@@ -1,5 +1,9 @@
 from flask import Flask, render_template
 from markdown import markdown
+import requests
+
+import settings
+
 app = Flask(__name__)
 
 @app.route('/')
@@ -9,4 +13,10 @@ def root():
 
 @app.route('/query')
 def query():
-    return "Query result"
+    sql = 'SELECT COUNT(*) FROM {0}'.format(settings.CLICKHOUSE_TABLE)
+    result = requests.get(
+        settings.CLICKHOUSE_SERVER,
+        params={'query': sql},
+    ).text
+
+    return (result, 200, {'Content-Type': 'application/json'})
