@@ -11,6 +11,14 @@ Snuba assumes a Clickhouse server HTTP endpoint at `CLICKHOUSE_SERVER` (default 
     mkvirtualenv snuba
     ./snuba
 
+## API
+
+Snuba exposes an HTTP API with the following endpoints.
+
+- `/`: Shows this page.
+- `/query`: GET endpoint for querying clickhouse.
+
+
 ## Settings
 
 Settings are found in `settings.py`
