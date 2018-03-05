@@ -73,11 +73,7 @@ COLUMNS = """
     -- interfaces
 
     -- http interface
-    http_method Nullable(Enum8(
-        'GET' = 1, 'HEAD' = 2, 'POST' = 3, 'PUT' = 4,
-        'DELETE' = 5, 'CONNECT' = 6, 'OPTIONS' = 7,
-        'TRACE' = 8, 'PATCH' = 9
-    )),
+    http_method Nullable(String),
     http_referer Nullable(String),
 
     -- exception interface
