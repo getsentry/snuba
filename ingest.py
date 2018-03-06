@@ -188,11 +188,12 @@ for msg in kafka:
     server_name = _unicodify(tags.pop('server_name', None))
     transaction = _unicodify(tags.pop('transaction', None))
     environment = _unicodify(tags.pop('environment', None))
-    release = _unicodify(tags.pop('release', None))
-    dist = _unicodify(tags.pop('dist', None))
+    release = _unicodify(tags.pop('sentry:release', None))
+    dist = _unicodify(tags.pop('sentry:dist', None))
     site = _unicodify(tags.pop('site', None))
     url = _unicodify(tags.pop('url', None))
 
+    data.pop('sentry:user') # defer to user interface data
     user = data.get('sentry.interfaces.User', {})
     user_id = _unicodify(user.get('id', None))
     username = _unicodify(user.get('username', None))
