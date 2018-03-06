@@ -29,3 +29,23 @@ def raw_query(sql):
         params={'query': sql},
     ).text
     return result
+
+def group_expr(groups, column_name='primary_hash'):
+    """
+    Takes a list of (group_id, fingerprint(s)) tuples of the form:
+
+        [(1, (hash1, hash2)), (2, hash3)]
+
+    and constructs a nested SQL if() expression to return the group_id of the
+    matching fingerprint expression when evaluated on the given column_name.
+
+        if(col in (hash1, hash2), 1, if(col = hash3, 2), NULL)
+
+    """
+    if len(groups) == 0:
+        return 'NULL'
+    else:
+        group_id, hashes = groups[0]
+        predicate = '{} = {}' if hasattr(hashes, '__iter__') else '{} IN {}'
+        predicate = predicate.format(column_name, hashes)
+        return 'if({}, {}, {})'.format(predicate, group_id, group_expr(group[1:], column_name=column_name))
