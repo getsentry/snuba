@@ -135,6 +135,11 @@ def _collapse_uint32(n):
         return None
     return n
 
+def _unicodify(s):
+    if not s:
+        return None
+    return unicode(s)
+
 
 batch = []
 connections = [Client(node) for node in CLICKHOUSE_NODES]
@@ -165,8 +170,8 @@ for msg in kafka:
     primary_hash = (msg['primary_hash'].rjust(16))[-16:]
 
     project_id = msg['project_id']
-    message = msg['message']
-    platform = msg['platform']
+    message = _unicodify(msg['message'])
+    platform = _unicodify(msg['platform'])
     timestamp = datetime.strptime(msg['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
 
     data = msg.get('data', {})
@@ -174,32 +179,32 @@ for msg in kafka:
     received = datetime.fromtimestamp(data['received'])
 
     sdk = data.get('sdk', {})
-    sdk_name = sdk.get('name', None)
-    sdk_version = sdk.get('version', None)
+    sdk_name = _unicodify(sdk.get('name', None))
+    sdk_version = _unicodify(sdk.get('version', None))
 
     tags = dict(data.get('tags', []))
 
-    level = tags.pop('level', None)
-    logger = tags.pop('logger', None)
-    server_name = tags.pop('server_name', None)
-    transaction = tags.pop('transaction', None)
-    environment = tags.pop('environment', None)
-    release = tags.pop('release', None)
-    dist = tags.pop('dist', None)
-    site = tags.pop('site', None)
-    url = tags.pop('url', None)
+    level = _unicodify(tags.pop('level', None))
+    logger = _unicodify(tags.pop('logger', None))
+    server_name = _unicodify(tags.pop('server_name', None))
+    transaction = _unicodify(tags.pop('transaction', None))
+    environment = _unicodify(tags.pop('environment', None))
+    release = _unicodify(tags.pop('release', None))
+    dist = _unicodify(tags.pop('dist', None))
+    site = _unicodify(tags.pop('site', None))
+    url = _unicodify(tags.pop('url', None))
 
     http = data.get('sentry.interfaces.Http', {})
-    http_method = http.get('method', None)
+    http_method = _unicodify(http.get('method', None))
 
     http_headers = dict(http.get('headers', []))
-    http_referer = http_headers.get('Referer', None)
+    http_referer = _unicodify(http_headers.get('Referer', None))
 
     tag_keys = []
     tag_values = []
     for tag_key, tag_value in tags.items():
-        tag_keys.append(tag_key)
-        tag_values.append(tag_value)
+        tag_keys.append(_unicodify(tag_key))
+        tag_values.append(_unicodify(tag_value))
 
     stack_types = []
     stack_values = []
@@ -217,17 +222,17 @@ for msg in kafka:
     stack_level = 0
     stacks = data.get('sentry.interfaces.Exception', {}).get('values', [])
     for stack in stacks[:200]:
-        stack_types.append(stack.get('type', ''))
-        stack_values.append(stack.get('value', ''))
+        stack_types.append(_unicodify(stack.get('type', None)))
+        stack_values.append(_unicodify(stack.get('value', None)))
 
         frames = stack.get('stacktrace', {}).get('frames', [])
         for frame in frames:
-            frame_abs_paths.append(frame.get('abs_path', ''))
-            frame_filenames.append(frame.get('filename', ''))
-            frame_packages.append(frame.get('package', ''))
-            frame_modules.append(frame.get('module', ''))
-            frame_functions.append(frame.get('function', ''))
-            frame_in_app.append(frame.get('in_app', 0))
+            frame_abs_paths.append(_unicodify(frame.get('abs_path', None)))
+            frame_filenames.append(_unicodify(frame.get('filename', None)))
+            frame_packages.append(_unicodify(frame.get('package', None)))
+            frame_modules.append(_unicodify(frame.get('module', None)))
+            frame_functions.append(_unicodify(frame.get('function', None)))
+            frame_in_app.append(frame.get('in_app', None))
             frame_colnos.append(_collapse_uint32(frame.get('colno', None)))
             frame_linenos.append(_collapse_uint32(frame.get('lineno', None)))
             frame_stack_levels.append(stack_level)
