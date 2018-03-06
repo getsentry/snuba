@@ -183,6 +183,7 @@ for msg in kafka:
 
     tags = dict(data.get('tags', []))
 
+    tags.pop('sentry:user', None) # defer to user interface data (below)
     level = _unicodify(tags.pop('level', None))
     logger = _unicodify(tags.pop('logger', None))
     server_name = _unicodify(tags.pop('server_name', None))
@@ -193,7 +194,6 @@ for msg in kafka:
     site = _unicodify(tags.pop('site', None))
     url = _unicodify(tags.pop('url', None))
 
-    data.pop('sentry:user') # defer to user interface data
     user = data.get('sentry.interfaces.User', {})
     user_id = _unicodify(user.get('id', None))
     username = _unicodify(user.get('username', None))
