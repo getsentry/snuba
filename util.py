@@ -50,7 +50,7 @@ def group_expr(groups, column_name='primary_hash'):
         group_id, hashes = groups[0]
         predicate = '{} = {}' if hasattr(hashes, '__iter__') else '{} IN {}'
         predicate = predicate.format(column_name, hashes)
-        return 'if({}, {}, {})'.format(predicate, group_id, group_expr(group[1:], column_name=column_name))
+        return 'if({}, {}, {})'.format(predicate, group_id, group_expr(groups[1:], column_name=column_name))
 
 def validate_query(query):
-    jsonschema.validate(query, QUERY_SCHEMA)
+    jsonschema.validate(query, schemas.QUERY_SCHEMA)
