@@ -157,17 +157,12 @@ for conn in connections:
 for msg in kafka:
     msg = json.loads(msg.value)
 
-    # TODO: need to add to event stream
-    # event_id
-    # user_id
-    # username
-    # email
-    # ip_address
-    event_id = '0' * 32
-    user_id = username = email = ip_address = None
+    # TODO: remove _unicodify, splice, and rjust once we stop sending Postgres integer ids
+    event_id = _unicodify(msg['event_id'])
+    event_id = event_id[-32:].rjust(32) if event_id else ('0' * 32)
 
-    # TODO: handle differing primary_hash lengths
-    primary_hash = (msg['primary_hash'].rjust(16))[-16:]
+    # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
+    primary_hash = msg['primary_hash'][-16:].rjust(16)
 
     project_id = msg['project_id']
     message = _unicodify(msg['message'])
@@ -193,6 +188,12 @@ for msg in kafka:
     dist = _unicodify(tags.pop('dist', None))
     site = _unicodify(tags.pop('site', None))
     url = _unicodify(tags.pop('url', None))
+
+    user = data.get('sentry.interfaces.User', {})
+    user_id = _unicodify(user.get('id', None))
+    username = _unicodify(user.get('username', None))
+    email = _unicodify(user.get('email', None))
+    ip_address = _unicodify(user.get('ip_address', None))
 
     http = data.get('sentry.interfaces.Http', {})
     http_method = _unicodify(http.get('method', None))
