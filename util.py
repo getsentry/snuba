@@ -1,3 +1,4 @@
+from flask import request, render_template
 from datetime import date, datetime
 import json
 import jsonschema
@@ -52,5 +53,27 @@ def group_expr(groups, column_name='primary_hash'):
         predicate = predicate.format(column_name, hashes)
         return 'if({}, {}, {})'.format(predicate, group_id, group_expr(groups[1:], column_name=column_name))
 
-def validate_query(query):
-    jsonschema.validate(query, schemas.QUERY_SCHEMA)
+def validate_request(schema):
+    """
+    Decorator to validate that a request body matches the given schema.
+    """
+    def validator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                body = json.loads(request.data)
+                schemas.validate(body, schema)
+                setattr(request, 'validated_body', body)
+            except (ValueError, jsonschema.ValidationError) as e:
+                return (render_template('error.html',
+                    error=str(e),
+                    schema=json.dumps(schema, indent=4, sort_keys=True, default=default_encode)
+                ), 400)
+            return func(*args, **kwargs)
+        return wrapper
+    return validator
+
+def default_encode(value):
+    if callable(value):
+        return value()
+    else:
+        raise TypeError()

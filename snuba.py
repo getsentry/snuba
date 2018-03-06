@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request
+import isodate
 from markdown import markdown
 from datetime import datetime, timedelta
 
-import settings, util
+import settings, util, schemas
 
 app = Flask(__name__)
 
@@ -11,23 +12,23 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
-@app.route('/query')
+@app.route('/query', methods=['GET', 'POST'])
+@util.validate_request(schemas.QUERY_SCHEMA)
 def query():
-    # TODO this should probably be a JSON request instead of get params
-    assert 'project' in request.args
-    project = int(request.args.get('project'))
+    # TODO allow GET with params=url-encoded-json?
+    body = request.validated_body
 
-    to_date = request.args.get('to_date', datetime.utcnow())
-    from_date = request.args.get('from_date', to_date - timedelta(days=1))
+    to_date = isodate.parse_datetime(body['to_date'])
+    from_date = isodate.parse_datetime(body['from_date'])
     assert from_date <= to_date
 
-    conditions = request.args.getlist('where')
+    conditions = body['conditions']
     conditions.append('timestamp >= {}'.format(util.escape_literal(from_date)))
     conditions.append('timestamp < {}'.format(util.escape_literal(to_date)))
-    conditions.append('project_id == {}'.format(util.escape_literal(project)))
+    #conditions.append('project_id == {}'.format(util.escape_literal(project)))
     where_clause = 'WHERE {}'.format(' AND '.join(conditions))
 
-    unit = util.granularity_group(request.args.get('unit', 'hour'))
+    unit = util.granularity_group(body['unit'])
 
     sql = 'SELECT {} as time, COUNT() as count FROM {} {} GROUP BY time'.format(
         unit,

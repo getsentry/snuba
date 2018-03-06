@@ -15,8 +15,8 @@ Snuba assumes a Clickhouse server HTTP endpoint at `CLICKHOUSE_SERVER` (default 
 
 Snuba exposes an HTTP API with the following endpoints.
 
-- `/`: Shows this page.
-- `/query`: GET endpoint for querying clickhouse.
+- [/](/): Shows this page.
+- [/query](/query): GET endpoint for querying clickhouse.
 
 
 ## Settings
