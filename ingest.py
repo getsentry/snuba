@@ -138,6 +138,10 @@ def _collapse_uint32(n):
 def _unicodify(s):
     if not s:
         return None
+
+    if isinstance(s, dict) or isinstance(s, list):
+        return json.dumps(s)
+
     return unicode(s)
 
 
