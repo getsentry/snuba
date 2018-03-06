@@ -164,12 +164,9 @@ for msg in kafka:
     # TODO: handle differing primary_hash lengths
     primary_hash = (msg['primary_hash'].rjust(16))[-16:]
 
-    project_id = msg.get('project_id', None)
-    if not project_id:
-        continue
-
-    message = msg.get('message', '')
-    platform = msg.get('platform', '')
+    project_id = msg['project_id']
+    message = msg['message']
+    platform = msg['platform']
     timestamp = datetime.strptime(msg['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
 
     data = msg.get('data', {})
@@ -219,7 +216,7 @@ for msg in kafka:
 
     stack_level = 0
     stacks = data.get('sentry.interfaces.Exception', {}).get('values', [])
-    for stack in stacks[:10]:
+    for stack in stacks[:200]:
         stack_types.append(stack.get('type', ''))
         stack_values.append(stack.get('value', ''))
 
