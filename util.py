@@ -1,8 +1,10 @@
 from datetime import date, datetime
 import json
+import jsonschema
 import requests
 import six
 
+import schemas
 import settings
 
 def escape_literal(value):
@@ -49,3 +51,6 @@ def group_expr(groups, column_name='primary_hash'):
         predicate = '{} = {}' if hasattr(hashes, '__iter__') else '{} IN {}'
         predicate = predicate.format(column_name, hashes)
         return 'if({}, {}, {})'.format(predicate, group_id, group_expr(group[1:], column_name=column_name))
+
+def validate_query(query):
+    jsonschema.validate(query, QUERY_SCHEMA)
