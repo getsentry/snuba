@@ -26,15 +26,26 @@ def query():
     conditions.append('timestamp >= {}'.format(util.escape_literal(from_date)))
     conditions.append('timestamp < {}'.format(util.escape_literal(to_date)))
     #conditions.append('project_id == {}'.format(util.escape_literal(project)))
+
+    aggregate_columns = [
+        ('COUNT()', 'count')
+    ]
+    group_columns = [
+        (util.issue_expr(body['issues']), 'issue'),
+        (util.granularity_group(body['unit']), 'time')
+    ]
+    select_columns = group_columns + aggregate_columns
+
+    select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
     where_clause = 'WHERE {}'.format(' AND '.join(conditions))
+    group_clause = 'GROUP BY ({})'.format(', '.join(alias for (_, alias) in group_columns))
 
-    unit = util.granularity_group(body['unit'])
-
-    sql = 'SELECT {} as time, COUNT() as count FROM {} {} GROUP BY time'.format(
-        unit,
+    sql = 'SELECT {} FROM {} {} {}'.format(
+        select_clause,
         settings.CLICKHOUSE_TABLE,
         where_clause,
+        group_clause
     )
-
+    print sql
     result = util.raw_query(sql)
     return (result, 200, {'Content-Type': 'application/json'})

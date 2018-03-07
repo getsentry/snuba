@@ -25,7 +25,7 @@ QUERY_SCHEMA = {
             'enum': ['hour', 'day', 'minute'],
             'default': 'hour',
         },
-        'groups': {
+        'issues': {
             'type': 'array',
             'items': {
                 'type': 'array',
@@ -43,7 +43,8 @@ QUERY_SCHEMA = {
                         ]
                     }
                 ],
-            }
+            },
+            'default': list,
         },
     },
     'required': [],
