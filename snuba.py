@@ -43,10 +43,13 @@ def query():
 
     select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
     select_clause = 'SELECT {}'.format(select_clause)
+
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
+
     where_clause = ' AND '.join('{} {} {}'.format(col, op, util.escape_literal(lit)) for (col, op, lit) in conditions)
     if where_clause:
         where_clause = 'WHERE {}'.format(where_clause)
+
     group_clause = ', '.join(alias for (_, alias) in group_columns)
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)

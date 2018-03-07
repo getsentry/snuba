@@ -25,9 +25,10 @@ def escape_literal(value):
 
 def granularity_group(unit):
     return {
-        'hour': 'toHour(timestamp)',
-        'minute': 'toMinute(timestamp)',
-    }.get(unit, 'toHour(timestamp)')
+        'hour': 'toStartOfHour(timestamp)',
+        'minute': 'toStartOfMinute(timestamp)',
+        'day': 'toDate(timestamp)',
+    }.get(unit, 'toStartOfHour(timestamp)')
 
 
 def raw_query(sql):
