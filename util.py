@@ -1,7 +1,9 @@
 from flask import request, render_template
 from datetime import date, datetime
+import isodate
 import json
 import jsonschema
+import numbers
 import requests
 import six
 
@@ -9,14 +11,17 @@ import schemas
 import settings
 
 def escape_literal(value):
-    # TODO this escaping is garbage
     if isinstance(value, six.string_types):
-        value = value.replace("'", "\\'")
+        value = value.replace("'", "\\'") # TODO this escaping is garbage
         return "'{}'".format(value)
     elif isinstance(value, (datetime, date)):
-        return "toDateTime('{}')".format(value.strftime("%Y-%m-%dT%H:%M:%S"))
-    else:
+        return "toDateTime('{}')".format(isodate.datetime_isoformat(value))
+    elif isinstance(value, list):
+        return "({})".format(', '.join(escape_literal(v) for v in value))
+    elif isinstance(value, numbers.Number):
         return str(value)
+    else:
+        raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
 
 def granularity_group(unit):
     return {

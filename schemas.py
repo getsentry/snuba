@@ -6,14 +6,38 @@ QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
         'conditions': {
-            'type': 'array', # TODO conditions probably need more validation
-            'items': {'type': 'string'},
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'items': [
+                    {
+                        # Column name
+                        'type': 'string',
+                        'pattern': '^[a-zA-Z0-9_]+$',
+                    },{
+                        # Operator
+                        'type': 'string',
+                        'enum': ['>', '<', '>=', '<=', '=', 'IN'],
+                    },{
+                        # Literal
+                        'anyOf': [
+                            {'type': ['string', 'number']},
+                            {
+                                'type': 'array',
+                                'items': {'type': ['string', 'number']}
+                            },
+                        ],
+                    },
+                ],
+                'minLength': 3,
+                'maxLength': 3,
+            },
             'default': list,
         },
         'from_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: isodate.datetime_isoformat(datetime.utcnow() - timedelta(days=1))
+            'default': lambda: isodate.datetime_isoformat(datetime.utcnow() - timedelta(days=5))
         },
         'to_date': {
             'type': 'string',
@@ -38,7 +62,8 @@ QUERY_SCHEMA = {
                             {"$ref": "#/definitions/fingerprint_hash"},
                             {
                                 'type': 'array',
-                                'items': {"$ref": "#/definitions/fingerprint_hash"}
+                                'items': {"$ref": "#/definitions/fingerprint_hash"},
+                                'minItems': 1,
                             },
                         ]
                     }
@@ -46,8 +71,21 @@ QUERY_SCHEMA = {
             },
             'default': list,
         },
+        'project': {
+            'type': 'number',
+        },
+        'groupby': {
+            'anyOf': [
+                {'enum': ['issue']}, # Special computed column created from `issues` definition
+                {
+                    'type': 'string',
+                    'pattern': '^[a-zA-Z0-9_]+$',
+                },
+            ],
+            'default': 'issue',
+        },
     },
-    'required': [],
+    'required': ['project'], # Need to select down to the project level for customer isolation and performance
 
     'definitions': {
         'fingerprint_hash': {
