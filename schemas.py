@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import isodate
 import jsonschema
 
 QUERY_SCHEMA = {
@@ -37,12 +36,12 @@ QUERY_SCHEMA = {
         'from_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: isodate.datetime_isoformat(datetime.utcnow() - timedelta(days=5))
+            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=5)).isoformat()
         },
         'to_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: isodate.datetime_isoformat(datetime.utcnow())
+            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
         },
         'unit': {
             'type': 'string',

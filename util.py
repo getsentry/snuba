@@ -1,6 +1,7 @@
 from flask import request, render_template
 from datetime import date, datetime
-import isodate
+from dateutil.parser import parse as parse_datetime
+from dateutil.tz import tz
 import json
 import jsonschema
 import numbers
@@ -11,11 +12,17 @@ import schemas
 import settings
 
 def escape_literal(value):
+    """
+    Escape a literal value for use in a SQL clause
+    """
     if isinstance(value, six.string_types):
         value = value.replace("'", "\\'") # TODO this escaping is garbage
         return "'{}'".format(value)
-    elif isinstance(value, (datetime, date)):
-        return "toDateTime('{}')".format(isodate.datetime_isoformat(value))
+    elif isinstance(value, datetime):
+        value = value.replace(tzinfo=None, microsecond=0)
+        return "toDateTime('{}')".format(value.isoformat())
+    elif isinstance(value, date):
+        return "toDate('{}')".format(value.isoformat())
     elif isinstance(value, list):
         return "({})".format(', '.join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
@@ -24,6 +31,10 @@ def escape_literal(value):
         raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
 
 def granularity_group(unit):
+    """
+    Return a clickhouse SQL expression on the `timestamp` column that can be
+    used to group timestamps into the desired granularity.
+    """
     return {
         'hour': 'toStartOfHour(timestamp)',
         'minute': 'toStartOfMinute(timestamp)',
@@ -32,12 +43,40 @@ def granularity_group(unit):
 
 
 def raw_query(sql):
+    """
+    Submit a raw SQL query to clickhouse and do some post-processing on it to
+    fix some of the formatting issues in the result JSON
+    """
     sql = sql + ' FORMAT JSON'
     result = requests.get(
         settings.CLICKHOUSE_SERVER,
         params={'query': sql},
     ).text
-    return result
+    # TODO handle query failures / retries
+
+    result = json.loads(result)
+    assert 'meta' in result
+    assert 'data' in result
+
+    # Fix up various anomalies in clickhouse JSON
+    for col in result['meta']:
+        # Clickhouse sends UInt64's as JSON strings
+        if col['type'] == 'UInt64':
+            for d in result['data']:
+                try:
+                    d[col['name']] = int(d[col['name']])
+                except:
+                    pass
+        # Convert naive datetime strings back to TZ aware ones
+        elif col['type'] == "DateTime('Etc/Zulu')":
+            for d in result['data']:
+                d[col['name']] = parse_datetime(
+                    d[col['name']]
+                ).replace(tzinfo=tz.tzutc()).isoformat()
+
+    # TODO reformat rows into tuples instead of dicts, or column arrays
+    # TODO record statistics somewhere
+    return { k: result[k] for k in ['data', 'meta']}
 
 def issue_expr(issues, col='primary_hash'):
     """
@@ -69,6 +108,13 @@ def validate_request(schema):
     """
     def validator(func):
         def wrapper(*args, **kwargs):
+
+            def default_encode(value):
+                if callable(value):
+                    return value()
+                else:
+                    raise TypeError()
+
             try:
                 body = json.loads(request.data)
                 schemas.validate(body, schema)
@@ -82,8 +128,3 @@ def validate_request(schema):
         return wrapper
     return validator
 
-def default_encode(value):
-    if callable(value):
-        return value()
-    else:
-        raise TypeError()

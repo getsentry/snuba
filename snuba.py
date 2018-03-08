@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request
-import isodate
+from dateutil.parser import parse as parse_datetime
+import json
 from markdown import markdown
 from datetime import datetime, timedelta
 
@@ -18,8 +19,8 @@ def query():
     # TODO allow GET with params=url-encoded-json?
     body = request.validated_body
 
-    to_date = isodate.parse_datetime(body['to_date'])
-    from_date = isodate.parse_datetime(body['from_date'])
+    to_date = parse_datetime(body['to_date'])
+    from_date = parse_datetime(body['from_date'])
     assert from_date <= to_date
 
     conditions = body['conditions']
@@ -58,5 +59,4 @@ def query():
 
     print sql
     result = util.raw_query(sql)
-    # TODO handle clickhouse failures
-    return (result, 200, {'Content-Type': 'application/json'})
+    return (json.dumps(result), 200, {'Content-Type': 'application/json'})
