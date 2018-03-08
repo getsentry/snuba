@@ -3,10 +3,12 @@ from dateutil.parser import parse as parse_datetime
 import json
 from markdown import markdown
 from datetime import datetime, timedelta
+from raven.contrib.flask import Sentry
 
 import settings, util, schemas
 
 app = Flask(__name__)
+sentry = Sentry(app, dsn=settings.SENTRY_DSN)
 
 @app.route('/')
 def root():

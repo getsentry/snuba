@@ -2,11 +2,13 @@ appnope==0.1.0
 astroid==1.6.1
 backports.functools-lru-cache==1.5
 backports.shutil-get-terminal-size==1.0.0
+blinker==1.4
 certifi==2018.1.18
 chardet==3.0.4
 click==6.7
 clickhouse-driver==0.0.9
 configparser==3.5.0
+contextlib2==0.5.5
 decorator==4.2.1
 deprecation==2.0
 enum34==1.1.6
@@ -37,6 +39,7 @@ Pygments==2.2.0
 pylint==1.8.2
 pyparsing==2.2.0
 python-dateutil==2.6.1
+raven==6.6.0
 requests==2.18.4
 scandir==1.7
 simplegeneric==0.8.1
