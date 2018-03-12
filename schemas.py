@@ -43,10 +43,9 @@ QUERY_SCHEMA = {
             'format': 'date-time',
             'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
         },
-        'unit': {
-            'type': 'string',
-            'enum': ['hour', 'day', 'minute'],
-            'default': 'hour',
+        'granularity': {
+            'type': 'number',
+            'default': 3600,
         },
         'issues': {
             'type': 'array',
@@ -64,8 +63,8 @@ QUERY_SCHEMA = {
                                 'items': {"$ref": "#/definitions/fingerprint_hash"},
                                 'minItems': 1,
                             },
-                        ]
-                    }
+                        ],
+                    },
                 ],
             },
             'default': list,
@@ -82,6 +81,19 @@ QUERY_SCHEMA = {
                 },
             ],
             'default': 'issue',
+        },
+        'aggregateby': {
+            'type': 'string',
+            'pattern': '^[a-zA-Z0-9_]*$',
+            'default': '',
+        },
+        'aggregation': {
+            'type': 'string',
+            'default': 'count',
+            'anyOf': [
+                {'enum': ['count', 'uniq']},
+                {'pattern': 'topK\(\d+\)'},
+            ],
         },
     },
     'required': ['project'], # Need to select down to the project level for customer isolation and performance

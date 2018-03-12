@@ -31,15 +31,16 @@ def query():
     conditions.append(('project_id', '=', body['project']))
 
     aggregate_columns = [
-        ('COUNT()', 'count')
+        ('{}({})'.format(body['aggregation'], body['aggregateby']), settings.AGGREGATE_RESULT_COLUMN)
     ]
     group_columns = [
-        (util.granularity_group(body['unit']), 'time')
+        (settings.TIME_GROUPS.get(granularity, settings.DEFAULT_TIME_GROUP), 'time')
     ]
     if body['groupby'] == 'issue':
         group_columns.append((util.issue_expr(body['issues']), 'issue'))
     else:
         # TODO make sure its a valid column, either in the schema or here
+        # TODO 'AS $groupby' might not work if grouping by something complex (alias can't be a formula)
         group_columns.append((body['groupby'], body['groupby']))
 
     select_columns = group_columns + aggregate_columns

@@ -30,18 +30,6 @@ def escape_literal(value):
     else:
         raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
 
-def granularity_group(unit):
-    """
-    Return a clickhouse SQL expression on the `timestamp` column that can be
-    used to group timestamps into the desired granularity.
-    """
-    return {
-        'hour': 'toStartOfHour(timestamp)',
-        'minute': 'toStartOfMinute(timestamp)',
-        'day': 'toDate(timestamp)',
-    }.get(unit, 'toStartOfHour(timestamp)')
-
-
 def raw_query(sql):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
@@ -54,7 +42,11 @@ def raw_query(sql):
     ).text
     # TODO handle query failures / retries
 
-    result = json.loads(result)
+    try:
+        result = json.loads(result)
+    except ValueError as e:
+        print result
+        raise e
     assert 'meta' in result
     assert 'data' in result
 
