@@ -32,7 +32,7 @@ def query():
     else:
         conditions.append(('project_id', '=', body['project']))
 
-    issue_expr = util.issue_expr(body['issues']) if body['issues'] else None
+    issue_expr = util.issue_expr(body['issues']) if body['issues'] is not None else None
 
     aggregate_columns = []
     if body['aggregateby'] == 'issue':
