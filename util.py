@@ -36,16 +36,16 @@ def raw_query(sql):
     fix some of the formatting issues in the result JSON
     """
     sql = sql + ' FORMAT JSON'
-    result = requests.get(
+    response = requests.get(
         settings.CLICKHOUSE_SERVER,
         params={'query': sql},
-    ).text
+    )
     # TODO handle query failures / retries
 
     try:
-        result = json.loads(result)
+        result = json.loads(response.text)
     except ValueError as e:
-        print result
+        print response
         raise e
     assert 'meta' in result
     assert 'data' in result

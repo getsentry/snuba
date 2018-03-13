@@ -13,3 +13,4 @@ TIME_GROUPS = {
     86400: 'toDate(timestamp)',
 }
 DEFAULT_TIME_GROUP = 'toDate(timestamp)'
+TIME_GROUP_COLUMN = 'time'

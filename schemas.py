@@ -70,13 +70,21 @@ QUERY_SCHEMA = {
             'default': list,
         },
         'project': {
-            'type': 'number',
+            'anyOf': [
+                {'type': 'number'},
+                {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'minItems': 1,
+                },
+            ]
         },
         'groupby': {
             'anyOf': [
                 {'enum': ['issue']}, # Special computed column created from `issues` definition
                 {
                     'type': 'string',
+                    # TODO make sure its a valid column, either in the schema or here
                     'pattern': '^[a-zA-Z0-9_]+$',
                 },
             ],

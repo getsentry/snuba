@@ -18,7 +18,6 @@ def root():
 @app.route('/query', methods=['GET', 'POST'])
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query():
-    # TODO allow GET with params=url-encoded-json?
     body = request.validated_body
 
     to_date = parse_datetime(body['to_date'])
@@ -28,19 +27,20 @@ def query():
     conditions = body['conditions']
     conditions.append(('timestamp', '>=', from_date))
     conditions.append(('timestamp', '<', to_date))
-    conditions.append(('project_id', '=', body['project']))
+    if isinstance(body['project'], list):
+        conditions.append(('project_id', 'IN', body['project']))
+    else:
+        conditions.append(('project_id', '=', body['project']))
 
     aggregate_columns = [
         ('{}({})'.format(body['aggregation'], body['aggregateby']), settings.AGGREGATE_RESULT_COLUMN)
     ]
     group_columns = [
-        (settings.TIME_GROUPS.get(granularity, settings.DEFAULT_TIME_GROUP), 'time')
+        (settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP), settings.TIME_GROUP_COLUMN)
     ]
     if body['groupby'] == 'issue':
         group_columns.append((util.issue_expr(body['issues']), 'issue'))
     else:
-        # TODO make sure its a valid column, either in the schema or here
-        # TODO 'AS $groupby' might not work if grouping by something complex (alias can't be a formula)
         group_columns.append((body['groupby'], body['groupby']))
 
     select_columns = group_columns + aggregate_columns
