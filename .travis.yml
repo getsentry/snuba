@@ -1,0 +1,10 @@
+sudo: enabled
+language: python
+before_install:
+  - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional
+  - sudo apt-add-repository "deb http://repo.yandex.ru/clickhouse/trusty stable main"
+  - sudo apt-get -qq update
+  - sudo apt-get install clickhouse-server-common clickhouse-client -y
+  - sudo service clickhouse-server start
+script:
+  - clickhouse-client -d system -q "show tables"
