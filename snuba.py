@@ -32,14 +32,19 @@ def query():
     else:
         conditions.append(('project_id', '=', body['project']))
 
-    aggregate_columns = [
-        ('{}({})'.format(body['aggregation'], body['aggregateby']), settings.AGGREGATE_RESULT_COLUMN)
-    ]
+    issue_expr = util.issue_expr(body['issues']) if body['issues'] else None
+
+    aggregate_columns = []
+    if body['aggregateby'] == 'issue':
+        aggregate_columns.append(('{}({})'.format(body['aggregation'], issue_expr), settings.AGGREGATE_RESULT_COLUMN))
+    else:
+        aggregate_columns.append(('{}({})'.format(body['aggregation'], body['aggregateby']), settings.AGGREGATE_RESULT_COLUMN))
+
     group_columns = [
         (settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP), settings.TIME_GROUP_COLUMN)
     ]
     if body['groupby'] == 'issue':
-        group_columns.append((util.issue_expr(body['issues']), 'issue'))
+        group_columns.append((issue_expr, body['groupby']))
     else:
         group_columns.append((body['groupby'], body['groupby']))
 
