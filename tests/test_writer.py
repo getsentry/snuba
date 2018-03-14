@@ -9,7 +9,7 @@ from snuba import settings
 
 class TestWriter(object):
     def setup_method(self, test_method):
-        self.table = str(uuid.uuid4())
+        self.table = uuid.uuid4().hex
         self.conn = Client('localhost')
         self.conn.execute(settings.get_local_table_definition(self.table))
 
