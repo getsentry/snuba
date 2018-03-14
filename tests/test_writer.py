@@ -11,7 +11,11 @@ class TestWriter(object):
     def setup_method(self, test_method):
         self.table = uuid.uuid4().hex
         self.conn = Client('localhost')
-        self.conn.execute(settings.get_local_table_definition(self.table))
+        self.conn.execute("""
+            CREATE TABLE %(table)s (
+                %(columns)s
+            ) ENGINE = Memory
+        """ % {'table': self.table, 'columns': settings.COLUMNS})
 
     def teardown_method(self, test_method):
         self.conn.execute("DROP TABLE %s" % self.table)
