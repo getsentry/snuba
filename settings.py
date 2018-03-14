@@ -24,16 +24,52 @@ CLICKHOUSE_NODES = [
 ]
 CLUSTER = 'cluster1'
 DATABASE = 'default'
-
 BROKERS = ['localhost:9093']
 WRITER_TOPIC = 'snuba'
 EVENT_TOPIC = 'events'
 BROKERS = ['localhost:9093']
 WRITER_CONSUMER_GROUP = 'snuba-writers'
 PROCESSOR_CONSUMER_GROUP = 'snuba-processors'
-
-BATCH_SIZE = 10000
-
+WRITER_BATCH_SIZE = 10000
+WRITER_COLUMNS = [
+    'event_id',
+    'timestamp',
+    'platform',
+    'message',
+    'primary_hash',
+    'project_id',
+    'received',
+    'user_id',
+    'username',
+    'email',
+    'ip_address',
+    'sdk_name',
+    'sdk_version',
+    'level',
+    'logger',
+    'server_name',
+    'transaction',
+    'environment',
+    'release',
+    'dist',
+    'site',
+    'url',
+    'tags.key',
+    'tags.value',
+    'http_method',
+    'http_referer',
+    'exception_stacks.type',
+    'exception_stacks.value',
+    'exception_frames.abs_path',
+    'exception_frames.filename',
+    'exception_frames.package',
+    'exception_frames.module',
+    'exception_frames.function',
+    'exception_frames.in_app',
+    'exception_frames.colno',
+    'exception_frames.lineno',
+    'exception_frames.stack_level',
+]
 
 # Table Definitions
 LOCAL_TABLE = 'sentry_local'

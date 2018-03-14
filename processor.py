@@ -46,60 +46,63 @@ producer = KafkaProducer(
 )
 
 class SnubaProcessor(object):
-    def __init__(self):
-        pass
-
     def process_event(self, event):
+        row = {}
+
         # TODO: remove _unicodify, splice, and rjust once we stop sending Postgres integer ids
         event_id = _unicodify(event['event_id'])
-        event_id = event_id[-32:].rjust(32) if event_id else ('0' * 32)
+        row['event_id'] = event_id[-32:].rjust(32) if event_id else ('0' * 32)
 
         # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
-        primary_hash = event['primary_hash'][-16:].rjust(16)
+        row['primary_hash'] = event['primary_hash'][-16:].rjust(16)
 
         project_id = event['project_id']
-        message = _unicodify(event['message'])
-        platform = _unicodify(event['platform'])
-        timestamp = time.mktime(datetime.strptime(event['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+        row['project_id'] = project_id
+        row['message'] = _unicodify(event['message'])
+        row['platform'] = _unicodify(event['platform'])
+        row['timestamp'] = time.mktime(datetime.strptime(event['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
 
         data = event.get('data', {})
 
-        received = data['received']
+        row['received'] = data['received']
 
         sdk = data.get('sdk', {})
-        sdk_name = _unicodify(sdk.get('name', None))
-        sdk_version = _unicodify(sdk.get('version', None))
+        row['sdk_name'] = _unicodify(sdk.get('name', None))
+        row['sdk_version'] = _unicodify(sdk.get('version', None))
 
         tags = dict(data.get('tags', []))
 
         tags.pop('sentry:user', None) # defer to user interface data (below)
-        level = _unicodify(tags.pop('level', None))
-        logger = _unicodify(tags.pop('logger', None))
-        server_name = _unicodify(tags.pop('server_name', None))
-        transaction = _unicodify(tags.pop('transaction', None))
-        environment = _unicodify(tags.pop('environment', None))
-        release = _unicodify(tags.pop('sentry:release', None))
-        dist = _unicodify(tags.pop('sentry:dist', None))
-        site = _unicodify(tags.pop('site', None))
-        url = _unicodify(tags.pop('url', None))
+        row['level'] = _unicodify(tags.pop('level', None))
+        row['logger'] = _unicodify(tags.pop('logger', None))
+        row['server_name'] = _unicodify(tags.pop('server_name', None))
+        row['transaction'] = _unicodify(tags.pop('transaction', None))
+        row['environment'] = _unicodify(tags.pop('environment', None))
+        row['release'] = _unicodify(tags.pop('sentry:release', None))
+        row['dist'] = _unicodify(tags.pop('sentry:dist', None))
+        row['site'] = _unicodify(tags.pop('site', None))
+        row['url'] = _unicodify(tags.pop('url', None))
 
         user = data.get('sentry.interfaces.User', {})
-        user_id = _unicodify(user.get('id', None))
-        username = _unicodify(user.get('username', None))
-        email = _unicodify(user.get('email', None))
-        ip_address = _unicodify(user.get('ip_address', None))
+        row['user_id'] = _unicodify(user.get('id', None))
+        row['username'] = _unicodify(user.get('username', None))
+        row['email'] = _unicodify(user.get('email', None))
+        row['ip_address'] = _unicodify(user.get('ip_address', None))
 
         http = data.get('sentry.interfaces.Http', {})
-        http_method = _unicodify(http.get('method', None))
+        row['http_method'] = _unicodify(http.get('method', None))
 
         http_headers = dict(http.get('headers', []))
-        http_referer = _unicodify(http_headers.get('Referer', None))
+        row['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
         tag_keys = []
         tag_values = []
         for tag_key, tag_value in tags.items():
             tag_keys.append(_unicodify(tag_key))
             tag_values.append(_unicodify(tag_value))
+
+        row['tags.key'] = tag_keys
+        row['tags.value'] = tag_values
 
         stack_types = []
         stack_values = []
@@ -134,45 +137,17 @@ class SnubaProcessor(object):
 
             stack_level += 1
 
-        row = (
-            event_id,
-            timestamp,
-            platform,
-            message,
-            primary_hash,
-            project_id,
-            received,
-            user_id,
-            username,
-            email,
-            ip_address,
-            sdk_name,
-            sdk_version,
-            level,
-            logger,
-            server_name,
-            transaction,
-            environment,
-            release,
-            dist,
-            site,
-            url,
-            tag_keys,
-            tag_values,
-            http_method,
-            http_referer,
-            stack_types,
-            stack_values,
-            frame_abs_paths,
-            frame_filenames,
-            frame_packages,
-            frame_modules,
-            frame_functions,
-            frame_in_app,
-            frame_colnos,
-            frame_linenos,
-            frame_stack_levels
-        )
+        row['exception_stacks.type'] = stack_types
+        row['exception_stacks.value'] = stack_values
+        row['exception_frames.abs_path'] = frame_abs_paths
+        row['exception_frames.filename'] = frame_filenames
+        row['exception_frames.package'] = frame_packages
+        row['exception_frames.module'] = frame_modules
+        row['exception_frames.function'] = frame_functions
+        row['exception_frames.in_app'] = frame_in_app
+        row['exception_frames.colno'] = frame_colnos
+        row['exception_frames.lineno'] = frame_linenos
+        row['exception_frames.stack_level'] = frame_stack_levels
 
         key = '%s:%s' % (event_id, project_id)
         producer.send(settings.WRITER_TOPIC, key=key.encode('utf-8'), value=json.dumps(row).encode('utf-8'))

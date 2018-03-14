@@ -23,7 +23,7 @@ consumer = KafkaConsumer(
 
 
 class SnubaWriter(object):
-    def __init__(self, batch_size=settings.BATCH_SIZE):
+    def __init__(self, batch_size=settings.WRITER_BATCH_SIZE):
         self.batch_size = batch_size
         self.clear_batch()
 
@@ -36,58 +36,32 @@ class SnubaWriter(object):
     def get_connection(self):
         return random.choice(connections)
 
-    def process_row(self, row):
-        # TODO: this sucks
-        row = list(row)
-        row[1] = datetime.fromtimestamp(row[1])
-        row[6] = datetime.fromtimestamp(row[6])
+    def flush(self):
+        conn = self.get_connection()
 
-        self.batch.append(row)
+        conn.execute("""
+        INSERT INTO %(table)s (
+            %(colnames)s
+        ) VALUES
+        """ % {
+            'colnames': ", ".join(settings.WRITER_COLUMNS),
+            'table': settings.DIST_TABLE
+        }, self.batch)
+        self.clear_batch()
+
+    def process_row(self, row):
+        # TODO: clickhouse-driver expects datetimes, would be nice to skip this
+        row['timestamp'] = datetime.fromtimestamp(row['timestamp'])
+        row['received'] = datetime.fromtimestamp(row['received'])
+
+        values = []
+        for colname in settings.WRITER_COLUMNS:
+            values.append(row.get(colname, None))
+
+        self.batch.append(values)
 
         if self.should_flush():
-            conn = self.get_connection()
-            conn.execute("""
-            INSERT INTO %(table)s (
-                event_id,
-                timestamp,
-                platform,
-                message,
-                primary_hash,
-                project_id,
-                received,
-                user_id,
-                username,
-                email,
-                ip_address,
-                sdk_name,
-                sdk_version,
-                level,
-                logger,
-                server_name,
-                transaction,
-                environment,
-                release,
-                dist,
-                site,
-                url,
-                tags.key,
-                tags.value,
-                http_method,
-                http_referer,
-                exception_stacks.type,
-                exception_stacks.value,
-                exception_frames.abs_path,
-                exception_frames.filename,
-                exception_frames.package,
-                exception_frames.module,
-                exception_frames.function,
-                exception_frames.in_app,
-                exception_frames.colno,
-                exception_frames.lineno,
-                exception_frames.stack_level
-            ) VALUES
-            """ % {'table': settings.DIST_TABLE}, self.batch)
-            self.clear_batch()
+            self.flush()
 
 
 writer = SnubaWriter()
