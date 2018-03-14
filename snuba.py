@@ -27,27 +27,12 @@ def query():
     conditions = body['conditions']
     conditions.append(('timestamp', '>=', from_date))
     conditions.append(('timestamp', '<', to_date))
-    if isinstance(body['project'], list):
-        conditions.append(('project_id', 'IN', body['project']))
-    else:
-        conditions.append(('project_id', '=', body['project']))
+    conditions.append(('project_id', 'IN', util.to_list(body['project'])))
 
-    issue_expr = util.issue_expr(body['issues']) if body['issues'] is not None else None
-
-    aggregate_columns = []
-    if body['aggregateby'] == 'issue':
-        aggregate_columns.append(('{}({})'.format(body['aggregation'], issue_expr), settings.AGGREGATE_RESULT_COLUMN))
-    else:
-        aggregate_columns.append(('{}({})'.format(body['aggregation'], body['aggregateby']), settings.AGGREGATE_RESULT_COLUMN))
-
-    group_columns = [
-        (settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP), settings.TIME_GROUP_COLUMN)
+    aggregate_columns = [
+        ('{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)), settings.AGGREGATE_RESULT_COLUMN)
     ]
-    if body['groupby'] == 'issue':
-        group_columns.append((issue_expr, body['groupby']))
-    else:
-        group_columns.append((body['groupby'], body['groupby']))
-
+    group_columns = [(util.column_expr(gb, body), gb) for gb in util.to_list(body['groupby'])]
     select_columns = group_columns + aggregate_columns
 
     select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
@@ -55,7 +40,10 @@ def query():
 
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
 
-    where_clause = ' AND '.join('{} {} {}'.format(col, op, util.escape_literal(lit)) for (col, op, lit) in conditions)
+    # TODO if there is a condition on 'issue', and issue is not defined/aliased in the SELECT clause, then
+    # we need to expand 'issue' into issue_expr here too
+    where_predicates = ('{} {} {}'.format(col, op, util.escape_literal(lit)) for (col, op, lit) in conditions)
+    where_clause = ' AND '.join(where_predicates)
     if where_clause:
         where_clause = 'WHERE {}'.format(where_clause)
 

@@ -11,6 +11,23 @@ import six
 import schemas
 import settings
 
+def to_list(value):
+    return value if isinstance(value, list) else [value]
+
+def column_expr(column_name, body):
+    """
+    Certain special column names expand into more complex expressions. Return
+    the column expression, or just the name if it is a regular column.
+
+    Needs the body of the request for some extra data used to expand column expressions.
+    """
+    if column_name == settings.TIME_GROUP_COLUMN:
+        return settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
+    elif column_name == 'issue':
+        return issue_expr(body['issues']) if body['issues'] is not None else None
+    else:
+        return column_name
+
 def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause

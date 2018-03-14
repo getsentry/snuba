@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import jsonschema
+import copy
 
 QUERY_SCHEMA = {
     'type': 'object',
@@ -10,9 +11,7 @@ QUERY_SCHEMA = {
                 'type': 'array',
                 'items': [
                     {
-                        # Column name
-                        'type': 'string',
-                        'pattern': '^[a-zA-Z0-9_]+$',
+                        "$ref": "#/definitions/column_name"
                     },{
                         # Operator
                         'type': 'string',
@@ -31,7 +30,7 @@ QUERY_SCHEMA = {
                 'minLength': 3,
                 'maxLength': 3,
             },
-            'default': list,
+            'default': [],
         },
         'from_date': {
             'type': 'string',
@@ -67,7 +66,7 @@ QUERY_SCHEMA = {
                     },
                 ],
             },
-            'default': list,
+            'default': [],
         },
         'project': {
             'anyOf': [
@@ -81,18 +80,13 @@ QUERY_SCHEMA = {
         },
         'groupby': {
             'anyOf': [
-                {'enum': ['issue']}, # Special computed column created from `issues` definition
-                {
-                    'type': 'string',
-                    # TODO make sure its a valid column, either in the schema or here
-                    'pattern': '^[a-zA-Z0-9_]+$',
-                },
+                {"$ref": "#/definitions/column_name"},
+                {"$ref": "#/definitions/column_list"},
             ],
-            'default': 'issue',
+            'default': 'time',
         },
         'aggregateby': {
-            'type': 'string',
-            'pattern': '^[a-zA-Z0-9_]*$',
+            "$ref": "#/definitions/column_name",
             'default': '',
         },
         'aggregation': {
@@ -112,6 +106,21 @@ QUERY_SCHEMA = {
             'minLength': 16,
             'maxLength': 16,
             'pattern': '^[0-9a-f]{16}$',
+        },
+        'column_name': {
+            'anyOf': [
+                {'enum': ['issue']}, # Special computed column created from `issues` definition
+                {
+                    'type': 'string',
+                    # TODO make sure its a valid column, either in the schema or here
+                    'pattern': '^[a-zA-Z0-9_]+$',
+                },
+            ],
+        },
+        'column_list': {
+            'type': 'array',
+            'items': {"$ref": "#/definitions/column_name"},
+            'minItems': 1,
         }
     }
 }
@@ -125,7 +134,7 @@ def validate(value, schema, set_defaults=True):
                 if callable(subschema["default"]):
                     instance.setdefault(property, subschema["default"]())
                 else:
-                    instance.setdefault(property, subschema["default"])
+                    instance.setdefault(property, copy.deepcopy(subschema["default"]))
 
         for error in orig(validator, properties, instance, schema):
             yield error
