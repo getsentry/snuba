@@ -4,6 +4,8 @@ import time
 from datetime import datetime
 from kafka import KafkaConsumer, KafkaProducer
 
+import settings
+
 
 # TODO: schema changes:
 #   * message params -> string array
@@ -16,12 +18,7 @@ from kafka import KafkaConsumer, KafkaProducer
 #           UserAgentPlugin model(s) in Sentry codebase
 
 
-EVENT_TOPIC = 'events'
-WRITER_TOPIC = 'snuba'
-BROKERS = ['localhost:9093']
-CONSUMER_GROUP = 'snuba-processors'
 MAX_UINT32 = 2 * 32 - 1
-
 
 def _collapse_uint32(n):
     if (n is None) or (n < 0) or (n > MAX_UINT32):
@@ -38,13 +35,13 @@ def _unicodify(s):
     return unicode(s)
 
 consumer = KafkaConsumer(
-    EVENT_TOPIC,
-    bootstrap_servers=BROKERS,
-    group_id=CONSUMER_GROUP,
+    settings.EVENT_TOPIC,
+    bootstrap_servers=settings.BROKERS,
+    group_id=settings.PROCESSOR_CONSUMER_GROUP,
 )
 
 producer = KafkaProducer(
-    bootstrap_servers=BROKERS,
+    bootstrap_servers=settings.BROKERS,
     linger_ms=50,
 )
 
@@ -175,9 +172,8 @@ def process_event(event):
     )
 
     key = '%s:%s' % (event_id, project_id)
-    producer.send(WRITER_TOPIC, key=key.encode('utf-8'), value=json.dumps(row).encode('utf-8'))
+    producer.send(settings.WRITER_TOPIC, key=key.encode('utf-8'), value=json.dumps(row).encode('utf-8'))
 
 
 for msg in consumer:
     process_event(json.loads(msg.value))
-
