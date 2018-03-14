@@ -11,7 +11,7 @@ import settings
 connections = [Client(node) for node in settings.CLICKHOUSE_NODES]
 
 for conn in connections:
-    conn.execute(settings.LOCAL_TABLE_DEFINITION)
+    conn.execute(settings.get_local_table_definition())
     conn.execute(settings.DIST_TABLE_DEFINITION)
 
 
@@ -40,13 +40,13 @@ class SnubaWriter(object):
         conn = self.get_connection()
 
         conn.execute("""
-        INSERT INTO %(table)s (
-            %(colnames)s
-        ) VALUES
-        """ % {
-            'colnames': ", ".join(settings.WRITER_COLUMNS),
-            'table': settings.DIST_TABLE
-        }, self.batch)
+            INSERT INTO %(table)s (
+                %(colnames)s
+            ) VALUES
+            """ % {
+                'colnames': ", ".join(settings.WRITER_COLUMNS),
+                'table': settings.DIST_TABLE
+            }, self.batch)
         self.clear_batch()
 
     def process_row(self, row):
@@ -56,7 +56,13 @@ class SnubaWriter(object):
 
         values = []
         for colname in settings.WRITER_COLUMNS:
-            values.append(row.get(colname, None))
+            value = row.get(colname, None)
+
+            # Hack to handle default value for array columns
+            if value is None and '.' in colname:
+                value = []
+
+            values.append(value)
 
         self.batch.append(values)
 

@@ -1,1 +1,4 @@
 *.swp
+*.pyc
+snuba.egg-info/
+.pytest_cache/

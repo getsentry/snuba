@@ -140,19 +140,21 @@ COLUMNS = """
 
 PARTITION_BY = '(toMonday(timestamp), modulo(intHash32(project_id), 32))'
 ORDER_BY = '(project_id, timestamp)'
-LOCAL_TABLE_DEFINITION = """
-CREATE TABLE IF NOT EXISTS %(name)s (
-    %(columns)s
-) ENGINE = ReplicatedMergeTree(
-    '/clickhouse/tables/{shard}/%(name)s',
-    '{replica}'
-) PARTITION BY %(partition_by)s
-  ORDER BY %(order_by)s;""" % {
-    'columns': COLUMNS,
-    'name': LOCAL_TABLE,
-    'order_by': ORDER_BY,
-    'partition_by': PARTITION_BY,
-}
+
+def get_local_table_definition(name=LOCAL_TABLE):
+    return """
+    CREATE TABLE IF NOT EXISTS %(name)s (
+        %(columns)s
+    ) ENGINE = ReplicatedMergeTree(
+        '/clickhouse/tables/{shard}/%(name)s',
+        '{replica}'
+    ) PARTITION BY %(partition_by)s
+    ORDER BY %(order_by)s;""" % {
+        'columns': COLUMNS,
+        'name': name,
+        'order_by': ORDER_BY,
+        'partition_by': PARTITION_BY,
+    }
 
 DIST_TABLE_DEFINITION = """
 CREATE TABLE IF NOT EXISTS %(name)s (

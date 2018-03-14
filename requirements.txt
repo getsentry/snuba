@@ -1,5 +1,6 @@
 appnope==0.1.0
 astroid==1.6.1
+attrs==17.4.0
 backports.functools-lru-cache==1.5
 backports.shutil-get-terminal-size==1.0.0
 blinker==1.4
@@ -13,12 +14,14 @@ decorator==4.2.1
 deprecation==2.0
 enum34==1.1.6
 Flask==0.12.2
+funcsigs==1.0.2
 functools32==3.2.3.post2
 future==0.16.0
 futures==3.2.0
 idna==2.6
 ipython==5.5.0
 ipython-genutils==0.2.0
+isodate==0.6.0
 isort==4.3.4
 itsdangerous==0.24
 Jinja2==2.10
@@ -33,11 +36,14 @@ packaging==17.1
 pathlib2==2.3.0
 pexpect==4.4.0
 pickleshare==0.7.4
+pluggy==0.6.0
 prompt-toolkit==1.0.15
 ptyprocess==0.5.2
+py==1.5.2
 Pygments==2.2.0
 pylint==1.8.2
 pyparsing==2.2.0
+pytest==3.4.2
 python-dateutil==2.6.1
 raven==6.6.0
 requests==2.18.4
