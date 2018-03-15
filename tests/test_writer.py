@@ -22,9 +22,12 @@ class TestWriter(object):
         self.conn.disconnect()
 
     def _write_events(self, events):
-        rows = []
+        if not isinstance(events, collections.Iterable):
+            events = [events]
 
+        rows = []
         for event in events:
+            row = []
             for colname in settings.WRITER_COLUMNS:
                 value = event.get(colname, None)
 
@@ -32,7 +35,8 @@ class TestWriter(object):
                 if value is None and '.' in colname:
                     value = []
 
-                rows.append(value)
+                row.append(value)
+            rows.append(row)
 
         return self._write_rows(rows)
 

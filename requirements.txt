@@ -34,6 +34,7 @@ MarkupSafe==1.0
 mccabe==0.6.1
 packaging==17.1
 pathlib2==2.3.0
+petname==2.2
 pexpect==4.4.0
 pickleshare==0.7.4
 pluggy==0.6.0
