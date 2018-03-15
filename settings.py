@@ -141,34 +141,34 @@ COLUMNS = """
 PARTITION_BY = '(toMonday(timestamp), modulo(intHash32(project_id), 32))'
 ORDER_BY = '(project_id, timestamp)'
 
-def get_local_table_definition(name=LOCAL_TABLE):
+def get_table_definition(name, engine, columns=COLUMNS):
     return """
     CREATE TABLE IF NOT EXISTS %(name)s (
         %(columns)s
-    ) ENGINE = ReplicatedMergeTree(
-        '/clickhouse/tables/{shard}/%(name)s',
-        '{replica}'
-    ) PARTITION BY %(partition_by)s
-    ORDER BY %(order_by)s;""" % {
-        'columns': COLUMNS,
+    ) ENGINE = %(engine)s""" % {
+        'columns': columns,
+        'engine': engine,
         'name': name,
-        'order_by': ORDER_BY,
-        'partition_by': PARTITION_BY,
     }
 
-DIST_TABLE_DEFINITION = """
-CREATE TABLE IF NOT EXISTS %(name)s (
-    %(columns)s
-) ENGINE = Distributed(
-    %(cluster)s,
-    %(database)s,
-    %(local_table)s,
-    %(sharding_key)s
-);""" % {
-    'cluster': CLUSTER,
-    'columns': COLUMNS,
-    'database': DATABASE,
-    'local_table': LOCAL_TABLE,
-    'name': DIST_TABLE,
-    'sharding_key': 'rand()',
+def get_replicated_engine(name=LOCAL_TABLE, order_by=ORDER_BY, partition_by=PARTITION_BY):
+    return """
+        ReplicatedMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}')
+        PARTITION BY %(partition_by)s
+        ORDER BY %(order_by)s;""" % {
+            'name': name,
+            'order_by': ORDER_BY,
+            'partition_by': PARTITION_BY,
+        }
+
+def get_distributed_engine(cluster=CLUSTER, database=DATABASE,
+                           local_table=LOCAL_TABLE, sharding_key='rand()'):
+    return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
+        'cluster': cluster,
+        'database': database,
+        'local_table': local_table,
+        'sharding_key': sharding_key,
 }
+
+LOCAL_TABLE_DEFINITION = get_table_definition(LOCAL_TABLE, get_replicated_engine())
+DIST_TABLE_DEFINITION = get_table_definition(DIST_TABLE, get_distributed_engine())

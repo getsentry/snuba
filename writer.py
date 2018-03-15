@@ -64,7 +64,7 @@ def run():
 
     # ensure tables exist
     for conn in connections:
-        conn.execute(settings.get_local_table_definition())
+        conn.execute(settings.LOCAL_TABLE_DEFINITION)
         conn.execute(settings.DIST_TABLE_DEFINITION)
 
     consumer = KafkaConsumer(
