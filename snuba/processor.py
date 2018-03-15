@@ -157,5 +157,5 @@ class SnubaProcessor(object):
         self.producer.send(
             settings.WRITER_TOPIC,
             key=key.encode('utf-8'),
-            value=json.dumps(row).encode('utf-8')
+            value=json.dumps(row).encode('utf-8'),
         )
