@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 
+import json
+
 from clickhouse_driver import Client
 from kafka import KafkaConsumer
 
 from snuba import settings
+from snuba.writer import SnubaWriter
 
 
 def run():

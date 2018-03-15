@@ -19,10 +19,12 @@ from snuba import settings
 
 MAX_UINT32 = 2 * 32 - 1
 
+
 def _collapse_uint32(n):
     if (n is None) or (n < 0) or (n > MAX_UINT32):
         return None
     return n
+
 
 def _unicodify(s):
     if not s:
@@ -32,6 +34,7 @@ def _unicodify(s):
         return json.dumps(s)
 
     return unicode(s)
+
 
 def event_to_row(event):
     row = {}
@@ -44,7 +47,10 @@ def event_to_row(event):
     row['project_id'] = event['project_id']
     row['message'] = _unicodify(event['message'])
     row['platform'] = _unicodify(event['platform'])
-    row['timestamp'] = time.mktime(datetime.strptime(event['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+    row['timestamp'] = time.mktime(
+        datetime.strptime(
+            event['datetime'],
+            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
 
     data = event.get('data', {})
 
@@ -56,7 +62,7 @@ def event_to_row(event):
 
     tags = dict(data.get('tags', []))
 
-    tags.pop('sentry:user', None) # defer to user interface data (below)
+    tags.pop('sentry:user', None)  # defer to user interface data (below)
     row['level'] = _unicodify(tags.pop('level', None))
     row['logger'] = _unicodify(tags.pop('logger', None))
     row['server_name'] = _unicodify(tags.pop('server_name', None))

@@ -26,9 +26,9 @@ class SnubaWriter(object):
 
         conn.execute("""
             INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-                'colnames': ", ".join(settings.WRITER_COLUMNS),
-                'table': settings.DIST_TABLE
-            }, self.batch)
+            'colnames': ", ".join(settings.WRITER_COLUMNS),
+            'table': settings.DIST_TABLE
+        }, self.batch)
         self.clear_batch()
 
     def process_row(self, row):

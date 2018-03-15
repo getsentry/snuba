@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
+import json
+
 from kafka import KafkaConsumer, KafkaProducer
 
 from snuba import settings
+from snuba.processor import SnubaProcessor
 
 
 def run():
