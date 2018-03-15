@@ -8,7 +8,7 @@ from base import BaseTest
 
 
 class TestWriter(BaseTest):
-    def test_foo(self):
+    def test(self):
         # only the required fields
         events = [{
             'event_id': uuid.uuid4().hex,

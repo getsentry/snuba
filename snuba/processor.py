@@ -144,16 +144,21 @@ class SnubaProcessor(object):
     def process_event(self, event):
         row = event_to_row(event)
 
-        event_id = row['event_id']
+        # send the same (project_id, event_id) to the same kafka partition
         project_id = row['project_id']
+        event_id = row['event_id']
+        key = '%s:%s' % (project_id, event_id)
 
-        key = '%s:%s' % (event_id, project_id)
-        self.producer.send(settings.WRITER_TOPIC, key=key.encode('utf-8'), value=json.dumps(row).encode('utf-8'))
+        self.producer.send(
+            settings.WRITER_TOPIC,
+            key=key.encode('utf-8'),
+            value=json.dumps(row).encode('utf-8')
+        )
 
 
 def run():
     consumer = KafkaConsumer(
-        settings.EVENT_TOPIC,
+        settings.RAW_EVENTS_TOPIC,
         bootstrap_servers=settings.BROKERS,
         group_id=settings.PROCESSOR_CONSUMER_GROUP,
     )

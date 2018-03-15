@@ -10,10 +10,10 @@ class BaseTest(object):
         self.table = 'test'
         self.conn = Client('localhost')
         self.conn.execute("""
-            CREATE TABLE %(table)s (
-                %(columns)s
-            ) ENGINE = Memory
-        """ % {'table': self.table, 'columns': settings.COLUMNS})
+            CREATE TABLE %(table)s (%(columns)s) ENGINE = Memory""" % {
+                'table': self.table, 'columns': settings.COLUMNS
+            }
+        )
 
     def teardown_method(self, test_method):
         self.conn.execute("DROP TABLE %s" % self.table)
@@ -43,10 +43,7 @@ class BaseTest(object):
             rows = [rows]
 
         self.conn.execute("""
-            INSERT INTO %(table)s (
-                %(colnames)s
-            ) VALUES
-            """ % {
+            INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
                 'colnames': ", ".join(settings.WRITER_COLUMNS),
                 'table': self.table,
             }, rows)

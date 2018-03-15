@@ -8,8 +8,6 @@ from kafka import KafkaConsumer
 import settings
 
 
-
-
 class SnubaWriter(object):
     def __init__(self, connections, batch_size=settings.WRITER_BATCH_SIZE):
         self.connections = connections
@@ -29,10 +27,7 @@ class SnubaWriter(object):
         conn = self.get_connection()
 
         conn.execute("""
-            INSERT INTO %(table)s (
-                %(colnames)s
-            ) VALUES
-            """ % {
+            INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
                 'colnames': ", ".join(settings.WRITER_COLUMNS),
                 'table': settings.DIST_TABLE
             }, self.batch)

@@ -9,7 +9,9 @@ Snuba assumes a Clickhouse server HTTP endpoint at `CLICKHOUSE_SERVER` (default 
 ## Install / Run
 
     mkvirtualenv snuba
-    ./snuba
+
+    # Run API server
+    ./api
 
 ## API
 

@@ -2,6 +2,7 @@
 
 pip install -r requirements.txt
 
-export FLASK_APP=snuba.py
+export FLASK_APP=snuba/api.py
 export FLASK_DEBUG=1
+
 flask run
