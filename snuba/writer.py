@@ -2,10 +2,8 @@ import json
 import random
 
 from datetime import datetime
-from clickhouse_driver import Client
-from kafka import KafkaConsumer
 
-import settings
+from snuba import settings
 
 
 class SnubaWriter(object):
@@ -52,26 +50,3 @@ class SnubaWriter(object):
 
         if self.should_flush():
             self.flush()
-
-
-def run():
-    connections = [Client(node) for node in settings.CLICKHOUSE_NODES]
-
-    # ensure tables exist
-    for conn in connections:
-        conn.execute(settings.LOCAL_TABLE_DEFINITION)
-        conn.execute(settings.DIST_TABLE_DEFINITION)
-
-    consumer = KafkaConsumer(
-        settings.WRITER_TOPIC,
-        bootstrap_servers=settings.BROKERS,
-        group_id=settings.WRITER_CONSUMER_GROUP,
-    )
-
-    writer = SnubaWriter(connections=connections)
-    for msg in consumer:
-        writer.process_row(json.loads(msg.value))
-
-
-if __name__ == '__main__':
-    run()

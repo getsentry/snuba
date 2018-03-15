@@ -2,9 +2,8 @@ import json
 import time
 
 from datetime import datetime
-from kafka import KafkaConsumer, KafkaProducer
 
-import settings
+from snuba import settings
 
 
 # TODO: schema changes:
@@ -154,24 +153,3 @@ class SnubaProcessor(object):
             key=key.encode('utf-8'),
             value=json.dumps(row).encode('utf-8')
         )
-
-
-def run():
-    consumer = KafkaConsumer(
-        settings.RAW_EVENTS_TOPIC,
-        bootstrap_servers=settings.BROKERS,
-        group_id=settings.PROCESSOR_CONSUMER_GROUP,
-    )
-
-    producer = KafkaProducer(
-        bootstrap_servers=settings.BROKERS,
-        linger_ms=50,
-    )
-
-    processor = SnubaProcessor(producer=producer)
-    for msg in consumer:
-        processor.process_event(json.loads(msg.value))
-
-
-if __name__ == '__main__':
-    run()
