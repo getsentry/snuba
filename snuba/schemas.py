@@ -82,11 +82,15 @@ QUERY_SCHEMA = {
             'anyOf': [
                 {"$ref": "#/definitions/column_name"},
                 {"$ref": "#/definitions/column_list"},
+                {'type': 'array', 'maxItems':0},
             ],
             'default': 'time',
         },
         'aggregateby': {
-            "$ref": "#/definitions/column_name",
+            'anyOf': [
+                {"$ref": "#/definitions/column_name"},
+                {'enum': ['']},
+            ],
             'default': '',
         },
         'aggregation': {

@@ -15,6 +15,10 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
+# TODO if there is a condition on `issue =` or `issue IN` we can prune
+# issue_expr to only search for issues that would pass the filter
+# TODO if `issue` or `time` is specified in 2 places (eg group and where),
+# we redundantly expand it twice
 @app.route('/query', methods=['GET', 'POST'])
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query():
@@ -25,27 +29,29 @@ def query():
     assert from_date <= to_date
 
     conditions = body['conditions']
-    conditions.append(('timestamp', '>=', from_date))
-    conditions.append(('timestamp', '<', to_date))
-    conditions.append(('project_id', 'IN', util.to_list(body['project'])))
+    conditions.extend([
+        ('timestamp', '>=', from_date),
+        ('timestamp', '<', to_date),
+        ('project_id', 'IN', util.to_list(body['project'])),
+    ])
 
-    aggregate_columns = [
-        ('{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)), settings.AGGREGATE_RESULT_COLUMN)
-    ]
+    aggregate_columns = [(
+        '{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)),
+        settings.AGGREGATE_RESULT_COLUMN
+    )]
     group_columns = [(util.column_expr(gb, body), gb) for gb in util.to_list(body['groupby'])]
-    select_columns = group_columns + aggregate_columns
 
+    select_columns = group_columns + aggregate_columns
     select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
     select_clause = 'SELECT {}'.format(select_clause)
 
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
 
-    # TODO if there is a condition on 'issue', and issue is not defined/aliased in the SELECT clause, then
-    # we need to expand 'issue' into issue_expr here too
-    where_predicates = ('{} {} {}'.format(col, op, util.escape_literal(lit)) for (col, op, lit) in conditions)
-    where_clause = ' AND '.join(where_predicates)
-    if where_clause:
-        where_clause = 'WHERE {}'.format(where_clause)
+    where_predicates = (
+        '{} {} {}'.format(util.column_expr(col, body), op, util.escape_literal(lit))
+        for (col, op, lit) in conditions
+    )
+    where_clause = 'WHERE {}'.format(' AND '.join(where_predicates)) if conditions else ''
 
     group_clause = ', '.join(alias for (_, alias) in group_columns)
     if group_clause:
