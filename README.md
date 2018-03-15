@@ -32,4 +32,7 @@ Settings are found in `settings.py`
     docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 \
       --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server
 
+    pip install -r requirements.txt
+    python setup.py develop
+
     pytest
