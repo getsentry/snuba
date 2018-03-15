@@ -11,6 +11,7 @@ click==6.7
 clickhouse-driver==0.0.9
 configparser==3.5.0
 contextlib2==0.5.5
+coverage==4.5.1
 decorator==4.2.1
 deprecation==2.0
 enum34==1.1.6
@@ -49,6 +50,7 @@ Pygments==2.2.0
 pylint==1.8.2
 pyparsing==2.2.0
 pytest==3.4.2
+pytest-cov==2.5.1
 python-dateutil==2.6.1
 raven==6.6.0
 requests==2.18.4
