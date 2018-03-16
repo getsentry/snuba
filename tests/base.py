@@ -11,7 +11,7 @@ class BaseTest(object):
     def setup_method(self, test_method):
         from fixtures import raw_event
 
-        self.base_event = self.wrap_raw_event(raw_event)
+        self.event = self.wrap_raw_event(raw_event)
 
         self.table = 'test'
         self.conn = Client('localhost')
@@ -41,6 +41,16 @@ class BaseTest(object):
         self.conn.disconnect()
 
     def write_raw_events(self, events):
+        if not isinstance(events, (list, tuple)):
+            events = [events]
+
+        wrapped = []
+        for event in events:
+            wrapped.append(self.wrap_raw_event(event))
+
+        return self.write_wrapped_events(wrapped)
+
+    def write_wrapped_events(self, events):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
