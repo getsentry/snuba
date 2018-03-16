@@ -44,21 +44,14 @@ class BaseTest(object):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        wrapped = []
+        out = []
         for event in events:
-            wrapped.append(self.wrap_raw_event(event))
+            if 'primary_hash' not in event:
+                event = self.wrap_raw_event(event)
+            processed = process_raw_event(event)
+            out.append(processed)
 
-        return self.write_wrapped_events(wrapped)
-
-    def write_wrapped_events(self, events):
-        if not isinstance(events, (list, tuple)):
-            events = [events]
-
-        processed = []
-        for event in events:
-            processed.append(process_raw_event(event))
-
-        return self.write_processed_events(processed)
+        return self.write_processed_events(out)
 
     def write_processed_events(self, events):
         if not isinstance(events, (list, tuple)):
