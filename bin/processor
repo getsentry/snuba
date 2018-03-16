@@ -39,6 +39,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
     for msg in consumer:
         event = json.loads(msg.value)
+
         key = get_key(event)
         processed = process_raw_event(event)
 

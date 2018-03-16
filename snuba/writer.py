@@ -6,6 +6,10 @@ from snuba import settings
 
 
 def row_from_processed_event(event, columns):
+    # TODO: clickhouse-driver expects datetimes, would be nice to skip this
+    event['timestamp'] = datetime.fromtimestamp(event['timestamp'])
+    event['received'] = datetime.fromtimestamp(event['received'])
+
     values = []
     for colname in columns:
         value = event.get(colname, None)
@@ -51,10 +55,6 @@ class SnubaWriter(object):
         self.clear_batch()
 
     def write(self, event):
-        # TODO: clickhouse-driver expects datetimes, would be nice to skip this
-        event['timestamp'] = datetime.fromtimestamp(event['timestamp'])
-        event['received'] = datetime.fromtimestamp(event['received'])
-
         row = row_from_processed_event(event, self.columns)
 
         self.batch.append(row)

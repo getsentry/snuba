@@ -1,9 +1,9 @@
-import collections
 from hashlib import md5
 
 from clickhouse_driver import Client
 
 from snuba import settings
+from snuba.processor import process_raw_event
 from snuba.writer import row_from_processed_event
 
 
@@ -21,8 +21,11 @@ class BaseTest(object):
         })
 
     def wrap_raw_event(self, event):
+        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
+
         unique = "%s:%s" % (str(event['project']), event['id'])
         primary_hash = md5(unique).hexdigest()[:16]
+
         return {
             'event_id': event['id'],
             'primary_hash': primary_hash,
@@ -37,19 +40,28 @@ class BaseTest(object):
         self.conn.execute("DROP TABLE %s" % self.table)
         self.conn.disconnect()
 
-    def _write_events(self, events):
-        if not isinstance(events, collections.Iterable):
+    def write_raw_events(self, events):
+        if not isinstance(events, (list, tuple)):
+            events = [events]
+
+        processed = []
+        for event in events:
+            processed.append(process_raw_event(event))
+
+        return self.write_processed_events(processed)
+
+    def write_processed_events(self, events):
+        if not isinstance(events, (list, tuple)):
             events = [events]
 
         rows = []
         for event in events:
-            row = row_from_processed_event(event, settings.WRITER_COLUMNS)
-            rows.append(row)
+            rows.append(row_from_processed_event(event, settings.WRITER_COLUMNS))
 
-        return self._write_rows(rows)
+        return self.write_rows(rows)
 
-    def _write_rows(self, rows):
-        if not isinstance(rows, collections.Iterable):
+    def write_rows(self, rows):
+        if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
         self.conn.execute("""
