@@ -2,6 +2,7 @@
 
 import json
 
+import click
 from clickhouse_driver import Client
 from kafka import KafkaConsumer
 
@@ -9,8 +10,17 @@ from snuba import settings
 from snuba.writer import SnubaWriter
 
 
-def run():
-    connections = [Client(node) for node in settings.CLICKHOUSE_NODES]
+@click.command()
+@click.option('--rows-topic', default=settings.WRITER_TOPIC,
+              help='Topic to consume processed rows from.')
+@click.option('--consumer-group', default=settings.WRITER_CONSUMER_GROUP,
+              help='Consumer group used for consuming the processed rows topic.')
+@click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
+              help='Kafka bootstrap server to use (multiple allowed).')
+@click.option('--clickhouse-server', default=settings.CLICKHOUSE_NODES, multiple=True,
+              help='Clickhouse server to write to (multiple allowed).')
+def run(rows_topic, consumer_group, bootstrap_server, clickhouse_server):
+    connections = [Client(node) for node in clickhouse_server]
 
     # ensure tables exist
     for conn in connections:
@@ -18,9 +28,9 @@ def run():
         conn.execute(settings.DIST_TABLE_DEFINITION)
 
     consumer = KafkaConsumer(
-        settings.WRITER_TOPIC,
-        bootstrap_servers=settings.BROKERS,
-        group_id=settings.WRITER_CONSUMER_GROUP,
+        rows_topic,
+        bootstrap_servers=bootstrap_server,
+        group_id=consumer_group,
     )
 
     writer = SnubaWriter(connections=connections)

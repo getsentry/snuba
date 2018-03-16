@@ -3,8 +3,6 @@ import time
 
 from datetime import datetime
 
-from snuba import settings
-
 
 # TODO: schema changes:
 #   * message params -> string array
@@ -143,9 +141,6 @@ def event_to_row(event):
 
 
 class SnubaProcessor(object):
-    def __init__(self, producer):
-        self.producer = producer
-
     def process_event(self, event):
         row = event_to_row(event)
 
@@ -154,8 +149,4 @@ class SnubaProcessor(object):
         event_id = row['event_id']
         key = '%s:%s' % (project_id, event_id)
 
-        self.producer.send(
-            settings.WRITER_TOPIC,
-            key=key.encode('utf-8'),
-            value=json.dumps(row).encode('utf-8'),
-        )
+        return (key, row)

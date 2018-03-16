@@ -1,28 +1,51 @@
 #!/usr/bin/env python
 
+import atexit
 import json
 
+import click
 from kafka import KafkaConsumer, KafkaProducer
 
 from snuba import settings
 from snuba.processor import SnubaProcessor
 
 
-def run():
+@click.command()
+@click.option('--raw-events-topic', default=settings.RAW_EVENTS_TOPIC,
+              help='Topic to consume raw events from.')
+@click.option('--consumer-group', default=settings.PROCESSOR_CONSUMER_GROUP,
+              help='Consumer group use for consuming the raw events topic.')
+@click.option('--rows-topic', default=settings.WRITER_TOPIC,
+              help='Topic to produce processed rows into.')
+@click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
+              help='Kafka bootstrap server to use.')
+def run(raw_events_topic, consumer_group, rows_topic, bootstrap_server):
     consumer = KafkaConsumer(
-        settings.RAW_EVENTS_TOPIC,
-        bootstrap_servers=settings.BROKERS,
-        group_id=settings.PROCESSOR_CONSUMER_GROUP,
+        raw_events_topic,
+        bootstrap_servers=bootstrap_server,
+        group_id=consumer_group,
     )
 
     producer = KafkaProducer(
-        bootstrap_servers=settings.BROKERS,
+        bootstrap_servers=bootstrap_server,
         linger_ms=50,
     )
 
-    processor = SnubaProcessor(producer=producer)
+    def exit_handler():
+        producer.flush()
+        producer.close()
+
+    atexit.register(exit_handler)
+
+    processor = SnubaProcessor()
     for msg in consumer:
-        processor.process_event(json.loads(msg.value))
+        key, value = processor.process_event(json.loads(msg.value))
+
+        producer.send(
+            rows_topic,
+            key=key.encode('utf-8'),
+            value=json.dumps(value).encode('utf-8'),
+        )
 
 
 if __name__ == '__main__':
