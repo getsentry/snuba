@@ -1,4 +1,6 @@
 from flask import request, render_template
+
+from clickhouse_driver import Client
 from datetime import date, datetime
 from dateutil.parser import parse as parse_datetime
 from dateutil.tz import tz
@@ -52,40 +54,27 @@ def raw_query(sql):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    sql = sql + ' FORMAT JSON'
-    response = requests.get(
-        settings.CLICKHOUSE_SERVER,
-        params={'query': sql},
+    client = Client(settings.CLICKHOUSE_SERVER,
+	port=settings.CLICKHOUSE_PORT,
+	connect_timeout=1
     )
+    response = client.execute(sql, with_column_types=True)
     # TODO handle query failures / retries
+    data, meta = response
 
-    try:
-        result = json.loads(response.text)
-    except ValueError as e:
-        print response
-        raise e
-    assert 'meta' in result
-    assert 'data' in result
+    # for now, convert back to a dict-y format to emulate the json
+    data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
+    meta = [{'name': m[0], 'type': m[1]} for m in meta]
 
-    # Fix up various anomalies in clickhouse JSON
-    for col in result['meta']:
-        # Clickhouse sends UInt64's as JSON strings
-        if col['type'] == 'UInt64':
-            for d in result['data']:
-                try:
-                    d[col['name']] = int(d[col['name']])
-                except:
-                    pass
-        # Convert naive datetime strings back to TZ aware ones
-        elif col['type'] == "DateTime('Etc/Zulu')":
-            for d in result['data']:
-                d[col['name']] = parse_datetime(
-                    d[col['name']]
-                ).replace(tzinfo=tz.tzutc()).isoformat()
+    for col in meta:
+        # Convert naive datetime strings back to TZ aware ones, and stringify
+	# TODO maybe this should be in the json serializer
+        if col['type'] == "DateTime":
+            for d in data:
+                d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
 
-    # TODO reformat rows into tuples instead of dicts, or column arrays
     # TODO record statistics somewhere
-    return { k: result[k] for k in ['data', 'meta']}
+    return { 'data': data, 'meta': meta}
 
 def issue_expr(issues, col='primary_hash'):
     """

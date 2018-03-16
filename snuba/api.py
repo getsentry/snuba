@@ -59,6 +59,5 @@ def query():
 
     sql = '{} {} {} {}'.format(select_clause, from_clause, where_clause, group_clause)
 
-    print sql
     result = util.raw_query(sql)
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})

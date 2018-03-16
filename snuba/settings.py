@@ -1,5 +1,6 @@
 # Clickhouse Options
-CLICKHOUSE_SERVER = 'http://localhost:8123'
+CLICKHOUSE_SERVER = 'localhost'
+CLICKHOUSE_PORT = 9001
 CLICKHOUSE_TABLE = 'sentry_dist'
 
 # Sentry Options
