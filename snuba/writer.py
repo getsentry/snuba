@@ -5,10 +5,27 @@ from datetime import datetime
 from snuba import settings
 
 
+def row_from_processed_event(event, columns):
+    values = []
+    for colname in columns:
+        value = event.get(colname, None)
+
+        # Hack to handle default value for array columns
+        if value is None and '.' in colname:
+            value = []
+
+        values.append(value)
+
+    return values
+
+
 class SnubaWriter(object):
-    def __init__(self, connections, batch_size=settings.WRITER_BATCH_SIZE):
+    def __init__(self, connections, batch_size=settings.WRITER_BATCH_SIZE,
+                 columns=settings.WRITER_COLUMNS):
         self.connections = connections
         self.batch_size = batch_size
+        self.columns = columns
+
         self.clear_batch()
 
     def clear_batch(self):
@@ -21,31 +38,26 @@ class SnubaWriter(object):
         return random.choice(self.connections)
 
     def flush(self):
-        conn = self.get_connection()
+        if len(self.batch) < 1:
+            return
 
+        conn = self.get_connection()
         conn.execute("""
             INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-            'colnames': ", ".join(settings.WRITER_COLUMNS),
+            'colnames': ", ".join(self.columns),
             'table': settings.DIST_TABLE
         }, self.batch)
+
         self.clear_batch()
 
-    def process_row(self, row):
+    def write(self, event):
         # TODO: clickhouse-driver expects datetimes, would be nice to skip this
-        row['timestamp'] = datetime.fromtimestamp(row['timestamp'])
-        row['received'] = datetime.fromtimestamp(row['received'])
+        event['timestamp'] = datetime.fromtimestamp(event['timestamp'])
+        event['received'] = datetime.fromtimestamp(event['received'])
 
-        values = []
-        for colname in settings.WRITER_COLUMNS:
-            value = row.get(colname, None)
+        row = row_from_processed_event(event, self.columns)
 
-            # Hack to handle default value for array columns
-            if value is None and '.' in colname:
-                value = []
-
-            values.append(value)
-
-        self.batch.append(values)
+        self.batch.append(row)
 
         if self.should_flush():
             self.flush()

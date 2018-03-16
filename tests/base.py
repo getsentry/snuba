@@ -4,6 +4,7 @@ from hashlib import md5
 from clickhouse_driver import Client
 
 from snuba import settings
+from snuba.writer import row_from_processed_event
 
 
 class BaseTest(object):
@@ -42,15 +43,7 @@ class BaseTest(object):
 
         rows = []
         for event in events:
-            row = []
-            for colname in settings.WRITER_COLUMNS:
-                value = event.get(colname, None)
-
-                # Hack to handle default value for array columns
-                if value is None and '.' in colname:
-                    value = []
-
-                row.append(value)
+            row = row_from_processed_event(event, settings.WRITER_COLUMNS)
             rows.append(row)
 
         return self._write_rows(rows)

@@ -34,61 +34,61 @@ def _unicodify(s):
     return unicode(s)
 
 
-def key_for_event(event):
+def get_key(event):
     # send the same (project_id, event_id) to the same kafka partition
     project_id = event['project_id']
     event_id = event['event_id']
     return '%s:%s' % (project_id, event_id)
 
 
-def row_for_event(event):
-    row = {}
+def process_raw_event(event):
+    processed = {}
 
-    row['event_id'] = event['event_id']
+    processed['event_id'] = event['event_id']
 
     # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
-    row['primary_hash'] = event['primary_hash'][-16:].rjust(16)
+    processed['primary_hash'] = event['primary_hash'][-16:].rjust(16)
 
-    row['project_id'] = event['project_id']
-    row['message'] = _unicodify(event['message'])
-    row['platform'] = _unicodify(event['platform'])
-    row['timestamp'] = int(time.mktime(
+    processed['project_id'] = event['project_id']
+    processed['message'] = _unicodify(event['message'])
+    processed['platform'] = _unicodify(event['platform'])
+    processed['timestamp'] = int(time.mktime(
         datetime.strptime(
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
     data = event.get('data', {})
 
-    row['received'] = int(data['received'])
+    processed['received'] = int(data['received'])
 
     sdk = data.get('sdk', {})
-    row['sdk_name'] = _unicodify(sdk.get('name', None))
-    row['sdk_version'] = _unicodify(sdk.get('version', None))
+    processed['sdk_name'] = _unicodify(sdk.get('name', None))
+    processed['sdk_version'] = _unicodify(sdk.get('version', None))
 
     tags = dict(data.get('tags', []))
 
     tags.pop('sentry:user', None)  # defer to user interface data (below)
-    row['level'] = _unicodify(tags.pop('level', None))
-    row['logger'] = _unicodify(tags.pop('logger', None))
-    row['server_name'] = _unicodify(tags.pop('server_name', None))
-    row['transaction'] = _unicodify(tags.pop('transaction', None))
-    row['environment'] = _unicodify(tags.pop('environment', None))
-    row['release'] = _unicodify(tags.pop('sentry:release', None))
-    row['dist'] = _unicodify(tags.pop('sentry:dist', None))
-    row['site'] = _unicodify(tags.pop('site', None))
-    row['url'] = _unicodify(tags.pop('url', None))
+    processed['level'] = _unicodify(tags.pop('level', None))
+    processed['logger'] = _unicodify(tags.pop('logger', None))
+    processed['server_name'] = _unicodify(tags.pop('server_name', None))
+    processed['transaction'] = _unicodify(tags.pop('transaction', None))
+    processed['environment'] = _unicodify(tags.pop('environment', None))
+    processed['release'] = _unicodify(tags.pop('sentry:release', None))
+    processed['dist'] = _unicodify(tags.pop('sentry:dist', None))
+    processed['site'] = _unicodify(tags.pop('site', None))
+    processed['url'] = _unicodify(tags.pop('url', None))
 
     user = data.get('sentry.interfaces.User', {})
-    row['user_id'] = _unicodify(user.get('id', None))
-    row['username'] = _unicodify(user.get('username', None))
-    row['email'] = _unicodify(user.get('email', None))
-    row['ip_address'] = _unicodify(user.get('ip_address', None))
+    processed['user_id'] = _unicodify(user.get('id', None))
+    processed['username'] = _unicodify(user.get('username', None))
+    processed['email'] = _unicodify(user.get('email', None))
+    processed['ip_address'] = _unicodify(user.get('ip_address', None))
 
     http = data.get('sentry.interfaces.Http', {})
-    row['http_method'] = _unicodify(http.get('method', None))
+    processed['http_method'] = _unicodify(http.get('method', None))
 
     http_headers = dict(http.get('headers', []))
-    row['http_referer'] = _unicodify(http_headers.get('Referer', None))
+    processed['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
     tag_keys = []
     tag_values = []
@@ -96,8 +96,8 @@ def row_for_event(event):
         tag_keys.append(_unicodify(tag_key))
         tag_values.append(_unicodify(tag_value))
 
-    row['tags.key'] = tag_keys
-    row['tags.value'] = tag_values
+    processed['tags.key'] = tag_keys
+    processed['tags.value'] = tag_values
 
     stack_types = []
     stack_values = []
@@ -132,16 +132,16 @@ def row_for_event(event):
 
         stack_level += 1
 
-    row['exception_stacks.type'] = stack_types
-    row['exception_stacks.value'] = stack_values
-    row['exception_frames.abs_path'] = frame_abs_paths
-    row['exception_frames.filename'] = frame_filenames
-    row['exception_frames.package'] = frame_packages
-    row['exception_frames.module'] = frame_modules
-    row['exception_frames.function'] = frame_functions
-    row['exception_frames.in_app'] = frame_in_app
-    row['exception_frames.colno'] = frame_colnos
-    row['exception_frames.lineno'] = frame_linenos
-    row['exception_frames.stack_level'] = frame_stack_levels
+    processed['exception_stacks.type'] = stack_types
+    processed['exception_stacks.value'] = stack_values
+    processed['exception_frames.abs_path'] = frame_abs_paths
+    processed['exception_frames.filename'] = frame_filenames
+    processed['exception_frames.package'] = frame_packages
+    processed['exception_frames.module'] = frame_modules
+    processed['exception_frames.function'] = frame_functions
+    processed['exception_frames.in_app'] = frame_in_app
+    processed['exception_frames.colno'] = frame_colnos
+    processed['exception_frames.lineno'] = frame_linenos
+    processed['exception_frames.stack_level'] = frame_stack_levels
 
-    return row
+    return processed

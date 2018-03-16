@@ -11,15 +11,15 @@ from snuba.writer import SnubaWriter
 
 
 @click.command()
-@click.option('--rows-topic', default=settings.WRITER_TOPIC,
-              help='Topic to consume processed rows from.')
+@click.option('--processed-events-topic', default=settings.WRITER_TOPIC,
+              help='Topic to consume processed events from.')
 @click.option('--consumer-group', default=settings.WRITER_CONSUMER_GROUP,
-              help='Consumer group used for consuming the processed rows topic.')
+              help='Consumer group used for consuming the processed events topic.')
 @click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
               help='Kafka bootstrap server to use (multiple allowed).')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_NODES, multiple=True,
               help='Clickhouse server to write to (multiple allowed).')
-def run(rows_topic, consumer_group, bootstrap_server, clickhouse_server):
+def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server):
     connections = [Client(node) for node in clickhouse_server]
 
     # ensure tables exist
@@ -28,14 +28,14 @@ def run(rows_topic, consumer_group, bootstrap_server, clickhouse_server):
         conn.execute(settings.DIST_TABLE_DEFINITION)
 
     consumer = KafkaConsumer(
-        rows_topic,
+        processed_events_topic,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
     )
 
     writer = SnubaWriter(connections=connections)
     for msg in consumer:
-        writer.process_row(json.loads(msg.value))
+        writer.write(json.loads(msg.value))
 
 
 if __name__ == '__main__':

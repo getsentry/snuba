@@ -7,7 +7,7 @@ import click
 from kafka import KafkaConsumer, KafkaProducer
 
 from snuba import settings
-from snuba.processor import key_for_event, row_for_event
+from snuba.processor import get_key, process_raw_event
 
 
 @click.command()
@@ -15,11 +15,11 @@ from snuba.processor import key_for_event, row_for_event
               help='Topic to consume raw events from.')
 @click.option('--consumer-group', default=settings.PROCESSOR_CONSUMER_GROUP,
               help='Consumer group use for consuming the raw events topic.')
-@click.option('--rows-topic', default=settings.WRITER_TOPIC,
-              help='Topic to produce processed rows into.')
+@click.option('--processed-events-topic', default=settings.WRITER_TOPIC,
+              help='Topic to send processed events to.')
 @click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
-def run(raw_events_topic, consumer_group, rows_topic, bootstrap_server):
+def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server):
     consumer = KafkaConsumer(
         raw_events_topic,
         bootstrap_servers=bootstrap_server,
@@ -39,13 +39,13 @@ def run(raw_events_topic, consumer_group, rows_topic, bootstrap_server):
 
     for msg in consumer:
         event = json.loads(msg.value)
-        key = key_for_event(event)
-        row = row_for_event(event)
+        key = get_key(event)
+        processed = process_raw_event(event)
 
         producer.send(
-            rows_topic,
+            processed_events_topic,
             key=key.encode('utf-8'),
-            value=json.dumps(row).encode('utf-8'),
+            value=json.dumps(processed).encode('utf-8'),
         )
 
 

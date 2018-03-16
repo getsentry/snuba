@@ -65,7 +65,8 @@ raw_event = {
     'sentry.interfaces.Message': {'message': 'Caught exception!'},
     'tags': [['logger', 'example.Application'],
              ['server_name', 'localhost.localdomain'],
-             ['level', 'error']],
+             ['level', 'error'],
+             ['custom_tag', 'custom_value']],
     'time_spent': None,
     'type': 'error',
     'version': '6'}
