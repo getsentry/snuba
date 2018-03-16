@@ -1,25 +1,26 @@
-import time
-from datetime import datetime
-
 from base import BaseTest
 
-from snuba.processor import SnubaProcessor
+from snuba.processor import key_for_event, row_for_event
 
 
 class TestProcessor(BaseTest):
-    def test(self):
-        processor = SnubaProcessor()
+    def test_key(self):
+        key = key_for_event(self.base_event)
 
-        event = {
-            'event_id': 'x' * 32,
-            'primary_hash': 'x' * 16,
-            'project_id': 1,
-            'message': 'm',
-            'platform': 'p',
-            'datetime': datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-            'data': {
-                'received': time.time(),
-            }
-        }
+        assert self.base_event['event_id'] in key
+        assert str(self.base_event['project_id']) in key
 
-        key, value = processor.process_event(event)
+    def test_simple(self):
+        row = row_for_event(self.base_event)
+
+        for field in ('event_id', 'project_id', 'message'):
+            assert row[field] == self.base_event[field]
+        assert isinstance(row['timestamp'], int)
+        assert isinstance(row['received'], int)
+
+    def test_unexpected_obj(self):
+        self.base_event['message'] = {'what': 'why is this in the message'}
+
+        row = row_for_event(self.base_event)
+
+        assert row['message'] == '{"what": "why is this in the message"}'

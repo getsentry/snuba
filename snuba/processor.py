@@ -34,7 +34,14 @@ def _unicodify(s):
     return unicode(s)
 
 
-def event_to_row(event):
+def key_for_event(event):
+    # send the same (project_id, event_id) to the same kafka partition
+    project_id = event['project_id']
+    event_id = event['event_id']
+    return '%s:%s' % (project_id, event_id)
+
+
+def row_for_event(event):
     row = {}
 
     row['event_id'] = event['event_id']
@@ -45,14 +52,14 @@ def event_to_row(event):
     row['project_id'] = event['project_id']
     row['message'] = _unicodify(event['message'])
     row['platform'] = _unicodify(event['platform'])
-    row['timestamp'] = time.mktime(
+    row['timestamp'] = int(time.mktime(
         datetime.strptime(
             event['datetime'],
-            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple())
+            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
     data = event.get('data', {})
 
-    row['received'] = data['received']
+    row['received'] = int(data['received'])
 
     sdk = data.get('sdk', {})
     row['sdk_name'] = _unicodify(sdk.get('name', None))
@@ -138,15 +145,3 @@ def event_to_row(event):
     row['exception_frames.stack_level'] = frame_stack_levels
 
     return row
-
-
-class SnubaProcessor(object):
-    def process_event(self, event):
-        row = event_to_row(event)
-
-        # send the same (project_id, event_id) to the same kafka partition
-        project_id = row['project_id']
-        event_id = row['event_id']
-        key = '%s:%s' % (project_id, event_id)
-
-        return (key, row)

@@ -1,4 +1,5 @@
 import collections
+from hashlib import md5
 
 from clickhouse_driver import Client
 
@@ -7,12 +8,29 @@ from snuba import settings
 
 class BaseTest(object):
     def setup_method(self, test_method):
+        from fixtures import raw_event
+
+        self.base_event = self.wrap_raw_event(raw_event)
+
         self.table = 'test'
         self.conn = Client('localhost')
         self.conn.execute("""
             CREATE TABLE %(table)s (%(columns)s) ENGINE = Memory""" % {
             'table': self.table, 'columns': settings.COLUMNS
         })
+
+    def wrap_raw_event(self, event):
+        unique = "%s:%s" % (str(event['project']), event['id'])
+        primary_hash = md5(unique).hexdigest()[:16]
+        return {
+            'event_id': event['id'],
+            'primary_hash': primary_hash,
+            'project_id': event['project'],
+            'message': event['message'],
+            'platform': event['platform'],
+            'datetime': event['datetime'],
+            'data': event
+        }
 
     def teardown_method(self, test_method):
         self.conn.execute("DROP TABLE %s" % self.table)
