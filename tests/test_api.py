@@ -92,3 +92,12 @@ class TestApi(BaseTest):
             issues_expected = set(range(0, len(self.hashes), p))
             assert issues_found - issues_expected == set()
 
+    def test_conditions(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'issues': list(enumerate(self.hashes)),
+            'groupby': 'issue',
+            'conditions': [['issue', 'IN', [0,1,2,3,4]]]
+        })).data)
+        assert set([d['issue'] for d in result['data']]) == set([0, 4])
