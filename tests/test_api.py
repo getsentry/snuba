@@ -103,3 +103,21 @@ class TestApi(BaseTest):
         })).data)
         assert set([d['issue'] for d in result['data']]) == set([0, 4])
 
+    def test_aggregate(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 3,
+            'issues': list(enumerate(self.hashes)),
+            'groupby': 'project_id',
+            'aggregation': 'topK(4)',
+            'aggregateby': 'issue',
+        })).data)
+        assert sorted(result['data'][0]['aggregate']) == [0, 3, 6, 9]
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 3,
+            'issues': list(enumerate(self.hashes)),
+            'groupby': 'project_id',
+            'aggregation': 'uniq',
+            'aggregateby': 'issue',
+        })).data)
+        assert result['data'][0]['aggregate'] == 4
