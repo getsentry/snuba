@@ -89,5 +89,6 @@ class TestApi(BaseTest):
                 'groupby': 'issue',
             })).data) 
             issues_found = set([d['issue'] for d in result['data']])
-            assert set(range(0, len(self.hashes), p)) == issues_found
+            issues_expected = set(range(0, len(self.hashes), p))
+            assert issues_found - issues_expected == set()
 
