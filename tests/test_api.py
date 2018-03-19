@@ -41,19 +41,24 @@ class TestApi(BaseTest):
         for tick in range(self.minutes):
             tock = tick + 1
             for p in self.project_ids:
+                # project N sends an event every Nth second
                 if tock % p == 0:
                     events.append({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
+                        # Project N sends every Nth (mod len(hashes)) hash (and platform)
                         'platform': self.platforms[(tock * p)% len(self.platforms)],
-                        'message': 'a message',
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
+                        'message': 'a message',
                         'timestamp': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                     })
         self.write_processed_events(events)
 
     def test_count(self):
+        """
+        Test total counts are correct in the hourly time buckets for each project
+        """
         res = self.conn.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
@@ -72,6 +77,10 @@ class TestApi(BaseTest):
                 assert result['data'][b]['aggregate'] == float(rollup_mins) / p
 
     def test_issues(self):
+        """
+        Test that issues are grouped correctly when passing an 'issues' list
+        to the query.
+        """
 	for p in self.project_ids:
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': p,
@@ -81,6 +90,4 @@ class TestApi(BaseTest):
             })).data) 
             issues_found = set([d['issue'] for d in result['data']])
             assert set(range(0, len(self.hashes), p)) == issues_found
-
-            assert result == 1
 
