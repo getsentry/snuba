@@ -13,7 +13,7 @@ class TestProcessor(BaseTest):
     def test_simple(self):
         processed = process_raw_event(self.event)
 
-        for field in ('event_id', 'project_id', 'message'):
+        for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
         assert isinstance(processed['timestamp'], int)
         assert isinstance(processed['received'], int)
@@ -24,3 +24,10 @@ class TestProcessor(BaseTest):
         processed = process_raw_event(self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
+
+    def test_long_hash(self):
+        self.event['primary_hash'] = 'x' * 128
+
+        processed = process_raw_event(self.event)
+
+        assert processed['primary_hash'] == ('x' * 16)

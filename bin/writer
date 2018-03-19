@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import atexit
 import json
 
 import click
@@ -34,6 +35,12 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
     )
 
     writer = SnubaWriter(connections=connections)
+
+    def exit_handler():
+        writer.flush()
+
+    atexit.register(exit_handler)
+
     for msg in consumer:
         writer.write(json.loads(msg.value))
 
