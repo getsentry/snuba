@@ -11,8 +11,10 @@ import six
 import schemas
 import settings
 
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
+
 
 def column_expr(column_name, body):
     """
@@ -28,12 +30,13 @@ def column_expr(column_name, body):
     else:
         return column_name
 
+
 def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
     """
     if isinstance(value, six.string_types):
-        value = value.replace("'", "\\'") # TODO this escaping is garbage
+        value = value.replace("'", "\\'")  # TODO this escaping is garbage
         return "'{}'".format(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
@@ -46,6 +49,7 @@ def escape_literal(value):
         return str(value)
     else:
         raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
+
 
 def raw_query(sql, client):
     """
@@ -62,7 +66,7 @@ def raw_query(sql, client):
 
     for col in meta:
         # Convert naive datetime strings back to TZ aware ones, and stringify
-	# TODO maybe this should be in the json serializer
+        # TODO maybe this should be in the json serializer
         if col['type'] == "DateTime":
             for d in data:
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
@@ -72,7 +76,8 @@ def raw_query(sql, client):
                 d[col['name']] = dt.isoformat()
 
     # TODO record statistics somewhere
-    return { 'data': data, 'meta': meta}
+    return {'data': data, 'meta': meta}
+
 
 def issue_expr(issues, col='primary_hash'):
     """
@@ -98,6 +103,7 @@ def issue_expr(issues, col='primary_hash'):
 
         return 'if({}, {}, {})'.format(predicate, issue_id, issue_expr(issues[1:], col=col))
 
+
 def validate_request(schema):
     """
     Decorator to validate that a request body matches the given schema.
@@ -117,10 +123,10 @@ def validate_request(schema):
                 setattr(request, 'validated_body', body)
             except (ValueError, jsonschema.ValidationError) as e:
                 return (render_template('error.html',
-                    error=str(e),
-                    schema=json.dumps(schema, indent=4, sort_keys=True, default=default_encode)
-                ), 400)
+                                        error=str(e),
+                                        schema=json.dumps(
+                                            schema, indent=4, sort_keys=True, default=default_encode)
+                                        ), 400)
             return func(*args, **kwargs)
         return wrapper
     return validator
-

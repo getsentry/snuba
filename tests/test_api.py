@@ -24,12 +24,13 @@ class TestApi(BaseTest):
         self.app = api.app.test_client()
 
         # values for test data
-        self.project_ids = [1, 2, 3] # 3 projects
-        self.platforms = ['a', 'b', 'c', 'd', 'e', 'f'] # 6 platforms
-        self.hashes = [x * 16  for x in '0123456789ab'] # 12 hashes
+        self.project_ids = [1, 2, 3]  # 3 projects
+        self.platforms = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 platforms
+        self.hashes = [x * 16 for x in '0123456789ab']  # 12 hashes
         self.minutes = 180
 
-        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(minutes=self.minutes)
+        self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - \
+            timedelta(minutes=self.minutes)
         self.generate_fizzbuzz_events()
 
     def generate_fizzbuzz_events(self):
@@ -47,7 +48,7 @@ class TestApi(BaseTest):
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         # Project N sends every Nth (mod len(hashes)) hash (and platform)
-                        'platform': self.platforms[(tock * p)% len(self.platforms)],
+                        'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
                         'message': 'a message',
                         'timestamp': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
@@ -65,15 +66,15 @@ class TestApi(BaseTest):
         rollup_mins = 60
         for p in self.project_ids:
             result = json.loads(self.app.post('/query', data=json.dumps({
-                'project':p,
-                'granularity':rollup_mins * 60,
+                'project': p,
+                'granularity': rollup_mins * 60,
                 'from_date': self.base_time.isoformat(),
                 'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat()
             })).data)
             buckets = self.minutes / rollup_mins
             for b in range(buckets):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
-                assert  bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
+                assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result['data'][b]['aggregate'] == float(rollup_mins) / p
 
     def test_issues(self):
@@ -87,7 +88,7 @@ class TestApi(BaseTest):
                 'granularity': 3600,
                 'issues': list(enumerate(self.hashes)),
                 'groupby': 'issue',
-            })).data) 
+            })).data)
             issues_found = set([d['issue'] for d in result['data']])
             issues_expected = set(range(0, len(self.hashes), p))
             assert issues_found - issues_expected == set()
@@ -98,6 +99,6 @@ class TestApi(BaseTest):
             'granularity': 3600,
             'issues': list(enumerate(self.hashes)),
             'groupby': 'issue',
-            'conditions': [['issue', 'IN', [0,1,2,3,4]]]
+            'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
         assert set([d['issue'] for d in result['data']]) == set([0, 4])

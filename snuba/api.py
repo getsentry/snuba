@@ -7,7 +7,9 @@ import json
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
-import settings, util, schemas
+import settings
+import util
+import schemas
 
 app = Flask(__name__)
 clickhouse = Client(
@@ -16,6 +18,7 @@ clickhouse = Client(
     connect_timeout=1
 )
 sentry = Sentry(app, dsn=settings.SENTRY_DSN)
+
 
 @app.route('/')
 def root():
@@ -26,6 +29,8 @@ def root():
 # issue_expr to only search for issues that would pass the filter
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
 # we redundantly expand it twice
+
+
 @app.route('/query', methods=['GET', 'POST'])
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query():
@@ -67,8 +72,12 @@ def query():
 
     order_clause = 'ORDER BY time' if 'time' in groupby else ''
 
-    sql = '{} {} {} {} {}'.format(select_clause, from_clause, where_clause, group_clause, order_clause)
-
+    sql = '{} {} {} {} {}'.format(
+        select_clause,
+        from_clause,
+        where_clause,
+        group_clause,
+        order_clause)
 
     result = util.raw_query(sql, clickhouse)
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})

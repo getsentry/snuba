@@ -12,11 +12,11 @@ QUERY_SCHEMA = {
                 'items': [
                     {
                         "$ref": "#/definitions/column_name"
-                    },{
+                    }, {
                         # Operator
                         'type': 'string',
                         'enum': ['>', '<', '>=', '<=', '=', 'IN'],
-                    },{
+                    }, {
                         # Literal
                         'anyOf': [
                             {'type': ['string', 'number']},
@@ -82,7 +82,7 @@ QUERY_SCHEMA = {
             'anyOf': [
                 {"$ref": "#/definitions/column_name"},
                 {"$ref": "#/definitions/column_list"},
-                {'type': 'array', 'maxItems':0},
+                {'type': 'array', 'maxItems': 0},
             ],
             'default': 'time',
         },
@@ -102,7 +102,8 @@ QUERY_SCHEMA = {
             ],
         },
     },
-    'required': ['project'], # Need to select down to the project level for customer isolation and performance
+    # Need to select down to the project level for customer isolation and performance
+    'required': ['project'],
 
     'definitions': {
         'fingerprint_hash': {
@@ -113,7 +114,7 @@ QUERY_SCHEMA = {
         },
         'column_name': {
             'anyOf': [
-                {'enum': ['issue']}, # Special computed column created from `issues` definition
+                {'enum': ['issue']},  # Special computed column created from `issues` definition
                 {
                     'type': 'string',
                     # TODO make sure its a valid column, either in the schema or here
@@ -128,6 +129,7 @@ QUERY_SCHEMA = {
         }
     }
 }
+
 
 def validate(value, schema, set_defaults=True):
     orig = jsonschema.Draft4Validator.VALIDATORS["properties"]
