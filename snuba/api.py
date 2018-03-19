@@ -1,13 +1,20 @@
 from flask import Flask, render_template, request
+
+from clickhouse_driver import Client
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 import json
 from markdown import markdown
-from datetime import datetime, timedelta
 from raven.contrib.flask import Sentry
 
 import settings, util, schemas
 
 app = Flask(__name__)
+clickhouse = Client(
+    settings.CLICKHOUSE_SERVER,
+    port=settings.CLICKHOUSE_PORT,
+    connect_timeout=1
+)
 sentry = Sentry(app, dsn=settings.SENTRY_DSN)
 
 @app.route('/')
@@ -39,7 +46,8 @@ def query():
         '{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)),
         settings.AGGREGATE_RESULT_COLUMN
     )]
-    group_columns = [(util.column_expr(gb, body), gb) for gb in util.to_list(body['groupby'])]
+    groupby = util.to_list(body['groupby'])
+    group_columns = [(util.column_expr(gb, body), gb) for gb in groupby]
 
     select_columns = group_columns + aggregate_columns
     select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
@@ -57,7 +65,10 @@ def query():
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)
 
-    sql = '{} {} {} {}'.format(select_clause, from_clause, where_clause, group_clause)
+    order_clause = 'ORDER BY time' if 'time' in groupby else ''
 
-    result = util.raw_query(sql)
+    sql = '{} {} {} {} {}'.format(select_clause, from_clause, where_clause, group_clause, order_clause)
+
+
+    result = util.raw_query(sql, clickhouse)
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})

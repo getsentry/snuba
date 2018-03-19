@@ -1,8 +1,6 @@
 from flask import request, render_template
 
-from clickhouse_driver import Client
 from datetime import date, datetime
-from dateutil.parser import parse as parse_datetime
 from dateutil.tz import tz
 import json
 import jsonschema
@@ -49,15 +47,11 @@ def escape_literal(value):
     else:
         raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
 
-def raw_query(sql):
+def raw_query(sql, client):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    client = Client(settings.CLICKHOUSE_SERVER,
-	port=settings.CLICKHOUSE_PORT,
-	connect_timeout=1
-    )
     response = client.execute(sql, with_column_types=True)
     # TODO handle query failures / retries
     data, meta = response
@@ -72,6 +66,10 @@ def raw_query(sql):
         if col['type'] == "DateTime":
             for d in data:
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
+        if col['type'] == "Date":
+            for d in data:
+                dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
+                d[col['name']] = dt.isoformat()
 
     # TODO record statistics somewhere
     return { 'data': data, 'meta': meta}
