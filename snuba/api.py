@@ -25,8 +25,6 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
-# TODO if there is a condition on `issue =` or `issue IN` we can prune
-# issue_expr to only search for issues that would pass the filter
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
 # we redundantly expand it twice
 

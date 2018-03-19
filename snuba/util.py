@@ -26,7 +26,12 @@ def column_expr(column_name, body):
     if column_name == settings.TIME_GROUP_COLUMN:
         return settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
     elif column_name == 'issue':
-        return issue_expr(body['issues']) if body['issues'] is not None else None
+        cond = body.get('conditions', [])
+        ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
+              [set(lit) for (col, op, lit) in cond if col == 'issue' and op == 'IN' and isinstance(lit, list)]
+        ids = set.union(*ids) if ids else None
+        return issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
+
     else:
         return column_name
 
@@ -79,7 +84,7 @@ def raw_query(sql, client):
     return {'data': data, 'meta': meta}
 
 
-def issue_expr(issues, col='primary_hash'):
+def issue_expr(issues, col='primary_hash', ids=None):
     """
     Takes a list of (issue_id, fingerprint(s)) tuples of the form:
 
@@ -96,12 +101,14 @@ def issue_expr(issues, col='primary_hash'):
     else:
         issue_id, hashes = issues[0]
 
-        if hasattr(hashes, '__iter__'):
-            predicate = "{} IN ('{}')".format(col, "', '".join(hashes))
+        if ids is None or issue_id in ids:
+            if hasattr(hashes, '__iter__'):
+                predicate = "{} IN ('{}')".format(col, "', '".join(hashes))
+            else:
+                predicate = "{} = '{}'".format(col, hashes)
+            return 'if({}, {}, {})'.format(predicate, issue_id, issue_expr(issues[1:], col=col, ids=ids))
         else:
-            predicate = "{} = '{}'".format(col, hashes)
-
-        return 'if({}, {}, {})'.format(predicate, issue_id, issue_expr(issues[1:], col=col))
+            return issue_expr(issues[1:], col=col, ids=ids)
 
 
 def validate_request(schema):

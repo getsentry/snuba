@@ -102,3 +102,4 @@ class TestApi(BaseTest):
             'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
         assert set([d['issue'] for d in result['data']]) == set([0, 4])
+
