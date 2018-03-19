@@ -8,11 +8,6 @@ from datetime import datetime
 #   * message params -> string array
 #   * span_id -> uuid
 #   * transaction_id -> uuid
-#   * context
-#       store all well known fields https://docs.sentry.io/clientdev/interfaces/contexts/
-#       dedupe/promote from two places:
-#           tags
-#           UserAgentPlugin model(s) in Sentry codebase
 
 
 MAX_UINT32 = 2 * 32 - 1
@@ -22,6 +17,40 @@ def _collapse_uint32(n):
     if (n is None) or (n < 0) or (n > MAX_UINT32):
         return None
     return n
+
+
+def _boolify(s):
+    if not s:
+        return None
+
+    if isinstance(s, bool):
+        return s
+
+    s = _unicodify(s)
+
+    if s in ('yes', 'true', '1'):
+        return True
+    elif s in ('false', 'no', '0'):
+        return False
+
+    return None
+
+
+def _floatify(s):
+    if not s:
+        return None
+
+    if isinstance(s, float):
+        return s
+
+    try:
+        s = float(s.strip(' %'))
+    except ValueError:
+        pass
+    else:
+        return s
+
+    return None
 
 
 def _unicodify(s):
@@ -64,6 +93,38 @@ def process_raw_event(event):
     sdk = data.get('sdk', {})
     processed['sdk_name'] = _unicodify(sdk.get('name', None))
     processed['sdk_version'] = _unicodify(sdk.get('version', None))
+
+    contexts = data.get('contexts', {})
+    os = contexts.get('os', {})
+
+    processed['os_name'] = _unicodify(os.get('name', None))
+    processed['os_version'] = _unicodify(os.get('version', None))
+    processed['os_build'] = _unicodify(os.get('build', None))
+    processed['os_kernel_version'] = _unicodify(os.get('kernel_version', None))
+    processed['os_rooted'] = _boolify(os.get('rooted', None))
+
+    runtime = contexts.get('runtime', {})
+    processed['runtime_name'] = _unicodify(runtime.get('name', None))
+    processed['runtime_version'] = _unicodify(runtime.get('version', None))
+
+    browser = contexts.get('browser', {})
+    processed['browser_name'] = _unicodify(browser.get('name', None))
+    processed['browser_version'] = _unicodify(browser.get('version', None))
+
+    device = contexts.get('device', {})
+    processed['device_name'] = _unicodify(device.get('name', None))
+    processed['device_brand'] = _unicodify(device.get('brand', None))
+    processed['device_locale'] = _unicodify(device.get('locale', None))
+    processed['device_uuid'] = _unicodify(device.get('uuid', None))
+    processed['device_family'] = _unicodify(device.get('family', None))
+    processed['device_model'] = _unicodify(device.get('model', None))
+    processed['device_model_id'] = _unicodify(device.get('model_id', None))
+    processed['device_arch'] = _unicodify(device.get('arch', None))
+    processed['device_battery_level'] = _floatify(device.get('battery_level', None))
+    processed['device_orientation'] = _unicodify(device.get('orientation', None))
+    processed['device_simulator'] = _boolify(os.get('simulator', None))
+    processed['device_online'] = _boolify(os.get('online', None))
+    processed['device_charging'] = _boolify(os.get('charging', None))
 
     tags = dict(data.get('tags', []))
 

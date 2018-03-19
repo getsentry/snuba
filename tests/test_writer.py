@@ -13,6 +13,12 @@ class TestWriter(BaseTest):
 
         assert res[0][0] == 1
 
+    def test_columns_match_schema(self):
+        processed = process_raw_event(self.event)
+        row = row_from_processed_event(processed, WRITER_COLUMNS)
+
+        assert len(processed) == len(row)
+
     def test_unknown_columns(self):
         """Fields in a processed events are ignored if they don't have
         a corresponding Clickhouse column declared."""
