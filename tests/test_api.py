@@ -20,14 +20,14 @@ class TestApi(BaseTest):
         settings.CLICKHOUSE_PORT = 9000
         from snuba import api
         api.app.testing = True
-	api.clickhouse = self.conn
+        api.clickhouse = self.conn
         self.app = api.app.test_client()
 
-	# values for test data
+        # values for test data
         self.project_ids = [1, 2, 3] # 3 projects
         self.platforms = ['a', 'b', 'c', 'd', 'e', 'f'] # 6 platforms
         self.hashes = [x * 16  for x in '0123456789ab'] # 12 hashes
-	self.minutes = 180
+        self.minutes = 180
 
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - timedelta(minutes=self.minutes)
         self.generate_fizzbuzz_events()
@@ -63,7 +63,7 @@ class TestApi(BaseTest):
         assert res[0][0] == 330
 
         rollup_mins = 60
-	for p in self.project_ids:
+        for p in self.project_ids:
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project':p,
                 'granularity':rollup_mins * 60,
@@ -81,7 +81,7 @@ class TestApi(BaseTest):
         Test that issues are grouped correctly when passing an 'issues' list
         to the query.
         """
-	for p in self.project_ids:
+        for p in self.project_ids:
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': p,
                 'granularity': 3600,
