@@ -5,7 +5,7 @@ from kafka import KafkaConsumer
 from kafka import ConsumerRebalanceListener
 
 
-class ConsumerWorker(object):
+class AbstractConsumerWorker(object):
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
@@ -16,8 +16,12 @@ class ConsumerWorker(object):
     def flush_batch(self, batch):
         pass
 
+    @abc.abstractmethod
+    def shutdown(self):
+        pass
 
-class BatchingConsumer(object):
+
+class BatchingKafkaConsumer(object):
     def __init__(self, topic, consumer_worker, max_batch_size, max_batch_time, **configs):
         self.consumer_worker = consumer_worker
         self.max_batch_size = max_batch_size
@@ -27,8 +31,11 @@ class BatchingConsumer(object):
         self.timer = None
 
         class RebalanceListener(ConsumerRebalanceListener):
+            def __init__(self, batching_consumer):
+                self.batching_consumer = batching_consumer
+
             def on_partitions_revoked(self, revoked):
-                self.flush()
+                self.batching_consumer._flush()
 
             def on_partitions_assigned(self, assigned):
                 pass
@@ -41,7 +48,7 @@ class BatchingConsumer(object):
             consumer_timeout_ms=consumer_timeout_ms,
             **configs
         )
-        self.consumer.subscribe(topics=(topic, ), listener=RebalanceListener())
+        self.consumer.subscribe(topics=(topic, ), listener=RebalanceListener(self))
 
     def run(self):
         while True:
@@ -60,7 +67,7 @@ class BatchingConsumer(object):
             if self.shutdown:
                 break
 
-        self.flush(force=True)
+        self._flush(force=True)
         self.consumer.close()
 
     def signal_shutdown(self):

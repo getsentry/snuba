@@ -5,23 +5,13 @@ import json
 import signal
 
 import click
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaProducer
 
 from snuba import settings
 from snuba.processor import get_key, process_raw_event
+from snuba.consumer import AbstractConsumerWorker, BatchingKafkaConsumer
 
-shutdown = False
 logger = logging.getLogger('snuba.processor')
-
-
-def handler(signum, frame):
-    global shutdown
-    shutdown = True
-
-    logger.warning("SIGINT received, initiating shutdown")
-
-
-signal.signal(signal.SIGINT, handler)
 
 
 @click.command()
@@ -37,39 +27,47 @@ signal.signal(signal.SIGINT, handler)
 def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level):
     logging.basicConfig(level=getattr(logging, log_level.upper()))
 
-    consumer = KafkaConsumer(
+    producer = KafkaProducer(bootstrap_servers=bootstrap_server)
+
+    class ConsumerWorker(AbstractConsumerWorker):
+        def process_message(self, message):
+            event = json.loads(message.value)
+
+            key = get_key(event).encode('utf-8')
+            processed = json.dumps(process_raw_event(event)).encode('utf-8')
+
+            return (key, processed)
+
+        def flush_batch(self, batch):
+            for key, value in batch:
+                producer.send(
+                    processed_events_topic,
+                    key=key,
+                    value=value,
+                )
+
+            producer.flush()
+
+        def shutdown(self):
+            producer.close()
+
+    consumer = BatchingKafkaConsumer(
         raw_events_topic,
+        consumer_worker=ConsumerWorker(),
+        max_batch_size=1000,
+        max_batch_time=1000,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',
         consumer_timeout_ms=1000,
     )
 
-    producer = KafkaProducer(
-        bootstrap_servers=bootstrap_server,
-        linger_ms=50,
-    )
+    def handler(signum, frame):
+        consumer.signal_shutdown()
 
-    while not shutdown:
-        for msg in consumer:
-            event = json.loads(msg.value)
+    signal.signal(signal.SIGINT, handler)
 
-            key = get_key(event)
-            processed = process_raw_event(event)
-
-            producer.send(
-                processed_events_topic,
-                key=key.encode('utf-8'),
-                value=json.dumps(processed).encode('utf-8'),
-            )
-
-            if shutdown:
-                break
-
-    # shutdown
-    consumer.close()
-    producer.flush()
-    producer.close()
+    consumer.run()
 
 
 if __name__ == '__main__':
