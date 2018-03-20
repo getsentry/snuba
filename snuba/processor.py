@@ -45,7 +45,7 @@ def _floatify(s):
 
     try:
         s = float(s)
-    except ValueError:
+    except (ValueError, TypeError):
         return None
     else:
         return s

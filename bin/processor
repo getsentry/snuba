@@ -1,13 +1,27 @@
 #!/usr/bin/env python
 
-import atexit
+import logging
 import json
+import signal
 
 import click
 from kafka import KafkaConsumer, KafkaProducer
 
 from snuba import settings
 from snuba.processor import get_key, process_raw_event
+
+shutdown = False
+logger = logging.getLogger('snuba.processor')
+
+
+def handler(signum, frame):
+    global shutdown
+    shutdown = True
+
+    logger.warning("SIGINT received, initiating shutdown")
+
+
+signal.signal(signal.SIGINT, handler)
 
 
 @click.command()
@@ -19,11 +33,16 @@ from snuba.processor import get_key, process_raw_event
               help='Topic to send processed events to.')
 @click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
-def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server):
+@click.option('--log-level', default='WARN', help='Logging level to use.')
+def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level):
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
+
     consumer = KafkaConsumer(
         raw_events_topic,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
+        auto_offset_reset='earliest',
+        consumer_timeout_ms=1000,
     )
 
     producer = KafkaProducer(
@@ -31,23 +50,26 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         linger_ms=50,
     )
 
-    def exit_handler():
-        producer.flush()
-        producer.close()
+    while not shutdown:
+        for msg in consumer:
+            event = json.loads(msg.value)
 
-    atexit.register(exit_handler)
+            key = get_key(event)
+            processed = process_raw_event(event)
 
-    for msg in consumer:
-        event = json.loads(msg.value)
+            producer.send(
+                processed_events_topic,
+                key=key.encode('utf-8'),
+                value=json.dumps(processed).encode('utf-8'),
+            )
 
-        key = get_key(event)
-        processed = process_raw_event(event)
+            if shutdown:
+                break
 
-        producer.send(
-            processed_events_topic,
-            key=key.encode('utf-8'),
-            value=json.dumps(processed).encode('utf-8'),
-        )
+    # shutdown
+    consumer.close()
+    producer.flush()
+    producer.close()
 
 
 if __name__ == '__main__':

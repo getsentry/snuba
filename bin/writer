@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
-import atexit
+import logging
 import json
+import signal
 
 import click
 from clickhouse_driver import Client
@@ -9,6 +10,20 @@ from kafka import KafkaConsumer
 
 from snuba import settings
 from snuba.writer import SnubaWriter
+
+
+shutdown = False
+logger = logging.getLogger('snuba.writer')
+
+
+def handler(signum, frame):
+    global shutdown
+    shutdown = True
+
+    logger.warning("SIGINT received, initiating shutdown")
+
+
+signal.signal(signal.SIGINT, handler)
 
 
 @click.command()
@@ -20,7 +35,10 @@ from snuba.writer import SnubaWriter
               help='Kafka bootstrap server to use (multiple allowed).')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_NODES, multiple=True,
               help='Clickhouse server to write to (multiple allowed).')
-def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server):
+@click.option('--log-level', default='WARN', help='Logging level to use.')
+def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server, log_level):
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
+
     connections = [Client(node) for node in clickhouse_server]
 
     # ensure tables exist
@@ -32,17 +50,21 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         processed_events_topic,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
+        auto_offset_reset='earliest',
+        consumer_timeout_ms=1000,
     )
 
     writer = SnubaWriter(connections=connections)
 
-    def exit_handler():
-        writer.flush()
+    while not shutdown:
+        for msg in consumer:
+            writer.write(json.loads(msg.value))
 
-    atexit.register(exit_handler)
+            if shutdown:
+                break
 
-    for msg in consumer:
-        writer.write(json.loads(msg.value))
+    # shutdown
+    writer.flush()
 
 
 if __name__ == '__main__':
