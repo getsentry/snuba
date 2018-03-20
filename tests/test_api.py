@@ -121,3 +121,13 @@ class TestApi(BaseTest):
             'aggregateby': 'issue',
         })).data)
         assert result['data'][0]['aggregate'] == 4
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 3,
+            'issues': list(enumerate(self.hashes)),
+            'groupby': ['project_id', 'time'],
+            'aggregation': 'uniq',
+            'aggregateby': 'issue',
+        })).data)
+        assert len(result['data']) == 3 # time buckets
+        assert all(d['aggregate'] == 4 for d in result['data'])

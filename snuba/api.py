@@ -45,6 +45,7 @@ def query():
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
 
+    # TODO need more safety, eg if aggregation is 'uniq' then there must be an 'aggregateby'
     aggregate_columns = [(
         '{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)),
         settings.AGGREGATE_RESULT_COLUMN

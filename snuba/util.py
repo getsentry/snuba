@@ -26,6 +26,8 @@ def column_expr(column_name, body):
     if column_name == settings.TIME_GROUP_COLUMN:
         return settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
     elif column_name == 'issue':
+        # If there are conditions on what 'issue' can be, then only expand the
+        # expression for the issues that will actually be selected.
         cond = body.get('conditions', [])
         ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
               [set(lit) for (col, op, lit) in cond if col == 'issue' and op == 'IN' and isinstance(lit, list)]
@@ -61,9 +63,11 @@ def raw_query(sql, client):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    response = client.execute(sql, with_column_types=True)
-    # TODO handle query failures / retries
-    data, meta = response
+    print sql
+    try:
+        data, meta = client.execute(sql, with_column_types=True)
+    except:
+        data, meta = [], []
 
     # for now, convert back to a dict-y format to emulate the json
     data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
