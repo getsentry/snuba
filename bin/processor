@@ -8,8 +8,9 @@ import click
 from kafka import KafkaProducer
 
 from snuba import settings
-from snuba.processor import get_key, process_raw_event
 from snuba.consumer import AbstractConsumerWorker, BatchingKafkaConsumer
+from snuba.processor import get_key, process_raw_event
+
 
 logger = logging.getLogger('snuba.processor')
 

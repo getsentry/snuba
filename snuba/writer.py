@@ -24,40 +24,16 @@ def row_from_processed_event(event, columns):
 
 
 class SnubaWriter(object):
-    def __init__(self, connections, batch_size=settings.WRITER_BATCH_SIZE,
-                 columns=settings.WRITER_COLUMNS):
+    def __init__(self, connections, table=settings.DIST_TABLE):
         self.connections = connections
-        self.batch_size = batch_size
-        self.columns = columns
-
-        self.clear_batch()
-
-    def clear_batch(self):
-        self.batch = []
-
-    def should_flush(self):
-        return len(self.batch) >= self.batch_size
 
     def get_connection(self):
         return random.choice(self.connections)
 
-    def flush(self):
-        if len(self.batch) < 1:
-            return
-
+    def write(self, rows):
         conn = self.get_connection()
         conn.execute("""
             INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
             'colnames': ", ".join(self.columns),
-            'table': settings.DIST_TABLE
-        }, self.batch)
-
-        self.clear_batch()
-
-    def write(self, event):
-        row = row_from_processed_event(event, self.columns)
-
-        self.batch.append(row)
-
-        if self.should_flush():
-            self.flush()
+            'table': self.table,
+        }, rows)
