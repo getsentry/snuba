@@ -44,9 +44,9 @@ def _floatify(s):
         return s
 
     try:
-        s = float(s.strip(' %'))
+        s = float(s)
     except ValueError:
-        pass
+        return None
     else:
         return s
 
