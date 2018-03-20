@@ -41,7 +41,10 @@ class BatchingKafkaConsumer(object):
                 pass
 
         assert 'enable_auto_commit' not in configs or not configs['enable_auto_commit']
-        consumer_timeout_ms = min(max_batch_time, configs.pop('consumer_timeout_ms', float('inf')))
+
+        consumer_timeout_ms = configs.pop('consumer_timeout_ms', float('inf'))
+        consumer_timeout_ms = min(max_batch_time, consumer_timeout_ms)
+        consumer_timeout_ms = min(1000, consumer_timeout_ms)
 
         self.consumer = KafkaConsumer(
             enable_auto_commit=False,
