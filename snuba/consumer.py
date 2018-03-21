@@ -137,7 +137,7 @@ class BatchingKafkaConsumer(object):
         logger.debug("Starting")
 
         while not self.shutdown:
-            self.run_once()
+            self._run_once()
 
         self._shutdown()
 
