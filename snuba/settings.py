@@ -31,7 +31,6 @@ RAW_EVENTS_TOPIC = 'events'
 BROKERS = ['localhost:9093']
 WRITER_CONSUMER_GROUP = 'snuba-writers'
 PROCESSOR_CONSUMER_GROUP = 'snuba-processors'
-WRITER_BATCH_SIZE = 10000
 WRITER_COLUMNS = [
     'event_id',
     'timestamp',

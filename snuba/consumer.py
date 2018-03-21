@@ -1,11 +1,15 @@
 import abc
+import logging
 import time
 
 from kafka import KafkaConsumer
 from kafka import ConsumerRebalanceListener
 
 
-class AbstractConsumerWorker(object):
+logger = logging.getLogger('snuba.consumer')
+
+
+class AbstractBatchWorker(object):
     """The `BatchingKafkaConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
@@ -55,16 +59,18 @@ class RebalanceListener(ConsumerRebalanceListener):
 
     def on_partitions_revoked(self, revoked):
         "Flush the batch (if any) and commit Kafka offsets."
+        logger.debug("Partitons revoked: %s" % revoked)
+
         self.batching_consumer._flush()
 
     def on_partitions_assigned(self, assigned):
-        pass
+        logger.debug("New partitions assigned: %s" % assigned)
 
 
 class BatchingKafkaConsumer(object):
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
-    for the `AbstractConsumerWorker` and then the `BatchingKafkaConsumer` handles the rest.
+    for the `AbstractBatchWorker` and then the `BatchingKafkaConsumer` handles the rest.
 
     Main differences from the default KafkaConsumer are as follows:
     * Messages are processed locally (e.g. not written to an external datastore!) as they are
@@ -80,9 +86,9 @@ class BatchingKafkaConsumer(object):
       and flush a batch of events
     """
 
-    def __init__(self, topic, consumer_worker, max_batch_size, max_batch_time, **configs):
-        assert isinstance(consumer_worker, AbstractConsumerWorker)
-        self.consumer_worker = consumer_worker
+    def __init__(self, topic, worker, max_batch_size, max_batch_time, **configs):
+        assert isinstance(worker, AbstractBatchWorker)
+        self.worker = worker
 
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time
@@ -118,6 +124,8 @@ class BatchingKafkaConsumer(object):
     def run(self):
         "The main run loop, see class docstring for more information."
 
+        logger.debug("Starting")
+
         while True:
             self._flush()
             if self.shutdown:
@@ -132,24 +140,32 @@ class BatchingKafkaConsumer(object):
                 if not self.timer:
                     self.timer = self.max_batch_time / 1000.0 + time.time()
 
-                result = self.consumer_worker.process_message(msg)
+                result = self.worker.process_message(msg)
                 self.batch.append(result)
 
                 self._flush()
                 if self.shutdown:
                     break
 
+        logger.debug("Stopping")
+
         # force flush the batch because it is unlikely that we hit a
         # size or time threshold just as we were told to shutdown
         self._flush(force=True)
 
         # tell the consumer to shutdown, and close the consumer
-        self.consumer_worker.shutdown()
+        logger.debug("Stopping worker")
+        self.worker.shutdown()
+        logger.debug("Stopping consumer")
         self.consumer.close()
+
+        logger.debug("Stopped")
 
     def signal_shutdown(self):
         """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
         Typically called from a signal handler."""
+        logger.debug("Shutdown signalled")
+
         self.shutdown = True
 
     def _flush(self, force=False):
@@ -160,7 +176,20 @@ class BatchingKafkaConsumer(object):
             batch_by_size = len(self.batch) >= self.max_batch_size
             batch_by_time = self.timer and time.time() > self.timer
             if (force or batch_by_size or batch_by_time):
-                self.consumer_worker.flush_batch(self.batch)
+                logger.debug(
+                    "Flushing %s items: forced:%s size:%s time:%s" % (
+                        len(self.batch), force, batch_by_size, batch_by_time)
+                )
+
+                logger.debug("Flushing batch via worker")
+                t = time.time()
+                self.worker.flush_batch(self.batch)
+                logger.debug("Worker flush took %ss" % (time.time() - t))
+
                 self.batch = []
                 self.timer = None
+
+                logger.debug("Committing Kafka offsets")
+                t = time.time()
                 self.consumer.commit()
+                logger.debug("Kafka offset commit took %ss" % (time.time() - t))

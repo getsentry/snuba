@@ -8,7 +8,7 @@ import click
 from kafka import KafkaProducer
 
 from snuba import settings
-from snuba.consumer import AbstractConsumerWorker, BatchingKafkaConsumer
+from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.processor import get_key, process_raw_event
 
 
@@ -30,7 +30,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
     producer = KafkaProducer(bootstrap_servers=bootstrap_server)
 
-    class ConsumerWorker(AbstractConsumerWorker):
+    class ProcessorWorker(AbstractBatchWorker):
         def process_message(self, message):
             event = json.loads(message.value)
 
@@ -54,9 +54,9 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        consumer_worker=ConsumerWorker(),
-        max_batch_size=1000,
-        max_batch_time=1000,
+        worker=ProcessorWorker(),
+        max_batch_size=50000,
+        max_batch_time=5000,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',

@@ -8,7 +8,7 @@ import click
 from clickhouse_driver import Client
 
 from snuba import settings
-from snuba.consumer import AbstractConsumerWorker, BatchingKafkaConsumer
+from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.writer import SnubaWriter, row_from_processed_event
 
 
@@ -48,7 +48,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     writer = SnubaWriter(connections=connections)
 
-    class ConsumerWorker(AbstractConsumerWorker):
+    class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
             return row_from_processed_event(json.loads(message.value), settings.WRITER_COLUMNS)
 
@@ -60,9 +60,9 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     consumer = BatchingKafkaConsumer(
         processed_events_topic,
-        consumer_worker=ConsumerWorker(),
-        max_batch_size=settings.WRITER_BATCH_SIZE,
-        max_batch_time=60 * 1000,
+        worker=WriterWorker(),
+        max_batch_size=100000,
+        max_batch_time=30 * 1000,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',
