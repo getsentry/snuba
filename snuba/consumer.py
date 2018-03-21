@@ -84,9 +84,14 @@ class BatchingKafkaConsumer(object):
       then Kafka offsets are immediately committed (in the same thread/loop)
     * Users need only provide an implementation of what it means to process a raw message
       and flush a batch of events
+
+    NOTE: This does not eliminate the possibility of duplicates if the consumer process
+    crashes between writing to its backend and commiting Kafka offsets. This should eliminate
+    the possibility of *losing* data though. An "exactly once" consumer would need to store
+    offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
-    def __init__(self, topic, worker, max_batch_size, max_batch_time, **configs):
+    def __init__(self, topic, worker, max_batch_size, max_batch_time, **kwargs):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -97,56 +102,72 @@ class BatchingKafkaConsumer(object):
         self.batch = []
         self.timer = None
 
+        self.consumer = self.create_consumer(topic, **kwargs)
+
+    def create_consumer(self, topic, **kwargs):
         # Ensure the caller didn't expct auto commit to work
-        assert not configs.get('enable_auto_commit', False)
+        assert not kwargs.get('enable_auto_commit', False)
 
         # `consumer_timeout_ms` configures the longest amount of time (in millis) we have
         # to wait for our main loop to run if no messages are received on a Kafka topic,
         # which means it needs to be the minimum of our `max_batch_time` and some reasonable
         # default that doesn't leave a user waiting forever for a shutdown to complete
-        consumer_timeout_ms = configs.pop('consumer_timeout_ms', float('inf'))
-        consumer_timeout_ms = min(max_batch_time, consumer_timeout_ms)
+        consumer_timeout_ms = kwargs.pop('consumer_timeout_ms', float('inf'))
+        consumer_timeout_ms = min(self.max_batch_time, consumer_timeout_ms)
         consumer_timeout_ms = min(1000, consumer_timeout_ms)
 
         # The KafkaConsumer constructor doesn't let us setup a RebalanceListener
         # so we have to construct it, then call subscribe.
-        self.consumer = KafkaConsumer(
+        consumer = KafkaConsumer(
             enable_auto_commit=False,
             consumer_timeout_ms=consumer_timeout_ms,
-            **configs
+            **kwargs
         )
 
-        self.consumer.subscribe(
+        consumer.subscribe(
             topics=(topic, ),
             listener=RebalanceListener(self)
         )
+
+        return consumer
 
     def run(self):
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
 
-        while True:
+        while not self.shutdown:
+            self.run_once()
+
+        self._shutdown()
+
+    def signal_shutdown(self):
+        """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
+        Typically called from a signal handler."""
+        logger.debug("Shutdown signalled")
+
+        self.shutdown = True
+
+    def _run_once(self):
+        self._flush()
+
+        # this iterator will run unless no message is received by `consumer_timeout_ms`
+        # (which we set in the constructor), at which point we begin the infinite
+        # loop again. this gives us a chance to check for shutdown (or flush based on time)
+        # even if a topic is not seeing much (or any) traffic
+        for msg in self.consumer:
+            # start the timer only after the first message for this batch is seen
+            if not self.timer:
+                self.timer = self.max_batch_time / 1000.0 + time.time()
+
+            result = self.worker.process_message(msg)
+            self.batch.append(result)
+
             self._flush()
             if self.shutdown:
                 break
 
-            # this iterator will run unless no message is received by `consumer_timeout_ms`
-            # (which we set in the constructor), at which point we begin the infinite
-            # loop again. this gives us a chance to check for shutdown (or flush based on time)
-            # even if a topic is not seeing much (or any) traffic
-            for msg in self.consumer:
-                # start the timer only after the first message for this batch is seen
-                if not self.timer:
-                    self.timer = self.max_batch_time / 1000.0 + time.time()
-
-                result = self.worker.process_message(msg)
-                self.batch.append(result)
-
-                self._flush()
-                if self.shutdown:
-                    break
-
+    def _shutdown(self):
         logger.debug("Stopping")
 
         # force flush the batch because it is unlikely that we hit a
@@ -160,13 +181,6 @@ class BatchingKafkaConsumer(object):
         self.consumer.close()
 
         logger.debug("Stopped")
-
-    def signal_shutdown(self):
-        """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
-        Typically called from a signal handler."""
-        logger.debug("Shutdown signalled")
-
-        self.shutdown = True
 
     def _flush(self, force=False):
         """Decides whether the `BatchingKafkaConsumer` should flush because of either
