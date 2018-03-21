@@ -6,56 +6,129 @@ from kafka import ConsumerRebalanceListener
 
 
 class AbstractConsumerWorker(object):
+    """The `BatchingKafkaConsumer` requires an instance of this class to
+    handle user provided work such as processing raw messages and flushing
+    processed batches to a custom backend."""
+
     __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def process_message(self, message):
+        """Called with each (raw) Kafka message, allowing the worker to do
+        incremental (preferablly local!) work on events. The object returned
+        is put into the batch maintained by the `BatchingKafkaConsumer`.
+
+        A simple example would be decoding the JSON value and extracting a few
+        fields.
+        """
         pass
 
     @abc.abstractmethod
     def flush_batch(self, batch):
+        """Called with a list of pre-processed (by `process_message`) objects.
+        The worker should write the batch of processed messages into whatever
+        store(s) it is maintaining. Afterwards the Kafka offsets are committed.
+
+        A simple example would be writing the batch to another Kafka topic.
+        """
         pass
 
     @abc.abstractmethod
     def shutdown(self):
+        """Called when the `BatchingKafkaConsumer` is shutting down (because it
+        was signalled to do so). Provides the worker a chance to do any final
+        cleanup.
+
+        A simple example would be closing any remaining backend connections."""
+        pass
+
+
+class RebalanceListener(ConsumerRebalanceListener):
+    """Handles flushing any locally buffered events (and Kafka offsets)
+    when group rebalances happen.
+
+    See `ConsumerRebalanceListener` documentation for more info.
+    """
+
+    def __init__(self, batching_consumer):
+        self.batching_consumer = batching_consumer
+
+    def on_partitions_revoked(self, revoked):
+        "Flush the batch (if any) and commit Kafka offsets."
+        self.batching_consumer._flush()
+
+    def on_partitions_assigned(self, assigned):
         pass
 
 
 class BatchingKafkaConsumer(object):
+    """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
+    loops. For this reason it uses inversion of control: the user provides an implementation
+    for the `AbstractConsumerWorker` and then the `BatchingKafkaConsumer` handles the rest.
+
+    Main differences from the default KafkaConsumer are as follows:
+    * Messages are processed locally (e.g. not written to an external datastore!) as they are
+      read from Kafka, then added to an in-memory batch
+    * Batches are flushed based on the batch size or time sent since the first message
+      in the batch was recieved (e.g. "500 items or 1000ms")
+    * Kafka offsets are not automatically committed! If they were, offsets might be committed
+      for messages that are still sitting in an in-memory batch, or they might *not* be committed
+      when messages are sent to an external datastore right before the consumer process dies
+    * Instead, when a batch of items is flushed they are written to the external datastore and
+      then Kafka offsets are immediately committed (in the same thread/loop)
+    * Users need only provide an implementation of what it means to process a raw message
+      and flush a batch of events
+    """
+
     def __init__(self, topic, consumer_worker, max_batch_size, max_batch_time, **configs):
+        assert isinstance(consumer_worker, AbstractConsumerWorker)
         self.consumer_worker = consumer_worker
+
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time
+
         self.shutdown = False
         self.batch = []
         self.timer = None
 
-        class RebalanceListener(ConsumerRebalanceListener):
-            def __init__(self, batching_consumer):
-                self.batching_consumer = batching_consumer
+        # Ensure the caller didn't expct auto commit to work
+        assert not configs.get('enable_auto_commit', False)
 
-            def on_partitions_revoked(self, revoked):
-                self.batching_consumer._flush()
-
-            def on_partitions_assigned(self, assigned):
-                pass
-
-        assert 'enable_auto_commit' not in configs or not configs['enable_auto_commit']
-
+        # `consumer_timeout_ms` configures the longest amount of time (in millis) we have
+        # to wait for our main loop to run if no messages are received on a Kafka topic,
+        # which means it needs to be the minimum of our `max_batch_time` and some reasonable
+        # default that doesn't leave a user waiting forever for a shutdown to complete
         consumer_timeout_ms = configs.pop('consumer_timeout_ms', float('inf'))
         consumer_timeout_ms = min(max_batch_time, consumer_timeout_ms)
         consumer_timeout_ms = min(1000, consumer_timeout_ms)
 
+        # The KafkaConsumer constructor doesn't let us setup a RebalanceListener
+        # so we have to construct it, then call subscribe.
         self.consumer = KafkaConsumer(
             enable_auto_commit=False,
             consumer_timeout_ms=consumer_timeout_ms,
             **configs
         )
-        self.consumer.subscribe(topics=(topic, ), listener=RebalanceListener(self))
+
+        self.consumer.subscribe(
+            topics=(topic, ),
+            listener=RebalanceListener(self)
+        )
 
     def run(self):
+        "The main run loop, see class docstring for more information."
+
         while True:
+            self._flush()
+            if self.shutdown:
+                break
+
+            # this iterator will run unless no message is received by `consumer_timeout_ms`
+            # (which we set in the constructor), at which point we begin the infinite
+            # loop again. this gives us a chance to check for shutdown (or flush based on time)
+            # even if a topic is not seeing much (or any) traffic
             for msg in self.consumer:
+                # start the timer only after the first message for this batch is seen
                 if not self.timer:
                     self.timer = self.max_batch_time / 1000.0 + time.time()
 
@@ -66,17 +139,23 @@ class BatchingKafkaConsumer(object):
                 if self.shutdown:
                     break
 
-            self._flush()
-            if self.shutdown:
-                break
-
+        # force flush the batch because it is unlikely that we hit a
+        # size or time threshold just as we were told to shutdown
         self._flush(force=True)
+
+        # tell the consumer to shutdown, and close the consumer
+        self.consumer_worker.shutdown()
         self.consumer.close()
 
     def signal_shutdown(self):
+        """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
+        Typically called from a signal handler."""
         self.shutdown = True
 
     def _flush(self, force=False):
+        """Decides whether the `BatchingKafkaConsumer` should flush because of either
+        batch size or time. If so, delegate to the worker, clear the current batch,
+        and commit offsets to Kafka."""
         if len(self.batch) > 0:
             batch_by_size = len(self.batch) >= self.max_batch_size
             batch_by_time = self.timer and time.time() > self.timer
