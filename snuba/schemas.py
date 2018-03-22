@@ -15,7 +15,7 @@ QUERY_SCHEMA = {
                     }, {
                         # Operator
                         'type': 'string',
-                        'enum': ['>', '<', '>=', '<=', '=', 'IN'],
+                        'enum': ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'IS NOT NULL'],
                     }, {
                         # Literal
                         'anyOf': [
