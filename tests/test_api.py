@@ -54,8 +54,8 @@ class TestApi(BaseTest):
                         'timestamp': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'dist': 'dist1',
-                        'tags.key': ['os', 'os.version'],
-                        'tags.value': ['iOS', '10.0'],
+                        'tags.key': ['foo', 'foo.bar'],
+                        'tags.value': ['baz', 'qux'],
                     })
         self.write_processed_events(events)
 
@@ -132,7 +132,7 @@ class TestApi(BaseTest):
             'aggregation': 'uniq',
             'aggregateby': 'issue',
         })).data)
-        assert len(result['data']) == 3 # time buckets
+        assert len(result['data']) == 3  # time buckets
         assert all(d['aggregate'] == 4 for d in result['data'])
 
     def test_tag_expansion(self):
@@ -146,14 +146,14 @@ class TestApi(BaseTest):
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
 
-        #A non promoted tag
+        # A non promoted tag
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'project_id',
             'conditions': [
-                ['tags[os]', '=', 'iOS'],
-                ['tags[os.version]', '=', '10.0'],
+                ['tags[foo]', '=', 'baz'],
+                ['tags[foo.bar]', '=', 'qux'],
             ]
         })).data)
         assert len(result['data']) == 1
@@ -166,7 +166,7 @@ class TestApi(BaseTest):
             'groupby': 'project_id',
             'conditions': [
                 ['tags[dist]', '=', 'dist1'],
-                ['tags[os.version]', '=', '10.0'],
+                ['tags[foo.bar]', '=', 'qux'],
             ]
         })).data)
         assert len(result['data']) == 1

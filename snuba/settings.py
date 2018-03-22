@@ -42,6 +42,31 @@ PROMOTED_TAGS = [
     'dist',
     'site',
     'url',
+    'app_device',
+    'device',
+    'device_family',
+    'runtime',
+    'runtime_name',
+    'browser',
+    'browser_name',
+    'os',
+    'os_name',
+    'os_rooted',
+]
+PROMOTED_CONTEXTS = [
+    'os_build',
+    'os_kernel_version',
+    'device_name',
+    'device_brand',
+    'device_locale',
+    'device_uuid',
+    'device_model_id',
+    'device_arch',
+    'device_battery_level',
+    'device_orientation',
+    'device_simulator',
+    'device_online',
+    'device_charging'
 ]
 WRITER_COLUMNS = [
     'event_id',
@@ -57,31 +82,11 @@ WRITER_COLUMNS = [
     'ip_address',
     'sdk_name',
     'sdk_version',
-    'os_name',
-    'os_version',
-    'os_build',
-    'os_kernel_version',
-    'os_rooted',
-    'runtime_name',
-    'runtime_version',
-    'browser_name',
-    'browser_version',
-    'device_name',
-    'device_brand',
-    'device_locale',
-    'device_uuid',
-    'device_family',
-    'device_model',
-    'device_model_id',
-    'device_arch',
-    'device_battery_level',
-    'device_orientation',
-    'device_simulator',
-    'device_online',
-    'device_charging'
-    ] + PROMOTED_TAGS + [
+] + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
     'tags.key',
     'tags.value',
+    'contexts.key',
+    'contexts.value',
     'http_method',
     'http_referer',
     'exception_stacks.type',
@@ -103,7 +108,8 @@ NESTED_COL_EXPR = re.compile('^(tags)\[([a-zA-Z0-9_\.:-]+)\]$')
 # The set of columns, and associated keys that have been promoted
 # to the top level table namespace
 PROMOTED_COLS = {
-    'tags': PROMOTED_TAGS
+    'tags': PROMOTED_TAGS,
+    'contexts': PROMOTED_CONTEXTS,
 }
 
 
@@ -134,20 +140,12 @@ COLUMNS = """
     sdk_version Nullable(String),
 
     -- contexts
-    os_name Nullable(String),
-    os_version Nullable(String),
     os_build Nullable(String),
     os_kernel_version Nullable(String),
-    os_rooted Nullable(UInt8),
-    runtime_name Nullable(String),
-    runtime_version Nullable(String),
-    browser_name Nullable(String),
-    browser_version Nullable(String),
     device_name Nullable(String),
     device_brand Nullable(String),
     device_locale Nullable(String),
     device_uuid Nullable(String),
-    device_family Nullable(String),
     device_model Nullable(String),
     device_model_id Nullable(String),
     device_arch Nullable(String),
@@ -167,9 +165,25 @@ COLUMNS = """
     dist Nullable(String), -- sentry:dist
     site Nullable(String),
     url Nullable(String),
+    app_device Nullable(String),
+    device Nullable(String),
+    device_family Nullable(String),
+    runtime Nullable(String),
+    runtime_name Nullable(String),
+    browser Nullable(String),
+    browser_name Nullable(String),
+    os Nullable(String),
+    os_name Nullable(String),
+    os_rooted Nullable(UInt8),
 
     -- other tags
     tags Nested (
+        key String,
+        value String
+    ),
+
+    -- other context
+    contexts Nested (
         key String,
         value String
     ),

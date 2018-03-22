@@ -94,38 +94,6 @@ def process_raw_event(event):
     processed['sdk_name'] = _unicodify(sdk.get('name', None))
     processed['sdk_version'] = _unicodify(sdk.get('version', None))
 
-    contexts = data.get('contexts', {})
-    os = contexts.get('os', {})
-
-    processed['os_name'] = _unicodify(os.get('name', None))
-    processed['os_version'] = _unicodify(os.get('version', None))
-    processed['os_build'] = _unicodify(os.get('build', None))
-    processed['os_kernel_version'] = _unicodify(os.get('kernel_version', None))
-    processed['os_rooted'] = _boolify(os.get('rooted', None))
-
-    runtime = contexts.get('runtime', {})
-    processed['runtime_name'] = _unicodify(runtime.get('name', None))
-    processed['runtime_version'] = _unicodify(runtime.get('version', None))
-
-    browser = contexts.get('browser', {})
-    processed['browser_name'] = _unicodify(browser.get('name', None))
-    processed['browser_version'] = _unicodify(browser.get('version', None))
-
-    device = contexts.get('device', {})
-    processed['device_name'] = _unicodify(device.get('name', None))
-    processed['device_brand'] = _unicodify(device.get('brand', None))
-    processed['device_locale'] = _unicodify(device.get('locale', None))
-    processed['device_uuid'] = _unicodify(device.get('uuid', None))
-    processed['device_family'] = _unicodify(device.get('family', None))
-    processed['device_model'] = _unicodify(device.get('model', None))
-    processed['device_model_id'] = _unicodify(device.get('model_id', None))
-    processed['device_arch'] = _unicodify(device.get('arch', None))
-    processed['device_battery_level'] = _floatify(device.get('battery_level', None))
-    processed['device_orientation'] = _unicodify(device.get('orientation', None))
-    processed['device_simulator'] = _boolify(os.get('simulator', None))
-    processed['device_online'] = _boolify(os.get('online', None))
-    processed['device_charging'] = _boolify(os.get('charging', None))
-
     tags = dict(data.get('tags', []))
 
     tags.pop('sentry:user', None)  # defer to user interface data (below)
@@ -138,6 +106,64 @@ def process_raw_event(event):
     processed['dist'] = _unicodify(tags.pop('sentry:dist', None))
     processed['site'] = _unicodify(tags.pop('site', None))
     processed['url'] = _unicodify(tags.pop('url', None))
+
+    contexts = data.get('contexts', {})
+
+    app_ctx = contexts.get('app', {})
+    processed['app_device'] = _unicodify(tags.pop('app.device', None))
+    app_ctx.pop('device_app_hash', None)  # tag=app.device
+
+    os_ctx = contexts.get('os', {})
+    processed['os'] = _unicodify(tags.pop('os', None))
+    processed['os_name'] = _unicodify(tags.pop('os.name', None))
+    os_ctx.pop('name', None)  # tag=os and/or os.name
+    os_ctx.pop('version', None)  # tag=os
+    processed['os_rooted'] = _boolify(tags.pop('os.rooted', None))
+    os_ctx.pop('rooted', None)  # tag=os.rooted
+    processed['os_build'] = _unicodify(os_ctx.pop('build', None))
+    processed['os_kernel_version'] = _unicodify(os_ctx.pop('kernel_version', None))
+
+    runtime_ctx = contexts.get('runtime', {})
+    processed['runtime'] = _unicodify(tags.pop('runtime', None))
+    processed['runtime_name'] = _unicodify(tags.pop('runtime.name', None))
+    runtime_ctx.pop('name', None)  # tag=runtime and/or runtime.name
+    runtime_ctx.pop('version', None)  # tag=runtime
+
+    browser_ctx = contexts.get('browser', {})
+    processed['browser'] = _unicodify(tags.pop('browser', None))
+    processed['browser_name'] = _unicodify(tags.pop('browser.name', None))
+    browser_ctx.pop('name', None)  # tag=browser and/or browser.name
+    browser_ctx.pop('version', None)  # tag=browser
+
+    device_ctx = contexts.get('device', {})
+    processed['device'] = _unicodify(tags.pop('device', None))
+    device_ctx.pop('model', None)  # tag=device
+    processed['device_family'] = _unicodify(tags.pop('device.family', None))
+    device_ctx.pop('family', None)  # tag=device.family
+    processed['device_name'] = _unicodify(device_ctx.pop('name', None))
+    processed['device_brand'] = _unicodify(device_ctx.pop('brand', None))
+    processed['device_locale'] = _unicodify(device_ctx.pop('locale', None))
+    processed['device_uuid'] = _unicodify(device_ctx.pop('uuid', None))
+    processed['device_model_id'] = _unicodify(device_ctx.pop('model_id', None))
+    processed['device_arch'] = _unicodify(device_ctx.pop('arch', None))
+    processed['device_battery_level'] = _floatify(device_ctx.pop('battery_level', None))
+    processed['device_orientation'] = _unicodify(device_ctx.pop('orientation', None))
+    processed['device_simulator'] = _boolify(device_ctx.pop('simulator', None))
+    processed['device_online'] = _boolify(device_ctx.pop('online', None))
+    processed['device_charging'] = _boolify(device_ctx.pop('charging', None))
+
+    context_keys = []
+    context_values = []
+    for ctx_name, ctx_obj in contexts.items():
+        if isinstance(ctx_obj, dict):
+            ctx_obj.pop('type', None)  # ignore type alias
+            for inner_ctx_name, ctx_value in ctx_obj.items():
+                if isinstance(ctx_value, (int, float, basestring)):
+                    context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
+                    context_values.append(_unicodify(ctx_value))
+
+    processed['contexts.key'] = context_keys
+    processed['contexts.value'] = context_values
 
     user = data.get('sentry.interfaces.User', {})
     processed['user_id'] = _unicodify(user.get('id', None))

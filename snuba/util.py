@@ -10,7 +10,6 @@ import requests
 import six
 
 import schemas
-import settings
 
 from snuba import settings
 
@@ -33,14 +32,16 @@ def column_expr(column_name, body):
         # expression for the issues that will actually be selected.
         cond = body.get('conditions', [])
         ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-              [set(lit) for (col, op, lit) in cond if col == 'issue' and op == 'IN' and isinstance(lit, list)]
+              [set(lit) for (col, op, lit) in cond if col ==
+               'issue' and op == 'IN' and isinstance(lit, list)]
         ids = set.union(*ids) if ids else None
         return issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
     elif settings.NESTED_COL_EXPR.match(column_name):
         match = settings.NESTED_COL_EXPR.match(column_name)
         col, sub = match.group(1), match.group(2)
-        if col in settings.PROMOTED_COLS and sub in settings.PROMOTED_COLS[col]:
-            return sub # TODO recurse?
+        sub_field = sub.replace('.', '_')
+        if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
+            return sub_field  # TODO recurse?
         else:
             return 'has({col}.key, {sub}) AND {col}.value[indexOf({col}.key, {sub})]'.format(**{
                 'col': col,
@@ -78,7 +79,7 @@ def raw_query(sql, client):
     print sql
     try:
         data, meta = client.execute(sql, with_column_types=True)
-    except:
+    except BaseException:
         data, meta = [], []
 
     # for now, convert back to a dict-y format to emulate the json
@@ -122,7 +123,8 @@ def issue_expr(issues, col='primary_hash', ids=None):
                 predicate = "{} IN ('{}')".format(col, "', '".join(hashes))
             else:
                 predicate = "{} = '{}'".format(col, hashes)
-            return 'if({}, {}, {})'.format(predicate, issue_id, issue_expr(issues[1:], col=col, ids=ids))
+            return 'if({}, {}, {})'.format(predicate, issue_id,
+                                           issue_expr(issues[1:], col=col, ids=ids))
         else:
             return issue_expr(issues[1:], col=col, ids=ids)
 
