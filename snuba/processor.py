@@ -54,7 +54,7 @@ def _floatify(s):
 
 
 def _unicodify(s):
-    if not s:
+    if s in ('', None):  # allow for 0, 0.0, etc
         return None
 
     if isinstance(s, dict) or isinstance(s, list):
@@ -159,8 +159,10 @@ def process_raw_event(event):
             ctx_obj.pop('type', None)  # ignore type alias
             for inner_ctx_name, ctx_value in ctx_obj.items():
                 if isinstance(ctx_value, (int, float, basestring)):
-                    context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
-                    context_values.append(_unicodify(ctx_value))
+                    value = _unicodify(ctx_value)
+                    if value:
+                        context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
+                        context_values.append(_unicodify(ctx_value))
 
     processed['contexts.key'] = context_keys
     processed['contexts.value'] = context_values
