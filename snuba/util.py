@@ -62,7 +62,7 @@ def escape_literal(value):
         return "toDateTime('{}')".format(value.isoformat())
     elif isinstance(value, date):
         return "toDate('{}')".format(value.isoformat())
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple)):
         return "({})".format(', '.join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
         return str(value)
