@@ -27,6 +27,8 @@ def root():
 
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
 # we redundantly expand it twice
+# TODO some aliases eg tags[foo] are invalid SQL
+# and need escaping or otherwise sanitizing
 
 
 @app.route('/query', methods=['GET', 'POST'])

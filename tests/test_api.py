@@ -53,6 +53,9 @@ class TestApi(BaseTest):
                         'message': 'a message',
                         'timestamp': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
+                        'dist': 'dist1',
+                        'tags.key': ['os'],
+                        'tags.value': ['iOS'],
                     })
         self.write_processed_events(events)
 
@@ -131,3 +134,24 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 3 # time buckets
         assert all(d['aggregate'] == 4 for d in result['data'])
+
+    def test_tag_expansion(self):
+        # A promoted tag
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'groupby': 'project_id',
+            'conditions': [['tags[dist]', 'IN', ['dist1', 'dist2']]]
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['aggregate'] == 90
+
+        #A non promoted tag
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'groupby': 'project_id',
+            'conditions': [['tags[os]', '=', 'iOS']]
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['aggregate'] == 90

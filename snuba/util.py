@@ -5,11 +5,14 @@ from dateutil.tz import tz
 import json
 import jsonschema
 import numbers
+import re
 import requests
 import six
 
 import schemas
 import settings
+
+from snuba import settings
 
 
 def to_list(value):
@@ -33,7 +36,16 @@ def column_expr(column_name, body):
               [set(lit) for (col, op, lit) in cond if col == 'issue' and op == 'IN' and isinstance(lit, list)]
         ids = set.union(*ids) if ids else None
         return issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
-
+    elif settings.NESTED_COL_EXPR.match(column_name):
+        match = settings.NESTED_COL_EXPR.match(column_name)
+        col, sub = match.group(1), match.group(2)
+        if col in settings.PROMOTED_COLS and sub in settings.PROMOTED_COLS[col]:
+            return sub # TODO recurse?
+        else:
+            return 'has({col}.key, {sub}) AND {col}.value[indexOf({col}.key, {sub})]'.format(**{
+                'col': col,
+                'sub': escape_literal(sub)
+            })
     else:
         return column_name
 

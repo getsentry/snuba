@@ -120,6 +120,10 @@ QUERY_SCHEMA = {
                     # TODO make sure its a valid column, either in the schema or here
                     'pattern': '^[a-zA-Z0-9_]+$',
                 },
+                {
+                    'type': 'string',
+                    'pattern': '^tags\[[a-zA-Z0-9_\.:-]+\]$',
+                },
             ],
         },
         'column_list': {

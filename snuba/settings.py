@@ -1,3 +1,4 @@
+import re
 # Clickhouse Options
 CLICKHOUSE_SERVER = 'localhost'
 CLICKHOUSE_PORT = 9000
@@ -31,6 +32,17 @@ RAW_EVENTS_TOPIC = 'events'
 BROKERS = ['localhost:9093']
 WRITER_CONSUMER_GROUP = 'snuba-writers'
 PROCESSOR_CONSUMER_GROUP = 'snuba-processors'
+PROMOTED_TAGS = [
+    'level',
+    'logger',
+    'server_name',
+    'transaction',
+    'environment',
+    'release',
+    'dist',
+    'site',
+    'url',
+]
 WRITER_COLUMNS = [
     'event_id',
     'timestamp',
@@ -66,16 +78,8 @@ WRITER_COLUMNS = [
     'device_orientation',
     'device_simulator',
     'device_online',
-    'device_charging',
-    'level',
-    'logger',
-    'server_name',
-    'transaction',
-    'environment',
-    'release',
-    'dist',
-    'site',
-    'url',
+    'device_charging'
+    ] + PROMOTED_TAGS + [
     'tags.key',
     'tags.value',
     'http_method',
@@ -92,6 +96,16 @@ WRITER_COLUMNS = [
     'exception_frames.lineno',
     'exception_frames.stack_level',
 ]
+
+# A column name like "tags[url]"
+NESTED_COL_EXPR = re.compile('^(tags)\[([a-zA-Z0-9_\.:-]+)\]$')
+
+# The set of columns, and associated keys that have been promoted
+# to the top level table namespace
+PROMOTED_COLS = {
+    'tags': PROMOTED_TAGS
+}
+
 
 # Table Definitions
 LOCAL_TABLE = 'sentry_local'
