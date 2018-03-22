@@ -54,8 +54,8 @@ class TestApi(BaseTest):
                         'timestamp': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': time.mktime((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'dist': 'dist1',
-                        'tags.key': ['os'],
-                        'tags.value': ['iOS'],
+                        'tags.key': ['os', 'os.version'],
+                        'tags.value': ['iOS', '10.0'],
                     })
         self.write_processed_events(events)
 
@@ -151,7 +151,23 @@ class TestApi(BaseTest):
             'project': 2,
             'granularity': 3600,
             'groupby': 'project_id',
-            'conditions': [['tags[os]', '=', 'iOS']]
+            'conditions': [
+                ['tags[os]', '=', 'iOS'],
+                ['tags[os.version]', '=', '10.0'],
+            ]
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['aggregate'] == 90
+
+        # A combination of promoted and nested
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'groupby': 'project_id',
+            'conditions': [
+                ['tags[dist]', '=', 'dist1'],
+                ['tags[os.version]', '=', '10.0'],
+            ]
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
