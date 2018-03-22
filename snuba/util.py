@@ -67,6 +67,8 @@ def escape_literal(value):
         return "({})".format(', '.join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
         return str(value)
+    elif value is None:
+        return ''
     else:
         raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
 
