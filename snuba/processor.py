@@ -65,87 +65,87 @@ def get_key(event):
     return '%s:%s' % (project_id, event_id)
 
 
-def extract_required(processed, event, data):
-    processed['event_id'] = event['event_id']
+def extract_required(output, event, data):
+    output['event_id'] = event['event_id']
 
     # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
-    processed['primary_hash'] = event['primary_hash'][-16:].rjust(16)
+    output['primary_hash'] = event['primary_hash'][-16:].rjust(16)
 
-    processed['project_id'] = event['project_id']
-    processed['message'] = _unicodify(event['message'])
-    processed['platform'] = _unicodify(event['platform'])
-    processed['timestamp'] = int(calendar.timegm(
+    output['project_id'] = event['project_id']
+    output['message'] = _unicodify(event['message'])
+    output['platform'] = _unicodify(event['platform'])
+    output['timestamp'] = int(calendar.timegm(
         datetime.strptime(
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
-    processed['received'] = int(data['received'])
+    output['received'] = int(data['received'])
 
 
-def extract_sdk(processed, sdk):
-    processed['sdk_name'] = _unicodify(sdk.get('name', None))
-    processed['sdk_version'] = _unicodify(sdk.get('version', None))
+def extract_sdk(output, sdk):
+    output['sdk_name'] = _unicodify(sdk.get('name', None))
+    output['sdk_version'] = _unicodify(sdk.get('version', None))
 
 
-def extract_promoted_tags(processed, tags):
+def extract_promoted_tags(output, tags):
     tags.pop('sentry:user', None)  # defer to user interface data
-    processed['level'] = _unicodify(tags.pop('level', None))
-    processed['logger'] = _unicodify(tags.pop('logger', None))
-    processed['server_name'] = _unicodify(tags.pop('server_name', None))
-    processed['transaction'] = _unicodify(tags.pop('transaction', None))
-    processed['environment'] = _unicodify(tags.pop('environment', None))
-    processed['release'] = _unicodify(tags.pop('sentry:release', None))
-    processed['dist'] = _unicodify(tags.pop('sentry:dist', None))
-    processed['site'] = _unicodify(tags.pop('site', None))
-    processed['url'] = _unicodify(tags.pop('url', None))
+    output['level'] = _unicodify(tags.pop('level', None))
+    output['logger'] = _unicodify(tags.pop('logger', None))
+    output['server_name'] = _unicodify(tags.pop('server_name', None))
+    output['transaction'] = _unicodify(tags.pop('transaction', None))
+    output['environment'] = _unicodify(tags.pop('environment', None))
+    output['release'] = _unicodify(tags.pop('sentry:release', None))
+    output['dist'] = _unicodify(tags.pop('sentry:dist', None))
+    output['site'] = _unicodify(tags.pop('site', None))
+    output['url'] = _unicodify(tags.pop('url', None))
 
 
-def extract_promoted_contexts(processed, contexts, tags):
+def extract_promoted_contexts(output, contexts, tags):
     app_ctx = contexts.get('app', {})
-    processed['app_device'] = _unicodify(tags.pop('app.device', None))
+    output['app_device'] = _unicodify(tags.pop('app.device', None))
     app_ctx.pop('device_app_hash', None)  # tag=app.device
 
     os_ctx = contexts.get('os', {})
-    processed['os'] = _unicodify(tags.pop('os', None))
-    processed['os_name'] = _unicodify(tags.pop('os.name', None))
+    output['os'] = _unicodify(tags.pop('os', None))
+    output['os_name'] = _unicodify(tags.pop('os.name', None))
     os_ctx.pop('name', None)  # tag=os and/or os.name
     os_ctx.pop('version', None)  # tag=os
-    processed['os_rooted'] = _boolify(tags.pop('os.rooted', None))
+    output['os_rooted'] = _boolify(tags.pop('os.rooted', None))
     os_ctx.pop('rooted', None)  # tag=os.rooted
-    processed['os_build'] = _unicodify(os_ctx.pop('build', None))
-    processed['os_kernel_version'] = _unicodify(os_ctx.pop('kernel_version', None))
+    output['os_build'] = _unicodify(os_ctx.pop('build', None))
+    output['os_kernel_version'] = _unicodify(os_ctx.pop('kernel_version', None))
 
     runtime_ctx = contexts.get('runtime', {})
-    processed['runtime'] = _unicodify(tags.pop('runtime', None))
-    processed['runtime_name'] = _unicodify(tags.pop('runtime.name', None))
+    output['runtime'] = _unicodify(tags.pop('runtime', None))
+    output['runtime_name'] = _unicodify(tags.pop('runtime.name', None))
     runtime_ctx.pop('name', None)  # tag=runtime and/or runtime.name
     runtime_ctx.pop('version', None)  # tag=runtime
 
     browser_ctx = contexts.get('browser', {})
-    processed['browser'] = _unicodify(tags.pop('browser', None))
-    processed['browser_name'] = _unicodify(tags.pop('browser.name', None))
+    output['browser'] = _unicodify(tags.pop('browser', None))
+    output['browser_name'] = _unicodify(tags.pop('browser.name', None))
     browser_ctx.pop('name', None)  # tag=browser and/or browser.name
     browser_ctx.pop('version', None)  # tag=browser
 
     device_ctx = contexts.get('device', {})
-    processed['device'] = _unicodify(tags.pop('device', None))
+    output['device'] = _unicodify(tags.pop('device', None))
     device_ctx.pop('model', None)  # tag=device
-    processed['device_family'] = _unicodify(tags.pop('device.family', None))
+    output['device_family'] = _unicodify(tags.pop('device.family', None))
     device_ctx.pop('family', None)  # tag=device.family
-    processed['device_name'] = _unicodify(device_ctx.pop('name', None))
-    processed['device_brand'] = _unicodify(device_ctx.pop('brand', None))
-    processed['device_locale'] = _unicodify(device_ctx.pop('locale', None))
-    processed['device_uuid'] = _unicodify(device_ctx.pop('uuid', None))
-    processed['device_model_id'] = _unicodify(device_ctx.pop('model_id', None))
-    processed['device_arch'] = _unicodify(device_ctx.pop('arch', None))
-    processed['device_battery_level'] = _floatify(device_ctx.pop('battery_level', None))
-    processed['device_orientation'] = _unicodify(device_ctx.pop('orientation', None))
-    processed['device_simulator'] = _boolify(device_ctx.pop('simulator', None))
-    processed['device_online'] = _boolify(device_ctx.pop('online', None))
-    processed['device_charging'] = _boolify(device_ctx.pop('charging', None))
+    output['device_name'] = _unicodify(device_ctx.pop('name', None))
+    output['device_brand'] = _unicodify(device_ctx.pop('brand', None))
+    output['device_locale'] = _unicodify(device_ctx.pop('locale', None))
+    output['device_uuid'] = _unicodify(device_ctx.pop('uuid', None))
+    output['device_model_id'] = _unicodify(device_ctx.pop('model_id', None))
+    output['device_arch'] = _unicodify(device_ctx.pop('arch', None))
+    output['device_battery_level'] = _floatify(device_ctx.pop('battery_level', None))
+    output['device_orientation'] = _unicodify(device_ctx.pop('orientation', None))
+    output['device_simulator'] = _boolify(device_ctx.pop('simulator', None))
+    output['device_online'] = _boolify(device_ctx.pop('online', None))
+    output['device_charging'] = _boolify(device_ctx.pop('charging', None))
 
 
-def extract_extra_contexts(processed, contexts):
+def extract_extra_contexts(output, contexts):
     context_keys = []
     context_values = []
     for ctx_name, ctx_obj in contexts.items():
@@ -158,35 +158,37 @@ def extract_extra_contexts(processed, contexts):
                         context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
                         context_values.append(_unicodify(ctx_value))
 
-    processed['contexts.key'] = context_keys
-    processed['contexts.value'] = context_values
+    output['contexts.key'] = context_keys
+    output['contexts.value'] = context_values
 
 
-def extract_extra_tags(processed, tags):
+def extract_extra_tags(output, tags):
     tag_keys = []
     tag_values = []
     for tag_key, tag_value in tags.items():
-        tag_keys.append(_unicodify(tag_key))
-        tag_values.append(_unicodify(tag_value))
+        value = _unicodify(tag_value)
+        if value:
+            tag_keys.append(_unicodify(tag_key))
+            tag_values.append(value)
 
-    processed['tags.key'] = tag_keys
-    processed['tags.value'] = tag_values
-
-
-def extract_user(processed, user):
-    processed['user_id'] = _unicodify(user.get('id', None))
-    processed['username'] = _unicodify(user.get('username', None))
-    processed['email'] = _unicodify(user.get('email', None))
-    processed['ip_address'] = _unicodify(user.get('ip_address', None))
+    output['tags.key'] = tag_keys
+    output['tags.value'] = tag_values
 
 
-def extract_http(processed, http):
-    processed['http_method'] = _unicodify(http.get('method', None))
+def extract_user(output, user):
+    output['user_id'] = _unicodify(user.get('id', None))
+    output['username'] = _unicodify(user.get('username', None))
+    output['email'] = _unicodify(user.get('email', None))
+    output['ip_address'] = _unicodify(user.get('ip_address', None))
+
+
+def extract_http(output, http):
+    output['http_method'] = _unicodify(http.get('method', None))
     http_headers = dict(http.get('headers', []))
-    processed['http_referer'] = _unicodify(http_headers.get('Referer', None))
+    output['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
 
-def extract_stacktraces(processed, stacks):
+def extract_stacktraces(output, stacks):
     stack_types = []
     stack_values = []
 
@@ -219,17 +221,17 @@ def extract_stacktraces(processed, stacks):
 
         stack_level += 1
 
-    processed['exception_stacks.type'] = stack_types
-    processed['exception_stacks.value'] = stack_values
-    processed['exception_frames.abs_path'] = frame_abs_paths
-    processed['exception_frames.filename'] = frame_filenames
-    processed['exception_frames.package'] = frame_packages
-    processed['exception_frames.module'] = frame_modules
-    processed['exception_frames.function'] = frame_functions
-    processed['exception_frames.in_app'] = frame_in_app
-    processed['exception_frames.colno'] = frame_colnos
-    processed['exception_frames.lineno'] = frame_linenos
-    processed['exception_frames.stack_level'] = frame_stack_levels
+    output['exception_stacks.type'] = stack_types
+    output['exception_stacks.value'] = stack_values
+    output['exception_frames.abs_path'] = frame_abs_paths
+    output['exception_frames.filename'] = frame_filenames
+    output['exception_frames.package'] = frame_packages
+    output['exception_frames.module'] = frame_modules
+    output['exception_frames.function'] = frame_functions
+    output['exception_frames.in_app'] = frame_in_app
+    output['exception_frames.colno'] = frame_colnos
+    output['exception_frames.lineno'] = frame_linenos
+    output['exception_frames.stack_level'] = frame_stack_levels
 
 
 def process_raw_event(event):

@@ -85,6 +85,7 @@ class TestProcessor(BaseTest):
             'site': 'the_site',
             'url': 'the_url',
             'extra_tag': 'extra_value',
+            'null_tag': None,
         }
         output = {}
 
@@ -101,7 +102,10 @@ class TestProcessor(BaseTest):
             'transaction': u'the_transaction',
             'url': u'the_url',
         }
-        assert tags == {'extra_tag': 'extra_value'}
+        assert tags == {
+            'extra_tag': 'extra_value',
+            'null_tag': None,
+        }
 
         extra_output = {}
         processor.extract_extra_tags(extra_output, tags)
