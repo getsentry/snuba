@@ -2,8 +2,6 @@ import random
 
 from datetime import datetime
 
-from snuba import settings
-
 
 def row_from_processed_event(event, columns):
     # TODO: clickhouse-driver expects datetimes, would be nice to skip this
@@ -24,7 +22,7 @@ def row_from_processed_event(event, columns):
 
 
 class SnubaWriter(object):
-    def __init__(self, connections, columns=settings.WRITER_COLUMNS, table=settings.DIST_TABLE):
+    def __init__(self, connections, columns, table):
         self.connections = connections
         self.columns = columns
         self.table = table

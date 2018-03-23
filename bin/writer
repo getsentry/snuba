@@ -10,30 +10,36 @@ from clickhouse_driver import Client
 from snuba import settings
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.writer import SnubaWriter, row_from_processed_event
+from snuba import util
 
 
-shutdown = False
 logger = logging.getLogger('snuba.writer')
 
 
-def handler(signum, frame):
-    global shutdown
-    shutdown = True
+DEFAULT_CLICKHOUSE_NODES = [
+    'clickhouse-08b7387d',
+    'clickhouse-a8ef8458',
+    'clickhouse-649c2398',
+    'clickhouse-f8e2348b'
+]
 
-    logger.warning("SIGINT received, initiating shutdown")
-
-
-signal.signal(signal.SIGINT, handler)
+# TODO: Move into click options
+LOCAL_TABLE = 'sentry_local'
+DIST_TABLE = 'sentry_dist'
+CLUSTER = 'cluster1'
+DATABASE = 'default'
+LOCAL_TABLE_DEFINITION = util.get_table_definition(LOCAL_TABLE, util.get_replicated_engine())
+DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distributed_engine())
 
 
 @click.command()
-@click.option('--processed-events-topic', default=settings.WRITER_TOPIC,
+@click.option('--processed-events-topic', default='snuba',
               help='Topic to consume processed events from.')
-@click.option('--consumer-group', default=settings.WRITER_CONSUMER_GROUP,
+@click.option('--consumer-group', default='snuba-writers',
               help='Consumer group used for consuming the processed events topic.')
-@click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
+@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use (multiple allowed).')
-@click.option('--clickhouse-server', default=settings.CLICKHOUSE_NODES, multiple=True,
+@click.option('--clickhouse-server', default=DEFAULT_CLICKHOUSE_NODES, multiple=True,
               help='Clickhouse server to write to (multiple allowed).')
 @click.option('--log-level', default='WARN', help='Logging level to use.')
 def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server, log_level):
@@ -43,10 +49,10 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     # ensure tables exist
     for conn in connections:
-        conn.execute(settings.LOCAL_TABLE_DEFINITION)
-        conn.execute(settings.DIST_TABLE_DEFINITION)
+        conn.execute(LOCAL_TABLE_DEFINITION)
+        conn.execute(DIST_TABLE_DEFINITION)
 
-    writer = SnubaWriter(connections=connections)
+    writer = SnubaWriter(connections=connections, columns=settings.SCHEMA_COLUMNS, table=DIST_TABLE)
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):

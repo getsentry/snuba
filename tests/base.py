@@ -4,7 +4,7 @@ from clickhouse_driver import Client
 
 from snuba import settings
 from snuba.processor import process_raw_event
-from snuba.writer import row_from_processed_event
+from snuba.writer import row_from_processed_event, SnubaWriter
 
 
 class BaseTest(object):
@@ -17,8 +17,9 @@ class BaseTest(object):
         self.conn = Client('localhost')
         self.conn.execute("""
             CREATE TABLE %(table)s (%(columns)s) ENGINE = Memory""" % {
-            'table': self.table, 'columns': settings.COLUMNS
+            'table': self.table, 'columns': settings.SCHEMA_COLUMNS,
         })
+        self.writer = SnubaWriter([self.conn], settings.WRITER_COLUMNS, self.table)
 
     def wrap_raw_event(self, event):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
@@ -67,8 +68,4 @@ class BaseTest(object):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        self.conn.execute("""
-            INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-            'colnames': ", ".join(settings.WRITER_COLUMNS),
-            'table': self.table,
-        }, rows)
+        self.writer.write(rows)

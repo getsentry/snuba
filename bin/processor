@@ -16,13 +16,13 @@ logger = logging.getLogger('snuba.processor')
 
 
 @click.command()
-@click.option('--raw-events-topic', default=settings.RAW_EVENTS_TOPIC,
+@click.option('--raw-events-topic', default='events',
               help='Topic to consume raw events from.')
-@click.option('--consumer-group', default=settings.PROCESSOR_CONSUMER_GROUP,
+@click.option('--consumer-group', default='snuba-processors',
               help='Consumer group use for consuming the raw events topic.')
-@click.option('--processed-events-topic', default=settings.WRITER_TOPIC,
+@click.option('--processed-events-topic', default='snuba',
               help='Topic to send processed events to.')
-@click.option('--bootstrap-server', default=settings.BROKERS, multiple=True,
+@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--log-level', default='WARN', help='Logging level to use.')
 def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level):
