@@ -4,12 +4,6 @@ import time
 from datetime import datetime
 
 
-# TODO: schema changes:
-#   * message params -> string array
-#   * span_id -> uuid
-#   * transaction_id -> uuid
-
-
 MAX_UINT32 = 2 * 32 - 1
 
 
@@ -70,9 +64,7 @@ def get_key(event):
     return '%s:%s' % (project_id, event_id)
 
 
-def process_raw_event(event):
-    processed = {}
-
+def extract_required(processed, event, data):
     processed['event_id'] = event['event_id']
 
     # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
@@ -86,17 +78,16 @@ def process_raw_event(event):
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
-    data = event.get('data', {})
-
     processed['received'] = int(data['received'])
 
-    sdk = data.get('sdk', {})
+
+def extract_sdk(processed, sdk):
     processed['sdk_name'] = _unicodify(sdk.get('name', None))
     processed['sdk_version'] = _unicodify(sdk.get('version', None))
 
-    tags = dict(data.get('tags', []))
 
-    tags.pop('sentry:user', None)  # defer to user interface data (below)
+def extract_promoted_tags(processed, tags):
+    tags.pop('sentry:user', None)  # defer to user interface data
     processed['level'] = _unicodify(tags.pop('level', None))
     processed['logger'] = _unicodify(tags.pop('logger', None))
     processed['server_name'] = _unicodify(tags.pop('server_name', None))
@@ -107,8 +98,8 @@ def process_raw_event(event):
     processed['site'] = _unicodify(tags.pop('site', None))
     processed['url'] = _unicodify(tags.pop('url', None))
 
-    contexts = data.get('contexts', {})
 
+def extract_promoted_contexts(processed, contexts, tags):
     app_ctx = contexts.get('app', {})
     processed['app_device'] = _unicodify(tags.pop('app.device', None))
     app_ctx.pop('device_app_hash', None)  # tag=app.device
@@ -152,6 +143,8 @@ def process_raw_event(event):
     processed['device_online'] = _boolify(device_ctx.pop('online', None))
     processed['device_charging'] = _boolify(device_ctx.pop('charging', None))
 
+
+def extract_extra_contexts(processed, contexts):
     context_keys = []
     context_values = []
     for ctx_name, ctx_obj in contexts.items():
@@ -167,18 +160,8 @@ def process_raw_event(event):
     processed['contexts.key'] = context_keys
     processed['contexts.value'] = context_values
 
-    user = data.get('sentry.interfaces.User', {})
-    processed['user_id'] = _unicodify(user.get('id', None))
-    processed['username'] = _unicodify(user.get('username', None))
-    processed['email'] = _unicodify(user.get('email', None))
-    processed['ip_address'] = _unicodify(user.get('ip_address', None))
 
-    http = data.get('sentry.interfaces.Http', {})
-    processed['http_method'] = _unicodify(http.get('method', None))
-
-    http_headers = dict(http.get('headers', []))
-    processed['http_referer'] = _unicodify(http_headers.get('Referer', None))
-
+def extract_extra_tags(processed, tags):
     tag_keys = []
     tag_values = []
     for tag_key, tag_value in tags.items():
@@ -188,6 +171,21 @@ def process_raw_event(event):
     processed['tags.key'] = tag_keys
     processed['tags.value'] = tag_values
 
+
+def extract_user(processed, user):
+    processed['user_id'] = _unicodify(user.get('id', None))
+    processed['username'] = _unicodify(user.get('username', None))
+    processed['email'] = _unicodify(user.get('email', None))
+    processed['ip_address'] = _unicodify(user.get('ip_address', None))
+
+
+def extract_http(processed, http):
+    processed['http_method'] = _unicodify(http.get('method', None))
+    http_headers = dict(http.get('headers', []))
+    processed['http_referer'] = _unicodify(http_headers.get('Referer', None))
+
+
+def extract_stacktraces(processed, stacks):
     stack_types = []
     stack_values = []
 
@@ -202,7 +200,6 @@ def process_raw_event(event):
     frame_stack_levels = []
 
     stack_level = 0
-    stacks = data.get('sentry.interfaces.Exception', {}).get('values', [])
     for stack in stacks[:200]:
         stack_types.append(_unicodify(stack.get('type', None)))
         stack_values.append(_unicodify(stack.get('value', None)))
@@ -232,5 +229,33 @@ def process_raw_event(event):
     processed['exception_frames.colno'] = frame_colnos
     processed['exception_frames.lineno'] = frame_linenos
     processed['exception_frames.stack_level'] = frame_stack_levels
+
+
+def process_raw_event(event):
+    processed = {}
+
+    data = event.get('data', {})
+    extract_required(processed, event, data)
+
+    sdk = data.get('sdk', {})
+    extract_sdk(processed, sdk)
+
+    tags = dict(data.get('tags', []))
+    extract_promoted_tags(processed, tags)
+
+    contexts = data.get('contexts', {})
+    extract_promoted_contexts(processed, contexts, tags)
+
+    user = data.get('sentry.interfaces.User', {})
+    extract_user(processed, user)
+
+    http = data.get('sentry.interfaces.Http', {})
+    extract_http(processed, http)
+
+    extract_extra_contexts(processed, contexts)
+    extract_extra_tags(processed, tags)
+
+    stacks = data.get('sentry.interfaces.Exception', {}).get('values', [])
+    extract_stacktraces(processed, stacks)
 
     return processed
