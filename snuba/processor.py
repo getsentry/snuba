@@ -1,3 +1,4 @@
+import calendar
 import json
 import time
 
@@ -73,7 +74,7 @@ def extract_required(processed, event, data):
     processed['project_id'] = event['project_id']
     processed['message'] = _unicodify(event['message'])
     processed['platform'] = _unicodify(event['platform'])
-    processed['timestamp'] = int(time.mktime(
+    processed['timestamp'] = int(calendar.timegm(
         datetime.strptime(
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))

@@ -57,7 +57,7 @@ class TestProcessor(BaseTest):
             'primary_hash': 'xxxxxxxxxxxxxxxx',
             'project_id': 100,
             'received': 1520971716,
-            'timestamp': 1520989716,
+            'timestamp': 1520971716,
         }
 
     def test_extract_sdk(self):
