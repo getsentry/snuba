@@ -103,6 +103,10 @@ def raw_query(sql, client):
     return {'data': data, 'meta': meta}
 
 
+def _pad_primary_hash(hash):
+    return hash.ljust(32, '\0')
+
+
 def issue_expr(issues, col='primary_hash', ids=None):
     """
     Takes a list of (issue_id, fingerprint(s)) tuples of the form:
@@ -122,9 +126,10 @@ def issue_expr(issues, col='primary_hash', ids=None):
 
         if ids is None or issue_id in ids:
             if hasattr(hashes, '__iter__'):
-                predicate = "{} IN ('{}')".format(col, "', '".join(hashes))
+                predicate = "{} IN ('{}')".format(
+                    col, "', '".join([_pad_primary_hash(h) for h in hashes]))
             else:
-                predicate = "{} = '{}'".format(col, hashes)
+                predicate = "{} = '{}'".format(col, _pad_primary_hash(hashes))
             return 'if({}, {}, {})'.format(predicate, issue_id,
                                            issue_expr(issues[1:], col=col, ids=ids))
         else:
