@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 import json
 import petname
+import mock
 import random
 import sys
 import time
@@ -171,3 +172,22 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
+
+    @mock.patch('snuba.util.raw_query')
+    def test_column_expansion(self, raw_query):
+        # If there is a condition on an already SELECTed column, then use the
+        # column alias instead of the full column expression again.
+        raw_query.return_value = {'data': [], 'meta': []}
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'groupby': 'issue',
+            'issues': list(enumerate(self.hashes)),
+            'conditions': [
+                ['issue', '=', 1],
+                ['issue', '=', 2],
+            ]
+        })).data)
+        assert "if(primary_hash = '1111111111111111', 1, if(primary_hash = '2222222222222222', 2, 0)) AS issue" in raw_query.call_args[0][0]
+        assert "issue = 1" in raw_query.call_args[0][0]
+        assert "issue = 2" in raw_query.call_args[0][0]

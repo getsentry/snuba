@@ -18,15 +18,21 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def column_expr(column_name, body):
+def column_expr(column_name, body, alias=None):
     """
     Certain special column names expand into more complex expressions. Return
-    the column expression, or just the name if it is a regular column.
+    a 2-tuple of:
+        (expanded column expression, sanitized alias)
 
     Needs the body of the request for some extra data used to expand column expressions.
     """
+    # By default, alias is the unexpanded coluumn name
+    if alias is None:
+        alias = column_name
+    alias = alias.replace('.', '_')
+
     if column_name == settings.TIME_GROUP_COLUMN:
-        return settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
+        expr = settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
     elif column_name == 'issue':
         # If there are conditions on what 'issue' can be, then only expand the
         # expression for the issues that will actually be selected.
@@ -35,21 +41,28 @@ def column_expr(column_name, body):
               [set(lit) for (col, op, lit) in cond if col ==
                'issue' and op == 'IN' and isinstance(lit, list)]
         ids = set.union(*ids) if ids else None
-        return issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
+        expr = issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
     elif settings.NESTED_COL_EXPR.match(column_name):
         match = settings.NESTED_COL_EXPR.match(column_name)
         col, sub = match.group(1), match.group(2)
         sub_field = sub.replace('.', '_')
         if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
-            return sub_field  # TODO recurse?
+            expr = sub_field  # TODO recurse?
         else:
-            return 'has({col}.key, {sub}) AND {col}.value[indexOf({col}.key, {sub})]'.format(**{
+            expr = 'has({col}.key, {sub}) AND {col}.value[indexOf({col}.key, {sub})]'.format(**{
                 'col': col,
                 'sub': escape_literal(sub)
             })
     else:
-        return column_name
+        expr = column_name
 
+    # If the alias is "aggregate" then this is the aggregate column and we
+    # wrap it in the aggregation function
+    if alias == settings.AGGREGATE_COLUMN:
+        # TODO need more safety, eg if aggregation is 'uniq' then there must be an 'aggregateby'
+        expr = '{}({})'.format(body['aggregation'], expr)
+
+    return (expr, alias)
 
 def escape_literal(value):
     """

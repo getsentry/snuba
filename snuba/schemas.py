@@ -15,6 +15,7 @@ QUERY_SCHEMA = {
                     }, {
                         # Operator
                         'type': 'string',
+                        #TODO  enforce literal = NULL for unary operators
                         'enum': ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'IS NOT NULL'],
                     }, {
                         # Literal
@@ -101,6 +102,9 @@ QUERY_SCHEMA = {
                 {'pattern': 'topK\(\d+\)'},
             ],
         },
+        'arrayjoin': {
+            "$ref": "#/definitions/column_name",
+        },
     },
     # Need to select down to the project level for customer isolation and performance
     'required': ['project'],
@@ -118,7 +122,7 @@ QUERY_SCHEMA = {
                 {
                     'type': 'string',
                     # TODO make sure its a valid column, either in the schema or here
-                    'pattern': '^[a-zA-Z0-9_]+$',
+                    'pattern': '^[a-zA-Z0-9_.]+$',
                 },
                 {
                     'type': 'string',

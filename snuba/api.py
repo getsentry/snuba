@@ -46,26 +46,31 @@ def query():
         ('timestamp', '<', to_date),
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
-    conditions = [(col, op, tuple(lit) if isinstance(lit, list) else lit)
-                  for col, op, lit in conditions]
 
-    # TODO need more safety, eg if aggregation is 'uniq' then there must be an 'aggregateby'
-    aggregate_columns = [(
-        '{}({})'.format(body['aggregation'], util.column_expr(body['aggregateby'], body)),
-        settings.AGGREGATE_RESULT_COLUMN
-    )]
+    aggregate_columns = [
+        util.column_expr(body['aggregateby'], body, settings.AGGREGATE_COLUMN)
+    ]
     groupby = util.to_list(body['groupby'])
-    group_columns = [(util.column_expr(gb, body), gb) for gb in groupby]
+    group_columns = [util.column_expr(gb, body) for gb in groupby]
 
     select_columns = group_columns + aggregate_columns
-    select_clause = ', '.join('{} AS {}'.format(defn, alias) for (defn, alias) in select_columns)
-    select_clause = 'SELECT {}'.format(select_clause)
-
+    select_predicates = (
+        '{} AS {}'.format(exp, alias) if exp != alias else exp
+        for (exp, alias) in select_columns
+    )
+    select_clause = 'SELECT {}'.format(', '.join(select_predicates))
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
+    join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
+    conditions = [
+        (util.column_expr(col, body), op, tuple(lit) if isinstance(lit, list) else lit)
+        for col, op, lit in conditions
+    ]
+    # If a where clause references a column already expanded in another clause
+    # then we can just use the alias.
     where_predicates = (
-        '{} {} {}'.format(util.column_expr(col, body), op, util.escape_literal(lit))
-        for (col, op, lit) in set(conditions)
+        '{} {} {}'.format(alias if (col, alias) in select_columns else col, op, util.escape_literal(lit))
+        for ((col, alias), op, lit) in set(conditions)
     )
     where_clause = 'WHERE {}'.format(' AND '.join(where_predicates)) if conditions else ''
 
@@ -75,12 +80,14 @@ def query():
 
     order_clause = 'ORDER BY time' if 'time' in groupby else ''
 
-    sql = '{} {} {} {} {}'.format(
+    sql = ' '.join([c for c in [
         select_clause,
         from_clause,
+        join_clause,
         where_clause,
         group_clause,
-        order_clause)
+        order_clause,
+    ] if c])
 
     result = util.raw_query(sql, clickhouse)
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})

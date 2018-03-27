@@ -19,19 +19,19 @@ class TestUtil(BaseTest):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
         }
-        assert column_expr('issue', body) ==\
+        assert column_expr('issue', body)[0] ==\
             "if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0))"
 
         body['conditions'] = [['issue', 'IN', [1]]]
-        assert column_expr('issue', body) ==\
+        assert column_expr('issue', body)[0] ==\
             "if(primary_hash IN ('a', 'b'), 1, 0)"
 
         body['conditions'] = [['issue', 'IN', [1]], ['issue', '=', 2]]
-        assert column_expr('issue', body) ==\
+        assert column_expr('issue', body)[0] ==\
             "if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0))"
 
         body['conditions'] = [['issue', 'IN', []]]
-        assert column_expr('issue', body) == 0
+        assert column_expr('issue', body)[0] == 0
 
     def test_escape(self):
         assert escape_literal("'") == r"'\''"
