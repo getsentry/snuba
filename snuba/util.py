@@ -189,3 +189,9 @@ def get_distributed_engine(cluster, database, local_table, sharding_key='rand()'
         'local_table': local_table,
         'sharding_key': sharding_key,
     }
+
+
+def force_bytes(s):
+    if isinstance(s, bytes):
+        return s
+    return s.encode('utf-8', 'replace')

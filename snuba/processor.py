@@ -1,10 +1,13 @@
 import calendar
 import json
+import re
 import time
-
 from datetime import datetime
+from hashlib import md5
 
+from snuba.util import force_bytes
 
+HASH_RE = re.compile(r'^[0-9a-f]{32}$')
 MAX_UINT32 = 2 * 32 - 1
 
 
@@ -68,9 +71,11 @@ def get_key(event):
 def extract_required(output, event, data):
     output['event_id'] = event['event_id']
 
-    # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
-    output['primary_hash'] = event['primary_hash'][-16:].rjust(16)
+    primary_hash = event['primary_hash']
+    if not HASH_RE.match(primary_hash):
+        primary_hash = md5(force_bytes(primary_hash)).hexdigest()
 
+    output['primary_hash'] = primary_hash
     output['project_id'] = event['project_id']
     output['message'] = _unicodify(event['message'])
     output['platform'] = _unicodify(event['platform'])

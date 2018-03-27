@@ -109,7 +109,7 @@ SCHEMA_COLUMNS = """
     message String,
 
     -- required and provided by Sentry
-    primary_hash FixedString(16),
+    primary_hash FixedString(32),
     project_id UInt64,
     received DateTime,
 

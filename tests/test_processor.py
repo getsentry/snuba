@@ -1,5 +1,3 @@
-from pprint import pprint
-
 from base import BaseTest
 
 from snuba import processor
@@ -28,17 +26,17 @@ class TestProcessor(BaseTest):
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
-    def test_long_hash(self):
-        self.event['primary_hash'] = 'x' * 128
+    def test_hash_invalid_primary_hash(self):
+        self.event['primary_hash'] = "'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('utf-8')
 
         processed = process_raw_event(self.event)
 
-        assert processed['primary_hash'] == ('x' * 16)
+        assert processed['primary_hash'] == 'ef981cdeac7a4b76bf55f214e1255653'
 
     def test_extract_required(self):
         event = {
             'event_id': '1' * 32,
-            'primary_hash': 'x' * 16,
+            'primary_hash': 'a' * 32,
             'project_id': 100,
             'message': 'the message',
             'platform': 'the_platform',
@@ -54,7 +52,7 @@ class TestProcessor(BaseTest):
             'event_id': '11111111111111111111111111111111',
             'message': u'the message',
             'platform': u'the_platform',
-            'primary_hash': 'xxxxxxxxxxxxxxxx',
+            'primary_hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             'project_id': 100,
             'received': 1520971716,
             'timestamp': 1520971716,

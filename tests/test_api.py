@@ -26,7 +26,7 @@ class TestApi(BaseTest):
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.platforms = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 platforms
-        self.hashes = [x * 16 for x in '0123456789ab']  # 12 hashes
+        self.hashes = [x * 32 for x in '0123456789ab']  # 12 hashes
         self.minutes = 180
 
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - \
