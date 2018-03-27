@@ -67,10 +67,7 @@ def get_key(event):
 
 def extract_required(output, event, data):
     output['event_id'] = event['event_id']
-
-    # TODO: remove splice and rjust once we handle 'checksum' hashes (which are too long)
-    output['primary_hash'] = event['primary_hash'][-16:].rjust(16)
-
+    output['primary_hash'] = event['primary_hash']
     output['project_id'] = event['project_id']
     output['message'] = _unicodify(event['message'])
     output['platform'] = _unicodify(event['platform'])

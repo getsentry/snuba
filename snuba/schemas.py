@@ -109,8 +109,8 @@ QUERY_SCHEMA = {
         'fingerprint_hash': {
             'type': 'string',
             'minLength': 16,
-            'maxLength': 16,
-            'pattern': '^[0-9a-f]{16}$',
+            'maxLength': 32,
+            'pattern': '^[0-9a-f]{16,32}$',
         },
         'column_name': {
             'anyOf': [

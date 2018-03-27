@@ -28,13 +28,6 @@ class TestProcessor(BaseTest):
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
-    def test_long_hash(self):
-        self.event['primary_hash'] = 'x' * 128
-
-        processed = process_raw_event(self.event)
-
-        assert processed['primary_hash'] == ('x' * 16)
-
     def test_extract_required(self):
         event = {
             'event_id': '1' * 32,
