@@ -46,7 +46,8 @@ def query():
         ('timestamp', '<', to_date),
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
-    conditions = [(col, op, tuple(lit) if isinstance(lit, list) else lit) for col, op, lit in conditions]
+    conditions = [(col, op, tuple(lit) if isinstance(lit, list) else lit)
+                  for col, op, lit in conditions]
 
     # TODO need more safety, eg if aggregation is 'uniq' then there must be an 'aggregateby'
     aggregate_columns = [(

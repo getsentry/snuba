@@ -25,7 +25,7 @@ class BaseTest(object):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
 
         unique = "%s:%s" % (str(event['project']), event['id'])
-        primary_hash = md5(unique).hexdigest()[:16]
+        primary_hash = md5(unique).hexdigest()
 
         return {
             'event_id': event['id'],
