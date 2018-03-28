@@ -28,8 +28,13 @@ LOCAL_TABLE = 'sentry_local'
 DIST_TABLE = 'sentry_dist'
 CLUSTER = 'cluster1'
 DATABASE = 'default'
-LOCAL_TABLE_DEFINITION = util.get_table_definition(LOCAL_TABLE, util.get_replicated_engine())
-DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distributed_engine())
+LOCAL_TABLE_DEFINITION = util.get_table_definition(
+    LOCAL_TABLE, util.get_replicated_engine(name=LOCAL_TABLE))
+DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distributed_engine(
+    cluster=CLUSTER,
+    database=DATABASE,
+    local_table=LOCAL_TABLE,
+))
 
 
 @click.command()

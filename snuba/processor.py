@@ -1,13 +1,12 @@
 import calendar
 import json
 import re
-import time
 from datetime import datetime
 from hashlib import md5
 
 from snuba.util import force_bytes
 
-HASH_RE = re.compile(r'^[0-9a-f]{32}$')
+HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 * 32 - 1
 
 
