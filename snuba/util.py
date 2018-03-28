@@ -64,6 +64,7 @@ def column_expr(column_name, body, alias=None):
 
     return (expr, alias)
 
+
 def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
@@ -183,8 +184,8 @@ def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
 
 def get_replicated_engine(
         name,
-        order_by='(project_id, timestamp)',
-        partition_by='(toMonday(timestamp), modulo(intHash32(project_id), 32))'):
+        order_by=settings.DEFAULT_ORDER_BY,
+        partition_by=settings.DEFAULT_PARTITION_BY):
     return """
         ReplicatedMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}')
         PARTITION BY %(partition_by)s
@@ -195,7 +196,8 @@ def get_replicated_engine(
     }
 
 
-def get_distributed_engine(cluster, database, local_table, sharding_key='rand()'):
+def get_distributed_engine(cluster, database, local_table,
+                           sharding_key=settings.DEFAULT_SHARDING_KEY):
     return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
         'cluster': cluster,
         'database': database,

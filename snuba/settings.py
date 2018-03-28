@@ -195,3 +195,7 @@ SCHEMA_COLUMNS = """
         stack_level UInt8
     )
 """
+
+DEFAULT_ORDER_BY = '(project_id, timestamp)'
+DEFAULT_PARTITION_BY = '(toMonday(timestamp))'  # modulo(intHash32(project_id), 32)
+DEFAULT_SHARDING_KEY = 'rand()'
