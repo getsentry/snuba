@@ -2,12 +2,13 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 import json
-import petname
 import mock
 import random
 import sys
 import time
 import uuid
+
+from snuba import util
 
 from base import BaseTest
 
@@ -178,16 +179,19 @@ class TestApi(BaseTest):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         raw_query.return_value = {'data': [], 'meta': []}
+        issues = list(enumerate(self.hashes))
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
-            'issues': list(enumerate(self.hashes)),
+            'issues': issues,
             'conditions': [
+                ['issue', '=', 0],
                 ['issue', '=', 1],
-                ['issue', '=', 2],
             ]
         })).data)
-        assert "if(primary_hash = '{}', 1, if(primary_hash = '{}', 2, 0)) AS issue".format(self.hashes[1], self.hashes[2]) in raw_query.call_args[0][0]
-        assert "issue = 1" in raw_query.call_args[0][0]
-        assert "issue = 2" in raw_query.call_args[0][0]
+        # Issue is expanded once, and alias used subsequently
+        sql = raw_query.call_args[0][0]
+        assert util.issue_expr(issues[:2]) + ' AS issue' in sql
+        assert "issue = 0" in sql
+        assert "issue = 1" in sql
