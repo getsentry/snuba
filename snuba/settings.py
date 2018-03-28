@@ -192,7 +192,7 @@ SCHEMA_COLUMNS = """
         in_app Nullable(UInt8),
         colno Nullable(UInt32),
         lineno Nullable(UInt32),
-        stack_level UInt8
+        stack_level UInt16
     )
 """
 

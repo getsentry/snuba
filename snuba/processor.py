@@ -207,7 +207,7 @@ def extract_stacktraces(output, stacks):
     frame_stack_levels = []
 
     stack_level = 0
-    for stack in stacks[:200]:
+    for stack in stacks:
         stack_types.append(_unicodify(stack.get('type', None)))
         stack_values.append(_unicodify(stack.get('value', None)))
 
