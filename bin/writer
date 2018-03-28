@@ -57,7 +57,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         conn.execute(LOCAL_TABLE_DEFINITION)
         conn.execute(DIST_TABLE_DEFINITION)
 
-    writer = SnubaWriter(connections=connections, columns=settings.SCHEMA_COLUMNS, table=DIST_TABLE)
+    writer = SnubaWriter(connections=connections, columns=settings.WRITER_COLUMNS, table=DIST_TABLE)
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
