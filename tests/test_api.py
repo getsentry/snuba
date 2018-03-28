@@ -188,6 +188,6 @@ class TestApi(BaseTest):
                 ['issue', '=', 2],
             ]
         })).data)
-        assert "if(primary_hash = '1111111111111111', 1, if(primary_hash = '2222222222222222', 2, 0)) AS issue" in raw_query.call_args[0][0]
+        assert "if(primary_hash = '{}', 1, if(primary_hash = '{}', 2, 0)) AS issue".format(self.hashes[1], self.hashes[2]) in raw_query.call_args[0][0]
         assert "issue = 1" in raw_query.call_args[0][0]
         assert "issue = 2" in raw_query.call_args[0][0]
