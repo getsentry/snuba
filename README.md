@@ -4,7 +4,7 @@ A service providing fast event searching, filtering and aggregation on arbitrary
 
 ## Requirements
 
-Snuba assumes a Clickhouse server HTTP endpoint at `CLICKHOUSE_SERVER` (default `localhost:8123`).
+Snuba assumes a Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `localhost:9000`).
 
 ## Install / Run
 
@@ -24,7 +24,7 @@ Snuba exposes an HTTP API with the following endpoints.
 
 Settings are found in `settings.py`
 
-- `CLICKHOUSE_SERVER` : The HTTP endpoint for the clickhouse service.
+- `CLICKHOUSE_SERVER` : The endpoint for the clickhouse service.
 - `CLICKHOUSE_TABLE` : The clickhouse table name.
 
 ## Tests

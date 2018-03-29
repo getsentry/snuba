@@ -1,22 +1,23 @@
-from flask import Flask, render_template, request
-
-from clickhouse_driver import Client
+import json
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-import json
+
+from flask import Flask, render_template, request
+from clickhouse_driver import Client
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
-import settings
-import util
-import schemas
+from snuba import settings, util, schemas
 
-app = Flask(__name__)
+
+host, port = util.get_clickhouse_server()
 clickhouse = Client(
-    settings.CLICKHOUSE_SERVER,
-    port=settings.CLICKHOUSE_PORT,
+    host,
+    port=port,
     connect_timeout=1
 )
+
+app = Flask(__name__)
 sentry = Sentry(app, dsn=settings.SENTRY_DSN)
 
 
@@ -108,9 +109,6 @@ if app.debug:
         clickhouse.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
 
         body = json.loads(request.data)
-
-        from pprint import pprint
-        pprint(body)
 
         rows = []
         for event in body:

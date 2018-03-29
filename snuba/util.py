@@ -7,6 +7,7 @@ import jsonschema
 import numbers
 import re
 import requests
+import os
 import six
 
 import schemas
@@ -210,3 +211,11 @@ def force_bytes(s):
     if isinstance(s, bytes):
         return s
     return s.encode('utf-8', 'replace')
+
+
+def get_clickhouse_server():
+    clickhouse_servers = os.environ.get('CLICKHOUSE_SERVERS')
+    if clickhouse_servers:
+        return clickhouse_servers.split(',')[0].split(':')
+    else:
+        return settings.CLICKHOUSE_SERVER.split(':')

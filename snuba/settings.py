@@ -1,7 +1,6 @@
 import re
 # Clickhouse Options
-CLICKHOUSE_SERVER = 'localhost'
-CLICKHOUSE_PORT = 9000
+CLICKHOUSE_SERVER = 'localhost:9000'
 CLICKHOUSE_TABLE = 'sentry_dist'
 
 # Sentry Options
