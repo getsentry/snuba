@@ -1,9 +1,10 @@
 import random
-
 from datetime import datetime
 
+from snuba import settings
 
-def row_from_processed_event(event, columns):
+
+def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     # TODO: clickhouse-driver expects datetimes, would be nice to skip this
     event['timestamp'] = datetime.fromtimestamp(event['timestamp'])
     event['received'] = datetime.fromtimestamp(event['received'])
@@ -21,6 +22,14 @@ def row_from_processed_event(event, columns):
     return values
 
 
+def write_rows(connection, table, columns, rows):
+    connection.execute("""
+        INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
+        'colnames': ", ".join(columns),
+        'table': table,
+    }, rows)
+
+
 class SnubaWriter(object):
     def __init__(self, connections, columns, table):
         self.connections = connections
@@ -31,9 +40,4 @@ class SnubaWriter(object):
         return random.choice(self.connections)
 
     def write(self, rows):
-        conn = self.get_connection()
-        conn.execute("""
-            INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-            'colnames': ", ".join(self.columns),
-            'table': self.table,
-        }, rows)
+        return write_rows(self.get_connection, self.table, self.columns, rows)

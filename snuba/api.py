@@ -69,7 +69,12 @@ def query():
     # If a where clause references a column already expanded in another clause
     # then we can just use the alias.
     where_predicates = (
-        '{} {} {}'.format(alias if (col, alias) in select_columns else col, op, util.escape_literal(lit))
+        '{} {} {}'.format(
+            alias if (
+                col,
+                alias) in select_columns else col,
+            op,
+            util.escape_literal(lit))
         for ((col, alias), op, lit) in set(conditions)
     )
     where_clause = 'WHERE {}'.format(' AND '.join(where_predicates)) if conditions else ''
@@ -91,3 +96,32 @@ def query():
 
     result = util.raw_query(sql, clickhouse)
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})
+
+
+if app.debug:
+    # Should only be used for testing/debugging
+    @app.route('/tests/insert', methods=['POST'])
+    def write():
+        from snuba.processor import process_raw_event
+        from snuba.writer import row_from_processed_event, write_rows
+
+        clickhouse.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
+
+        body = json.loads(request.data)
+
+        from pprint import pprint
+        pprint(body)
+
+        rows = []
+        for event in body:
+            processed = process_raw_event(event)
+            row = row_from_processed_event(processed)
+            rows.append(row)
+
+        write_rows(clickhouse, table='test', columns=settings.WRITER_COLUMNS, rows=rows)
+        return ('ok', 200, {'Content-Type': 'text/plain'})
+
+    @app.route('/tests/drop', methods=['POST'])
+    def drop():
+        clickhouse.execute("DROP TABLE IF EXISTS test")
+        return ('ok', 200, {'Content-Type': 'text/plain'})

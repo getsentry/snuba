@@ -15,7 +15,7 @@ class TestWriter(BaseTest):
 
     def test_columns_match_schema(self):
         processed = process_raw_event(self.event)
-        row = row_from_processed_event(processed, WRITER_COLUMNS)
+        row = row_from_processed_event(processed)
 
         assert len(processed) == len(row)
 

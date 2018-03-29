@@ -61,7 +61,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
-            return row_from_processed_event(json.loads(message.value), settings.WRITER_COLUMNS)
+            return row_from_processed_event(json.loads(message.value))
 
         def flush_batch(self, batch):
             writer.write(batch)

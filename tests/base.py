@@ -2,9 +2,9 @@ from hashlib import md5
 
 from clickhouse_driver import Client
 
-from snuba import settings
+from snuba import settings, util
 from snuba.processor import process_raw_event
-from snuba.writer import row_from_processed_event, SnubaWriter
+from snuba.writer import row_from_processed_event, write_rows
 
 
 class BaseTest(object):
@@ -15,11 +15,7 @@ class BaseTest(object):
 
         self.table = 'test'
         self.conn = Client('localhost')
-        self.conn.execute("""
-            CREATE TABLE %(table)s (%(columns)s) ENGINE = Memory""" % {
-            'table': self.table, 'columns': settings.SCHEMA_COLUMNS,
-        })
-        self.writer = SnubaWriter([self.conn], settings.WRITER_COLUMNS, self.table)
+        self.conn.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
 
     def wrap_raw_event(self, event):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
@@ -60,7 +56,7 @@ class BaseTest(object):
 
         rows = []
         for event in events:
-            rows.append(row_from_processed_event(event, settings.WRITER_COLUMNS))
+            rows.append(row_from_processed_event(event))
 
         return self.write_rows(rows)
 
@@ -68,4 +64,4 @@ class BaseTest(object):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        self.writer.write(rows)
+        write_rows(self.conn, table=self.table, columns=settings.WRITER_COLUMNS, rows=rows)
