@@ -2,7 +2,7 @@ from flask import request, render_template
 
 from datetime import date, datetime
 from dateutil.tz import tz
-import json
+import simplejson as json
 import jsonschema
 import numbers
 import re
@@ -219,3 +219,15 @@ def get_clickhouse_server():
         return clickhouse_servers.split(',')[0].split(':')
     else:
         return settings.CLICKHOUSE_SERVER.split(':')
+
+
+def create_metrics(host, port, prefix, tags=None):
+    """Create a DogStatsd object with the specified prefix and tags. Prefixes
+    must start with `snuba.<category>`, for example: `snuba.processor`."""
+
+    from datadog import DogStatsd
+
+    bits = prefix.split('.', 2)
+    assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
+
+    return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)

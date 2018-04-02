@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 import logging
-import json
+import simplejson as json
 import signal
 
 import click
 from kafka import KafkaProducer
 
-from snuba import settings
+from snuba import settings, util
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.processor import get_key, process_raw_event
 
@@ -25,8 +25,13 @@ logger = logging.getLogger('snuba.processor')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--log-level', default='WARN', help='Logging level to use.')
-def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level):
+@click.option('--dogstatsd-host', default='localhost', help='Host to send DogStatsD metrics to.')
+@click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
+def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level,
+        dogstatsd_host, dogstatsd_port):
     logging.basicConfig(level=getattr(logging, log_level.upper()))
+
+    metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.processor')
 
     producer = KafkaProducer(bootstrap_servers=bootstrap_server)
 
@@ -57,6 +62,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         worker=ProcessorWorker(),
         max_batch_size=50000,
         max_batch_time=5000,
+        metrics=metrics,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',

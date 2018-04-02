@@ -1,7 +1,7 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-import json
+import simplejson as json
 import mock
 import random
 import sys

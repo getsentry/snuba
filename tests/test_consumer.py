@@ -1,6 +1,7 @@
 from datetime import datetime
 from mock import patch
 import time
+from datadog import statsd
 
 from base import BaseTest
 
@@ -53,6 +54,7 @@ class TestConsumer(BaseTest):
             worker=FakeWorker(),
             max_batch_size=2,
             max_batch_time=100,
+            metrics=statsd,
         )
 
         consumer.consumer.items = [1, 2, 3]
@@ -72,6 +74,7 @@ class TestConsumer(BaseTest):
             worker=FakeWorker(),
             max_batch_size=100,
             max_batch_time=2000,
+            metrics=statsd,
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

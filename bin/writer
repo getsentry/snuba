@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import logging
-import json
+import simplejson as json
 import signal
 
 import click
@@ -47,8 +47,13 @@ DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distribut
 @click.option('--clickhouse-server', default=DEFAULT_CLICKHOUSE_NODES, multiple=True,
               help='Clickhouse server to write to (multiple allowed).')
 @click.option('--log-level', default='WARN', help='Logging level to use.')
-def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server, log_level):
+@click.option('--dogstatsd-host', default='localhost', help='Host to send DogStatsD metrics to.')
+@click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
+def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server, log_level,
+        dogstatsd_host, dogstatsd_port):
     logging.basicConfig(level=getattr(logging, log_level.upper()))
+
+    metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
 
     connections = [Client(node) for node in clickhouse_server]
 
@@ -74,6 +79,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         worker=WriterWorker(),
         max_batch_size=100000,
         max_batch_time=30 * 1000,
+        metrics=metrics,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',

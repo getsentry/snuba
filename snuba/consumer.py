@@ -91,12 +91,13 @@ class BatchingKafkaConsumer(object):
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
-    def __init__(self, topic, worker, max_batch_size, max_batch_time, **kwargs):
+    def __init__(self, topic, worker, max_batch_size, max_batch_time, metrics, **kwargs):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time
+        self.metrics = metrics
 
         self.shutdown = False
         self.batch = []
@@ -198,7 +199,9 @@ class BatchingKafkaConsumer(object):
                 logger.debug("Flushing batch via worker")
                 t = time.time()
                 self.worker.flush_batch(self.batch)
-                logger.debug("Worker flush took %ss" % (time.time() - t))
+                duration = time.time() - t
+                logger.debug("Worker flush took %ss" % duration)
+                self.metrics.timing('batch.flush', duration)
 
                 self.batch = []
                 self.timer = None

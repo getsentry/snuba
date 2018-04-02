@@ -1,5 +1,5 @@
 import calendar
-import json
+import simplejson as json
 import re
 from datetime import datetime
 from hashlib import md5

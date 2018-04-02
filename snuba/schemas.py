@@ -15,7 +15,7 @@ QUERY_SCHEMA = {
                     }, {
                         # Operator
                         'type': 'string',
-                        #TODO  enforce literal = NULL for unary operators
+                        # TODO  enforce literal = NULL for unary operators
                         'enum': ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'IS NOT NULL'],
                     }, {
                         # Literal

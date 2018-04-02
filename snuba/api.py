@@ -1,4 +1,4 @@
-import json
+import simplejson as json
 import os
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime

@@ -40,4 +40,4 @@ class SnubaWriter(object):
         return random.choice(self.connections)
 
     def write(self, rows):
-        return write_rows(self.get_connection, self.table, self.columns, rows)
+        return write_rows(self.get_connection(), self.table, self.columns, rows)
