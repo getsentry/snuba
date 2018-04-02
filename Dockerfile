@@ -17,6 +17,10 @@ COPY setup.py README.md ./
 
 RUN python setup.py install && rm -rf ./build ./dist
 
+ENV CLICKHOUSE_SERVERS clickhouse-server:9000
+ENV CLICKHOUSE_TABLE sentry
+ENV FLASK_DEBUG 0
+
 EXPOSE 8000
 
 CMD [ "gunicorn", "snuba.api:app", "-b", "0.0.0.0:8000" ]

@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 
@@ -10,6 +11,7 @@ from raven.contrib.flask import Sentry
 from snuba import settings, util, schemas
 
 
+clickhouse_table = os.environ.get('CLICKHOUSE_TABLE', settings.CLICKHOUSE_TABLE)
 host, port = util.get_clickhouse_server()
 clickhouse = Client(
     host,
@@ -60,7 +62,7 @@ def query():
         for (exp, alias) in select_columns
     )
     select_clause = 'SELECT {}'.format(', '.join(select_predicates))
-    from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
+    from_clause = 'FROM {}'.format(clickhouse_table)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
     conditions = [
