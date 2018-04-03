@@ -6,6 +6,7 @@ import signal
 
 import click
 from clickhouse_driver import Client
+from raven import Client as RavenClient
 
 from snuba import settings
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
@@ -14,7 +15,7 @@ from snuba import util
 
 
 logger = logging.getLogger('snuba.writer')
-
+sentry = RavenClient(dsn=settings.SENTRY_DSN)
 
 DEFAULT_CLICKHOUSE_NODES = [
     'clickhouse-08b7387d',

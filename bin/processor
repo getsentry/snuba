@@ -6,6 +6,7 @@ import signal
 
 import click
 from kafka import KafkaProducer
+from raven import Client as RavenClient
 
 from snuba import settings, util
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
@@ -13,6 +14,7 @@ from snuba.processor import get_key, process_raw_event
 
 
 logger = logging.getLogger('snuba.processor')
+sentry = RavenClient(dsn=settings.SENTRY_DSN)
 
 
 @click.command()
