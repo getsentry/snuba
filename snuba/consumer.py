@@ -199,8 +199,8 @@ class BatchingKafkaConsumer(object):
                 logger.debug("Flushing batch via worker")
                 t = time.time()
                 self.worker.flush_batch(self.batch)
-                duration = time.time() - t
-                logger.debug("Worker flush took %ss" % duration)
+                duration = int((time.time() - t) * 1000)
+                logger.debug("Worker flush took %sms" % duration)
                 self.metrics.timing('batch.flush', duration)
 
                 self.batch = []
@@ -209,4 +209,5 @@ class BatchingKafkaConsumer(object):
                 logger.debug("Committing Kafka offsets")
                 t = time.time()
                 self.consumer.commit()
-                logger.debug("Kafka offset commit took %ss" % (time.time() - t))
+                duration = int((time.time() - t) * 1000)
+                logger.debug("Kafka offset commit took %sms" % duration)
