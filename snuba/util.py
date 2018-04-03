@@ -30,7 +30,6 @@ def column_expr(column_name, body, alias=None):
     # By default, alias is the unexpanded coluumn name
     if alias is None:
         alias = column_name
-    alias = alias.replace('.', '_')
 
     if column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
@@ -64,7 +63,6 @@ def column_expr(column_name, body, alias=None):
         expr = '{}({})'.format(body['aggregation'], expr)
 
     return (expr, alias)
-
 
 def escape_literal(value):
     """

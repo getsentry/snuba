@@ -58,7 +58,7 @@ def query():
 
     select_columns = group_columns + aggregate_columns
     select_predicates = (
-        '{} AS {}'.format(exp, alias) if exp != alias else exp
+        '{} AS `{}`'.format(exp, alias) if exp != alias else exp
         for (exp, alias) in select_columns
     )
     select_clause = 'SELECT {}'.format(', '.join(select_predicates))
@@ -73,9 +73,7 @@ def query():
     # then we can just use the alias.
     where_predicates = (
         '{} {} {}'.format(
-            alias if (
-                col,
-                alias) in select_columns else col,
+            alias if (col,alias) in select_columns else col,
             op,
             util.escape_literal(lit))
         for ((col, alias), op, lit) in set(conditions)
