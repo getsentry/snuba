@@ -198,3 +198,12 @@ SCHEMA_COLUMNS = """
 DEFAULT_ORDER_BY = '(project_id, timestamp)'
 DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'  # modulo(intHash32(project_id), 32)
 DEFAULT_SHARDING_KEY = 'rand()'
+
+DEFAULT_CLICKHOUSE_NODES = [
+    'clickhouse-08b7387d',
+    'clickhouse-a8ef8458',
+    'clickhouse-649c2398',
+    'clickhouse-f8e2348b'
+]
+DEFAULT_LOCAL_TABLE = 'sentry_local'
+DEFAULT_DIST_TABLE = 'sentry_dist'

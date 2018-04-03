@@ -31,8 +31,8 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
 @click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
 def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level,
         dogstatsd_host, dogstatsd_port):
-    logging.basicConfig(level=getattr(logging, log_level.upper()))
 
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.processor')
 
     producer = KafkaProducer(bootstrap_servers=bootstrap_server)
@@ -65,6 +65,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         max_batch_size=50000,
         max_batch_time=5000,
         metrics=metrics,
+        # KafkaConsumer
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',

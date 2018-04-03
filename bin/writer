@@ -17,26 +17,6 @@ from snuba import util
 logger = logging.getLogger('snuba.writer')
 sentry = RavenClient(dsn=settings.SENTRY_DSN)
 
-DEFAULT_CLICKHOUSE_NODES = [
-    'clickhouse-08b7387d',
-    'clickhouse-a8ef8458',
-    'clickhouse-649c2398',
-    'clickhouse-f8e2348b'
-]
-
-# TODO: Move into click options
-LOCAL_TABLE = 'sentry_local'
-DIST_TABLE = 'sentry_dist'
-CLUSTER = 'cluster1'
-DATABASE = 'default'
-LOCAL_TABLE_DEFINITION = util.get_table_definition(
-    LOCAL_TABLE, util.get_replicated_engine(name=LOCAL_TABLE))
-DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distributed_engine(
-    cluster=CLUSTER,
-    database=DATABASE,
-    local_table=LOCAL_TABLE,
-))
-
 
 @click.command()
 @click.option('--processed-events-topic', default='snuba',
@@ -45,25 +25,40 @@ DIST_TABLE_DEFINITION = util.get_table_definition(DIST_TABLE, util.get_distribut
               help='Consumer group used for consuming the processed events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use (multiple allowed).')
-@click.option('--clickhouse-server', default=DEFAULT_CLICKHOUSE_NODES, multiple=True,
+@click.option('--clickhouse-server', default=settings.DEFAULT_CLICKHOUSE_NODES, multiple=True,
               help='Clickhouse server to write to (multiple allowed).')
+@click.option('--local-table-name', default=settings.DEFAULT_LOCAL_TABLE,
+              help='Clickhouse table name for the (optionally replicated) local table.')
+@click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
+              help='Clickhouse table name for the "meta" Distributed table.')
 @click.option('--log-level', default='WARN', help='Logging level to use.')
 @click.option('--dogstatsd-host', default='localhost', help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
-def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server, log_level,
-        dogstatsd_host, dogstatsd_port):
-    logging.basicConfig(level=getattr(logging, log_level.upper()))
+def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server,
+        local_table_name, distributed_table_name, log_level, dogstatsd_host, dogstatsd_port):
 
+    logging.basicConfig(level=getattr(logging, log_level.upper()))
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
 
     connections = [Client(node) for node in clickhouse_server]
 
     # ensure tables exist
+    LOCAL_TABLE_DEFINITION = util.get_table_definition(
+        local_table_name, util.get_replicated_engine(name=local_table_name))
+    DIST_TABLE_DEFINITION = util.get_table_definition(distributed_table_name, util.get_distributed_engine(
+        cluster='cluster1',
+        database='default',
+        local_table=local_table_name,
+    ))
     for conn in connections:
         conn.execute(LOCAL_TABLE_DEFINITION)
         conn.execute(DIST_TABLE_DEFINITION)
 
-    writer = SnubaWriter(connections=connections, columns=settings.WRITER_COLUMNS, table=DIST_TABLE)
+    writer = SnubaWriter(
+        connections=connections,
+        columns=settings.WRITER_COLUMNS,
+        table=distributed_table_name
+    )
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
@@ -81,6 +76,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         max_batch_size=100000,
         max_batch_time=30 * 1000,
         metrics=metrics,
+        # KafkaConsumer
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         auto_offset_reset='earliest',
