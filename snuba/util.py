@@ -64,6 +64,7 @@ def column_expr(column_name, body, alias=None):
 
     return (expr, alias)
 
+
 def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
@@ -209,14 +210,6 @@ def force_bytes(s):
     if isinstance(s, bytes):
         return s
     return s.encode('utf-8', 'replace')
-
-
-def get_clickhouse_server():
-    clickhouse_servers = os.environ.get('CLICKHOUSE_SERVERS')
-    if clickhouse_servers:
-        return clickhouse_servers.split(',')[0].split(':')
-    else:
-        return settings.CLICKHOUSE_SERVER.split(':')
 
 
 def create_metrics(host, port, prefix, tags=None):

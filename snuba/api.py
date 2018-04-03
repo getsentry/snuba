@@ -8,19 +8,21 @@ from clickhouse_driver import Client
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
-from snuba import settings, util, schemas
+from snuba import util, schemas
 
-
-clickhouse_table = os.environ.get('CLICKHOUSE_TABLE', settings.CLICKHOUSE_TABLE)
-host, port = util.get_clickhouse_server()
-clickhouse = Client(
-    host,
-    port=port,
-    connect_timeout=1
-)
 
 app = Flask(__name__)
-sentry = Sentry(app, dsn=settings.SENTRY_DSN)
+if 'SNUBA_SETTINGS' not in os.environ:
+    os.environ['SNUBA_SETTINGS'] = 'settings.py'
+app.config.from_envvar('SNUBA_SETTINGS')
+
+clickhouse = Client(
+    host=app.config['CLICKHOUSE_SERVER'].split(':')[0],
+    port=int(app.config['CLICKHOUSE_SERVER'].split(':')[1]),
+    connect_timeout=1,
+)
+
+sentry = Sentry(app, dsn=app.config['SENTRY_DSN'])
 
 
 @app.route('/')
@@ -51,7 +53,7 @@ def query():
     ])
 
     aggregate_columns = [
-        util.column_expr(body['aggregateby'], body, settings.AGGREGATE_COLUMN)
+        util.column_expr(body['aggregateby'], body, app.config['AGGREGATE_COLUMN'])
     ]
     groupby = util.to_list(body['groupby'])
     group_columns = [util.column_expr(gb, body) for gb in groupby]
@@ -62,7 +64,7 @@ def query():
         for (exp, alias) in select_columns
     )
     select_clause = 'SELECT {}'.format(', '.join(select_predicates))
-    from_clause = 'FROM {}'.format(clickhouse_table)
+    from_clause = 'FROM {}'.format(app.config['CLICKHOUSE_TABLE'])
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
     conditions = [
@@ -109,7 +111,11 @@ if app.debug or app.testing:
         from snuba.processor import process_raw_event
         from snuba.writer import row_from_processed_event, write_rows
 
-        clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
+        clickhouse.execute(
+            util.get_table_definition(
+                TEST_TABLE,
+                'Memory',
+                app.config['SCHEMA_COLUMNS']))
 
         body = json.loads(request.data)
 
@@ -119,7 +125,7 @@ if app.debug or app.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+        write_rows(clickhouse, table=TEST_TABLE, columns=app.config['WRITER_COLUMNS'], rows=rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @app.route('/tests/drop', methods=['POST'])

@@ -1,10 +1,14 @@
 from hashlib import md5
+import os
 
 from clickhouse_driver import Client
 
 from snuba import settings, util
 from snuba.processor import process_raw_event
 from snuba.writer import row_from_processed_event, write_rows
+
+
+os.environ['SNUBA_SETTINGS'] = 'settings_test.py'
 
 
 class BaseTest(object):
