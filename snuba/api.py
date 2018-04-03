@@ -73,7 +73,7 @@ def query():
     # then we can just use the alias.
     where_predicates = (
         '{} {} {}'.format(
-            alias if (col,alias) in select_columns else col,
+            alias if (col, alias) in select_columns else col,
             op,
             util.escape_literal(lit))
         for ((col, alias), op, lit) in set(conditions)
@@ -99,14 +99,17 @@ def query():
     return (json.dumps(result), 200, {'Content-Type': 'application/json'})
 
 
-if app.debug:
-    # Should only be used for testing/debugging
+if app.debug or app.testing:
+    # These should only be used for testing/debugging. Note that the database name
+    # is hardcoded to 'test' on purpose to avoid scary production mishaps.
+    TEST_TABLE = 'test'
+
     @app.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_raw_event
         from snuba.writer import row_from_processed_event, write_rows
 
-        clickhouse.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
+        clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
 
         body = json.loads(request.data)
 
@@ -116,10 +119,10 @@ if app.debug:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        write_rows(clickhouse, table='test', columns=settings.WRITER_COLUMNS, rows=rows)
+        write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @app.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse.execute("DROP TABLE IF EXISTS test")
+        clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
         return ('ok', 200, {'Content-Type': 'text/plain'})
