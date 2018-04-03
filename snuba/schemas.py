@@ -87,20 +87,34 @@ QUERY_SCHEMA = {
             ],
             'default': 'time',
         },
-        'aggregateby': {
-            'anyOf': [
-                {"$ref": "#/definitions/column_name"},
-                {'enum': ['']},
-            ],
-            'default': '',
-        },
-        'aggregation': {
-            'type': 'string',
-            'default': 'count',
-            'anyOf': [
-                {'enum': ['count', 'uniq']},
-                {'pattern': 'topK\(\d+\)'},
-            ],
+        'aggregations': {
+            'type': 'array',
+            'items': {
+                'type': 'array',
+                'items': [
+                    {
+                        # Aggregation function
+                        'type': 'string',
+                        'anyOf': [
+                            {'enum': ['count', 'uniq']},
+                            {'pattern': 'topK\(\d+\)'},
+                        ],
+                    }, {
+                        # Aggregate column
+                        'anyOf': [
+                            {"$ref": "#/definitions/column_name"},
+                            {'enum': ['']},
+                        ],
+                    }, {
+                        # Alias
+                        'type': ['string', 'null'],
+                    },
+                ],
+                'minLength': 3,
+                'maxLength': 3,
+            },
+            'minLength': 1,
+            'default': [['count', '', 'aggregate']],
         },
         'arrayjoin': {
             "$ref": "#/definitions/column_name",

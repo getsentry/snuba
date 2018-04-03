@@ -51,7 +51,8 @@ def query():
     ])
 
     aggregate_columns = [
-        util.column_expr(body['aggregateby'], body, settings.AGGREGATE_COLUMN)
+        util.column_expr(col, body, alias, agg)
+        for (agg, col, alias) in body['aggregations']
     ]
     groupby = util.to_list(body['groupby'])
     group_columns = [util.column_expr(gb, body) for gb in groupby]

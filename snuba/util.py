@@ -19,7 +19,7 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def column_expr(column_name, body, alias=None):
+def column_expr(column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
     a 2-tuple of:
@@ -56,11 +56,8 @@ def column_expr(column_name, body, alias=None):
     else:
         expr = column_name
 
-    # If the alias is "aggregate" then this is the aggregate column and we
-    # wrap it in the aggregation function
-    if alias == settings.AGGREGATE_COLUMN:
-        # TODO need more safety, eg if aggregation is 'uniq' then there must be an 'aggregateby'
-        expr = '{}({})'.format(body['aggregation'], expr)
+    if aggregate is not None:
+        expr = '{}({})'.format(aggregate, expr)
 
     return (expr, alias)
 

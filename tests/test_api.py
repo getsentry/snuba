@@ -113,8 +113,7 @@ class TestApi(BaseTest):
             'project': 3,
             'issues': list(enumerate(self.hashes)),
             'groupby': 'project_id',
-            'aggregation': 'topK(4)',
-            'aggregateby': 'issue',
+            'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
         assert sorted(result['data'][0]['aggregate']) == [0, 3, 6, 9]
 
@@ -122,8 +121,7 @@ class TestApi(BaseTest):
             'project': 3,
             'issues': list(enumerate(self.hashes)),
             'groupby': 'project_id',
-            'aggregation': 'uniq',
-            'aggregateby': 'issue',
+            'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
         assert result['data'][0]['aggregate'] == 4
 
@@ -131,11 +129,28 @@ class TestApi(BaseTest):
             'project': 3,
             'issues': list(enumerate(self.hashes)),
             'groupby': ['project_id', 'time'],
-            'aggregation': 'uniq',
-            'aggregateby': 'issue',
+            'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
         assert len(result['data']) == 3  # time buckets
         assert all(d['aggregate'] == 4 for d in result['data'])
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id'],
+            'aggregations': [
+                ['count', 'platform', 'platforms'],
+                ['uniq', 'platform', 'uniq_platforms'],
+                ['topK(1)', 'platform', 'top_platforms'],
+            ],
+        })).data)
+        data = sorted(result['data'], key=lambda r:r['project_id'])
+
+        for idx, pid in enumerate(self.project_ids):
+            assert data[idx]['project_id'] == pid
+            assert data[idx]['uniq_platforms'] == len(self.platforms) // pid
+            assert data[idx]['platforms'] == self.minutes // pid
+            assert len(data[idx]['top_platforms']) == 1
+            assert data[idx]['top_platforms'][0] in self.platforms
 
     def test_tag_expansion(self):
         # A promoted tag
