@@ -17,13 +17,9 @@ class TestApi(BaseTest):
 
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
-        from snuba import settings
-        settings.CLICKHOUSE_TABLE = 'test'
-        settings.CLICKHOUSE_PORT = 9000
-        from snuba import api
-        api.app.testing = True
-        api.clickhouse = self.conn
-        self.app = api.app.test_client()
+        from snuba.api import app
+        assert app.testing == True
+        self.app = app.test_client()
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
@@ -143,7 +139,7 @@ class TestApi(BaseTest):
                 ['topK(1)', 'platform', 'top_platforms'],
             ],
         })).data)
-        data = sorted(result['data'], key=lambda r:r['project_id'])
+        data = sorted(result['data'], key=lambda r: r['project_id'])
 
         for idx, pid in enumerate(self.project_ids):
             assert data[idx]['project_id'] == pid
