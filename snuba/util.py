@@ -49,7 +49,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
             expr = sub_field  # TODO recurse?
         else:
-            expr = 'has({col}.key, {sub}) AND {col}.value[indexOf({col}.key, {sub})]'.format(**{
+            expr = '{col}.value[indexOf({col}.key, {sub})]'.format(**{
                 'col': col,
                 'sub': escape_literal(sub)
             })
