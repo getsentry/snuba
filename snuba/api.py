@@ -1,25 +1,23 @@
 import simplejson as json
-import os
-from datetime import datetime, timedelta
-from dateutil.parser import parse as parse_datetime
-
-from flask import Flask, render_template, request
 from clickhouse_driver import Client
+from dateutil.parser import parse as parse_datetime
+from flask import Flask, render_template, request
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
 from snuba import settings, util, schemas
 
 
-clickhouse_table = os.environ.get('CLICKHOUSE_TABLE', settings.CLICKHOUSE_TABLE)
-host, port = util.get_clickhouse_server()
 clickhouse = Client(
-    host,
-    port=port,
-    connect_timeout=1
+    host=settings.CLICKHOUSE_SERVER.split(':')[0],
+    port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
+    connect_timeout=1,
 )
 
 app = Flask(__name__)
+app.testing = settings.TESTING
+app.debug = settings.DEBUG
+
 sentry = Sentry(app, dsn=settings.SENTRY_DSN)
 
 
@@ -63,7 +61,7 @@ def query():
         for (exp, alias) in select_columns
     )
     select_clause = 'SELECT {}'.format(', '.join(select_predicates))
-    from_clause = 'FROM {}'.format(clickhouse_table)
+    from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
     conditions = [

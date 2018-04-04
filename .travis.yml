@@ -8,7 +8,6 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install clickhouse-server-common clickhouse-client -y
   - sudo service clickhouse-server start
-  - pip install -r requirements.txt
-  - python setup.py develop
+  - make install-dependencies
 script:
-  - py.test -s
+  - make test

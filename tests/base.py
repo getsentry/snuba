@@ -9,6 +9,8 @@ from snuba.writer import row_from_processed_event, write_rows
 
 class BaseTest(object):
     def setup_method(self, test_method):
+        assert settings.TESTING == True, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
         from fixtures import raw_event
 
         self.event = self.wrap_raw_event(raw_event)
