@@ -1,10 +1,11 @@
 import re
+import os
 
 TESTING = False
 DEBUG = True
 
 # Clickhouse Options
-CLICKHOUSE_SERVER = 'localhost:9000'
+CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
 CLICKHOUSE_TABLE = 'sentry_dist'
 
 # Sentry Options
