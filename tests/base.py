@@ -17,7 +17,12 @@ class BaseTest(object):
 
         self.table = 'test'
         self.conn = Client('localhost')
+        self.conn.execute("DROP TABLE IF EXISTS %s" % self.table)
         self.conn.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
+
+    def teardown_method(self, test_method):
+        self.conn.execute("DROP TABLE IF EXISTS %s" % self.table)
+        self.conn.disconnect()
 
     def wrap_raw_event(self, event):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
@@ -34,10 +39,6 @@ class BaseTest(object):
             'datetime': event['datetime'],
             'data': event
         }
-
-    def teardown_method(self, test_method):
-        self.conn.execute("DROP TABLE %s" % self.table)
-        self.conn.disconnect()
 
     def write_raw_events(self, events):
         if not isinstance(events, (list, tuple)):
