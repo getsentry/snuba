@@ -72,14 +72,14 @@ def query():
     # then we can just use the alias.
     where_predicates = (
         '{} {} {}'.format(
-            alias if (col, alias) in select_columns else col,
+            '`{}`'.format(alias) if (col, alias) in select_columns else col,
             op,
             util.escape_literal(lit))
         for ((col, alias), op, lit) in set(conditions)
     )
     where_clause = 'WHERE {}'.format(' AND '.join(where_predicates)) if conditions else ''
 
-    group_clause = ', '.join(alias for (_, alias) in group_columns)
+    group_clause = ', '.join('`{}`'.format(alias) for (_, alias) in group_columns)
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)
 
