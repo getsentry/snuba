@@ -119,6 +119,18 @@ QUERY_SCHEMA = {
         'arrayjoin': {
             "$ref": "#/definitions/column_name",
         },
+        'orderby': {
+            "$ref": "#/definitions/column_name",
+            'default': 'time',
+        },
+        'limit': {
+            'type': 'number'
+        },
+        'offset': {
+            'type': 'number',
+            'default': 0
+            #TODO offset only applies if limit is set
+        },
     },
     # Need to select down to the project level for customer isolation and performance
     'required': ['project'],
@@ -132,15 +144,15 @@ QUERY_SCHEMA = {
         },
         'column_name': {
             'anyOf': [
-                {'enum': ['issue']},  # Special computed column created from `issues` definition
+                {'enum': ['issue', '-issue']},  # Special computed column created from `issues` definition
                 {
                     'type': 'string',
                     # TODO make sure its a valid column, either in the schema or here
-                    'pattern': '^[a-zA-Z0-9_.]+$',
+                    'pattern': '^-?[a-zA-Z0-9_.]+$',
                 },
                 {
                     'type': 'string',
-                    'pattern': '^tags\[[a-zA-Z0-9_\.:-]+\]$',
+                    'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$',
                 },
             ],
         },

@@ -83,7 +83,13 @@ def query():
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)
 
-    order_clause = 'ORDER BY time' if 'time' in groupby else ''
+    order_clause = ''
+    desc = body['orderby'].startswith('-')
+    orderby = body['orderby'].lstrip('-')
+    if any(c[1] == orderby for c in select_columns):
+        order_clause = 'ORDER BY `{}` {}'.format(orderby, 'DESC' if desc else 'ASC')
+
+    limit_clause = "LIMIT {}, {}".format(body['offset'], body['limit']) if 'limit' in body else ''
 
     sql = ' '.join([c for c in [
         select_clause,
@@ -92,6 +98,7 @@ def query():
         where_clause,
         group_clause,
         order_clause,
+        limit_clause
     ] if c])
 
     result = util.raw_query(sql, clickhouse)
