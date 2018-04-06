@@ -128,12 +128,14 @@ QUERY_SCHEMA = {
         },
         'offset': {
             'type': 'number',
-            'default': 0
-            #TODO offset only applies if limit is set
         },
     },
     # Need to select down to the project level for customer isolation and performance
     'required': ['project'],
+    'dependencies': {
+        'offset': ['limit'],
+        'limit': ['orderby'],
+    },
 
     'definitions': {
         'fingerprint_hash': {

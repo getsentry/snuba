@@ -94,6 +94,28 @@ class TestApi(BaseTest):
             issues_expected = set(range(0, len(self.hashes), p))
             assert issues_found - issues_expected == set()
 
+    def test_offset_limit(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id'],
+            'aggregations': [['count', '', 'count']],
+            'orderby': '-count',
+            'offset': 1,
+            'limit': 1,
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['project_id'] == 2
+
+        # offset without limit is invalid
+        result = self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id'],
+            'aggregations': [['count', '', 'count']],
+            'orderby': '-count',
+            'offset': 1,
+        }))
+        assert result.status_code == 400
+
     def test_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
