@@ -96,7 +96,7 @@ QUERY_SCHEMA = {
                         # Aggregation function
                         'type': 'string',
                         'anyOf': [
-                            {'enum': ['count', 'uniq']},
+                            {'enum': ['count', 'uniq', 'min', 'max']},
                             {'pattern': 'topK\(\d+\)'},
                         ],
                     }, {
