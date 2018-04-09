@@ -72,7 +72,7 @@ class TestProcessor(BaseTest):
 
     def test_extract_tags(self):
         tags = {
-            'sentry:user': 'foo',
+            'sentry:user': 'the_user',
             'level': 'the_level',
             'logger': 'the_logger',
             'server_name': 'the_servername',
@@ -80,7 +80,6 @@ class TestProcessor(BaseTest):
             'environment': 'the_enviroment',
             'sentry:release': 'the_release',
             'sentry:dist': 'the_dist',
-            'sentry:user': 'the_user',
             'site': 'the_site',
             'url': 'the_url',
             'extra_tag': 'extra_value',
