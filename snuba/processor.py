@@ -92,7 +92,6 @@ def extract_sdk(output, sdk):
 
 
 def extract_promoted_tags(output, tags):
-    tags.pop('sentry:user', None)  # defer to user interface data
     output['level'] = _unicodify(tags.pop('level', None))
     output['logger'] = _unicodify(tags.pop('logger', None))
     output['server_name'] = _unicodify(tags.pop('server_name', None))
@@ -100,6 +99,7 @@ def extract_promoted_tags(output, tags):
     output['environment'] = _unicodify(tags.pop('environment', None))
     output['release'] = _unicodify(tags.pop('sentry:release', None))
     output['dist'] = _unicodify(tags.pop('sentry:dist', None))
+    output['user'] = _unicodify(tags.pop('sentry:user', None))
     output['site'] = _unicodify(tags.pop('site', None))
     output['url'] = _unicodify(tags.pop('url', None))
 

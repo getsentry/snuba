@@ -80,6 +80,7 @@ class TestProcessor(BaseTest):
             'environment': 'the_enviroment',
             'sentry:release': 'the_release',
             'sentry:dist': 'the_dist',
+            'sentry:user': 'the_user',
             'site': 'the_site',
             'url': 'the_url',
             'extra_tag': 'extra_value',
@@ -99,6 +100,7 @@ class TestProcessor(BaseTest):
             'site': u'the_site',
             'transaction': u'the_transaction',
             'url': u'the_url',
+            'user': u'the_user',
         }
         assert tags == {
             'extra_tag': 'extra_value',

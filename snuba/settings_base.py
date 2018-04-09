@@ -30,6 +30,7 @@ PROMOTED_TAGS = [
     'environment',
     'release',
     'dist',
+    'user',
     'site',
     'url',
     'app_device',
@@ -150,6 +151,7 @@ SCHEMA_COLUMNS = """
     environment Nullable(String),
     release Nullable(String), -- sentry:release
     dist Nullable(String), -- sentry:dist
+    user Nullable(String), -- sentry:user
     site Nullable(String),
     url Nullable(String),
     app_device Nullable(String),
