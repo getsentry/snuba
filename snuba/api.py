@@ -44,7 +44,7 @@ def query():
     conditions = body['conditions']
     conditions.extend([
         ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
+        ('timestamp', '<=', to_date),
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
 

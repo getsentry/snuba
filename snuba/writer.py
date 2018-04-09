@@ -6,8 +6,8 @@ from snuba import settings
 
 def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     # TODO: clickhouse-driver expects datetimes, would be nice to skip this
-    event['timestamp'] = datetime.fromtimestamp(event['timestamp'])
-    event['received'] = datetime.fromtimestamp(event['received'])
+    event['timestamp'] = datetime.utcfromtimestamp(event['timestamp'])
+    event['received'] = datetime.utcfromtimestamp(event['received'])
 
     values = []
     for colname in columns:
