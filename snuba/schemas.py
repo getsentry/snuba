@@ -19,7 +19,6 @@ QUERY_SCHEMA = {
                     {
                         'type': 'array',
                         'items': {'$ref': '#/definitions/condition'},
-                        'minItems': 2,
                     },
                 ],
             },
