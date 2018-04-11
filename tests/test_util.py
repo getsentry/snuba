@@ -39,3 +39,41 @@ class TestUtil(BaseTest):
         assert escape_literal(datetime(2001, 1, 1, 1, 1, 1)) == "toDateTime('2001-01-01T01:01:01')"
         assert escape_literal([1, 'a', date(2001, 1, 1)]) ==\
             "(1, 'a', toDate('2001-01-01'))"
+
+    def test_condition_expr(self):
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+        }
+        select_columns = []
+
+        conditions = [['a', '=', 1]]
+        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+
+        conditions = [[['a', '=', 1]]]
+        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+
+        conditions = [['a', '=', 1], ['b', '=', 2]]
+        assert condition_expr(conditions, body, select_columns) == 'a = 1 AND b = 2'
+
+        conditions = [[['a', '=', 1], ['b', '=', 2]]]
+        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2)'
+
+        conditions = [[['a', '=', 1], ['b', '=', 2]], ['c', '=', 3]]
+        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2) AND c = 3'
+
+        conditions = [[['a', '=', 1], ['b', '=', 2]], [['c', '=', 3], ['d', '=', 4]]]
+        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
+
+        # Malformed condition input
+        conditions = [[['a', '=', 1], []]]
+        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+
+        # Test column expansion
+        conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
+        expanded = column_expr('tags[foo]', body)
+        assert condition_expr(conditions, body, select_columns) == '({} = 1 OR b = 2)'.format(expanded[0])
+
+        # Test using alias if column has already been expanded in SELECT clause
+        conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
+        select_columns = [expanded]
+        assert condition_expr(conditions, body, select_columns) == '(`tags[foo]` = 1 OR b = 2)'

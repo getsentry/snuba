@@ -64,20 +64,9 @@ def query():
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
-    conditions = [
-        (util.column_expr(col, body), op, tuple(lit) if isinstance(lit, list) else lit)
-        for col, op, lit in conditions
-    ]
-    # If a where clause references a column already expanded in another clause
-    # then we can just use the alias.
-    where_predicates = (
-        '{} {} {}'.format(
-            '`{}`'.format(alias) if (col, alias) in select_columns else col,
-            op,
-            util.escape_literal(lit))
-        for ((col, alias), op, lit) in set(conditions)
-    )
-    where_clause = 'WHERE {}'.format(' AND '.join(where_predicates)) if conditions else ''
+    where_clause = ''
+    if conditions:
+        where_clause = 'WHERE {}'.format(util.condition_expr(conditions, body, select_columns))
 
     group_clause = ', '.join('`{}`'.format(alias) for (_, alias) in group_columns)
     if group_clause:
