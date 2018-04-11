@@ -61,6 +61,30 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     return (expr, alias)
 
+def condition_expr(conditions, body, select_columns, depth=0):
+    """
+    Return a boolean expression suitable for putting in the WHERE clause of the
+    query.  The expression is constructed by ANDing groups of OR expressions.
+    Expansion of columns is handled, as is replacement of columns with aliases,
+    if the column has already been expanded and aliased elsewhere.
+    """
+    if not conditions:
+        return ''
+
+    if depth == 0:
+        sub = (condition_expr(cond, body, select_columns, depth+1) for cond in conditions)
+        return ' AND '.join(s for s in sub if s)
+    elif len(conditions) == 3 and isinstance(conditions[0], six.string_types):
+        col, op, lit = conditions
+        col, alias = column_expr(col, body)
+        col = '`{}`'.format(alias) if (col, alias) in select_columns else col
+        lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
+        return '{} {} {}'.format(col, op, lit)
+    elif depth == 1:
+        sub = (condition_expr(cond, body, select_columns, depth+1) for cond in conditions)
+        sub = [s for s in sub if s]
+        res = ' OR '.join(sub)
+        return '({})'.format(res) if len(sub) > 1 else res
 
 def escape_literal(value):
     """
