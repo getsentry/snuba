@@ -3,6 +3,7 @@ from flask import request, render_template
 from datetime import date, datetime
 from dateutil.tz import tz
 import simplejson as json
+from itertools import chain
 import jsonschema
 import numbers
 import re
@@ -36,7 +37,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     elif column_name == 'issue':
         # If there are conditions on what 'issue' can be, then only expand the
         # expression for the issues that will actually be selected.
-        cond = body.get('conditions', [])
+        cond = flat_conditions(body.get('conditions', []))
         ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
               [set(lit) for (col, op, lit) in cond if col ==
                'issue' and op == 'IN' and isinstance(lit, list)]
@@ -61,6 +62,12 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     return (expr, alias)
 
+def is_condition(cond_or_list):
+    return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
+
+def flat_conditions(conditions):
+    return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+
 def condition_expr(conditions, body, select_columns, depth=0):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
@@ -74,7 +81,7 @@ def condition_expr(conditions, body, select_columns, depth=0):
     if depth == 0:
         sub = (condition_expr(cond, body, select_columns, depth+1) for cond in conditions)
         return ' AND '.join(s for s in sub if s)
-    elif len(conditions) == 3 and isinstance(conditions[0], six.string_types):
+    elif is_condition(conditions):
         col, op, lit = conditions
         col, alias = column_expr(col, body)
         col = '`{}`'.format(alias) if (col, alias) in select_columns else col
