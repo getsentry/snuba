@@ -95,6 +95,7 @@ QUERY_SCHEMA = {
                         'anyOf': [
                             {'$ref': '#/definitions/column_name'},
                             {'enum': ['']},
+                            {'type': 'null'},
                         ],
                     }, {
                         # Alias

@@ -28,9 +28,11 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     Needs the body of the request for some extra data used to expand column expressions.
     """
-    # By default, alias is the unexpanded coluumn name
+    assert column_name or aggregate
+    column_name = column_name or ''
+
     if alias is None:
-        alias = column_name
+        alias = column_name if column_name else aggregate
 
     if column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
