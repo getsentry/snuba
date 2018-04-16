@@ -23,4 +23,6 @@ ENV FLASK_DEBUG 0
 
 EXPOSE 8000
 
-CMD [ "gunicorn", "snuba.api:app", "-b", "0.0.0.0:8000" ]
+COPY docker_entrypoint.sh ./
+ENTRYPOINT [ "./docker_entrypoint.sh" ]
+CMD [ "api" ]
