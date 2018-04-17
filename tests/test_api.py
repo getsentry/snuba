@@ -1,9 +1,10 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-import simplejson as json
 import mock
 import random
+import simplejson as json
+import six
 import sys
 import time
 import uuid
@@ -23,6 +24,7 @@ class TestApi(BaseTest):
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
+        self.environments = ['prod', 'test']  # 2 environments
         self.platforms = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 platforms
         self.hashes = [x * 32 for x in '0123456789ab']  # 12 hashes
         self.minutes = 180
@@ -52,6 +54,8 @@ class TestApi(BaseTest):
                         'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'dist': 'dist1',
+                        'release': six.text_type(tick),
+                        'environment': self.environments[(tock * p) % len(self.environments)],
                         'tags.key': ['foo', 'foo.bar'],
                         'tags.value': ['baz', 'qux'],
                     })
@@ -228,3 +232,22 @@ class TestApi(BaseTest):
         assert util.issue_expr(issues[:2]) + ' AS `issue`' in sql
         assert "`issue` = 0" in sql
         assert "`issue` = 1" in sql
+
+    def test_promoted_expansion(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': ['tags_key'],
+            'aggregations': [
+                ['count', '', 'count'],
+                ['topK(3)', 'tags_value', 'top'],
+            ],
+            'conditions': [
+                ['tags_value', 'IS NOT NULL', None],
+            ],
+        })).data)
+
+        result_map = {d['tags_key']: d for d in result['data']}
+        # Result contains both promoted and regular tags
+        assert set(result_map.keys()) == set([
+            'foo', 'foo.bar', 'release', 'environment', 'dist'])

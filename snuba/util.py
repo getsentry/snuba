@@ -46,6 +46,8 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         ids = set.union(*ids) if ids else None
         expr = issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
     elif settings.NESTED_COL_EXPR.match(column_name):
+        # For tags/contexts, we expand the expression depending on whether the tag is
+        # "promoted" to a top level column, or whether we have to look in the tags map.
         match = settings.NESTED_COL_EXPR.match(column_name)
         col, sub = match.group(1), match.group(2)
         sub_field = sub.replace('.', '_')
@@ -56,6 +58,26 @@ def column_expr(column_name, body, alias=None, aggregate=None):
                 'col': col,
                 'sub': escape_literal(sub)
             })
+    elif column_name in ['tags_key', 'tags_value']:
+        # For special columns `tags_key` and `tags_value` we construct a an interesting
+        # arrayjoin that enumerates all promoted and non-promoted keys. This is for
+        # cases where we do not have a tag key to filter on (eg top tags).
+        col, typ = column_name.split('_', 1)
+        promoted = settings.PROMOTED_COLS[col]
+
+        key_list = 'arrayConcat([{}], {}.key)'.format(
+            ', '.join('\'{}\''.format(p) for p in promoted),
+            col
+        )
+        val_list = 'arrayConcat([{}], {}.value)'.format(
+            # TODO os_rooted is actually the only one that needs a toString()
+            ', '.join('toString({})'.format(p) for p in promoted),
+            col
+        )
+        expr = ('arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
+            key_list,
+            val_list
+        ) + ('[1]' if typ == 'key' else '[2]')
     else:
         expr = column_name
 
@@ -124,9 +146,10 @@ def raw_query(sql, client):
     """
     print sql
     try:
+        error = None
         data, meta = client.execute(sql, with_column_types=True)
-    except BaseException:
-        data, meta = [], []
+    except BaseException as ex:
+        data, meta, error = [], [], six.text_type(ex)
 
     # for now, convert back to a dict-y format to emulate the json
     data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
@@ -144,7 +167,7 @@ def raw_query(sql, client):
                 d[col['name']] = dt.isoformat()
 
     # TODO record statistics somewhere
-    return {'data': data, 'meta': meta}
+    return {'data': data, 'meta': meta, 'error': error}
 
 
 def issue_expr(issues, col='primary_hash', ids=None):
