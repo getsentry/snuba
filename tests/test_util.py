@@ -19,19 +19,19 @@ class TestUtil(BaseTest):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
         }
-        assert column_expr('issue', body)[0] ==\
-            "if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0))"
+        assert column_expr('issue', body.copy()) ==\
+            "(if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0)) AS `issue`)"
 
         body['conditions'] = [['issue', 'IN', [1]]]
-        assert column_expr('issue', body)[0] ==\
-            "if(primary_hash IN ('a', 'b'), 1, 0)"
+        assert column_expr('issue', body.copy()) ==\
+            "(if(primary_hash IN ('a', 'b'), 1, 0) AS `issue`)"
 
         body['conditions'] = [['issue', 'IN', [1]], ['issue', '=', 2]]
-        assert column_expr('issue', body)[0] ==\
-            "if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0))"
+        assert column_expr('issue', body.copy()) ==\
+            "(if(primary_hash IN ('a', 'b'), 1, if(primary_hash = 'c', 2, 0)) AS `issue`)"
 
         body['conditions'] = [['issue', 'IN', []]]
-        assert column_expr('issue', body)[0] == 0
+        assert column_expr('issue', body.copy()) == "(0 AS `issue`)"
 
     def test_escape(self):
         assert escape_literal("'") == r"'\''"
@@ -44,36 +44,35 @@ class TestUtil(BaseTest):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
         }
-        select_columns = []
 
         conditions = [['a', '=', 1]]
-        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+        assert condition_expr(conditions, body.copy()) == 'a = 1'
 
         conditions = [[['a', '=', 1]]]
-        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+        assert condition_expr(conditions, body.copy()) == 'a = 1'
 
         conditions = [['a', '=', 1], ['b', '=', 2]]
-        assert condition_expr(conditions, body, select_columns) == 'a = 1 AND b = 2'
+        assert condition_expr(conditions, body.copy()) == 'a = 1 AND b = 2'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]]]
-        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2)'
+        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2)'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], ['c', '=', 3]]
-        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2) AND c = 3'
+        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2) AND c = 3'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], [['c', '=', 3], ['d', '=', 4]]]
-        assert condition_expr(conditions, body, select_columns) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
+        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
 
         # Malformed condition input
         conditions = [[['a', '=', 1], []]]
-        assert condition_expr(conditions, body, select_columns) == 'a = 1'
+        assert condition_expr(conditions, body.copy()) == 'a = 1'
 
         # Test column expansion
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        expanded = column_expr('tags[foo]', body)
-        assert condition_expr(conditions, body, select_columns) == '({} = 1 OR b = 2)'.format(expanded[0])
+        expanded = column_expr('tags[foo]', body.copy())
+        assert condition_expr(conditions, body.copy()) == '({} = 1 OR b = 2)'.format(expanded)
 
         # Test using alias if column has already been expanded in SELECT clause
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        select_columns = [expanded]
-        assert condition_expr(conditions, body, select_columns) == '(`tags[foo]` = 1 OR b = 2)'
+        column_expr('tags[foo]', body) # Expand it once so the next time is aliased
+        assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'

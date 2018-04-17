@@ -240,14 +240,30 @@ class TestApi(BaseTest):
             'groupby': ['tags_key'],
             'aggregations': [
                 ['count', '', 'count'],
+                ['uniq', 'tags_value', 'uniq'],
                 ['topK(3)', 'tags_value', 'top'],
             ],
             'conditions': [
                 ['tags_value', 'IS NOT NULL', None],
             ],
         })).data)
+        print result
 
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
             'foo', 'foo.bar', 'release', 'environment', 'dist'])
+
+        # Reguar (nested) tag
+        assert result_map['foo']['count'] == 180
+        assert len(result_map['foo']['top']) == 1
+        assert result_map['foo']['top'][0] == 'baz'
+
+        # Promoted tags
+        assert result_map['release']['count'] == 180
+        assert len(result_map['release']['top']) == 3
+        assert result_map['release']['uniq'] == 180
+
+        assert result_map['environment']['count'] == 180
+        assert len(result_map['environment']['top']) == 2
+        assert all(r in self.environments for r in result_map['environment']['top'])

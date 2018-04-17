@@ -77,14 +77,38 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = ('arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
             key_list,
             val_list
-        ) + ('[1]' if typ == 'key' else '[2]')
+        )
+        # alias sub-expression for later reuse
+        expr = alias_expr(expr, 'all_tags', body)
+        expr = '({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
     else:
         expr = column_name
 
     if aggregate is not None:
         expr = '{}({})'.format(aggregate, expr)
 
-    return (expr, alias)
+    return alias_expr(expr, alias, body)
+
+def alias_expr(expr, alias, body):
+    """
+    Return the correct expression to use in the final SQL. Keeps a cache of
+    the previously created expressions and aliases, so it knows when it can
+    subsequently replace a redundant expression with an alias.
+
+    1. If the expression and alias are equal, just return that.
+    2. Otherwise, if the expression is new, add it to the cache and its alias so
+       it can be reused later and return `expr AS alias`
+    3. If the expression has been aliased before, return the alias
+    """
+    alias_cache = body.setdefault('alias_cache', {})
+
+    if expr == alias:
+        return expr
+    elif expr in alias_cache:
+        return '`{}`'.format(alias_cache[expr])
+    else:
+        alias_cache[expr] = alias
+        return '({} AS `{}`)'.format(expr, alias)
 
 def is_condition(cond_or_list):
     return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
@@ -92,7 +116,7 @@ def is_condition(cond_or_list):
 def flat_conditions(conditions):
     return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
 
-def condition_expr(conditions, body, select_columns, depth=0):
+def condition_expr(conditions, body, depth=0):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
     query.  The expression is constructed by ANDing groups of OR expressions.
@@ -103,16 +127,15 @@ def condition_expr(conditions, body, select_columns, depth=0):
         return ''
 
     if depth == 0:
-        sub = (condition_expr(cond, body, select_columns, depth+1) for cond in conditions)
+        sub = (condition_expr(cond, body, depth+1) for cond in conditions)
         return ' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         col, op, lit = conditions
-        col, alias = column_expr(col, body)
-        col = '`{}`'.format(alias) if (col, alias) in select_columns else col
+        col = column_expr(col, body)
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         return '{} {} {}'.format(col, op, lit)
     elif depth == 1:
-        sub = (condition_expr(cond, body, select_columns, depth+1) for cond in conditions)
+        sub = (condition_expr(cond, body, depth+1) for cond in conditions)
         sub = [s for s in sub if s]
         res = ' OR '.join(sub)
         return '({})'.format(res) if len(sub) > 1 else res
