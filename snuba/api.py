@@ -26,6 +26,13 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
+
+@app.route('/health')
+def health():
+    assert settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+    return ('ok', 200, {'Content-Type': 'text/plain'})
+
+
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
 # we redundantly expand it twice
 # TODO some aliases eg tags[foo] are invalid SQL
