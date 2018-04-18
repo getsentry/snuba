@@ -94,7 +94,7 @@ WRITER_COLUMNS = [
 ]
 
 # A column name like "tags[url]"
-NESTED_COL_EXPR = re.compile('^(tags)\[([a-zA-Z0-9_\.:-]+)\]$')
+NESTED_COL_EXPR = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 # The set of columns, and associated keys that have been promoted
 # to the top level table namespace

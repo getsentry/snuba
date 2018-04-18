@@ -56,26 +56,23 @@ def query():
     group_columns = [util.column_expr(gb, body) for gb in groupby]
 
     select_columns = group_columns + aggregate_columns
-    select_predicates = (
-        '{} AS `{}`'.format(exp, alias) if exp != alias else exp
-        for (exp, alias) in select_columns
-    )
-    select_clause = 'SELECT {}'.format(', '.join(select_predicates))
+    select_clause = 'SELECT {}'.format(', '.join(select_columns))
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
     where_clause = ''
     if conditions:
-        where_clause = 'WHERE {}'.format(util.condition_expr(conditions, body, select_columns))
+        where_clause = 'WHERE {}'.format(util.condition_expr(conditions, body))
 
-    group_clause = ', '.join('`{}`'.format(alias) for (_, alias) in group_columns)
+
+    group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)
 
     order_clause = ''
     desc = body['orderby'].startswith('-')
     orderby = body['orderby'].lstrip('-')
-    if any(c[1] == orderby for c in select_columns):
+    if orderby in body.get('alias_cache', {}).values():
         order_clause = 'ORDER BY `{}` {}'.format(orderby, 'DESC' if desc else 'ASC')
 
     limit_clause = ''
