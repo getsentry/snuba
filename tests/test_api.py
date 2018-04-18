@@ -102,7 +102,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
             'groupby': ['project_id'],
-            'aggregations': [['count', '', 'count']],
+            'aggregations': [['count()', '', 'count']],
             'orderby': '-count',
             'offset': 1,
             'limit': 1,
@@ -114,7 +114,7 @@ class TestApi(BaseTest):
         result = self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
             'groupby': ['project_id'],
-            'aggregations': [['count', '', 'count']],
+            'aggregations': [['count()', '', 'count']],
             'orderby': '-count',
             'offset': 1,
         }))
@@ -239,7 +239,7 @@ class TestApi(BaseTest):
             'granularity': 3600,
             'groupby': ['tags_key'],
             'aggregations': [
-                ['count', '', 'count'],
+                ['count()', '', 'count'],
                 ['uniq', 'tags_value', 'uniq'],
                 ['topK(3)', 'tags_value', 'top'],
             ],

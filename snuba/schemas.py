@@ -87,8 +87,7 @@ QUERY_SCHEMA = {
                         # Aggregation function
                         'type': 'string',
                         'anyOf': [
-                            {'enum': ['count', 'uniq', 'min', 'max']},
-                            {'pattern': 'topK\(\d+\)'},
+                            {'type': 'string'},
                         ],
                     }, {
                         # Aggregate column
@@ -106,7 +105,7 @@ QUERY_SCHEMA = {
                 'maxLength': 3,
             },
             'minLength': 1,
-            'default': [['count', '', 'aggregate']],
+            'default': [['count()', '', 'aggregate']],
         },
         'arrayjoin': {
             '$ref': '#/definitions/column_name',
@@ -139,9 +138,10 @@ QUERY_SCHEMA = {
         'column_name': {
             'type': 'string',
             'anyOf': [
-                {'enum': ['issue', '-issue']},  # Special computed column created from `issues` definition
-                {'pattern': '^-?[a-zA-Z0-9_.]+$',},
-                {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$',},
+                # Special computed column created from `issues` definition
+                {'enum': ['issue', '-issue']},
+                {'pattern': '^-?[a-zA-Z0-9_.]+$', },
+                {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
             ],
         },
         'column_list': {

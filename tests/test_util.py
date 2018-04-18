@@ -74,5 +74,5 @@ class TestUtil(BaseTest):
 
         # Test using alias if column has already been expanded in SELECT clause
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        column_expr('tags[foo]', body) # Expand it once so the next time is aliased
+        column_expr('tags[foo]', body)  # Expand it once so the next time is aliased
         assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'

@@ -85,9 +85,13 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = column_name
 
     if aggregate is not None:
-        expr = '{}({})'.format(aggregate, expr)
+        if not expr:
+            expr = aggregate
+        else:
+            expr = '{}({})'.format(aggregate, expr)
 
     return alias_expr(expr, alias, body)
+
 
 def alias_expr(expr, alias, body):
     """
@@ -110,11 +114,14 @@ def alias_expr(expr, alias, body):
         alias_cache[expr] = alias
         return '({} AS `{}`)'.format(expr, alias)
 
+
 def is_condition(cond_or_list):
     return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
 
+
 def flat_conditions(conditions):
     return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+
 
 def condition_expr(conditions, body, depth=0):
     """
@@ -127,7 +134,7 @@ def condition_expr(conditions, body, depth=0):
         return ''
 
     if depth == 0:
-        sub = (condition_expr(cond, body, depth+1) for cond in conditions)
+        sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         return ' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         col, op, lit = conditions
@@ -135,10 +142,11 @@ def condition_expr(conditions, body, depth=0):
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         return '{} {} {}'.format(col, op, lit)
     elif depth == 1:
-        sub = (condition_expr(cond, body, depth+1) for cond in conditions)
+        sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = ' OR '.join(sub)
         return '({})'.format(res) if len(sub) > 1 else res
+
 
 def escape_literal(value):
     """
