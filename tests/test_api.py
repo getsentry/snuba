@@ -252,7 +252,8 @@ class TestApi(BaseTest):
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
-            'foo', 'foo.bar', 'release', 'environment', 'dist'])
+            'foo', 'foo.bar', 'release', 'environment', 'dist'
+        ])
 
         # Reguar (nested) tag
         assert result_map['foo']['count'] == 180
