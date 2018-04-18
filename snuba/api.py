@@ -64,7 +64,6 @@ def query():
     if conditions:
         where_clause = 'WHERE {}'.format(util.condition_expr(conditions, body))
 
-
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:
         group_clause = 'GROUP BY ({})'.format(group_clause)
