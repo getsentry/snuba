@@ -179,7 +179,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'groupby': 'primary_hash',
-            'conditions': [['times_seen', '>', 1]],
+            'having': [['times_seen', '>', 1]],
             'aggregations': [['count()', '', 'times_seen']],
         })).data)
         assert len(result['data']) == 3
@@ -187,7 +187,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'groupby': 'primary_hash',
-            'conditions': [['times_seen', '>', 100]],
+            'having': [['times_seen', '>', 100]],
             'aggregations': [['count()', '', 'times_seen']],
         })).data)
         assert len(result['data']) == 0
@@ -197,14 +197,14 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 2,
                 'groupby': [],
-                'conditions': [['times_seen', '>', 1]],
+                'having': [['times_seen', '>', 1]],
                 'aggregations': [['count()', '', 'times_seen']],
             })).data)
 
         # unknown field times_seen
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
-            'conditions': [['times_seen', '>', 1]],
+            'having': [['times_seen', '>', 1]],
         })).data)
         assert result['error']
 

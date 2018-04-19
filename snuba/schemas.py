@@ -24,6 +24,12 @@ QUERY_SCHEMA = {
             },
             'default': [],
         },
+        'having': {
+            'type': 'array',
+            # HAVING looks just like a condition
+            'items': {'$ref': '#/definitions/condition'},
+            'default': [],
+        },
         'from_date': {
             'type': 'string',
             'format': 'date-time',
