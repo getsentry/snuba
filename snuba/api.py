@@ -55,21 +55,36 @@ def query():
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
 
-    aggregate_columns = [
+    aggregate_exprs = [
         util.column_expr(col, body, alias, agg)
         for (agg, col, alias) in body['aggregations']
     ]
     groupby = util.to_list(body['groupby'])
-    group_columns = [util.column_expr(gb, body) for gb in groupby]
+    group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
-    select_columns = group_columns + aggregate_columns
-    select_clause = 'SELECT {}'.format(', '.join(select_columns))
+    select_exprs = group_exprs + aggregate_exprs
+    select_clause = 'SELECT {}'.format(', '.join(select_exprs))
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
+    aggregate_columns = set(a[2] for a in body['aggregations'])
+
+    where_conditions = []
+    having_conditions = []
+    for condition in conditions:
+        if condition[0] in aggregate_columns:
+            having_conditions.append(condition)
+        else:
+            where_conditions.append(condition)
+
     where_clause = ''
-    if conditions:
-        where_clause = 'WHERE {}'.format(util.condition_expr(conditions, body))
+    if where_conditions:
+        where_clause = 'WHERE {}'.format(util.condition_expr(where_conditions, body))
+
+    having_clause = ''
+    if having_conditions:
+        assert groupby, "found HAVING clause with no GROUP BY"
+        having_clause = 'HAVING {}'.format(util.condition_expr(having_conditions, body))
 
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:
@@ -91,12 +106,19 @@ def query():
         join_clause,
         where_clause,
         group_clause,
+        having_clause,
         order_clause,
         limit_clause
     ] if c])
 
     result = util.raw_query(sql, clickhouse)
-    return (json.dumps(result), 200, {'Content-Type': 'application/json'})
+
+    if result.get('error'):
+        status = 500
+    else:
+        status = 200
+
+    return (json.dumps(result), status, {'Content-Type': 'application/json'})
 
 
 if app.debug or app.testing:
