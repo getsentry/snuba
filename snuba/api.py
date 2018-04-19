@@ -48,12 +48,13 @@ def query():
     from_date = parse_datetime(body['from_date'])
     assert from_date <= to_date
 
-    conditions = body['conditions']
-    conditions.extend([
+    where_conditions = body['conditions']
+    where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<=', to_date),
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
+    having_conditions = body['having']
 
     aggregate_exprs = [
         util.column_expr(col, body, alias, agg)
@@ -66,16 +67,6 @@ def query():
     select_clause = 'SELECT {}'.format(', '.join(select_exprs))
     from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
-
-    aggregate_columns = set(a[2] for a in body['aggregations'])
-
-    where_conditions = []
-    having_conditions = []
-    for condition in conditions:
-        if condition[0] in aggregate_columns:
-            having_conditions.append(condition)
-        else:
-            where_conditions.append(condition)
 
     where_clause = ''
     if where_conditions:
