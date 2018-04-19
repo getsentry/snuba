@@ -83,6 +83,7 @@ def query():
 
     having_clause = ''
     if having_conditions:
+        assert groupby, "found HAVING clause with no GROUP BY"
         having_clause = 'HAVING {}'.format(util.condition_expr(having_conditions, body))
 
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
