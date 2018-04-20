@@ -51,7 +51,7 @@ def query():
     where_conditions = body['conditions']
     where_conditions.extend([
         ('timestamp', '>=', from_date),
-        ('timestamp', '<=', to_date),
+        ('timestamp', '<', to_date),
         ('project_id', 'IN', util.to_list(body['project'])),
     ])
     having_conditions = body['having']
