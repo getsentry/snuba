@@ -1,3 +1,5 @@
+import os
+
 import simplejson as json
 from clickhouse_driver import Client
 from dateutil.parser import parse as parse_datetime
@@ -6,6 +8,23 @@ from markdown import markdown
 from raven.contrib.flask import Sentry
 
 from snuba import settings, util, schemas
+
+
+try:
+    import uwsgi
+except ImportError:
+    def is_down():
+        return False
+else:
+    def is_down():
+        try:
+            return os.stat('/tmp/snuba.down').st_mtime > uwsgi.started_on
+        except OSError:
+            return False
+
+
+def check_clickhouse():
+    return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
 
 
 clickhouse = Client(
@@ -29,8 +48,10 @@ def root():
 
 @app.route('/health')
 def health():
-    assert settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
-    return ('ok', 200, {'Content-Type': 'text/plain'})
+    if not is_down() and check_clickhouse():
+        return ('ok', 200, {'Content-Type': 'text/plain'})
+    else:
+        return (':(', 500, {'Content-Type': 'text/plain'})
 
 
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
