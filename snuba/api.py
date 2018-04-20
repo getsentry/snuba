@@ -13,10 +13,10 @@ from snuba import settings, util, schemas
 try:
     import uwsgi
 except ImportError:
-    def is_down():
+    def check_down_file_exists():
         return False
 else:
-    def is_down():
+    def check_down_file_exists():
         try:
             return os.stat('/tmp/snuba.down').st_mtime > uwsgi.started_on
         except OSError:
@@ -24,7 +24,10 @@ else:
 
 
 def check_clickhouse():
-    return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+    try:
+        return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+    except IndexError:
+        return False
 
 
 clickhouse = Client(
@@ -48,10 +51,20 @@ def root():
 
 @app.route('/health')
 def health():
-    if not is_down() and check_clickhouse():
-        return ('ok', 200, {'Content-Type': 'text/plain'})
+    down_file_exists = check_down_file_exists()
+    clickhouse_health = check_clickhouse()
+
+    if not down_file_exists and clickhouse_health:
+        body = {'status': 'ok'}
+        status = 200
     else:
-        return (':(', 500, {'Content-Type': 'text/plain'})
+        body = {
+            'down_file_exists': down_file_exists,
+            'clickhouse_ok': clickhouse_health,
+        }
+        status = 500
+
+    return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
 # TODO if `issue` or `time` is specified in 2 places (eg group and where),
