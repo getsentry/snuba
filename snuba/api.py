@@ -62,7 +62,7 @@ def health():
             'down_file_exists': down_file_exists,
             'clickhouse_ok': clickhouse_health,
         }
-        status = 500
+        status = 502
 
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
