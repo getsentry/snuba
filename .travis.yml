@@ -35,4 +35,4 @@ deploy:
   provider: script
   script: docker push "${IMAGE_NAME}:latest"
   on:
-    branch: docker
+    branch: master
