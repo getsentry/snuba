@@ -1,9 +1,15 @@
-# wake up travis
 sudo: required
+services:
+  - docker
 dist: trusty
 language: python
+env:
+  global:
+    - IMAGE_NAME=getsentry/snuba
+    - secure: "t6aXxRzCAqFYMwzTC0Am+poXRjEOu2nJvblBpO4bT3fG/oy1mcF6l0DMZJMjQKGJLSt5q7Wdqh/IXMBjrzQ8hMHdQQfNl4xZYTVRre+b2trSM7EPVD3jwj6Uu+yCVS+EdFGykDd1GhOmbCFAcCIowUKdSdVh5nM1lI3Jz4ftdoh3Acv6cpz7k/fYfvnkUvsCFfzntO5XEz/NYhfXDfeVIwPciirhw5uj/zBjRdTLR+tFKjHQrbixAlpSfBM7Tko0fOh0bqX24TjIj4hpvdk8IVKeS6ZlQ30dyLT1OG2DF4kHkLqm9W8WlG6CZ3tJN2vNIVV/e8gtqiVTLbW4XC9BJeziRPFw3LRcdnwBVPp1fI2StCeDffw2no3xZ/xqFf4LmdWT8e91P2okJAy8F+FrqH8LFaCMLo81Tp5m1SfkCLHFjCBf/z3MUVv4blWV24Zluo9XdQ5O8Wl7opq44nkxAOQ/3RpLd9oTlh8v4Q4FY0Nuz2rnfVTgb8unvF1mlayZ51z9I8YZi0JBjB0CjQO1i67Yj+FSmCkLotV/lPeHHfwqnNnHbJ00URw7mjknIh5uQYr6hgd9D40kvzi2daHGtIltxQKTfFVc1RCFApdZa1yw2l6CYhhPds9WXI8UOI1opnYS1EOfxjsIA4MDf/DuHHlTYYc9PORf6TXoJtEaX48="
+    - secure: "gsXoWm6Qhll+gRS1Tl9VD9PvMou0mjGjzWxIArsFkn2JqAw4WvjYDvN+Vqey7JYVmSGBytA9TDbbgvEONxuWX/i/YiCs0drm3sXfXoEKgxqrlbX6sMNvK5uzaVYKJWxuRtX7LB+6tI8gXUpqKJ1B5inibGTIt7XozXQvFU5BfWc78TAUtm+gWfiagn1Ix3ItA1AiM+/ep0G3xOen7qyOn0dqcNCiA54r9+Tr4Za8wd42r20hHDaWal/dvTmHm3aY6c0WgXJo+DlyXFubtDzzeojC72fjPPkt5VhtLin9VG90nk3UOCUYu0tmqHRDw/ENjKgBYu7ZScar7SFwTw7UHXABQdZanCWh9vFsiCR6TQSF6hoz7QGTKirVYzaGXT1rdbKxGeGhMgmwLzkMe23JFoAYDPpn3BHw6mIKbDGK7GH4UyG5sZi2lh+fdzp67bzOGfPcLVuKI/hZFohhko2xVaU8UuTBoqow5EHf2cAbPo9NuV1mJxMi0HmTo9K1+BcLOgEgBq3Bbk2WIAv9ExNOyiKPLps8Q0nTlpRI9DJaT9VrJzUMKkljB/pVHPi23V7k+UL9Li6wm2G/GWnY8SHI2aELdpUi3/gTzTkfCyKK8d3sHEscB62I9Bsdhj4/LZusaIrrPIT5IRXASEtKBY0zA+nbWxuGmIlewcdMYf7MhW4="
 before_install:
-  - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4    # optional
+  - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4
   - sudo apt-add-repository "deb http://repo.yandex.ru/clickhouse/deb/stable/ main/"
   - sudo apt-get -qq update
   - sudo apt-get install clickhouse-server-common clickhouse-client -y
@@ -11,3 +17,14 @@ before_install:
   - make install-dependencies
 script:
   - make test
+  - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" .
+after_script:
+  - docker images
+before_deploy:
+  - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+  - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
+deploy:
+  provider: script
+  script: docker push "${IMAGE_NAME}:latest"
+  on:
+    branch: master
