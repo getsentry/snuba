@@ -24,7 +24,7 @@ ENV FLASK_DEBUG 0
 
 USER snuba
 
-EXPOSE 8000
+EXPOSE 1218
 
 COPY docker_entrypoint.sh ./
 ENTRYPOINT [ "./docker_entrypoint.sh" ]

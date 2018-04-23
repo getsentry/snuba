@@ -11,7 +11,7 @@ case $1 in
         echo "Running Snuba API server with arguments:" "${@:2}"
         exec uwsgi --master --manage-script-name --mount /=snuba.api:app "${@:2}"
     else
-        _default_args="--socket /tmp/snuba.sock --http 0.0.0.0:8000"
+        _default_args="--socket /tmp/snuba.sock --http 0.0.0.0:1218"
         echo "Running Snuba API server with default arguments: $_default_args"
         exec uwsgi --master --manage-script-name --mount /=snuba.api:app $_default_args
     fi
