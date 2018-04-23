@@ -6,7 +6,7 @@ language: python
 env:
   global:
     - CACHE_DIR=$HOME/.cache/docker
-    - CACHE_FILE_DOCKER=$CACHE_DIR/docker.tar.gz
+    - CACHE_FILE_SNUBA=$CACHE_DIR/snuba.tar.gz
     - IMAGE_NAME=getsentry/snuba
     # DOCKER_USER
     - secure: "t6aXxRzCAqFYMwzTC0Am+poXRjEOu2nJvblBpO4bT3fG/oy1mcF6l0DMZJMjQKGJLSt5q7Wdqh/IXMBjrzQ8hMHdQQfNl4xZYTVRre+b2trSM7EPVD3jwj6Uu+yCVS+EdFGykDd1GhOmbCFAcCIowUKdSdVh5nM1lI3Jz4ftdoh3Acv6cpz7k/fYfvnkUvsCFfzntO5XEz/NYhfXDfeVIwPciirhw5uj/zBjRdTLR+tFKjHQrbixAlpSfBM7Tko0fOh0bqX24TjIj4hpvdk8IVKeS6ZlQ30dyLT1OG2DF4kHkLqm9W8WlG6CZ3tJN2vNIVV/e8gtqiVTLbW4XC9BJeziRPFw3LRcdnwBVPp1fI2StCeDffw2no3xZ/xqFf4LmdWT8e91P2okJAy8F+FrqH8LFaCMLo81Tp5m1SfkCLHFjCBf/z3MUVv4blWV24Zluo9XdQ5O8Wl7opq44nkxAOQ/3RpLd9oTlh8v4Q4FY0Nuz2rnfVTgb8unvF1mlayZ51z9I8YZi0JBjB0CjQO1i67Yj+FSmCkLotV/lPeHHfwqnNnHbJ00URw7mjknIh5uQYr6hgd9D40kvzi2daHGtIltxQKTfFVc1RCFApdZa1yw2l6CYhhPds9WXI8UOI1opnYS1EOfxjsIA4MDf/DuHHlTYYc9PORf6TXoJtEaX48="
@@ -24,11 +24,11 @@ before_install:
   - sudo apt-get install clickhouse-server-common clickhouse-client -y
   - sudo service clickhouse-server start
   - make install-dependencies
-  - if [ -f ${CACHE_FILE_DOCKER} ]; then gzip -dc $CACHE_FILE_DOCKER | docker load; fi
+  - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
   - make test
   - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" .
-  - docker save $IMAGE_NAME | gzip > $CACHE_FILE_DOCKER
+  - docker save $IMAGE_NAME | gzip > $CACHE_FILE_SNUBA
 before_deploy:
   - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
   - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
