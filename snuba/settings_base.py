@@ -4,6 +4,8 @@ import os
 TESTING = False
 DEBUG = True
 
+PORT = 1218
+
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
 CLICKHOUSE_TABLE = 'sentry_dist'

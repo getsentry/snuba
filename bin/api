@@ -1,7 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env python
 
-make install-dependencies
+from snuba import settings
+from snuba.api import app
 
-export FLASK_APP=snuba/api.py
-
-flask run
+app.run(port=settings.PORT)
