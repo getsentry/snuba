@@ -27,9 +27,9 @@ before_install:
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
   - make test
+before_deploy:
   - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" .
   - docker save $IMAGE_NAME | gzip > $CACHE_FILE_SNUBA
-before_deploy:
   - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
   - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
 deploy:
