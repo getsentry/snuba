@@ -21,7 +21,7 @@ before_install:
   - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4
   - sudo apt-add-repository "deb http://repo.yandex.ru/clickhouse/deb/stable/ main/"
   - sudo apt-get -qq update
-  - sudo apt-get install clickhouse-server-common clickhouse-client -y
+  - sudo apt-get install clickhouse-server clickhouse-client -y
   - sudo service clickhouse-server start
   - make install-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
