@@ -23,18 +23,27 @@ else:
             return False
 
 
+class Clickhouse(object):
+    def __enter__(self):
+        self.clickhouse = Client(
+            host=settings.CLICKHOUSE_SERVER.split(':')[0],
+            port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
+            connect_timeout=1,
+        )
+
+        return self.clickhouse
+
+    def __exit__(self, *args):
+        self.clickhouse.disconnect()
+
+
 def check_clickhouse():
-    try:
-        return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
-    except IndexError:
-        return False
+    with Clickhouse() as clickhouse:
+        try:
+            return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+        except IndexError:
+            return False
 
-
-clickhouse = Client(
-    host=settings.CLICKHOUSE_SERVER.split(':')[0],
-    port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
-    connect_timeout=1,
-)
 
 app = Flask(__name__)
 app.testing = settings.TESTING
@@ -136,7 +145,8 @@ def query():
         limit_clause
     ] if c])
 
-    result = util.raw_query(sql, clickhouse)
+    with Clickhouse() as clickhouse:
+        result = util.raw_query(sql, clickhouse)
 
     if result.get('error'):
         status = 500
@@ -156,8 +166,6 @@ if app.debug or app.testing:
         from snuba.processor import process_raw_event
         from snuba.writer import row_from_processed_event, write_rows
 
-        clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
-
         body = json.loads(request.data)
 
         rows = []
@@ -166,10 +174,15 @@ if app.debug or app.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+        with Clickhouse() as clickhouse:
+            clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
+            write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @app.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
+        with Clickhouse() as clickhouse:
+            clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
+
         return ('ok', 200, {'Content-Type': 'text/plain'})
