@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
@@ -25,7 +26,7 @@ class TestApi(BaseTest):
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
-        self.environments = ['prod', 'test']  # 2 environments
+        self.environments = [u'prød', 'test']  # 2 environments
         self.platforms = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 platforms
         self.hashes = [x * 32 for x in '0123456789ab']  # 12 hashes
         self.minutes = 180
@@ -281,7 +282,6 @@ class TestApi(BaseTest):
                 ['tags_value', 'IS NOT NULL', None],
             ],
         })).data)
-        print result
 
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
@@ -302,3 +302,17 @@ class TestApi(BaseTest):
         assert result_map['environment']['count'] == 180
         assert len(result_map['environment']['top']) == 2
         assert all(r in self.environments for r in result_map['environment']['top'])
+
+    def test_unicode_condition(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': ['environment'],
+            'aggregations': [
+                ['count()', '', 'count']
+            ],
+            'conditions': [
+                ['environment', 'IN', [u'prød']],
+            ],
+        })).data)
+        assert result['data'][0] == {'environment': u'prød', 'count': 90}
