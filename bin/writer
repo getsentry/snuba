@@ -5,12 +5,12 @@ import simplejson as json
 import signal
 
 import click
-from clickhouse_driver import Client
 from raven import Client as RavenClient
 
 from snuba import settings
+from snuba.clickhouse import Clickhouse
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.writer import SnubaWriter, row_from_processed_event
+from snuba.writer import row_from_processed_event, write_rows
 from snuba import util
 
 
@@ -25,8 +25,8 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Consumer group used for consuming the processed events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use (multiple allowed).')
-@click.option('--clickhouse-server', default=settings.DEFAULT_CLICKHOUSE_NODES, multiple=True,
-              help='Clickhouse server to write to (multiple allowed).')
+@click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
+              help='Clickhouse server to write to.')
 @click.option('--local-table-name', default=settings.DEFAULT_LOCAL_TABLE,
               help='Clickhouse table name for the (optionally replicated) local table.')
 @click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
@@ -40,8 +40,6 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
     logging.basicConfig(level=getattr(logging, log_level.upper()))
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
 
-    connections = [Client(node) for node in clickhouse_server]
-
     # ensure tables exist
     LOCAL_TABLE_DEFINITION = util.get_table_definition(
         local_table_name, util.get_replicated_engine(name=local_table_name))
@@ -50,22 +48,18 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         database='default',
         local_table=local_table_name,
     ))
-    for conn in connections:
-        conn.execute(LOCAL_TABLE_DEFINITION)
-        conn.execute(DIST_TABLE_DEFINITION)
 
-    writer = SnubaWriter(
-        connections=connections,
-        columns=settings.WRITER_COLUMNS,
-        table=distributed_table_name
-    )
+    with Clickhouse() as clickhouse:
+        clickhouse.execute(LOCAL_TABLE_DEFINITION)
+        clickhouse.execute(DIST_TABLE_DEFINITION)
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
             return row_from_processed_event(json.loads(message.value))
 
         def flush_batch(self, batch):
-            writer.write(batch)
+            with Clickhouse() as clickhouse:
+                write_rows(clickhouse, distributed_table_name, settings.WRITER_COLUMNS, batch)
 
         def shutdown(self):
             pass

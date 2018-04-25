@@ -1,13 +1,13 @@
 import os
 
 import simplejson as json
-from clickhouse_driver import Client
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
 from snuba import settings, util, schemas
+from snuba.clickhouse import Clickhouse
 
 
 try:
@@ -21,20 +21,6 @@ else:
             return os.stat('/tmp/snuba.down').st_mtime > uwsgi.started_on
         except OSError:
             return False
-
-
-class Clickhouse(object):
-    def __enter__(self):
-        self.clickhouse = Client(
-            host=settings.CLICKHOUSE_SERVER.split(':')[0],
-            port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
-            connect_timeout=1,
-        )
-
-        return self.clickhouse
-
-    def __exit__(self, *args):
-        self.clickhouse.disconnect()
 
 
 def check_clickhouse():

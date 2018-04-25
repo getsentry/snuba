@@ -1,4 +1,3 @@
-import random
 from datetime import datetime
 
 from snuba import settings
@@ -28,16 +27,3 @@ def write_rows(connection, table, columns, rows):
         'colnames': ", ".join(columns),
         'table': table,
     }, rows)
-
-
-class SnubaWriter(object):
-    def __init__(self, connections, columns, table):
-        self.connections = connections
-        self.columns = columns
-        self.table = table
-
-    def get_connection(self):
-        return random.choice(self.connections)
-
-    def write(self, rows):
-        return write_rows(self.get_connection(), self.table, self.columns, rows)
