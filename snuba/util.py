@@ -54,7 +54,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
             expr = sub_field  # TODO recurse?
         else:
-            expr = '{col}.value[indexOf({col}.key, {sub})]'.format(**{
+            expr = u'{col}.value[indexOf({col}.key, {sub})]'.format(**{
                 'col': col,
                 'sub': escape_literal(sub)
             })
@@ -65,22 +65,22 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         col, typ = column_name.split('_', 1)
         promoted = settings.PROMOTED_COLS[col]
 
-        key_list = 'arrayConcat([{}], {}.key)'.format(
-            ', '.join('\'{}\''.format(p) for p in promoted),
+        key_list = u'arrayConcat([{}], {}.key)'.format(
+            u', '.join(u'\'{}\''.format(p) for p in promoted),
             col
         )
-        val_list = 'arrayConcat([{}], {}.value)'.format(
+        val_list = u'arrayConcat([{}], {}.value)'.format(
             # TODO os_rooted is actually the only one that needs a toString()
             ', '.join('toString({})'.format(p) for p in promoted),
             col
         )
-        expr = ('arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
+        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
             key_list,
             val_list
         )
         # alias sub-expression for later reuse
         expr = alias_expr(expr, 'all_tags', body)
-        expr = '({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
+        expr = u'({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
     else:
         expr = column_name
 
@@ -88,7 +88,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         if not expr:
             expr = aggregate
         else:
-            expr = '{}({})'.format(aggregate, expr)
+            expr = u'{}({})'.format(aggregate, expr)
 
     return alias_expr(expr, alias, body)
 
@@ -109,10 +109,10 @@ def alias_expr(expr, alias, body):
     if expr == alias:
         return expr
     elif expr in alias_cache:
-        return '`{}`'.format(alias_cache[expr])
+        return u'`{}`'.format(alias_cache[expr])
     else:
         alias_cache[expr] = alias
-        return '({} AS `{}`)'.format(expr, alias)
+        return u'({} AS `{}`)'.format(expr, alias)
 
 
 def is_condition(cond_or_list):
@@ -135,17 +135,17 @@ def condition_expr(conditions, body, depth=0):
 
     if depth == 0:
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
-        return ' AND '.join(s for s in sub if s)
+        return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         col, op, lit = conditions
         col = column_expr(col, body)
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
-        return '{} {} {}'.format(col, op, lit)
+        return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
-        res = ' OR '.join(sub)
-        return '({})'.format(res) if len(sub) > 1 else res
+        res = u' OR '.join(sub)
+        return u'({})'.format(res) if len(sub) > 1 else res
 
 
 def escape_literal(value):
@@ -154,20 +154,20 @@ def escape_literal(value):
     """
     if isinstance(value, six.string_types):
         value = value.replace("'", "\\'")  # TODO this escaping is garbage
-        return "'{}'".format(value)
+        return u"'{}'".format(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
         return "toDateTime('{}')".format(value.isoformat())
     elif isinstance(value, date):
         return "toDate('{}')".format(value.isoformat())
     elif isinstance(value, (list, tuple)):
-        return "({})".format(', '.join(escape_literal(v) for v in value))
+        return u"({})".format(', '.join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
         return str(value)
     elif value is None:
         return ''
     else:
-        raise ValueError('Do not know how to escape {} for SQL'.format(type(value)))
+        raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
 def raw_query(sql, client):
@@ -220,10 +220,10 @@ def issue_expr(issues, col='primary_hash', ids=None):
 
         if ids is None or issue_id in ids:
             if hasattr(hashes, '__iter__'):
-                predicate = "{} IN ('{}')".format(col, "', '".join(hashes))
+                predicate = u"{} IN ('{}')".format(col, "', '".join(hashes))
             else:
-                predicate = "{} = '{}'".format(col, hashes)
-            return 'if({}, {}, {})'.format(predicate, issue_id,
+                predicate = u"{} = '{}'".format(col, hashes)
+            return u'if({}, {}, {})'.format(predicate, issue_id,
                                            issue_expr(issues[1:], col=col, ids=ids))
         else:
             return issue_expr(issues[1:], col=col, ids=ids)

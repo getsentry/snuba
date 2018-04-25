@@ -107,18 +107,18 @@ def query():
     group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
     select_exprs = group_exprs + aggregate_exprs
-    select_clause = 'SELECT {}'.format(', '.join(select_exprs))
-    from_clause = 'FROM {}'.format(settings.CLICKHOUSE_TABLE)
-    join_clause = 'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
+    select_clause = u'SELECT {}'.format(', '.join(select_exprs))
+    from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
+    join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
 
     where_clause = ''
     if where_conditions:
-        where_clause = 'WHERE {}'.format(util.condition_expr(where_conditions, body))
+        where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
 
     having_clause = ''
     if having_conditions:
-        assert groupby, "found HAVING clause with no GROUP BY"
-        having_clause = 'HAVING {}'.format(util.condition_expr(having_conditions, body))
+        assert groupby, 'found HAVING clause with no GROUP BY'
+        having_clause = u'HAVING {}'.format(util.condition_expr(having_conditions, body))
 
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:
@@ -128,11 +128,11 @@ def query():
     desc = body['orderby'].startswith('-')
     orderby = body['orderby'].lstrip('-')
     if orderby in body.get('alias_cache', {}).values():
-        order_clause = 'ORDER BY `{}` {}'.format(orderby, 'DESC' if desc else 'ASC')
+        order_clause = u'ORDER BY `{}` {}'.format(orderby, 'DESC' if desc else 'ASC')
 
     limit_clause = ''
     if 'limit' in body:
-        limit_clause = "LIMIT {}, {}".format(body.get('offset', 0), body['limit'])
+        limit_clause = 'LIMIT {}, {}'.format(body.get('offset', 0), body['limit'])
 
     sql = ' '.join([c for c in [
         select_clause,
