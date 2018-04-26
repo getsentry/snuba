@@ -31,7 +31,7 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Clickhouse table name for the (optionally replicated) local table.')
 @click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
               help='Clickhouse table name for the "meta" Distributed table.')
-@click.option('--log-level', default='WARN', help='Logging level to use.')
+@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default='localhost', help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
 def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server,
