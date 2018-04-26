@@ -264,7 +264,6 @@ class TestApi(BaseTest):
         })).data)
         # Issue is expanded once, and alias used subsequently
         sql = raw_query.call_args[0][0]
-        assert util.issue_expr(issues[:2]) + ' AS `issue`' in sql
         assert "`issue` = 0" in sql
         assert "`issue` = 1" in sql
 
