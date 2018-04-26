@@ -62,9 +62,9 @@ class TestConsumer(BaseTest):
         consumer._shutdown()
 
         assert consumer.worker.processed == [1, 2, 3]
-        assert consumer.worker.flushed == [[1, 2], [3]]
+        assert consumer.worker.flushed == [[1, 2]]
         assert consumer.worker.shutdown_calls == 1
-        assert consumer.consumer.commit_calls == 2
+        assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
 
     @patch('time.time')
@@ -92,7 +92,7 @@ class TestConsumer(BaseTest):
         consumer._shutdown()
 
         assert consumer.worker.processed == [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        assert consumer.worker.flushed == [[1, 2, 3, 4, 5, 6], [7, 8, 9]]
+        assert consumer.worker.flushed == [[1, 2, 3, 4, 5, 6]]
         assert consumer.worker.shutdown_calls == 1
-        assert consumer.consumer.commit_calls == 2
+        assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
