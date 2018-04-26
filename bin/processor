@@ -26,7 +26,7 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Topic to send processed events to.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
-@click.option('--log-level', default='WARN', help='Logging level to use.')
+@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default='localhost', help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=8125, type=int, help='Port to send DogStatsD metrics to.')
 def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_server, log_level,

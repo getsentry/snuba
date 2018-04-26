@@ -4,6 +4,7 @@ from datetime import date, datetime
 from dateutil.tz import tz
 import simplejson as json
 from itertools import chain
+import logging
 import jsonschema
 import numbers
 import re
@@ -14,6 +15,9 @@ import six
 import schemas
 
 from snuba import settings
+
+
+logger = logging.getLogger('snuba.util')
 
 
 def to_list(value):
@@ -175,7 +179,7 @@ def raw_query(sql, client):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    print sql
+    logger.debug(sql)
     try:
         error = None
         data, meta = client.execute(sql, with_column_types=True)

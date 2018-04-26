@@ -1,3 +1,4 @@
+import logging
 import os
 
 import simplejson as json
@@ -8,6 +9,10 @@ from raven.contrib.flask import Sentry
 
 from snuba import settings, util, schemas
 from snuba.clickhouse import Clickhouse
+
+
+logger = logging.getLogger('snuba.api')
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()))
 
 
 try:
@@ -135,6 +140,7 @@ def query():
         result = util.raw_query(sql, clickhouse)
 
     if result.get('error'):
+        logger.error(result['error'])
         status = 500
     else:
         status = 200
