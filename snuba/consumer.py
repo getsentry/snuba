@@ -48,7 +48,7 @@ class AbstractBatchWorker(object):
 
 
 class RebalanceListener(ConsumerRebalanceListener):
-    """Handles flushing any locally buffered events (and Kafka offsets)
+    """Drops any locally buffered events (and Kafka offsets)
     when group rebalances happen.
 
     See `ConsumerRebalanceListener` documentation for more info.
@@ -58,7 +58,7 @@ class RebalanceListener(ConsumerRebalanceListener):
         self.batching_consumer = batching_consumer
 
     def on_partitions_revoked(self, revoked):
-        "Flush the batch (if any) and commit Kafka offsets."
+        "Reset the current in-memory batch, letting the next consumer take over where we left off."
         logger.debug("Partitons revoked: %s" % revoked)
 
         self.batching_consumer._flush()
@@ -171,9 +171,8 @@ class BatchingKafkaConsumer(object):
     def _shutdown(self):
         logger.debug("Stopping")
 
-        # force flush the batch because it is unlikely that we hit a
-        # size or time threshold just as we were told to shutdown
-        self._flush(force=True)
+        # drop in-memory events, letting the next consumer take over where we left off
+        self._reset_batch()
 
         # tell the consumer to shutdown, and close the consumer
         logger.debug("Stopping worker")
@@ -182,6 +181,11 @@ class BatchingKafkaConsumer(object):
         self.consumer.close()
 
         logger.debug("Stopped")
+
+    def _reset_batch(self):
+        logger.debug("Resetting in-memory batch")
+        self.batch = []
+        self.timer = None
 
     def _flush(self, force=False):
         """Decides whether the `BatchingKafkaConsumer` should flush because of either
@@ -201,10 +205,10 @@ class BatchingKafkaConsumer(object):
                 self.worker.flush_batch(self.batch)
                 duration = int((time.time() - t) * 1000)
                 logger.debug("Worker flush took %sms" % duration)
-                self.metrics.timing('batch.flush', duration)
+                if self.metrics:
+                    self.metrics.timing('batch.flush', duration)
 
-                self.batch = []
-                self.timer = None
+                self._reset_batch()
 
                 logger.debug("Committing Kafka offsets")
                 t = time.time()

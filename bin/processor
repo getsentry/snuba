@@ -57,6 +57,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
             producer.flush()
 
         def shutdown(self):
+            producer.flush()
             producer.close()
 
     consumer = BatchingKafkaConsumer(

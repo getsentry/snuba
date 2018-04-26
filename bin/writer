@@ -39,6 +39,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     logging.basicConfig(level=getattr(logging, log_level.upper()))
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
+    clickhouse = Clickhouse(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
 
     # ensure tables exist
     LOCAL_TABLE_DEFINITION = util.get_table_definition(
@@ -49,17 +50,17 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         local_table=local_table_name,
     ))
 
-    with Clickhouse() as clickhouse:
-        clickhouse.execute(LOCAL_TABLE_DEFINITION)
-        clickhouse.execute(DIST_TABLE_DEFINITION)
+    with clickhouse as ch:
+        ch.execute(LOCAL_TABLE_DEFINITION)
+        ch.execute(DIST_TABLE_DEFINITION)
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
             return row_from_processed_event(json.loads(message.value))
 
         def flush_batch(self, batch):
-            with Clickhouse() as clickhouse:
-                write_rows(clickhouse, distributed_table_name, settings.WRITER_COLUMNS, batch)
+            with clickhouse as ch:
+                write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
 
         def shutdown(self):
             pass
