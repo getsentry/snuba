@@ -1,7 +1,7 @@
 import re
 import os
 
-LOG_LEVEL = 'INFO'
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
 TESTING = False
 DEBUG = True
