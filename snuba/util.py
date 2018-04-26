@@ -211,26 +211,25 @@ def issue_expr(issues, col='primary_hash', ids=None):
 
         [(1, (hash1, hash2)), (2, hash3)]
 
-    and constructs a nested SQL if() expression to return the issue_id of the
-    matching fingerprint expression when evaluated on the given column_name.
-
-        if(col in (hash1, hash2), 1, if(col = hash3, 2), NULL)
-
+    and constructs a SQL expression that will return the corresponding
+    issue_id for any row whose `col` matches any of that issue_id's hashes
     """
-    if len(issues) == 0:
-        return 0
-    else:
-        issue_id, hashes = issues[0]
-
+    issue_ids = []
+    hashes = []
+    for issue_id, issue_hashes in issues:
         if ids is None or issue_id in ids:
-            if hasattr(hashes, '__iter__'):
-                predicate = u"{} IN ('{}')".format(col, "', '".join(hashes))
-            else:
-                predicate = u"{} = '{}'".format(col, hashes)
-            return u'if({}, {}, {})'.format(predicate, issue_id,
-                                           issue_expr(issues[1:], col=col, ids=ids))
-        else:
-            return issue_expr(issues[1:], col=col, ids=ids)
+            if not hasattr(issue_hashes, '__iter__'):
+                issue_hashes = [issue_hashes]
+            issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
+            hashes.extend('\'{}\''.format(h) for h in issue_hashes)
+    assert len(issue_ids) == len(hashes)
+    if len(hashes) == 0:
+        return 0
+    return '[{}][indexOf(CAST([{}], \'Array(FixedString(32))\'), {})]'.format(
+        ','.join(issue_ids),
+        ','.join(hashes),
+        col
+    )
 
 
 def validate_request(schema):
