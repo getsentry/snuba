@@ -7,11 +7,11 @@ class TestUtil(BaseTest):
 
     def test_issue_expr(self):
         assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash') ==\
-            "[1,1,2][indexOf([toFixedString('a',32),toFixedString('b',32),toFixedString('c',32)], hash)]"
+            "[1,1,2][indexOf(CAST(['a','b','c'], 'Array(FixedString(32))'), hash)]"
         assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[1]) ==\
-            "[1,1][indexOf([toFixedString('a',32),toFixedString('b',32)], hash)]"
+            "[1,1][indexOf(CAST(['a','b'], 'Array(FixedString(32))'), hash)]"
         assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[2]) ==\
-            "[2][indexOf([toFixedString('c',32)], hash)]"
+            "[2][indexOf(CAST(['c'], 'Array(FixedString(32))'), hash)]"
         assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[]) == 0
         assert issue_expr([], col='hash', ids=[]) == 0
 
@@ -20,11 +20,11 @@ class TestUtil(BaseTest):
             'issues': [(1, ['a', 'b']), (2, 'c')],
         }
         assert column_expr('issue', body.copy()) ==\
-            "([1,1,2][indexOf([toFixedString('a',32),toFixedString('b',32),toFixedString('c',32)], primary_hash)] AS `issue`)"
+            "([1,1,2][indexOf(CAST(['a','b','c'], 'Array(FixedString(32))'), primary_hash)] AS `issue`)"
 
         body['conditions'] = [['issue', 'IN', [1]]]
         assert column_expr('issue', body.copy()) ==\
-            "([1,1][indexOf([toFixedString('a',32),toFixedString('b',32)], primary_hash)] AS `issue`)"
+            "([1,1][indexOf(CAST(['a','b'], 'Array(FixedString(32))'), primary_hash)] AS `issue`)"
 
         body['conditions'] = [['issue', 'IN', []]]
         assert column_expr('issue', body.copy()) == "(0 AS `issue`)"

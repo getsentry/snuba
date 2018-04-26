@@ -217,11 +217,15 @@ def issue_expr(issues, col='primary_hash', ids=None):
             if not hasattr(issue_hashes, '__iter__'):
                 issue_hashes = [issue_hashes]
             issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
-            hashes.extend('toFixedString(\'{}\',32)'.format(h) for h in issue_hashes)
+            hashes.extend('\'{}\''.format(h) for h in issue_hashes)
     assert len(issue_ids) == len(hashes)
     if len(hashes) == 0:
         return 0
-    return '[{}][indexOf([{}], {})]'.format(','.join(issue_ids), ','.join(hashes), col)
+    return '[{}][indexOf(CAST([{}], \'Array(FixedString(32))\'), {})]'.format(
+        ','.join(issue_ids),
+        ','.join(hashes),
+        col
+    )
 
 
 def validate_request(schema):
