@@ -12,7 +12,7 @@ from snuba.clickhouse import Clickhouse
 
 
 logger = logging.getLogger('snuba.api')
-logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()))
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
 
 
 try:

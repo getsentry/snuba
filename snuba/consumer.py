@@ -48,7 +48,7 @@ class AbstractBatchWorker(object):
 
 
 class RebalanceListener(ConsumerRebalanceListener):
-    """Drops any locally buffered events (and Kafka offsets)
+    """Flushes any locally buffered events (and Kafka offsets)
     when group rebalances happen.
 
     See `ConsumerRebalanceListener` documentation for more info.
@@ -59,12 +59,11 @@ class RebalanceListener(ConsumerRebalanceListener):
 
     def on_partitions_revoked(self, revoked):
         "Reset the current in-memory batch, letting the next consumer take over where we left off."
-        logger.debug("Partitons revoked: %s" % revoked)
-
-        self.batching_consumer._flush()
+        logger.info("Partitions revoked: %s" % revoked)
+        self.batching_consumer._flush(force=True)
 
     def on_partitions_assigned(self, assigned):
-        logger.debug("New partitions assigned: %s" % assigned)
+        logger.info("New partitions assigned: %s" % assigned)
 
 
 class BatchingKafkaConsumer(object):
@@ -195,7 +194,7 @@ class BatchingKafkaConsumer(object):
             batch_by_size = len(self.batch) >= self.max_batch_size
             batch_by_time = self.timer and time.time() > self.timer
             if (force or batch_by_size or batch_by_time):
-                logger.debug(
+                logger.info(
                     "Flushing %s items: forced:%s size:%s time:%s" % (
                         len(self.batch), force, batch_by_size, batch_by_time)
                 )
@@ -204,7 +203,7 @@ class BatchingKafkaConsumer(object):
                 t = time.time()
                 self.worker.flush_batch(self.batch)
                 duration = int((time.time() - t) * 1000)
-                logger.debug("Worker flush took %sms" % duration)
+                logger.info("Worker flush took %sms" % duration)
                 if self.metrics:
                     self.metrics.timing('batch.flush', duration)
 
