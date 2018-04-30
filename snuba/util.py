@@ -7,13 +7,13 @@ from itertools import chain
 import logging
 import jsonschema
 import numbers
+import os
 import re
 import requests
-import os
 import six
+import time
 
-import schemas
-
+from snuba import schemas
 from snuba import settings
 
 
@@ -201,7 +201,6 @@ def raw_query(sql, client):
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
 
-    # TODO record statistics somewhere
     return {'data': data, 'meta': meta, 'error': error}
 
 
@@ -236,7 +235,7 @@ def validate_request(schema):
     """
     Decorator to validate that a request body matches the given schema.
     """
-    def validator(func):
+    def decorator(func):
         def wrapper(*args, **kwargs):
 
             def default_encode(value):
@@ -248,7 +247,7 @@ def validate_request(schema):
             try:
                 body = json.loads(request.data)
                 schemas.validate(body, schema)
-                setattr(request, 'validated_body', body)
+                kwargs['validated_body'] = body
             except (ValueError, jsonschema.ValidationError) as e:
                 return (render_template('error.html',
                                         error=str(e),
@@ -257,8 +256,32 @@ def validate_request(schema):
                                         ), 400)
             return func(*args, **kwargs)
         return wrapper
-    return validator
+    return decorator
 
+
+class Timer(object):
+    def __init__(self):
+        self.marks = [('', time.time())]
+
+    def mark(self, thing):
+        self.marks.append((thing, time.time()))
+
+    def for_json(self):
+        end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
+        return {
+            'timestamp': int(self.marks[0][1]),
+            'duration_ms': int((end - self.marks[0][1]) * 1000),
+            'marks_ms': {
+                m[0]: int((m[1] - self.marks[i][1]) * 1000) for i, m in enumerate(self.marks[1:])
+            }
+        }
+
+def time_request(func):
+    def wrapper(*args, **kwargs):
+        kwargs['timer'] = Timer()
+        result = func(*args, **kwargs)
+        return result
+    return wrapper
 
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """

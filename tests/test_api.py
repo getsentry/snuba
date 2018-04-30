@@ -315,3 +315,14 @@ class TestApi(BaseTest):
             ],
         })).data)
         assert result['data'][0] == {'environment': u'prød', 'count': 90}
+
+    def test_query_timing(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'issues': list(enumerate(self.hashes)),
+            'groupby': 'issue',
+        })).data)
+
+        assert 'timing' in result
+        assert 'timestamp' in result['timing']

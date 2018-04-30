@@ -67,16 +67,11 @@ def health():
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
-# TODO if `issue` or `time` is specified in 2 places (eg group and where),
-# we redundantly expand it twice
-# TODO some aliases eg tags[foo] are invalid SQL
-# and need escaping or otherwise sanitizing
-
-
 @app.route('/query', methods=['GET', 'POST'])
+@util.time_request
 @util.validate_request(schemas.QUERY_SCHEMA)
-def query():
-    body = request.validated_body
+def query(validated_body, timer):
+    body = validated_body
 
     to_date = parse_datetime(body['to_date'])
     from_date = parse_datetime(body['from_date'])
@@ -136,8 +131,13 @@ def query():
         limit_clause
     ] if c])
 
+    timer.mark('prepare_query')
+
     with Clickhouse() as clickhouse:
         result = util.raw_query(sql, clickhouse)
+
+    timer.mark('execute')
+    result['timing'] = timer
 
     if result.get('error'):
         logger.error(result['error'])
@@ -145,7 +145,7 @@ def query():
     else:
         status = 200
 
-    return (json.dumps(result), status, {'Content-Type': 'application/json'})
+    return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 
 
 if app.debug or app.testing:
