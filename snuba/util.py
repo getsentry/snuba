@@ -279,8 +279,7 @@ class Timer(object):
 def time_request(func):
     def wrapper(*args, **kwargs):
         kwargs['timer'] = Timer()
-        result = func(*args, **kwargs)
-        return result
+        return func(*args, **kwargs)
     return wrapper
 
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
