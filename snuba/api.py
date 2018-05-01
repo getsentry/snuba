@@ -41,6 +41,7 @@ app.testing = settings.TESTING
 app.debug = settings.DEBUG
 
 sentry = Sentry(app, dsn=settings.SENTRY_DSN)
+metrics = util.create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
 
 @app.route('/')
@@ -68,7 +69,7 @@ def health():
 
 
 @app.route('/query', methods=['GET', 'POST'])
-@util.time_request
+@util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body, timer):
     body = validated_body
@@ -138,6 +139,7 @@ def query(validated_body, timer):
 
     timer.mark('execute')
     result['timing'] = timer
+    timer.record(metrics)
 
     if result.get('error'):
         logger.error(result['error'])

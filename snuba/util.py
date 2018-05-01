@@ -260,27 +260,45 @@ def validate_request(schema):
 
 
 class Timer(object):
-    def __init__(self):
-        self.marks = [('', time.time())]
+    def __init__(self, name=''):
+        self.marks = [(name, time.time())]
+        self.final = None
 
-    def mark(self, thing):
-        self.marks.append((thing, time.time()))
+    def mark(self, name):
+        self.marks.append((name, time.time()))
+
+    def finish(self):
+        if not self.final:
+            start = self.marks[0][1]
+            end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
+            diff_ms = lambda start, end: int((end - start) * 1000)
+            self.final = {
+                'timestamp': int(start),
+                'duration_ms': diff_ms(start, end),
+                'marks_ms': {
+                    name: diff_ms(self.marks[i][1], ts) for i, (name, ts) in enumerate(self.marks[1:])
+                }
+            }
+        return self.final
 
     def for_json(self):
-        end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
-        return {
-            'timestamp': int(self.marks[0][1]),
-            'duration_ms': int((end - self.marks[0][1]) * 1000),
-            'marks_ms': {
-                m[0]: int((m[1] - self.marks[i][1]) * 1000) for i, m in enumerate(self.marks[1:])
-            }
-        }
+        return self.finish()
 
-def time_request(func):
-    def wrapper(*args, **kwargs):
-        kwargs['timer'] = Timer()
-        return func(*args, **kwargs)
-    return wrapper
+    def record(self, metrics):
+        name = self.marks[0][0]
+        final = self.finish()
+        metrics.timing(name, final['duration_ms'])
+        for mark, duration in six.iteritems(final['marks_ms']):
+            metrics.timing('{}.{}'.format(name, mark), duration)
+
+
+def time_request(name):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            kwargs['timer'] = Timer(name)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """
