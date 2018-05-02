@@ -7,13 +7,13 @@ from itertools import chain
 import logging
 import jsonschema
 import numbers
+import os
 import re
 import requests
-import os
 import six
+import time
 
-import schemas
-
+from snuba import schemas
 from snuba import settings
 
 
@@ -201,7 +201,6 @@ def raw_query(sql, client):
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
 
-    # TODO record statistics somewhere
     return {'data': data, 'meta': meta, 'error': error}
 
 
@@ -236,7 +235,7 @@ def validate_request(schema):
     """
     Decorator to validate that a request body matches the given schema.
     """
-    def validator(func):
+    def decorator(func):
         def wrapper(*args, **kwargs):
 
             def default_encode(value):
@@ -248,7 +247,7 @@ def validate_request(schema):
             try:
                 body = json.loads(request.data)
                 schemas.validate(body, schema)
-                setattr(request, 'validated_body', body)
+                kwargs['validated_body'] = body
             except (ValueError, jsonschema.ValidationError) as e:
                 return (render_template('error.html',
                                         error=str(e),
@@ -257,8 +256,49 @@ def validate_request(schema):
                                         ), 400)
             return func(*args, **kwargs)
         return wrapper
-    return validator
+    return decorator
 
+
+class Timer(object):
+    def __init__(self, name=''):
+        self.marks = [(name, time.time())]
+        self.final = None
+
+    def mark(self, name):
+        self.marks.append((name, time.time()))
+
+    def finish(self):
+        if not self.final:
+            start = self.marks[0][1]
+            end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
+            diff_ms = lambda start, end: int((end - start) * 1000)
+            self.final = {
+                'timestamp': int(start),
+                'duration_ms': diff_ms(start, end),
+                'marks_ms': {
+                    name: diff_ms(self.marks[i][1], ts) for i, (name, ts) in enumerate(self.marks[1:])
+                }
+            }
+        return self.final
+
+    def for_json(self):
+        return self.finish()
+
+    def record(self, metrics):
+        name = self.marks[0][0]
+        final = self.finish()
+        metrics.timing(name, final['duration_ms'])
+        for mark, duration in six.iteritems(final['marks_ms']):
+            metrics.timing('{}.{}'.format(name, mark), duration)
+
+
+def time_request(name):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            kwargs['timer'] = Timer(name)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """

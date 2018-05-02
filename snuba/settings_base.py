@@ -12,6 +12,10 @@ PORT = 1218
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
 CLICKHOUSE_TABLE = 'sentry_dist'
 
+# Dogstatsd Options
+DOGSTATSD_HOST = 'localhost'
+DOGSTATSD_PORT = 8125
+
 # Sentry Options
 SENTRY_DSN = 'https://4aa266a7bb2f465aa4a80eca3284b55f:7eb958f65cc743a487b3e319cfc662d8@sentry.io/300688'
 
