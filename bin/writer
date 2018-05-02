@@ -3,8 +3,10 @@
 import logging
 import simplejson as json
 import signal
+import time
 
 import click
+from clickhouse import errors
 from raven import Client as RavenClient
 
 from snuba import settings
@@ -59,8 +61,18 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
             return row_from_processed_event(json.loads(message.value))
 
         def flush_batch(self, batch):
-            with clickhouse as ch:
-                write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
+            for attempt in xrange(2):
+                try:
+                    with clickhouse as ch:
+                        write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
+
+                    break
+                except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                    if attempt == 0:
+                        logger.exception("Error writing to Clickhouse, retrying.")
+                        time.sleep(1)
+                    else:
+                        logger.exception("Error writing to Clickhouse, giving up.")
 
         def shutdown(self):
             pass
