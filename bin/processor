@@ -69,7 +69,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         # KafkaConsumer
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
-        auto_offset_reset='earliest',
+        auto_offset_reset='none',
         consumer_timeout_ms=1000,
     )
 
