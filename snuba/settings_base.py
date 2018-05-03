@@ -119,9 +119,7 @@ SCHEMA_COLUMNS = """
     event_id FixedString(32),
     project_id UInt64,
     timestamp DateTime,
-
-    -- flags
-    deleted Nullable(UInt8),
+    deleted UInt8,
 
     -- required for non-deleted
     platform Nullable(String),
@@ -215,6 +213,7 @@ SCHEMA_COLUMNS = """
 
 DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
 DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'  # modulo(intHash32(project_id), 32)
-DEFAULT_SHARDING_KEY = 'rand()'
+DEFAULT_VERSION_COLUMN = 'deleted'
+DEFAULT_SHARDING_KEY = 'jumpConsistentHash(intHash64(event_id), 2)'
 DEFAULT_LOCAL_TABLE = 'sentry_local'
 DEFAULT_DIST_TABLE = 'sentry_dist'

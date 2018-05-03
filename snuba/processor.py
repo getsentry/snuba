@@ -243,7 +243,7 @@ def process_raw_event(event):
 
     extract_required(processed, event)
 
-    deleted = event.get('deleted')
+    deleted = int(event.get('deleted', 0))
     processed['deleted'] = deleted
     if deleted:
         # no need to extract other fields

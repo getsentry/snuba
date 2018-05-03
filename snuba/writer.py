@@ -21,9 +21,9 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     return values
 
 
-def write_rows(connection, table, columns, rows):
+def write_rows(connection, table, columns, rows, types_check=False):
     connection.execute("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
         'colnames': ", ".join(columns),
         'table': table,
-    }, rows)
+    }, rows, types_check=types_check)
