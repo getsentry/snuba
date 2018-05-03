@@ -36,26 +36,56 @@ class TestProcessor(BaseTest):
     def test_extract_required(self):
         event = {
             'event_id': '1' * 32,
-            'primary_hash': 'a' * 32,
             'project_id': 100,
+            'datetime': '2018-03-13T20:08:36.000000Z',
+        }
+        output = {}
+
+        processor.extract_required(output, event)
+        assert output == {
+            'event_id': '11111111111111111111111111111111',
+            'project_id': 100,
+            'timestamp': 1520971716,
+        }
+
+    def test_extract_common(self):
+        event = {
+            'primary_hash': 'a' * 32,
             'message': 'the message',
             'platform': 'the_platform',
-            'datetime': '2018-03-13T20:08:36.000000Z',
         }
         data = {
             'received': 1520971716.0
         }
         output = {}
 
-        processor.extract_required(output, event, data)
+        processor.extract_common(output, event, data)
         assert output == {
-            'event_id': '11111111111111111111111111111111',
             'message': u'the message',
             'platform': u'the_platform',
             'primary_hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            'project_id': 100,
             'received': 1520971716,
+        }
+
+    def test_deleted(self):
+        event = {
+            'event_id': '1' * 32,
+            'project_id': 100,
+            'datetime': '2018-03-13T20:08:36.000000Z',
+            'deleted': True,
+
+            # should be ignored
+            'primary_hash': 'a' * 32,
+            'message': 'the message',
+            'platform': 'the_platform',
+        }
+
+        output = processor.process_raw_event(event)
+        assert output == {
+            'event_id': '11111111111111111111111111111111',
+            'project_id': 100,
             'timestamp': 1520971716,
+            'deleted': True,
         }
 
     def test_extract_sdk(self):
