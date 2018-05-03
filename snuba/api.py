@@ -2,12 +2,13 @@ import logging
 import os
 
 import simplejson as json
+from datetime import timedelta
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from markdown import markdown
 from raven.contrib.flask import Sentry
 
-from snuba import settings, util, schemas
+from snuba import settings, util, schemas, state
 from snuba.clickhouse import Clickhouse
 
 
@@ -73,16 +74,20 @@ def health():
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body, timer):
     body = validated_body
-
+    project_ids = util.to_list(body['project'])
     to_date = parse_datetime(body['to_date'])
     from_date = parse_datetime(body['from_date'])
     assert from_date <= to_date
+
+    max_days = state.get_config('max_days', None)
+    if max_days is not None and (to_date - from_date).days > max_days:
+        from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body['conditions']
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('project_id', 'IN', util.to_list(body['project'])),
+        ('project_id', 'IN', project_ids),
     ])
     having_conditions = body['having']
 
@@ -134,18 +139,29 @@ def query(validated_body, timer):
 
     timer.mark('prepare_query')
 
-    with Clickhouse() as clickhouse:
-        result = util.raw_query(sql, clickhouse)
+    result = {}
+    gpsl = state.get_config('global_per_second_limit', 1000)
+    gcl = state.get_config('global_concurrent_limit', 1000)
+    ppsl = state.get_config('project_per_second_limit', 1000)
+    pcl = state.get_config('project_concurrent_limit', 1000)
+    with state.rate_limit('global', gpsl, gcl) as global_allowed:
+        with state.rate_limit(project_ids[0], ppsl, pcl) as allowed:
+            if not global_allowed or not allowed:
+                status = 429
+            else:
+                with Clickhouse() as clickhouse:
+                    result = util.raw_query(sql, clickhouse)
+                    timer.mark('execute')
 
-    timer.mark('execute')
+                if result.get('error'):
+                    logger.error(result['error'])
+                    status = 500
+                else:
+                    status = 200
+
     result['timing'] = timer
     timer.record(metrics)
-
-    if result.get('error'):
-        logger.error(result['error'])
-        status = 500
-    else:
-        status = 200
+    state.record_query(result)
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 
