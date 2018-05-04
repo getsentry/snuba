@@ -71,7 +71,7 @@ def set_config(key, value):
     except:
         pass
 
-def get_config(key, default):
+def get_config(key, default=None):
     key = 'snuba_config:{}'.format(key)
     try:
         result = rds.get(key)

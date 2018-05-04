@@ -13,8 +13,7 @@ import requests
 import six
 import time
 
-from snuba import schemas
-from snuba import settings
+from snuba import schemas, settings, state
 
 
 logger = logging.getLogger('snuba.util')
@@ -215,10 +214,19 @@ def issue_expr(issues, col='primary_hash', ids=None):
     """
     issue_ids = []
     hashes = []
+
+    # NB the number of issues in the request is already limited by the schema.
+    # This is for further limiting at runtime.
+    max_issues = state.get_config('max_issues')
+    max_hashes_per_issue = state.get_config('max_hashes_per_issue')
+    if max_issues is not None:
+        issues = issues[:max_issues]
+
     for issue_id, issue_hashes in issues:
         if ids is None or issue_id in ids:
-            if not hasattr(issue_hashes, '__iter__'):
-                issue_hashes = [issue_hashes]
+            issue_hashes = to_list(issue_hashes)
+            if max_hashes_per_issue is not None:
+                issue_hashes = issue_hashes[:max_hashes_per_issue]
             issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
             hashes.extend('\'{}\''.format(h) for h in issue_hashes)
     assert len(issue_ids) == len(hashes)
