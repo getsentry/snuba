@@ -3,7 +3,14 @@ from contextlib import contextmanager
 import time
 import uuid
 
-rds = redis.Redis('127.0.0.1', db=1)
+from snuba import settings
+
+rds = redis.StrictRedis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    db=settings.REDIS_DB
+)
+
 
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
@@ -33,7 +40,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
 
     pipe = rds.pipeline()
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_lookback_s)) #cleanup
-    pipe.zadd(bucket, query_id, now + max_query_duration_s) # add query
+    pipe.zadd(bucket, now + max_query_duration_s, query_id) # add query
     pipe.zcount(bucket, now - rate_lookback_s, now) # get rate
     pipe.zcount(bucket, '({:f}'.format(now), '+inf') # get concurrent
     try:
