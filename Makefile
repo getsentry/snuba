@@ -1,3 +1,11 @@
+UNAME := $(shell uname -s)
+
+ifeq ($(UNAME),Darwin)
+	librdkafka_cmd = install-librdkafka-homebrew
+else
+	librdkafka_cmd = install-librdkafka-src
+endif
+
 test:
 	SNUBA_SETTINGS=test py.test
 
@@ -5,7 +13,10 @@ install-python-dependencies:
 	@pip install -q -r requirements.txt
 	@python setup.py -q develop
 
-install-librdkafka:
+install-librdkafka-homebrew:
+	brew install librdkafka
+
+install-librdkafka-src:
 	mkdir tmp-build-librdkafka && \
 	cd tmp-build-librdkafka && \
 	curl -L https://github.com/edenhill/librdkafka/archive/v0.11.4.tar.gz -O && \
@@ -18,4 +29,6 @@ install-librdkafka:
 	cd .. && \
 	rm -rf tmp-build-librdkafka
 
-.PHONY: test install-python-dependencies install-librdkafka
+install-librdkafka: $(librdkafka_cmd)
+
+.PHONY: test install-python-dependencies install-librdkafka install-librdkafka-homebrew install-librdkafka-src-
