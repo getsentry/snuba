@@ -25,7 +25,7 @@ class FakeKafkaConsumer(object):
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, topic, **kwargs):
+    def create_consumer(self, topic, bootstrap_server, group_id):
         return FakeKafkaConsumer()
 
 
@@ -55,6 +55,8 @@ class TestConsumer(BaseTest):
             max_batch_size=2,
             max_batch_time=100,
             metrics=statsd,
+            bootstrap_server=None,
+            group_id=None,
         )
 
         consumer.consumer.items = [1, 2, 3]
@@ -75,6 +77,8 @@ class TestConsumer(BaseTest):
             max_batch_size=100,
             max_batch_time=2000,
             metrics=statsd,
+            bootstrap_server=None,
+            group_id=None,
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())

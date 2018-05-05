@@ -6,7 +6,7 @@ import signal
 import time
 
 import click
-from clickhouse import errors
+from clickhouse_driver import errors
 from raven import Client as RavenClient
 
 from snuba import settings
@@ -58,7 +58,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
 
     class WriterWorker(AbstractBatchWorker):
         def process_message(self, message):
-            return row_from_processed_event(json.loads(message.value))
+            return row_from_processed_event(json.loads(message.value()))
 
         def flush_batch(self, batch):
             for attempt in xrange(2):
@@ -80,14 +80,11 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
     consumer = BatchingKafkaConsumer(
         processed_events_topic,
         worker=WriterWorker(),
-        max_batch_size=25000,
-        max_batch_time=30 * 1000,
+        max_batch_size=50000,
+        max_batch_time=10 * 1000,
         metrics=metrics,
-        # KafkaConsumer
-        bootstrap_servers=bootstrap_server,
+        bootstrap_server=bootstrap_server[0],
         group_id=consumer_group,
-        auto_offset_reset='none',
-        consumer_timeout_ms=1000,
     )
 
     def handler(signum, frame):

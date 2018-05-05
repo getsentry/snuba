@@ -2,8 +2,7 @@ import abc
 import logging
 import time
 
-from kafka import KafkaConsumer
-from kafka import ConsumerRebalanceListener
+from confluent_kafka import Consumer, KafkaError
 
 
 logger = logging.getLogger('snuba.consumer')
@@ -47,25 +46,6 @@ class AbstractBatchWorker(object):
         pass
 
 
-class RebalanceListener(ConsumerRebalanceListener):
-    """Flushes any locally buffered events (and Kafka offsets)
-    when group rebalances happen.
-
-    See `ConsumerRebalanceListener` documentation for more info.
-    """
-
-    def __init__(self, batching_consumer):
-        self.batching_consumer = batching_consumer
-
-    def on_partitions_revoked(self, revoked):
-        "Reset the current in-memory batch, letting the next consumer take over where we left off."
-        logger.info("Partitions revoked: %s" % revoked)
-        self.batching_consumer._flush(force=True)
-
-    def on_partitions_assigned(self, assigned):
-        logger.info("New partitions assigned: %s" % assigned)
-
-
 class BatchingKafkaConsumer(object):
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
@@ -90,7 +70,7 @@ class BatchingKafkaConsumer(object):
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
-    def __init__(self, topic, worker, max_batch_size, max_batch_time, metrics, **kwargs):
+    def __init__(self, topic, worker, max_batch_size, max_batch_time, metrics, bootstrap_server, group_id):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -101,32 +81,35 @@ class BatchingKafkaConsumer(object):
         self.shutdown = False
         self.batch = []
         self.timer = None
+        self.last_msg = None
 
-        self.consumer = self.create_consumer(topic, **kwargs)
+        self.consumer = self.create_consumer(topic, bootstrap_server, group_id)
+        self.last_message = None
 
-    def create_consumer(self, topic, **kwargs):
-        # Ensure the caller didn't expct auto commit to work
-        assert not kwargs.get('enable_auto_commit', False)
+    def create_consumer(self, topic, bootstrap_server, group_id):
+        consumer_config = {
+            'auto.commit.enable': False,
+            'bootstrap.servers': bootstrap_server,
+            'group.id': group_id,
+            'default.topic.config': {
+                'auto.offset.reset': 'error',
+            }
+        }
 
-        # `consumer_timeout_ms` configures the longest amount of time (in millis) we have
-        # to wait for our main loop to run if no messages are received on a Kafka topic,
-        # which means it needs to be the minimum of our `max_batch_time` and some reasonable
-        # default that doesn't leave a user waiting forever for a shutdown to complete
-        consumer_timeout_ms = kwargs.pop('consumer_timeout_ms', float('inf'))
-        consumer_timeout_ms = min(self.max_batch_time, consumer_timeout_ms)
-        consumer_timeout_ms = min(1000, consumer_timeout_ms)
+        consumer = Consumer(consumer_config)
 
-        # The KafkaConsumer constructor doesn't let us setup a RebalanceListener
-        # so we have to construct it, then call subscribe.
-        consumer = KafkaConsumer(
-            enable_auto_commit=False,
-            consumer_timeout_ms=consumer_timeout_ms,
-            **kwargs
-        )
+        def on_partitions_assigned(consumer, partitons):
+            logger.info("New partitions assigned: %s" % partitons)
+
+        def on_partitions_revoked(consumer, partitons):
+            "Reset the current in-memory batch, letting the next consumer take over where we left off."
+            logger.info("Partitions revoked: %s" % partitons)
+            self._flush(force=True)
 
         consumer.subscribe(
-            topics=(topic, ),
-            listener=RebalanceListener(self)
+            [topic],
+            on_assign=on_partitions_assigned,
+            on_revoke=on_partitions_revoked,
         )
 
         return consumer
@@ -135,9 +118,21 @@ class BatchingKafkaConsumer(object):
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
-
         while not self.shutdown:
-            self._run_once()
+            self._flush()
+
+            msg = self.consumer.poll(timeout=1.0)
+
+            if msg is None:
+                continue
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                    continue
+                else:
+                    print(msg.error())
+                    break
+
+            self._handle_message(msg)
 
         self._shutdown()
 
@@ -148,24 +143,14 @@ class BatchingKafkaConsumer(object):
 
         self.shutdown = True
 
-    def _run_once(self):
-        self._flush()
+    def _handle_message(self, msg):
+        # start the timer only after the first message for this batch is seen
+        if not self.timer:
+            self.timer = self.max_batch_time / 1000.0 + time.time()
 
-        # this iterator will run unless no message is received by `consumer_timeout_ms`
-        # (which we set in the constructor), at which point we begin the infinite
-        # loop again. this gives us a chance to check for shutdown (or flush based on time)
-        # even if a topic is not seeing much (or any) traffic
-        for msg in self.consumer:
-            # start the timer only after the first message for this batch is seen
-            if not self.timer:
-                self.timer = self.max_batch_time / 1000.0 + time.time()
-
-            result = self.worker.process_message(msg)
-            self.batch.append(result)
-
-            self._flush()
-            if self.shutdown:
-                break
+        result = self.worker.process_message(msg)
+        self.batch.append(result)
+        self.last_message = msg
 
     def _shutdown(self):
         logger.debug("Stopping")
@@ -179,12 +164,13 @@ class BatchingKafkaConsumer(object):
         logger.debug("Stopping consumer")
         self.consumer.close()
 
-        logger.debug("Stopped")
+    logger.debug("Stopped")
 
     def _reset_batch(self):
         logger.debug("Resetting in-memory batch")
         self.batch = []
         self.timer = None
+        self.last_message = None
 
     def _flush(self, force=False):
         """Decides whether the `BatchingKafkaConsumer` should flush because of either
@@ -207,10 +193,10 @@ class BatchingKafkaConsumer(object):
                 if self.metrics:
                     self.metrics.timing('batch.flush', duration)
 
-                self._reset_batch()
-
                 logger.debug("Committing Kafka offsets")
                 t = time.time()
-                self.consumer.commit()
+                self.consumer.commit(message=self.last_message, asynchronous=False)
                 duration = int((time.time() - t) * 1000)
                 logger.debug("Kafka offset commit took %sms" % duration)
+
+                self._reset_batch()

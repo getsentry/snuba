@@ -39,7 +39,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
     class ProcessorWorker(AbstractBatchWorker):
         def process_message(self, message):
-            event = json.loads(message.value)
+            event = json.loads(message.value())
 
             key = get_key(event).encode('utf-8')
             processed = json.dumps(process_raw_event(event)).encode('utf-8')
@@ -66,11 +66,8 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         max_batch_size=50000,
         max_batch_time=5000,
         metrics=metrics,
-        # KafkaConsumer
-        bootstrap_servers=bootstrap_server,
+        bootstrap_server=bootstrap_server[0],
         group_id=consumer_group,
-        auto_offset_reset='none',
-        consumer_timeout_ms=1000,
     )
 
     def handler(signum, frame):
