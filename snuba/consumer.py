@@ -119,22 +119,24 @@ class BatchingKafkaConsumer(object):
 
         logger.debug("Starting")
         while not self.shutdown:
-            self._flush()
-
-            msg = self.consumer.poll(timeout=1.0)
-
-            if msg is None:
-                continue
-            if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
-                    continue
-                else:
-                    print(msg.error())
-                    break
-
-            self._handle_message(msg)
+            self._run_once()
 
         self._shutdown()
+
+    def _run_once(self):
+        self._flush()
+
+        msg = self.consumer.poll(timeout=1.0)
+
+        if msg is None:
+            return
+        if msg.error():
+            if msg.error().code() == KafkaError._PARTITION_EOF:
+                return
+            else:
+                raise RuntimeError(msg.error())
+
+        self._handle_message(msg)
 
     def signal_shutdown(self):
         """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
