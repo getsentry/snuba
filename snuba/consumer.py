@@ -81,14 +81,14 @@ class BatchingKafkaConsumer(object):
         self.shutdown = False
         self.batch = []
         self.timer = None
-        self.last_msg = None
 
         self.consumer = self.create_consumer(topic, bootstrap_server, group_id)
-        self.last_message = None
 
     def create_consumer(self, topic, bootstrap_server, group_id):
         consumer_config = {
-            'auto.commit.enable': False,
+            'enable.auto.commit': False,
+            'enable.auto.offset.store': True,
+            'offset.store.method': 'broker',
             'bootstrap.servers': bootstrap_server,
             'group.id': group_id,
             'default.topic.config': {
@@ -152,7 +152,6 @@ class BatchingKafkaConsumer(object):
 
         result = self.worker.process_message(msg)
         self.batch.append(result)
-        self.last_message = msg
 
     def _shutdown(self):
         logger.debug("Stopping")
@@ -172,7 +171,6 @@ class BatchingKafkaConsumer(object):
         logger.debug("Resetting in-memory batch")
         self.batch = []
         self.timer = None
-        self.last_message = None
 
     def _flush(self, force=False):
         """Decides whether the `BatchingKafkaConsumer` should flush because of either
@@ -197,7 +195,7 @@ class BatchingKafkaConsumer(object):
 
                 logger.debug("Committing Kafka offsets")
                 t = time.time()
-                self.consumer.commit(message=self.last_message, asynchronous=False)
+                self.consumer.commit(asynchronous=False)
                 duration = int((time.time() - t) * 1000)
                 logger.debug("Kafka offset commit took %sms" % duration)
 

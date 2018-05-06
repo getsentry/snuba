@@ -28,7 +28,7 @@ class FakeKafkaConsumer(object):
     def poll(self, timeout=None):
         return FakeKafkaMessage(self.items.pop(0))
 
-    def commit(self, message, asynchronous):
+    def commit(self, asynchronous):
         self.commit_calls += 1
 
     def close(self):
