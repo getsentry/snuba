@@ -1,9 +1,12 @@
-import redis
 from contextlib import contextmanager
+import logging
+import redis
 import time
 import uuid
 
 from snuba import settings
+
+logger = logging.getLogger('snuba.state')
 
 rds = redis.StrictRedis(
     host=settings.REDIS_HOST,
@@ -45,7 +48,8 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     pipe.zcount(bucket, '({:f}'.format(now), '+inf') # get concurrent
     try:
         _, _, rate, concurrent = pipe.execute()
-    except:
+    except Exception as ex:
+        logger.error(ex)
         yield True # fail open if redis is having issues
         return
 
@@ -61,14 +65,16 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
                 rds.zincrby(bucket, query_id, -float(max_query_duration_s))
             else:
                 rds.zrem(bucket, query_id) # not allowed / not counted
-        except:
+        except Exception as ex:
+            logger.error(ex)
             pass
 
 def set_config(key, value):
     key = 'snuba_config:{}'.format(key)
     try:
         rds.set(key, value)
-    except:
+    except Exception as ex:
+        logger.error(ex)
         pass
 
 def get_config(key, default=None, numeric=True):
@@ -83,7 +89,8 @@ def get_config(key, default=None, numeric=True):
                     return default
             else:
                 return result
-    except:
+    except Exception as ex:
+        logger.error(ex)
         pass
     return default
 
@@ -91,7 +98,8 @@ def delete_config(key):
     key = 'snuba_config:{}'.format(key)
     try:
         rds.delete(key)
-    except:
+    except Exception as ex:
+        logger.error(ex)
         pass
 
 def record_query(data):
@@ -101,11 +109,13 @@ def record_query(data):
             .lpush('snuba_queries', data)\
             .ltrim('snuba_queries', 0, max_queries - 1)\
             .execute()
-    except:
+    except Exception as ex:
+        logger.error(ex)
         pass
 
 def get_queries():
     try:
         return rds.lrange('snuba_queries', 0, -1)
-    except:
+    except Exception as ex:
+        logger.error(ex)
         return []
