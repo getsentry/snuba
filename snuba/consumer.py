@@ -87,8 +87,6 @@ class BatchingKafkaConsumer(object):
     def create_consumer(self, topic, bootstrap_server, group_id):
         consumer_config = {
             'enable.auto.commit': False,
-            'enable.auto.offset.store': True,
-            'offset.store.method': 'broker',
             'bootstrap.servers': bootstrap_server,
             'group.id': group_id,
             'default.topic.config': {
@@ -134,7 +132,8 @@ class BatchingKafkaConsumer(object):
             if msg.error().code() == KafkaError._PARTITION_EOF:
                 return
             else:
-                raise RuntimeError(msg.error())
+                logger.error(msg.error())
+                return
 
         self._handle_message(msg)
 
