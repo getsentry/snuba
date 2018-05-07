@@ -1,12 +1,13 @@
 import logging
 import os
 
-import simplejson as json
+from copy import deepcopy
 from datetime import timedelta
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from markdown import markdown
 from raven.contrib.flask import Sentry
+import simplejson as json
 
 from snuba import settings, util, schemas, state
 from snuba.clickhouse import Clickhouse
@@ -50,6 +51,11 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
+@app.route('/queries')
+def queries():
+    queries = [json.loads(q) for q in state.get_queries()]
+    return (json.dumps(queries), 200, {'Content-Type': 'application/json'})
+
 
 @app.route('/health')
 def health():
@@ -73,7 +79,7 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body, timer):
-    body = validated_body
+    body = deepcopy(validated_body)
     project_ids = util.to_list(body['project'])
     to_date = parse_datetime(body['to_date'])
     from_date = parse_datetime(body['from_date'])
@@ -161,7 +167,11 @@ def query(validated_body, timer):
 
     result['timing'] = timer
     timer.record(metrics)
-    state.record_query(result)
+    state.record_query(json.dumps({
+        'request': validated_body,
+        'sql': sql,
+        'result': result,
+    }, for_json=True))
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 

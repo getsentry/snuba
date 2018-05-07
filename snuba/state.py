@@ -50,8 +50,8 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
         return
 
     per_second = rate / float(rate_lookback_s)
-    allowed = (per_second_limit == None or per_second <= per_second_limit) and\
-                 (concurrent_limit == None or concurrent <= concurrent_limit)
+    allowed = (per_second_limit is None or per_second <= per_second_limit) and\
+                 (concurrent_limit is None or concurrent <= concurrent_limit)
     try:
         yield allowed
     finally:
@@ -71,15 +71,28 @@ def set_config(key, value):
     except:
         pass
 
-def get_config(key, default=None):
+def get_config(key, default=None, numeric=True):
     key = 'snuba_config:{}'.format(key)
     try:
         result = rds.get(key)
         if result is not None:
-            return result
+            if numeric:
+                try:
+                    return int(result)
+                except ValueError:
+                    return default
+            else:
+                return result
     except:
         pass
     return default
+
+def delete_config(key):
+    key = 'snuba_config:{}'.format(key)
+    try:
+        rds.delete(key)
+    except:
+        pass
 
 def record_query(data):
     max_queries = 1000
