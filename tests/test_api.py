@@ -11,7 +11,7 @@ import time
 import uuid
 import pytest
 
-from snuba import util
+from snuba import util, state
 
 from base import BaseTest
 
@@ -23,6 +23,12 @@ class TestApi(BaseTest):
         from snuba.api import app
         assert app.testing == True
         self.app = app.test_client()
+
+        # Reset rate limits
+        state.delete_config('global_concurrent_limit')
+        state.delete_config('global_per_second_limit')
+        state.delete_config('project_concurrent_limit')
+        state.delete_config('project_per_second_limit')
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
@@ -326,3 +332,10 @@ class TestApi(BaseTest):
 
         assert 'timing' in result
         assert 'timestamp' in result['timing']
+
+    def test_rate_limiting(self):
+        state.set_config('global_concurrent_limit', 0)
+        response = self.app.post('/query', data=json.dumps({
+            'project': 1,
+        }))
+        assert response.status_code == 429

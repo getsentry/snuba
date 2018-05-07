@@ -1,6 +1,7 @@
 sudo: required
 services:
   - docker
+  - redis-server
 dist: trusty
 language: python
 env:
