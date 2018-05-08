@@ -41,7 +41,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     query_id = uuid.uuid4()
     now = time.time()
 
-    pipe = rds.pipeline()
+    pipe = rds.pipeline(transaction=False)
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_lookback_s)) #cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id) # add query
     pipe.zcount(bucket, now - rate_lookback_s, now) # get rate
@@ -105,7 +105,7 @@ def delete_config(key):
 def record_query(data):
     max_queries = 1000
     try:
-        rds.pipeline()\
+        rds.pipeline(transaction=False)\
             .lpush('snuba_queries', data)\
             .ltrim('snuba_queries', 0, max_queries - 1)\
             .execute()
