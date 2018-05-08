@@ -5,29 +5,15 @@ from snuba.util import *
 
 class TestUtil(BaseTest):
 
-    def test_issue_expr(self):
-        assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash') ==\
-            "[1,1,2][indexOf(CAST(['a','b','c'], 'Array(FixedString(32))'), hash)]"
-        assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[1]) ==\
-            "[1,1][indexOf(CAST(['a','b'], 'Array(FixedString(32))'), hash)]"
-        assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[2]) ==\
-            "[2][indexOf(CAST(['c'], 'Array(FixedString(32))'), hash)]"
-        assert issue_expr([(1, ['a', 'b']), (2, 'c')], col='hash', ids=[]) == 0
-        assert issue_expr([], col='hash', ids=[]) == 0
-
     def test_column_expr(self):
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'granularity': 86400
         }
-        assert column_expr('issue', body.copy()) ==\
-            "([1,1,2][indexOf(CAST(['a','b','c'], 'Array(FixedString(32))'), primary_hash)] AS `issue`)"
+        assert column_expr('tags[foo]', body.copy()) ==\
+            "(tags.value[indexOf(tags.key, \'foo\')] AS `tags[foo]`)"
 
-        body['conditions'] = [['issue', 'IN', [1]]]
-        assert column_expr('issue', body.copy()) ==\
-            "([1,1][indexOf(CAST(['a','b'], 'Array(FixedString(32))'), primary_hash)] AS `issue`)"
-
-        body['conditions'] = [['issue', 'IN', []]]
-        assert column_expr('issue', body.copy()) == "(0 AS `issue`)"
+        assert column_expr('time', body.copy()) ==\
+            "(toDate(timestamp) AS `time`)"
 
     def test_escape(self):
         assert escape_literal("'") == r"'\''"

@@ -270,8 +270,8 @@ class TestApi(BaseTest):
         })).data)
         # Issue is expanded once, and alias used subsequently
         sql = raw_query.call_args[0][0]
-        assert "`issue` = 0" in sql
-        assert "`issue` = 1" in sql
+        assert "issue = 0" in sql
+        assert "issue = 1" in sql
 
     def test_promoted_expansion(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
