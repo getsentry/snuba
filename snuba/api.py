@@ -38,7 +38,7 @@ def check_clickhouse():
             return False
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='')
 app.testing = settings.TESTING
 app.debug = settings.DEBUG
 
@@ -51,11 +51,18 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
-@app.route('/queries')
-def queries():
-    queries = [json.loads(q) for q in state.get_queries()]
-    return (json.dumps(queries), 200, {'Content-Type': 'application/json'})
-
+@app.route('/dashboard')
+@app.route('/dashboard.<fmt>')
+def dashboard(fmt='html'):
+    if fmt == 'json':
+        result = {
+            'queries': state.get_queries(),
+            'concurrent': {k: state.get_concurrent(k) for k in ['global']},
+            'rates': {k: state.get_rates(k) for k in ['global']},
+        }
+        return (json.dumps(result), 200, {'Content-Type': 'application/json'})
+    else:
+        return app.send_static_file('dashboard.html')
 
 @app.route('/health')
 def health():
@@ -170,11 +177,11 @@ def query(validated_body, timer):
 
     result['timing'] = timer
     timer.record(metrics)
-    state.record_query(json.dumps({
+    state.record_query({
         'request': validated_body,
         'sql': sql,
         'result': result,
-    }, for_json=True))
+    })
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 

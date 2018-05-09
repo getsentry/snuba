@@ -1,0 +1,166 @@
+<html>
+	<head>
+      <link rel="stylesheet" href="https://unpkg.com/react-table@latest/react-table.css">
+      <style>
+        body {
+            font-family: "Verdana"
+        }
+      </style>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react-dom.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.21.1/babel.min.js"></script>
+      <script src="https://unpkg.com/react-table@latest/react-table.js"></script>
+      <script type="text/jsx">
+        var ReactTable = window.ReactTable.default;
+        class Sparkline extends React.Component {
+          constructor(props) {
+            super(props);
+            this.state = {
+              values: props.values,
+              width: props.width,
+              height: props.height,
+            }
+          }
+
+          componentWillReceiveProps(nextProps) {
+            this.setState({
+              values: nextProps.values
+            });
+          }
+
+          render() {
+            let values = this.state.values || [0];
+            let limits = [Math.max(0, Math.min.apply(this, values) - 1), Math.max.apply(this, values) + 1];
+            let scale = Math.pow(10, Math.floor(Math.log10(limits[1] - limits[0])));
+            let domain = [Math.floor(limits[0] / scale) * scale, Math.ceil(limits[1] / scale) * scale];
+            let range = [this.state.height, 0];
+            let step = this.state.width / Math.max(values.length - 1, 1)
+            let x = function(dx) { return dx * step; };
+            let y = function(dy) { return ((dy - domain[0]) / (domain[1] - domain[0]) * (range[1] - range[0])) + range[0]; };
+            let path = values.map(function (v, i) { return "L" + x(i) + "," + y(v); }).join()
+            let strokepath = "M" + path.substring(1);
+            let fillpath = "M0," + range[0] + path + "L" + this.state.width + "," + range[0] + "L0," + range[0]
+            let lastval = values.slice(-1)[0];
+            return (
+              <svg id="sparkline" width={this.state.width} height={this.state.height} overflow="visible">
+                <rect width={this.state.width} height={this.state.height} fill={'#EEE'}/>
+                <path className="sparkfill" fill="#c0d0f0" d={fillpath}/>
+                <path className="sparkstroke" stroke="#0000f0" fill="none" strokeWidth={1} d={strokepath}/>
+                <text x={0} y={range[0]} fontSize="8">{domain[0]}</text>
+                <text x={0} y={range[1]} fontSize="8">{domain[1]}</text>
+                <text x={this.state.width} y={y(lastval)} fontSize="8">{lastval.toFixed(1)}</text>
+              </svg>
+            )
+          }
+        }
+
+        class Dashboard extends React.Component {
+          constructor(props) {
+            super(props)
+            this.state = {
+              queries: [],
+              rates: {},
+              concurrent: {},
+              error: null,
+              loaded: false,
+            }
+          }
+
+          componentDidMount() {
+            this.reload()
+            this.interval = setInterval(this.reload.bind(this), 5000);
+          }
+
+          componentWillUnmount() {
+            clearInterval(this.interval);
+          }
+
+          reload() {
+            fetch('/dashboard.json')
+              .then(res => res.json())
+              .then(
+                (result) => {
+                  this.setState({
+                    queries: result.queries,
+                    rates: result.rates,
+                    concurrent: result.concurrent || {},
+                    loaded: true,
+                  })
+                },
+                (error) => {
+                  this.setState({
+                    error: error,
+                  })
+                }
+              )
+          }
+
+          render() {
+            return (
+              <div style={{'display':'flex', 'flexDirection':'column'}}>
+                  <div style={{'display':'flex', 'flexDirection':'row', 'justifyContent':'space-evenly'}}>
+                    <div>
+                      <h2>QPS:</h2>
+                      <Sparkline width={200} height={60} values={this.state.rates.global} />
+                    </div>
+                    <div>
+                      <h2>Concurrent:</h2>
+                      <h2>{this.state.concurrent.global}</h2>
+                    </div>
+                </div>
+
+                  <h2>Queries:</h2>
+                  <ReactTable
+                    manual
+                    pages={-1}
+                    loading={!this.state.loaded}
+                    data={this.state.queries}
+                    className="-striped -highlight"
+                    showPagination={false}
+                    columns={[
+                      {
+                        Header: 'date',
+                        width:90,
+                        id: 'date',
+                        accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleDateString()
+                      },{
+                        Header: 'time',
+                        width:110,
+                        id: 'time',
+                        accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleTimeString()
+                      },{
+                        Header: 'project',
+                        width:80,
+                        accessor: 'request.project'
+                      },{
+                        Header: 'duration_ms',
+                        width:100, accessor:
+                        'result.timing.duration_ms'
+                      },{
+                        Header: 'num_issues',
+                        width:100,
+                        id: 'num_issues',
+                        accessor: row => (row.request.issues || []).length
+                      },{
+                        Header: 'groupby',
+                        width:200,
+                        id: 'groupby',
+                        accessor: row => (Array.isArray(row.request.groupby) ? row.request.groupby : [row.request.groupby]).join(', ')
+                      },{
+                        Header: 'SQL',
+                        accessor: 'sql'
+                      },
+                    ]}
+                  />
+              </div>
+            )
+          }
+        }
+        ReactDOM.render(<Dashboard />, document.querySelector("#dash"))
+      </script>
+	</head>
+	<body>
+		<div id="dash"></div>
+	</body>
+</html>
