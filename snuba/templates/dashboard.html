@@ -31,18 +31,18 @@
           }
 
           render() {
-            var values = this.state.values || [0];
-            var limits = [Math.max(0, Math.min.apply(this, values) - 1), Math.max.apply(this, values) + 1];
-            var scale = Math.pow(10, Math.floor(Math.log10(limits[1] - limits[0])));
-            var domain = [Math.floor(limits[0] / scale) * scale, Math.ceil(limits[1] / scale) * scale];
-            var range = [this.state.height, 0];
-            var step = this.state.width / Math.max(values.length - 1, 1)
-            var x = function(dx) { return dx * step; };
-            var y = function(dy) { return ((dy - domain[0]) / (domain[1] - domain[0]) * (range[1] - range[0])) + range[0]; };
-            var path = values.map(function (v, i) { return "L" + x(i) + "," + y(v); }).join()
-            var strokepath = "M" + path.substring(1);
-            var fillpath = "M0," + range[0] + path + "L" + this.state.width + "," + range[0] + "L0," + range[0]
-            var lastval = values.slice(-1)[0];
+            let values = this.state.values || [0];
+            let limits = [Math.max(0, Math.min.apply(this, values) - 1), Math.max.apply(this, values) + 1];
+            let scale = Math.pow(10, Math.floor(Math.log10(limits[1] - limits[0])));
+            let domain = [Math.floor(limits[0] / scale) * scale, Math.ceil(limits[1] / scale) * scale];
+            let range = [this.state.height, 0];
+            let step = this.state.width / Math.max(values.length - 1, 1)
+            let x = function(dx) { return dx * step; };
+            let y = function(dy) { return ((dy - domain[0]) / (domain[1] - domain[0]) * (range[1] - range[0])) + range[0]; };
+            let path = values.map(function (v, i) { return "L" + x(i) + "," + y(v); }).join()
+            let strokepath = "M" + path.substring(1);
+            let fillpath = "M0," + range[0] + path + "L" + this.state.width + "," + range[0] + "L0," + range[0]
+            let lastval = values.slice(-1)[0];
             return (
               <svg id="sparkline" width={this.state.width} height={this.state.height} overflow="visible">
                 <rect width={this.state.width} height={this.state.height} fill={'#EEE'}/>
@@ -68,6 +68,15 @@
           }
 
           componentDidMount() {
+            this.reload()
+            this.interval = setInterval(this.reload.bind(this), 5000);
+          }
+
+          componentWillUnmount() {
+            clearInterval(this.interval);
+          }
+
+          reload() {
             fetch('/dashboard.json')
               .then(res => res.json())
               .then(

@@ -55,14 +55,10 @@ def root():
 @app.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
     if fmt == 'json':
-        queries = []
-        for q in state.get_queries():
-            try:
-                queries.append(json.loads(q))
-            except:
-                pass
-        rates = {k: state.get_rates(k) for k in ['global']}
-        result = {'queries': queries, 'rates': rates}
+        result = {
+            'queries': state.get_queries(),
+            'rates': {k: state.get_rates(k) for k in ['global']},
+        }
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
         return render_template('dashboard.html')
@@ -177,11 +173,11 @@ def query(validated_body, timer):
 
     result['timing'] = timer
     timer.record(metrics)
-    state.record_query(json.dumps({
+    state.record_query({
         'request': validated_body,
         'sql': sql,
         'result': result,
-    }, for_json=True))
+    })
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 

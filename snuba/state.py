@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 import logging
 import redis
+import simplejson as json
 import time
 import uuid
 
@@ -116,7 +117,8 @@ def delete_config(key):
         pass
 
 def record_query(data):
-    max_queries = 1000
+    max_queries = 200
+    data = json.dumps(data, for_json=True)
     try:
         rds.pipeline(transaction=False)\
             .lpush('snuba_queries', data)\
@@ -128,7 +130,13 @@ def record_query(data):
 
 def get_queries():
     try:
-        return rds.lrange('snuba_queries', 0, -1)
+        queries = []
+        for q in rds.lrange('snuba_queries', 0, -1):
+            try:
+                queries.append(json.loads(q))
+            except:
+                pass
     except Exception as ex:
         logger.error(ex)
-        return []
+
+    return queries
