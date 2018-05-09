@@ -18,6 +18,7 @@ Snuba assumes a Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `loca
 Snuba exposes an HTTP API with the following endpoints.
 
 - [/](/): Shows this page.
+- [/dashboard](/dashboard): Query dashboard
 - [/query](/query): GET endpoint for querying clickhouse.
 
 ## Settings
