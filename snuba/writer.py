@@ -8,6 +8,9 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     event['timestamp'] = datetime.utcfromtimestamp(event['timestamp'])
     event['received'] = datetime.utcfromtimestamp(event['received'])
 
+    if not event.get('deleted'):
+        event['deleted'] = 0
+
     values = []
     for colname in columns:
         value = event.get(colname, None)
