@@ -77,8 +77,9 @@
           }
 
           reload() {
-            fetch('/dashboard.json')
-              .then(res => res.json())
+            fetch('/dashboard.json', {
+              credentials: 'same-origin',
+            }).then(res => res.json())
               .then(
                 (result) => {
                   this.setState({
