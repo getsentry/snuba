@@ -107,7 +107,10 @@ def query(validated_body, timer):
     select_exprs = group_exprs + aggregate_exprs
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
     from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
-    join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
+    joins = [util.issue_expr(body)]
+    if 'arrayjoin' in body:
+        joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
+    join_clause = ' '.join(joins)
 
     where_clause = ''
     if where_conditions:
