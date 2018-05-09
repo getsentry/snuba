@@ -2,7 +2,7 @@ import abc
 import logging
 import time
 
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 
 logger = logging.getLogger('snuba.consumer')
@@ -194,8 +194,28 @@ class BatchingKafkaConsumer(object):
 
                 logger.debug("Committing Kafka offsets")
                 t = time.time()
-                self.consumer.commit(asynchronous=False)
+                self._commit()
                 duration = int((time.time() - t) * 1000)
                 logger.debug("Kafka offset commit took %sms" % duration)
 
                 self._reset_batch()
+
+        def _commit(self):
+            retries = 3
+            while True:
+                try:
+                    offsets = self.consumer.commit(asynchronous=False)
+                    logger.debug("Committed offsets: %s" % offsets)
+                    break  # success
+                except KafkaException as e:
+                    if e.args[0].code() in (KafkaError.REQUEST_TIMED_OUT,
+                                            KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                                            KafkaError._WAIT_COORD):
+                        logger.warning("Commit failed: %s (%d retries)" % (str(e), retries))
+                        if retries <= 0:
+                            raise
+                        retries -= 1
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise
