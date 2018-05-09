@@ -14,6 +14,12 @@ rds = redis.StrictRedis(
     db=settings.REDIS_DB
 )
 
+# Window for concurrent query counting
+max_query_duration_s = 60
+# Window for determining query rate
+rate_lookback_s = 60
+# Amount of time we keep rate history
+rate_history_s = 3600
 
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
@@ -35,14 +41,12 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
                                   ^
                                  now
     """
-    max_query_duration_s = 60
-    rate_lookback_s = 60
     bucket = 'snuba-ratelimit:{}'.format(bucket)
     query_id = uuid.uuid4()
     now = time.time()
 
     pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_lookback_s)) #cleanup
+    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s)) #cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id) # add query
     pipe.zcount(bucket, now - rate_lookback_s, now) # get rate
     pipe.zcount(bucket, '({:f}'.format(now), '+inf') # get concurrent
@@ -68,6 +72,15 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
         except Exception as ex:
             logger.error(ex)
             pass
+
+def get_rates(bucket, rollup=60):
+    now = int(time.time())
+    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    pipe = rds.pipeline(transaction=False)
+    for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
+        pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
+    return [c / float(rollup) for c in pipe.execute()]
+
 
 def set_config(key, value):
     key = 'snuba_config:{}'.format(key)

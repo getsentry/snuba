@@ -51,11 +51,21 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
-@app.route('/queries')
-def queries():
-    queries = [json.loads(q) for q in state.get_queries()]
-    return (json.dumps(queries), 200, {'Content-Type': 'application/json'})
-
+@app.route('/dashboard')
+@app.route('/dashboard.<fmt>')
+def dashboard(fmt='html'):
+    if fmt == 'json':
+        queries = []
+        for q in state.get_queries():
+            try:
+                queries.append(json.loads(q))
+            except:
+                pass
+        rates = {k: state.get_rates(k) for k in ['global']}
+        result = {'queries': queries, 'rates': rates}
+        return (json.dumps(result), 200, {'Content-Type': 'application/json'})
+    else:
+        return render_template('dashboard.html')
 
 @app.route('/health')
 def health():
