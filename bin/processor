@@ -64,7 +64,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         raw_events_topic,
         worker=ProcessorWorker(),
         max_batch_size=50000,
-        max_batch_time=5000,
+        max_batch_time=2 * 1000,
         metrics=metrics,
         bootstrap_server=bootstrap_server[0],
         group_id=consumer_group,

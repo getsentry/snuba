@@ -81,7 +81,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         processed_events_topic,
         worker=WriterWorker(),
         max_batch_size=50000,
-        max_batch_time=10 * 1000,
+        max_batch_time=2 * 1000,
         metrics=metrics,
         bootstrap_server=bootstrap_server[0],
         group_id=consumer_group,
