@@ -74,6 +74,11 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
             logger.error(ex)
             pass
 
+def get_concurrent(bucket):
+    now = time.time()
+    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    return rds.zcount(bucket, '({:f}'.format(now), '+inf')
+
 def get_rates(bucket, rollup=60):
     now = int(time.time())
     bucket = 'snuba-ratelimit:{}'.format(bucket)
@@ -81,7 +86,6 @@ def get_rates(bucket, rollup=60):
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
-
 
 def set_config(key, value):
     key = 'snuba_config:{}'.format(key)

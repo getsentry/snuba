@@ -16,7 +16,6 @@
         class Sparkline extends React.Component {
           constructor(props) {
             super(props);
-            console.log(props)
             this.state = {
               values: props.values,
               width: props.width,
@@ -61,7 +60,8 @@
             super(props)
             this.state = {
               queries: [],
-              rates: [],
+              rates: {},
+              concurrent: {},
               error: null,
               loaded: false,
             }
@@ -84,6 +84,7 @@
                   this.setState({
                     queries: result.queries,
                     rates: result.rates,
+                    concurrent: result.concurrent || {},
                     loaded: true,
                   })
                 },
@@ -97,9 +98,17 @@
 
           render() {
             return (
-              <div>
-                  <h2>QPS:</h2>
-                  <Sparkline width={200} height={60} values={this.state.rates.global} />
+              <div style={{'display':'flex', 'flexDirection':'column'}}>
+                  <div style={{'display':'flex', 'flexDirection':'row', 'justifyContent':'space-evenly'}}>
+                    <div>
+                      <h2>QPS:</h2>
+                      <Sparkline width={200} height={60} values={this.state.rates.global} />
+                    </div>
+                    <div>
+                      <h2>Concurrent:</h2>
+                      <h2>{this.state.concurrent.global}</h2>
+                    </div>
+                </div>
 
                   <h2>Queries:</h2>
                   <ReactTable
@@ -112,12 +121,12 @@
                     columns={[
                       {
                         Header: 'date',
-                        width:80,
+                        width:90,
                         id: 'date',
                         accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleDateString()
                       },{
                         Header: 'time',
-                        width:100,
+                        width:110,
                         id: 'time',
                         accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleTimeString()
                       },{

@@ -38,7 +38,7 @@ def check_clickhouse():
             return False
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='')
 app.testing = settings.TESTING
 app.debug = settings.DEBUG
 
@@ -57,11 +57,12 @@ def dashboard(fmt='html'):
     if fmt == 'json':
         result = {
             'queries': state.get_queries(),
+            'concurrent': {k: state.get_concurrent(k) for k in ['global']},
             'rates': {k: state.get_rates(k) for k in ['global']},
         }
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
-        return render_template('dashboard.html')
+        return app.send_static_file('dashboard.html')
 
 @app.route('/health')
 def health():
