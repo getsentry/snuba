@@ -211,9 +211,10 @@ SCHEMA_COLUMNS = """
     )
 """
 
+# project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
-DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'  # modulo(intHash32(project_id), 32)
+DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'
 DEFAULT_VERSION_COLUMN = 'deleted'
-DEFAULT_SHARDING_KEY = 'jumpConsistentHash(reinterpretAsInt32(event_id), 2)'
+DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
 DEFAULT_LOCAL_TABLE = 'sentry_local'
 DEFAULT_DIST_TABLE = 'sentry_dist'
