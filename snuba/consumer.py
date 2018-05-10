@@ -89,6 +89,7 @@ class BatchingKafkaConsumer(object):
             'enable.auto.commit': False,
             'bootstrap.servers': bootstrap_server,
             'group.id': group_id,
+            'batch.num.messages': 500,
             'default.topic.config': {
                 'auto.offset.reset': 'error',
             }
