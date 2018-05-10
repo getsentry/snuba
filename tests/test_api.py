@@ -24,12 +24,6 @@ class TestApi(BaseTest):
         assert app.testing == True
         self.app = app.test_client()
 
-        # Reset rate limits
-        state.delete_config('global_concurrent_limit')
-        state.delete_config('global_per_second_limit')
-        state.delete_config('project_concurrent_limit')
-        state.delete_config('project_per_second_limit')
-
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
         self.environments = [u'prød', 'test']  # 2 environments
@@ -40,6 +34,13 @@ class TestApi(BaseTest):
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - \
             timedelta(minutes=self.minutes)
         self.generate_fizzbuzz_events()
+
+    def teardown_method(self, test_method):
+        # Reset rate limits
+        state.delete_config('global_concurrent_limit')
+        state.delete_config('global_per_second_limit')
+        state.delete_config('project_concurrent_limit')
+        state.delete_config('project_per_second_limit')
 
     def generate_fizzbuzz_events(self):
         """
