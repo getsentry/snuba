@@ -1,13 +1,15 @@
 import logging
 import os
 
-import simplejson as json
+from copy import deepcopy
+from datetime import timedelta
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from markdown import markdown
 from raven.contrib.flask import Sentry
+import simplejson as json
 
-from snuba import settings, util, schemas
+from snuba import settings, util, schemas, state
 from snuba.clickhouse import Clickhouse
 
 
@@ -36,7 +38,7 @@ def check_clickhouse():
             return False
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='')
 app.testing = settings.TESTING
 app.debug = settings.DEBUG
 
@@ -49,6 +51,18 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
+@app.route('/dashboard')
+@app.route('/dashboard.<fmt>')
+def dashboard(fmt='html'):
+    if fmt == 'json':
+        result = {
+            'queries': state.get_queries(),
+            'concurrent': {k: state.get_concurrent(k) for k in ['global']},
+            'rates': {k: state.get_rates(k) for k in ['global']},
+        }
+        return (json.dumps(result), 200, {'Content-Type': 'application/json'})
+    else:
+        return app.send_static_file('dashboard.html')
 
 @app.route('/health')
 def health():
@@ -72,17 +86,21 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body, timer):
-    body = validated_body
-
+    body = deepcopy(validated_body)
+    project_ids = util.to_list(body['project'])
     to_date = parse_datetime(body['to_date'])
     from_date = parse_datetime(body['from_date'])
     assert from_date <= to_date
+
+    max_days = state.get_config('max_days', None)
+    if max_days is not None and (to_date - from_date).days > max_days:
+        from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body['conditions']
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('project_id', 'IN', util.to_list(body['project'])),
+        ('project_id', 'IN', project_ids),
     ])
     having_conditions = body['having']
 
@@ -96,7 +114,10 @@ def query(validated_body, timer):
     select_exprs = group_exprs + aggregate_exprs
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
     from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
-    join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin']) if 'arrayjoin' in body else ''
+    joins = [util.issue_expr(body)]
+    if 'arrayjoin' in body:
+        joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
+    join_clause = ' '.join(joins)
 
     where_clause = ''
     if where_conditions:
@@ -134,18 +155,33 @@ def query(validated_body, timer):
 
     timer.mark('prepare_query')
 
-    with Clickhouse() as clickhouse:
-        result = util.raw_query(sql, clickhouse)
+    result = {}
+    gpsl = state.get_config('global_per_second_limit', 1000)
+    gcl = state.get_config('global_concurrent_limit', 1000)
+    ppsl = state.get_config('project_per_second_limit', 1000)
+    pcl = state.get_config('project_concurrent_limit', 1000)
+    with state.rate_limit('global', gpsl, gcl) as global_allowed:
+        with state.rate_limit(project_ids[0], ppsl, pcl) as allowed:
+            if not global_allowed or not allowed:
+                status = 429
+            else:
+                with Clickhouse() as clickhouse:
+                    result = util.raw_query(sql, clickhouse)
+                    timer.mark('execute')
 
-    timer.mark('execute')
+                if result.get('error'):
+                    logger.error(result['error'])
+                    status = 500
+                else:
+                    status = 200
+
     result['timing'] = timer
     timer.record(metrics)
-
-    if result.get('error'):
-        logger.error(result['error'])
-        status = 500
-    else:
-        status = 200
+    state.record_query({
+        'request': validated_body,
+        'sql': sql,
+        'result': result,
+    })
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 

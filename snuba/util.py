@@ -13,8 +13,7 @@ import requests
 import six
 import time
 
-from snuba import schemas
-from snuba import settings
+from snuba import schemas, settings, state
 
 
 logger = logging.getLogger('snuba.util')
@@ -40,15 +39,6 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     if column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
-    elif column_name == 'issue':
-        # If there are conditions on what 'issue' can be, then only expand the
-        # expression for the issues that will actually be selected.
-        cond = flat_conditions(body.get('conditions', []))
-        ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-              [set(lit) for (col, op, lit) in cond if col ==
-               'issue' and op == 'IN' and isinstance(lit, list)]
-        ids = set.union(*ids) if ids else None
-        expr = issue_expr(body['issues'], ids=ids) if body['issues'] is not None else None
     elif settings.NESTED_COL_EXPR.match(column_name):
         # For tags/contexts, we expand the expression depending on whether the tag is
         # "promoted" to a top level column, or whether we have to look in the tags map.
@@ -204,31 +194,55 @@ def raw_query(sql, client):
     return {'data': data, 'meta': meta, 'error': error}
 
 
-def issue_expr(issues, col='primary_hash', ids=None):
+def issue_expr(body, hash_column='primary_hash'):
     """
     Takes a list of (issue_id, fingerprint(s)) tuples of the form:
 
         [(1, (hash1, hash2)), (2, hash3)]
 
-    and constructs a SQL expression that will return the corresponding
-    issue_id for any row whose `col` matches any of that issue_id's hashes
+    from body['issues'] and constructs a SQL JOIN expression that will add the
+    issue id to the query. If specific issue IDs are selected for in the query
+    conditions, this query will only expand the expression for those referenced
+    issues.
     """
+    cond = flat_conditions(body.get('conditions', []))
+    used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
+          [set(lit) for (col, op, lit) in cond if col ==
+           'issue' and op == 'IN' and isinstance(lit, list)]
+    used_ids = set.union(*used_ids) if used_ids else None
+
     issue_ids = []
     hashes = []
+
+    # NB the number of issues in the request is already limited by the schema.
+    # This is for further limiting at runtime.
+    max_issues = state.get_config('max_issues')
+    max_hashes_per_issue = state.get_config('max_hashes_per_issue')
+    issues = body['issues']
+    if max_issues is not None:
+        issues = issues[:max_issues]
+
     for issue_id, issue_hashes in issues:
-        if ids is None or issue_id in ids:
-            if not hasattr(issue_hashes, '__iter__'):
-                issue_hashes = [issue_hashes]
+        if used_ids is None or issue_id in used_ids:
+            issue_hashes = to_list(issue_hashes)
+            if max_hashes_per_issue is not None:
+                issue_hashes = issue_hashes[:max_hashes_per_issue]
             issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
             hashes.extend('\'{}\''.format(h) for h in issue_hashes)
     assert len(issue_ids) == len(hashes)
     if len(hashes) == 0:
-        return 0
-    return '[{}][indexOf(CAST([{}], \'Array(FixedString(32))\'), {})]'.format(
-        ','.join(issue_ids),
-        ','.join(hashes),
-        col
+        return ''
+    return ('ANY INNER JOIN '
+                '(SELECT arrayJoin('
+                    'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
+                    'tupleElement(map, 1) as {col},'
+                    'tupleElement(map, 2) as issue'
+            ') USING {col}').format(
+        issue_ids=','.join(issue_ids),
+        hashes=','.join(hashes),
+        col=hash_column
     )
+
 
 
 def validate_request(schema):

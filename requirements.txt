@@ -65,6 +65,7 @@ pytest-watch==4.1.0
 python-dateutil==2.7.2
 PyYAML==3.12
 raven==6.7.0
+redis==2.10.6
 requests==2.18.4
 scandir==1.7
 simplegeneric==0.8.1
