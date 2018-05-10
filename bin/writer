@@ -73,13 +73,20 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
                         write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
 
                     break  # success
-                except (errors.NetworkError, errors.SocketTimeoutError):
+                except (errors.NetworkError, errors.SocketTimeoutError) as e:
                     logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
                     if retries <= 0:
                         raise
                     retries -= 1
                     time.sleep(1)
                     continue
+                except errors.ServerException as e:
+                    logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
+                    if e.code == errors.ErrorCodes.TOO_MUCH_SIMULTANEOUS_QUERIES:
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise
 
         def shutdown(self):
             pass
