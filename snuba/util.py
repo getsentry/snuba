@@ -314,6 +314,7 @@ def time_request(name):
         return wrapper
     return decorator
 
+
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """
     CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
@@ -326,14 +327,16 @@ def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
 def get_replicated_engine(
         name,
         order_by=settings.DEFAULT_ORDER_BY,
-        partition_by=settings.DEFAULT_PARTITION_BY):
+        partition_by=settings.DEFAULT_PARTITION_BY,
+        version_column=settings.DEFAULT_VERSION_COLUMN):
     return """
-        ReplicatedMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}')
+        ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}', %(version_column)s)
         PARTITION BY %(partition_by)s
         ORDER BY %(order_by)s;""" % {
         'name': name,
         'order_by': order_by,
         'partition_by': partition_by,
+        'version_column': version_column,
     }
 
 

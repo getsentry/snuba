@@ -8,6 +8,9 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     event['timestamp'] = datetime.utcfromtimestamp(event['timestamp'])
     event['received'] = datetime.utcfromtimestamp(event['received'])
 
+    if not event.get('deleted'):
+        event['deleted'] = 0
+
     values = []
     for colname in columns:
         value = event.get(colname, None)
@@ -21,9 +24,9 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     return values
 
 
-def write_rows(connection, table, columns, rows):
+def write_rows(connection, table, columns, rows, types_check=False):
     connection.execute("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
         'colnames': ", ".join(columns),
         'table': table,
-    }, rows)
+    }, rows, types_check=types_check)
