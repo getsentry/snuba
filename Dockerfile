@@ -1,9 +1,10 @@
-FROM python:2-slim
+FROM pypy:2-slim
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && \
     apt-get install --no-install-recommends -y build-essential libpcre3 libpcre3-dev && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old
+RUN ln -s /usr/local/bin/pypy /usr/local/bin/python
 
 RUN useradd -m -s /bin/bash snuba
 WORKDIR /home/snuba
