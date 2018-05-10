@@ -30,6 +30,8 @@ TIME_GROUP_COLUMN = 'time'
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9093']
+DEFAULT_MAX_BATCH_SIZE = 50000
+DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 PROMOTED_TAGS = [
     'level',
     'logger',

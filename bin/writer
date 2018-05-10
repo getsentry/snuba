@@ -33,11 +33,16 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Clickhouse table name for the (optionally replicated) local table.')
 @click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
               help='Clickhouse table name for the "meta" Distributed table.')
+@click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
+              help='Max number of messages to batch in memory before writing to Clickhouse.')
+@click.option('--max-batch-time-ms', default=settings.DEFAULT_MAX_BATCH_TIME_MS,
+              help='Max length of time to buffer messages in memory before writing to Clickhouse.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_server,
-        local_table_name, distributed_table_name, log_level, dogstatsd_host, dogstatsd_port):
+        local_table_name, distributed_table_name, max_batch_size, max_batch_time_ms,
+        log_level, dogstatsd_host, dogstatsd_port):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
@@ -67,7 +72,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
                         write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
 
                     break
-                except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                except (errors.NetworkError, errors.SocketTimeoutError):
                     if attempt == 0:
                         logger.exception("Error writing to Clickhouse, retrying.")
                         time.sleep(1)
@@ -80,8 +85,8 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
     consumer = BatchingKafkaConsumer(
         processed_events_topic,
         worker=WriterWorker(),
-        max_batch_size=50000,
-        max_batch_time=2 * 1000,
+        max_batch_size=max_batch_size,
+        max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_server=bootstrap_server[0],
         group_id=consumer_group,
