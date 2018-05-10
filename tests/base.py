@@ -67,4 +67,4 @@ class BaseTest(object):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        write_rows(self.conn, table=self.table, columns=settings.WRITER_COLUMNS, rows=rows)
+        write_rows(self.conn, table=self.table, columns=settings.WRITER_COLUMNS, rows=rows, types_check=True)

@@ -67,22 +67,22 @@ def get_key(event):
     return '%s:%s' % (project_id, event_id)
 
 
-def extract_required(output, event, data):
+def extract_required(output, event):
     output['event_id'] = event['event_id']
-
-    primary_hash = event['primary_hash']
-    if not HASH_RE.match(primary_hash):
-        primary_hash = md5(force_bytes(primary_hash)).hexdigest()
-
-    output['primary_hash'] = primary_hash
     output['project_id'] = event['project_id']
-    output['message'] = _unicodify(event['message'])
-    output['platform'] = _unicodify(event['platform'])
     output['timestamp'] = int(calendar.timegm(
         datetime.strptime(
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
+
+def extract_common(output, event, data):
+    output['platform'] = _unicodify(event['platform'])
+    output['message'] = _unicodify(event['message'])
+    primary_hash = event['primary_hash']
+    if not HASH_RE.match(primary_hash):
+        primary_hash = md5(force_bytes(primary_hash)).hexdigest()
+    output['primary_hash'] = primary_hash
     output['received'] = int(data['received'])
 
 
@@ -241,8 +241,16 @@ def extract_stacktraces(output, stacks):
 def process_raw_event(event):
     processed = {}
 
+    extract_required(processed, event)
+
+    deleted = int(event.get('deleted', 0))
+    processed['deleted'] = deleted
+    if deleted:
+        # no need to extract other fields
+        return processed
+
     data = event.get('data', {})
-    extract_required(processed, event, data)
+    extract_common(processed, event, data)
 
     sdk = data.get('sdk', {})
     extract_sdk(processed, sdk)

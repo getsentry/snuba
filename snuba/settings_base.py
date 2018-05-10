@@ -76,11 +76,12 @@ PROMOTED_CONTEXTS = [
 ]
 WRITER_COLUMNS = [
     'event_id',
+    'project_id',
     'timestamp',
+    'deleted',
     'platform',
     'message',
     'primary_hash',
-    'project_id',
     'received',
     'user_id',
     'username',
@@ -121,16 +122,17 @@ PROMOTED_COLS = {
 
 # Table Definitions
 SCHEMA_COLUMNS = """
-    -- required and provided by SDK
+    -- required
     event_id FixedString(32),
-    timestamp DateTime,
-    platform String,
-    message String,
-
-    -- required and provided by Sentry
-    primary_hash FixedString(32),
     project_id UInt64,
-    received DateTime,
+    timestamp DateTime,
+    deleted UInt8,
+
+    -- required for non-deleted
+    platform Nullable(String),
+    message Nullable(String),
+    primary_hash Nullable(FixedString(32)),
+    received Nullable(DateTime),
 
     -- optional user
     user_id Nullable(String),
@@ -216,8 +218,10 @@ SCHEMA_COLUMNS = """
     )
 """
 
-DEFAULT_ORDER_BY = '(project_id, timestamp)'
-DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'  # modulo(intHash32(project_id), 32)
-DEFAULT_SHARDING_KEY = 'rand()'
+# project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
+DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
+DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'
+DEFAULT_VERSION_COLUMN = 'deleted'
+DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
 DEFAULT_LOCAL_TABLE = 'sentry_local'
 DEFAULT_DIST_TABLE = 'sentry_dist'

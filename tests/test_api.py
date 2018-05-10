@@ -55,6 +55,7 @@ class TestApi(BaseTest):
                     events.append({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
+                        'deleted': 0,
                         # Project N sends every Nth (mod len(hashes)) hash (and platform)
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],

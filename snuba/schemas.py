@@ -46,7 +46,6 @@ QUERY_SCHEMA = {
         },
         'issues': {
             'type': 'array',
-            'maxItems': 500,
             'items': {
                 'type': 'array',
                 'minItems': 2,
