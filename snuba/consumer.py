@@ -164,8 +164,7 @@ class BatchingKafkaConsumer(object):
         self.worker.shutdown()
         logger.debug("Stopping consumer")
         self.consumer.close()
-
-    logger.debug("Stopped")
+        logger.debug("Stopped")
 
     def _reset_batch(self):
         logger.debug("Resetting in-memory batch")
