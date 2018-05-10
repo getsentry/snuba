@@ -66,18 +66,20 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
             return row_from_processed_event(json.loads(message.value()))
 
         def flush_batch(self, batch):
-            for attempt in xrange(2):
+            retries = 3
+            while True:
                 try:
                     with clickhouse as ch:
                         write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
 
-                    break
+                    break  # success
                 except (errors.NetworkError, errors.SocketTimeoutError):
-                    if attempt == 0:
-                        logger.exception("Error writing to Clickhouse, retrying.")
-                        time.sleep(1)
-                    else:
-                        logger.exception("Error writing to Clickhouse, giving up.")
+                    logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
+                    if retries <= 0:
+                        raise
+                    retries -= 1
+                    time.sleep(1)
+                    continue
 
         def shutdown(self):
             pass
