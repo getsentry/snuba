@@ -8,16 +8,27 @@ from base import BaseTest
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 
 
+class FakeKafkaMessage(object):
+    def __init__(self, value):
+        self._value = value
+
+    def error(self):
+        return None
+
+    def value(self):
+        return self._value
+
+
 class FakeKafkaConsumer(object):
     def __init__(self):
         self.items = []
         self.commit_calls = 0
         self.close_calls = 0
 
-    def __iter__(self):
-        return iter(self.items)
+    def poll(self, timeout=None):
+        return FakeKafkaMessage(self.items.pop(0))
 
-    def commit(self):
+    def commit(self, asynchronous):
         self.commit_calls += 1
 
     def close(self):
@@ -25,7 +36,7 @@ class FakeKafkaConsumer(object):
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, topic, **kwargs):
+    def create_consumer(self, topic, bootstrap_server, group_id):
         return FakeKafkaConsumer()
 
 
@@ -37,8 +48,8 @@ class FakeWorker(AbstractBatchWorker):
         self.shutdown_calls = 0
 
     def process_message(self, message):
-        self.processed.append(message)
-        return message
+        self.processed.append(message.value())
+        return message.value()
 
     def flush_batch(self, batch):
         self.flushed.append(batch)
@@ -55,10 +66,13 @@ class TestConsumer(BaseTest):
             max_batch_size=2,
             max_batch_time=100,
             metrics=statsd,
+            bootstrap_server=None,
+            group_id=None,
         )
 
         consumer.consumer.items = [1, 2, 3]
-        consumer._run_once()
+        for x in xrange(len(consumer.consumer.items)):
+            consumer._run_once()
         consumer._shutdown()
 
         assert consumer.worker.processed == [1, 2, 3]
@@ -75,19 +89,24 @@ class TestConsumer(BaseTest):
             max_batch_size=100,
             max_batch_time=2000,
             metrics=statsd,
+            bootstrap_server=None,
+            group_id=None,
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
         consumer.consumer.items = [1, 2, 3]
-        consumer._run_once()
+        for x in xrange(len(consumer.consumer.items)):
+            consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
         consumer.consumer.items = [4, 5, 6]
-        consumer._run_once()
+        for x in xrange(len(consumer.consumer.items)):
+            consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
         consumer.consumer.items = [7, 8, 9]
-        consumer._run_once()
+        for x in xrange(len(consumer.consumer.items)):
+            consumer._run_once()
 
         consumer._shutdown()
 

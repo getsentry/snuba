@@ -24,7 +24,8 @@ before_install:
   - sudo apt-get -qq update
   - sudo apt-get install clickhouse-server clickhouse-client -y
   - sudo service clickhouse-server start
-  - make install-dependencies
+  - make install-librdkafka
+  - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
   - make test
