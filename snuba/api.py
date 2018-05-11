@@ -51,6 +51,7 @@ def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
+
 @app.route('/dashboard')
 @app.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
@@ -63,6 +64,7 @@ def dashboard(fmt='html'):
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
         return app.send_static_file('dashboard.html')
+
 
 @app.route('/health')
 def health():

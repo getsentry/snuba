@@ -22,6 +22,7 @@ rate_lookback_s = 60
 # Amount of time we keep rate history
 rate_history_s = 3600
 
+
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     """
@@ -47,20 +48,20 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     now = time.time()
 
     pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s)) #cleanup
-    pipe.zadd(bucket, now + max_query_duration_s, query_id) # add query
-    pipe.zcount(bucket, now - rate_lookback_s, now) # get rate
-    pipe.zcount(bucket, '({:f}'.format(now), '+inf') # get concurrent
+    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
+    pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
+    pipe.zcount(bucket, now - rate_lookback_s, now)  # get rate
+    pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
     try:
         _, _, rate, concurrent = pipe.execute()
     except Exception as ex:
         logger.error(ex)
-        yield True # fail open if redis is having issues
+        yield True  # fail open if redis is having issues
         return
 
     per_second = rate / float(rate_lookback_s)
     allowed = (per_second_limit is None or per_second <= per_second_limit) and\
-                 (concurrent_limit is None or concurrent <= concurrent_limit)
+        (concurrent_limit is None or concurrent <= concurrent_limit)
     try:
         yield allowed
     finally:
@@ -69,15 +70,17 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
                 # return the query to its start time
                 rds.zincrby(bucket, query_id, -float(max_query_duration_s))
             else:
-                rds.zrem(bucket, query_id) # not allowed / not counted
+                rds.zrem(bucket, query_id)  # not allowed / not counted
         except Exception as ex:
             logger.error(ex)
             pass
+
 
 def get_concurrent(bucket):
     now = time.time()
     bucket = 'snuba-ratelimit:{}'.format(bucket)
     return rds.zcount(bucket, '({:f}'.format(now), '+inf')
+
 
 def get_rates(bucket, rollup=60):
     now = int(time.time())
@@ -87,6 +90,7 @@ def get_rates(bucket, rollup=60):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
 
+
 def set_config(key, value):
     key = 'snuba_config:{}'.format(key)
     try:
@@ -94,6 +98,7 @@ def set_config(key, value):
     except Exception as ex:
         logger.error(ex)
         pass
+
 
 def get_config(key, default=None, numeric=True):
     key = 'snuba_config:{}'.format(key)
@@ -112,6 +117,7 @@ def get_config(key, default=None, numeric=True):
         pass
     return default
 
+
 def delete_config(key):
     key = 'snuba_config:{}'.format(key)
     try:
@@ -119,6 +125,7 @@ def delete_config(key):
     except Exception as ex:
         logger.error(ex)
         pass
+
 
 def record_query(data):
     max_queries = 200
@@ -132,13 +139,14 @@ def record_query(data):
         logger.error(ex)
         pass
 
+
 def get_queries():
     try:
         queries = []
         for q in rds.lrange('snuba_queries', 0, -1):
             try:
                 queries.append(json.loads(q))
-            except:
+            except BaseException:
                 pass
     except Exception as ex:
         logger.error(ex)
