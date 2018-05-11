@@ -36,7 +36,7 @@ class FakeKafkaConsumer(object):
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, topic, bootstrap_server, group_id):
+    def create_consumer(self, topic, bootstrap_servers, group_id):
         return FakeKafkaConsumer()
 
 
@@ -66,7 +66,7 @@ class TestConsumer(BaseTest):
             max_batch_size=2,
             max_batch_time=100,
             metrics=statsd,
-            bootstrap_server=None,
+            bootstrap_servers=None,
             group_id=None,
         )
 
@@ -89,7 +89,7 @@ class TestConsumer(BaseTest):
             max_batch_size=100,
             max_batch_time=2000,
             metrics=statsd,
-            bootstrap_server=None,
+            bootstrap_servers=None,
             group_id=None,
         )
 

@@ -97,7 +97,7 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
-        bootstrap_server=bootstrap_server[0],
+        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
     )
 
