@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+    <script>
+    function run() {
+      fetch('/query', {
+        credentials: 'same-origin',
+        method: 'POST',
+        body: document.getElementById("query").value
+      }).then(res => res.json())
+        .then(
+          (result) => {
+            document.getElementById("result").value = JSON.stringify(result, null, 4)
+          }
+        )
+
+    }
+    </script>
+    <h2>Query</h2>
+    <textarea id="query" style="width: 100%; height: 300px;">{{query_template}}</textarea>
+    <button onclick="run()">Run</button>
+    <h2>Result</h2>
+    <textarea id="result" style="width: 100%; height: 100%;"></textarea>
+{% endblock %}

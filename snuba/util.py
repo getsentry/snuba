@@ -258,16 +258,18 @@ def validate_request(schema):
                 else:
                     raise TypeError()
 
-            try:
-                body = json.loads(request.data)
-                schemas.validate(body, schema)
-                kwargs['validated_body'] = body
-            except (ValueError, jsonschema.ValidationError) as e:
-                return (render_template('error.html',
-                                        error=str(e),
-                                        schema=json.dumps(
-                                            schema, indent=4, sort_keys=True, default=default_encode)
-                                        ), 400)
+            if request.method == 'POST':
+                try:
+                    body = json.loads(request.data)
+                    schemas.validate(body, schema)
+                    kwargs['validated_body'] = body
+                except (ValueError, jsonschema.ValidationError) as e:
+                    result = {'error': str(e), 'schema': schema}
+                    return (
+                        json.dumps(result, sort_keys=True, indent=4, default=default_encode),
+                        400,
+                        {'Content-Type': 'application/json'}
+                    )
             return func(*args, **kwargs)
         return wrapper
     return decorator
