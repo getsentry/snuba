@@ -5,7 +5,7 @@ import simplejson as json
 import signal
 
 import click
-from kafka import KafkaProducer
+from confluent_kafka import Producer
 from raven import Client as RavenClient
 
 from snuba import settings, util
@@ -39,7 +39,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.processor')
 
-    producer = KafkaProducer(bootstrap_servers=bootstrap_server)
+    producer = Producer({'bootstrap.servers': ','.join(bootstrap_server)})
 
     class ProcessorWorker(AbstractBatchWorker):
         def process_message(self, message):
@@ -52,7 +52,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
         def flush_batch(self, batch):
             for key, value in batch:
-                producer.send(
+                producer.produce(
                     processed_events_topic,
                     key=key,
                     value=value,
@@ -62,7 +62,6 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
         def shutdown(self):
             producer.flush()
-            producer.close()
 
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
@@ -70,7 +69,7 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
-        bootstrap_server=bootstrap_server[0],
+        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
     )
 
