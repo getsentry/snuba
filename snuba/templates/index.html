@@ -1,18 +1,4 @@
-<html>
-    <style>
-body {
-    font-family: "Verdana"
-}
-code {
-    background-color: #EEE;
-}
-pre {
-    margin: 1em;
-    padding: 1em;
-    background-color: #EEE;
-}
-    </style>
-    <body>
+{% extends "base.html" %}
+{% block content %}
 {{ body|safe }}
-    </body>
-</html>
+{% endblock %}
