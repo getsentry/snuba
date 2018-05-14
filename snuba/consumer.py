@@ -89,10 +89,12 @@ class BatchingKafkaConsumer(object):
             'enable.auto.commit': False,
             'bootstrap.servers': ','.join(bootstrap_servers),
             'group.id': group_id,
-            'batch.num.messages': 500,
             'default.topic.config': {
                 'auto.offset.reset': 'error',
-            }
+            },
+            # overridden to reduce memory usage when there's a large backlog
+            'queued.max.messages.kbytes': 50000,  # 50MB, default is 1GB
+            'queued.min.messages': 20000,  # default is 100k
         }
 
         consumer = Consumer(consumer_config)
