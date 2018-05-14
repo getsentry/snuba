@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import jsonschema
 import copy
+import six
 
 QUERY_SCHEMA = {
     'type': 'object',
@@ -207,3 +208,20 @@ def validate(value, schema, set_defaults=True):
         types={'array': (list, tuple)},
         format_checker=jsonschema.FormatChecker()
     ).validate(value, schema)
+
+def generate(schema):
+    """
+    Generate a (not necessarily valid) object that can be used as a template
+    from the provided schema
+    """
+    typ = schema.get('type')
+    if 'default' in schema:
+        default = schema['default']
+        return default() if callable(default) else default
+    elif typ == 'object':
+        return {prop: generate(subschema) for prop, subschema in six.iteritems(schema.get('properties', {}))}
+    elif typ == 'array':
+        return []
+    elif typ == 'string':
+        return ""
+    return None
