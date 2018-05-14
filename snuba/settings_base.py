@@ -111,6 +111,12 @@ WRITER_COLUMNS = [
     'exception_frames.stack_level',
 ]
 
+# Columsns that come from outside the event body itself
+METADATA_COLUMNS = [
+    'offset',
+    'partition',
+]
+
 # A column name like "tags[url]"
 NESTED_COL_EXPR = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
