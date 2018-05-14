@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import logging
-import simplejson as json
 import signal
 
 import click
@@ -9,11 +8,10 @@ from confluent_kafka import Producer
 from raven import Client as RavenClient
 
 from snuba import settings, util
-from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.processor import get_key, process_raw_event
+from snuba.consumer import BatchingKafkaConsumer
+from snuba.processor import ProcessorWorker
 
 
-logger = logging.getLogger('snuba.processor')
 sentry = RavenClient(dsn=settings.SENTRY_DSN)
 
 
@@ -41,31 +39,9 @@ def run(raw_events_topic, consumer_group, processed_events_topic, bootstrap_serv
 
     producer = Producer({'bootstrap.servers': ','.join(bootstrap_server)})
 
-    class ProcessorWorker(AbstractBatchWorker):
-        def process_message(self, message):
-            event = json.loads(message.value())
-
-            key = get_key(event).encode('utf-8')
-            processed = json.dumps(process_raw_event(event)).encode('utf-8')
-
-            return (key, processed)
-
-        def flush_batch(self, batch):
-            for key, value in batch:
-                producer.produce(
-                    processed_events_topic,
-                    key=key,
-                    value=value,
-                )
-
-            producer.flush()
-
-        def shutdown(self):
-            producer.flush()
-
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ProcessorWorker(),
+        worker=ProcessorWorker(producer, processed_events_topic),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

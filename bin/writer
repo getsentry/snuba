@@ -1,22 +1,18 @@
 #!/usr/bin/env python
 
 import logging
-import simplejson as json
 import signal
-import time
 
 import click
-from clickhouse_driver import errors
 from raven import Client as RavenClient
 
 from snuba import settings
 from snuba.clickhouse import Clickhouse
-from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.writer import row_from_processed_event, write_rows
+from snuba.consumer import BatchingKafkaConsumer
+from snuba.writer import WriterWorker
 from snuba import util
 
 
-logger = logging.getLogger('snuba.writer')
 sentry = RavenClient(dsn=settings.SENTRY_DSN)
 
 
@@ -61,39 +57,9 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
         ch.execute(LOCAL_TABLE_DEFINITION)
         ch.execute(DIST_TABLE_DEFINITION)
 
-    class WriterWorker(AbstractBatchWorker):
-        def process_message(self, message):
-            return row_from_processed_event(json.loads(message.value()))
-
-        def flush_batch(self, batch):
-            retries = 3
-            while True:
-                try:
-                    with clickhouse as ch:
-                        write_rows(ch, distributed_table_name, settings.WRITER_COLUMNS, batch)
-
-                    break  # success
-                except (errors.NetworkError, errors.SocketTimeoutError) as e:
-                    logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
-                    if retries <= 0:
-                        raise
-                    retries -= 1
-                    time.sleep(1)
-                    continue
-                except errors.ServerException as e:
-                    logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
-                    if e.code == errors.ErrorCodes.TOO_MUCH_SIMULTANEOUS_QUERIES:
-                        time.sleep(1)
-                        continue
-                    else:
-                        raise
-
-        def shutdown(self):
-            pass
-
     consumer = BatchingKafkaConsumer(
         processed_events_topic,
-        worker=WriterWorker(),
+        worker=WriterWorker(clickhouse, distributed_table_name),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

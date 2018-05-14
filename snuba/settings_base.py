@@ -83,6 +83,8 @@ WRITER_COLUMNS = [
     'message',
     'primary_hash',
     'received',
+    'offset',
+    'partition',
     'user_id',
     'username',
     'email',
@@ -133,6 +135,10 @@ SCHEMA_COLUMNS = """
     message Nullable(String),
     primary_hash Nullable(FixedString(32)),
     received Nullable(DateTime),
+
+    -- optional stream related data
+    offset Nullable(UInt64),
+    partition Nullable(UInt16),
 
     -- optional user
     user_id Nullable(String),

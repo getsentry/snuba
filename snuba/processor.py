@@ -1,10 +1,16 @@
 import calendar
+import logging
 import simplejson as json
 import re
 from datetime import datetime
 from hashlib import md5
 
+from snuba.consumer import AbstractBatchWorker
 from snuba.util import force_bytes
+
+
+logger = logging.getLogger('snuba.processor')
+
 
 HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 * 32 - 1
@@ -274,3 +280,33 @@ def process_raw_event(event):
     extract_stacktraces(processed, stacks)
 
     return processed
+
+
+class ProcessorWorker(AbstractBatchWorker):
+    def __init__(self, producer, topic):
+        self.producer = producer
+        self.topic = topic
+
+    def process_message(self, message):
+        event = json.loads(message.value())
+
+        processed = process_raw_event(event)
+        processed['offset'] = message.offset()
+        processed['partition'] = message.partition()
+
+        key = get_key(event).encode('utf-8')
+        ret = json.dumps(processed).encode('utf-8')
+        return (key, ret)
+
+    def flush_batch(self, batch):
+        for key, value in batch:
+            self.producer.produce(
+                topic=self.topic,
+                key=key,
+                value=value,
+            )
+
+        self.producer.flush()
+
+    def shutdown(self):
+        self.producer.flush()
