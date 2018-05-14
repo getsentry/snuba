@@ -20,9 +20,9 @@ class TestApi(BaseTest):
 
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
-        from snuba.api import app
-        assert app.testing == True
-        self.app = app.test_client()
+        from snuba.api import application
+        assert application.testing == True
+        self.app = application.test_client()
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
