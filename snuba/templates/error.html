@@ -1,0 +1,23 @@
+<html>
+    <style>
+code {
+    background-color: #EEE;
+}
+pre {
+    margin: 1em;
+    padding: 1em;
+    background-color: #EEE;
+}
+    </style>
+    <body>
+        <h2>Invalid request:</h2>
+        <pre><code>
+{{ error }}
+        </code></pre>
+        <h3>Requests should be POST with a JSON body that matches the schema:</h3>
+        <pre><code>
+{{ schema }}
+        </code></pre>
+
+    </body>
+</html>

@@ -87,12 +87,7 @@ def health():
 @app.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
-def query(validated_body=None, timer=None):
-    if request.method == 'GET':
-        query_template = schemas.generate(schemas.QUERY_SCHEMA)
-        template_str = json.dumps(query_template, sort_keys=True, indent=4)
-        return render_template('query.html', query_template=template_str)
-
+def query(validated_body, timer):
     body = deepcopy(validated_body)
     project_ids = util.to_list(body['project'])
     to_date = parse_datetime(body['to_date'])
