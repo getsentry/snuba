@@ -38,22 +38,22 @@ def check_clickhouse():
             return False
 
 
-app = Flask(__name__, static_url_path='')
-app.testing = settings.TESTING
-app.debug = settings.DEBUG
+application = Flask(__name__, static_url_path='')
+application.testing = settings.TESTING
+application.debug = settings.DEBUG
 
-sentry = Sentry(app, dsn=settings.SENTRY_DSN)
+sentry = Sentry(application, dsn=settings.SENTRY_DSN)
 metrics = util.create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
 
-@app.route('/')
+@application.route('/')
 def root():
     with open('README.md') as f:
         return render_template('index.html', body=markdown(f.read()))
 
 
-@app.route('/dashboard')
-@app.route('/dashboard.<fmt>')
+@application.route('/dashboard')
+@application.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
     if fmt == 'json':
         result = {
@@ -63,10 +63,10 @@ def dashboard(fmt='html'):
         }
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
-        return app.send_static_file('dashboard.html')
+        return application.send_static_file('dashboard.html')
 
 
-@app.route('/health')
+@application.route('/health')
 def health():
     down_file_exists = check_down_file_exists()
     clickhouse_health = check_clickhouse()
@@ -84,7 +84,7 @@ def health():
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
-@app.route('/query', methods=['GET', 'POST'])
+@application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body, timer):
@@ -188,12 +188,12 @@ def query(validated_body, timer):
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 
 
-if app.debug or app.testing:
+if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is hardcoded to 'test' on purpose to avoid scary production mishaps.
     TEST_TABLE = 'test'
 
-    @app.route('/tests/insert', methods=['POST'])
+    @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_raw_event
         from snuba.writer import row_from_processed_event, write_rows
@@ -212,7 +212,7 @@ if app.debug or app.testing:
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
-    @app.route('/tests/drop', methods=['POST'])
+    @application.route('/tests/drop', methods=['POST'])
     def drop():
         with Clickhouse() as clickhouse:
             clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
