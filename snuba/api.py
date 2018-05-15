@@ -52,6 +52,10 @@ def root():
         return render_template('index.html', body=markdown(f.read()))
 
 
+@application.route('/css/<path:path>')
+def send_css(path):
+    return application.send_static_file(os.path.join('css', path))
+
 @application.route('/dashboard')
 @application.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
@@ -64,6 +68,17 @@ def dashboard(fmt='html'):
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('dashboard.html')
+
+@application.route('/config')
+@application.route('/config.<fmt>')
+def config(fmt='html'):
+    if fmt == 'json':
+        if request.method == 'GET':
+            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
+        elif request.method == 'POST':
+            state.set_configs(json.loads(request.data))
+    else:
+        return application.send_static_file('config.html')
 
 
 @application.route('/health')

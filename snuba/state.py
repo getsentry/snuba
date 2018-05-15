@@ -99,8 +99,15 @@ def set_config(key, value):
         logger.error(ex)
         pass
 
+def set_configs(values):
+    for k, v in six.iteritems(values):
+        set_config(k, v)
+
 
 def get_config(key, default=None, numeric=True):
+    # If you are setting this key with the config already attached,
+    # you are probably making a mistake.
+    assert not key.startswith('snuba_config')
     key = 'snuba_config:{}'.format(key)
     try:
         result = rds.get(key)
@@ -117,6 +124,7 @@ def get_config(key, default=None, numeric=True):
         pass
     return default
 
+def get_configs():
 
 def delete_config(key):
     key = 'snuba_config:{}'.format(key)
