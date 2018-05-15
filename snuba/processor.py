@@ -67,29 +67,29 @@ def _unicodify(s):
     return unicode(s)
 
 
-def get_key(event):
+def get_key(message):
     # send the same (project_id, event_id) to the same kafka partition
-    project_id = event['project_id']
-    event_id = event['event_id']
+    project_id = message['project_id']
+    event_id = message['event_id']
     return '%s:%s' % (project_id, event_id)
 
 
-def extract_required(output, event):
-    output['event_id'] = event['event_id']
-    output['project_id'] = event['project_id']
+def extract_required(output, message):
+    output['event_id'] = message['event_id']
+    output['project_id'] = message['project_id']
     output['timestamp'] = int(calendar.timegm(
         datetime.strptime(
-            event['datetime'],
+            message['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
-    retention_days = int(event.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+    retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
     output['retention_days'] = retention_days
 
 
-def extract_common(output, event, data):
-    output['platform'] = _unicodify(event['platform'])
-    output['message'] = _unicodify(event['message'])
-    primary_hash = event['primary_hash']
+def extract_common(output, message, data):
+    output['platform'] = _unicodify(message['platform'])
+    output['message'] = _unicodify(message['message'])
+    primary_hash = message['primary_hash']
     if not HASH_RE.match(primary_hash):
         primary_hash = md5(force_bytes(primary_hash)).hexdigest()
     output['primary_hash'] = primary_hash
@@ -248,19 +248,30 @@ def extract_stacktraces(output, stacks):
     output['exception_frames.stack_level'] = frame_stack_levels
 
 
-def process_raw_event(event):
-    processed = {}
+def process_message(message):
+    if isinstance(message, dict):
+        # deprecated unwrapped event message == insert
+        return process_insert(message)
+    if isinstance(message, (list, tuple)) and len(message) >= 2:
+        version = message[0]
 
-    extract_required(processed, event)
+        if version == 0:
+            # version 0: (version, type, message)
+            type_, event = message[1:]
+            if type_ == 'insert':
+                return process_insert(event)
+            elif type_ == 'delete':
+                return process_delete(event)
 
-    deleted = int(event.get('deleted', 0))
-    processed['deleted'] = deleted
-    if deleted:
-        # no need to extract other fields
-        return processed
+    raise ValueError("Unknown message format: " + str(message))
 
-    data = event.get('data', {})
-    extract_common(processed, event, data)
+
+def process_insert(message):
+    processed = {'deleted': 0}
+    extract_required(processed, message)
+
+    data = message.get('data', {})
+    extract_common(processed, message, data)
 
     sdk = data.get('sdk', {})
     extract_sdk(processed, sdk)
@@ -286,19 +297,26 @@ def process_raw_event(event):
     return processed
 
 
+def process_delete(message):
+    processed = {'deleted': 1}
+    extract_required(processed, message)
+
+    return processed
+
+
 class ProcessorWorker(AbstractBatchWorker):
     def __init__(self, producer, topic):
         self.producer = producer
         self.topic = topic
 
     def process_message(self, message):
-        event = json.loads(message.value())
+        value = json.loads(message.value())
 
-        processed = process_raw_event(event)
+        processed = process_message(value)
         processed['offset'] = message.offset()
         processed['partition'] = message.partition()
 
-        key = get_key(event).encode('utf-8')
+        key = get_key(value).encode('utf-8')
         ret = json.dumps(processed).encode('utf-8')
         return (key, ret)
 

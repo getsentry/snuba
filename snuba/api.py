@@ -200,14 +200,14 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import process_raw_event
+        from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
         body = json.loads(request.data)
 
         rows = []
         for event in body:
-            processed = process_raw_event(event)
+            processed = process_message(event)
             row = row_from_processed_event(processed)
             rows.append(row)
 
