@@ -37,6 +37,11 @@ TIME_GROUP_COLUMN = 'time'
 DEFAULT_BROKERS = ['localhost:9093']
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
+# Columns that come from outside the event body itself
+METADATA_COLUMNS = [
+    'offset',
+    'partition',
+]
 PROMOTED_TAGS = [
     'level',
     'logger',
@@ -83,15 +88,13 @@ WRITER_COLUMNS = [
     'message',
     'primary_hash',
     'received',
-    'offset',
-    'partition',
     'user_id',
     'username',
     'email',
     'ip_address',
     'sdk_name',
     'sdk_version',
-] + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
+] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
     'tags.key',
     'tags.value',
     'contexts.key',
@@ -109,12 +112,6 @@ WRITER_COLUMNS = [
     'exception_frames.colno',
     'exception_frames.lineno',
     'exception_frames.stack_level',
-]
-
-# Columsns that come from outside the event body itself
-METADATA_COLUMNS = [
-    'offset',
-    'partition',
 ]
 
 # A column name like "tags[url]"
@@ -142,10 +139,6 @@ SCHEMA_COLUMNS = """
     primary_hash Nullable(FixedString(32)),
     received Nullable(DateTime),
 
-    -- optional stream related data
-    offset Nullable(UInt64),
-    partition Nullable(UInt16),
-
     -- optional user
     user_id Nullable(String),
     username Nullable(String),
@@ -155,6 +148,10 @@ SCHEMA_COLUMNS = """
     -- optional misc
     sdk_name Nullable(String),
     sdk_version Nullable(String),
+
+    -- optional stream related data
+    offset Nullable(UInt64),
+    partition Nullable(UInt16),
 
     -- contexts
     os_build Nullable(String),
