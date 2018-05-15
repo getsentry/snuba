@@ -11,7 +11,7 @@ import time
 import uuid
 import pytest
 
-from snuba import util, state
+from snuba import util, state, settings
 
 from base import BaseTest
 
@@ -68,6 +68,7 @@ class TestApi(BaseTest):
                         'environment': self.environments[(tock * p) % len(self.environments)],
                         'tags.key': ['foo', 'foo.bar'],
                         'tags.value': ['baz', 'qux'],
+                        'retention_days': settings.DEFAULT_RETENTION_DAYS,
                     })
         self.write_processed_events(events)
 

@@ -84,6 +84,7 @@ WRITER_COLUMNS = [
     'project_id',
     'timestamp',
     'deleted',
+    'retention_days',
     'platform',
     'message',
     'primary_hash',
@@ -132,6 +133,7 @@ SCHEMA_COLUMNS = """
     project_id UInt64,
     timestamp DateTime,
     deleted UInt8,
+    retention_days UInt16,
 
     -- required for non-deleted
     platform Nullable(String),
@@ -229,8 +231,9 @@ SCHEMA_COLUMNS = """
 
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
-DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp))'
+DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp), retention_days)'
 DEFAULT_VERSION_COLUMN = 'deleted'
 DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
 DEFAULT_LOCAL_TABLE = 'sentry_local'
 DEFAULT_DIST_TABLE = 'sentry_dist'
+DEFAULT_RETENTION_DAYS = 90

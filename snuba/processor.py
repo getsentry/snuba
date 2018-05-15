@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from hashlib import md5
 
+from snuba import settings
 from snuba.consumer import AbstractBatchWorker
 from snuba.util import force_bytes
 
@@ -80,6 +81,9 @@ def extract_required(output, message):
         datetime.strptime(
             message['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
+
+    retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+    output['retention_days'] = retention_days
 
 
 def extract_common(output, message, data):
