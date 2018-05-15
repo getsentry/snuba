@@ -9,11 +9,11 @@ case $1 in
 "api")
     if [ "$#" -gt 1 ]; then
         echo "Running Snuba API server with arguments:" "${@:2}"
-        exec uwsgi --master --manage-script-name --mount /=snuba.api:app "${@:2}"
+        exec uwsgi --master --manage-script-name --pypy-wsgi snuba.api "${@:2}"
     else
         _default_args="--socket /tmp/snuba.sock --http 0.0.0.0:1218"
         echo "Running Snuba API server with default arguments: $_default_args"
-        exec uwsgi --master --manage-script-name --mount /=snuba.api:app $_default_args
+        exec uwsgi --master --manage-script-name --pypy-wsgi snuba.api $_default_args
     fi
     ;;
 "processor")
@@ -23,6 +23,9 @@ case $1 in
 "writer")
     echo "Running Snuba writer with arguments:" "${@:2}"
     exec ./bin/writer "${@:2}"
+    ;;
+"sh"|"/bin/sh"|"bash"|"/bin/bash")
+    bash "${@:2}"
     ;;
 "-h")
     print_help
