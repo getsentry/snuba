@@ -82,7 +82,7 @@ def extract_required(output, event):
             event['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
-    retention_days = int(event.get('retention_days', settings.DEFAULT_RETENTION_DAYS))
+    retention_days = int(event.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
     output['retention_days'] = retention_days
 
 
