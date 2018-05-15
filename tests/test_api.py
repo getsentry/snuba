@@ -2,6 +2,7 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
+from functools import partial
 import mock
 import random
 import simplejson as json
@@ -23,6 +24,7 @@ class TestApi(BaseTest):
         from snuba.api import application
         assert application.testing == True
         self.app = application.test_client()
+        self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
