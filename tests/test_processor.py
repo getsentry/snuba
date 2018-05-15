@@ -2,7 +2,7 @@ import simplejson as json
 
 from base import BaseTest
 
-from snuba import processor
+from snuba import processor, settings
 from snuba.processor import get_key, process_raw_event, ProcessorWorker
 
 
@@ -48,6 +48,7 @@ class TestProcessor(BaseTest):
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
             'timestamp': 1520971716,
+            'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
 
     def test_extract_common(self):
@@ -88,6 +89,7 @@ class TestProcessor(BaseTest):
             'project_id': 100,
             'timestamp': 1520971716,
             'deleted': True,
+            'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
 
     def test_extract_sdk(self):

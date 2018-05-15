@@ -20,6 +20,9 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     if not event.get('deleted'):
         event['deleted'] = 0
 
+    if not event.get('retention_days'):
+        event['retention_days'] = settings.DEFAULT_RETENTION_DAYS
+
     values = []
     for colname in columns:
         value = event.get(colname, None)
