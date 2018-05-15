@@ -1,7 +1,9 @@
+import simplejson as json
+
 from base import BaseTest
 
 from snuba import processor
-from snuba.processor import get_key, process_raw_event
+from snuba.processor import get_key, process_raw_event, ProcessorWorker
 
 
 class TestProcessor(BaseTest):
@@ -374,3 +376,27 @@ class TestProcessor(BaseTest):
             'exception_frames.stack_level': [0, 0, 0, 0, 0, 0, 0],
             'exception_stacks.type': [u'ArithmeticException'],
             'exception_stacks.value': [u'/ by zero']}
+
+    def test_offsets(self):
+        event = self.event
+
+        class FakeMessage(object):
+            def value(self):
+                # event doesn't really matter
+                return json.dumps(event)
+
+            def offset(self):
+                return 123
+
+            def partition(self):
+                return 456
+
+        test_worker = ProcessorWorker(producer=None, topic=None)
+        key, val = test_worker.process_message(FakeMessage())
+
+        val = json.loads(val)
+
+        assert val['project_id'] == self.event['project_id']
+        assert val['event_id'] == self.event['event_id']
+        assert val['offset'] == 123
+        assert val['partition'] == 456

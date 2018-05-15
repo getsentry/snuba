@@ -37,6 +37,11 @@ TIME_GROUP_COLUMN = 'time'
 DEFAULT_BROKERS = ['localhost:9093']
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
+# Columns that come from outside the event body itself
+METADATA_COLUMNS = [
+    'offset',
+    'partition',
+]
 PROMOTED_TAGS = [
     'level',
     'logger',
@@ -89,7 +94,7 @@ WRITER_COLUMNS = [
     'ip_address',
     'sdk_name',
     'sdk_version',
-] + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
+] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
     'tags.key',
     'tags.value',
     'contexts.key',
@@ -143,6 +148,10 @@ SCHEMA_COLUMNS = """
     -- optional misc
     sdk_name Nullable(String),
     sdk_version Nullable(String),
+
+    -- optional stream related data
+    offset Nullable(UInt64),
+    partition Nullable(UInt16),
 
     -- contexts
     os_build Nullable(String),
