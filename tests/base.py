@@ -3,7 +3,7 @@ from hashlib import md5
 from clickhouse_driver import Client
 
 from snuba import settings, util
-from snuba.processor import process_raw_event
+from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, write_rows
 
 
@@ -48,7 +48,7 @@ class BaseTest(object):
         for event in events:
             if 'primary_hash' not in event:
                 event = self.wrap_raw_event(event)
-            processed = process_raw_event(event)
+            processed = process_message(event)
             out.append(processed)
 
         return self.write_processed_events(out)
