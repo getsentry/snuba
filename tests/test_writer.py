@@ -17,6 +17,9 @@ class TestWriter(BaseTest):
         processed = process_raw_event(self.event)
         row = row_from_processed_event(processed)
 
+        # verify that the 'count of columns from event' + 'count of columns from metadata'
+        # equals the 'count of columns' in the processed row tuple
+        # note that the content is verified in processor tests
         assert (len(processed) + len(settings.METADATA_COLUMNS)) == len(row)
 
     def test_unknown_columns(self):
