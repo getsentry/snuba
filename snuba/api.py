@@ -186,6 +186,7 @@ def query(validated_body=None, timer=None):
     timer.record(metrics)
     state.record_query({
         'request': validated_body,
+        'referrer': request.referrer,
         'sql': sql,
         'result': result,
     })
