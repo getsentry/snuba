@@ -1,9 +1,10 @@
+import pytest
 import simplejson as json
 
 from base import BaseTest
 
 from snuba import processor
-from snuba.processor import get_key, process_raw_event, ProcessorWorker
+from snuba.processor import get_key, process_message, ProcessorWorker
 
 
 class TestProcessor(BaseTest):
@@ -14,24 +15,40 @@ class TestProcessor(BaseTest):
         assert str(self.event['project_id']) in key
 
     def test_simple(self):
-        processed = process_raw_event(self.event)
+        processed = process_message(self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
         assert isinstance(processed['timestamp'], int)
         assert isinstance(processed['received'], int)
 
+    def test_simple_version_0(self):
+        processed = process_message((0, 'insert', self.event))
+
+        for field in ('event_id', 'project_id', 'message', 'platform'):
+            assert processed[field] == self.event[field]
+        assert isinstance(processed['timestamp'], int)
+        assert isinstance(processed['received'], int)
+
+    def test_invalid_action_version_0(self):
+        with pytest.raises(ValueError):
+            process_message((1, 'invalid', self.event))
+
+    def test_invalid_format(self):
+        with pytest.raises(ValueError):
+            process_message((-1, 'insert', self.event))
+
     def test_unexpected_obj(self):
         self.event['message'] = {'what': 'why is this in the message'}
 
-        processed = process_raw_event(self.event)
+        processed = process_message(self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = "'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('utf-8')
 
-        processed = process_raw_event(self.event)
+        processed = process_message(self.event)
 
         assert processed['primary_hash'] == 'ef981cdeac7a4b76bf55f214e1255653'
 
@@ -70,19 +87,14 @@ class TestProcessor(BaseTest):
         }
 
     def test_deleted(self):
-        event = {
+        message = (0, 'delete', {
             'event_id': '1' * 32,
             'project_id': 100,
             'datetime': '2018-03-13T20:08:36.000000Z',
             'deleted': True,
+        })
 
-            # should be ignored
-            'primary_hash': 'a' * 32,
-            'message': 'the message',
-            'platform': 'the_platform',
-        }
-
-        output = processor.process_raw_event(event)
+        output = processor.process_message(message)
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
