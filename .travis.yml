@@ -34,8 +34,10 @@ before_deploy:
   - docker save $IMAGE_NAME | gzip > $CACHE_FILE_SNUBA
   - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
   - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
+  - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:$(git rev-parse HEAD)"
 deploy:
+  skip_cleanup: true
   provider: script
-  script: docker push "${IMAGE_NAME}:latest"
+  script: docker push "${IMAGE_NAME}:latest" && docker push "${IMAGE_NAME}:$(git rev-parse HEAD)"
   on:
     branch: master
