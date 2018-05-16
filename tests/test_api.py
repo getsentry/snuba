@@ -65,8 +65,8 @@ class TestApi(BaseTest):
                         'message': 'a message',
                         'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                        'dist': 'dist1',
-                        'release': six.text_type(tick),
+                        'sentry:dist': 'dist1',
+                        'sentry:release': six.text_type(tick),
                         'environment': self.environments[(tock * p) % len(self.environments)],
                         'tags.key': ['foo', 'foo.bar'],
                         'tags.value': ['baz', 'qux'],
@@ -226,7 +226,7 @@ class TestApi(BaseTest):
             'project': 2,
             'granularity': 3600,
             'groupby': 'project_id',
-            'conditions': [['tags[dist]', 'IN', ['dist1', 'dist2']]]
+            'conditions': [['tags[sentry:dist]', 'IN', ['dist1', 'dist2']]]
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
@@ -250,7 +250,7 @@ class TestApi(BaseTest):
             'granularity': 3600,
             'groupby': 'project_id',
             'conditions': [
-                ['tags[dist]', '=', 'dist1'],
+                ['tags[sentry:dist]', '=', 'dist1'],
                 ['tags[foo.bar]', '=', 'qux'],
             ]
         })).data)
@@ -296,7 +296,7 @@ class TestApi(BaseTest):
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
-            'foo', 'foo.bar', 'release', 'environment', 'dist'
+            'foo', 'foo.bar', 'sentry:release', 'environment', 'sentry:dist'
         ])
 
         # Reguar (nested) tag
@@ -305,9 +305,9 @@ class TestApi(BaseTest):
         assert result_map['foo']['top'][0] == 'baz'
 
         # Promoted tags
-        assert result_map['release']['count'] == 180
-        assert len(result_map['release']['top']) == 3
-        assert result_map['release']['uniq'] == 180
+        assert result_map['sentry:release']['count'] == 180
+        assert len(result_map['sentry:release']['top']) == 3
+        assert result_map['sentry:release']['uniq'] == 180
 
         assert result_map['environment']['count'] == 180
         assert len(result_map['environment']['top']) == 2

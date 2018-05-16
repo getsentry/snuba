@@ -136,16 +136,16 @@ class TestProcessor(BaseTest):
         processor.extract_promoted_tags(output, tags)
 
         assert output == {
-            'dist': 'the_dist',
+            'sentry:dist': 'the_dist',
             'environment': u'the_enviroment',
             'level': u'the_level',
             'logger': u'the_logger',
-            'release': 'the_release',
+            'sentry:release': 'the_release',
             'server_name': u'the_servername',
             'site': u'the_site',
             'transaction': u'the_transaction',
             'url': u'the_url',
-            'user': u'the_user',
+            'sentry:user': u'the_user',
         }
         assert tags == {
             'extra_tag': 'extra_value',
