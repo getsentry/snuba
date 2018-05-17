@@ -15,9 +15,6 @@ class TestCleanup(BaseTest):
 
         self.clickhouse = Clickhouse('localhost')
 
-    def test_blank(self):
-        assert cleanup.get_active_partitions(self.clickhouse, self.database, self.table) == []
-
     @mock.patch('time.time')
     def test(self, time_mock):
         now = datetime(2000, 1, 1)
@@ -32,6 +29,8 @@ class TestCleanup(BaseTest):
             event['timestamp'] = time.mktime(dt.timetuple())
             event['retention_days'] = retention_days
             return event
+
+        assert cleanup.get_active_partitions(self.clickhouse, self.database, self.table) == []
 
         # now, 90 retention
         self.write_processed_events(create_event(now))
