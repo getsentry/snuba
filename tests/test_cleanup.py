@@ -33,14 +33,14 @@ class TestCleanup(BaseTest):
             event['retention_days'] = retention_days
             return event
 
-        # now, 90
+        # now, 90 retention
         self.write_processed_events(create_event(now))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
         assert parts == [(now, 90)]
         stale = cleanup.filter_stale_partitions(parts)
         assert stale == []
 
-        # -40, 90
+        # -40 days, 90 retention
         forty_days_ago = now - timedelta(days=40)
         self.write_processed_events(create_event(forty_days_ago))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
@@ -48,7 +48,7 @@ class TestCleanup(BaseTest):
         stale = cleanup.filter_stale_partitions(parts)
         assert stale == []
 
-        # -100, 90
+        # -100 days, 90 retention
         one_hundred_days_ago = now - timedelta(days=100)
         self.write_processed_events(create_event(one_hundred_days_ago))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
@@ -56,7 +56,7 @@ class TestCleanup(BaseTest):
         stale = cleanup.filter_stale_partitions(parts)
         assert stale == [(one_hundred_days_ago, 90)]
 
-        # -1, 3
+        # -1 day, 3 retention
         one_day_ago = now - timedelta(days=1)
         self.write_processed_events(create_event(one_day_ago, 3))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
@@ -64,7 +64,7 @@ class TestCleanup(BaseTest):
         stale = cleanup.filter_stale_partitions(parts)
         assert stale == [(one_hundred_days_ago, 90)]
 
-        # -5, 3
+        # -5 days, 3 retention
         five_days_ago = now - timedelta(days=5)
         self.write_processed_events(create_event(five_days_ago, 3))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
