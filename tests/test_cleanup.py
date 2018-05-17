@@ -30,7 +30,8 @@ class TestCleanup(BaseTest):
             event['retention_days'] = retention_days
             return event
 
-        assert cleanup.get_active_partitions(self.clickhouse, self.database, self.table) == []
+        parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
+        assert parts == []
 
         # now, 90 retention
         self.write_processed_events(create_event(now))
