@@ -15,7 +15,7 @@ from snuba.clickhouse import Clickhouse
 @click.command()
 @click.option('--clickhouse-server', multiple=True,
               help='Clickhouse server to cleanup.')
-@click.option('--dry-run', default=True,
+@click.option('--dry-run', type=bool, default=True,
               help="If true, only print which partitions would be dropped.")
 @click.option('--database', default='default',
               help='Name of the database to target.')

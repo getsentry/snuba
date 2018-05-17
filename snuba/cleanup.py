@@ -59,7 +59,7 @@ def filter_stale_partitions(parts):
 
 
 def drop_partitions(clickhouse, database, table, parts, dry_run=True):
-    query = """\
+    query_template = """\
         ALTER TABLE %(database)s.%(table)s DROP PARTITION ('%(date_str)s', %(retention_days)s)
     """
 
@@ -72,8 +72,9 @@ def drop_partitions(clickhouse, database, table, parts, dry_run=True):
                 'retention_days': retention_days,
             }
 
+            query = (query_template % args).strip()
             if dry_run:
-                logger.info("Dry run: " + (query % args).strip())
+                logger.info("Dry run: " + query)
             else:
-                logger.debug("Dropping partition: " + (query % args).strip())
-                ch.execute(query, args)
+                logger.info("Dropping partition: " + query)
+                ch.execute(query)
