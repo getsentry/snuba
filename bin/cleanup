@@ -15,12 +15,14 @@ from snuba.clickhouse import Clickhouse
 @click.command()
 @click.option('--clickhouse-server', multiple=True,
               help='Clickhouse server to cleanup.')
-@click.option('--database-name', default='default',
+@click.option('--dry-run', default=True,
+              help="If true, only print which partitions would be dropped.")
+@click.option('--database', default='default',
               help='Name of the database to target.')
-@click.option('--table-name', default=settings.DEFAULT_LOCAL_TABLE,
+@click.option('--table', default=settings.DEFAULT_LOCAL_TABLE,
               help='Name of the table to target.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def run(clickhouse_server, database_name, table_name, log_level):
+def run(clickhouse_server, dry_run, database, table, log_level):
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     if not clickhouse_server:
@@ -28,9 +30,9 @@ def run(clickhouse_server, database_name, table_name, log_level):
         sys.exit(1)
 
     for server in clickhouse_server:
-        clickhouse = Clickhouse(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
-        num_dropped = len(run_cleanup(clickhouse, database_name, table_name))
-        print("Dropped %s partitions on %s." % (num_dropped, server))
+        clickhouse = Clickhouse(server.split(':')[0], port=int(server.split(':')[1]))
+        num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)
+        logger.info("Dropped %s partitions on %s" % (num_dropped, server))
 
 
 if __name__ == '__main__':
