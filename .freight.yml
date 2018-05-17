@@ -1,0 +1,4 @@
+deploy:
+  services:
+    - name: snuba-api
+      healthcheck: sleep 3 && curl -fsI 127.0.0.1:11218/health
