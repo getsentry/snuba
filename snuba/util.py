@@ -19,20 +19,26 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
+ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
+
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
+
 def escape_col(col):
-    if re.match('^[a-zA-Z]*$', col):
+    if ESCAPE_RE.match(col):
         return col
     else:
         return '`{}`'.format(col)
+
 
 def string_col(col):
     if 'String' in settings.SCHEMA_MAP[col]:
         return escape_col(col)
     else:
         return 'toString({})'.format(escape_col(col))
+
 
 def column_expr(column_name, body, alias=None, aggregate=None):
     """
@@ -61,7 +67,6 @@ def column_expr(column_name, body, alias=None, aggregate=None):
             # This is the "count()" case where the brackets are already in the aggregate
             expr = aggregate
 
-
     alias = escape_col(alias or column_name or aggregate)
 
     return alias_expr(expr, alias, body)
@@ -88,6 +93,7 @@ def alias_expr(expr, alias, body):
         alias_cache[expr] = alias
         return u'({} AS {})'.format(expr, alias)
 
+
 def tag_expr(column_name):
     """
     Return an expression for the value of a single named tag.
@@ -106,6 +112,7 @@ def tag_expr(column_name):
             'sub': escape_literal(sub)
         })
     return expr
+
 
 def tags_expr(column_name, body):
     """
@@ -135,6 +142,7 @@ def tags_expr(column_name, body):
     # to refer to it next time instead of expanding it again.
     expr = alias_expr(expr, 'all_tags', body)
     return u'({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
+
 
 def is_condition(cond_or_list):
     return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
@@ -234,8 +242,8 @@ def issue_expr(body, hash_column='primary_hash'):
     """
     cond = flat_conditions(body.get('conditions', []))
     used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-          [set(lit) for (col, op, lit) in cond if col ==
-           'issue' and op == 'IN' and isinstance(lit, list)]
+        [set(lit) for (col, op, lit) in cond if col ==
+     'issue' and op == 'IN' and isinstance(lit, list)]
     used_ids = set.union(*used_ids) if used_ids else None
 
     issue_ids = []
@@ -260,16 +268,15 @@ def issue_expr(body, hash_column='primary_hash'):
     if len(hashes) == 0:
         return ''
     return ('ANY INNER JOIN '
-                '(SELECT arrayJoin('
-                    'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
-                    'tupleElement(map, 1) as {col},'
-                    'tupleElement(map, 2) as issue'
+            '(SELECT arrayJoin('
+            'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
+            'tupleElement(map, 1) as {col},'
+            'tupleElement(map, 2) as issue'
             ') USING {col}').format(
         issue_ids=','.join(issue_ids),
         hashes=','.join(hashes),
         col=hash_column
     )
-
 
 
 def validate_request(schema):

@@ -175,7 +175,7 @@ SCHEMA_COLUMNS = [
     # promoted tags
     ('level', 'Nullable(String)'),
     ('logger', 'Nullable(String)'),
-    ('server_name', 'Nullable(String)'), # future name: device_id?
+    ('server_name', 'Nullable(String)'),  # future name: device_id?
     ('transaction', 'Nullable(String)'),
     ('environment', 'Nullable(String)'),
     ('sentry:release', 'Nullable(String)'),
