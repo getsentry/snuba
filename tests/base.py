@@ -15,10 +15,11 @@ class BaseTest(object):
 
         self.event = self.wrap_raw_event(raw_event)
 
+        self.database = 'default'
         self.table = 'test'
         self.conn = Client('localhost')
         self.conn.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.conn.execute(util.get_table_definition('test', 'Memory', settings.SCHEMA_COLUMNS))
+        self.conn.execute(util.get_table_definition('test', util.get_test_engine(), settings.SCHEMA_COLUMNS))
 
     def teardown_method(self, test_method):
         self.conn.execute("DROP TABLE IF EXISTS %s" % self.table)

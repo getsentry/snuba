@@ -214,7 +214,9 @@ if application.debug or application.testing:
             rows.append(row)
 
         with Clickhouse() as clickhouse:
-            clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
+            clickhouse.execute(
+                util.get_table_definition(TEST_TABLE, util.util.get_test_engine(), settings.SCHEMA_COLUMNS)
+            )
             write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})

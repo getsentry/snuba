@@ -4,7 +4,9 @@ from snuba import settings
 
 
 class Clickhouse(object):
-    def __init__(self, host=settings.CLICKHOUSE_SERVER.split(':')[0], port=int(settings.CLICKHOUSE_SERVER.split(':')[1])):
+    def __init__(self,
+                 host=settings.CLICKHOUSE_SERVER.split(':')[0],
+                 port=int(settings.CLICKHOUSE_SERVER.split(':')[1])):
         self.host = host
         self.port = port
 
