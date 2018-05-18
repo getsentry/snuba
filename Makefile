@@ -7,7 +7,7 @@ else
 endif
 
 test:
-	SNUBA_SETTINGS=test py.test -vv
+	SNUBA_SETTINGS=test py.test -svv
 
 install-python-dependencies:
 	@pip install -q -r requirements.txt
