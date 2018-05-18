@@ -1,6 +1,8 @@
 from base import BaseTest
 
+from snuba import util
 from snuba.util import *
+from mock import patch
 
 
 class TestUtil(BaseTest):
@@ -9,11 +11,40 @@ class TestUtil(BaseTest):
         body = {
             'granularity': 86400
         }
+        # Single tag expression
         assert column_expr('tags[foo]', body.copy()) ==\
             "(tags.value[indexOf(tags.key, \'foo\')] AS `tags[foo]`)"
 
+        # All tags expression
+        with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['level', 'sentry:user']}):
+            assert column_expr('tags_key', body.copy()) == (
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
+                'arrayConcat([\'level\', \'sentry:user\'], tags.key), '
+                'arrayConcat([level, `sentry:user`], tags.value))) '
+                'AS all_tags))[1] AS `tags_key`)'
+            )
+
         assert column_expr('time', body.copy()) ==\
-            "(toDate(timestamp) AS `time`)"
+            "(toDate(timestamp) AS time)"
+
+        assert column_expr('col', body.copy(), aggregate='sum') ==\
+            "(sum(col) AS col)"
+
+        assert column_expr(None, body.copy(), aggregate='sum') ==\
+            "sum"  # This should probably be an error as its an aggregate with no column
+
+        assert column_expr('col', body.copy(), alias='summation', aggregate='sum') ==\
+            "(sum(col) AS summation)"
+
+        # Special cases where count() doesn't need a column
+        assert column_expr('', body.copy(), aggregate='count()') ==\
+            "(count() AS `count()`)"
+
+        assert column_expr('', body.copy(), alias='aggregate', aggregate='count()') ==\
+            "(count() AS aggregate)"
+
+        # Columns that need escaping
+        assert column_expr('sentry:release', body.copy()) == '`sentry:release`'
 
     def test_escape(self):
         assert escape_literal("'") == r"'\''"

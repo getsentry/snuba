@@ -19,8 +19,25 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
+ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
+
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
+
+
+def escape_col(col):
+    if ESCAPE_RE.match(col):
+        return col
+    else:
+        return '`{}`'.format(col)
+
+
+def string_col(col):
+    if 'String' in settings.SCHEMA_MAP[col]:
+        return escape_col(col)
+    else:
+        return 'toString({})'.format(escape_col(col))
 
 
 def column_expr(column_name, body, alias=None, aggregate=None):
@@ -34,55 +51,23 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     assert column_name or aggregate
     column_name = column_name or ''
 
-    if alias is None:
-        alias = column_name if column_name else aggregate
-
     if column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS.get(body['granularity'], settings.DEFAULT_TIME_GROUP)
     elif settings.NESTED_COL_EXPR.match(column_name):
-        # For tags/contexts, we expand the expression depending on whether the tag is
-        # "promoted" to a top level column, or whether we have to look in the tags map.
-        match = settings.NESTED_COL_EXPR.match(column_name)
-        col, sub = match.group(1), match.group(2)
-        sub_field = sub.replace('.', '_')
-        if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
-            expr = sub_field  # TODO recurse?
-        else:
-            expr = u'{col}.value[indexOf({col}.key, {sub})]'.format(**{
-                'col': col,
-                'sub': escape_literal(sub)
-            })
+        expr = tag_expr(column_name)
     elif column_name in ['tags_key', 'tags_value']:
-        # For special columns `tags_key` and `tags_value` we construct a an interesting
-        # arrayjoin that enumerates all promoted and non-promoted keys. This is for
-        # cases where we do not have a tag key to filter on (eg top tags).
-        col, typ = column_name.split('_', 1)
-        promoted = settings.PROMOTED_COLS[col]
-
-        key_list = u'arrayConcat([{}], {}.key)'.format(
-            u', '.join(u'\'{}\''.format(p) for p in promoted),
-            col
-        )
-        val_list = u'arrayConcat([{}], {}.value)'.format(
-            # TODO os_rooted is actually the only one that needs a toString()
-            ', '.join('toString({})'.format(p) for p in promoted),
-            col
-        )
-        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
-            key_list,
-            val_list
-        )
-        # alias sub-expression for later reuse
-        expr = alias_expr(expr, 'all_tags', body)
-        expr = u'({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
+        expr = tags_expr(column_name, body)
     else:
-        expr = column_name
+        expr = escape_col(column_name)
 
-    if aggregate is not None:
-        if not expr:
-            expr = aggregate
-        else:
+    if aggregate:
+        if expr:
             expr = u'{}({})'.format(aggregate, expr)
+        else:
+            # This is the "count()" case where the brackets are already in the aggregate
+            expr = aggregate
+
+    alias = escape_col(alias or column_name or aggregate)
 
     return alias_expr(expr, alias, body)
 
@@ -103,10 +88,60 @@ def alias_expr(expr, alias, body):
     if expr == alias:
         return expr
     elif expr in alias_cache:
-        return u'`{}`'.format(alias_cache[expr])
+        return alias_cache[expr]
     else:
         alias_cache[expr] = alias
-        return u'({} AS `{}`)'.format(expr, alias)
+        return u'({} AS {})'.format(expr, alias)
+
+
+def tag_expr(column_name):
+    """
+    Return an expression for the value of a single named tag.
+
+    For tags/contexts, we expand the expression depending on whether the tag is
+    "promoted" to a top level column, or whether we have to look in the tags map.
+    """
+    match = settings.NESTED_COL_EXPR.match(column_name)
+    col, sub = match.group(1), match.group(2)
+    sub_field = sub.replace('.', '_')
+    if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
+        expr = escape_col(sub_field)  # TODO recurse?
+    else:
+        expr = u'{col}.value[indexOf({col}.key, {sub})]'.format(**{
+            'col': col,
+            'sub': escape_literal(sub)
+        })
+    return expr
+
+
+def tags_expr(column_name, body):
+    """
+    Return an expression enumerating all tags as rows
+
+    For special columns `tags_key` and `tags_value` we construct a an interesting
+    arrayjoin that enumerates all promoted and non-promoted keys. This is for
+    cases where we do not have a tag key to filter on (eg top tags).
+    """
+    assert column_name in ['tags_key', 'tags_value']
+    col, typ = column_name.split('_', 1)
+    promoted = settings.PROMOTED_COLS[col]
+
+    key_list = u'arrayConcat([{}], {}.key)'.format(
+        u', '.join(u'\'{}\''.format(p) for p in promoted),
+        col
+    )
+    val_list = u'arrayConcat([{}], {}.value)'.format(
+        ', '.join(string_col(p) for p in promoted),
+        col
+    )
+    expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
+        key_list,
+        val_list
+    )
+    # put the tag expression in the alias cache so we can use the alias
+    # to refer to it next time instead of expanding it again.
+    expr = alias_expr(expr, 'all_tags', body)
+    return u'({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
 
 
 def is_condition(cond_or_list):
@@ -186,7 +221,7 @@ def raw_query(sql, client):
         if col['type'] == "DateTime":
             for d in data:
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
-        if col['type'] == "Date":
+        elif col['type'] == "Date":
             for d in data:
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
@@ -207,8 +242,8 @@ def issue_expr(body, hash_column='primary_hash'):
     """
     cond = flat_conditions(body.get('conditions', []))
     used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-          [set(lit) for (col, op, lit) in cond if col ==
-           'issue' and op == 'IN' and isinstance(lit, list)]
+        [set(lit) for (col, op, lit) in cond if col ==
+     'issue' and op == 'IN' and isinstance(lit, list)]
     used_ids = set.union(*used_ids) if used_ids else None
 
     issue_ids = []
@@ -233,16 +268,15 @@ def issue_expr(body, hash_column='primary_hash'):
     if len(hashes) == 0:
         return ''
     return ('ANY INNER JOIN '
-                '(SELECT arrayJoin('
-                    'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
-                    'tupleElement(map, 1) as {col},'
-                    'tupleElement(map, 2) as issue'
+            '(SELECT arrayJoin('
+            'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
+            'tupleElement(map, 1) as {col},'
+            'tupleElement(map, 2) as issue'
             ') USING {col}').format(
         issue_ids=','.join(issue_ids),
         hashes=','.join(hashes),
         col=hash_column
     )
-
 
 
 def validate_request(schema):
@@ -320,7 +354,7 @@ def time_request(name):
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """
     CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-        'columns': columns,
+        'columns': ', '.join('{} {}'.format(escape_col(col), type_) for col, type_ in columns),
         'engine': engine,
         'name': name,
     }

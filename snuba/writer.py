@@ -33,7 +33,7 @@ def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
 def write_rows(connection, table, columns, rows, types_check=False):
     connection.execute("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-        'colnames': ", ".join(columns),
+        'colnames': ", ".join('`{}`'.format(c) for c in columns),
         'table': table,
     }, rows, types_check=types_check)
 

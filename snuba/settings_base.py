@@ -43,16 +43,18 @@ METADATA_COLUMNS = [
     'partition',
 ]
 PROMOTED_TAGS = [
+    # These are the classic tags.
     'level',
     'logger',
     'server_name',
     'transaction',
     'environment',
-    'release',
-    'dist',
-    'user',
+    'sentry:release',
+    'sentry:dist',
+    'sentry:user',
     'site',
     'url',
+    # These are still treated as tags for search, but really they are contexts.
     'app_device',
     'device',
     'device_family',
@@ -125,98 +127,97 @@ PROMOTED_COLS = {
     'contexts': PROMOTED_CONTEXTS,
 }
 
+# Column Definitions (Name, Type)
+SCHEMA_COLUMNS = [
+    # required
+    ('event_id', 'FixedString(32)'),
+    ('project_id', 'UInt64'),
+    ('timestamp', 'DateTime'),
+    ('deleted', 'UInt8'),
+    ('retention_days', 'UInt16'),
 
-# Table Definitions
-SCHEMA_COLUMNS = """
-    -- required
-    event_id FixedString(32),
-    project_id UInt64,
-    timestamp DateTime,
-    deleted UInt8,
-    retention_days UInt16,
+    # required for non-deleted
+    ('platform', 'Nullable(String)'),
+    ('message', 'Nullable(String)'),
+    ('primary_hash', 'Nullable(FixedString(32))'),
+    ('received', 'Nullable(DateTime)'),
 
-    -- required for non-deleted
-    platform Nullable(String),
-    message Nullable(String),
-    primary_hash Nullable(FixedString(32)),
-    received Nullable(DateTime),
+    # optional user
+    ('user_id', 'Nullable(String)'),
+    ('username', 'Nullable(String)'),
+    ('email', 'Nullable(String)'),
+    ('ip_address', 'Nullable(String)'),
 
-    -- optional user
-    user_id Nullable(String),
-    username Nullable(String),
-    email Nullable(String),
-    ip_address Nullable(String),
+    # optional misc
+    ('sdk_name', 'Nullable(String)'),
+    ('sdk_version', 'Nullable(String)'),
 
-    -- optional misc
-    sdk_name Nullable(String),
-    sdk_version Nullable(String),
+    # optional stream related data
+    ('offset', 'Nullable(UInt64)'),
+    ('partition', 'Nullable(UInt16)'),
 
-    -- optional stream related data
-    offset Nullable(UInt64),
-    partition Nullable(UInt16),
+    # contexts
+    ('os_build', 'Nullable(String)'),
+    ('os_kernel_version', 'Nullable(String)'),
+    ('device_name', 'Nullable(String)'),
+    ('device_brand', 'Nullable(String)'),
+    ('device_locale', 'Nullable(String)'),
+    ('device_uuid', 'Nullable(String)'),
+    ('device_model', 'Nullable(String)'),
+    ('device_model_id', 'Nullable(String)'),
+    ('device_arch', 'Nullable(String)'),
+    ('device_battery_level', 'Nullable(Float32)'),
+    ('device_orientation', 'Nullable(String)'),
+    ('device_simulator', 'Nullable(UInt8)'),
+    ('device_online', 'Nullable(UInt8)'),
+    ('device_charging', 'Nullable(UInt8)'),
 
-    -- contexts
-    os_build Nullable(String),
-    os_kernel_version Nullable(String),
-    device_name Nullable(String),
-    device_brand Nullable(String),
-    device_locale Nullable(String),
-    device_uuid Nullable(String),
-    device_model Nullable(String),
-    device_model_id Nullable(String),
-    device_arch Nullable(String),
-    device_battery_level Nullable(Float32),
-    device_orientation Nullable(String),
-    device_simulator Nullable(UInt8),
-    device_online Nullable(UInt8),
-    device_charging Nullable(UInt8),
+    # promoted tags
+    ('level', 'Nullable(String)'),
+    ('logger', 'Nullable(String)'),
+    ('server_name', 'Nullable(String)'),  # future name: device_id?
+    ('transaction', 'Nullable(String)'),
+    ('environment', 'Nullable(String)'),
+    ('sentry:release', 'Nullable(String)'),
+    ('sentry:dist', 'Nullable(String)'),
+    ('sentry:user', 'Nullable(String)'),
+    ('site', 'Nullable(String)'),
+    ('url', 'Nullable(String)'),
+    ('app_device', 'Nullable(String)'),
+    ('device', 'Nullable(String)'),
+    ('device_family', 'Nullable(String)'),
+    ('runtime', 'Nullable(String)'),
+    ('runtime_name', 'Nullable(String)'),
+    ('browser', 'Nullable(String)'),
+    ('browser_name', 'Nullable(String)'),
+    ('os', 'Nullable(String)'),
+    ('os_name', 'Nullable(String)'),
+    ('os_rooted', 'Nullable(UInt8)'),
 
-    -- promoted tags
-    level Nullable(String),
-    logger Nullable(String),
-    server_name Nullable(String), -- future name: device_id?
-    transaction Nullable(String),
-    environment Nullable(String),
-    release Nullable(String), -- sentry:release
-    dist Nullable(String), -- sentry:dist
-    user Nullable(String), -- sentry:user
-    site Nullable(String),
-    url Nullable(String),
-    app_device Nullable(String),
-    device Nullable(String),
-    device_family Nullable(String),
-    runtime Nullable(String),
-    runtime_name Nullable(String),
-    browser Nullable(String),
-    browser_name Nullable(String),
-    os Nullable(String),
-    os_name Nullable(String),
-    os_rooted Nullable(UInt8),
-
-    -- other tags
-    tags Nested (
+    # other tags
+    ('tags', '''Nested (
         key String,
         value String
-    ),
+    )'''),
 
-    -- other context
-    contexts Nested (
+    # other context
+    ('contexts', '''Nested (
         key String,
         value String
-    ),
+    )'''),
 
-    -- interfaces
+    # interfaces
 
-    -- http interface
-    http_method Nullable(String),
-    http_referer Nullable(String),
+    # http interface
+    ('http_method', 'Nullable(String)'),
+    ('http_referer', 'Nullable(String)'),
 
-    -- exception interface
-    exception_stacks Nested (
+    # exception interface
+    ('exception_stacks', '''Nested (
         type Nullable(String),
         value Nullable(String)
-    ),
-    exception_frames Nested (
+    )'''),
+    ('exception_frames', '''Nested (
         abs_path Nullable(String),
         filename Nullable(String),
         package Nullable(String),
@@ -226,8 +227,10 @@ SCHEMA_COLUMNS = """
         colno Nullable(UInt32),
         lineno Nullable(UInt32),
         stack_level UInt16
-    )
-"""
+    )'''),
+]
+
+SCHEMA_MAP = dict(SCHEMA_COLUMNS)
 
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
