@@ -116,6 +116,7 @@ def extract_promoted_tags(output, tags):
     ]
     output.update({name: _unicodify(tags.pop(name, None)) for name in names})
 
+
 def extract_promoted_contexts(output, contexts, tags):
     app_ctx = contexts.get('app', {})
     output['app_device'] = _unicodify(tags.pop('app.device', None))
@@ -318,7 +319,7 @@ class ProcessorWorker(AbstractBatchWorker):
         processed['offset'] = message.offset()
         processed['partition'] = message.partition()
 
-        key = get_key(value).encode('utf-8')
+        key = get_key(processed).encode('utf-8')
         ret = json.dumps(processed).encode('utf-8')
         return (key, ret)
 

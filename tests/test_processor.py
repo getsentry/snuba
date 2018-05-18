@@ -397,7 +397,7 @@ class TestProcessor(BaseTest):
         class FakeMessage(object):
             def value(self):
                 # event doesn't really matter
-                return json.dumps(event)
+                return json.dumps((0, 'insert', event))
 
             def offset(self):
                 return 123
