@@ -47,16 +47,13 @@ def get_active_partitions(clickhouse, database, table):
     return ret
 
 
-def filter_stale_partitions(parts):
-    now = datetime.utcnow()
-    print("now: %s" % now)
+def filter_stale_partitions(parts, as_of=None):
+    if as_of is None:
+        as_of = datetime.utcnow()
 
     ret = []
     for date, retention_days in parts:
-        print("date: %s" % date)
-        print("ret:  %s" % retention_days)
-        print("math: %s" % (now - timedelta(days=retention_days)))
-        if date < (now - timedelta(days=retention_days)):
+        if date < (as_of - timedelta(days=retention_days)):
             ret.append((date, retention_days))
 
     return ret
