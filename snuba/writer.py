@@ -15,7 +15,8 @@ logger = logging.getLogger('snuba.writer')
 def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
     # TODO: clickhouse-driver expects datetimes, would be nice to skip this
     event['timestamp'] = datetime.utcfromtimestamp(event['timestamp'])
-    event['received'] = datetime.utcfromtimestamp(event['received'])
+    if event.get('received'):
+        event['received'] = datetime.utcfromtimestamp(event['received'])
 
     values = []
     for colname in columns:

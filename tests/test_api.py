@@ -344,3 +344,24 @@ class TestApi(BaseTest):
             'project': 1,
         }))
         assert response.status_code == 429
+
+    def test_doesnt_select_deletions(self):
+        query = {
+            'project': 1,
+            'groupby': 'project_id',
+            'aggregations': [
+                ['count()', '', 'count']
+            ]
+        }
+        result1 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+
+        self.write_processed_events([{
+            'event_id': '9' * 32,
+            'project_id': 1,
+            'timestamp': calendar.timegm(self.base_time.timetuple()),
+            'deleted': 1,
+            'retention_days': settings.DEFAULT_RETENTION_DAYS,
+        }])
+
+        result2 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        assert result1['data'] == result2['data']
