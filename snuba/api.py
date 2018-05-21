@@ -108,6 +108,7 @@ def query(validated_body=None, timer=None):
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
         ('project_id', 'IN', project_ids),
+        ('deleted', '=', 0)
     ])
     having_conditions = body['having']
 
