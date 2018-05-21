@@ -15,7 +15,7 @@ class TestProcessor(BaseTest):
         assert str(self.event['project_id']) in key
 
     def test_simple(self):
-        processed = process_message(self.event)
+        _, _, processed = process_message(self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
@@ -23,7 +23,7 @@ class TestProcessor(BaseTest):
         assert isinstance(processed['received'], int)
 
     def test_simple_version_0(self):
-        processed = process_message((0, 'insert', self.event))
+        _, _, processed = process_message((0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
@@ -41,14 +41,14 @@ class TestProcessor(BaseTest):
     def test_unexpected_obj(self):
         self.event['message'] = {'what': 'why is this in the message'}
 
-        processed = process_message(self.event)
+        _, _, processed = process_message(self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = "'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('utf-8')
 
-        processed = process_message(self.event)
+        _, _, processed = process_message(self.event)
 
         assert processed['primary_hash'] == 'ef981cdeac7a4b76bf55f214e1255653'
 
@@ -95,8 +95,8 @@ class TestProcessor(BaseTest):
             'deleted': True,
         })
 
-        output = processor.process_message(message)
-        assert output == {
+        _, _, processed = processor.process_message(message)
+        assert processed == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
             'timestamp': 1520971716,
@@ -405,8 +405,8 @@ class TestProcessor(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ProcessorWorker(producer=None, topic=None)
-        key, val = test_worker.process_message(FakeMessage())
+        test_worker = ProcessorWorker(producer=None, events_topic=None, deletes_topic=None)
+        _, _, val = test_worker.process_message(FakeMessage())
 
         val = json.loads(val)
 

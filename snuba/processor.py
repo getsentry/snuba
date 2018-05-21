@@ -15,6 +15,8 @@ logger = logging.getLogger('snuba.processor')
 
 HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 * 32 - 1
+INSERT = object()
+DELETE = object()
 
 
 def _collapse_uint32(n):
@@ -252,21 +254,36 @@ def extract_stacktraces(output, stacks):
 
 
 def process_message(message):
+    """\
+    Process a raw message into a tuple of (message_type, key, processed_message):
+    * message_type: one of the sentinel values INSERT or DELETE
+    * key: string used for output partitioning
+    * processed_message: dict representing the processed column -> value(s)
+    """
+    message_type = None
+
     if isinstance(message, dict):
         # deprecated unwrapped event message == insert
-        return process_insert(message)
-    if isinstance(message, (list, tuple)) and len(message) >= 2:
+        message_type = INSERT
+        processed = process_insert(message)
+    elif isinstance(message, (list, tuple)) and len(message) >= 2:
         version = message[0]
 
         if version == 0:
             # version 0: (version, type, message)
             type_, event = message[1:]
             if type_ == 'insert':
-                return process_insert(event)
+                message_type = INSERT
+                processed = process_insert(event)
             elif type_ == 'delete':
-                return process_delete(event)
+                message_type = DELETE
+                processed = process_delete(event)
 
-    raise ValueError("Unknown message format: " + str(message))
+    if message_type is None:
+        raise ValueError("Unknown message format: " + str(message))
+
+    key = get_key(processed).encode('utf-8')
+    return (message_type, key, processed)
 
 
 def process_insert(message):
@@ -308,25 +325,29 @@ def process_delete(message):
 
 
 class ProcessorWorker(AbstractBatchWorker):
-    def __init__(self, producer, topic):
+    def __init__(self, producer, events_topic, deletes_topic):
         self.producer = producer
-        self.topic = topic
+        self.events_topic = events_topic
+        self.deletes_topics = deletes_topic
 
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = process_message(value)
+        message_type, key, processed = process_message(value)
         processed['offset'] = message.offset()
         processed['partition'] = message.partition()
 
-        key = get_key(processed).encode('utf-8')
-        ret = json.dumps(processed).encode('utf-8')
-        return (key, ret)
+        return (message_type, key, json.dumps(processed).encode('utf-8'))
 
     def flush_batch(self, batch):
-        for key, value in batch:
+        for message_type, key, value in batch:
+            if message_type is INSERT:
+                topic = self.events_topic
+            elif message_type is DELETE:
+                topic = self.deletes_topics
+
             self.producer.produce(
-                topic=self.topic,
+                topic=topic,
                 key=key,
                 value=value,
             )

@@ -70,7 +70,7 @@ class BatchingKafkaConsumer(object):
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
-    def __init__(self, topic, worker, max_batch_size, max_batch_time, metrics, bootstrap_servers, group_id):
+    def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics, bootstrap_servers, group_id):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -82,9 +82,14 @@ class BatchingKafkaConsumer(object):
         self.batch = []
         self.timer = None
 
-        self.consumer = self.create_consumer(topic, bootstrap_servers, group_id)
+        if not isinstance(topics, (list, tuple)):
+            topics = [topics]
+        elif isinstance(topics, tuple):
+            topics = list(topics)
 
-    def create_consumer(self, topic, bootstrap_servers, group_id):
+        self.consumer = self.create_consumer(topics, bootstrap_servers, group_id)
+
+    def create_consumer(self, topics, bootstrap_servers, group_id):
         consumer_config = {
             'enable.auto.commit': False,
             'bootstrap.servers': ','.join(bootstrap_servers),
@@ -108,7 +113,7 @@ class BatchingKafkaConsumer(object):
             self._flush(force=True)
 
         consumer.subscribe(
-            [topic],
+            topics,
             on_assign=on_partitions_assigned,
             on_revoke=on_partitions_revoked,
         )
