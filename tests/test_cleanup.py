@@ -9,11 +9,6 @@ from snuba.clickhouse import Clickhouse
 
 
 class TestCleanup(BaseTest):
-    def setup_method(self, test_method):
-        super(TestCleanup, self).setup_method(test_method)
-
-        self.clickhouse = Clickhouse('localhost')
-
     def test(self):
         now = datetime(2000, 1, 1)
 

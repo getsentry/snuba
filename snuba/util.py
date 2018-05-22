@@ -1,4 +1,4 @@
-from flask import request, render_template
+from flask import request
 
 from datetime import date, datetime
 from dateutil.tz import tz
@@ -7,9 +7,7 @@ from itertools import chain
 import logging
 import jsonschema
 import numbers
-import os
 import re
-import requests
 import six
 import time
 
@@ -20,6 +18,8 @@ logger = logging.getLogger('snuba.util')
 
 
 ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
+# example partition name: "('2018-03-13 00:00:00', 90)"
+PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
 
 def to_list(value):
@@ -349,6 +349,17 @@ def time_request(name):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def decode_part_str(part_str):
+    match = PART_RE.match(part_str)
+    if not match:
+        raise ValueError("Unknown part name/format: " + str(part))
+
+    date_str, retention_days = match.groups()
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+
+    return (date, int(retention_days))
 
 
 def force_bytes(s):

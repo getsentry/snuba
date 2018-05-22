@@ -78,7 +78,8 @@ class TestApi(BaseTest):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        res = self.conn.execute("SELECT count() FROM %s" % self.table)
+        with self.clickhouse as ch:
+            res = ch.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
         rollup_mins = 60
