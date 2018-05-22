@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import logging
 import redis
 import simplejson as json
+import six
 import time
 import uuid
 
@@ -23,6 +24,10 @@ rate_lookback_s = 60
 rate_history_s = 3600
 
 
+ratelimit_prefix = 'snuba-ratelimit:'
+config_prefix = 'snuba-config:'
+queries_list = 'snuba-queries'
+
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     """
@@ -43,7 +48,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
                                   ^
                                  now
     """
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     query_id = uuid.uuid4()
     now = time.time()
 
@@ -78,13 +83,13 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
 
 def get_concurrent(bucket):
     now = time.time()
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     return rds.zcount(bucket, '({:f}'.format(now), '+inf')
 
 
 def get_rates(bucket, rollup=60):
     now = int(time.time())
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
@@ -92,42 +97,51 @@ def get_rates(bucket, rollup=60):
 
 
 def set_config(key, value):
-    key = 'snuba_config:{}'.format(key)
-    try:
-        rds.set(key, value)
-    except Exception as ex:
-        logger.error(ex)
-        pass
+    # If you are setting this key with the prefix already attached,
+    # you are probably making a mistake.
+    assert not key.startswith(config_prefix)
+    if value is None:
+        delete_config(key)
+    else:
+        key = '{}{}'.format(config_prefix, key)
+        try:
+            rds.set(key, value)
+        except Exception as ex:
+            logger.error(ex)
+            pass
+
 
 def set_configs(values):
     for k, v in six.iteritems(values):
         set_config(k, v)
 
 
-def get_config(key, default=None, numeric=True):
-    # If you are setting this key with the config already attached,
+def get_config(key, default=None):
+    # If you are getting this key with the prefix already attached,
     # you are probably making a mistake.
-    assert not key.startswith('snuba_config')
-    key = 'snuba_config:{}'.format(key)
+    assert not key.startswith(config_prefix)
+    key = '{}{}'.format(config_prefix, key)
     try:
         result = rds.get(key)
         if result is not None:
-            if numeric:
-                try:
-                    return int(result)
-                except ValueError:
-                    return default
-            else:
+            try:
+                return int(result)
+            except ValueError:
                 return result
     except Exception as ex:
         logger.error(ex)
         pass
     return default
 
+
 def get_configs():
+    keys = rds.keys('{}*'.format(config_prefix))
+    keys = [k[len(config_prefix):] for k in keys]
+    values = [get_config(k) for k in keys]
+    return dict(zip(keys, values))
 
 def delete_config(key):
-    key = 'snuba_config:{}'.format(key)
+    key = '{}{}'.format(config_prefix, key)
     try:
         rds.delete(key)
     except Exception as ex:
@@ -140,8 +154,8 @@ def record_query(data):
     data = json.dumps(data, for_json=True)
     try:
         rds.pipeline(transaction=False)\
-            .lpush('snuba_queries', data)\
-            .ltrim('snuba_queries', 0, max_queries - 1)\
+            .lpush(queries_list, data)\
+            .ltrim(queries_list, 0, max_queries - 1)\
             .execute()
     except Exception as ex:
         logger.error(ex)
@@ -151,7 +165,7 @@ def record_query(data):
 def get_queries():
     try:
         queries = []
-        for q in rds.lrange('snuba_queries', 0, -1):
+        for q in rds.lrange(queries_list, 0, -1):
             try:
                 queries.append(json.loads(q))
             except BaseException:

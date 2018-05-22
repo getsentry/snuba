@@ -70,13 +70,14 @@ def dashboard(fmt='html'):
         return application.send_static_file('dashboard.html')
 
 @application.route('/config')
-@application.route('/config.<fmt>')
+@application.route('/config.<fmt>', methods=['GET', 'POST'])
 def config(fmt='html'):
     if fmt == 'json':
         if request.method == 'GET':
             return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
         elif request.method == 'POST':
             state.set_configs(json.loads(request.data))
+            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('config.html')
 
