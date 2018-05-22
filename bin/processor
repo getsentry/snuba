@@ -1,5 +1,20 @@
 #!/usr/bin/env python
 
+"""
+The Processor consumes the Sentry raw events topic and produces fully
+"processed" inserts and deletes to different Kafka topics. "Processed" means
+they are ready for insertion into Clickhouse by downstream writers.
+
+Inserts and deletes can be produced to the same topic or different ones.
+Ordering of inserts and deletes is not a concern because we use a
+ReplacingMergeTree that is versioned on the `deleted` column, so deletes will
+always win during a merge, even if they were written before their matching
+event. The reason we allow inserts and deletes to be split up is that different
+sets of downstream writers can work on different sets of messages, which
+prevents a large project deletion from backing up insert writes. In a way, the
+two topics can be thought of as priority levels.
+"""
+
 import logging
 import signal
 
