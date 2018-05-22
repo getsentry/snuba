@@ -202,6 +202,7 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
+        from snuba.clickhouse import get_table_definition, get_test_engine
         from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
@@ -214,7 +215,9 @@ if application.debug or application.testing:
             rows.append(row)
 
         with Clickhouse() as clickhouse:
-            clickhouse.execute(util.get_table_definition(TEST_TABLE, 'Memory', settings.SCHEMA_COLUMNS))
+            clickhouse.execute(
+                get_table_definition(TEST_TABLE, get_test_engine(), settings.SCHEMA_COLUMNS)
+            )
             write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
