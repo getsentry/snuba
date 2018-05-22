@@ -51,12 +51,11 @@ def filter_stale_partitions(parts, as_of=None):
     if as_of is None:
         as_of = datetime.utcnow()
 
-    ret = []
-    for date, retention_days in parts:
-        if date < (as_of - timedelta(days=retention_days)):
-            ret.append((date, retention_days))
-
-    return ret
+    return [
+        (date, retention_days) for date, retention_days
+        in parts
+        if date < (as_of - timedelta(days=retention_days))
+    ]
 
 
 def drop_partitions(clickhouse, database, table, parts, dry_run=True):
