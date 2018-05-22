@@ -7,7 +7,9 @@ import click
 from raven import Client as RavenClient
 
 from snuba import settings
-from snuba.clickhouse import Clickhouse
+from snuba.clickhouse import (
+    Clickhouse, get_table_definition, get_replicated_engine, get_distributed_engine
+)
 from snuba.consumer import BatchingKafkaConsumer
 from snuba.writer import WriterWorker
 from snuba import util
@@ -45,13 +47,16 @@ def run(processed_events_topic, consumer_group, bootstrap_server, clickhouse_ser
     clickhouse = Clickhouse(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
 
     # ensure tables exist
-    LOCAL_TABLE_DEFINITION = util.get_table_definition(
-        local_table_name, util.get_replicated_engine(name=local_table_name))
-    DIST_TABLE_DEFINITION = util.get_table_definition(distributed_table_name, util.get_distributed_engine(
-        cluster='cluster1',
-        database='default',
-        local_table=local_table_name,
-    ))
+    LOCAL_TABLE_DEFINITION = get_table_definition(
+        local_table_name, get_replicated_engine(name=local_table_name))
+    DIST_TABLE_DEFINITION = get_table_definition(
+        distributed_table_name,
+        get_distributed_engine(
+            cluster='cluster1',
+            database='default',
+            local_table=local_table_name,
+        )
+    )
 
     with clickhouse as ch:
         ch.execute(LOCAL_TABLE_DEFINITION)

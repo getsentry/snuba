@@ -54,10 +54,7 @@ def filter_stale_partitions(parts, as_of=None):
     if as_of is None:
         as_of = datetime.utcnow()
 
-    return filter(
-        lambda part: part[0] < (as_of - timedelta(days=part[1])),
-        parts
-    )
+    return [part for part in parts if part[0] < (as_of - timedelta(days=part[1]))]
 
 
 def drop_partitions(clickhouse, database, table, parts, dry_run=True):
