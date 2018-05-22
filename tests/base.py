@@ -1,6 +1,8 @@
 from hashlib import md5
+import time
+import uuid
 
-from snuba import settings, util
+from snuba import settings
 from snuba.clickhouse import Clickhouse, get_table_definition, get_test_engine
 from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, write_rows
@@ -21,6 +23,16 @@ class BaseTest(object):
         with self.clickhouse as ch:
             ch.execute("DROP TABLE IF EXISTS %s" % self.table)
             ch.execute(get_table_definition('test', get_test_engine(), settings.SCHEMA_COLUMNS))
+
+    def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
+        event = {
+            'event_id': uuid.uuid4().hex,
+            'project_id': 1,
+            'deleted': 0,
+        }
+        event['timestamp'] = time.mktime(dt.timetuple())
+        event['retention_days'] = retention_days
+        return event
 
     def teardown_method(self, test_method):
         with self.clickhouse as ch:
