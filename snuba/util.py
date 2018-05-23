@@ -52,7 +52,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     column_name = column_name or ''
 
     if column_name == settings.TIME_GROUP_COLUMN:
-        expr = settings.TIME_GROUP(body['granularity'])
+        expr = settings.TIME_GROUPS[body['granularity']]
     elif settings.NESTED_COL_EXPR.match(column_name):
         expr = tag_expr(column_name)
     elif column_name in ['tags_key', 'tags_value']:
