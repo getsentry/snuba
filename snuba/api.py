@@ -56,6 +56,10 @@ def root():
 def send_css(path):
     return application.send_static_file(os.path.join('css', path))
 
+@application.route('/img/<path:path>')
+def send_img(path):
+    return application.send_static_file(os.path.join('img', path))
+
 @application.route('/dashboard')
 @application.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
