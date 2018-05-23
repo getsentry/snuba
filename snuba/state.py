@@ -25,7 +25,7 @@ rate_history_s = 3600
 
 
 ratelimit_prefix = 'snuba-ratelimit:'
-config_prefix = 'snuba-config:'
+config_hash = 'snuba-config'
 queries_list = 'snuba-queries'
 
 @contextmanager
@@ -97,15 +97,11 @@ def get_rates(bucket, rollup=60):
 
 
 def set_config(key, value):
-    # If you are setting this key with the prefix already attached,
-    # you are probably making a mistake.
-    assert not key.startswith(config_prefix)
     if value is None:
         delete_config(key)
     else:
-        key = '{}{}'.format(config_prefix, key)
         try:
-            rds.set(key, value)
+            rds.hset(config_hash, key, value)
         except Exception as ex:
             logger.error(ex)
             pass
@@ -117,12 +113,8 @@ def set_configs(values):
 
 
 def get_config(key, default=None):
-    # If you are getting this key with the prefix already attached,
-    # you are probably making a mistake.
-    assert not key.startswith(config_prefix)
-    key = '{}{}'.format(config_prefix, key)
     try:
-        result = rds.get(key)
+        result = rds.hget(config_hash, key)
         if result is not None:
             try:
                 return int(result)
@@ -135,15 +127,18 @@ def get_config(key, default=None):
 
 
 def get_configs():
-    keys = rds.keys('{}*'.format(config_prefix))
-    keys = [k[len(config_prefix):] for k in keys]
-    values = [get_config(k) for k in keys]
-    return dict(zip(keys, values))
+    result = dict(rds.hgetall(config_hash))
+    for k in result:
+        try:
+            result[k] = int(result[k])
+        except ValueError:
+            pass
+    return result
+
 
 def delete_config(key):
-    key = '{}{}'.format(config_prefix, key)
     try:
-        rds.delete(key)
+        rds.hdel(config_hash, key)
     except Exception as ex:
         logger.error(ex)
         pass
