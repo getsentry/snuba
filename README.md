@@ -19,7 +19,8 @@ Snuba exposes an HTTP API with the following endpoints.
 
 - [/](/): Shows this page.
 - [/dashboard](/dashboard): Query dashboard
-- [/query](/query): GET endpoint for querying clickhouse.
+- [/query](/query): Endpoint for querying clickhouse.
+- [/config](/config): Console for runtime config options
 
 ## Settings
 

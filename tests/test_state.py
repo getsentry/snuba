@@ -64,3 +64,13 @@ class TestState(BaseTest):
         with patch.object(state.time, 'time', lambda: 61):
             with state.rate_limit(bucket, per_second_limit=1) as allowed:
                 assert allowed
+
+    def test_config(self):
+        state.set_config('foo', 1)
+        state.set_configs({'bar': 2, 'baz': 3})
+        assert state.get_config('foo') == 1
+        assert state.get_config('bar') == 2
+        assert state.get_configs() == {'foo': 1, 'bar': 2, 'baz': 3}
+
+        state.set_configs({'bar': 'quux'})
+        assert state.get_configs() == {'foo': 1, 'bar': 'quux', 'baz': 3}
