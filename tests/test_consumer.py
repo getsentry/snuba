@@ -25,18 +25,18 @@ class FakeKafkaConsumer(object):
         self.commit_calls = 0
         self.close_calls = 0
 
-    def poll(self, timeout=None):
+    def poll(self, *args, **kwargs):
         return FakeKafkaMessage(self.items.pop(0))
 
-    def commit(self, asynchronous):
+    def commit(self, *args, **kwargs):
         self.commit_calls += 1
 
-    def close(self):
+    def close(self, *args, **kwargs):
         self.close_calls += 1
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, topic, bootstrap_servers, group_id):
+    def create_consumer(self, *args, **kwargs):
         return FakeKafkaConsumer()
 
 
