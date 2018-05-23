@@ -53,7 +53,7 @@ class TestApi(BaseTest):
         for tick in range(self.minutes):
             tock = tick + 1
             for p in self.project_ids:
-                # project N sends an event every Nth second
+                # project N sends an event every Nth minute
                 if tock % p == 0:
                     events.append({
                         'project_id': p,
@@ -94,6 +94,22 @@ class TestApi(BaseTest):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
                 assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result['data'][b]['aggregate'] == float(rollup_mins) / p
+
+    def test_rollups(self):
+        for rollup_mins in (1, 2, 15, 30, 60):
+            # Note for buckets bigger than 1 hour, the results may not line up
+            # with self.base_time as base_time is not necessarily on a bucket boundary
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'granularity': rollup_mins * 60,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat()
+            })).data)
+            buckets = self.minutes / rollup_mins
+            for b in range(buckets):
+                bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
+                assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
+                assert result['data'][b]['aggregate'] == rollup_mins # project 1 has 1 event per minute
 
     def test_issues(self):
         """

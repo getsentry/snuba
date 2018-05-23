@@ -30,7 +30,8 @@ TIME_GROUPS = {
     60: 'toStartOfMinute(timestamp)',
     86400: 'toDate(timestamp)',
 }
-DEFAULT_TIME_GROUP = 'toDate(timestamp)'
+TIME_GROUP = lambda sec: TIME_GROUPS.get(sec, 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(sec))
+
 TIME_GROUP_COLUMN = 'time'
 
 # Processor/Writer Options
