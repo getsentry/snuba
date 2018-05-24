@@ -41,6 +41,17 @@ Settings are found in `settings.py`
 
 ## Querying
 
+Try out queries on the [query console](/query)
+
+### Issues / Groups
+
+Because events can be reassigned to different issues through merging, and
+because snuba does not support updates, we cannot store the issue id for an
+event in snuba. If you want to filter or group by `issue`, you need to pass a
+list of `issues` into the query.  This list is a mapping from issue ids to the
+event `primary_hash`es in that issue. Snuba automatically expands this mapping
+into the query so that filters/grouping on `issue` will just work.
+
 ### Tags
 
 Event tags are stored in one of 2 ways. Promoted tags are the ones we expect to
