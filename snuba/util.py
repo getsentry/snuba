@@ -251,8 +251,6 @@ def issue_expr(body, hash_column='primary_hash'):
     issue_ids = []
     hashes = []
 
-    # NB the number of issues in the request is already limited by the schema.
-    # This is for further limiting at runtime.
     max_issues = state.get_config('max_issues')
     max_hashes_per_issue = state.get_config('max_hashes_per_issue')
     issues = body['issues']
@@ -267,18 +265,20 @@ def issue_expr(body, hash_column='primary_hash'):
             issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
             hashes.extend('\'{}\''.format(h) for h in issue_hashes)
     assert len(issue_ids) == len(hashes)
-    if len(hashes) == 0:
+
+    if hashes or used_ids or 'issue' in to_list(body['groupby']):
+        return ('ANY INNER JOIN '
+                '(SELECT arrayJoin('
+                'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
+                'tupleElement(map, 1) as {col},'
+                'tupleElement(map, 2) as issue'
+                ') USING {col}').format(
+            issue_ids=','.join(issue_ids),
+            hashes=','.join(hashes),
+            col=hash_column
+        )
+    else:
         return ''
-    return ('ANY INNER JOIN '
-            '(SELECT arrayJoin('
-            'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
-            'tupleElement(map, 1) as {col},'
-            'tupleElement(map, 2) as issue'
-            ') USING {col}').format(
-        issue_ids=','.join(issue_ids),
-        hashes=','.join(hashes),
-        col=hash_column
-    )
 
 
 def validate_request(schema):
