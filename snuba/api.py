@@ -230,7 +230,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            processed = process_message(event)
+            _, _, processed = process_message(event)
             row = row_from_processed_event(processed)
             rows.append(row)
 
