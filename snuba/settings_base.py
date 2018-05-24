@@ -1,5 +1,14 @@
 import re
 import os
+from collections import defaultdict
+
+class dynamicdict(defaultdict):
+    def __missing__(self, key):
+        if self.default_factory:
+            self.__setitem__(key, self.default_factory(key))
+            return self[key]
+        else:
+            return super(dynamicdict, self).__missing__(key)
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
@@ -25,12 +34,15 @@ REDIS_DB = 1
 SENTRY_DSN = 'https://4aa266a7bb2f465aa4a80eca3284b55f:7eb958f65cc743a487b3e319cfc662d8@sentry.io/300688'
 
 # Snuba Options
-TIME_GROUPS = {
-    3600: 'toStartOfHour(timestamp)',
-    60: 'toStartOfMinute(timestamp)',
-    86400: 'toDate(timestamp)',
-}
-DEFAULT_TIME_GROUP = 'toDate(timestamp)'
+TIME_GROUPS = dynamicdict(
+    lambda sec: 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(sec),
+    {
+        3600: 'toStartOfHour(timestamp)',
+        60: 'toStartOfMinute(timestamp)',
+        86400: 'toDate(timestamp)',
+    }
+)
+
 TIME_GROUP_COLUMN = 'time'
 
 # Processor/Writer Options

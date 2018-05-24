@@ -1,11 +1,7 @@
 <html>
 	<head>
       <link rel="stylesheet" href="https://unpkg.com/react-table@latest/react-table.css">
-      <style>
-        body {
-            font-family: "Verdana"
-        }
-      </style>
+      <link rel="stylesheet" href="/css/base.css">
 
       <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react-dom.js"></script>
@@ -30,8 +26,9 @@
           }
 
           render() {
+            let zerobase = true;
             let values = this.state.values || [0];
-            let limits = [Math.max(0, Math.min.apply(this, values) - 1), Math.max.apply(this, values) + 1];
+            let limits = [(zerobase ? 0 : Math.max(0, Math.min.apply(this, values) - 1)), Math.max.apply(this, values) + 1];
             let scale = Math.pow(10, Math.floor(Math.log10(limits[1] - limits[0])));
             let domain = [Math.floor(limits[0] / scale) * scale, Math.ceil(limits[1] / scale) * scale];
             let range = [this.state.height, 0];

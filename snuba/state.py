@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import logging
 import redis
 import simplejson as json
+import six
 import time
 import uuid
 
@@ -23,6 +24,10 @@ rate_lookback_s = 60
 rate_history_s = 3600
 
 
+ratelimit_prefix = 'snuba-ratelimit:'
+config_hash = 'snuba-config'
+queries_list = 'snuba-queries'
+
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     """
@@ -43,7 +48,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
                                   ^
                                  now
     """
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     query_id = uuid.uuid4()
     now = time.time()
 
@@ -78,13 +83,13 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
 
 def get_concurrent(bucket):
     now = time.time()
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     return rds.zcount(bucket, '({:f}'.format(now), '+inf')
 
 
 def get_rates(bucket, rollup=60):
     now = int(time.time())
-    bucket = 'snuba-ratelimit:{}'.format(bucket)
+    bucket = '{}{}'.format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
@@ -92,25 +97,28 @@ def get_rates(bucket, rollup=60):
 
 
 def set_config(key, value):
-    key = 'snuba_config:{}'.format(key)
-    try:
-        rds.set(key, value)
-    except Exception as ex:
-        logger.error(ex)
-        pass
+    if value is None:
+        delete_config(key)
+    else:
+        try:
+            rds.hset(config_hash, key, value)
+        except Exception as ex:
+            logger.error(ex)
+            pass
 
 
-def get_config(key, default=None, numeric=True):
-    key = 'snuba_config:{}'.format(key)
+def set_configs(values):
+    for k, v in six.iteritems(values):
+        set_config(k, v)
+
+
+def get_config(key, default=None):
     try:
-        result = rds.get(key)
+        result = rds.hget(config_hash, key)
         if result is not None:
-            if numeric:
-                try:
-                    return int(result)
-                except ValueError:
-                    return default
-            else:
+            try:
+                return int(result)
+            except ValueError:
                 return result
     except Exception as ex:
         logger.error(ex)
@@ -118,10 +126,19 @@ def get_config(key, default=None, numeric=True):
     return default
 
 
+def get_configs():
+    result = dict(rds.hgetall(config_hash))
+    for k in result:
+        try:
+            result[k] = int(result[k])
+        except ValueError:
+            pass
+    return result
+
+
 def delete_config(key):
-    key = 'snuba_config:{}'.format(key)
     try:
-        rds.delete(key)
+        rds.hdel(config_hash, key)
     except Exception as ex:
         logger.error(ex)
         pass
@@ -132,8 +149,8 @@ def record_query(data):
     data = json.dumps(data, for_json=True)
     try:
         rds.pipeline(transaction=False)\
-            .lpush('snuba_queries', data)\
-            .ltrim('snuba_queries', 0, max_queries - 1)\
+            .lpush(queries_list, data)\
+            .ltrim(queries_list, 0, max_queries - 1)\
             .execute()
     except Exception as ex:
         logger.error(ex)
@@ -143,7 +160,7 @@ def record_query(data):
 def get_queries():
     try:
         queries = []
-        for q in rds.lrange('snuba_queries', 0, -1):
+        for q in rds.lrange(queries_list, 0, -1):
             try:
                 queries.append(json.loads(q))
             except BaseException:

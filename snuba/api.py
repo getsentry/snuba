@@ -52,6 +52,14 @@ def root():
         return render_template('index.html', body=markdown(f.read()))
 
 
+@application.route('/css/<path:path>')
+def send_css(path):
+    return application.send_static_file(os.path.join('css', path))
+
+@application.route('/img/<path:path>')
+def send_img(path):
+    return application.send_static_file(os.path.join('img', path))
+
 @application.route('/dashboard')
 @application.route('/dashboard.<fmt>')
 def dashboard(fmt='html'):
@@ -64,6 +72,18 @@ def dashboard(fmt='html'):
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('dashboard.html')
+
+@application.route('/config')
+@application.route('/config.<fmt>', methods=['GET', 'POST'])
+def config(fmt='html'):
+    if fmt == 'json':
+        if request.method == 'GET':
+            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
+        elif request.method == 'POST':
+            state.set_configs(json.loads(request.data))
+            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
+    else:
+        return application.send_static_file('config.html')
 
 
 @application.route('/health')
@@ -210,7 +230,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            processed = process_message(event)
+            _, _, processed = process_message(event)
             row = row_from_processed_event(processed)
             rows.append(row)
 
