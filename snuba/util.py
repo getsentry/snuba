@@ -63,8 +63,9 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     if aggregate:
         if expr:
             expr = u'{}({})'.format(aggregate, expr)
-        else:
-            # This is the "count()" case where the brackets are already in the aggregate
+            if aggregate == 'uniq': # default uniq() result to 0, not null
+                expr = 'ifNull({}, 0)'.format(expr)
+        else: # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
     alias = escape_col(alias or column_name or aggregate)
