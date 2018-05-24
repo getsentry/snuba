@@ -198,7 +198,6 @@ def query(validated_body=None, timer=None):
                     timer.mark('execute')
 
                 if result.get('error'):
-                    logger.error(result['error'])
                     status = 500
                 else:
                     status = 200

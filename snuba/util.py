@@ -204,12 +204,13 @@ def raw_query(sql, client):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    logger.debug(sql)
     try:
         error = None
         data, meta = client.execute(sql, with_column_types=True)
+        logger.debug(sql)
     except BaseException as ex:
         data, meta, error = [], [], six.text_type(ex)
+        logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
 
     # for now, convert back to a dict-y format to emulate the json
     data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
