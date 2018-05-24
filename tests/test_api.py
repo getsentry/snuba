@@ -381,3 +381,34 @@ class TestApi(BaseTest):
 
         result2 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result1['data'] == result2['data']
+
+    def test_test_endpoints(self):
+        project_id = 73
+        event = {
+            'event_id': '9' * 32,
+            'primary_hash': '1' * 32,
+            'project_id': project_id,
+            'datetime': self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'deleted': 1,
+            'retention_days': settings.DEFAULT_RETENTION_DAYS,
+            'platform': 'python',
+            'message': 'message',
+            'data': {
+                'received': time.mktime(self.base_time.timetuple()),
+            }
+        }
+        response = self.app.post('/tests/insert', data=json.dumps([event]))
+        assert response.status_code == 200
+
+        query = {
+            'project': project_id,
+            'groupby': 'project_id',
+            'aggregations': [
+                ['count()', '', 'count']
+            ]
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        assert result['data'] == [{'count': 1, 'project_id': project_id}]
+
+        assert self.app.post('/tests/drop').status_code == 200
+        assert settings.CLICKHOUSE_TABLE not in self.conn.execute("SHOW TABLES")
