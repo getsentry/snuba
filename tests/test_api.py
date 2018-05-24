@@ -412,4 +412,6 @@ class TestApi(BaseTest):
         assert result['data'] == [{'count': 1, 'project_id': project_id}]
 
         assert self.app.post('/tests/drop').status_code == 200
-        assert settings.CLICKHOUSE_TABLE not in self.conn.execute("SHOW TABLES")
+
+        with self.clickhouse as ch:
+            assert settings.CLICKHOUSE_TABLE not in ch.execute("SHOW TABLES")
