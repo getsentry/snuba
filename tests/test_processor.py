@@ -234,7 +234,7 @@ class TestProcessor(BaseTest):
             'device_name': u'the_device_name',
             'device_online': True,
             'device_orientation': u'the_device_orientation',
-            'device_simulator': None,
+            'device_simulator': False,
             'device_uuid': u'the_device_uuid',
             'os': u'the_os_name the_os_version',
             'os_build': u'the_os_build',
@@ -303,6 +303,21 @@ class TestProcessor(BaseTest):
     def test_extract_stacktraces(self):
         stacks = [
             {'module': 'java.lang',
+             'mechanism': {
+                 'type': 'promise',
+                 'description': 'globally unhandled promise rejection',
+                 'help_link': 'http://example.com',
+                 'handled': False,
+                 'data': {
+                     'polyfill': 'Bluebird'
+                 },
+                 'meta': {
+                     'errno': {
+                         'number': 123112,
+                         'name': ''
+                     }
+                 }
+             },
              'stacktrace': {
                  'frames': [
                      {'abs_path': 'Thread.java',
@@ -389,7 +404,10 @@ class TestProcessor(BaseTest):
             'exception_frames.package': [None, None, None, u'foo.bar', None, None, None],
             'exception_frames.stack_level': [0, 0, 0, 0, 0, 0, 0],
             'exception_stacks.type': [u'ArithmeticException'],
-            'exception_stacks.value': [u'/ by zero']}
+            'exception_stacks.value': [u'/ by zero'],
+            'exception_stacks.mechanism_handled': [False],
+            'exception_stacks.mechanism_type': [u'promise'],
+        }
 
     def test_offsets(self):
         event = self.event

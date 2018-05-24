@@ -26,7 +26,7 @@ def _collapse_uint32(n):
 
 
 def _boolify(s):
-    if not s:
+    if s is None:
         return None
 
     if isinstance(s, bool):
@@ -210,6 +210,8 @@ def extract_http(output, http):
 def extract_stacktraces(output, stacks):
     stack_types = []
     stack_values = []
+    stack_mechanism_types = []
+    stack_mechanism_handled = []
 
     frame_abs_paths = []
     frame_filenames = []
@@ -225,6 +227,10 @@ def extract_stacktraces(output, stacks):
     for stack in stacks:
         stack_types.append(_unicodify(stack.get('type', None)))
         stack_values.append(_unicodify(stack.get('value', None)))
+
+        mechanism = stack.get('mechanism', {})
+        stack_mechanism_types.append(_unicodify(mechanism.get('type', None)))
+        stack_mechanism_handled.append(_boolify(mechanism.get('handled', None)))
 
         frames = stack.get('stacktrace', {}).get('frames', [])
         for frame in frames:
@@ -242,6 +248,8 @@ def extract_stacktraces(output, stacks):
 
     output['exception_stacks.type'] = stack_types
     output['exception_stacks.value'] = stack_values
+    output['exception_stacks.mechanism_type'] = stack_mechanism_types
+    output['exception_stacks.mechanism_handled'] = stack_mechanism_handled
     output['exception_frames.abs_path'] = frame_abs_paths
     output['exception_frames.filename'] = frame_filenames
     output['exception_frames.package'] = frame_packages
