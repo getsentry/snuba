@@ -157,6 +157,17 @@ class TestProcessor(BaseTest):
 
         assert extra_output == {'tags.key': [u'extra_tag'], 'tags.value': [u'extra_value']}
 
+    def test_extract_tags_empty_string(self):
+        # verify our text field extraction doesn't coerce '' to None
+        tags = {
+            'environment': '',
+        }
+        output = {}
+
+        processor.extract_promoted_tags(output, tags)
+
+        assert output['environment'] == u''
+
     def test_extract_contexts(self):
         contexts = {
             'app': {

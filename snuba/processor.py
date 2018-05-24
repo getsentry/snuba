@@ -60,7 +60,7 @@ def _floatify(s):
 
 
 def _unicodify(s):
-    if s in ('', None):  # allow for 0, 0.0, etc
+    if s is None:
         return None
 
     if isinstance(s, dict) or isinstance(s, list):
