@@ -252,3 +252,5 @@ DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
 DEFAULT_LOCAL_TABLE = 'sentry_local'
 DEFAULT_DIST_TABLE = 'sentry_dist'
 DEFAULT_RETENTION_DAYS = 90
+
+RETENTION_OVERRIDES = {}
