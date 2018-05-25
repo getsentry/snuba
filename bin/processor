@@ -55,7 +55,9 @@ def run(raw_events_topic, consumer_group, processed_events_topic, processed_dele
         dogstatsd_host, dogstatsd_port):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
-    metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.processor')
+    metrics = util.create_metrics(
+        dogstatsd_host, dogstatsd_port, 'snuba.processor', tags=["group:%s" % consumer_group]
+    )
 
     producer = Producer({'bootstrap.servers': ','.join(bootstrap_server)})
 
