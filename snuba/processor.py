@@ -78,13 +78,17 @@ def get_key(message):
 
 def extract_required(output, message):
     output['event_id'] = message['event_id']
-    output['project_id'] = message['project_id']
+    project_id = message['project_id']
+    output['project_id'] = project_id
     output['timestamp'] = int(calendar.timegm(
         datetime.strptime(
             message['datetime'],
             "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
 
-    retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
+    if retention_days is None:
+        retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+
     output['retention_days'] = retention_days
 
 
