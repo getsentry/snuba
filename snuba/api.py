@@ -57,6 +57,7 @@ def send_css(path):
     return application.send_static_file(os.path.join('css', path))
 
 @application.route('/img/<path:path>')
+@application.route('/snuba/static/img/<path:path>')
 def send_img(path):
     return application.send_static_file(os.path.join('img', path))
 
