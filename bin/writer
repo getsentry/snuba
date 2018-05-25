@@ -45,7 +45,9 @@ def run(processed_topic, consumer_group, bootstrap_server, clickhouse_server,
         auto_offset_reset, log_level, dogstatsd_host, dogstatsd_port):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
-    metrics = util.create_metrics(dogstatsd_host, dogstatsd_port, 'snuba.writer')
+    metrics = util.create_metrics(
+        dogstatsd_host, dogstatsd_port, 'snuba.writer', tags=["group:%s" % consumer_group]
+    )
     clickhouse = Clickhouse(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
 
     # ensure tables exist
