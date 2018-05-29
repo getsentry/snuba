@@ -299,6 +299,8 @@ def validate_request(schema):
                     body = json.loads(request.data)
                     schemas.validate(body, schema)
                     kwargs['validated_body'] = body
+                    if kwargs.get('timer'):
+                        kwargs['timer'].mark('validate_schema')
                 except (ValueError, jsonschema.ValidationError) as e:
                     result = {'error': str(e), 'schema': schema}
                     return (
