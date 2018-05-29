@@ -26,7 +26,7 @@ def _collapse_uint32(n):
 
 
 def _boolify(s):
-    if not s:
+    if s is None:
         return None
 
     if isinstance(s, bool):

@@ -245,7 +245,7 @@ class TestProcessor(BaseTest):
             'device_name': u'the_device_name',
             'device_online': True,
             'device_orientation': u'the_device_orientation',
-            'device_simulator': None,
+            'device_simulator': False,
             'device_uuid': u'the_device_uuid',
             'os': u'the_os_name the_os_version',
             'os_build': u'the_os_build',
