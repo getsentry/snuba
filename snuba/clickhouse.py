@@ -7,15 +7,21 @@ from snuba import util
 class Clickhouse(object):
     def __init__(self,
                  host=settings.CLICKHOUSE_SERVER.split(':')[0],
-                 port=int(settings.CLICKHOUSE_SERVER.split(':')[1])):
+                 port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
+                 connect_timeout=1,
+                 send_receive_timeout=300,
+                 ):
         self.host = host
         self.port = port
+        self.connect_timeout = connect_timeout
+        self.send_receive_timeout = send_receive_timeout
 
     def __enter__(self):
         self.clickhouse = Client(
             host=self.host,
             port=self.port,
-            connect_timeout=1,
+            connect_timeout=self.connect_timeout,
+            send_receive_timeout=self.send_receive_timeout,
         )
 
         return self.clickhouse

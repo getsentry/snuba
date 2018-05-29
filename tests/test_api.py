@@ -78,7 +78,8 @@ class TestApi(BaseTest):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        res = self.conn.execute("SELECT count() FROM %s" % self.table)
+        with self.clickhouse as ch:
+            res = ch.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
         rollup_mins = 60
@@ -420,4 +421,6 @@ class TestApi(BaseTest):
         assert result['data'] == [{'count': 1, 'project_id': project_id}]
 
         assert self.app.post('/tests/drop').status_code == 200
-        assert settings.CLICKHOUSE_TABLE not in self.conn.execute("SHOW TABLES")
+
+        with self.clickhouse as ch:
+            assert settings.CLICKHOUSE_TABLE not in ch.execute("SHOW TABLES")

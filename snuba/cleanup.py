@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta
 import logging
-import re
+
+from snuba import util
 
 
 logger = logging.getLogger('snuba.cleanup')
 
 
-# example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
 
 def run_cleanup(clickhouse, database, table, dry_run=True):
@@ -19,7 +18,7 @@ def run_cleanup(clickhouse, database, table, dry_run=True):
 
 def get_active_partitions(clickhouse, database, table):
     with clickhouse as ch:
-        parts = ch.execute(
+        response = ch.execute(
             """
             SELECT partition
             FROM system.parts
@@ -33,18 +32,7 @@ def get_active_partitions(clickhouse, database, table):
             }
         )
 
-    ret = []
-    for part in parts:
-        match = PART_RE.match(part[0])
-        if not match:
-            raise ValueError("Unknown part name/format: " + str(part))
-
-        date_str, retention_days = match.groups()
-        date = datetime.strptime(date_str, '%Y-%m-%d')
-
-        ret.append((date, int(retention_days)))
-
-    return ret
+    return [util.decode_part_str(part) for part, in response]
 
 
 def filter_stale_partitions(parts, as_of=None):
