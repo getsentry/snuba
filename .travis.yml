@@ -19,11 +19,7 @@ cache:
   - $CACHE_DIR
 before_install:
   - mkdir -p $CACHE_DIR
-  - sudo apt-key adv --keyserver keyserver.ubuntu.com --recv E0C56BD4
-  - sudo apt-add-repository "deb http://repo.yandex.ru/clickhouse/deb/stable/ main/"
-  - sudo apt-get -qq update
-  - sudo apt-get install clickhouse-server clickhouse-client -y
-  - sudo service clickhouse-server start
+  - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server
   - make install-librdkafka
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
