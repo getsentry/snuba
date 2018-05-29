@@ -118,6 +118,8 @@ WRITER_COLUMNS = [
     'http_referer',
     'exception_stacks.type',
     'exception_stacks.value',
+    'exception_stacks.mechanism_type',
+    'exception_stacks.mechanism_handled',
     'exception_frames.abs_path',
     'exception_frames.filename',
     'exception_frames.package',
@@ -227,7 +229,9 @@ SCHEMA_COLUMNS = [
     # exception interface
     ('exception_stacks', '''Nested (
         type Nullable(String),
-        value Nullable(String)
+        value Nullable(String),
+        mechanism_type Nullable(String),
+        mechanism_handled Nullable(UInt8)
     )'''),
     ('exception_frames', '''Nested (
         abs_path Nullable(String),
