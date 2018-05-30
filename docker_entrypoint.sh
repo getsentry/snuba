@@ -24,6 +24,14 @@ case $1 in
     echo "Running Snuba writer with arguments:" "${@:2}"
     exec ./bin/writer "${@:2}"
     ;;
+"optimize"|"optimizer")
+    echo "Running Snuba optimizer with arguments:" "${@:2}"
+    exec ./bin/optimize "${@:2}"
+    ;;
+"cleanup"|"cleaner")
+    echo "Running Snuba partition cleaner with arguments:" "${@:2}"
+    exec ./bin/cleanup "${@:2}"
+    ;;
 "sh"|"/bin/sh"|"bash"|"/bin/bash")
     bash "${@:2}"
     ;;
