@@ -2,5 +2,7 @@
 
 from snuba import settings
 from snuba.api import application
+from werkzeug.serving import WSGIRequestHandler
 
-application.run(port=settings.PORT)
+WSGIRequestHandler.protocol_version = "HTTP/1.1"
+application.run(port=settings.PORT, threaded=True)
