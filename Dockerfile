@@ -24,7 +24,7 @@ COPY setup.py README.md ./
 
 RUN python setup.py install && rm -rf ./build ./dist
 
-ENV CLICKHOUSE_SERVERS clickhouse-server:9000
+ENV CLICKHOUSE_SERVER clickhouse-server:9000
 ENV CLICKHOUSE_TABLE sentry
 ENV FLASK_DEBUG 0
 
