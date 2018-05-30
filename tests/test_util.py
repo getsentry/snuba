@@ -89,3 +89,50 @@ class TestUtil(BaseTest):
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
         column_expr('tags[foo]', body)  # Expand it once so the next time is aliased
         assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'
+
+    def test_issue_expr(self):
+        # Provides list of issues but doesn't use them
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+        }
+        assert issue_expr(body) == ''
+
+        # Uses issue in groupby, expands all issues
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'groupby': ['timestamp', 'issue']
+        }
+        assert '[1,1,2]' in issue_expr(body)
+
+        # Issue in condition, expands only that issue
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'conditions': [['issue', '=', 1]]
+        }
+        assert '[1,1]' in issue_expr(body)
+
+        # Issue in aggregation, expands all.
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'aggregations': [['topK(3)', 'issue',  'top_issues']]
+        }
+        assert '[1,1,2]' in issue_expr(body)
+
+        # No issues to expand, and no reference to any specific issue, but
+        # still need `issue` defined for groupby so we expand the issue
+        # expression with empty lists
+        body = {
+            'issues': [],
+            'groupby': ['issue']
+        }
+        assert 'ANY INNER JOIN' in issue_expr(body)
+        assert '[]' in issue_expr(body)
+
+        # No issues to expand, but a condition on a specific issue. Creates
+        # issue join expresssion with single Null value to avoid comparison bug.
+        body = {
+            'issues': [],
+            'conditions': [['issue', '=', 4]]
+        }
+        assert 'ANY INNER JOIN' in issue_expr(body)
+        assert '[Null]' in issue_expr(body)

@@ -231,6 +231,26 @@ def raw_query(sql, client):
     return {'data': data, 'meta': meta, 'error': error}
 
 
+def uses_issue(body):
+    """
+    Returns whether the query references `issue` in groupings, conditions, or
+    aggregations. and which issue IDs it specifically selects for, if any.
+    """
+    cond = flat_conditions(body.get('conditions', []))
+    used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
+        [set(lit) for (col, op, lit) in cond if col == 'issue'
+         and op == 'IN' and isinstance(lit, list)]
+    # TODO handle NOT IN or not equal
+    used_ids = set.union(*used_ids) if used_ids else None
+
+    uses = (
+        used_ids is not None or
+        'issue' in to_list(body.get('groupby', [])) or
+        any(col == 'issue' for (_, col, _) in body.get('aggregations', []))
+    )
+    return (uses, used_ids)
+
+
 def issue_expr(body, hash_column='primary_hash'):
     """
     Takes a list of (issue_id, fingerprint(s)) tuples of the form:
@@ -242,34 +262,37 @@ def issue_expr(body, hash_column='primary_hash'):
     conditions, this query will only expand the expression for those referenced
     issues.
     """
-    cond = flat_conditions(body.get('conditions', []))
-    used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-        [set(lit) for (col, op, lit) in cond if col ==
-     'issue' and op == 'IN' and isinstance(lit, list)]
-    used_ids = set.union(*used_ids) if used_ids else None
+    uses, used_ids = uses_issue(body)
+    if not uses:
+        return ''
+    else:
+        issue_ids = []
+        hashes = []
 
-    issue_ids = []
-    hashes = []
+        max_issues = state.get_config('max_issues')
+        max_hashes_per_issue = state.get_config('max_hashes_per_issue')
+        issues = body['issues']
+        if max_issues is not None:
+            issues = issues[:max_issues]
 
-    max_issues = state.get_config('max_issues')
-    max_hashes_per_issue = state.get_config('max_hashes_per_issue')
-    issues = body['issues']
-    if max_issues is not None:
-        issues = issues[:max_issues]
+        for issue_id, issue_hashes in issues:
+            if used_ids is None or issue_id in used_ids:
+                issue_hashes = to_list(issue_hashes)
+                if max_hashes_per_issue is not None:
+                    issue_hashes = issue_hashes[:max_hashes_per_issue]
+                issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
+                hashes.extend('\'{}\''.format(h) for h in issue_hashes)
 
-    for issue_id, issue_hashes in issues:
-        if used_ids is None or issue_id in used_ids:
-            issue_hashes = to_list(issue_hashes)
-            if max_hashes_per_issue is not None:
-                issue_hashes = issue_hashes[:max_hashes_per_issue]
-            issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
-            hashes.extend('\'{}\''.format(h) for h in issue_hashes)
-    assert len(issue_ids) == len(hashes)
+        # Special case, we have no issues to expand but there is still a
+        # reference to a specific `issue = X`. Clickhouse will error trying to
+        # compare (Nothing, UInt8), but will work on comparing (Null, Uint8) so
+        # we need a Null value in the issue expression for the query to work.
+        if not issue_ids and used_ids:
+            issue_ids, hashes = ['Null'], ['Null']
 
-    if hashes or used_ids or 'issue' in to_list(body['groupby']):
         return ('ANY INNER JOIN '
                 '(SELECT arrayJoin('
-                'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(FixedString(32))\'), [{issue_ids}])) as map,'
+                'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(Nullable(FixedString(32)))\'), [{issue_ids}])) as map,'
                 'tupleElement(map, 1) as {col},'
                 'tupleElement(map, 2) as issue'
                 ') USING {col}').format(
@@ -277,8 +300,6 @@ def issue_expr(body, hash_column='primary_hash'):
             hashes=','.join(hashes),
             col=hash_column
         )
-    else:
-        return ''
 
 
 def validate_request(schema):
