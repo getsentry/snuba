@@ -51,8 +51,7 @@ class WriterWorker(AbstractBatchWorker):
         retries = 3
         while True:
             try:
-                with self.clickhouse as ch:
-                    write_rows(ch, self.table_name, settings.WRITER_COLUMNS, batch)
+                write_rows(self.clickhouse, self.table_name, settings.WRITER_COLUMNS, batch)
 
                 break  # success
             except (errors.NetworkError, errors.SocketTimeoutError) as e:

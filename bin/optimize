@@ -8,7 +8,7 @@ import sys
 import click
 
 from snuba import settings
-from snuba.clickhouse import Clickhouse
+from snuba.clickhouse import ClickhousePool
 from snuba.optimize import run_optimize, logger
 
 
@@ -30,7 +30,7 @@ def run(clickhouse_server, database, table, timeout, log_level):
         sys.exit(1)
 
     for server in clickhouse_server:
-        clickhouse = Clickhouse(
+        clickhouse = ClickhousePool(
             server.split(':')[0], port=int(server.split(':')[1]), send_receive_timeout=timeout
         )
         num_dropped = run_optimize(clickhouse, database, table)

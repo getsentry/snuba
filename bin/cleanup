@@ -9,7 +9,7 @@ import click
 
 from snuba import settings
 from snuba.cleanup import run_cleanup, logger
-from snuba.clickhouse import Clickhouse
+from snuba.clickhouse import ClickhousePool
 
 
 @click.command()
@@ -30,7 +30,7 @@ def run(clickhouse_server, dry_run, database, table, log_level):
         sys.exit(1)
 
     for server in clickhouse_server:
-        clickhouse = Clickhouse(server.split(':')[0], port=int(server.split(':')[1]))
+        clickhouse = ClickhousePool(server.split(':')[0], port=int(server.split(':')[1]))
         num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)
         logger.info("Dropped %s partitions on %s" % (num_dropped, server))
 
