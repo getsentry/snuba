@@ -10,11 +10,14 @@ from raven.contrib.flask import Sentry
 import simplejson as json
 
 from snuba import settings, util, schemas, state
-from snuba.clickhouse import Clickhouse
+from snuba.clickhouse import ClickhousePool
 
 
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
+
+
+clickhouse = ClickhousePool()
 
 
 try:
@@ -31,11 +34,10 @@ else:
 
 
 def check_clickhouse():
-    with Clickhouse() as clickhouse:
-        try:
-            return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
-        except IndexError:
-            return False
+    try:
+        return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+    except IndexError:
+        return False
 
 
 application = Flask(__name__, static_url_path='')
@@ -194,9 +196,8 @@ def query(validated_body=None, timer=None):
             if not global_allowed or not allowed:
                 status = 429
             else:
-                with Clickhouse() as clickhouse:
-                    result = util.raw_query(sql, clickhouse)
-                    timer.mark('execute')
+                result = util.raw_query(sql, clickhouse)
+                timer.mark('execute')
 
                 if result.get('error'):
                     status = 500
@@ -234,17 +235,15 @@ if application.debug or application.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        with Clickhouse() as clickhouse:
-            clickhouse.execute(
-                get_table_definition(TEST_TABLE, get_test_engine(), settings.SCHEMA_COLUMNS)
-            )
-            write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+        clickhouse.execute(
+            get_table_definition(TEST_TABLE, get_test_engine(), settings.SCHEMA_COLUMNS)
+        )
+        write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        with Clickhouse() as clickhouse:
-            clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
+        clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
