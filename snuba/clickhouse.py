@@ -1,9 +1,14 @@
+import logging
+
 from six.moves import queue
 
-from clickhouse_driver import Client
+from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba import util
+
+
+logger = logging.getLogger('snuba.clickhouse')
 
 
 class ClickhousePool(object):
@@ -33,7 +38,12 @@ class ClickhousePool(object):
             if conn is None:
                 conn = self._create_conn()
 
-            return conn.execute(*args, **kwargs)
+            try:
+                return conn.execute(*args, **kwargs)
+            except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                # Force a reconnection next time
+                conn = None
+                raise e
         finally:
             self.pool.put(conn, block=False)
 
