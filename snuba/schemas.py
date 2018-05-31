@@ -83,7 +83,7 @@ QUERY_SCHEMA = {
                 {'$ref': '#/definitions/column_list'},
                 {'type': 'array', 'maxItems': 0},
             ],
-            'default': 'time',
+            'default': [],
         },
         'aggregations': {
             'type': 'array',
@@ -112,7 +112,7 @@ QUERY_SCHEMA = {
                 'maxLength': 3,
             },
             'minLength': 1,
-            'default': [['count()', '', 'aggregate']],
+            'default': [],
         },
         'arrayjoin': {
             '$ref': '#/definitions/column_name',
@@ -126,6 +126,14 @@ QUERY_SCHEMA = {
         },
         'offset': {
             'type': 'number',
+        },
+        'selected_columns': {
+            'anyOf': [
+                {'$ref': '#/definitions/column_name'},
+                {'$ref': '#/definitions/column_list'},
+                {'type': 'array'},
+            ],
+            'default': [],
         },
     },
     # Need to select down to the project level for customer isolation and performance
@@ -208,6 +216,7 @@ def validate(value, schema, set_defaults=True):
         types={'array': (list, tuple)},
         format_checker=jsonschema.FormatChecker()
     ).validate(value, schema)
+
 
 def generate(schema):
     """

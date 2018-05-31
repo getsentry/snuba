@@ -58,10 +58,12 @@ def root():
 def send_css(path):
     return application.send_static_file(os.path.join('css', path))
 
+
 @application.route('/img/<path:path>')
 @application.route('/snuba/static/img/<path:path>')
 def send_img(path):
     return application.send_static_file(os.path.join('img', path))
+
 
 @application.route('/dashboard')
 @application.route('/dashboard.<fmt>')
@@ -75,6 +77,7 @@ def dashboard(fmt='html'):
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('dashboard.html')
+
 
 @application.route('/config')
 @application.route('/config.<fmt>', methods=['GET', 'POST'])
@@ -142,7 +145,10 @@ def query(validated_body=None, timer=None):
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
-    select_exprs = group_exprs + aggregate_exprs
+    selected_cols = [util.column_expr(colname, body) for colname in body['selected_columns']]
+
+    select_exprs = group_exprs + aggregate_exprs + selected_cols
+
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
     from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
     joins = [util.issue_expr(body)]

@@ -87,7 +87,9 @@ class TestApi(BaseTest):
                 'project': p,
                 'granularity': rollup_mins * 60,
                 'from_date': self.base_time.isoformat(),
-                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat()
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['count()', '', 'aggregate']],
+                'groupby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
             for b in range(buckets):
@@ -103,13 +105,15 @@ class TestApi(BaseTest):
                 'project': 1,
                 'granularity': rollup_mins * 60,
                 'from_date': self.base_time.isoformat(),
-                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat()
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['count()', '', 'aggregate']],
+                'groupby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
             for b in range(buckets):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
                 assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
-                assert result['data'][b]['aggregate'] == rollup_mins # project 1 has 1 event per minute
+                assert result['data'][b]['aggregate'] == rollup_mins  # project 1 has 1 event per minute
 
     def test_issues(self):
         """
@@ -212,7 +216,7 @@ class TestApi(BaseTest):
             assert len(data[idx]['top_platforms']) == 1
             assert data[idx]['top_platforms'][0] in self.platforms
 
-    def test_having_condiitons(self):
+    def test_having_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'groupby': 'primary_hash',
@@ -242,6 +246,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'having': [['times_seen', '>', 1]],
+            'groupby': 'time'
         })).data)
         assert result['error']
 
@@ -251,7 +256,8 @@ class TestApi(BaseTest):
             'project': 2,
             'granularity': 3600,
             'groupby': 'project_id',
-            'conditions': [['tags[sentry:dist]', 'IN', ['dist1', 'dist2']]]
+            'conditions': [['tags[sentry:dist]', 'IN', ['dist1', 'dist2']]],
+            'aggregations': [['count()', '', 'aggregate']],
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
@@ -264,7 +270,8 @@ class TestApi(BaseTest):
             'conditions': [
                 ['tags[foo]', '=', 'baz'],
                 ['tags[foo.bar]', '=', 'qux'],
-            ]
+            ],
+            'aggregations': [['count()', '', 'aggregate']],
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
@@ -277,7 +284,8 @@ class TestApi(BaseTest):
             'conditions': [
                 ['tags[sentry:dist]', '=', 'dist1'],
                 ['tags[foo.bar]', '=', 'qux'],
-            ]
+            ],
+            'aggregations': [['count()', '', 'aggregate']],
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
@@ -390,6 +398,15 @@ class TestApi(BaseTest):
 
         result2 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result1['data'] == result2['data']
+
+    def test_select_columns(self):
+        query = {
+            'project': 1,
+            'selected_columns': ['platform', 'message'],
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+
+        assert len(result['data']) == 180
 
     def test_test_endpoints(self):
         project_id = 73
