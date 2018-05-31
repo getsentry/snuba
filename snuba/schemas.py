@@ -131,7 +131,7 @@ QUERY_SCHEMA = {
             'anyOf': [
                 {'$ref': '#/definitions/column_name'},
                 {'$ref': '#/definitions/column_list'},
-                {'type': 'array'},
+                {'type': 'array', 'minItems': 0, 'maxItems': 0},
             ],
             'default': [],
         },
