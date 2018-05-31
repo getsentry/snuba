@@ -358,7 +358,7 @@ def time_request(name):
 def decode_part_str(part_str):
     match = PART_RE.match(part_str)
     if not match:
-        raise ValueError("Unknown part name/format: " + str(part))
+        raise ValueError("Unknown part name/format: " + str(part_str))
 
     date_str, retention_days = match.groups()
     date = datetime.strptime(date_str, '%Y-%m-%d')
