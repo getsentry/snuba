@@ -44,7 +44,7 @@ def optimize_partitions(clickhouse, database, table, parts):
 
     with clickhouse as ch:
         for part_date, retention_days in parts:
-            date_str = part_date.strftime("%Y-%m-%d %H:%M:%S")
+            date_str = part_date.strftime("%Y-%m-%d")
             args = {
                 'database': database,
                 'table': table,

@@ -97,6 +97,7 @@ WRITER_COLUMNS = [
     'event_id',
     'project_id',
     'timestamp',
+    'date',
     'deleted',
     'retention_days',
     'platform',
@@ -147,6 +148,7 @@ SCHEMA_COLUMNS = [
     ('event_id', 'FixedString(32)'),
     ('project_id', 'UInt64'),
     ('timestamp', 'DateTime'),
+    ('date', 'Date'),
     ('deleted', 'UInt8'),
     ('retention_days', 'UInt16'),
 
@@ -250,7 +252,7 @@ SCHEMA_MAP = dict(SCHEMA_COLUMNS)
 
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
-DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp), retention_days)'
+DEFAULT_PARTITION_BY = '(date, retention_days)'
 DEFAULT_VERSION_COLUMN = 'deleted'
 DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
 DEFAULT_LOCAL_TABLE = 'sentry_local'

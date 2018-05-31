@@ -18,8 +18,8 @@ logger = logging.getLogger('snuba.util')
 
 
 ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
-# example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
+# example partition name: "('2018-03-13', 90)"
+PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 
 
 def to_list(value):
@@ -358,7 +358,7 @@ def time_request(name):
 def decode_part_str(part_str):
     match = PART_RE.match(part_str)
     if not match:
-        raise ValueError("Unknown part name/format: " + str(part))
+        raise ValueError("Unknown part name/format: " + str(part_str))
 
     date_str, retention_days = match.groups()
     date = datetime.strptime(date_str, '%Y-%m-%d')

@@ -80,10 +80,8 @@ def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
-    output['timestamp'] = int(calendar.timegm(
-        datetime.strptime(
-            message['datetime'],
-            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
+    timestamp = datetime.strptime(message['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    output['timestamp'] = int(calendar.timegm(timestamp.timetuple()))
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
