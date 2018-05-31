@@ -3,7 +3,7 @@ import time
 import uuid
 
 from snuba import settings
-from snuba.clickhouse import Clickhouse, get_table_definition, get_test_engine
+from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
 from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, write_rows
 
@@ -18,11 +18,10 @@ class BaseTest(object):
 
         self.database = 'default'
         self.table = 'test'
-        self.clickhouse = Clickhouse('localhost')
+        self.clickhouse = ClickhousePool('localhost')
 
-        with self.clickhouse as ch:
-            ch.execute("DROP TABLE IF EXISTS %s" % self.table)
-            ch.execute(get_table_definition('test', get_test_engine(), settings.SCHEMA_COLUMNS))
+        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+        self.clickhouse.execute(get_table_definition('test', get_test_engine(), settings.SCHEMA_COLUMNS))
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
@@ -35,9 +34,7 @@ class BaseTest(object):
         return event
 
     def teardown_method(self, test_method):
-        with self.clickhouse as ch:
-            ch.execute("DROP TABLE IF EXISTS %s" % self.table)
-            ch.disconnect()
+        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
 
     def wrap_raw_event(self, event):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."
@@ -82,6 +79,5 @@ class BaseTest(object):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        with self.clickhouse as ch:
-            write_rows(ch, table=self.table, columns=settings.WRITER_COLUMNS,
-                       rows=rows, types_check=True)
+        write_rows(self.clickhouse, table=self.table, columns=settings.WRITER_COLUMNS,
+                   rows=rows, types_check=True)

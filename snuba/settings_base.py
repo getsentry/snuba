@@ -2,6 +2,7 @@ import re
 import os
 from collections import defaultdict
 
+
 class dynamicdict(defaultdict):
     def __missing__(self, key):
         if self.default_factory:
@@ -9,6 +10,7 @@ class dynamicdict(defaultdict):
             return self[key]
         else:
             return super(dynamicdict, self).__missing__(key)
+
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
@@ -20,6 +22,7 @@ PORT = 1218
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
 CLICKHOUSE_TABLE = 'sentry_dist'
+CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
 DOGSTATSD_HOST = 'localhost'

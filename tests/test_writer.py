@@ -9,8 +9,7 @@ class TestWriter(BaseTest):
     def test(self):
         self.write_raw_events(self.event)
 
-        with self.clickhouse as ch:
-            res = ch.execute("SELECT count() FROM %s" % self.table)
+        res = self.clickhouse.execute("SELECT count() FROM %s" % self.table)
 
         assert res[0][0] == 1
 

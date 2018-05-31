@@ -17,20 +17,19 @@ def run_cleanup(clickhouse, database, table, dry_run=True):
 
 
 def get_active_partitions(clickhouse, database, table):
-    with clickhouse as ch:
-        response = ch.execute(
-            """
-            SELECT partition
-            FROM system.parts
-            WHERE database = %(database)s
-            AND table = %(table)s
-            AND active = 1
-            """,
-            {
-                'database': database,
-                'table': table,
-            }
-        )
+    response = clickhouse.execute(
+        """
+        SELECT partition
+        FROM system.parts
+        WHERE database = %(database)s
+        AND table = %(table)s
+        AND active = 1
+        """,
+        {
+            'database': database,
+            'table': table,
+        }
+    )
 
     return [util.decode_part_str(part) for part, in response]
 
@@ -50,18 +49,17 @@ def drop_partitions(clickhouse, database, table, parts, dry_run=True):
         ALTER TABLE %(database)s.%(table)s DROP PARTITION ('%(date_str)s', %(retention_days)s)
     """
 
-    with clickhouse as ch:
-        for part_date, retention_days in parts:
-            args = {
-                'database': database,
-                'table': table,
-                'date_str': part_date.strftime("%Y-%m-%d %H:%M:%S"),
-                'retention_days': retention_days,
-            }
+    for part_date, retention_days in parts:
+        args = {
+            'database': database,
+            'table': table,
+            'date_str': part_date.strftime("%Y-%m-%d %H:%M:%S"),
+            'retention_days': retention_days,
+        }
 
-            query = (query_template % args).strip()
-            if dry_run:
-                logger.info("Dry run: " + query)
-            else:
-                logger.info("Dropping partition: " + query)
-                ch.execute(query)
+        query = (query_template % args).strip()
+        if dry_run:
+            logger.info("Dry run: " + query)
+        else:
+            logger.info("Dropping partition: " + query)
+            clickhouse.execute(query)
