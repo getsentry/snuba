@@ -12,7 +12,7 @@ class ClickhousePool(object):
                  port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
                  connect_timeout=1,
                  send_receive_timeout=300,
-                 max_pool_size=10,
+                 max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
                  ):
         self.host = host
         self.port = port
