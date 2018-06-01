@@ -22,6 +22,11 @@ ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
 
+class ColumnLiteral(object):
+    def __init__(self, column_name):
+        self.column_name = column_name
+
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
@@ -63,9 +68,9 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     if aggregate:
         if expr:
             expr = u'{}({})'.format(aggregate, expr)
-            if aggregate == 'uniq': # default uniq() result to 0, not null
+            if aggregate == 'uniq':  # default uniq() result to 0, not null
                 expr = 'ifNull({}, 0)'.format(expr)
-        else: # This is the "count()" case where the '()' is already provided
+        else:  # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
     alias = escape_col(alias or column_name or aggregate)
@@ -182,7 +187,9 @@ def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
     """
-    if isinstance(value, six.string_types):
+    if isinstance(value, ColumnLiteral):
+        return value.column_name
+    elif isinstance(value, six.string_types):
         value = value.replace("'", "\\'")  # TODO this escaping is garbage
         return u"'{}'".format(value)
     elif isinstance(value, datetime):
@@ -265,41 +272,59 @@ def issue_expr(body, hash_column='primary_hash'):
     uses, used_ids = uses_issue(body)
     if not uses:
         return ''
-    else:
-        issue_ids = []
-        hashes = []
 
-        max_issues = state.get_config('max_issues')
-        max_hashes_per_issue = state.get_config('max_hashes_per_issue')
-        issues = body['issues']
-        if max_issues is not None:
-            issues = issues[:max_issues]
+    issue_ids = []
+    hashes = []
+    tombstones = []
 
-        for issue_id, issue_hashes in issues:
-            if used_ids is None or issue_id in used_ids:
-                issue_hashes = to_list(issue_hashes)
-                if max_hashes_per_issue is not None:
-                    issue_hashes = issue_hashes[:max_hashes_per_issue]
-                issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
-                hashes.extend('\'{}\''.format(h) for h in issue_hashes)
+    max_issues = state.get_config('max_issues')
+    max_hashes_per_issue = state.get_config('max_hashes_per_issue')
+    issues = body['issues']
+    if max_issues is not None:
+        issues = issues[:max_issues]
 
-        # Special case, we have no issues to expand but there is still a
-        # reference to a specific `issue = X`. Clickhouse will error trying to
-        # compare (Nothing, UInt8), but will work on comparing (Null, Uint8) so
-        # we need a Null value in the issue expression for the query to work.
-        if not issue_ids and used_ids:
-            issue_ids, hashes = ['Null'], ['Null']
+    for issue_id, issue_hashes in issues:
+        if used_ids is None or issue_id in used_ids:
+            if max_hashes_per_issue is not None:
+                issue_hashes = issue_hashes[:max_hashes_per_issue]
+            issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
+            for hash_obj in issue_hashes:
+                if isinstance(hash_obj, list):
+                    issue_hash, tombstone = hash_obj
+                else:
+                    issue_hash, tombstone = hash_obj, None
 
-        return ('ANY INNER JOIN '
-                '(SELECT arrayJoin('
-                'arrayMap((x, y) -> tuple(x, y), CAST([{hashes}], \'Array(Nullable(FixedString(32)))\'), [{issue_ids}])) as map,'
-                'tupleElement(map, 1) as {col},'
-                'tupleElement(map, 2) as issue'
-                ') USING {col}').format(
-            issue_ids=','.join(issue_ids),
-            hashes=','.join(hashes),
-            col=hash_column
-        )
+                if tombstone:
+                    tombstones.append('\'{}\''.format(tombstone.strftime("%Y-%m-%d %H:%M:%S")))
+                else:
+                    tombstones.append('\'1970-01-01 00:00:00\'')
+                hashes.append('\'{}\''.format(issue_hash))
+
+    # Special case, we have no issues to expand but there is still a
+    # reference to a specific `issue = X`. Clickhouse will error trying to
+    # compare (Nothing, UInt8), but will work on comparing (Null, Uint8) so
+    # we need a Null value in the issue expression for the query to work.
+    if not issue_ids and used_ids:
+        issue_ids, hashes = ['Null'], ['Null']
+
+    return ("""
+        ANY INNER JOIN
+        (SELECT arrayJoin(
+            arrayMap(
+                (x, y, z) -> tuple(x, y, z),
+                CAST([{hashes}], 'Array(Nullable(FixedString(32)))'),
+                [{issue_ids}],
+                CAST([{tombstones}], 'Array(Nullable(DateTime))'))
+            ) as map,
+            tupleElement(map, 1) as {col},
+            tupleElement(map, 2) as issue,
+            tupleElement(map, 3) as hash_timestamp
+        ) USING {col}""").format(
+        issue_ids=','.join(issue_ids),
+        hashes=','.join(hashes),
+        tombstones=','.join(tombstones),
+        col=hash_column
+    )
 
 
 def validate_request(schema):

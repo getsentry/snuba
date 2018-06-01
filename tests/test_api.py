@@ -124,7 +124,7 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': p,
                 'granularity': 3600,
-                'issues': list(enumerate(self.hashes)),
+                'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
                 'groupby': 'issue',
             })).data)
             issues_found = set([d['issue'] for d in result['data']])
@@ -166,7 +166,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
             'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
@@ -175,7 +175,7 @@ class TestApi(BaseTest):
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
@@ -183,7 +183,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -191,7 +191,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -295,8 +295,8 @@ class TestApi(BaseTest):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         raw_query.return_value = {'data': [], 'meta': []}
-        issues = list(enumerate(self.hashes))
-        result = json.loads(self.app.post('/query', data=json.dumps({
+        issues = [(i, [j]) for i, j in enumerate(self.hashes)]
+        json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
@@ -364,7 +364,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
