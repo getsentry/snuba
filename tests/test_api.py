@@ -63,6 +63,7 @@ class TestApi(BaseTest):
                         'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'sentry:dist': 'dist1',
+                        'os_rooted': 1,
                         'sentry:release': six.text_type(tick),
                         'environment': self.environments[(tock * p) % len(self.environments)],
                         'tags.key': ['foo', 'foo.bar'],
@@ -287,6 +288,18 @@ class TestApi(BaseTest):
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
 
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'granularity': 3600,
+            'groupby': 'project_id',
+            'conditions': [
+                ['tags[os.rooted]', '=', '1'],
+            ],
+            'aggregations': [['count()', '', 'aggregate']],
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['aggregate'] == 90
+
     @mock.patch('snuba.util.raw_query')
     def test_column_expansion(self, raw_query):
         # If there is a condition on an already SELECTed column, then use the
@@ -326,7 +339,7 @@ class TestApi(BaseTest):
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
-            'foo', 'foo.bar', 'sentry:release', 'environment', 'sentry:dist'
+            'foo', 'foo.bar', 'os_rooted', 'sentry:release', 'environment', 'sentry:dist'
         ])
 
         # Reguar (nested) tag

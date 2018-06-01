@@ -111,7 +111,7 @@ def tag_expr(column_name):
     col, sub = match.group(1), match.group(2)
     sub_field = sub.replace('.', '_')
     if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
-        expr = escape_col(sub_field)  # TODO recurse?
+        expr = string_col(sub_field)  # TODO recurse?
     else:
         expr = u'{col}.value[indexOf({col}.key, {sub})]'.format(**{
             'col': col,
