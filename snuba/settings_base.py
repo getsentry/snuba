@@ -261,3 +261,6 @@ DEFAULT_DIST_TABLE = 'sentry_dist'
 DEFAULT_RETENTION_DAYS = 90
 
 RETENTION_OVERRIDES = {}
+
+# the list of keys that will upgrade from a WHERE condition to a PREWHERE
+PREWHERE_KEYS = []
