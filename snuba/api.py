@@ -194,7 +194,6 @@ def query(validated_body=None, timer=None):
         order_clause,
         limit_clause
     ] if c])
-    print(sql)
 
     timer.mark('prepare_query')
 

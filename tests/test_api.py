@@ -477,6 +477,4 @@ class TestApi(BaseTest):
                 ['count()', '', 'count']
             ]
         })).data)
-        from pprint import pprint
-        pprint(result['error'])
         assert result['data'] == [{'count': 1, 'issue': 0}]
