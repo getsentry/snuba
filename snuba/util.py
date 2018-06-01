@@ -292,12 +292,10 @@ def issue_expr(body, hash_column='primary_hash'):
                 if isinstance(hash_obj, list):
                     issue_hash, tombstone = hash_obj
                 else:
-                    issue_hash, tombstone = hash_obj, None
+                    issue_hash = hash_obj
+                    tombstone = None
 
-                if tombstone:
-                    tombstones.append('\'{}\''.format(tombstone.strftime("%Y-%m-%d %H:%M:%S")))
-                else:
-                    tombstones.append('\'1970-01-01 00:00:00\'')
+                tombstones.append('\'{}\''.format(tombstone or '1970-01-01 00:00:00'))
                 hashes.append('\'{}\''.format(issue_hash))
 
     # Special case, we have no issues to expand but there is still a
