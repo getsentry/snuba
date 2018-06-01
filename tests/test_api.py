@@ -461,6 +461,16 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': project_id,
+            'issues': [(0, [hash])],
+            'groupby': 'issue',
+            'aggregations': [
+                ['count()', '', 'count']
+            ]
+        })).data)
+        assert result['data'] == [{'count': 2, 'issue': 0}]
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': project_id,
             'issues': [(0, [(hash, None)])],
             'groupby': 'issue',
             'aggregations': [
