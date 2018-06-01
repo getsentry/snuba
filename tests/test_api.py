@@ -4,21 +4,18 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
 import mock
-import random
 import simplejson as json
 import six
-import sys
 import time
 import uuid
 import pytest
 
-from snuba import util, state, settings
+from snuba import state, settings
 
 from base import BaseTest
 
 
 class TestApi(BaseTest):
-
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
         from snuba.api import application
@@ -124,7 +121,7 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': p,
                 'granularity': 3600,
-                'issues': list(enumerate(self.hashes)),
+                'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
                 'groupby': 'issue',
             })).data)
             issues_found = set([d['issue'] for d in result['data']])
@@ -166,7 +163,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
             'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
@@ -175,7 +172,7 @@ class TestApi(BaseTest):
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
@@ -183,7 +180,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -191,7 +188,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -295,8 +292,8 @@ class TestApi(BaseTest):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         raw_query.return_value = {'data': [], 'meta': []}
-        issues = list(enumerate(self.hashes))
-        result = json.loads(self.app.post('/query', data=json.dumps({
+        issues = [(i, [j]) for i, j in enumerate(self.hashes)]
+        json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
@@ -364,7 +361,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': list(enumerate(self.hashes)),
+            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
@@ -440,3 +437,44 @@ class TestApi(BaseTest):
         assert self.app.post('/tests/drop').status_code == 200
 
         assert settings.CLICKHOUSE_TABLE not in self.clickhouse.execute("SHOW TABLES")
+
+    def test_issues_with_tombstone(self):
+        now = datetime.utcnow()
+
+        project_id = 100
+        hash = 'a' * 32
+        base_event = {
+            'project_id': project_id,
+            'event_id': uuid.uuid4().hex,
+            'deleted': 0,
+            'primary_hash': hash,
+            'retention_days': 90,
+        }
+
+        event1 = base_event.copy()
+        event1['timestamp'] = calendar.timegm((now - timedelta(days=1)).timetuple())
+
+        event2 = base_event.copy()
+        event2['timestamp'] = calendar.timegm((now - timedelta(days=3)).timetuple())
+
+        self.write_processed_events([event1, event2])
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': project_id,
+            'issues': [(0, [(hash, None)])],
+            'groupby': 'issue',
+            'aggregations': [
+                ['count()', '', 'count']
+            ]
+        })).data)
+        assert result['data'] == [{'count': 2, 'issue': 0}]
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': project_id,
+            'issues': [(0, [(hash, (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"))])],
+            'groupby': 'issue',
+            'aggregations': [
+                ['count()', '', 'count']
+            ]
+        })).data)
+        assert result['data'] == [{'count': 1, 'issue': 0}]

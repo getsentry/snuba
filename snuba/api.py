@@ -151,7 +151,12 @@ def query(validated_body=None, timer=None):
 
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
     from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
-    joins = [util.issue_expr(body)]
+
+    joins = []
+    issue_expr = util.issue_expr(body)
+    if issue_expr:
+        joins.append(issue_expr)
+        where_conditions.append(('timestamp', '>', util.ColumnLiteral('hash_timestamp')))
     if 'arrayjoin' in body:
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)

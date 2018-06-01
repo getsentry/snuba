@@ -54,14 +54,14 @@ QUERY_SCHEMA = {
                 'items': [
                     {'type': 'number'},
                     {
-                        'anyOf': [
-                            {'$ref': '#/definitions/fingerprint_hash'},
-                            {
-                                'type': 'array',
-                                'items': {'$ref': '#/definitions/fingerprint_hash'},
-                                'minItems': 1,
-                            },
-                        ],
+                        'type': 'array',
+                        'items': {
+                            'anyOf': [
+                                {'$ref': '#/definitions/fingerprint_hash'},
+                                {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
+                            ],
+                        },
+                        'minItems': 1,
                     },
                 ],
             },
@@ -149,6 +149,18 @@ QUERY_SCHEMA = {
             'minLength': 32,
             'maxLength': 32,
             'pattern': '^[0-9a-f]{32}$',
+        },
+        'fingerprint_hash_with_tombstone': {
+            'type': 'array',
+            'items': [
+                {'$ref': '#/definitions/fingerprint_hash'},
+                {
+                    'anyOf': [
+                        {'type': 'null'},
+                        {'pattern': '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
+                    ]
+                },
+            ],
         },
         'column_name': {
             'type': 'string',
