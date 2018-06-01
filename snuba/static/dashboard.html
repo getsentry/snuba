@@ -121,29 +121,36 @@
                         Header: 'date',
                         width:90,
                         id: 'date',
-                        accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleDateString()
+                        accessor: row => new Date(row.timing.timestamp * 1000).toLocaleDateString()
                       },{
                         Header: 'time',
-                        width:110,
+                        width: 110,
                         id: 'time',
-                        accessor: row => new Date(row.result.timing.timestamp * 1000).toLocaleTimeString()
+                        accessor: row => new Date(row.timing.timestamp * 1000).toLocaleTimeString()
                       },{
                         Header: 'project',
-                        width:80,
+                        width: 80,
                         accessor: 'request.project'
                       },{
                         Header: 'referrer',
-                        width:80,
+                        width: 80,
                         accessor: 'referrer'
                       },{
-                        Header: 'duration_ms',
-                        width:100, accessor:
-                        'result.timing.duration_ms'
+                        Header: 'ms',
+                        width: 50,
+                        accessor: 'timing.duration_ms'
                       },{
-                        Header: 'num_issues',
-                        width:100,
-                        id: 'num_issues',
-                        accessor: row => (row.request.issues || []).length
+                        Header: 'days',
+                        width:50,
+                        accessor: 'stats.num_days'
+                      },{
+                        Header: 'issues',
+                        width:61,
+                        accessor: 'stats.num_issues'
+                      },{
+                        Header: 'hashes',
+                        width:68,
+                        accessor: 'stats.num_hashes'
                       },{
                         Header: 'groupby',
                         width:200,

@@ -216,7 +216,12 @@ def query(validated_body=None, timer=None):
         'request': validated_body,
         'referrer': request.referrer,
         'sql': sql,
-        'result': result,
+        'timing': result['timing'],
+        'stats': {
+            'num_days': (to_date - from_date).days,
+            'num_issues': len(validated_body.get('issues', [])),
+            'num_hashes': sum(len(h) for i, h in validated_body.get('issues', [])),
+        }
     })
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
