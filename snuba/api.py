@@ -160,7 +160,8 @@ def query(validated_body=None, timer=None):
     prewhere_clause = ''
     if prewhere_keys:
         prewhere_condition = [condition for condition in where_conditions if condition[0] in prewhere_keys]
-        prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_condition, body))
+        if prewhere_condition:
+            prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_condition, body))
 
     where_clause = ''
     if where_conditions:
