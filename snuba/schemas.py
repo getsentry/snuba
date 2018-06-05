@@ -119,7 +119,6 @@ QUERY_SCHEMA = {
         },
         'orderby': {
             '$ref': '#/definitions/column_name',
-            'default': 'time',
         },
         'limit': {
             'type': 'number'
