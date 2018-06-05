@@ -87,6 +87,7 @@ class TestApi(BaseTest):
                 'from_date': self.base_time.isoformat(),
                 'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [['count()', '', 'aggregate']],
+                'orderby': 'time',
                 'groupby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
@@ -106,6 +107,7 @@ class TestApi(BaseTest):
                 'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [['count()', '', 'aggregate']],
                 'groupby': 'time',
+                'orderby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
             for b in range(buckets):

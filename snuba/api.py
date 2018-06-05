@@ -182,10 +182,12 @@ def query(validated_body=None, timer=None):
         group_clause = 'GROUP BY ({})'.format(group_clause)
 
     order_clause = ''
-    desc = body['orderby'].startswith('-')
-    orderby = body['orderby'].lstrip('-')
-    if orderby in body.get('alias_cache', {}).values():
-        order_clause = u'ORDER BY `{}` {}'.format(orderby, 'DESC' if desc else 'ASC')
+    if body.get('orderby'):
+        desc = body['orderby'].startswith('-')
+        orderby = body['orderby'].lstrip('-')
+        order_clause = u'ORDER BY {} {}'.format(
+            util.column_expr(orderby, body), 'DESC' if desc else 'ASC'
+        )
 
     limit_clause = ''
     if 'limit' in body:
