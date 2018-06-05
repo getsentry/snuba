@@ -8,7 +8,7 @@ from raven import Client as RavenClient
 
 from snuba import settings
 from snuba.clickhouse import (
-    Clickhouse, get_table_definition, get_replicated_engine, get_distributed_engine
+    ClickhousePool, get_table_definition, get_replicated_engine, get_distributed_engine
 )
 from snuba.consumer import BatchingKafkaConsumer
 from snuba.writer import WriterWorker
@@ -48,7 +48,7 @@ def run(processed_topic, consumer_group, bootstrap_server, clickhouse_server,
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.writer', tags=["group:%s" % consumer_group]
     )
-    clickhouse = Clickhouse(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
+    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
 
     # ensure tables exist
     LOCAL_TABLE_DEFINITION = get_table_definition(
@@ -62,9 +62,8 @@ def run(processed_topic, consumer_group, bootstrap_server, clickhouse_server,
         )
     )
 
-    with clickhouse as ch:
-        ch.execute(LOCAL_TABLE_DEFINITION)
-        ch.execute(DIST_TABLE_DEFINITION)
+    clickhouse.execute(LOCAL_TABLE_DEFINITION)
+    clickhouse.execute(DIST_TABLE_DEFINITION)
 
     consumer = BatchingKafkaConsumer(
         processed_topic,
