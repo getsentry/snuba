@@ -35,7 +35,7 @@ else:
 
 def check_clickhouse():
     try:
-        return settings.CLICKHOUSE_TABLE in clickhouse.execute('show tables')[0]
+        return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse.execute('show tables'))
     except IndexError:
         return False
 
