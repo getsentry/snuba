@@ -157,6 +157,10 @@ def is_condition(cond_or_list):
 def flat_conditions(conditions):
     return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
 
+def tuplify(nested):
+    if isinstance(nested, (list, tuple)):
+        return tuple(tuplify(child) for child in nested)
+    return nested
 
 def condition_expr(conditions, body, depth=0):
     """
