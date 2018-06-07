@@ -140,6 +140,24 @@ class TestApi(BaseTest):
         })).data)
         assert result['error'] is None
 
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': 'issue',
+            'conditions': [['issue', '=', 100]],
+        })).data)
+        assert result['error'] is None
+        assert result['data'] == []
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': 'issue',
+            'conditions': [['issue', 'IN', [100,200]]],
+        })).data)
+        assert result['error'] is None
+        assert result['data'] == []
+
     def test_offset_limit(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
