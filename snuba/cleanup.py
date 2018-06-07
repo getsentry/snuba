@@ -53,7 +53,7 @@ def drop_partitions(clickhouse, database, table, parts, dry_run=True):
         args = {
             'database': database,
             'table': table,
-            'date_str': part_date.strftime("%Y-%m-%d %H:%M:%S"),
+            'date_str': part_date.strftime("%Y-%m-%d"),
             'retention_days': retention_days,
         }
 
