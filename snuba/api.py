@@ -133,9 +133,12 @@ def query(validated_body=None, timer=None):
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('project_id', 'IN', project_ids),
         ('deleted', '=', 0)
     ])
+    if len(project_ids) == 1:
+        where_conditions.append(('project_id', '=', project_ids[0]))
+    else:
+        where_conditions.append(('project_id', 'IN', project_ids))
     having_conditions = body['having']
 
     aggregate_exprs = [
@@ -161,16 +164,16 @@ def query(validated_body=None, timer=None):
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)
 
-    prewhere_keys = settings.PREWHERE_KEYS
-    prewhere_clause = ''
-    if prewhere_keys:
-        prewhere_condition = [condition for condition in where_conditions if condition[0] in prewhere_keys]
-        if prewhere_condition:
-            prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_condition, body))
-
     where_clause = ''
     if where_conditions:
+        where_conditions = list(set(util.tuplify(where_conditions)))
         where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
+
+    prewhere_clause = ''
+    if settings.PREWHERE_KEYS:
+        prewhere_conditions = [c for c in where_conditions if c[0] in settings.PREWHERE_KEYS]
+        if prewhere_conditions:
+            prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
 
     having_clause = ''
     if having_conditions:
