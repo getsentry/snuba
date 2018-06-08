@@ -307,7 +307,7 @@ def issue_expr(body, hash_column='primary_hash'):
     # compare (Nothing, UInt8), but will work on comparing (Null, Uint8) so
     # we need a Null value in the issue expression for the query to work.
     if not issue_ids and used_ids:
-        issue_ids, hashes, tombstones = ['Null'], ['Null'], ['Null']
+        issue_ids, hashes, tombstones = ['0'], ['Null'], ['Null']
 
     return ("""
         ANY INNER JOIN
