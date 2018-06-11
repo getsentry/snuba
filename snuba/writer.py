@@ -50,13 +50,12 @@ def _create_missing_array(colname, event):
     prefix, _ = colname.split('.', 1)
     prefix += '.'
 
-    sibling_length = 0
     for key in event.keys():
         if key.startswith(prefix):
-            sibling_length = len(event[key])
-            break
+            return [None] * len(event[key])
 
-    return [None] * sibling_length
+    # no siblings, empty array is safe!
+    return []
 
 
 def write_rows(connection, table, columns, rows, types_check=False):
