@@ -21,6 +21,7 @@ PORT = 1218
 
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
+CLICKHOUSE_CLUSTER = 'cluster1'
 CLICKHOUSE_TABLE = 'sentry_dist'
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
