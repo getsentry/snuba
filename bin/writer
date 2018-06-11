@@ -31,6 +31,8 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Clickhouse table name for the (optionally replicated) local table.')
 @click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
               help='Clickhouse table name for the "meta" Distributed table.')
+@click.option('--clickhouse-cluster', default=settings.CLICKHOUSE_CLUSTER,
+              help='Clickhouse cluster name for the "meta" Distributed table.')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
               help='Max number of messages to batch in memory before writing to Clickhouse.')
 @click.option('--max-batch-time-ms', default=settings.DEFAULT_MAX_BATCH_TIME_MS,
@@ -41,8 +43,8 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def run(processed_topic, consumer_group, bootstrap_server, clickhouse_server,
-        local_table_name, distributed_table_name, max_batch_size, max_batch_time_ms,
-        auto_offset_reset, log_level, dogstatsd_host, dogstatsd_port):
+        local_table_name, distributed_table_name, clickhouse_cluster, max_batch_size,
+        max_batch_time_ms, auto_offset_reset, log_level, dogstatsd_host, dogstatsd_port):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
@@ -56,7 +58,7 @@ def run(processed_topic, consumer_group, bootstrap_server, clickhouse_server,
     DIST_TABLE_DEFINITION = get_table_definition(
         distributed_table_name,
         get_distributed_engine(
-            cluster='cluster1',
+            cluster=clickhouse_cluster,
             database='default',
             local_table=local_table_name,
         )
