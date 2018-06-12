@@ -231,10 +231,10 @@ def raw_query(sql, client):
     for col in meta:
         # Convert naive datetime strings back to TZ aware ones, and stringify
         # TODO maybe this should be in the json serializer
-        if col['type'] == "DateTime":
+        if col['type'].startswith('DateTime'):
             for d in data:
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
-        elif col['type'] == "Date":
+        elif col['type'].startswith('Date'):
             for d in data:
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()

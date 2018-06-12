@@ -17,7 +17,10 @@ logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
 
 
-clickhouse = ClickhousePool()
+clickhouse_rw = ClickhousePool()
+clickhouse_ro = ClickhousePool(client_settings={
+    'readonly': True,
+})
 
 
 try:
@@ -35,7 +38,7 @@ else:
 
 def check_clickhouse():
     try:
-        return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse.execute('show tables'))
+        return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse_ro.execute('show tables'))
     except IndexError:
         return False
 
@@ -220,7 +223,7 @@ def query(validated_body=None, timer=None):
             if not global_allowed or not allowed:
                 status = 429
             else:
-                result = util.raw_query(sql, clickhouse)
+                result = util.raw_query(sql, clickhouse_ro)
                 timer.mark('execute')
 
                 if result.get('error'):
@@ -264,15 +267,16 @@ if application.debug or application.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        clickhouse.execute(
+        clickhouse_rw.execute(
             get_table_definition(TEST_TABLE, get_test_engine(), settings.SCHEMA_COLUMNS)
         )
-        write_rows(clickhouse, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+        write_rows(clickhouse_rw, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
+        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
+
 
         return ('ok', 200, {'Content-Type': 'text/plain'})

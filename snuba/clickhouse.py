@@ -18,11 +18,13 @@ class ClickhousePool(object):
                  connect_timeout=1,
                  send_receive_timeout=300,
                  max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
+                 client_settings={}
                  ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
+        self.client_settings = client_settings
 
         self.pool = queue.LifoQueue(max_pool_size)
 
@@ -53,6 +55,7 @@ class ClickhousePool(object):
             port=self.port,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
+            settings=self.client_settings
         )
 
     def close(self):
