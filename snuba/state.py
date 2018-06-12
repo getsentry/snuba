@@ -61,14 +61,14 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
         _, _, rate, concurrent = pipe.execute()
     except Exception as ex:
         logger.error(ex)
-        yield True  # fail open if redis is having issues
+        yield (True, 0, 0) # fail open if redis is having issues
         return
 
     per_second = rate / float(rate_lookback_s)
     allowed = (per_second_limit is None or per_second <= per_second_limit) and\
         (concurrent_limit is None or concurrent <= concurrent_limit)
     try:
-        yield allowed
+        yield (allowed, concurrent, per_second)
     finally:
         try:
             if allowed:

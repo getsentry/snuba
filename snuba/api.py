@@ -215,9 +215,9 @@ def query(validated_body=None, timer=None):
     gcl = state.get_config('global_concurrent_limit', 1000)
     ppsl = state.get_config('project_per_second_limit', 1000)
     pcl = state.get_config('project_concurrent_limit', 1000)
-    with state.rate_limit('global', gpsl, gcl) as global_allowed:
-        with state.rate_limit(project_ids[0], ppsl, pcl) as allowed:
-            if not global_allowed or not allowed:
+    with state.rate_limit('global', gpsl, gcl) as (g_allowed, g_concurr, g_rate):
+        with state.rate_limit(project_ids[0], ppsl, pcl) as (allowed, concurr, rate):
+            if not g_allowed or not allowed:
                 status = 429
             else:
                 result = util.raw_query(sql, clickhouse)
@@ -230,6 +230,7 @@ def query(validated_body=None, timer=None):
 
     result['timing'] = timer
     timer.record(metrics)
+    metrics.gauge('query.global_concurrent', g_concurr)
     state.record_query({
         'request': validated_body,
         'referrer': request.referrer,
@@ -239,6 +240,10 @@ def query(validated_body=None, timer=None):
             'num_days': (to_date - from_date).days,
             'num_issues': len(validated_body.get('issues', [])),
             'num_hashes': sum(len(h) for i, h in validated_body.get('issues', [])),
+            'global_concurrent': g_concurr,
+            'global_rate': g_rate,
+            'project_concurrent': concurr,
+            'project_rate': rate,
         }
     })
 
