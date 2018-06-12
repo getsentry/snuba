@@ -159,7 +159,11 @@ def query(validated_body=None, timer=None):
     issue_expr = util.issue_expr(body)
     if issue_expr:
         joins.append(issue_expr)
-        where_conditions.append(('timestamp', '>', util.ColumnLiteral('hash_timestamp')))
+        where_conditions.append(
+            ('timestamp', '>', util.Literal(
+                'ifNull(hash_timestamp, CAST(\'1970-01-01 00:00:00\', \'DateTime\'))')
+            )
+        )
     if 'arrayjoin' in body:
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)

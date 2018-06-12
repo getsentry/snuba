@@ -1,5 +1,6 @@
 from flask import request
 
+import calendar
 from datetime import date, datetime
 from dateutil.tz import tz
 import simplejson as json
@@ -22,9 +23,9 @@ ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
 
-class ColumnLiteral(object):
-    def __init__(self, column_name):
-        self.column_name = column_name
+class Literal(object):
+    def __init__(self, literal):
+        self.literal = literal
 
 
 def to_list(value):
@@ -191,8 +192,8 @@ def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
     """
-    if isinstance(value, ColumnLiteral):
-        return value.column_name
+    if isinstance(value, Literal):
+        return value.literal
     elif isinstance(value, six.string_types):
         value = value.replace("'", "\\'")  # TODO this escaping is garbage
         return u"'{}'".format(value)
@@ -299,7 +300,10 @@ def issue_expr(body, hash_column='primary_hash'):
                     issue_hash = hash_obj
                     tombstone = None
 
-                tombstones.append('\'{}\''.format(tombstone or '1970-01-01 00:00:00'))
+                if tombstone:
+                    tombstone = int(calendar.timegm(
+                        datetime.strptime(tombstone, "%Y-%m-%d %H:%M:%S").timetuple()))
+                tombstones.append(str(tombstone) if tombstone else 'Null')
                 hashes.append('\'{}\''.format(issue_hash))
 
     # Special case, we have no issues to expand but there is still a
