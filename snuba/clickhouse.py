@@ -112,3 +112,15 @@ def get_distributed_engine(cluster, database, local_table,
         'local_table': local_table,
         'sharding_key': sharding_key,
     }
+
+
+LOCAL_TABLE_DEFINITION = get_table_definition(
+    settings.DEFAULT_LOCAL_TABLE, get_replicated_engine(name=settings.DEFAULT_LOCAL_TABLE))
+DIST_TABLE_DEFINITION = get_table_definition(
+    settings.DEFAULT_DIST_TABLE,
+    get_distributed_engine(
+        cluster=settings.CLICKHOUSE_CLUSTER,
+        database='default',
+        local_table=settings.DEFAULT_LOCAL_TABLE,
+    )
+)
