@@ -217,9 +217,17 @@ def raw_query(sql, client):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
+    query_settings = {}
+    try:
+        query_settings_json = state.get_config('query_settings_json')
+        if query_settings_json:
+            query_settings = json.loads(query_settings_json)
+    except ValueError:
+        pass
+
     try:
         error = None
-        data, meta = client.execute(sql, with_column_types=True)
+        data, meta = client.execute(sql, with_column_types=True, settings=query_settings)
         logger.debug(sql)
     except BaseException as ex:
         data, meta, error = [], [], six.text_type(ex)
