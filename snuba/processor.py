@@ -108,19 +108,9 @@ def extract_sdk(output, sdk):
 
 
 def extract_promoted_tags(output, tags):
-    names = [
-        'level',
-        'logger',
-        'server_name',
-        'transaction',
-        'environment',
-        'sentry:release',
-        'sentry:dist',
-        'sentry:user',
-        'site',
-        'url',
-    ]
-    output.update({name: _unicodify(tags.pop(name, None)) for name in names})
+    output.update({name: _unicodify(tags.pop(name, None))
+        for name in settings.PROMOTED_TAGS
+    })
 
 
 def extract_promoted_contexts(output, contexts, tags):

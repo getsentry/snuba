@@ -15,12 +15,31 @@ class TestUtil(BaseTest):
         assert column_expr('tags[foo]', body.copy()) ==\
             "(tags.value[indexOf(tags.key, \'foo\')] AS `tags[foo]`)"
 
-        # All tags expression
+        # Promoted tag expression / no translation
+        assert column_expr('tags[server_name]', body.copy()) ==\
+            "(`server_name` AS `tags[server_name]`)"
+
+        # Promoted tag expression / with translation
+        assert column_expr('tags[app.device]', body.copy()) ==\
+            "(`app_device` AS `tags[app.device]`)"
+
+        # All tag keys expression
         with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['level', 'sentry:user']}):
             assert column_expr('tags_key', body.copy()) == (
                 '(((arrayJoin(arrayMap((x,y) -> [x,y], '
                 'arrayConcat([\'level\', \'sentry:user\'], tags.key), '
                 'arrayConcat([level, `sentry:user`], tags.value))) '
+                'AS all_tags))[1] AS `tags_key`)'
+            )
+
+        # All tag_keys with translated tags. Note the tags_key array uses the
+        # tag name that the user expects, but the parallel tags.value array
+        # uses the actual column name
+        with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
+            assert column_expr('tags_key', body.copy()) == (
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
+                'arrayConcat([\'browser.name\'], tags.key), '
+                'arrayConcat([`browser_name`], tags.value))) '
                 'AS all_tags))[1] AS `tags_key`)'
             )
 

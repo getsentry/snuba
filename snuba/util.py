@@ -109,16 +109,19 @@ def tag_expr(column_name):
     "promoted" to a top level column, or whether we have to look in the tags map.
     """
     match = settings.NESTED_COL_EXPR.match(column_name)
-    col, sub = match.group(1), match.group(2)
-    sub_field = sub.replace('.', '_')
-    if col in settings.PROMOTED_COLS and sub_field in settings.PROMOTED_COLS[col]:
-        expr = string_col(sub_field)  # TODO recurse?
-    else:
-        expr = u'{col}.value[indexOf({col}.key, {sub})]'.format(**{
-            'col': col,
-            'sub': escape_literal(sub)
-        })
-    return expr
+    col, tag = match.group(1), match.group(2)
+
+    # For promoted tags, return the column name.
+    if col in settings.PROMOTED_COLS:
+        actual_tag = settings.COL_TRANSLATIONS[col].get(tag, tag)
+        if actual_tag in settings.PROMOTED_COLS[col]:
+            return string_col(actual_tag)
+
+    # For the rest, return an expression that looks it up in the nested tags.
+    return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
+        'col': col,
+        'tag': escape_literal(tag)
+    })
 
 
 def tags_expr(column_name, body):
@@ -130,25 +133,22 @@ def tags_expr(column_name, body):
     cases where we do not have a tag key to filter on (eg top tags).
     """
     assert column_name in ['tags_key', 'tags_value']
-    col, typ = column_name.split('_', 1)
+    col, k_or_v = column_name.split('_', 1)
     promoted = settings.PROMOTED_COLS[col]
-
-    key_list = u'arrayConcat([{}], {}.key)'.format(
-        u', '.join(u'\'{}\''.format(p) for p in promoted),
-        col
-    )
-    val_list = u'arrayConcat([{}], {}.value)'.format(
-        ', '.join(string_col(p) for p in promoted),
-        col
-    )
+    rev_trans = settings.COL_REV_TRANSLATIONS[col]
+    promoted_keys = (u'\'{}\''.format(rev_trans.get(p, p)) for p in promoted)
+    promoted_vals = (string_col(p) for p in promoted)
+    key_list = u'arrayConcat([{}], {}.key)'.format(u', '.join(promoted_keys), col)
+    val_list = u'arrayConcat([{}], {}.value)'.format(', '.join(promoted_vals), col)
     expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
         key_list,
         val_list
     )
+
     # put the tag expression in the alias cache so we can use the alias
     # to refer to it next time instead of expanding it again.
     expr = alias_expr(expr, 'all_tags', body)
-    return u'({})'.format(expr) + ('[1]' if typ == 'key' else '[2]')
+    return u'({})'.format(expr) + ('[1]' if k_or_v == 'key' else '[2]')
 
 
 def is_condition(cond_or_list):

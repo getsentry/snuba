@@ -59,7 +59,8 @@ METADATA_COLUMNS = [
     'partition',
 ]
 PROMOTED_TAGS = [
-    # These are the classic tags.
+    # These are the classic tags, they are saved in Snuba exactly as they
+    # appear in the event body.
     'level',
     'logger',
     'server_name',
@@ -70,7 +71,11 @@ PROMOTED_TAGS = [
     'sentry:user',
     'site',
     'url',
-    # These are still treated as tags for search, but really they are contexts.
+]
+PROMOTED_CONTEXT_TAGS = [
+    # These are promoted tags that come in in `tags`, but are more closely
+    # related to contexts.  To avoid naming confusion with Clickhouse nested
+    # columns, they are stored in the database with s/./_/
     'app_device',
     'device',
     'device_family',
@@ -113,7 +118,7 @@ WRITER_COLUMNS = [
     'ip_address',
     'sdk_name',
     'sdk_version',
-] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + [
+] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS + [
     'tags.key',
     'tags.value',
     'contexts.key',
@@ -139,10 +144,22 @@ WRITER_COLUMNS = [
 NESTED_COL_EXPR = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 # The set of columns, and associated keys that have been promoted
-# to the top level table namespace
+# to the top level table namespace. They are listed here as
 PROMOTED_COLS = {
-    'tags': PROMOTED_TAGS,
+    'tags': PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS,
     'contexts': PROMOTED_CONTEXTS,
+}
+
+# For every item in PROMOTED_COLS, a map of translations from the tag
+# we receive in the query to the column we store in the table.
+COL_TRANSLATIONS = {
+    'tags': {t.replace('_', '.'): t for t in PROMOTED_CONTEXT_TAGS if '_' in t},
+    'contexts': {}
+}
+
+# And a reverse map from the database columns to the tags the client expects
+COL_REV_TRANSLATIONS = {
+    col: dict(map(reversed, trans.items())) for col, trans in COL_TRANSLATIONS.items()
 }
 
 # Column Definitions (Name, Type)

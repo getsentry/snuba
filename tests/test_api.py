@@ -359,7 +359,7 @@ class TestApi(BaseTest):
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
-            'foo', 'foo.bar', 'os_rooted', 'sentry:release', 'environment', 'sentry:dist'
+            'foo', 'foo.bar', 'os.rooted', 'sentry:release', 'environment', 'sentry:dist'
         ])
 
         # Reguar (nested) tag
@@ -375,6 +375,17 @@ class TestApi(BaseTest):
         assert result_map['environment']['count'] == 180
         assert len(result_map['environment']['top']) == 2
         assert all(r in self.environments for r in result_map['environment']['top'])
+
+    def test_tag_translation(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'aggregations': [
+                ['topK(100)', 'tags_key', 'top'],
+            ],
+        })).data)
+
+        assert 'os.rooted' in result['data'][0]['top']
 
     def test_unicode_condition(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
