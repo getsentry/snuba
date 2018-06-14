@@ -65,6 +65,23 @@ class TestUtil(BaseTest):
         # Columns that need escaping
         assert column_expr('sentry:release', body.copy()) == '`sentry:release`'
 
+    def test_alias_in_alias(self):
+        body = {}
+        with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
+            assert column_expr('tags_key', body) == (
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
+                'arrayConcat([\'browser.name\'], tags.key), '
+                'arrayConcat([`browser_name`], tags.value))) '
+                'AS all_tags))[1] AS `tags_key`)'
+            )
+
+            # If we want to use `tags_key` again, make sure we use the
+            # already-created alias verbatim
+            assert column_expr('tags_key', body) == '`tags_key`'
+            # If we also want to use `tags_value`, make sure that we use
+            # the `all_tags` alias instead of re-expanding the tags arrayJoin
+            assert column_expr('tags_value', body) == '((all_tags)[2] AS `tags_value`)'
+
     def test_escape(self):
         assert escape_literal("'") == r"'\''"
         assert escape_literal(date(2001, 1, 1)) == "toDate('2001-01-01')"
@@ -108,6 +125,23 @@ class TestUtil(BaseTest):
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
         column_expr('tags[foo]', body)  # Expand it once so the next time is aliased
         assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'
+
+    def test_duplicate_expression_alias(self):
+        body = {
+            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'aggregations': [
+                ['topK(3)', 'logger', 'dupe_alias'],
+                ['uniq', 'environment', 'dupe_alias'],
+            ]
+        }
+        # In the case where 2 different expressions are aliased
+        # to the same thing, one ends up overwriting the other.
+        # This may not be ideal as it may mask bugs in query conditions
+        exprs = [
+            column_expr(col, body, alias, agg)
+            for (agg, col, alias) in body['aggregations']
+        ]
+        assert exprs == ['(topK(3)(logger) AS `dupe_alias`)', '`dupe_alias`']
 
     def test_issue_expr(self):
         # Provides list of issues but doesn't use them
