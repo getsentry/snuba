@@ -1,14 +1,15 @@
 from flask import request
 
-import calendar
 from datetime import date, datetime
 from dateutil.tz import tz
-import simplejson as json
+from hashlib import md5
 from itertools import chain
-import logging
+import calendar
 import jsonschema
+import logging
 import numbers
 import re
+import simplejson as json
 import six
 import time
 
@@ -71,7 +72,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
             expr = u'{}({})'.format(aggregate, expr)
             if aggregate == 'uniq':  # default uniq() result to 0, not null
                 expr = 'ifNull({}, 0)'.format(expr)
-        else:  # This is the "count()" case where the '()' is already provided
+        else: # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
     alias = escape_col(alias or column_name or aggregate)
@@ -231,7 +232,12 @@ def raw_query(sql, client):
 
     try:
         error = None
-        data, meta = client.execute(sql, with_column_types=True, settings=query_settings)
+        data, meta = client.execute(
+            sql,
+            with_column_types=True,
+            settings=query_settings,
+            query_id=md5(force_bytes(sql)).hexdigest()
+        )
         logger.debug(sql)
     except BaseException as ex:
         data, meta, error = [], [], six.text_type(ex)

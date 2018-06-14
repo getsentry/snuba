@@ -92,10 +92,8 @@ QUERY_SCHEMA = {
                 'items': [
                     {
                         # Aggregation function
+                        # TODO this should eventually become more restrictive again.
                         'type': 'string',
-                        'anyOf': [
-                            {'type': 'string'},
-                        ],
                     }, {
                         # Aggregate column
                         'anyOf': [
