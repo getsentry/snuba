@@ -136,12 +136,9 @@ def query(validated_body=None, timer=None):
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('deleted', '=', 0)
+        ('deleted', '=', 0),
+        ('project_id', 'IN', project_ids),
     ])
-    if len(project_ids) == 1:
-        where_conditions.append(('project_id', '=', project_ids[0]))
-    else:
-        where_conditions.append(('project_id', 'IN', project_ids))
     having_conditions = body['having']
 
     aggregate_exprs = [
