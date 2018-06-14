@@ -90,14 +90,14 @@ def alias_expr(expr, alias, body):
        it can be reused later and return `expr AS alias`
     3. If the expression has been aliased before, return the alias
     """
-    alias_cache = body.setdefault('alias_cache', {})
+    alias_cache = body.setdefault('alias_cache', [])
 
     if expr == alias:
         return expr
-    elif expr in alias_cache:
-        return alias_cache[expr]
+    elif alias in alias_cache:
+        return alias
     else:
-        alias_cache[expr] = alias
+        alias_cache.append(alias)
         return u'({} AS {})'.format(expr, alias)
 
 
