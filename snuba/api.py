@@ -175,14 +175,14 @@ def query(validated_body=None, timer=None):
 
     prewhere_clause = ''
     prewhere_conditions = []
-    if settings.PREWHERE_KEYS:
-        prewhere_conditions.extend([c for c in where_conditions if c[0] in settings.PREWHERE_KEYS])
-
     # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
     if 'issues' in body and len(body['issues']) == 1 and len(body['issues'][0][1]) == 1:
         hash_ = body['issues'][0][1][0]
         hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_ # strip out tombstone
         prewhere_conditions.append(['primary_hash', '=', hash_])
+
+    if not prewhere_conditions and settings.PREWHERE_KEYS:
+        prewhere_conditions.extend([c for c in where_conditions if c[0] in settings.PREWHERE_KEYS])
 
     if prewhere_conditions:
         prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
