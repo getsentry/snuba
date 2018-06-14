@@ -113,7 +113,7 @@ def tag_expr(column_name):
 
     # For promoted tags, return the column name.
     if col in settings.PROMOTED_COLS:
-        actual_tag = settings.COL_TRANSLATIONS[col].get(tag, tag)
+        actual_tag = settings.TAG_COLUMN_MAP[col].get(tag, tag)
         if actual_tag in settings.PROMOTED_COLS[col]:
             return string_col(actual_tag)
 
@@ -135,11 +135,15 @@ def tags_expr(column_name, body):
     assert column_name in ['tags_key', 'tags_value']
     col, k_or_v = column_name.split('_', 1)
     promoted = settings.PROMOTED_COLS[col]
-    rev_trans = settings.COL_REV_TRANSLATIONS[col]
-    promoted_keys = (u'\'{}\''.format(rev_trans.get(p, p)) for p in promoted)
-    promoted_vals = (string_col(p) for p in promoted)
-    key_list = u'arrayConcat([{}], {}.key)'.format(u', '.join(promoted_keys), col)
-    val_list = u'arrayConcat([{}], {}.value)'.format(', '.join(promoted_vals), col)
+    col_map = settings.COLUMN_TAG_MAP[col]
+    key_list = u'arrayConcat([{}], {}.key)'.format(
+        u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
+        col
+    )
+    val_list = u'arrayConcat([{}], {}.value)'.format(
+        ', '.join(string_col(p) for p in promoted),
+        col
+    )
     expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
         key_list,
         val_list

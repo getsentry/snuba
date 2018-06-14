@@ -144,22 +144,22 @@ WRITER_COLUMNS = [
 NESTED_COL_EXPR = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 # The set of columns, and associated keys that have been promoted
-# to the top level table namespace. They are listed here as
+# to the top level table namespace.
 PROMOTED_COLS = {
-    'tags': PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS,
-    'contexts': PROMOTED_CONTEXTS,
+    'tags': frozenset(PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS),
+    'contexts': frozenset(PROMOTED_CONTEXTS),
 }
 
-# For every item in PROMOTED_COLS, a map of translations from the tag
-# we receive in the query to the column we store in the table.
-COL_TRANSLATIONS = {
-    'tags': {t.replace('_', '.'): t for t in PROMOTED_CONTEXT_TAGS if '_' in t},
+# For every item in PROMOTED_COLS, a map of translations from the column
+# name  we save in the database to the tag we receive in the query.
+COLUMN_TAG_MAP = {
+    'tags': {t: t.replace('_', '.') for t in PROMOTED_CONTEXT_TAGS},
     'contexts': {}
 }
 
-# And a reverse map from the database columns to the tags the client expects
-COL_REV_TRANSLATIONS = {
-    col: dict(map(reversed, trans.items())) for col, trans in COL_TRANSLATIONS.items()
+# And a reverse map from the tags the client expects to the database columns
+TAG_COLUMN_MAP = {
+    col: dict(map(reversed, trans.items())) for col, trans in COLUMN_TAG_MAP.items()
 }
 
 # Column Definitions (Name, Type)

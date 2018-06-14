@@ -64,10 +64,11 @@ class TestApi(BaseTest):
                         'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                         'sentry:dist': 'dist1',
                         'os_rooted': 1,
+                        'os_name': 'windows',
                         'sentry:release': six.text_type(tick),
                         'environment': self.environments[(tock * p) % len(self.environments)],
-                        'tags.key': ['foo', 'foo.bar'],
-                        'tags.value': ['baz', 'qux'],
+                        'tags.key': [ 'foo', 'foo.bar', 'os_name'],
+                        'tags.value': ['baz', 'qux', 'linux'],
                         'retention_days': settings.DEFAULT_RETENTION_DAYS,
                     })
         self.write_processed_events(events)
@@ -359,7 +360,20 @@ class TestApi(BaseTest):
         result_map = {d['tags_key']: d for d in result['data']}
         # Result contains both promoted and regular tags
         assert set(result_map.keys()) == set([
-            'foo', 'foo.bar', 'os.rooted', 'sentry:release', 'environment', 'sentry:dist'
+            # Promoted tags
+            'environment',
+            'sentry:dist',
+            'sentry:release',
+            'os.rooted',
+            'os.name',
+
+            # User (nested) tags
+            'foo',
+            'foo.bar',
+            # Note this is a nested (user-provided) os_name tag and is
+            # unrelated to the fact that we happen to store the
+            # `os.name` tag as an `os_name` column.
+            'os_name',
         ])
 
         # Reguar (nested) tag
@@ -375,6 +389,7 @@ class TestApi(BaseTest):
         assert result_map['environment']['count'] == 180
         assert len(result_map['environment']['top']) == 2
         assert all(r in self.environments for r in result_map['environment']['top'])
+
 
     def test_tag_translation(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
