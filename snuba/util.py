@@ -235,13 +235,14 @@ def raw_query(sql, client):
     except ValueError:
         pass
 
+    use_query_id = state.get_config('use_query_id', 0)
     try:
         error = None
         data, meta = client.execute(
             sql,
             with_column_types=True,
             settings=query_settings,
-            query_id=md5(force_bytes(sql)).hexdigest()
+            query_id=(md5(force_bytes(sql)).hexdigest() if use_query_id else None)
         )
         logger.debug(sql)
     except BaseException as ex:
