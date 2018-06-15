@@ -126,6 +126,10 @@ class TestUtil(BaseTest):
         column_expr('tags[foo]', body)  # Expand it once so the next time is aliased
         assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'
 
+        # Test special output format of LIKE
+        conditions = [['a', 'LIKE', '%foo%']]
+        assert condition_expr(conditions, body.copy()) == 'like(a, \'%foo%\')'
+
     def test_duplicate_expression_alias(self):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
@@ -167,7 +171,7 @@ class TestUtil(BaseTest):
         # Issue in aggregation, expands all.
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
-            'aggregations': [['topK(3)', 'issue',  'top_issues']]
+            'aggregations': [['topK(3)', 'issue', 'top_issues']]
         }
         assert '[1,1,2]' in issue_expr(body)
 
