@@ -162,10 +162,12 @@ def is_condition(cond_or_list):
 def flat_conditions(conditions):
     return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
 
+
 def tuplify(nested):
     if isinstance(nested, (list, tuple)):
         return tuple(tuplify(child) for child in nested)
     return nested
+
 
 def condition_expr(conditions, body, depth=0):
     """
@@ -184,7 +186,10 @@ def condition_expr(conditions, body, depth=0):
         col, op, lit = conditions
         col = column_expr(col, body)
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
-        return u'{} {} {}'.format(col, op, lit)
+        if op == 'LIKE':
+            return u'like({}, {})'.format(col, lit)
+        else:
+            return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
