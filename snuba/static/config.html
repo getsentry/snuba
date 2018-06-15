@@ -80,7 +80,7 @@
                       {Object.keys(this.state.controls).map(key => (
                           <li key={key} className={"option" + (this.state.controls[key] == null ? " disabled":"")}>
                             <label htmlFor={key}>{key}</label>
-                            <input type="text" name={key} value={this.state.controls[key] || ''} onChange={this.handleChange} />
+                            <input type="text" name={key} value={this.state.controls[key] == null ? '' : this.state.controls[key]} onChange={this.handleChange} />
                             <button name={key} onClick={event => this.handleChange(event, true)}>Delete</button>
                           </li>
                       ))}
