@@ -116,6 +116,9 @@ WRITER_COLUMNS = [
     'username',
     'email',
     'ip_address',
+    'geo_country_code',
+    'geo_subdivision_code',
+    'geo_city_name',
     'sdk_name',
     'sdk_version',
 ] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS + [
@@ -182,6 +185,9 @@ SCHEMA_COLUMNS = [
     ('username', 'Nullable(String)'),
     ('email', 'Nullable(String)'),
     ('ip_address', 'Nullable(String)'),
+    ('geo_country_code', 'Nullable(String)'),
+    ('geo_subdivision_code', 'Nullable(String)'),
+    ('geo_city_name', 'Nullable(String)'),
 
     # optional misc
     ('sdk_name', 'Nullable(String)'),
