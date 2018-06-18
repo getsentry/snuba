@@ -30,6 +30,7 @@ script:
   - make test
 before_deploy:
   - docker pull "$IMAGE_NAME" || true
+  # docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" --build-arg PYTHON_VERSION=3 --build-arg PYPY_SUFFIX=3 .
   - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" .
   - docker save $IMAGE_NAME | gzip > $CACHE_FILE_SNUBA
   - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
