@@ -2,6 +2,7 @@ from datetime import datetime
 from mock import patch
 import time
 from datadog import statsd
+from six.moves import range
 
 from base import BaseTest
 
@@ -71,7 +72,7 @@ class TestConsumer(BaseTest):
         )
 
         consumer.consumer.items = [1, 2, 3]
-        for x in xrange(len(consumer.consumer.items)):
+        for x in range(len(consumer.consumer.items)):
             consumer._run_once()
         consumer._shutdown()
 
@@ -95,17 +96,17 @@ class TestConsumer(BaseTest):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
         consumer.consumer.items = [1, 2, 3]
-        for x in xrange(len(consumer.consumer.items)):
+        for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
         consumer.consumer.items = [4, 5, 6]
-        for x in xrange(len(consumer.consumer.items)):
+        for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
         consumer.consumer.items = [7, 8, 9]
-        for x in xrange(len(consumer.consumer.items)):
+        for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         consumer._shutdown()

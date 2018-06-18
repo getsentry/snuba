@@ -1,10 +1,15 @@
-FROM pypy:2-slim
+ARG PYTHON_VERSION=2
+FROM pypy:${PYTHON_VERSION}-slim
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && \
     apt-get install --no-install-recommends -y curl build-essential libpcre3 libpcre3-dev liblz4-1 liblz4-dev && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old
-RUN ln -s /usr/local/bin/pypy /usr/local/bin/python
+
+# pypy:2-slim binary: /usr/local/bin/pypy
+# pypy:3-slim binary: /usr/local/bin/pypy3
+ARG PYPY_SUFFIX
+RUN ln -s /usr/local/bin/pypy${PYPY_SUFFIX} /usr/local/bin/python
 
 RUN cd && curl -L https://github.com/edenhill/librdkafka/archive/v0.11.4.tar.gz -O && \
     tar xf v0.11.4.tar.gz && cd librdkafka-0.11.4/ && \
@@ -14,9 +19,11 @@ RUN cd && curl -L https://github.com/edenhill/librdkafka/archive/v0.11.4.tar.gz 
 RUN useradd -m -s /bin/bash snuba
 WORKDIR /home/snuba
 
-COPY requirements.txt ./
-
-RUN pip install --no-cache-dir -r requirements.txt
+# This is required in addition to the PYTHON_VERSION ARG at the top, because
+# apparently the one before FROM is not in scope here.
+ARG PYTHON_VERSION=2
+COPY requirements-py${PYTHON_VERSION}.txt ./
+RUN pip install --no-cache-dir -r requirements-py${PYTHON_VERSION}.txt
 
 COPY bin ./bin/
 COPY snuba ./snuba/

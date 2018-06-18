@@ -92,7 +92,7 @@ class TestApi(BaseTest):
                 'groupby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
-            for b in range(buckets):
+            for b in range(int(buckets)):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
                 assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result['data'][b]['aggregate'] == float(rollup_mins) / p
@@ -111,7 +111,7 @@ class TestApi(BaseTest):
                 'orderby': 'time',
             })).data)
             buckets = self.minutes / rollup_mins
-            for b in range(buckets):
+            for b in range(int(buckets)):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
                 assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result['data'][b]['aggregate'] == rollup_mins  # project 1 has 1 event per minute

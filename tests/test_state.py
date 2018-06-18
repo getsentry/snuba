@@ -70,7 +70,7 @@ class TestState(BaseTest):
         state.set_configs({'bar': 2, 'baz': 3})
         assert state.get_config('foo') == 1
         assert state.get_config('bar') == 2
-        assert state.get_configs() == {'foo': 1, 'bar': 2, 'baz': 3}
+        assert state.get_configs() == {b'foo': 1, b'bar': 2, b'baz': 3}
 
         state.set_configs({'bar': 'quux'})
-        assert state.get_configs() == {'foo': 1, 'bar': 'quux', 'baz': 3}
+        assert state.get_configs() == {b'foo': 1, b'bar': b'quux', b'baz': 3}

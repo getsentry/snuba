@@ -46,11 +46,11 @@ class TestProcessor(BaseTest):
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
-        self.event['primary_hash'] = "'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('utf-8')
+        self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
 
         _, _, processed = process_message(self.event)
 
-        assert processed['primary_hash'] == 'ef981cdeac7a4b76bf55f214e1255653'
+        assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
     def test_extract_required(self):
         event = {
