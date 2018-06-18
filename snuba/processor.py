@@ -100,6 +100,8 @@ def extract_common(output, message, data):
         primary_hash = md5(force_bytes(primary_hash)).hexdigest()
     output['primary_hash'] = primary_hash
     output['received'] = int(data['received'])
+    output['type'] = _unicodify(data.get('type', None))
+    output['version'] = _unicodify(data.get('version', None))
 
 
 def extract_sdk(output, sdk):
