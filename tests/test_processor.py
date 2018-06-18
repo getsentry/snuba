@@ -286,16 +286,21 @@ class TestProcessor(BaseTest):
             'id': 'user_id',
             'email': 'user_email',
             'username': 'user_username',
-            'ip_address': 'user_ip_address',
+            'ip_address': '1.1.1.1',
         }
         output = {}
 
         processor.extract_user(output, user)
 
-        assert output == {'email': u'user_email',
-                          'ip_address': u'user_ip_address',
-                          'user_id': u'user_id',
-                          'username': u'user_username'}
+        assert output == {
+            'email': u'user_email',
+            'ip_address': u'1.1.1.1',
+            'user_id': u'user_id',
+            'username': u'user_username',
+            'geo_country_code': None,
+            'geo_subdivision_code': None,
+            'geo_city_name': None,
+        }
 
     def test_extract_http(self):
         http = {

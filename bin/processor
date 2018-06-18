@@ -19,6 +19,7 @@ import logging
 import signal
 
 import click
+import geoip2.database
 from confluent_kafka import Producer
 from raven import Client as RavenClient
 
@@ -47,11 +48,12 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
               help='Max length of time to buffer messages in memory before writing to Kafka.')
 @click.option('--auto-offset-reset', default='error', type=click.Choice(['error', 'earliest', 'latest']),
               help='Kafka consumer auto offset reset.')
+@click.option('--geo-ip-db', help='Path to a MaxMind City Database.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def run(raw_events_topic, consumer_group, processed_events_topic, processed_deletes_topic,
-        bootstrap_server, max_batch_size, max_batch_time_ms, auto_offset_reset, log_level,
+        bootstrap_server, max_batch_size, max_batch_time_ms, auto_offset_reset, geo_ip_db, log_level,
         dogstatsd_host, dogstatsd_port):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
@@ -60,10 +62,15 @@ def run(raw_events_topic, consumer_group, processed_events_topic, processed_dele
     )
 
     producer = Producer({'bootstrap.servers': ','.join(bootstrap_server)})
+    if geo_ip_db:
+        geo_reader = geoip2.database.Reader(geo_ip_db)
+    else:
+        geo_reader = None
+    worker = ProcessorWorker(producer, processed_events_topic, processed_deletes_topic, geo_reader=geo_reader)
 
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ProcessorWorker(producer, processed_events_topic, processed_deletes_topic),
+        worker=worker,
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

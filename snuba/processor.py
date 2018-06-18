@@ -1,4 +1,5 @@
 import calendar
+import geoip2.errors
 import logging
 import simplejson as json
 import six
@@ -190,11 +191,29 @@ def extract_extra_tags(output, tags):
     output['tags.value'] = tag_values
 
 
-def extract_user(output, user):
+def extract_user(output, user, geo_reader=None):
     output['user_id'] = _unicodify(user.get('id', None))
     output['username'] = _unicodify(user.get('username', None))
     output['email'] = _unicodify(user.get('email', None))
-    output['ip_address'] = _unicodify(user.get('ip_address', None))
+    ip_address = _unicodify(user.get('ip_address', None))
+    output['ip_address'] = ip_address
+
+    geo_country_code = None
+    geo_subdivision_code = None
+    geo_city_name = None
+    if ip_address and geo_reader:
+        try:
+            response = geo_reader.city(ip_address)
+        except geoip2.errors.AddressNotFoundError:
+            pass
+        else:
+            geo_country_code = _unicodify(response.country.iso_code)
+            geo_subdivision_code = _unicodify(response.subdivisions.most_specific.iso_code)
+            geo_city_name = _unicodify(response.city.name)
+
+    output['geo_country_code'] = geo_country_code
+    output['geo_subdivision_code'] = geo_subdivision_code
+    output['geo_city_name'] = geo_city_name
 
 
 def extract_http(output, http):
@@ -257,7 +276,7 @@ def extract_stacktraces(output, stacks):
     output['exception_frames.stack_level'] = frame_stack_levels
 
 
-def process_message(message):
+def process_message(message, geo_reader=None):
     """\
     Process a raw message into a tuple of (message_type, key, processed_message):
     * message_type: one of the sentinel values INSERT or DELETE
@@ -269,7 +288,7 @@ def process_message(message):
     if isinstance(message, dict):
         # deprecated unwrapped event message == insert
         message_type = INSERT
-        processed = process_insert(message)
+        processed = process_insert(message, geo_reader=geo_reader)
     elif isinstance(message, (list, tuple)) and len(message) >= 2:
         version = message[0]
 
@@ -278,7 +297,7 @@ def process_message(message):
             type_, event = message[1:]
             if type_ == 'insert':
                 message_type = INSERT
-                processed = process_insert(event)
+                processed = process_insert(event, geo_reader=geo_reader)
             elif type_ == 'delete':
                 message_type = DELETE
                 processed = process_delete(event)
@@ -290,7 +309,7 @@ def process_message(message):
     return (message_type, key, processed)
 
 
-def process_insert(message):
+def process_insert(message, geo_reader=None):
     processed = {'deleted': 0}
     extract_required(processed, message)
 
@@ -307,7 +326,7 @@ def process_insert(message):
     extract_promoted_contexts(processed, contexts, tags)
 
     user = data.get('sentry.interfaces.User', {})
-    extract_user(processed, user)
+    extract_user(processed, user, geo_reader)
 
     http = data.get('sentry.interfaces.Http', {})
     extract_http(processed, http)
@@ -329,15 +348,16 @@ def process_delete(message):
 
 
 class ProcessorWorker(AbstractBatchWorker):
-    def __init__(self, producer, events_topic, deletes_topic):
+    def __init__(self, producer, events_topic, deletes_topic, geo_reader=None):
         self.producer = producer
         self.events_topic = events_topic
         self.deletes_topics = deletes_topic
+        self.geo_reader = geo_reader
 
     def process_message(self, message):
         value = json.loads(message.value())
 
-        message_type, key, processed = process_message(value)
+        message_type, key, processed = process_message(value, geo_reader=self.geo_reader)
         processed['offset'] = message.offset()
         processed['partition'] = message.partition()
 
