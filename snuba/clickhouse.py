@@ -1,6 +1,6 @@
 import logging
 
-from six.moves import queue
+from six.moves import queue, range
 
 from clickhouse_driver import Client, errors
 
@@ -29,7 +29,7 @@ class ClickhousePool(object):
         self.pool = queue.LifoQueue(max_pool_size)
 
         # Fill the queue up so that doing get() on it will block properly
-        for _ in xrange(max_pool_size):
+        for _ in range(max_pool_size):
             self.pool.put(None)
 
     def execute(self, *args, **kwargs):

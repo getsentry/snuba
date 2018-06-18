@@ -1,6 +1,7 @@
 import calendar
 import logging
 import simplejson as json
+import six
 import re
 from datetime import datetime
 from hashlib import md5
@@ -66,7 +67,7 @@ def _unicodify(s):
     if isinstance(s, dict) or isinstance(s, list):
         return json.dumps(s)
 
-    return unicode(s)
+    return six.text_type(s)
 
 
 def get_key(message):
@@ -161,11 +162,12 @@ def extract_promoted_contexts(output, contexts, tags):
 def extract_extra_contexts(output, contexts):
     context_keys = []
     context_values = []
+    valid_types = (int, float) + six.string_types
     for ctx_name, ctx_obj in contexts.items():
         if isinstance(ctx_obj, dict):
             ctx_obj.pop('type', None)  # ignore type alias
             for inner_ctx_name, ctx_value in ctx_obj.items():
-                if isinstance(ctx_value, (int, float, basestring)):
+                if isinstance(ctx_value, valid_types):
                     value = _unicodify(ctx_value)
                     if value:
                         context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))

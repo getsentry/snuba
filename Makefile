@@ -10,7 +10,7 @@ test:
 	SNUBA_SETTINGS=test py.test -vv
 
 install-python-dependencies:
-	@pip install -q -r requirements.txt
+	@pip install -q -r requirements-py2.txt
 	@python setup.py -q develop
 
 install-librdkafka-homebrew:

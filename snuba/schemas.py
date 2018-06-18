@@ -205,7 +205,7 @@ def validate(value, schema, set_defaults=True):
     orig = jsonschema.Draft4Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
-        for property, subschema in properties.iteritems():
+        for property, subschema in six.iteritems(properties):
             if 'default' in subschema:
                 if callable(subschema['default']):
                     instance.setdefault(property, subschema['default']())
