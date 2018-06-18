@@ -10,7 +10,8 @@ test:
 	SNUBA_SETTINGS=test py.test -vv
 
 install-python-dependencies:
-	@pip install -q -r requirements-py2.txt
+	$(eval PY_VERSION = $(shell python -c "import sys; print(sys.version_info[0])"))
+	@pip install -q -r requirements-py$(PY_VERSION).txt
 	@python setup.py -q develop
 
 install-librdkafka-homebrew:
