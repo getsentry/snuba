@@ -5,8 +5,8 @@ services:
 dist: trusty
 language: python
 python:
-  - "pypy2.7"
-  - "pypy3.6"
+  - "2.7"
+  - "3.6"
 env:
   global:
     - CACHE_DIR=$HOME/.cache/docker
