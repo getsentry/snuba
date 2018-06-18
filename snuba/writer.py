@@ -90,7 +90,7 @@ class WriterWorker(AbstractBatchWorker):
                 continue
             except errors.ServerException as e:
                 logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
-                if e.code == errors.ErrorCodes.TOO_MUCH_SIMULTANEOUS_QUERIES:
+                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     time.sleep(1)
                     continue
                 else:
