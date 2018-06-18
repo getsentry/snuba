@@ -75,7 +75,9 @@ class TestProcessor(BaseTest):
             'platform': 'the_platform',
         }
         data = {
-            'received': 1520971716.0
+            'received': 1520971716.0,
+            'type': 'error',
+            'version': 6,
         }
         output = {}
 
@@ -85,6 +87,8 @@ class TestProcessor(BaseTest):
             'platform': u'the_platform',
             'primary_hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             'received': 1520971716,
+            'type': 'error',
+            'version': '6',
         }
 
     def test_deleted(self):

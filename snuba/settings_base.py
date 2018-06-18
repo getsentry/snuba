@@ -118,6 +118,8 @@ WRITER_COLUMNS = [
     'ip_address',
     'sdk_name',
     'sdk_version',
+    'type',
+    'version',
 ] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS + [
     'tags.key',
     'tags.value',
@@ -186,6 +188,8 @@ SCHEMA_COLUMNS = [
     # optional misc
     ('sdk_name', 'Nullable(String)'),
     ('sdk_version', 'Nullable(String)'),
+    ('type', 'Nullable(String)'),
+    ('version', 'Nullable(String)'),
 
     # optional stream related data
     ('offset', 'Nullable(UInt64)'),
