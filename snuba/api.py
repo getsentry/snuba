@@ -232,7 +232,7 @@ def query(validated_body=None, timer=None):
             if not g_allowed or not allowed:
                 status = 429
             else:
-                result = util.raw_query(sql, clickhouse_ro)
+                result = util.raw_query(sql, clickhouse_ro, timer)
                 timer.mark('execute')
 
                 if result.get('error'):
