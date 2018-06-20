@@ -25,6 +25,8 @@ rate_history_s = 3600
 
 
 ratelimit_prefix = 'snuba-ratelimit:'
+query_lock_prefix = 'snuba-query-lock:'
+query_cache_prefix = 'snuba-query-cache:'
 config_hash = 'snuba-config'
 queries_list = 'snuba-queries'
 
@@ -169,3 +171,47 @@ def get_queries():
         logger.error(ex)
 
     return queries
+
+def get_result(query_id):
+    key = '{}{}'.format(query_cache_prefix, query_id)
+    result = rds.get(key)
+    return result
+
+def set_result(query_id, result):
+    timeout = 1
+    key = '{}{}'.format(query_cache_prefix, query_id)
+    return rds.set(key, result, ex=timeout)
+
+unlock_lua = rds.register_script('''
+    if redis.call('get', KEYS[1]) == ARGV[1]
+    then
+        return redis.call('del', KEYS[1])
+    else
+        return 0
+    end
+''')
+
+@contextmanager
+def deduper(query_id):
+    """
+    A simple redis distributed lock on a query_id to prevent multiple
+    concurrent queries running with the same id. Blocks subsequent
+    queries until the first is finished.
+
+    When used in conjunction with caching this means that the subsequent
+    queries can then use the cached result from the first query.
+    """
+    if query_id is None:
+        yield False
+    else:
+        lock = '{}{}'.format(query_lock_prefix, query_id)
+        nonce = uuid.uuid4()
+        timeout = 10
+        try:
+            is_dupe = False
+            while not rds.set(lock, nonce, nx=True, ex=timeout):
+                is_dupe = True
+                time.sleep(0.01)
+            yield is_dupe
+        finally:
+            unlock_lua(keys=[lock], args=[nonce])

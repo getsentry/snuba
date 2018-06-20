@@ -1,12 +1,21 @@
 from base import BaseTest
-import time
+from functools import partial
 from mock import patch
+import simplejson as json
+from threading import Thread
+import time
 import uuid
 
 from snuba import state
 
 
 class TestState(BaseTest):
+    def setup_method(self, test_method):
+        super(TestState, self).setup_method(test_method)
+        from snuba.api import application
+        assert application.testing == True
+        self.app = application.test_client()
+        self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
     def test_concurrent_limit(self):
         # No concurrent limit
@@ -74,3 +83,61 @@ class TestState(BaseTest):
 
         state.set_configs({'bar': 'quux'})
         assert state.get_configs() == {b'foo': 1, b'bar': b'quux', b'baz': 3}
+
+    def test_dedupe(self):
+        try:
+            state.set_config('use_query_id', 1)
+            state.set_config('use_cache', 1)
+            uniq_name = uuid.uuid4().hex[:8]
+            def do_request(result_container):
+                result = json.loads(self.app.post('/query', data=json.dumps({
+                    'project': 1,
+                    'granularity': 3600,
+                    'aggregations': [['count()', '', uniq_name]],
+                })).data)
+                result_container.append(result)
+
+            # t0 and t1 are exact duplicate queries submitted concurrently.  One of
+            # them will execute normally and the other one should be held back by
+            # the deduper, until it can use the cached result from the first.
+            results = [[] for _ in range(4)]
+            t0 = Thread(target=do_request, args=(results[0],))
+            t1 = Thread(target=do_request, args=(results[1],))
+            t0.start()
+            t1.start()
+            t0.join()
+            t1.join()
+
+            # a subsequent request will also use the cached value as
+            # it is still fresh
+            do_request(results[2])
+
+            # after a second, the cache entry will no longer be fresh
+            # and we will re-query the database.
+            time.sleep(1)
+            do_request(results[3])
+
+            results = [r.pop() for r in results]
+            # The results should all have the same data
+            datas = [r['data'] for r in results]
+            assert datas[0] == [{uniq_name: 0}]
+            assert all(d == datas[0] for d in datas)
+
+            stats = [r['stats'] for r in results]
+            # we don't know which order these will execute in, but one
+            # of them will be a cached result
+            assert stats[0]['cache_hit'] in (True, False)
+            assert stats[1]['cache_hit'] in (True, False)
+            assert stats[0]['cache_hit'] != stats[1]['cache_hit']
+            # and the cached one should be the one marked as dupe
+            assert stats[0]['cache_hit'] == stats[0]['is_duplicate']
+            assert stats[1]['cache_hit'] == stats[1]['is_duplicate']
+
+            assert stats[2]['cache_hit'] == True
+            assert stats[2]['is_duplicate'] == False
+            assert stats[3]['cache_hit'] == False
+            assert stats[3]['is_duplicate'] == False
+
+        finally:
+            state.delete_config('use_query_id')
+            state.delete_config('use_cache')

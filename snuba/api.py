@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import timedelta
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
+from hashlib import md5
 from markdown import markdown
 from raven.contrib.flask import Sentry
 import simplejson as json
@@ -223,41 +224,60 @@ def query(validated_body=None, timer=None):
     timer.mark('prepare_query')
 
     result = {}
+    status = 200
     gpsl = state.get_config('global_per_second_limit', 1000)
     gcl = state.get_config('global_concurrent_limit', 1000)
     ppsl = state.get_config('project_per_second_limit', 1000)
     pcl = state.get_config('project_concurrent_limit', 1000)
-    with state.rate_limit('global', gpsl, gcl) as (g_allowed, g_concurr, g_rate):
-        with state.rate_limit(project_ids[0], ppsl, pcl) as (allowed, concurr, rate):
-            if not g_allowed or not allowed:
-                status = 429
-            else:
-                result = util.raw_query(sql, clickhouse_ro)
-                timer.mark('execute')
+    use_query_id = state.get_config('use_query_id', 0)
+    use_cache = use_query_id and state.get_config('use_cache', 0)
+    query_id = md5(util.force_bytes(sql)).hexdigest() if use_query_id else None
+    cache_hit = use_cache
+    concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
+    with state.deduper(query_id) as is_dupe:
+        timer.mark('dedupe_wait')
+        if use_cache:
+            result = json.loads(state.get_result(query_id) or "{}")
+            timer.mark('cache_get')
 
-                if result.get('error'):
-                    status = 500
-                else:
-                    status = 200
+        if not result:
+            cache_hit = False
+            with state.rate_limit('global', gpsl, gcl) as (g_allowed, g_concurr, g_rate):
+                with state.rate_limit(project_ids[0], ppsl, pcl) as (allowed, concurr, rate):
+                    if not g_allowed or not allowed:
+                        status = 429
+                    else:
+                        result = util.raw_query(sql, clickhouse_ro, query_id)
+                        timer.mark('execute')
+                        if result.get('error'):
+                            status = 500
+                        elif use_cache:
+                            state.set_result(query_id, json.dumps(result))
+                            timer.mark('cache_set')
 
-    result['timing'] = timer
+    stats = {
+        'is_duplicate': is_dupe,
+        'cache_hit': cache_hit,
+        'num_days': (to_date - from_date).days,
+        'num_issues': len(validated_body.get('issues', [])),
+        'num_hashes': sum(len(h) for i, h in validated_body.get('issues', [])),
+        'global_concurrent': g_concurr,
+        'global_rate': g_rate,
+        'project_concurrent': concurr,
+        'project_rate': rate,
+    }
     timer.record(metrics)
-    metrics.gauge('query.global_concurrent', g_concurr)
     state.record_query({
         'request': validated_body,
         'referrer': request.referrer,
         'sql': sql,
-        'timing': result['timing'],
-        'stats': {
-            'num_days': (to_date - from_date).days,
-            'num_issues': len(validated_body.get('issues', [])),
-            'num_hashes': sum(len(h) for i, h in validated_body.get('issues', [])),
-            'global_concurrent': g_concurr,
-            'global_rate': g_rate,
-            'project_concurrent': concurr,
-            'project_rate': rate,
-        }
+        'timing': timer,
+        'stats': stats,
     })
+
+    result['timing'] = timer
+    if settings.STATS_IN_RESPONSE:
+        result['stats'] = stats
 
     return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
 

@@ -222,7 +222,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(sql, client):
+def raw_query(sql, client, query_id=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -235,14 +235,13 @@ def raw_query(sql, client):
     except ValueError:
         pass
 
-    use_query_id = state.get_config('use_query_id', 0)
     try:
         error = None
         data, meta = client.execute(
             sql,
             with_column_types=True,
             settings=query_settings,
-            query_id=(md5(force_bytes(sql)).hexdigest() if use_query_id else None)
+            query_id=query_id
         )
         logger.debug(sql)
     except BaseException as ex:
