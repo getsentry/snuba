@@ -88,18 +88,18 @@ class TestState(BaseTest):
 
         state.set_config('use_query_id', 1)
         state.set_config('use_cache', 1)
-
+        uniq_name = uuid.uuid4().hex[:8]
         def do_request(result_container):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 1,
                 'granularity': 3600,
-                'aggregations': [['count()', '', 'concurrent_count']],
+                'aggregations': [['count()', '', uniq_name]],
             })).data)
             result_container.append(result)
 
-        # t0 and t1 are exact duplicate queries submitted concurrently
-        # t1 should be held back until t0 finishes, at which point t1
-        # will use the cached result from t0.
+        # t0 and t1 are exact duplicate queries submitted concurrently.  One of
+        # them will execute normally and the other one should be held back by
+        # the deduper, until it can use the cached result from the first.
         results = [[] for _ in range(4)]
         t0 = Thread(target=do_request, args=(results[0],))
         t1 = Thread(target=do_request, args=(results[1],))
@@ -120,12 +120,15 @@ class TestState(BaseTest):
         results = [r.pop() for r in results]
         # The results should all have the same data
         datas = [r['data'] for r in results]
-        assert datas[0] == [{'concurrent_count': 0}]
+        assert datas[0] == [{uniq_name: 0}]
         assert all(d == datas[0] for d in datas)
 
-        # The results should have the right caching flags
-        assert results[0]['cache'] == 0
-        assert results[1]['cache'] == 1
+        # we don't know which order these will execute in, but one
+        # of them will be a cached result
+        assert results[0]['cache'] in (0, 1)
+        assert results[1]['cache'] in (0, 1)
+        assert results[0]['cache'] != results[1]['cache']
+
         assert results[2]['cache'] == 1
         assert results[3]['cache'] == 0
 

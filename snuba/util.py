@@ -239,11 +239,15 @@ def raw_query(sql, client, timer=None):
     use_cache = state.get_config('use_cache', 0)
     query_id = md5(force_bytes(sql)).hexdigest() if use_query_id else None
     with state.deduper(query_id):
+        if timer:
+            timer.mark('dedupe_wait')
         if use_query_id and use_cache:
             cached = state.get_result(query_id)
             if cached is not None:
                 cached = json.loads(cached)
                 cached['cache'] = 1
+                if timer:
+                    timer.mark('cache_hit')
                 return cached
 
         try:
