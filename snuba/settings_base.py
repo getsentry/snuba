@@ -286,3 +286,5 @@ RETENTION_OVERRIDES = {}
 
 # the list of keys that will upgrade from a WHERE condition to a PREWHERE
 PREWHERE_KEYS = []
+
+STATS_IN_RESPONSE = False

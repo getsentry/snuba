@@ -222,7 +222,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(sql, client, timer=None):
+def raw_query(sql, client, query_id=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -235,55 +235,35 @@ def raw_query(sql, client, timer=None):
     except ValueError:
         pass
 
-    use_query_id = state.get_config('use_query_id', 0)
-    use_cache = state.get_config('use_cache', 0)
-    query_id = md5(force_bytes(sql)).hexdigest() if use_query_id else None
-    with state.deduper(query_id):
-        if timer:
-            timer.mark('dedupe_wait')
-        if use_query_id and use_cache:
-            cached = state.get_result(query_id)
-            if cached is not None:
-                cached = json.loads(cached)
-                cached['cache'] = 1
-                if timer:
-                    timer.mark('cache_hit')
-                return cached
+    try:
+        error = None
+        data, meta = client.execute(
+            sql,
+            with_column_types=True,
+            settings=query_settings,
+            query_id=query_id
+        )
+        logger.debug(sql)
+    except BaseException as ex:
+        data, meta, error = [], [], six.text_type(ex)
+        logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
 
-        try:
-            error = None
-            data, meta = client.execute(
-                sql,
-                with_column_types=True,
-                settings=query_settings,
-                query_id=query_id
-            )
-            logger.debug(sql)
-        except BaseException as ex:
-            data, meta, error = [], [], six.text_type(ex)
-            logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
+    # for now, convert back to a dict-y format to emulate the json
+    data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
+    meta = [{'name': m[0], 'type': m[1]} for m in meta]
 
-        # for now, convert back to a dict-y format to emulate the json
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-        meta = [{'name': m[0], 'type': m[1]} for m in meta]
+    for col in meta:
+        # Convert naive datetime strings back to TZ aware ones, and stringify
+        # TODO maybe this should be in the json serializer
+        if col['type'].startswith('DateTime'):
+            for d in data:
+                d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
+        elif col['type'].startswith('Date'):
+            for d in data:
+                dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
+                d[col['name']] = dt.isoformat()
 
-        for col in meta:
-            # Convert naive datetime strings back to TZ aware ones, and stringify
-            # TODO maybe this should be in the json serializer
-            if col['type'].startswith('DateTime'):
-                for d in data:
-                    d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
-            elif col['type'].startswith('Date'):
-                for d in data:
-                    dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
-                    d[col['name']] = dt.isoformat()
-
-        result = {'data': data, 'meta': meta, 'error': error, 'cache': 0}
-
-        if use_query_id and use_cache and error is None:
-            state.set_result(query_id, json.dumps(result))
-
-        return result
+    return {'data': data, 'meta': meta, 'error': error}
 
 
 def uses_issue(body):

@@ -202,14 +202,16 @@ def deduper(query_id):
     queries can then use the cached result from the first query.
     """
     if query_id is None:
-        yield
+        yield False
     else:
         lock = '{}{}'.format(query_lock_prefix, query_id)
         nonce = uuid.uuid4()
         timeout = 10
         try:
+            is_dupe = False
             while not rds.set(lock, nonce, nx=True, ex=timeout):
+                is_dupe = True
                 time.sleep(0.01)
-            yield
+            yield is_dupe
         finally:
             unlock_lua(keys=[lock], args=[nonce])
