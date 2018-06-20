@@ -182,15 +182,6 @@ def set_result(query_id, result):
     key = '{}{}'.format(query_cache_prefix, query_id)
     return rds.set(key, result, ex=timeout)
 
-unlock_lua = rds.register_script('''
-    if redis.call('get', KEYS[1]) == ARGV[1]
-    then
-        return redis.call('del', KEYS[1])
-    else
-        return 0
-    end
-''')
-
 @contextmanager
 def deduper(query_id):
     """
@@ -201,6 +192,16 @@ def deduper(query_id):
     When used in conjunction with caching this means that the subsequent
     queries can then use the cached result from the first query.
     """
+
+    unlock = '''
+        if redis.call('get', KEYS[1]) == ARGV[1]
+        then
+            return redis.call('del', KEYS[1])
+        else
+            return 0
+        end
+    '''
+
     if query_id is None:
         yield False
     else:
@@ -214,4 +215,4 @@ def deduper(query_id):
                 time.sleep(0.01)
             yield is_dupe
         finally:
-            unlock_lua(keys=[lock], args=[nonce])
+            rds.eval(unlock, 1, lock, nonce)
