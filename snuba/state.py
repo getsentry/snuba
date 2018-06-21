@@ -97,6 +97,11 @@ def get_rates(bucket, rollup=60):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
 
+def _int(value):
+    try:
+        return int(value)
+    except ValueError:
+        return value
 
 def set_config(key, value):
     if value is None:
@@ -118,25 +123,21 @@ def get_config(key, default=None):
     try:
         result = rds.hget(config_hash, key)
         if result is not None:
-            try:
-                return int(result)
-            except ValueError:
-                return result
+            return _int(result)
     except Exception as ex:
         logger.error(ex)
         pass
     return default
 
 
-def get_configs():
-    result = dict(rds.hgetall(config_hash))
-    for k in result:
-        try:
-            result[k] = int(result[k])
-        except ValueError:
-            pass
-    return result
+def get_configs(key_defaults):
+    configs = rds.hmget(config_hash, *[kd[0] for kd in key_defaults])
+    return [key_defaults[i][1] if c is None else _int(c) for i, c in enumerate(configs)]
 
+
+def get_all_configs():
+    all_configs = rds.hgetall(config_hash)
+    return {k: _int(v) for k, v in six.iteritems(all_configs)}
 
 def delete_config(key):
     try:
@@ -207,10 +208,9 @@ def deduper(query_id):
     else:
         lock = '{}{}'.format(query_lock_prefix, query_id)
         nonce = uuid.uuid4()
-        timeout = 10
         try:
             is_dupe = False
-            while not rds.set(lock, nonce, nx=True, ex=timeout):
+            while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
                 is_dupe = True
                 time.sleep(0.01)
             yield is_dupe

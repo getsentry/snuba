@@ -88,10 +88,10 @@ def dashboard(fmt='html'):
 def config(fmt='html'):
     if fmt == 'json':
         if request.method == 'GET':
-            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
+            return (json.dumps(state.get_all_configs()), 200, {'Content-Type': 'application/json'})
         elif request.method == 'POST':
             state.set_configs(json.loads(request.data))
-            return (json.dumps(state.get_configs()), 200, {'Content-Type': 'application/json'})
+            return (json.dumps(state.get_all_configs()), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('config.html')
 
@@ -223,31 +223,37 @@ def query(validated_body=None, timer=None):
 
     timer.mark('prepare_query')
 
-    result = {}
-    status = 200
-    gpsl = state.get_config('global_per_second_limit', 1000)
-    gcl = state.get_config('global_concurrent_limit', 1000)
-    ppsl = state.get_config('project_per_second_limit', 1000)
-    pcl = state.get_config('project_concurrent_limit', 1000)
-    use_query_id = state.get_config('use_query_id', 0)
-    use_cache = use_query_id and state.get_config('use_cache', 0)
+    grl, gcl, prl, pcl, use_query_id, use_cache = state.get_configs([
+        ('global_per_second_limit', 1000),
+        ('global_concurrent_limit', 1000),
+        ('project_per_second_limit', 1000),
+        ('project_concurrent_limit', 1000),
+        ('use_query_id', 0),
+        ('use_cache', 0),
+    ])
+    concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
+    timer.mark('get_configs')
+
     query_id = md5(util.force_bytes(sql)).hexdigest() if use_query_id else None
     cache_hit = use_cache
-    concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
-    timer.mark('get_limits')
-    with state.deduper(query_id) as is_dupe:
-        timer.mark('dedupe_wait')
-        if use_cache:
-            result = json.loads(state.get_result(query_id) or "{}")
-            timer.mark('cache_get')
+    is_dupe = False
+    result = {}
+    status = 200
 
-        if not result:
-            cache_hit = False
-            with state.rate_limit('global', gpsl, gcl) as (g_allowed, g_concurr, g_rate):
-                with state.rate_limit(project_ids[0], ppsl, pcl) as (allowed, concurr, rate):
-                    if not g_allowed or not allowed:
-                        status = 429
-                    else:
+    with state.rate_limit('global', grl, gcl) as (g_allowed, g_concurr, g_rate):
+        with state.rate_limit(project_ids[0], prl, pcl) as (allowed, concurr, rate):
+            timer.mark('rate_limit')
+            if not g_allowed or not allowed:
+                status = 429
+            else:
+                with state.deduper(query_id) as is_dupe:
+                    timer.mark('dedupe_wait')
+                    if use_cache:
+                        result = json.loads(state.get_result(query_id) or "{}")
+                        timer.mark('cache_get')
+
+                    if not result:
+                        cache_hit = False
                         result = util.raw_query(sql, clickhouse_ro, query_id)
                         timer.mark('execute')
                         if result.get('error'):
