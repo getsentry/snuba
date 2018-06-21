@@ -79,10 +79,17 @@ class TestState(BaseTest):
         state.set_configs({'bar': 2, 'baz': 3})
         assert state.get_config('foo') == 1
         assert state.get_config('bar') == 2
-        assert state.get_configs() == {b'foo': 1, b'bar': 2, b'baz': 3}
+        assert state.get_config('noexist', 4) == 4
+        assert state.get_all_configs() == {b'foo': 1, b'bar': 2, b'baz': 3}
+        assert state.get_configs([
+            ('foo', 100),
+            ('bar', 200),
+            ('noexist', 300)
+        ]) == [1, 2, 300]
+
 
         state.set_configs({'bar': 'quux'})
-        assert state.get_configs() == {b'foo': 1, b'bar': b'quux', b'baz': 3}
+        assert state.get_all_configs() == {b'foo': 1, b'bar': b'quux', b'baz': 3}
 
     def test_dedupe(self):
         try:
