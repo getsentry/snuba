@@ -231,6 +231,7 @@ def query(validated_body=None, timer=None):
         ('use_query_id', 0),
         ('use_cache', 0),
     ])
+    use_cache = use_query_id and use_cache
     concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
     timer.mark('get_configs')
 
