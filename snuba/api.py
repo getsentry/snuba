@@ -234,6 +234,7 @@ def query(validated_body=None, timer=None):
     query_id = md5(util.force_bytes(sql)).hexdigest() if use_query_id else None
     cache_hit = use_cache
     concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
+    timer.mark('get_limits')
     with state.deduper(query_id) as is_dupe:
         timer.mark('dedupe_wait')
         if use_cache:
@@ -266,6 +267,7 @@ def query(validated_body=None, timer=None):
         'project_concurrent': concurr,
         'project_rate': rate,
     }
+    metrics.gauge('query.global_concurrent', g_concurr)
     timer.record(metrics)
     state.record_query({
         'request': validated_body,
