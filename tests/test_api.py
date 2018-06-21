@@ -10,7 +10,7 @@ import time
 import uuid
 import pytest
 
-from snuba import state, settings
+from snuba import state, settings, processor
 
 from base import BaseTest
 
@@ -52,25 +52,33 @@ class TestApi(BaseTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append({
+                    events.append(processor.process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
-                        # Project N sends every Nth (mod len(hashes)) hash (and platform)
+                        'datetime': (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                        'message': 'a message',
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
-                        'message': 'a message',
-                        'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                        'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                        'sentry:dist': 'dist1',
-                        'os_rooted': 1,
-                        'os_name': 'windows',
-                        'sentry:release': six.text_type(tick),
-                        'environment': self.environments[(tock * p) % len(self.environments)],
-                        'tags.key': [ 'foo', 'foo.bar', 'os_name'],
-                        'tags.value': ['baz', 'qux', 'linux'],
                         'retention_days': settings.DEFAULT_RETENTION_DAYS,
-                    })
+                        'data': {
+                            # Project N sends every Nth (mod len(hashes)) hash (and platform)
+                            'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                            'tags': {
+                                # Sentry
+                                'environment': self.environments[(tock * p) % len(self.environments)],
+                                'sentry:release': six.text_type(tick),
+                                'sentry:dist': 'dist1',
+                                'os.name': 'windows',
+                                'os.rooted': 1,
+
+                                # User
+                                'foo': 'baz',
+                                'foo.bar': 'qux',
+                                'os_name': 'linux',
+                            },
+                        }
+                    }))
         self.write_processed_events(events)
 
     def test_count(self):

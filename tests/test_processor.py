@@ -121,7 +121,7 @@ class TestProcessor(BaseTest):
         assert output == {'sdk_name': u'sentry-java', 'sdk_version': u'1.6.1-d1e3a'}
 
     def test_extract_tags(self):
-        tags = {
+        orig_tags = {
             'sentry:user': 'the_user',
             'level': 'the_level',
             'logger': 'the_logger',
@@ -135,6 +135,7 @@ class TestProcessor(BaseTest):
             'extra_tag': 'extra_value',
             'null_tag': None,
         }
+        tags = orig_tags.copy()
         output = {}
 
         processor.extract_promoted_tags(output, tags)
@@ -151,15 +152,16 @@ class TestProcessor(BaseTest):
             'url': u'the_url',
             'sentry:user': u'the_user',
         }
-        assert tags == {
-            'extra_tag': 'extra_value',
-            'null_tag': None,
-        }
+        assert tags == orig_tags
 
         extra_output = {}
         processor.extract_extra_tags(extra_output, tags)
 
-        assert extra_output == {'tags.key': [u'extra_tag'], 'tags.value': [u'extra_value']}
+        valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
+        assert extra_output == {
+            'tags.key': [k for k, v in valid_items],
+            'tags.value': [v for k, v in valid_items]
+        }
 
     def test_extract_tags_empty_string(self):
         # verify our text field extraction doesn't coerce '' to None
@@ -217,7 +219,7 @@ class TestProcessor(BaseTest):
                 'str': 'string',
             }
         }
-        tags = {
+        orig_tags = {
             'app.device': 'the_app_device_uuid',
             'os': 'the_os_name the_os_version',
             'os.name': 'the_os_name',
@@ -230,6 +232,7 @@ class TestProcessor(BaseTest):
             'device.family': 'the_device_family',
             'extra_tag': 'extra_value',
         }
+        tags = orig_tags.copy()
         output = {}
 
         processor.extract_promoted_contexts(output, contexts, tags)
@@ -275,7 +278,7 @@ class TestProcessor(BaseTest):
             'os': {},
             'runtime': {},
         }
-        assert tags == {'extra_tag': 'extra_value'}
+        assert tags == orig_tags
 
         extra_output = {}
         processor.extract_extra_contexts(extra_output, contexts)

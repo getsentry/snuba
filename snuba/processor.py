@@ -111,42 +111,42 @@ def extract_sdk(output, sdk):
 
 
 def extract_promoted_tags(output, tags):
-    output.update({name: _unicodify(tags.pop(name, None))
+    output.update({name: _unicodify(tags.get(name, None))
         for name in settings.PROMOTED_TAGS
     })
 
 
 def extract_promoted_contexts(output, contexts, tags):
     app_ctx = contexts.get('app', {})
-    output['app_device'] = _unicodify(tags.pop('app.device', None))
+    output['app_device'] = _unicodify(tags.get('app.device', None))
     app_ctx.pop('device_app_hash', None)  # tag=app.device
 
     os_ctx = contexts.get('os', {})
-    output['os'] = _unicodify(tags.pop('os', None))
-    output['os_name'] = _unicodify(tags.pop('os.name', None))
+    output['os'] = _unicodify(tags.get('os', None))
+    output['os_name'] = _unicodify(tags.get('os.name', None))
     os_ctx.pop('name', None)  # tag=os and/or os.name
     os_ctx.pop('version', None)  # tag=os
-    output['os_rooted'] = _boolify(tags.pop('os.rooted', None))
+    output['os_rooted'] = _boolify(tags.get('os.rooted', None))
     os_ctx.pop('rooted', None)  # tag=os.rooted
     output['os_build'] = _unicodify(os_ctx.pop('build', None))
     output['os_kernel_version'] = _unicodify(os_ctx.pop('kernel_version', None))
 
     runtime_ctx = contexts.get('runtime', {})
-    output['runtime'] = _unicodify(tags.pop('runtime', None))
-    output['runtime_name'] = _unicodify(tags.pop('runtime.name', None))
+    output['runtime'] = _unicodify(tags.get('runtime', None))
+    output['runtime_name'] = _unicodify(tags.get('runtime.name', None))
     runtime_ctx.pop('name', None)  # tag=runtime and/or runtime.name
     runtime_ctx.pop('version', None)  # tag=runtime
 
     browser_ctx = contexts.get('browser', {})
-    output['browser'] = _unicodify(tags.pop('browser', None))
-    output['browser_name'] = _unicodify(tags.pop('browser.name', None))
+    output['browser'] = _unicodify(tags.get('browser', None))
+    output['browser_name'] = _unicodify(tags.get('browser.name', None))
     browser_ctx.pop('name', None)  # tag=browser and/or browser.name
     browser_ctx.pop('version', None)  # tag=browser
 
     device_ctx = contexts.get('device', {})
-    output['device'] = _unicodify(tags.pop('device', None))
+    output['device'] = _unicodify(tags.get('device', None))
     device_ctx.pop('model', None)  # tag=device
-    output['device_family'] = _unicodify(tags.pop('device.family', None))
+    output['device_family'] = _unicodify(tags.get('device.family', None))
     device_ctx.pop('family', None)  # tag=device.family
     output['device_name'] = _unicodify(device_ctx.pop('name', None))
     output['device_brand'] = _unicodify(device_ctx.pop('brand', None))
@@ -182,7 +182,7 @@ def extract_extra_contexts(output, contexts):
 def extract_extra_tags(output, tags):
     tag_keys = []
     tag_values = []
-    for tag_key, tag_value in tags.items():
+    for tag_key, tag_value in sorted(tags.items()):
         value = _unicodify(tag_value)
         if value:
             tag_keys.append(_unicodify(tag_key))

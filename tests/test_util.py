@@ -26,9 +26,7 @@ class TestUtil(BaseTest):
         # All tag keys expression
         with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['level', 'sentry:user']}):
             assert column_expr('tags_key', body.copy()) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
-                'arrayConcat([\'level\', \'sentry:user\'], tags.key), '
-                'arrayConcat([level, `sentry:user`], tags.value))) '
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
                 'AS all_tags))[1] AS `tags_key`)'
             )
 
@@ -37,9 +35,7 @@ class TestUtil(BaseTest):
         # uses the actual column name
         with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
             assert column_expr('tags_key', body.copy()) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
-                'arrayConcat([\'browser.name\'], tags.key), '
-                'arrayConcat([`browser_name`], tags.value))) '
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
                 'AS all_tags))[1] AS `tags_key`)'
             )
 
@@ -69,9 +65,7 @@ class TestUtil(BaseTest):
         body = {}
         with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
             assert column_expr('tags_key', body) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], '
-                'arrayConcat([\'browser.name\'], tags.key), '
-                'arrayConcat([`browser_name`], tags.value))) '
+                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
                 'AS all_tags))[1] AS `tags_key`)'
             )
 
