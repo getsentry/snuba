@@ -2,7 +2,7 @@ import logging
 import os
 
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from hashlib import md5
@@ -288,7 +288,12 @@ def query(validated_body=None, timer=None):
     if settings.STATS_IN_RESPONSE:
         result['stats'] = stats
 
-    return (json.dumps(result, for_json=True), status, {'Content-Type': 'application/json'})
+    return (
+        json.dumps(
+            result,
+            for_json=True,
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+        status, {'Content-Type': 'application/json'})
 
 
 if application.debug or application.testing:
@@ -320,6 +325,5 @@ if application.debug or application.testing:
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
-
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
