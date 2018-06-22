@@ -241,8 +241,8 @@ def query(validated_body=None, timer=None):
     result = {}
     status = 200
 
-    with state.rate_limit('global', grl, gcl) as (g_allowed, g_concurr, g_rate):
-        with state.rate_limit(project_ids[0], prl, pcl) as (allowed, concurr, rate):
+    with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
+        with state.rate_limit(project_ids[0], prl, pcl) as (allowed, rate, concurr):
             timer.mark('rate_limit')
             if not g_allowed or not allowed:
                 status = 429

@@ -70,7 +70,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     allowed = (per_second_limit is None or per_second <= per_second_limit) and\
         (concurrent_limit is None or concurrent <= concurrent_limit)
     try:
-        yield (allowed, concurrent, per_second)
+        yield (allowed, per_second, concurrent)
     finally:
         try:
             if allowed:
