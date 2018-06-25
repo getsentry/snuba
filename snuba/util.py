@@ -135,16 +135,21 @@ def tags_expr(column_name, body):
     """
     assert column_name in ['tags_key', 'tags_value']
     col, k_or_v = column_name.split('_', 1)
-    promoted = settings.PROMOTED_COLS[col]
-    col_map = settings.COLUMN_TAG_MAP[col]
-    key_list = u'arrayConcat([{}], {}.key)'.format(
-        u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-        col
-    )
-    val_list = u'arrayConcat([{}], {}.value)'.format(
-        ', '.join(string_col(p) for p in promoted),
-        col
-    )
+    nested_tags_only = state.get_config('nested_tags_only')
+    if nested_tags_only:
+        key_list = '{}.key'.format(col)
+        val_list = '{}.value'.format(col)
+    else:
+        promoted = settings.PROMOTED_COLS[col]
+        col_map = settings.COLUMN_TAG_MAP[col]
+        key_list = u'arrayConcat([{}], {}.key)'.format(
+            u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
+            col
+        )
+        val_list = u'arrayConcat([{}], {}.value)'.format(
+            ', '.join(string_col(p) for p in promoted),
+            col
+        )
     expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
         key_list,
         val_list
@@ -305,8 +310,10 @@ def issue_expr(body, hash_column='primary_hash'):
     hashes = []
     tombstones = []
 
-    max_issues = state.get_config('max_issues')
-    max_hashes_per_issue = state.get_config('max_hashes_per_issue')
+    max_issues, max_hashes_per_issue = state.get_configs([
+        ('max_issues', None),
+        ('max_hashes_per_issue', None),
+    ])
     issues = body['issues']
     if max_issues is not None:
         issues = issues[:max_issues]
