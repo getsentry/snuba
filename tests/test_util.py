@@ -29,22 +29,6 @@ class TestUtil(BaseTest):
             'AS all_tags))[1] AS `tags_key`)'
         )
 
-        # TODO this test can be removed when nested_tags_only is the only way to
-        # get tags
-        try:
-            state.set_config('nested_tags_only', 0)
-            # All tag_keys with translated tags. Note the tags_key array uses the
-            # tag name that the user expects, but the parallel tags.value array
-            # uses the actual column name
-            with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
-                assert column_expr('tags_key', body.copy()) == (
-                    '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-                    'AS all_tags))[1] AS `tags_key`)'
-                )
-        finally:
-            state.delete_config('nested_tags_only')
-
-
         assert column_expr('time', body.copy()) ==\
             "(toDate(timestamp) AS time)"
 
