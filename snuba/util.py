@@ -132,7 +132,7 @@ def tags_expr(column_name, body):
     """
     assert column_name in ['tags_key', 'tags_value']
     col, k_or_v = column_name.split('_', 1)
-    nested_tags_only = state.get_config('nested_tags_only')
+    nested_tags_only = state.get_config('nested_tags_only', 1)
     if nested_tags_only:
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)

@@ -23,25 +23,26 @@ class TestUtil(BaseTest):
         assert column_expr('tags[app.device]', body.copy()) ==\
             "(`app_device` AS `tags[app.device]`)"
 
+        # All tag keys expression
+        assert column_expr('tags_key', body.copy()) == (
+            '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
+            'AS all_tags))[1] AS `tags_key`)'
+        )
+
+        # TODO this test can be removed when nested_tags_only is the only way to
+        # get tags
         try:
-            state.set_config('nested_tags_only', 1)
-            # All tag keys expression
-            assert column_expr('tags_key', body.copy()) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-                'AS all_tags))[1] AS `tags_key`)'
-            )
+            state.set_config('nested_tags_only', 0)
+            # All tag_keys with translated tags. Note the tags_key array uses the
+            # tag name that the user expects, but the parallel tags.value array
+            # uses the actual column name
+            with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
+                assert column_expr('tags_key', body.copy()) == (
+                    '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
+                    'AS all_tags))[1] AS `tags_key`)'
+                )
         finally:
             state.delete_config('nested_tags_only')
-
-        # All tag_keys with translated tags. Note the tags_key array uses the
-        # tag name that the user expects, but the parallel tags.value array
-        # uses the actual column name
-        # TODO this test can be removed when nested_tags_only is the default
-        with patch.object(util.settings, 'PROMOTED_COLS', {'tags': ['browser_name']}):
-            assert column_expr('tags_key', body.copy()) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-                'AS all_tags))[1] AS `tags_key`)'
-            )
 
 
         assert column_expr('time', body.copy()) ==\
@@ -68,21 +69,17 @@ class TestUtil(BaseTest):
 
     def test_alias_in_alias(self):
         body = {}
-        try:
-            state.set_config('nested_tags_only', 1)
-            assert column_expr('tags_key', body) == (
-                '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-                'AS all_tags))[1] AS `tags_key`)'
-            )
+        assert column_expr('tags_key', body) == (
+            '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
+            'AS all_tags))[1] AS `tags_key`)'
+        )
 
-            # If we want to use `tags_key` again, make sure we use the
-            # already-created alias verbatim
-            assert column_expr('tags_key', body) == '`tags_key`'
-            # If we also want to use `tags_value`, make sure that we use
-            # the `all_tags` alias instead of re-expanding the tags arrayJoin
-            assert column_expr('tags_value', body) == '((all_tags)[2] AS `tags_value`)'
-        finally:
-            state.delete_config('nested_tags_only')
+        # If we want to use `tags_key` again, make sure we use the
+        # already-created alias verbatim
+        assert column_expr('tags_key', body) == '`tags_key`'
+        # If we also want to use `tags_value`, make sure that we use
+        # the `all_tags` alias instead of re-expanding the tags arrayJoin
+        assert column_expr('tags_value', body) == '((all_tags)[2] AS `tags_value`)'
 
 
     def test_escape(self):
