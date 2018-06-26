@@ -1,5 +1,7 @@
+import calendar
 import pytest
 import simplejson as json
+from datetime import datetime, timedelta
 
 from base import BaseTest
 
@@ -53,10 +55,11 @@ class TestProcessor(BaseTest):
         assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
     def test_extract_required(self):
+        now = datetime.utcnow()
         event = {
             'event_id': '1' * 32,
             'project_id': 100,
-            'datetime': '2018-03-13T20:08:36.000000Z',
+            'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
         output = {}
 
@@ -64,7 +67,7 @@ class TestProcessor(BaseTest):
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
-            'timestamp': 1520971716,
+            'timestamp': int(calendar.timegm(now.timetuple())),
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
 
@@ -92,10 +95,11 @@ class TestProcessor(BaseTest):
         }
 
     def test_deleted(self):
+        now = datetime.utcnow()
         message = (0, 'delete', {
             'event_id': '1' * 32,
             'project_id': 100,
-            'datetime': '2018-03-13T20:08:36.000000Z',
+            'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'deleted': True,
         })
 
@@ -103,7 +107,7 @@ class TestProcessor(BaseTest):
         assert processed == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
-            'timestamp': 1520971716,
+            'timestamp': int(calendar.timegm(now.timetuple())),
             'deleted': True,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
@@ -450,3 +454,19 @@ class TestProcessor(BaseTest):
         assert val['event_id'] == self.event['event_id']
         assert val['offset'] == 123
         assert val['partition'] == 456
+
+    def test_skip_too_old(self):
+        test_worker = ProcessorWorker(producer=None, events_topic=None, deletes_topic=None)
+
+        event = self.event
+        old_timestamp = datetime.utcnow() - timedelta(days=300)
+        old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event['datetime'] = old_timestamp_str
+        event['data']['datetime'] = old_timestamp_str
+        event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'insert', event))
+
+        assert test_worker.process_message(FakeMessage()) is None

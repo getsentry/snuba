@@ -1,5 +1,6 @@
+import calendar
 from hashlib import md5
-import six
+from datetime import datetime, timedelta
 import time
 import uuid
 
@@ -15,6 +16,9 @@ class BaseTest(object):
 
         from fixtures import raw_event
 
+        timestamp = datetime.utcnow()
+        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
