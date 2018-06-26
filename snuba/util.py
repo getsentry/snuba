@@ -315,6 +315,14 @@ def issue_expr(body, hash_column='primary_hash'):
     if max_issues is not None:
         issues = issues[:max_issues]
 
+    if len(issues) > 0 and len(issues[0]) == 3:
+        # HACK: Temporary hack to allow (but not require) Sentry to send
+        # (group_id, project_id, (tombstones, ...)) tuples. Once this is
+        # deployed, Sentry can be upgraded to always send the `project_id`
+        # and *then* Snuba can be upgraded to actually expect/respect that
+        # parameter.
+        issues = [(i[0], i[2]) for i in issues]
+
     for issue_id, issue_hashes in issues:
         if used_ids is None or issue_id in used_ids:
             if max_hashes_per_issue is not None:
