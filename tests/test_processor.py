@@ -1,5 +1,7 @@
+import calendar
 import pytest
 import simplejson as json
+from datetime import datetime, timedelta
 
 from base import BaseTest
 
@@ -450,3 +452,19 @@ class TestProcessor(BaseTest):
         assert val['event_id'] == self.event['event_id']
         assert val['offset'] == 123
         assert val['partition'] == 456
+
+    def test_skip_too_old(self):
+        test_worker = ProcessorWorker(producer=None, events_topic=None, deletes_topic=None)
+
+        event = self.event
+        old_timestamp = datetime.utcnow() - timedelta(days=300)
+        old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event['datetime'] = old_timestamp_str
+        event['data']['datetime'] = old_timestamp_str
+        event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'insert', event))
+
+        assert test_worker.process_message(FakeMessage()) is None

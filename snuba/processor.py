@@ -3,7 +3,7 @@ import logging
 import simplejson as json
 import six
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from hashlib import md5
 
 from snuba import settings
@@ -18,6 +18,10 @@ HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 * 32 - 1
 INSERT = object()
 DELETE = object()
+
+
+class EventTooOld(Exception):
+    pass
 
 
 def _collapse_uint32(n):
@@ -81,15 +85,19 @@ def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
-    output['timestamp'] = int(calendar.timegm(
-        datetime.strptime(
-            message['datetime'],
-            "%Y-%m-%dT%H:%M:%S.%fZ").timetuple()))
+    timestamp = datetime.strptime(message['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
         retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
 
+    # TODO: We may need to allow for older events in the future when post
+    # processing triggers are based off of Snuba. Or this branch could be put
+    # behind a "backfill-only" optional switch.
+    if timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
+        raise EventTooOld
+
+    output['timestamp'] = int(calendar.timegm(timestamp.timetuple()))
     output['retention_days'] = retention_days
 
 
@@ -339,14 +347,18 @@ class ProcessorWorker(AbstractBatchWorker):
     def process_message(self, message):
         value = json.loads(message.value())
 
-        message_type, key, processed = process_message(value)
+        try:
+            message_type, key, processed = process_message(value)
+        except EventTooOld:
+            return None
+
         processed['offset'] = message.offset()
         processed['partition'] = message.partition()
 
         return (message_type, key, json.dumps(processed).encode('utf-8'))
 
     def flush_batch(self, batch):
-        for message_type, key, value in batch:
+        for message_type, key, value in filter(None, batch):
             if message_type is INSERT:
                 topic = self.events_topic
             elif message_type is DELETE:

@@ -1,6 +1,5 @@
 raw_event = {
     'culprit': 'io.sentry.example.Application in main',
-    'datetime': '2018-03-13T20:08:36.000000Z',
     'errors': [],
     'extra': {'Sentry-Threadname': 'io.sentry.example.Application.main()'},
     'fingerprint': ['{{ default }}'],
@@ -10,7 +9,6 @@ raw_event = {
     'metadata': {'type': 'ArithmeticException', 'value': '/ by zero'},
     'platform': 'java',
     'project': 70156,
-    'received': 1520971716.0,
     'release': '1.0',
     'dist': None,
     'sdk': {'integrations': ['logback'],
