@@ -177,3 +177,10 @@ class TestUtil(BaseTest):
         }
         assert 'ANY INNER JOIN' in issue_expr(body)
         assert '[Null]' in issue_expr(body)
+
+        # Middle tuple member is ignored -- as a placement for project_id
+        body = {
+            'issues': [(1, 9, ['a', 'b']), (2, 10, 'c')],
+            'conditions': [['issue', '=', 1]]
+        }
+        assert '[1,1]' in issue_expr(body)
