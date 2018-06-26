@@ -127,11 +127,8 @@ def tag_expr(column_name):
 
 def tags_expr(column_name, body):
     """
-    Return an expression enumerating all tags as rows
-
-    For special columns `tags_key` and `tags_value` we construct a an interesting
-    arrayjoin that enumerates all promoted and non-promoted keys. This is for
-    cases where we do not have a tag key to filter on (eg top tags).
+    Return an expression that array-joins on tags to produce an output with one
+    row per tag.
     """
     assert column_name in ['tags_key', 'tags_value']
     col, k_or_v = column_name.split('_', 1)
