@@ -100,7 +100,10 @@ class TestState(BaseTest):
                 result = json.loads(self.app.post('/query', data=json.dumps({
                     'project': 1,
                     'granularity': 3600,
-                    'aggregations': [['count()', '', uniq_name]],
+                    'aggregations': [
+                        ['count()', '', uniq_name],
+                        ['sleep(0.01)', '', 'sleep'],
+                    ],
                 })).data)
                 result_container.append(result)
 
@@ -127,7 +130,7 @@ class TestState(BaseTest):
             results = [r.pop() for r in results]
             # The results should all have the same data
             datas = [r['data'] for r in results]
-            assert datas[0] == [{uniq_name: 0}]
+            assert datas[0] == [{uniq_name: 0, 'sleep': 0}]
             assert all(d == datas[0] for d in datas)
 
             stats = [r['stats'] for r in results]
