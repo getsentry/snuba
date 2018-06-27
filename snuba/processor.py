@@ -316,16 +316,17 @@ def process_insert(message):
     contexts = data.get('contexts', {})
     extract_promoted_contexts(processed, contexts, tags)
 
-    user = data.get('sentry.interfaces.User', {})
+    user = data.get('user', data.get('sentry.interfaces.User', {}))
     extract_user(processed, user)
 
-    http = data.get('sentry.interfaces.Http', {})
+    http = data.get('http', data.get('sentry.interfaces.Http', {}))
     extract_http(processed, http)
 
     extract_extra_contexts(processed, contexts)
     extract_extra_tags(processed, tags)
 
-    stacks = data.get('sentry.interfaces.Exception', {}).get('values', [])
+    exception = data.get('exception', data.get('sentry.interfaces.Exception', {}))
+    stacks = exception.get('values', [])
     extract_stacktraces(processed, stacks)
 
     return processed
