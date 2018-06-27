@@ -3,7 +3,7 @@ FROM pypy:${PYTHON_VERSION}-slim
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y curl build-essential libpcre3 libpcre3-dev liblz4-1 liblz4-dev && \
+    apt-get install --no-install-recommends -y curl build-essential libpcre3 libpcre3-dev liblz4-1 liblz4-dev git && \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old
 
 # pypy:2-slim binary: /usr/local/bin/pypy
