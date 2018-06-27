@@ -597,8 +597,10 @@ class TestApi(BaseTest):
         })).data)
 
         assert result['data'] == [
-            # 15 events naturally exist (via the class) for project 1 with hash 'a' * 32
+            # 15 events naturally exist (via the setup method) for project 1
+            # with hash 'a' * 32, under issue 1
             {'count': 15, 'issue': 1, 'project_id': 1},
-            # 1 event was created under project 2 with hash 'a' * 32
+            # 1 event was created under project 2 with hash 'a' * 32, under
+            # issue 2
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
