@@ -133,7 +133,7 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': p,
                 'granularity': 3600,
-                'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+                'issues': [(i, p, [j]) for i, j in enumerate(self.hashes)],
                 'groupby': 'issue',
             })).data)
             issues_found = set([d['issue'] for d in result['data']])
@@ -162,7 +162,7 @@ class TestApi(BaseTest):
             'project': 1,
             'granularity': 3600,
             'groupby': 'issue',
-            'conditions': [['issue', 'IN', [100,200]]],
+            'conditions': [['issue', 'IN', [100, 200]]],
         })).data)
         assert result['error'] is None
         assert result['data'] == []
@@ -193,7 +193,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
-            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+            'issues': [(i, 2, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
             'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
@@ -202,7 +202,7 @@ class TestApi(BaseTest):
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
@@ -210,7 +210,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -218,7 +218,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -334,7 +334,7 @@ class TestApi(BaseTest):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
         raw_query.return_value = {'data': [], 'meta': []}
-        issues = [(i, [j]) for i, j in enumerate(self.hashes)]
+        issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
         json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
@@ -398,7 +398,6 @@ class TestApi(BaseTest):
         assert len(result_map['environment']['top']) == 2
         assert all(r in self.environments for r in result_map['environment']['top'])
 
-
     def test_tag_translation(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -428,7 +427,7 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [(i, [j]) for i, j in enumerate(self.hashes)],
+            'issues': [(i, 1, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
@@ -528,7 +527,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': project_id,
-            'issues': [(0, [hash])],
+            'issues': [(0, project_id, [hash])],
             'groupby': 'issue',
             'aggregations': [
                 ['count()', '', 'count']
@@ -538,7 +537,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': project_id,
-            'issues': [(0, [(hash, None)])],
+            'issues': [(0, project_id, [(hash, None)])],
             'groupby': 'issue',
             'aggregations': [
                 ['count()', '', 'count']
@@ -548,7 +547,7 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': project_id,
-            'issues': [(0, [(hash, (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"))])],
+            'issues': [(0, project_id, [(hash, (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"))])],
             'groupby': 'issue',
             'aggregations': [
                 ['count()', '', 'count']
@@ -566,3 +565,40 @@ class TestApi(BaseTest):
         assert 'rows_read' in result['stats']
         assert 'bytes_read' in result['stats']
         assert result['stats']['bytes_read'] > 0
+
+    def test_multi_project_issues(self):
+        hash = 'a' * 32
+
+        self.write_processed_events(processor.process_insert({
+            'project_id': 2,
+            'event_id': uuid.uuid4().hex,
+            'deleted': 0,
+            'datetime': (self.base_time).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+            'message': 'a message',
+            'platform': self.platforms[0],
+            'primary_hash': hash,
+            'retention_days': settings.DEFAULT_RETENTION_DAYS,
+            'data': {
+                'received': calendar.timegm((self.base_time).timetuple()),
+            }
+        }))
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2],
+            'issues': [
+                (1, 1, [(hash, None)]),
+                (2, 2, [(hash, None)]),
+            ],
+            'groupby': ['project_id', 'issue'],
+            'aggregations': [
+                ['count()', '', 'count']
+            ],
+            'orderby': '-count',
+        })).data)
+
+        assert result['data'] == [
+            # 15 events naturally exist (via the class) for project 1 with hash 'a' * 32
+            {'count': 15, 'issue': 1, 'project_id': 1},
+            # 1 event was created under project 2 with hash 'a' * 32
+            {'count': 1, 'issue': 2, 'project_id': 2},
+        ]
