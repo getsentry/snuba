@@ -555,3 +555,14 @@ class TestApi(BaseTest):
             ]
         })).data)
         assert result['data'] == [{'count': 1, 'issue': 0}]
+
+    def test_row_stats(self):
+        query = {
+            'project': 1,
+            'selected_columns': ['platform'],
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+
+        assert 'rows_read' in result['stats']
+        assert 'bytes_read' in result['stats']
+        assert result['stats']['bytes_read'] > 0

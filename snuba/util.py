@@ -239,15 +239,20 @@ def raw_query(sql, client, query_id=None):
 
     try:
         error = None
-        data, meta = client.execute(
+        query = client.execute_with_progress(
             sql,
             with_column_types=True,
             settings=query_settings,
             query_id=query_id
         )
         logger.debug(sql)
+        data, meta = query.get_result()
+        stats = {
+            'rows_read': query.progress_totals.rows,
+            'bytes_read': query.progress_totals.bytes,
+        }
     except BaseException as ex:
-        data, meta, error = [], [], six.text_type(ex)
+        data, meta, error, stats = [], [], six.text_type(ex), {}
         logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
 
     # for now, convert back to a dict-y format to emulate the json
@@ -265,7 +270,7 @@ def raw_query(sql, client, query_id=None):
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
 
-    return {'data': data, 'meta': meta, 'error': error}
+    return {'data': data, 'meta': meta, 'error': error, 'stats': stats}
 
 
 def uses_issue(body):

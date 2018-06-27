@@ -242,6 +242,7 @@ def query(validated_body=None, timer=None):
     cache_hit = use_cache
     is_dupe = False
     result = {}
+    stats = {}
     status = 200
 
     with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
@@ -259,6 +260,7 @@ def query(validated_body=None, timer=None):
                     if not result:
                         cache_hit = False
                         result = util.raw_query(sql, clickhouse_ro, query_id)
+                        stats = result.pop('stats', {})
                         timer.mark('execute')
                         if result.get('error'):
                             status = 500
@@ -266,7 +268,7 @@ def query(validated_body=None, timer=None):
                             state.set_result(query_id, json.dumps(result))
                             timer.mark('cache_set')
 
-    stats = {
+    stats.update({
         'is_duplicate': is_dupe,
         'cache_hit': cache_hit,
         'num_days': (to_date - from_date).days,
@@ -276,7 +278,7 @@ def query(validated_body=None, timer=None):
         'global_rate': g_rate,
         'project_concurrent': concurr,
         'project_rate': rate,
-    }
+    })
     metrics.gauge('query.global_concurrent', g_concurr)
     timer.record(metrics)
     state.record_query({
