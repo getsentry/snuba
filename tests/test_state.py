@@ -110,7 +110,7 @@ class TestState(BaseTest):
             # t0 and t1 are exact duplicate queries submitted concurrently.  One of
             # them will execute normally and the other one should be held back by
             # the deduper, until it can use the cached result from the first.
-            results = [[] for _ in range(4)]
+            results = [[] for _ in range(3)]
             t0 = Thread(target=do_request, args=(results[0],))
             t1 = Thread(target=do_request, args=(results[1],))
             t0.start()
@@ -118,14 +118,10 @@ class TestState(BaseTest):
             t0.join()
             t1.join()
 
-            # a subsequent request will also use the cached value as
+            # a subsequent request will not be marked as duplicate
+            # as we waited for the first 2 to finish
             # it is still fresh
             do_request(results[2])
-
-            # after a second, the cache entry will no longer be fresh
-            # and we will re-query the database.
-            time.sleep(1)
-            do_request(results[3])
 
             results = [r.pop() for r in results]
             # The results should all have the same data
@@ -143,10 +139,7 @@ class TestState(BaseTest):
             assert stats[0]['cache_hit'] == stats[0]['is_duplicate']
             assert stats[1]['cache_hit'] == stats[1]['is_duplicate']
 
-            assert stats[2]['cache_hit'] == True
             assert stats[2]['is_duplicate'] == False
-            assert stats[3]['cache_hit'] == False
-            assert stats[3]['is_duplicate'] == False
 
         finally:
             state.delete_config('use_query_id')
