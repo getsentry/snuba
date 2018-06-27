@@ -119,6 +119,9 @@ WRITER_COLUMNS = [
     'username',
     'email',
     'ip_address',
+    'geo_country_code',
+    'geo_region',
+    'geo_city',
     'sdk_name',
     'sdk_version',
     'type',
@@ -187,6 +190,11 @@ SCHEMA_COLUMNS = [
     ('username', 'Nullable(String)'),
     ('email', 'Nullable(String)'),
     ('ip_address', 'Nullable(String)'),
+
+    # optional geo
+    ('geo_country_code', 'Nullable(String)'),
+    ('geo_region', 'Nullable(String)'),
+    ('geo_city', 'Nullable(String)'),
 
     # optional misc
     ('sdk_name', 'Nullable(String)'),

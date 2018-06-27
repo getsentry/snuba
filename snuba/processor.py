@@ -207,6 +207,12 @@ def extract_user(output, user):
     output['ip_address'] = _unicodify(user.get('ip_address', None))
 
 
+def extract_geo(output, geo):
+    output['geo_country_code'] = _unicodify(geo.get('country_code', None))
+    output['geo_region'] = _unicodify(geo.get('region', None))
+    output['geo_city'] = _unicodify(geo.get('city', None))
+
+
 def extract_http(output, http):
     output['http_method'] = _unicodify(http.get('method', None))
     http_headers = dict(http.get('headers', []))
@@ -318,6 +324,9 @@ def process_insert(message):
 
     user = data.get('user', data.get('sentry.interfaces.User', {}))
     extract_user(processed, user)
+
+    geo = user.get('geo', {})
+    extract_geo(processed, geo)
 
     http = data.get('http', data.get('sentry.interfaces.Http', {}))
     extract_http(processed, http)
