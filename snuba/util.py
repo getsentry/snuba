@@ -230,12 +230,11 @@ def raw_query(body, sql, client, timer, stats=None):
     fix some of the formatting issues in the result JSON
     """
     stats = stats or {}
-    grl, gcl, prl, pcl, use_query_id, use_cache, query_settings = state.get_configs([
+    grl, gcl, prl, pcl, use_cache, query_settings = state.get_configs([
         ('global_per_second_limit', 1000),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
-        ('use_query_id', 0),
         ('use_cache', 0),
         ('query_settings_json', None),
     ])
@@ -250,23 +249,24 @@ def raw_query(body, sql, client, timer, stats=None):
         metrics.gauge('query.global_concurrent', g_concurr)
         stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
 
+        # TODO rate limit on every project in the list?
         project_ids = to_list(body['project'])
         with state.rate_limit(project_ids[0], prl, pcl) as (p_allowed, p_rate, p_concurr):
             stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
             timer.mark('rate_limit')
 
             if g_allowed and p_allowed:
-                query_id = md5(force_bytes(sql)).hexdigest() if use_query_id else None
+                query_id = md5(force_bytes(sql)).hexdigest()
                 with state.deduper(query_id) as is_dupe:
-                    stats.update({'is_duplicate': is_dupe})
                     timer.mark('dedupe_wait')
 
-                    use_cache = bool(use_query_id and use_cache)
                     result = state.get_result(query_id) if use_cache else None
                     timer.mark('cache_get')
 
                     stats.update({
-                        'use_cache': use_cache,
+                        'is_duplicate': is_dupe,
+                        'query_id': query_id,
+                        'use_cache': bool(use_cache),
                         'cache_hit': bool(result)}
                     ),
 
@@ -278,6 +278,8 @@ def raw_query(body, sql, client, timer, stats=None):
                                 sql,
                                 with_column_types=True,
                                 settings=query_settings,
+                                # All queries should already be deduplicated at this point
+                                # But the query_id will let us know if they aren't
                                 query_id=query_id
                             )
                             data, meta = scrub_ch_data(data, meta)
@@ -302,7 +304,6 @@ def raw_query(body, sql, client, timer, stats=None):
 
     state.record_query({
         'request': body,
-        'referrer': request.referrer,
         'sql': sql,
         'timing': timer,
         'stats': stats,

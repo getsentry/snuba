@@ -226,6 +226,7 @@ def query(validated_body=None, timer=None):
     timer.mark('prepare_query')
 
     stats.update({
+        'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
         'num_issues': len(body.get('issues', [])),

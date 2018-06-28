@@ -1,3 +1,4 @@
+from confluent_kafka import Producer
 from contextlib import contextmanager
 import logging
 import redis
@@ -15,6 +16,9 @@ rds = redis.StrictRedis(
     port=settings.REDIS_PORT,
     db=settings.REDIS_DB
 )
+kfk = Producer({
+    'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
+})
 
 # Window for concurrent query counting
 max_query_duration_s = 60
@@ -148,13 +152,18 @@ def delete_config(key):
 
 
 def record_query(data):
-    max_queries = 200
+    max_redis_queries = 200
     data = json.dumps(data, for_json=True)
     try:
         rds.pipeline(transaction=False)\
             .lpush(queries_list, data)\
-            .ltrim(queries_list, 0, max_queries - 1)\
+            .ltrim(queries_list, 0, max_redis_queries - 1)\
             .execute()
+
+        kfk.produce(
+            settings.QUERIES_TOPIC,
+            data.encode('utf-8'),
+        )
     except Exception as ex:
         logger.error(ex)
         pass
