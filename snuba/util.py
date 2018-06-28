@@ -310,6 +310,7 @@ def issue_expr(body, hash_column='primary_hash'):
 
     issue_ids = []
     hashes = []
+    project_ids = []
     tombstones = []
 
     max_issues, max_hashes_per_issue = state.get_configs([
@@ -320,19 +321,14 @@ def issue_expr(body, hash_column='primary_hash'):
     if max_issues is not None:
         issues = issues[:max_issues]
 
-    if len(issues) > 0 and len(issues[0]) == 3:
-        # HACK: Temporary hack to allow (but not require) Sentry to send
-        # (group_id, project_id, (tombstones, ...)) tuples. Once this is
-        # deployed, Sentry can be upgraded to always send the `project_id`
-        # and *then* Snuba can be upgraded to actually expect/respect that
-        # parameter.
-        issues = [(i[0], i[2]) for i in issues]
-
-    for issue_id, issue_hashes in issues:
+    for issue_id, project_id, issue_hashes in issues:
         if used_ids is None or issue_id in used_ids:
             if max_hashes_per_issue is not None:
                 issue_hashes = issue_hashes[:max_hashes_per_issue]
+
             issue_ids.extend([six.text_type(issue_id)] * len(issue_hashes))
+            project_ids.extend([six.text_type(project_id)] * len(issue_hashes))
+
             for hash_obj in issue_hashes:
                 if isinstance(hash_obj, list):
                     issue_hash, tombstone = hash_obj
@@ -353,24 +349,47 @@ def issue_expr(body, hash_column='primary_hash'):
     if not issue_ids and used_ids:
         issue_ids, hashes, tombstones = ['0'], ['Null'], ['Null']
 
-    return ("""
-        ANY INNER JOIN
-        (SELECT arrayJoin(
-            arrayMap(
-                (x, y, z) -> tuple(x, y, z),
-                CAST([{hashes}], 'Array(Nullable(FixedString(32)))'),
-                [{issue_ids}],
-                CAST([{tombstones}], 'Array(Nullable(DateTime))'))
-            ) as map,
-            tupleElement(map, 1) as {col},
-            tupleElement(map, 2) as issue,
-            tupleElement(map, 3) as hash_timestamp
-        ) USING {col}""").format(
-        issue_ids=','.join(issue_ids),
-        hashes=','.join(hashes),
-        tombstones=','.join(tombstones),
-        col=hash_column
-    )
+    if project_ids and len(set(project_ids)) > 1:
+        return ("""
+            ANY INNER JOIN
+            (SELECT arrayJoin(
+                arrayMap(
+                    (w, x, y, z) -> tuple(w, x, y, z),
+                    CAST([{hashes}], 'Array(Nullable(FixedString(32)))'),
+                    [{issue_ids}],
+                    CAST([{project_ids}], 'Array(UInt64)'),
+                    CAST([{tombstones}], 'Array(Nullable(DateTime))'))
+                ) as map,
+                tupleElement(map, 1) as {col},
+                tupleElement(map, 2) as issue,
+                tupleElement(map, 3) as project_id,
+                tupleElement(map, 4) as hash_timestamp
+            ) USING ({col}, project_id)""").format(
+            issue_ids=','.join(issue_ids),
+            project_ids=','.join(project_ids),
+            hashes=','.join(hashes),
+            tombstones=','.join(tombstones),
+            col=hash_column,
+        )
+    else:
+        return ("""
+            ANY INNER JOIN
+            (SELECT arrayJoin(
+                arrayMap(
+                    (x, y, z) -> tuple(x, y, z),
+                    CAST([{hashes}], 'Array(Nullable(FixedString(32)))'),
+                    [{issue_ids}],
+                    CAST([{tombstones}], 'Array(Nullable(DateTime))'))
+                ) as map,
+                tupleElement(map, 1) as {col},
+                tupleElement(map, 2) as issue,
+                tupleElement(map, 3) as hash_timestamp
+            ) USING {col}""").format(
+            issue_ids=','.join(issue_ids),
+            hashes=','.join(hashes),
+            tombstones=','.join(tombstones),
+            col=hash_column,
+        )
 
 
 def validate_request(schema):

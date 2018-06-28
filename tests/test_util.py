@@ -65,7 +65,6 @@ class TestUtil(BaseTest):
         # the `all_tags` alias instead of re-expanding the tags arrayJoin
         assert column_expr('tags_value', body) == '((all_tags)[2] AS `tags_value`)'
 
-
     def test_escape(self):
         assert escape_literal("'") == r"'\''"
         assert escape_literal(date(2001, 1, 1)) == "toDate('2001-01-01')"
@@ -134,27 +133,27 @@ class TestUtil(BaseTest):
     def test_issue_expr(self):
         # Provides list of issues but doesn't use them
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
         }
         assert issue_expr(body) == ''
 
         # Uses issue in groupby, expands all issues
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
             'groupby': ['timestamp', 'issue']
         }
         assert '[1,1,2]' in issue_expr(body)
 
         # Issue in condition, expands only that issue
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
             'conditions': [['issue', '=', 1]]
         }
         assert '[1,1]' in issue_expr(body)
 
         # Issue in aggregation, expands all.
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
+            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
             'aggregations': [['topK(3)', 'issue', 'top_issues']]
         }
         assert '[1,1,2]' in issue_expr(body)
@@ -178,9 +177,10 @@ class TestUtil(BaseTest):
         assert 'ANY INNER JOIN' in issue_expr(body)
         assert '[Null]' in issue_expr(body)
 
-        # Middle tuple member is ignored -- as a placement for project_id
+        # Ensure project_id expression is in the INNER JOIN
         body = {
-            'issues': [(1, 9, ['a', 'b']), (2, 10, 'c')],
-            'conditions': [['issue', '=', 1]]
+            'issues': [(1, 99, ['a', 'b']), (2, 100, 'c')],
+            'conditions': [['issue', 'IN', [1, 2]]]
         }
-        assert '[1,1]' in issue_expr(body)
+        assert '[1,1,2]' in issue_expr(body)
+        assert '[99,99,100]' in issue_expr(body)

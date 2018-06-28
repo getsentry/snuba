@@ -48,43 +48,21 @@ QUERY_SCHEMA = {
         'issues': {
             'type': 'array',
             'items': {
-                'anyOf': [
+                'type': 'array',
+                'minItems': 3,
+                'maxItems': 3,
+                'items': [
+                    {'type': 'number'},
+                    {'type': 'number'},
                     {
                         'type': 'array',
-                        'minItems': 2,
-                        'maxItems': 2,
-                        'items': [
-                            {'type': 'number'},
-                            {
-                                'type': 'array',
-                                'items': {
-                                    'anyOf': [
-                                        {'$ref': '#/definitions/fingerprint_hash'},
-                                        {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
-                                    ],
-                                },
-                                'minItems': 1,
-                            },
-                        ],
-                    },
-                    {
-                        'type': 'array',
-                        'minItems': 3,
-                        'maxItems': 3,
-                        'items': [
-                            {'type': 'number'},
-                            {'type': 'number'},
-                            {
-                                'type': 'array',
-                                'items': {
-                                    'anyOf': [
-                                        {'$ref': '#/definitions/fingerprint_hash'},
-                                        {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
-                                    ],
-                                },
-                                'minItems': 1,
-                            },
-                        ],
+                        'items': {
+                            'anyOf': [
+                                {'$ref': '#/definitions/fingerprint_hash'},
+                                {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
+                            ],
+                        },
+                        'minItems': 1,
                     },
                 ],
             },
