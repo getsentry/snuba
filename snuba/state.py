@@ -176,12 +176,12 @@ def get_queries():
 def get_result(query_id):
     key = '{}{}'.format(query_cache_prefix, query_id)
     result = rds.get(key)
-    return result
+    return result and json.loads(result)
 
 def set_result(query_id, result):
     timeout = 1
     key = '{}{}'.format(query_cache_prefix, query_id)
-    return rds.set(key, result, ex=timeout)
+    return rds.set(key, json.dumps(result), ex=timeout)
 
 @contextmanager
 def deduper(query_id):

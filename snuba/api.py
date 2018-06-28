@@ -17,7 +17,6 @@ from snuba.clickhouse import ClickhousePool
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
 
-
 clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={
     'readonly': True,
@@ -49,7 +48,6 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
 sentry = Sentry(application, dsn=settings.SENTRY_DSN)
-metrics = util.create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
 
 @application.route('/')
@@ -124,6 +122,7 @@ def query(validated_body=None, timer=None):
         return render_template('query.html', query_template=template_str)
 
     body = deepcopy(validated_body)
+    stats = {}
     project_ids = util.to_list(body['project'])
     to_date = parse_datetime(body['to_date'])
     from_date = parse_datetime(body['from_date'])
@@ -226,79 +225,24 @@ def query(validated_body=None, timer=None):
 
     timer.mark('prepare_query')
 
-    grl, gcl, prl, pcl, use_query_id, use_cache = state.get_configs([
-        ('global_per_second_limit', 1000),
-        ('global_concurrent_limit', 1000),
-        ('project_per_second_limit', 1000),
-        ('project_concurrent_limit', 1000),
-        ('use_query_id', 0),
-        ('use_cache', 0),
-    ])
-    use_cache = use_query_id and use_cache
-    concurr, rate, g_concurr, g_rate = 0, 0, 0, 0
-    timer.mark('get_configs')
-
-    query_id = md5(util.force_bytes(sql)).hexdigest() if use_query_id else None
-    cache_hit = use_cache
-    is_dupe = False
-    result = {}
-    stats = {}
-    status = 200
-
-    with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
-        with state.rate_limit(project_ids[0], prl, pcl) as (allowed, rate, concurr):
-            timer.mark('rate_limit')
-            if not g_allowed or not allowed:
-                status = 429
-            else:
-                with state.deduper(query_id) as is_dupe:
-                    timer.mark('dedupe_wait')
-                    if use_cache:
-                        result = json.loads(state.get_result(query_id) or "{}")
-                        timer.mark('cache_get')
-
-                    if not result:
-                        cache_hit = False
-                        result = util.raw_query(sql, clickhouse_ro, query_id)
-                        stats = result.pop('stats', {})
-                        timer.mark('execute')
-                        if result.get('error'):
-                            status = 500
-                        elif use_cache:
-                            state.set_result(query_id, json.dumps(result))
-                            timer.mark('cache_set')
-
     stats.update({
-        'is_duplicate': is_dupe,
-        'cache_hit': cache_hit,
         'num_days': (to_date - from_date).days,
-        'num_issues': len(validated_body.get('issues', [])),
-        'num_hashes': sum(len(i[-1]) for i in validated_body.get('issues', [])),
-        'global_concurrent': g_concurr,
-        'global_rate': g_rate,
-        'project_concurrent': concurr,
-        'project_rate': rate,
-    })
-    metrics.gauge('query.global_concurrent', g_concurr)
-    timer.record(metrics)
-    state.record_query({
-        'request': validated_body,
-        'referrer': request.referrer,
-        'sql': sql,
-        'timing': timer,
-        'stats': stats,
+        'num_projects': len(project_ids),
+        'num_issues': len(body.get('issues', [])),
+        'num_hashes': sum(len(i[-1]) for i in body.get('issues', [])),
     })
 
-    result['timing'] = timer
-    if settings.STATS_IN_RESPONSE:
-        result['stats'] = stats
+    result, status = util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
 
     return (
         json.dumps(
             result,
             for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
-        status, {'Content-Type': 'application/json'})
+        status,
+        {'Content-Type': 'application/json'}
+    )
+
 
 
 if application.debug or application.testing:
