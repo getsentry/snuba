@@ -230,6 +230,7 @@ def raw_query(sql, client, query_id=None):
     fix some of the formatting issues in the result JSON
     """
     query_settings = {}
+    stats = {}
     try:
         query_settings_json = state.get_config('query_settings_json')
         if query_settings_json:
@@ -247,10 +248,11 @@ def raw_query(sql, client, query_id=None):
         )
         logger.debug(sql)
         data, meta = query.get_result()
-        stats = {
-            'rows_read': query.progress_totals.rows,
-            'bytes_read': query.progress_totals.bytes,
-        }
+        if hasattr(query, 'progress_totals'):
+            stats.update({
+                'rows_read': query.progress_totals.rows,
+                'bytes_read': query.progress_totals.bytes,
+            })
     except BaseException as ex:
         data, meta, error, stats = [], [], six.text_type(ex), {}
         logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
