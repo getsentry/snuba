@@ -1,12 +1,14 @@
-from datetime import datetime
+import calendar
+from datetime import datetime, timedelta
 from mock import patch
+import simplejson as json
 import time
 from datadog import statsd
 from six.moves import range
 
 from base import BaseTest
 
-from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer, ConsumerWorker
 
 
 class FakeKafkaMessage(object):
@@ -116,3 +118,41 @@ class TestConsumer(BaseTest):
         assert consumer.worker.shutdown_calls == 1
         assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
+
+    def test_offsets(self):
+        event = self.event
+
+        class FakeMessage(object):
+            def value(self):
+                # event doesn't really matter
+                return json.dumps((0, 'insert', event))
+
+            def offset(self):
+                return 123
+
+            def partition(self):
+                return 456
+
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        batch = [test_worker.process_message(FakeMessage())]
+        test_worker.flush_batch(batch)
+
+        assert self.clickhouse.execute(
+            "SELECT project_id, event_id, offset, partition FROM %s" % self.table
+        ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
+
+    def test_skip_too_old(self):
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
+
+        event = self.event
+        old_timestamp = datetime.utcnow() - timedelta(days=300)
+        old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event['datetime'] = old_timestamp_str
+        event['data']['datetime'] = old_timestamp_str
+        event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'insert', event))
+
+        assert test_worker.process_message(FakeMessage()) is None

@@ -1,4 +1,3 @@
-import calendar
 import logging
 import simplejson as json
 import six
@@ -7,7 +6,6 @@ from datetime import datetime, timedelta
 from hashlib import md5
 
 from snuba import settings
-from snuba.consumer import AbstractBatchWorker
 from snuba.util import force_bytes
 
 
@@ -97,7 +95,7 @@ def extract_required(output, message):
     if timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
         raise EventTooOld
 
-    output['timestamp'] = int(calendar.timegm(timestamp.timetuple()))
+    output['timestamp'] = timestamp
     output['retention_days'] = retention_days
 
 
@@ -108,7 +106,7 @@ def extract_common(output, message, data):
     if not HASH_RE.match(primary_hash):
         primary_hash = md5(force_bytes(primary_hash)).hexdigest()
     output['primary_hash'] = primary_hash
-    output['received'] = int(data['received'])
+    output['received'] = datetime.utcfromtimestamp(int(data['received']))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
 
@@ -273,31 +271,36 @@ def process_message(message):
     * message_type: one of the sentinel values INSERT or DELETE
     * key: string used for output partitioning
     * processed_message: dict representing the processed column -> value(s)
+
+    Returns `None` if the event is too old to be written.
     """
     message_type = None
 
-    if isinstance(message, dict):
-        # deprecated unwrapped event message == insert
-        message_type = INSERT
-        processed = process_insert(message)
-    elif isinstance(message, (list, tuple)) and len(message) >= 2:
-        version = message[0]
+    try:
+        if isinstance(message, dict):
+            # deprecated unwrapped event message == insert
+            message_type = INSERT
+            processed = process_insert(message)
+        elif isinstance(message, (list, tuple)) and len(message) >= 2:
+            version = message[0]
 
-        if version == 0:
-            # version 0: (version, type, message)
-            type_, event = message[1:]
-            if type_ == 'insert':
-                message_type = INSERT
-                processed = process_insert(event)
-            elif type_ == 'delete':
-                message_type = DELETE
-                processed = process_delete(event)
+            if version == 0:
+                # version 0: (version, type, message)
+                type_, event = message[1:]
+                if type_ == 'insert':
+                    message_type = INSERT
+                    processed = process_insert(event)
+                elif type_ == 'delete':
+                    message_type = DELETE
+                    processed = process_delete(event)
 
-    if message_type is None:
-        raise ValueError("Unknown message format: " + str(message))
+        if message_type is None:
+            raise ValueError("Unknown message format: " + str(message))
 
-    key = get_key(processed).encode('utf-8')
-    return (message_type, key, processed)
+        key = get_key(processed).encode('utf-8')
+        return (message_type, key, processed)
+    except EventTooOld:
+        return None
 
 
 def process_insert(message):
@@ -337,41 +340,3 @@ def process_delete(message):
     extract_required(processed, message)
 
     return processed
-
-
-class ProcessorWorker(AbstractBatchWorker):
-    def __init__(self, producer, events_topic, deletes_topic):
-        self.producer = producer
-        self.events_topic = events_topic
-        self.deletes_topics = deletes_topic
-
-    def process_message(self, message):
-        value = json.loads(message.value())
-
-        try:
-            message_type, key, processed = process_message(value)
-        except EventTooOld:
-            return None
-
-        processed['offset'] = message.offset()
-        processed['partition'] = message.partition()
-
-        return (message_type, key, json.dumps(processed).encode('utf-8'))
-
-    def flush_batch(self, batch):
-        for message_type, key, value in filter(None, batch):
-            if message_type is INSERT:
-                topic = self.events_topic
-            elif message_type is DELETE:
-                topic = self.deletes_topics
-
-            self.producer.produce(
-                topic=topic,
-                key=key,
-                value=value,
-            )
-
-        self.producer.flush()
-
-    def shutdown(self):
-        self.producer.flush()

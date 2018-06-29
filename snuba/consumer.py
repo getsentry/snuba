@@ -1,8 +1,14 @@
 import abc
 import logging
+import simplejson as json
 import time
 
+from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException
+
+from . import settings
+from .processor import process_message
+from .writer import row_from_processed_event, write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
@@ -20,6 +26,8 @@ class AbstractBatchWorker(object):
         """Called with each (raw) Kafka message, allowing the worker to do
         incremental (preferablly local!) work on events. The object returned
         is put into the batch maintained by the `BatchingKafkaConsumer`.
+
+        If this method returns `None` it is not added to the batch.
 
         A simple example would be decoding the JSON value and extracting a few
         fields.
@@ -71,7 +79,9 @@ class BatchingKafkaConsumer(object):
     """
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, auto_offset_reset='error'):
+                 bootstrap_servers, group_id, auto_offset_reset='error',
+                 queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+                 queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -89,10 +99,13 @@ class BatchingKafkaConsumer(object):
             topics = list(topics)
 
         self.consumer = self.create_consumer(
-            topics, bootstrap_servers, group_id, auto_offset_reset=auto_offset_reset
+            topics, bootstrap_servers, group_id, auto_offset_reset,
+            queued_max_messages_kbytes, queued_min_messages
         )
 
-    def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset='error'):
+    def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
+            queued_max_messages_kbytes, queued_min_messages):
+
         consumer_config = {
             'enable.auto.commit': False,
             'bootstrap.servers': ','.join(bootstrap_servers),
@@ -101,8 +114,8 @@ class BatchingKafkaConsumer(object):
                 'auto.offset.reset': auto_offset_reset,
             },
             # overridden to reduce memory usage when there's a large backlog
-            'queued.max.messages.kbytes': 50000,  # 50MB, default is 1GB
-            'queued.min.messages': 20000,  # default is 100k
+            'queued.max.messages.kbytes': queued_max_messages_kbytes,
+            'queued.min.messages': queued_min_messages,
         }
 
         consumer = Consumer(consumer_config)
@@ -161,7 +174,8 @@ class BatchingKafkaConsumer(object):
             self.timer = self.max_batch_time / 1000.0 + time.time()
 
         result = self.worker.process_message(msg)
-        self.batch.append(result)
+        if result is not None:
+            self.batch.append(result)
 
     def _shutdown(self):
         logger.debug("Stopping")
@@ -229,3 +243,48 @@ class BatchingKafkaConsumer(object):
                     continue
                 else:
                     raise
+
+
+class ConsumerWorker(AbstractBatchWorker):
+    def __init__(self, clickhouse, table_name):
+        self.clickhouse = clickhouse
+        self.table_name = table_name
+
+    def process_message(self, message):
+        value = json.loads(message.value())
+
+        processed = process_message(value)
+        if processed is None:
+            return None
+
+        message_type, key, processed_event = processed
+
+        processed_event['offset'] = message.offset()
+        processed_event['partition'] = message.partition()
+
+        return row_from_processed_event(processed_event)
+
+    def flush_batch(self, batch):
+        retries = 3
+        while True:
+            try:
+                write_rows(self.clickhouse, self.table_name, settings.WRITER_COLUMNS, batch)
+
+                break  # success
+            except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
+                if retries <= 0:
+                    raise
+                retries -= 1
+                time.sleep(1)
+                continue
+            except errors.ServerException as e:
+                logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
+                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    time.sleep(1)
+                    continue
+                else:
+                    raise
+
+    def shutdown(self):
+        pass

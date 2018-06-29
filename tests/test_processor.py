@@ -1,12 +1,11 @@
 import calendar
 import pytest
-import simplejson as json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from base import BaseTest
 
 from snuba import processor, settings
-from snuba.processor import get_key, process_message, ProcessorWorker
+from snuba.processor import get_key, process_message
 
 
 class TestProcessor(BaseTest):
@@ -21,16 +20,12 @@ class TestProcessor(BaseTest):
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
-        assert isinstance(processed['timestamp'], int)
-        assert isinstance(processed['received'], int)
 
     def test_simple_version_0(self):
         _, _, processed = process_message((0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
-        assert isinstance(processed['timestamp'], int)
-        assert isinstance(processed['received'], int)
 
     def test_invalid_action_version_0(self):
         with pytest.raises(ValueError):
@@ -67,18 +62,19 @@ class TestProcessor(BaseTest):
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
-            'timestamp': int(calendar.timegm(now.timetuple())),
+            'timestamp': now,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
 
     def test_extract_common(self):
+        now = datetime.utcnow().replace(microsecond=0)
         event = {
             'primary_hash': 'a' * 32,
             'message': 'the message',
             'platform': 'the_platform',
         }
         data = {
-            'received': 1520971716.0,
+            'received': int(calendar.timegm(now.timetuple())),
             'type': 'error',
             'version': 6,
         }
@@ -89,7 +85,7 @@ class TestProcessor(BaseTest):
             'message': u'the message',
             'platform': u'the_platform',
             'primary_hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-            'received': 1520971716,
+            'received': now,
             'type': 'error',
             'version': '6',
         }
@@ -107,7 +103,7 @@ class TestProcessor(BaseTest):
         assert processed == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
-            'timestamp': int(calendar.timegm(now.timetuple())),
+            'timestamp': now,
             'deleted': True,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
@@ -430,43 +426,3 @@ class TestProcessor(BaseTest):
             'exception_stacks.mechanism_handled': [False],
             'exception_stacks.mechanism_type': [u'promise'],
         }
-
-    def test_offsets(self):
-        event = self.event
-
-        class FakeMessage(object):
-            def value(self):
-                # event doesn't really matter
-                return json.dumps((0, 'insert', event))
-
-            def offset(self):
-                return 123
-
-            def partition(self):
-                return 456
-
-        test_worker = ProcessorWorker(producer=None, events_topic=None, deletes_topic=None)
-        _, _, val = test_worker.process_message(FakeMessage())
-
-        val = json.loads(val)
-
-        assert val['project_id'] == self.event['project_id']
-        assert val['event_id'] == self.event['event_id']
-        assert val['offset'] == 123
-        assert val['partition'] == 456
-
-    def test_skip_too_old(self):
-        test_worker = ProcessorWorker(producer=None, events_topic=None, deletes_topic=None)
-
-        event = self.event
-        old_timestamp = datetime.utcnow() - timedelta(days=300)
-        old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        event['datetime'] = old_timestamp_str
-        event['data']['datetime'] = old_timestamp_str
-        event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
-
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((0, 'insert', event))
-
-        assert test_worker.process_message(FakeMessage()) is None
