@@ -16,9 +16,7 @@ rds = redis.StrictRedis(
     port=settings.REDIS_PORT,
     db=settings.REDIS_DB
 )
-kfk = Producer({
-    'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
-})
+kfk = None
 
 # Window for concurrent query counting
 max_query_duration_s = 60
@@ -152,6 +150,7 @@ def delete_config(key):
 
 
 def record_query(data):
+    global kfk
     max_redis_queries = 200
     data = json.dumps(data, for_json=True)
     try:
@@ -159,6 +158,11 @@ def record_query(data):
             .lpush(queries_list, data)\
             .ltrim(queries_list, 0, max_redis_queries - 1)\
             .execute()
+
+        if kfk is None:
+            kfk = Producer({
+                'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
+            })
 
         kfk.produce(
             settings.QUERIES_TOPIC,
