@@ -2,6 +2,7 @@
 
 from __future__ import print_function
 
+from datetime import datetime
 import logging
 import sys
 
@@ -29,11 +30,12 @@ def run(clickhouse_server, database, table, timeout, log_level):
         logger.error("Must provide at least one Clickhouse server.")
         sys.exit(1)
 
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     for server in clickhouse_server:
         clickhouse = ClickhousePool(
             server.split(':')[0], port=int(server.split(':')[1]), send_receive_timeout=timeout
         )
-        num_dropped = run_optimize(clickhouse, database, table)
+        num_dropped = run_optimize(clickhouse, database, table, before=today)
         logger.info("Optimized %s partitions on %s" % (num_dropped, server))
 
 

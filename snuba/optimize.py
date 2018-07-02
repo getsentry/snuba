@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 
 from snuba import util
@@ -6,13 +7,13 @@ from snuba import util
 logger = logging.getLogger('snuba.optimize')
 
 
-def run_optimize(clickhouse, database, table):
-    parts = get_partitions_to_optimize(clickhouse, database, table)
+def run_optimize(clickhouse, database, table, before=None):
+    parts = get_partitions_to_optimize(clickhouse, database, table, before)
     optimize_partitions(clickhouse, database, table, parts)
     return len(parts)
 
 
-def get_partitions_to_optimize(clickhouse, database, table):
+def get_partitions_to_optimize(clickhouse, database, table, before=None):
     response = clickhouse.execute(
         """
         SELECT
@@ -32,7 +33,12 @@ def get_partitions_to_optimize(clickhouse, database, table):
         }
     )
 
-    return [util.decode_part_str(part) for part, count in response]
+    parts = [util.decode_part_str(part) for part, count in response]
+
+    if before:
+        parts = filter(lambda p: p[0] < before, parts)
+
+    return parts
 
 
 def optimize_partitions(clickhouse, database, table, parts):
