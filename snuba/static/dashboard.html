@@ -224,7 +224,7 @@
                   <div>
                     <h2>Scatter:</h2>
                     <Scatter width={500} height={200} values={this.state.queries}
-                      xacc="stats.num_days" yacc="timing.duration_ms" cacc="referrer"
+                      xacc="stats.num_days" yacc="timing.duration_ms" cacc="stats.referrer"
                     />
                   </div>
                 </div>
@@ -253,9 +253,9 @@
                       width: 80,
                       accessor: 'request.project'
                     },{
-                      Header: 'stats.referrer',
+                      Header: 'referrer',
                       width: 80,
-                      accessor: 'referrer'
+                      accessor: 'stats.referrer'
                     },{
                       Header: 'ms',
                       width: 50,
