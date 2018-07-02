@@ -1,7 +1,7 @@
 #!/bin/bash
 
 print_help() {
-    echo "Available commands: api, processor, writer."
+    echo "Available commands: api, consumer, optimize, cleanup."
     echo "Additional arguments are appended as arguments to the respective program."
 }
 
@@ -16,13 +16,9 @@ case $1 in
         exec uwsgi --master --manage-script-name --pypy-wsgi snuba.api $_default_args
     fi
     ;;
-"processor")
-    echo "Running Snuba processor with arguments:" "${@:2}"
-    exec ./bin/processor "${@:2}"
-    ;;
-"writer")
-    echo "Running Snuba writer with arguments:" "${@:2}"
-    exec ./bin/writer "${@:2}"
+"consumer")
+    echo "Running Snuba consumer with arguments:" "${@:2}"
+    exec ./bin/consumer "${@:2}"
     ;;
 "optimize"|"optimizer")
     echo "Running Snuba optimizer with arguments:" "${@:2}"
