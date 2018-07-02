@@ -147,7 +147,7 @@ class TestApi(BaseTest):
             'issues': [],
             'groupby': 'issue',
         })).data)
-        assert result['error'] is None
+        assert 'error' not in result
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -155,7 +155,7 @@ class TestApi(BaseTest):
             'groupby': 'issue',
             'conditions': [['issue', '=', 100]],
         })).data)
-        assert result['error'] is None
+        assert 'error' not in result
         assert result['data'] == []
 
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -164,7 +164,7 @@ class TestApi(BaseTest):
             'groupby': 'issue',
             'conditions': [['issue', 'IN', [100, 200]]],
         })).data)
-        assert result['error'] is None
+        assert 'error' not in result
         assert result['data'] == []
 
     def test_offset_limit(self):
@@ -333,7 +333,7 @@ class TestApi(BaseTest):
     def test_column_expansion(self, raw_query):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
-        raw_query.return_value = {'data': [], 'meta': []}
+        raw_query.return_value = ({'data': [], 'meta': []}, 200)
         issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
         json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
@@ -346,7 +346,7 @@ class TestApi(BaseTest):
             ]
         })).data)
         # Issue is expanded once, and alias used subsequently
-        sql = raw_query.call_args[0][0]
+        sql = raw_query.call_args[0][1]
         assert "issue = 0" in sql
         assert "issue = 1" in sql
 

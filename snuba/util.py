@@ -224,33 +224,101 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(sql, client, query_id=None):
+def raw_query(body, sql, client, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    query_settings = {}
-    stats = {}
+    stats = stats or {}
+    grl, gcl, prl, pcl, use_cache, query_settings = state.get_configs([
+        ('global_per_second_limit', 1000),
+        ('global_concurrent_limit', 1000),
+        ('project_per_second_limit', 1000),
+        ('project_concurrent_limit', 1000),
+        ('use_cache', 0),
+        ('query_settings_json', None),
+    ])
     try:
-        query_settings_json = state.get_config('query_settings_json')
-        if query_settings_json:
-            query_settings = json.loads(query_settings_json)
-    except ValueError:
-        pass
+        query_settings = json.loads(query_settings)
+    except (TypeError, ValueError):
+        query_settings = {}
+    stats.update(query_settings)
+    timer.mark('get_configs')
 
-    try:
-        error = None
-        data, meta = client.execute(
-            sql,
-            with_column_types=True,
-            settings=query_settings,
-            query_id=query_id
-        )
-        logger.debug(sql)
-    except BaseException as ex:
-        data, meta, error, stats = [], [], six.text_type(ex), {}
-        logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
+    with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
+        metrics.gauge('query.global_concurrent', g_concurr)
+        stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
 
+        # TODO rate limit on every project in the list?
+        project_ids = to_list(body['project'])
+        with state.rate_limit(project_ids[0], prl, pcl) as (p_allowed, p_rate, p_concurr):
+            stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
+            timer.mark('rate_limit')
+
+            if g_allowed and p_allowed:
+                query_id = md5(force_bytes(sql)).hexdigest()
+                with state.deduper(query_id) as is_dupe:
+                    timer.mark('dedupe_wait')
+
+                    result = state.get_result(query_id) if use_cache else None
+                    timer.mark('cache_get')
+
+                    stats.update({
+                        'is_duplicate': is_dupe,
+                        'query_id': query_id,
+                        'use_cache': bool(use_cache),
+                        'cache_hit': bool(result)}
+                    ),
+
+                    if result:
+                        status = 200
+                    else:
+                        try:
+                            data, meta = client.execute(
+                                sql,
+                                with_column_types=True,
+                                settings=query_settings,
+                                # All queries should already be deduplicated at this point
+                                # But the query_id will let us know if they aren't
+                                query_id=query_id
+                            )
+                            data, meta = scrub_ch_data(data, meta)
+                            result = {'data': data, 'meta': meta}
+                            status = 200
+
+                            logger.debug(sql)
+                            timer.mark('execute')
+
+                            if use_cache:
+                                state.set_result(query_id, result)
+                                timer.mark('cache_set')
+
+                        except BaseException as ex:
+                            error = six.text_type(ex)
+                            status = 500
+                            logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
+                            result = {'error': error}
+            else:
+                status = 429
+                result = {'error': 'rate limit exceeded'}
+
+    state.record_query({
+        'request': body,
+        'sql': sql,
+        'timing': timer,
+        'stats': stats,
+    })
+
+    timer.record(metrics)
+    result['timing'] = timer
+
+    if settings.STATS_IN_RESPONSE:
+        result['stats'] = stats
+
+    return (result, status)
+
+
+def scrub_ch_data(data, meta):
     # for now, convert back to a dict-y format to emulate the json
     data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
     meta = [{'name': m[0], 'type': m[1]} for m in meta]
@@ -266,7 +334,7 @@ def raw_query(sql, client, query_id=None):
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
 
-    return {'data': data, 'meta': meta, 'error': error, 'stats': stats}
+    return (data, meta)
 
 
 def uses_issue(body):
@@ -489,3 +557,5 @@ def create_metrics(host, port, prefix, tags=None):
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
     return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)
+
+metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
