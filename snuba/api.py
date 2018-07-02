@@ -303,12 +303,24 @@ def query(validated_body=None, timer=None):
 
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
-    # is hardcoded to 'test' on purpose to avoid scary production mishaps.
-    TEST_TABLE = 'test'
+    # is checked to avoid scary production mishaps.
+    assert settings.CLICKHOUSE_TABLE in ('dev', 'test')
+
+    def ensure_table_exists():
+        from snuba.clickhouse import get_table_definition, get_test_engine
+
+        clickhouse_rw.execute(
+            get_table_definition(
+                name=settings.CLICKHOUSE_TABLE,
+                engine=get_test_engine(),
+                columns=settings.SCHEMA_COLUMNS
+            )
+        )
+
+    ensure_table_exists()
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.clickhouse import get_table_definition, get_test_engine
         from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
@@ -320,15 +332,12 @@ if application.debug or application.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        clickhouse_rw.execute(
-            get_table_definition(TEST_TABLE, get_test_engine(), settings.SCHEMA_COLUMNS)
-        )
-        write_rows(clickhouse_rw, table=TEST_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
-
+        ensure_table_exists()
+        write_rows(clickhouse_rw, table=settings.CLICKHOUSE_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % TEST_TABLE)
-
+        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
+        ensure_table_exists()
         return ('ok', 200, {'Content-Type': 'text/plain'})
