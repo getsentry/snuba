@@ -308,6 +308,22 @@ class TestProcessor(BaseTest):
                           'user_id': u'user_id',
                           'username': u'user_username'}
 
+    def test_extract_geo(self):
+        geo = {
+            'country_code': 'US',
+            'city': 'San Francisco',
+            'region': 'CA',
+        }
+        output = {}
+
+        processor.extract_geo(output, geo)
+
+        assert output == {
+            'geo_country_code': 'US',
+            'geo_city': 'San Francisco',
+            'geo_region': 'CA',
+        }
+
     def test_extract_http(self):
         http = {
             'method': 'GET',
