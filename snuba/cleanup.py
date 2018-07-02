@@ -7,8 +7,6 @@ from snuba import util
 logger = logging.getLogger('snuba.cleanup')
 
 
-
-
 def run_cleanup(clickhouse, database, table, dry_run=True):
     active_parts = get_active_partitions(clickhouse, database, table)
     stale_parts = filter_stale_partitions(active_parts)

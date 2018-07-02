@@ -35,6 +35,11 @@ class TestOptimize(BaseTest):
         parts = optimize.get_partitions_to_optimize(self.clickhouse, self.database, self.table)
         assert parts == [(now, 90), (a_month_earlier, 90)]
 
+        # respects before (now is properly excluded)
+        assert list(optimize.get_partitions_to_optimize(
+            self.clickhouse, self.database, self.table, before=now
+        )) == [(a_month_earlier, 90)]
+
         optimize.optimize_partitions(self.clickhouse, self.database, self.table, parts)
 
         # all parts should be optimized
