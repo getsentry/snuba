@@ -22,11 +22,18 @@ class BaseTest(object):
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
-        self.table = 'test'
+        self.table = settings.CLICKHOUSE_TABLE
+
         self.clickhouse = ClickhousePool('localhost')
 
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(get_table_definition('test', get_test_engine(), settings.SCHEMA_COLUMNS))
+        self.clickhouse.execute(
+            get_table_definition(
+                name=self.table,
+                engine=get_test_engine(),
+                columns=settings.SCHEMA_COLUMNS
+            )
+        )
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
