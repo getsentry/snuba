@@ -454,7 +454,7 @@ class TestApi(BaseTest):
         self.write_processed_events([{
             'event_id': '9' * 32,
             'project_id': 1,
-            'timestamp': calendar.timegm(self.base_time.timetuple()),
+            'timestamp': self.base_time,
             'deleted': 1,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }])
@@ -518,10 +518,10 @@ class TestApi(BaseTest):
         }
 
         event1 = base_event.copy()
-        event1['timestamp'] = calendar.timegm((now - timedelta(days=1)).timetuple())
+        event1['timestamp'] = now - timedelta(days=1)
 
         event2 = base_event.copy()
-        event2['timestamp'] = calendar.timegm((now - timedelta(days=3)).timetuple())
+        event2['timestamp'] = now - timedelta(days=3)
 
         self.write_processed_events([event1, event2])
 

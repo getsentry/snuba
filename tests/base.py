@@ -1,7 +1,6 @@
 import calendar
 from hashlib import md5
 from datetime import datetime, timedelta
-import time
 import uuid
 
 from snuba import settings
@@ -41,7 +40,7 @@ class BaseTest(object):
             'project_id': 1,
             'deleted': 0,
         }
-        event['timestamp'] = time.mktime(dt.timetuple())
+        event['timestamp'] = dt
         event['retention_days'] = retention_days
         return event
 
