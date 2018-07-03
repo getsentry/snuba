@@ -101,7 +101,7 @@ column.
 <!-- -->
 
     # Find any tags whose *value* is `bar`
-    "conditoons": [
+    "conditons": [
         ["tags_value", "=", "bar"],
     ],
 
