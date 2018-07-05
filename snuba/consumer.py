@@ -2,6 +2,8 @@ import abc
 import logging
 import simplejson as json
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
+from multiprocessing import Process, Pipe
 
 from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException
@@ -41,6 +43,8 @@ class AbstractBatchWorker(object):
         store(s) it is maintaining. Afterwards the Kafka offsets are committed.
 
         A simple example would be writing the batch to another Kafka topic.
+
+        # TODO: Document that it must return a future
         """
         pass
 
@@ -89,6 +93,10 @@ class BatchingKafkaConsumer(object):
         self.max_batch_time = max_batch_time
         self.metrics = metrics
 
+        self.assigned = set()
+        self.flush_future = None
+        self.pending_positions = None
+
         self.shutdown = False
         self.batch = []
         self.timer = None
@@ -108,6 +116,8 @@ class BatchingKafkaConsumer(object):
 
         consumer_config = {
             'enable.auto.commit': False,
+            'enable.auto.offset.store': False,
+            'enable.partition.eof': False,
             'bootstrap.servers': ','.join(bootstrap_servers),
             'group.id': group_id,
             'default.topic.config': {
@@ -120,13 +130,20 @@ class BatchingKafkaConsumer(object):
 
         consumer = Consumer(consumer_config)
 
-        def on_partitions_assigned(consumer, partitons):
-            logger.info("New partitions assigned: %s" % partitons)
+        def on_partitions_assigned(consumer, partitions):
+            logger.info("New partitions assigned: %s" % partitions)
+            self.assigned = set(partitions)
 
-        def on_partitions_revoked(consumer, partitons):
+        def on_partitions_revoked(consumer, partitions):
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Partitions revoked: %s" % partitons)
-            self._flush(force=True)
+            logger.info("Partitions revoked: %s" % partitions)
+
+            for partition in partitions:
+                self.assigned.remove(partition)
+
+            assert len(self.assigned) == 0
+            self._await_flush_future()
+            self._reset_batch()
 
         consumer.subscribe(
             topics,
@@ -208,27 +225,37 @@ class BatchingKafkaConsumer(object):
                         len(self.batch), force, batch_by_size, batch_by_time)
                 )
 
+                self._await_flush_future()
+                self.pending_positions = self.consumer.position(list(self.assigned))
+
                 logger.debug("Flushing batch via worker")
                 t = time.time()
-                self.worker.flush_batch(self.batch)
+                self.flush_future = self.worker.flush_batch(self.batch)
                 duration = int((time.time() - t) * 1000)
                 logger.info("Worker flush took %sms" % duration)
                 if self.metrics:
                     self.metrics.timing('batch.flush', duration)
 
-                logger.debug("Committing Kafka offsets")
-                t = time.time()
-                self._commit()
-                duration = int((time.time() - t) * 1000)
-                logger.debug("Kafka offset commit took %sms" % duration)
-
                 self._reset_batch()
 
-    def _commit(self):
+    def _await_flush_future(self):
+        if self.flush_future is not None:
+            self.flush_future.result()  # wait on previous future
+
+            logger.debug("Committing Kafka offsets")
+            t = time.time()
+            self._commit(self.pending_positions)
+            duration = int((time.time() - t) * 1000)
+            logger.debug("Kafka offset commit took %sms" % duration)
+
+            self.flush_future = None
+            self.pending_positions = None
+
+    def _commit(self, offsets):
         retries = 3
         while True:
             try:
-                offsets = self.consumer.commit(asynchronous=False)
+                offsets = self.consumer.commit(offsets=offsets, asynchronous=False)
                 logger.debug("Committed offsets: %s" % offsets)
                 break  # success
             except KafkaException as e:
@@ -245,24 +272,11 @@ class BatchingKafkaConsumer(object):
                     raise
 
 
-class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, table_name):
+class ClickhouseWriter(object):
+    def __init__(self, clickhouse, table_name, pipe):
         self.clickhouse = clickhouse
         self.table_name = table_name
-
-    def process_message(self, message):
-        value = json.loads(message.value())
-
-        processed = process_message(value)
-        if processed is None:
-            return None
-
-        message_type, key, processed_event = processed
-
-        processed_event['offset'] = message.offset()
-        processed_event['partition'] = message.partition()
-
-        return row_from_processed_event(processed_event)
+        self.pipe = pipe
 
     def flush_batch(self, batch):
         retries = 3
@@ -285,6 +299,63 @@ class ConsumerWorker(AbstractBatchWorker):
                     continue
                 else:
                     raise
+
+    def __call__(self):
+        while True:
+            counter, batch = self.pipe.recv()
+
+            try:
+                t = time.time()
+                self.flush_batch(batch)
+                duration = int((time.time() - t) * 1000)
+                logger.info("Clickhouse flush took %sms" % duration)
+            except Exception as e:
+                self.pipe.send(e)
+            else:
+                self.pipe.send(counter)
+
+
+class ConsumerWorker(AbstractBatchWorker):
+    def __init__(self, clickhouse, table_name):
+        self.clickhouse = clickhouse
+        self.table_name = table_name
+
+        parent_pipe, child_pipe = Pipe()
+        self.pipe = parent_pipe
+        self.writer = ClickhouseWriter(self.clickhouse, self.table_name, child_pipe)
+
+        self.counter = 0
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.process = Process(target=self.writer)
+        self.process.start()
+
+    def process_message(self, message):
+        value = json.loads(message.value())
+
+        processed = process_message(value)
+        if processed is None:
+            return None
+
+        message_type, key, processed_event = processed
+
+        processed_event['offset'] = message.offset()
+        processed_event['partition'] = message.partition()
+
+        return row_from_processed_event(processed_event)
+
+    def flush_batch(self, batch):
+        current_counter = self.counter
+        self.pipe.send((current_counter, batch))
+
+        def _await_subprocess_recv():
+            result = self.pipe.recv()
+            if isinstance(result, Exception):
+                raise result
+            else:
+                assert result == current_counter
+
+        self.counter += 1
+        return self.executor.submit(_await_subprocess_recv)
 
     def shutdown(self):
         pass
