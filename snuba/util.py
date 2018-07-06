@@ -274,7 +274,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         status = 200
                     else:
                         try:
-                            data, meta = client.execute(
+                            query = client.execute_with_progress(
                                 sql,
                                 with_column_types=True,
                                 settings=query_settings,
@@ -282,6 +282,12 @@ def raw_query(body, sql, client, timer, stats=None):
                                 # But the query_id will let us know if they aren't
                                 query_id=query_id
                             )
+                            data, meta = query.get_result()
+                            if hasattr(query, 'progress_totals'):
+                                stats.update({
+                                    'rows_read': query.progress_totals.rows,
+                                    'bytes_read': query.progress_totals.bytes,
+                                })
                             data, meta = scrub_ch_data(data, meta)
                             result = {'data': data, 'meta': meta}
                             status = 200
