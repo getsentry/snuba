@@ -309,7 +309,8 @@ def raw_query(body, sql, client, timer, stats=None):
         'stats': stats,
     })
 
-    timer.record(metrics)
+    if settings.RECORD_QUERIES:
+        timer.record(metrics)
     result['timing'] = timer
 
     if settings.STATS_IN_RESPONSE:

@@ -35,6 +35,7 @@ REDIS_PORT = 6379
 REDIS_DB = 1
 
 # Query Recording Options
+RECORD_QUERIES = False
 QUERIES_TOPIC = 'snuba-queries'
 
 # Sentry Options
