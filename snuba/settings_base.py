@@ -288,7 +288,8 @@ SCHEMA_COLUMNS = [
 SCHEMA_MAP = dict(SCHEMA_COLUMNS)
 
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
-DEFAULT_ORDER_BY = '(project_id, timestamp, event_id)'
+DEFAULT_SAMPLE_EXPR = 'intHash64(reinterpretAsInt64(event_id))'
+DEFAULT_ORDER_BY = '(project_id, timestamp, %s, event_id)' % DEFAULT_SAMPLE_EXPR
 DEFAULT_PARTITION_BY = '(toStartOfDay(timestamp), retention_days)'
 DEFAULT_VERSION_COLUMN = 'deleted'
 DEFAULT_SHARDING_KEY = 'intHash64(reinterpretAsInt64(event_id))'
