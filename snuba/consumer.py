@@ -2,8 +2,7 @@ import abc
 import logging
 import simplejson as json
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
-from multiprocessing import Process, Pipe
+from concurrent.futures import ThreadPoolExecutor
 
 from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException
@@ -273,12 +272,13 @@ class BatchingKafkaConsumer(object):
 
 
 class ClickhouseWriter(object):
-    def __init__(self, clickhouse, table_name, pipe):
+    def __init__(self, clickhouse, table_name):
         self.clickhouse = clickhouse
         self.table_name = table_name
-        self.pipe = pipe
 
     def flush_batch(self, batch):
+        t = time.time()
+
         retries = 3
         while True:
             try:
@@ -300,19 +300,8 @@ class ClickhouseWriter(object):
                 else:
                     raise
 
-    def __call__(self):
-        while True:
-            counter, batch = self.pipe.recv()
-
-            try:
-                t = time.time()
-                self.flush_batch(batch)
-                duration = int((time.time() - t) * 1000)
-                logger.info("Clickhouse flush took %sms" % duration)
-            except Exception as e:
-                self.pipe.send(e)
-            else:
-                self.pipe.send(counter)
+        duration = int((time.time() - t) * 1000)
+        logger.info("Clickhouse flush took %sms" % duration)
 
 
 class ConsumerWorker(AbstractBatchWorker):
@@ -320,14 +309,8 @@ class ConsumerWorker(AbstractBatchWorker):
         self.clickhouse = clickhouse
         self.table_name = table_name
 
-        parent_pipe, child_pipe = Pipe()
-        self.pipe = parent_pipe
-        self.writer = ClickhouseWriter(self.clickhouse, self.table_name, child_pipe)
-
-        self.counter = 0
+        self.writer = ClickhouseWriter(self.clickhouse, self.table_name)
         self.executor = ThreadPoolExecutor(max_workers=1)
-        self.process = Process(target=self.writer)
-        self.process.start()
 
     def process_message(self, message):
         value = json.loads(message.value())
@@ -344,18 +327,7 @@ class ConsumerWorker(AbstractBatchWorker):
         return row_from_processed_event(processed_event)
 
     def flush_batch(self, batch):
-        current_counter = self.counter
-        self.pipe.send((current_counter, batch))
-
-        def _await_subprocess_recv():
-            result = self.pipe.recv()
-            if isinstance(result, Exception):
-                raise result
-            else:
-                assert result == current_counter
-
-        self.counter += 1
-        return self.executor.submit(_await_subprocess_recv)
+        return self.executor.submit(self.writer.flush_batch, batch)
 
     def shutdown(self):
         pass
