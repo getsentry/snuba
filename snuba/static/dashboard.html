@@ -234,7 +234,7 @@
                   manual
                   pages={-1}
                   loading={!this.state.loaded}
-                  data={this.state.queries.slice(0, 20)}
+                  data={this.state.queries.slice(0, 50)}
                   className="-striped -highlight"
                   showPagination={false}
                   columns={[
@@ -264,6 +264,16 @@
                       Header: 'days',
                       width:50,
                       accessor: 'stats.num_days'
+                    },{
+                      Header: 'hit',
+                      id: 'hit',
+                      width:35,
+                      accessor: row => row.stats.cache_hit ? 'Y': ''
+                    },{
+                      Header: 'dup',
+                      id: 'dup',
+                      width:42,
+                      accessor: row => row.stats.is_duplicate ? 'Y': ''
                     },{
                       Header: 'issues',
                       width:61,
