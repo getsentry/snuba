@@ -555,6 +555,7 @@ class TestApi(BaseTest):
         })).data)
         assert result['data'] == [{'count': 1, 'issue': 0}]
 
+    @pytest.mark.xfail
     def test_row_stats(self):
         query = {
             'project': 1,
