@@ -47,7 +47,7 @@ application = Flask(__name__, static_url_path='')
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
-sentry = Sentry(application, dsn=settings.SENTRY_DSN)
+#sentry = Sentry(application, dsn=settings.SENTRY_DSN)
 
 
 @application.route('/')
