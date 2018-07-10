@@ -19,7 +19,8 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
+ESCAPE_RE = re.compile(r'^[a-zA-Z]*(?:\[\d+\])?$')
+INDEX_RE = re.compile(r'^.+\[\d+\]$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
@@ -36,8 +37,10 @@ def to_list(value):
 def escape_col(col):
     if ESCAPE_RE.match(col):
         return col
-    else:
-        return '`{}`'.format(col)
+    if INDEX_RE.match(col):
+        idx = col.index('[')
+        return '`{}`{}'.format(col[:idx], col[idx:])
+    return '`{}`'.format(col)
 
 
 def string_col(col):

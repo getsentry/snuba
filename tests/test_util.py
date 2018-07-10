@@ -50,6 +50,8 @@ class TestUtil(BaseTest):
 
         # Columns that need escaping
         assert column_expr('sentry:release', body.copy()) == '`sentry:release`'
+        assert column_expr('sentry:release[1]', body.copy()) == '`sentry:release`[1]'
+        assert column_expr('sentry:release[foo]', body.copy()) == '`sentry:release[foo]`'
 
     def test_alias_in_alias(self):
         body = {}
@@ -184,3 +186,9 @@ class TestUtil(BaseTest):
         }
         assert '[1,1,2]' in issue_expr(body)
         assert '[99,99,100]' in issue_expr(body)
+
+    def test_escape_col(self):
+        assert escape_col('foo') == 'foo'
+        assert escape_col('foo.bar') == '`foo.bar`'
+        assert escape_col('foo.bar[1]') == '`foo.bar`[1]'
+        assert escape_col('foo[1]') == 'foo[1]'

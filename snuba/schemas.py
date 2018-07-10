@@ -165,7 +165,7 @@ QUERY_SCHEMA = {
             'anyOf': [
                 # Special computed column created from `issues` definition
                 {'enum': ['issue', '-issue']},
-                {'pattern': '^-?[a-zA-Z0-9_.]+$', },
+                {'pattern': '^-?[a-zA-Z0-9_.]+(?:\[\d+\])?$', },
                 {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
             ],
         },
