@@ -313,6 +313,7 @@ def raw_query(body, sql, client, timer, stats=None):
         'sql': sql,
         'timing': timer,
         'stats': stats,
+        'status': status,
     })
 
     if settings.RECORD_QUERIES:
