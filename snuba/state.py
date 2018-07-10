@@ -193,7 +193,7 @@ def get_result(query_id):
     return result and json.loads(result)
 
 def set_result(query_id, result):
-    timeout = 1
+    timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
     return rds.set(key, json.dumps(result), ex=timeout)
 
