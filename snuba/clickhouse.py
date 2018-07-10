@@ -34,15 +34,6 @@ class ClickhousePool(object):
             self.pool.put(None)
 
     def execute(self, *args, **kwargs):
-        with self._get_conn() as conn:
-            return conn.execute(*args, **kwargs)
-
-    def execute_with_progress(self, *args, **kwargs):
-        with self._get_conn() as conn:
-            return conn.execute_with_progress(*args, **kwargs)
-
-    @contextmanager
-    def _get_conn(self):
         try:
             conn = self.pool.get(block=True)
 
@@ -51,7 +42,7 @@ class ClickhousePool(object):
                 conn = self._create_conn()
 
             try:
-                yield conn
+                return conn.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError) as e:
                 # Force a reconnection next time
                 conn = None
