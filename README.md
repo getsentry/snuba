@@ -110,6 +110,19 @@ Aggregations are also included in the output columns automatically.
 
 #### granularity
 
+Snuba provides a magic column `time`, that you can use in groupby or filter
+expressions. This column gives a floored time value for each event so that
+events in the same minute/hour/day/etc. can be grouped.
+
+`granularity` determines the number of seconds in each of these time buckets.
+Eg, to count the number of events by hour, you would do
+
+    {
+        "aggregations": [["count()", "", "event_count"]],
+        "granularity": 3600,
+        "groupby": "time"
+    }
+
 #### having
 
 #### issues
@@ -117,6 +130,8 @@ Aggregations are also included in the output columns automatically.
 #### project
 
 ### Issues / Groups
+
+Snuba provides a magic column `issue` that can be used to group events by issue.
 
 Because events can be reassigned to different issues through merging, and
 because snuba does not support updates, we cannot store the issue id for an
