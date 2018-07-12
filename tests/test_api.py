@@ -466,11 +466,12 @@ class TestApi(BaseTest):
         query = {
             'project': 1,
             'selected_columns': ['platform', 'message'],
+            'orderby': 'platform',
         }
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
 
         assert len(result['data']) == 180
-        assert result['data'][0] == {'message': 'a message', 'platform': 'b'}
+        assert result['data'][0] == {'message': 'a message', 'platform': 'a'}
 
     def test_test_endpoints(self):
         project_id = 73
