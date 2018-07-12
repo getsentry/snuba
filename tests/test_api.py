@@ -195,7 +195,7 @@ class TestApi(BaseTest):
             'granularity': 3600,
             'issues': [(i, 2, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
-            'conditions': [['issue', 'IN', [0, 1, 2, 3, 4]]]
+            'conditions': [[], ['issue', 'IN', [0, 1, 2, 3, 4]]]
         })).data)
         assert set([d['issue'] for d in result['data']]) == set([0, 4])
 
@@ -555,6 +555,7 @@ class TestApi(BaseTest):
         })).data)
         assert result['data'] == [{'count': 1, 'issue': 0}]
 
+    @pytest.mark.xfail
     def test_row_stats(self):
         query = {
             'project': 1,

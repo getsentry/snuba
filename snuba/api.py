@@ -47,7 +47,7 @@ application = Flask(__name__, static_url_path='')
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
-sentry = Sentry(application, dsn=settings.SENTRY_DSN)
+#sentry = Sentry(application, dsn=settings.SENTRY_DSN)
 
 
 @application.route('/')
@@ -185,7 +185,7 @@ def query(validated_body=None, timer=None):
         prewhere_conditions.append(['primary_hash', '=', hash_])
 
     if not prewhere_conditions and settings.PREWHERE_KEYS:
-        prewhere_conditions.extend([c for c in where_conditions if c[0] in settings.PREWHERE_KEYS])
+        prewhere_conditions.extend([c for c in where_conditions if c and c[0] in settings.PREWHERE_KEYS])
 
     if prewhere_conditions:
         prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
