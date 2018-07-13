@@ -190,9 +190,9 @@ def condition_expr(conditions, body, depth=0):
         col = column_expr(col, body)
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         if op == 'LIKE':
-            return u'like(toString({}), {})'.format(col, lit)
+            return u'like({}, {})'.format(col, lit)
         elif op == 'NOT LIKE':
-            return u'notLike(toString({}), {})'.format(col, lit)
+            return u'notLike({}, {})'.format(col, lit)
         else:
             return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:
