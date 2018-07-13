@@ -19,7 +19,7 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
+ESCAPE_RE = re.compile(r'^[a-zA-Z_]*$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
 
@@ -41,7 +41,9 @@ def escape_col(col):
 
 
 def string_col(col):
-    if 'String' in settings.SCHEMA_MAP[col]:
+    col_type = settings.SCHEMA_MAP.get(col, None)
+
+    if col_type and 'String' in col_type and 'FixedString' not in col_type:
         return escape_col(col)
     else:
         return 'toString({})'.format(escape_col(col))
@@ -72,7 +74,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
             expr = u'{}({})'.format(aggregate, expr)
             if aggregate == 'uniq':  # default uniq() result to 0, not null
                 expr = 'ifNull({}, 0)'.format(expr)
-        else: # This is the "count()" case where the '()' is already provided
+        else:  # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
     alias = escape_col(alias or column_name or aggregate)
@@ -190,7 +192,7 @@ def condition_expr(conditions, body, depth=0):
         col = column_expr(col, body)
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         if op == 'LIKE':
-            return u'like({}, {})'.format(col, lit)
+            return u'like({}, {})'.format(string_col(col), lit)
         else:
             return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:
@@ -563,5 +565,6 @@ def create_metrics(host, port, prefix, tags=None):
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
     return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)
+
 
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')

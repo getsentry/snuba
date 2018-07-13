@@ -17,16 +17,16 @@ class TestUtil(BaseTest):
 
         # Promoted tag expression / no translation
         assert column_expr('tags[server_name]', body.copy()) ==\
-            "(`server_name` AS `tags[server_name]`)"
+            "(server_name AS `tags[server_name]`)"
 
         # Promoted tag expression / with translation
         assert column_expr('tags[app.device]', body.copy()) ==\
-            "(`app_device` AS `tags[app.device]`)"
+            "(app_device AS `tags[app.device]`)"
 
         # All tag keys expression
         assert column_expr('tags_key', body.copy()) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-            'AS all_tags))[1] AS `tags_key`)'
+            'AS all_tags))[1] AS tags_key)'
         )
 
         assert column_expr('time', body.copy()) ==\
@@ -55,15 +55,15 @@ class TestUtil(BaseTest):
         body = {}
         assert column_expr('tags_key', body) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
-            'AS all_tags))[1] AS `tags_key`)'
+            'AS all_tags))[1] AS tags_key)'
         )
 
         # If we want to use `tags_key` again, make sure we use the
         # already-created alias verbatim
-        assert column_expr('tags_key', body) == '`tags_key`'
+        assert column_expr('tags_key', body) == 'tags_key'
         # If we also want to use `tags_value`, make sure that we use
         # the `all_tags` alias instead of re-expanding the tags arrayJoin
-        assert column_expr('tags_value', body) == '((all_tags)[2] AS `tags_value`)'
+        assert column_expr('tags_value', body) == '((all_tags)[2] AS tags_value)'
 
     def test_escape(self):
         assert escape_literal("'") == r"'\''"
@@ -110,8 +110,8 @@ class TestUtil(BaseTest):
         assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'
 
         # Test special output format of LIKE
-        conditions = [['a', 'LIKE', '%foo%']]
-        assert condition_expr(conditions, body.copy()) == 'like(a, \'%foo%\')'
+        conditions = [['primary_hash', 'LIKE', '%foo%']]
+        assert condition_expr(conditions, body.copy()) == 'like(toString(primary_hash), \'%foo%\')'
 
     def test_duplicate_expression_alias(self):
         body = {
@@ -128,7 +128,7 @@ class TestUtil(BaseTest):
             column_expr(col, body, alias, agg)
             for (agg, col, alias) in body['aggregations']
         ]
-        assert exprs == ['(topK(3)(logger) AS `dupe_alias`)', '`dupe_alias`']
+        assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
 
     def test_issue_expr(self):
         # Provides list of issues but doesn't use them
