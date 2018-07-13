@@ -226,6 +226,7 @@ def query(validated_body=None, timer=None):
     timer.mark('prepare_query')
 
     stats.update({
+        'clickhouse_table': settings.CLICKHOUSE_TABLE,
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
