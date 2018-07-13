@@ -111,7 +111,7 @@ class TestUtil(BaseTest):
 
         # Test special output format of LIKE
         conditions = [['a', 'LIKE', '%foo%']]
-        assert condition_expr(conditions, body.copy()) == 'like(a, \'%foo%\')'
+        assert condition_expr(conditions, body.copy()) == 'like(toString(a), \'%foo%\')'
 
     def test_duplicate_expression_alias(self):
         body = {
