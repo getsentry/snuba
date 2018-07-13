@@ -288,6 +288,10 @@ def raw_query(body, sql, client, timer, stats=None):
 
                             logger.debug(sql)
                             timer.mark('execute')
+                            stats.update({
+                                'result_rows': len(data),
+                                'result_cols': len(meta),
+                            })
 
                             if use_cache:
                                 state.set_result(query_id, result)
