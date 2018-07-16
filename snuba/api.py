@@ -177,11 +177,8 @@ def query(validated_body=None, timer=None):
     prewhere_clause = ''
     prewhere_conditions = []
     # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
-    # TODO: Fix to work with `len(body['issues'][0]) == 3` once we also pass the `project_id`
-    if 'issues' in body and len(body['issues']) == 1 and \
-            (len(body['issues'][0]) == 2 and len(body['issues'][0][1]) == 1):
-
-        hash_ = body['issues'][0][1][0]
+    if 'issues' in body and len(body['issues']) == 1 and len(body['issues'][0][2]) == 1:
+        hash_ = body['issues'][0][2][0]
         hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_  # strip out tombstone
         prewhere_conditions.append(['primary_hash', '=', hash_])
 
