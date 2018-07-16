@@ -1,6 +1,7 @@
 from flask import request
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
 from hashlib import md5
 from itertools import chain
@@ -45,6 +46,11 @@ def string_col(col):
         return escape_col(col)
     else:
         return 'toString({})'.format(escape_col(col))
+
+
+def parse_datetime(value, alignment):
+    dt = dateutil_parse(value)
+    return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
 
 def column_expr(column_name, body, alias=None, aggregate=None):
