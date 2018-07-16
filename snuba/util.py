@@ -21,7 +21,7 @@ logger = logging.getLogger('snuba.util')
 
 ESCAPE_RE = re.compile(r'^[a-zA-Z]*$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2}) 00:00:00', (\d+)\)")
+PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 
 
 class Literal(object):
