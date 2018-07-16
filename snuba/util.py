@@ -60,6 +60,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     Needs the body of the request for some extra data used to expand column expressions.
     """
     assert column_name or aggregate
+    assert not aggregate or (aggregate and (column_name or alias))
     column_name = column_name or ''
 
     if column_name == settings.TIME_GROUP_COLUMN:
@@ -79,7 +80,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         else:  # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
-    alias = escape_col(alias or column_name or aggregate)
+    alias = escape_col(alias or column_name)
 
     return alias_expr(expr, alias, body)
 

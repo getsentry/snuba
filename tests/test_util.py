@@ -35,15 +35,15 @@ class TestUtil(BaseTest):
         assert column_expr('col', body.copy(), aggregate='sum') ==\
             "(sum(col) AS col)"
 
-        assert column_expr(None, body.copy(), aggregate='sum') ==\
+        assert column_expr(None, body.copy(), alias='sum', aggregate='sum') ==\
             "sum"  # This should probably be an error as its an aggregate with no column
 
         assert column_expr('col', body.copy(), alias='summation', aggregate='sum') ==\
             "(sum(col) AS summation)"
 
         # Special cases where count() doesn't need a column
-        assert column_expr('', body.copy(), aggregate='count()') ==\
-            "(count() AS `count()`)"
+        assert column_expr('', body.copy(), alias='count', aggregate='count()') ==\
+            "(count() AS count)"
 
         assert column_expr('', body.copy(), alias='aggregate', aggregate='count()') ==\
             "(count() AS aggregate)"
