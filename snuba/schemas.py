@@ -178,7 +178,11 @@ QUERY_SCHEMA = {
             'type': 'array',
             'items': [
                 {
-                    'type': 'string'
+                    'anyOf': [
+                        {'$ref': '#/definitions/column_name'},
+                        # anything allowed by util.ESCAPE_RE
+                        {'pattern': '^[a-zA-Z][a-zA-Z0-9_\.(), ]+$'},
+                    ],
                 }, {
                     # Operator
                     'type': 'string',
