@@ -191,6 +191,8 @@ def condition_expr(conditions, body, depth=0):
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         if op == 'LIKE':
             return u'like({}, {})'.format(col, lit)
+        elif op == 'NOT LIKE':
+            return u'notLike({}, {})'.format(col, lit)
         else:
             return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:
@@ -288,6 +290,10 @@ def raw_query(body, sql, client, timer, stats=None):
 
                             logger.debug(sql)
                             timer.mark('execute')
+                            stats.update({
+                                'result_rows': len(data),
+                                'result_cols': len(meta),
+                            })
 
                             if use_cache:
                                 state.set_result(query_id, result)
