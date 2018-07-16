@@ -178,7 +178,7 @@ QUERY_SCHEMA = {
             'type': 'array',
             'items': [
                 {
-                    '$ref': '#/definitions/column_name'
+                    'type': 'string'
                 }, {
                     # Operator
                     'type': 'string',
