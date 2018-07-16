@@ -193,6 +193,8 @@ def condition_expr(conditions, body, depth=0):
         lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
         if op == 'LIKE':
             return u'like({}, {})'.format(string_col(col), lit)
+        elif op == 'NOT LIKE':
+            return u'notLike({}, {})'.format(string_col(col), lit)
         else:
             return u'{} {} {}'.format(col, op, lit)
     elif depth == 1:

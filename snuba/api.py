@@ -153,7 +153,8 @@ def query(validated_body=None, timer=None):
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
-    from_clause = u'FROM {}'.format(settings.CLICKHOUSE_TABLE)
+    table = state.get_config('clickhouse_table', settings.CLICKHOUSE_TABLE)
+    from_clause = u'FROM {}'.format(table)
 
     joins = []
     issue_expr = util.issue_expr(body)
@@ -226,7 +227,7 @@ def query(validated_body=None, timer=None):
     timer.mark('prepare_query')
 
     stats.update({
-        'clickhouse_table': settings.CLICKHOUSE_TABLE,
+        'clickhouse_table': table,
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
