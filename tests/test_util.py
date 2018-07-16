@@ -113,6 +113,9 @@ class TestUtil(BaseTest):
         conditions = [['primary_hash', 'LIKE', '%foo%']]
         assert condition_expr(conditions, body.copy()) == 'like(toString(primary_hash), \'%foo%\')'
 
+        conditions = [['notEmpty(arrayElement(exception_stacks.type, 1))', '=', 1]]
+        assert condition_expr(conditions, body.copy()) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+
     def test_duplicate_expression_alias(self):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
