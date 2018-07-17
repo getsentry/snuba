@@ -17,7 +17,7 @@ def run_cleanup(clickhouse, database, table, dry_run=True):
 def get_active_partitions(clickhouse, database, table):
     response = clickhouse.execute(
         """
-        SELECT partition
+        SELECT DISTINCT partition
         FROM system.parts
         WHERE database = %(database)s
         AND table = %(table)s
