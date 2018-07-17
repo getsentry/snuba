@@ -42,34 +42,34 @@ class TestCleanup(BaseTest):
         stale = cleanup.filter_stale_partitions(parts, as_of=base)
         assert stale == [(to_monday(thirteen_weeks_ago), 90)]
 
-        # -1 week, 10 retention
+        # -1 week, 30 retention
         one_week_ago = base - timedelta(days=7)
-        self.write_processed_events(self.create_event_for_date(one_week_ago, 10))
+        self.write_processed_events(self.create_event_for_date(one_week_ago, 30))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
         assert parts == [
             (to_monday(thirteen_weeks_ago), 90),
             (to_monday(three_weeks_ago), 90),
-            (to_monday(one_week_ago), 10),
+            (to_monday(one_week_ago), 30),
             (to_monday(base), 90)
         ]
         stale = cleanup.filter_stale_partitions(parts, as_of=base)
         assert stale == [(to_monday(thirteen_weeks_ago), 90)]
 
-        # -2 weeks, 10 retention
-        two_weeks_ago = base - timedelta(days=7 * 2)
-        self.write_processed_events(self.create_event_for_date(two_weeks_ago, 10))
+        # -5 weeks, 30 retention
+        five_weeks_ago = base - timedelta(days=7 * 5)
+        self.write_processed_events(self.create_event_for_date(five_weeks_ago, 30))
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
         assert parts == [
             (to_monday(thirteen_weeks_ago), 90),
+            (to_monday(five_weeks_ago), 30),
             (to_monday(three_weeks_ago), 90),
-            (to_monday(two_weeks_ago), 10),
-            (to_monday(one_week_ago), 10),
+            (to_monday(one_week_ago), 30),
             (to_monday(base), 90)
         ]
         stale = cleanup.filter_stale_partitions(parts, as_of=base)
         assert stale == [
             (to_monday(thirteen_weeks_ago), 90),
-            (to_monday(two_weeks_ago), 10)
+            (to_monday(five_weeks_ago), 30)
         ]
 
         cleanup.drop_partitions(self.clickhouse, self.database, self.table, stale, dry_run=False)
@@ -77,6 +77,6 @@ class TestCleanup(BaseTest):
         parts = cleanup.get_active_partitions(self.clickhouse, self.database, self.table)
         assert parts == [
             (to_monday(three_weeks_ago), 90),
-            (to_monday(one_week_ago), 10),
+            (to_monday(one_week_ago), 30),
             (to_monday(base), 90)
         ]
