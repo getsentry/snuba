@@ -40,6 +40,7 @@ class TestApi(BaseTest):
         state.delete_config('global_per_second_limit')
         state.delete_config('project_concurrent_limit')
         state.delete_config('project_per_second_limit')
+        state.delete_config('date_align_seconds')
 
     def generate_fizzbuzz_events(self):
         """
@@ -123,6 +124,34 @@ class TestApi(BaseTest):
                 bucket_time = parse_datetime(result['data'][b]['time']).replace(tzinfo=None)
                 assert bucket_time == self.base_time + timedelta(minutes=b * rollup_mins)
                 assert result['data'][b]['aggregate'] == rollup_mins  # project 1 has 1 event per minute
+
+    def test_time_alignment(self):
+        # Adding a half hour skew to the time.
+        skew = timedelta(minutes=30)
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 60,
+            'groupby': 'time',
+            'from_date': (self.base_time + skew).isoformat(),
+            'to_date': (self.base_time + skew + timedelta(minutes=self.minutes)).isoformat(),
+            'orderby': 'time'
+        })).data)
+        bucket_time = parse_datetime(result['data'][0]['time']).replace(tzinfo=None)
+        assert bucket_time == (self.base_time + skew)
+
+        # But if we set time alignment to an hour, the buckets will fall back to
+        # the 1hr boundary.
+        state.set_config('date_align_seconds', 3600)
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 60,
+            'groupby': 'time',
+            'from_date': (self.base_time + skew).isoformat(),
+            'to_date': (self.base_time + skew + timedelta(minutes=self.minutes)).isoformat(),
+            'orderby': 'time'
+        })).data)
+        bucket_time = parse_datetime(result['data'][0]['time']).replace(tzinfo=None)
+        assert bucket_time == self.base_time
 
     def test_issues(self):
         """
