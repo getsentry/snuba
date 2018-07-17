@@ -37,7 +37,7 @@ class TestProcessor(BaseTest):
 
     def test_invalid_version(self):
         with pytest.raises(InvalidMessageVersion):
-            process_message((sys.maxint, 'insert', self.event))
+            process_message((2 ** 32 - 1, 'insert', self.event))
 
     def test_invalid_format(self):
         with pytest.raises(InvalidMessageVersion):
