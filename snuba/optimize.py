@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import timedelta
 import logging
 
 from snuba import util
@@ -36,7 +36,7 @@ def get_partitions_to_optimize(clickhouse, database, table, before=None):
     parts = [util.decode_part_str(part) for part, count in response]
 
     if before:
-        parts = filter(lambda p: p[0] < before, parts)
+        parts = filter(lambda p: (p[0] + timedelta(days=6 - p[0].weekday())) < before, parts)
 
     return parts
 
@@ -48,7 +48,7 @@ def optimize_partitions(clickhouse, database, table, parts):
     """
 
     for part_date, retention_days in parts:
-        date_str = part_date.strftime("%Y-%m-%d %H:%M:%S")
+        date_str = part_date.strftime("%Y-%m-%d")
         args = {
             'database': database,
             'table': table,

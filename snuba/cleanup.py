@@ -17,7 +17,7 @@ def run_cleanup(clickhouse, database, table, dry_run=True):
 def get_active_partitions(clickhouse, database, table):
     response = clickhouse.execute(
         """
-        SELECT partition
+        SELECT DISTINCT partition
         FROM system.parts
         WHERE database = %(database)s
         AND table = %(table)s
@@ -39,7 +39,14 @@ def filter_stale_partitions(parts, as_of=None):
     if as_of is None:
         as_of = datetime.utcnow()
 
-    return [part for part in parts if part[0] < (as_of - timedelta(days=part[1]))]
+    stale_parts = []
+    for part_date, retention_days in parts:
+        part_last_day = part_date + timedelta(days=6 - part_date.weekday())
+
+        if part_last_day < (as_of - timedelta(days=retention_days)):
+            stale_parts.append((part_date, retention_days))
+
+    return stale_parts
 
 
 def drop_partitions(clickhouse, database, table, parts, dry_run=True):
@@ -51,7 +58,7 @@ def drop_partitions(clickhouse, database, table, parts, dry_run=True):
         args = {
             'database': database,
             'table': table,
-            'date_str': part_date.strftime("%Y-%m-%d %H:%M:%S"),
+            'date_str': part_date.strftime("%Y-%m-%d"),
             'retention_days': retention_days,
         }
 
