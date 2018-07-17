@@ -147,8 +147,8 @@ class TestConsumer(BaseTest):
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
         assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group')
-        assert commit_message.value() == '{}'.format(2 + 1)  # offsets are last processed message offset + 1
+        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
+        assert commit_message.value() == '{}'.format(2 + 1).encode('utf-8')  # offsets are last processed message offset + 1
 
     @patch('time.time')
     def test_batch_time(self, mock_time):
@@ -189,8 +189,8 @@ class TestConsumer(BaseTest):
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
         assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group')
-        assert commit_message.value() == '{}'.format(6 + 1)  # offsets are last processed message offset + 1
+        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
+        assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
 
     def test_offsets(self):
         event = self.event
