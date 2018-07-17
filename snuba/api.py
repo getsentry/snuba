@@ -3,6 +3,7 @@ import os
 
 from copy import deepcopy
 from datetime import datetime, timedelta
+from dateutil.parser import parse as parse_datetime
 from flask import Flask, render_template, request
 from hashlib import md5
 from markdown import markdown
@@ -120,18 +121,14 @@ def query(validated_body=None, timer=None):
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
         return render_template('query.html', query_template=template_str)
 
-    max_days, table, date_align = state.get_configs([
-        ('max_days', None),
-        ('clickhouse_table', settings.CLICKHOUSE_TABLE),
-        ('date_align_seconds', 1),
-    ])
     body = deepcopy(validated_body)
     stats = {}
     project_ids = util.to_list(body['project'])
-    to_date = util.parse_datetime(body['to_date'], date_align)
-    from_date = util.parse_datetime(body['from_date'], date_align)
+    to_date = parse_datetime(body['to_date'])
+    from_date = parse_datetime(body['from_date'])
     assert from_date <= to_date
 
+    max_days = state.get_config('max_days', None)
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
@@ -156,6 +153,7 @@ def query(validated_body=None, timer=None):
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
+    table = state.get_config('clickhouse_table', settings.CLICKHOUSE_TABLE)
     from_clause = u'FROM {}'.format(table)
 
     joins = []
