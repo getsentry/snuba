@@ -1,11 +1,12 @@
 import calendar
 import pytest
+import sys
 from datetime import datetime
 
 from base import BaseTest
 
 from snuba import processor, settings
-from snuba.processor import get_key, process_message
+from snuba.processor import InvalidMessageType, InvalidMessageVersion, get_key, process_message
 
 
 class TestProcessor(BaseTest):
@@ -27,12 +28,19 @@ class TestProcessor(BaseTest):
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
-    def test_invalid_action_version_0(self):
-        with pytest.raises(ValueError):
-            process_message((1, 'invalid', self.event))
+    def test_simple_version_1(self):
+        assert process_message((0, 'insert', self.event)) == process_message((1, 'insert', self.event, {}))
+
+    def test_invalid_type_version_0(self):
+        with pytest.raises(InvalidMessageType):
+            process_message((0, 'invalid', self.event))
+
+    def test_invalid_version(self):
+        with pytest.raises(InvalidMessageVersion):
+            process_message((sys.maxint, 'insert', self.event))
 
     def test_invalid_format(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidMessageVersion):
             process_message((-1, 'insert', self.event))
 
     def test_unexpected_obj(self):
