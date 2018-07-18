@@ -271,6 +271,14 @@ def extract_stacktraces(output, stacks):
     output['exception_frames.stack_level'] = frame_stack_levels
 
 
+class InvalidMessageType(Exception):
+    pass
+
+
+class InvalidMessageVersion(Exception):
+    pass
+
+
 def process_message(message):
     """\
     Process a raw message into a tuple of (message_type, key, processed_message):
@@ -290,18 +298,21 @@ def process_message(message):
         elif isinstance(message, (list, tuple)) and len(message) >= 2:
             version = message[0]
 
-            if version == 0:
-                # version 0: (version, type, message)
-                type_, event = message[1:]
+            if version in (0, 1):
+                # version 0: (version, type, data)
+                # version 1: (version, type, data, state)
+                type_, event = message[1:3]
                 if type_ == 'insert':
                     message_type = INSERT
                     processed = process_insert(event)
                 elif type_ == 'delete':
                     message_type = DELETE
                     processed = process_delete(event)
+                else:
+                    raise InvalidMessageType("Invalid message type: {}".format(type_))
 
         if message_type is None:
-            raise ValueError("Unknown message format: " + str(message))
+            raise InvalidMessageVersion("Unknown message format: " + str(message))
 
         key = get_key(processed).encode('utf-8')
         return (message_type, key, processed)
