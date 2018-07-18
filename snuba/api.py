@@ -247,7 +247,6 @@ def query(validated_body=None, timer=None):
     )
 
 
-
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.

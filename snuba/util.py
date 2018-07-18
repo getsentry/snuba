@@ -19,9 +19,13 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_\.(), ]*$')
+ESCAPE_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_\.]*$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
+
+
+class InvalidConditionException(Exception):
+    pass
 
 
 class Literal(object):
@@ -164,11 +168,15 @@ def tags_expr(column_name, body):
 
 
 def is_condition(cond_or_list):
-    return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
+    if not (len(cond_or_list) == 3 and isinstance(cond_or_list[1], six.string_types)):
+        return False
 
+    # string: ['foo', '=', 'bar'] == foo = 'bar'
+    # list or tuple: [['foo', ['bar']], '=', 'qux'] == foo(bar) = 'qux'
+    if isinstance(cond_or_list[0], (six.string_types, tuple, list)):
+        return True
 
-def flat_conditions(conditions):
-    return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+    return False
 
 
 def tuplify(nested):
@@ -191,20 +199,66 @@ def condition_expr(conditions, body, depth=0):
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
-        col, op, lit = conditions
-        col = column_expr(col, body)
-        lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
-        if op == 'LIKE':
-            return u'like({}, {})'.format(string_col(col), lit)
-        elif op == 'NOT LIKE':
-            return u'notLike({}, {})'.format(string_col(col), lit)
+        lhs, op, lit = conditions
+        lit = escape_literal(lit)
+
+        if isinstance(lhs, six.string_types):
+            lhs = column_expr(lhs, body)
+            if op == 'LIKE':
+                return u'like({}, {})'.format(string_col(lhs), lit)
+            elif op == 'NOT LIKE':
+                return u'notLike({}, {})'.format(string_col(lhs), lit)
+        elif isinstance(lhs, tuple) and isinstance(lhs[1], tuple):
+            lhs = complex_condition_expr(lhs, body)
         else:
-            return u'{} {} {}'.format(col, op, lit)
+            raise InvalidConditionException(str(conditions))
+
+        return u'{} {} {}'.format(lhs, op, lit)
     elif depth == 1:
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = u' OR '.join(sub)
         return u'({})'.format(res) if len(sub) > 1 else res
+    else:
+        raise InvalidConditionException(str(conditions))
+
+
+def complex_condition_expr(expr, body, depth=0):
+    if depth == 0:
+        # we know the first item is a function
+        ret = expr[0]
+        expr = expr[1:]
+
+        # if the last item of the toplevel is a string, it's an alias
+        alias = None
+        if len(expr) > 1 and isinstance(expr[-1], six.string_types):
+            alias = expr[-1]
+            expr = expr[:-1]
+    else:
+        # is this a nested function call?
+        if len(expr) > 1 and isinstance(expr[1], tuple):
+            ret = expr[0]
+            expr = expr[1:]
+        else:
+            ret = ''
+
+    first = True
+    for subexpr in expr:
+        if isinstance(subexpr, tuple):
+            ret += '(' + complex_condition_expr(subexpr, body, depth + 1) + ')'
+        else:
+            if not first:
+                ret += ', '
+            if isinstance(subexpr, six.string_types):
+                ret += column_expr(subexpr, body)
+            else:
+                ret += escape_literal(subexpr)
+        first = False
+
+    if depth == 0 and alias:
+        return alias_expr(ret, alias, body)
+
+    return ret
 
 
 def escape_literal(value):
@@ -348,6 +402,11 @@ def scrub_ch_data(data, meta):
                 d[col['name']] = dt.isoformat()
 
     return (data, meta)
+
+
+def flat_conditions(conditions):
+    # TODO: need to handle function call conditions somehow: [['foo', ['bar', ['issue']]]]
+    return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
 
 
 def uses_issue(body):

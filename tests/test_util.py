@@ -113,8 +113,14 @@ class TestUtil(BaseTest):
         conditions = [['primary_hash', 'LIKE', '%foo%']]
         assert condition_expr(conditions, body.copy()) == 'like(toString(primary_hash), \'%foo%\')'
 
-        conditions = [['notEmpty(arrayElement(exception_stacks.type, 1))', '=', 1]]
+        conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
         assert condition_expr(conditions, body.copy()) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+
+        conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
+        assert condition_expr(conditions, body.copy()) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
+
+        conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
+        assert condition_expr(conditions, body.copy()) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
 
     def test_duplicate_expression_alias(self):
         body = {
@@ -187,3 +193,15 @@ class TestUtil(BaseTest):
         }
         assert '[1,1,2]' in issue_expr(body)
         assert '[99,99,100]' in issue_expr(body)
+
+    def test_complex_condition_expr(self):
+        body = {}
+
+        assert complex_condition_expr(tuplify(['count', []]), body.copy()) == 'count()'
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_condition_expr(tuplify(['notEmpty', ['foo']]), body.copy()) == 'notEmpty(foo)'
+        assert complex_condition_expr(tuplify(['notEmpty', ['arrayElement', ['foo', 1]]]), body.copy()) == 'notEmpty(arrayElement(foo, 1))'
+        assert complex_condition_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
+        assert complex_condition_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
+        assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'

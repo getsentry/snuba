@@ -174,14 +174,15 @@ QUERY_SCHEMA = {
             'items': {'$ref': '#/definitions/column_name'},
             'minItems': 1,
         },
+        # TODO: can the complex nested expr actually be encoded here?
+        'nested_expr': {'type': 'array'},
         'condition': {
             'type': 'array',
             'items': [
                 {
                     'anyOf': [
                         {'$ref': '#/definitions/column_name'},
-                        # anything allowed by util.ESCAPE_RE
-                        {'pattern': '^[a-zA-Z][a-zA-Z0-9_\.(), ]+$'},
+                        {'$ref': '#/definitions/nested_expr'},
                     ],
                 }, {
                     # Operator
