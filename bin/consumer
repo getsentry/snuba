@@ -38,7 +38,7 @@ sentry = RavenClient(dsn=settings.SENTRY_DSN)
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-@click.option('--commit-log-topic', default='commit-log',
+@click.option('--commit-log-topic', default='snuba-commit-log',
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 def run(raw_events_topic, consumer_group, bootstrap_server, clickhouse_server, distributed_table_name,
         max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes, queued_min_messages,
