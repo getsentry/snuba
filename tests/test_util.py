@@ -198,10 +198,16 @@ class TestUtil(BaseTest):
         body = {}
 
         assert complex_condition_expr(tuplify(['count', []]), body.copy()) == 'count()'
-        assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
         assert complex_condition_expr(tuplify(['notEmpty', ['foo']]), body.copy()) == 'notEmpty(foo)'
         assert complex_condition_expr(tuplify(['notEmpty', ['arrayElement', ['foo', 1]]]), body.copy()) == 'notEmpty(arrayElement(foo, 1))'
         assert complex_condition_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
         assert complex_condition_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
         assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
-        assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
+
+    def test_flatten_conditions(self):
+        assert flatten_conditions([['issue', '=', 1]]) == [['issue', '=', 1]]
+        assert flatten_conditions([['issue', 'IN', 1]]) == [['issue', 'IN', 1]]
+        assert flatten_conditions([[['issue', '=', 1], ['issue', '=', 2]]]) == [['issue', '=', 1], ['issue', '=', 2]]
+        assert flatten_conditions([[['function', ['issue']], '=', 1]]) == [['issue', '=', 1]]
+        assert flatten_conditions([[['foo', ['bar', ['baz', 'qux', 'issue']]], '=', 1]]) == [['baz', '=', 1], ['qux', '=', 1], ['issue', '=', 1]]
+        assert flatten_conditions([[['foo', ['bar', ['baz', 'qux']], 'issue'], '=', 1]]) == [['baz', '=', 1], ['qux', '=', 1], ['issue', '=', 1]]
