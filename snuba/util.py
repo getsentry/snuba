@@ -404,71 +404,68 @@ def scrub_ch_data(data, meta):
     return (data, meta)
 
 
-def explode_complex_condition(condition, depth=0):
-    """'Explodes' out a complex condition into a list of [column, operation, literal]
-    over each *argument* used in the complex condition.
-
-    For example:
-      [['foo', ['bar', ['issue'], 'other_arg']], '=', 1]
-    Results in:
-      [['issue', '=', 1], ['other_arg', '=', 1]]
-
-    It is assumed that the functions being applied don't matter to the caller,
-    and they just want to know what possible columns were compared to what literals.
-    """
-    exploded = []
-
-    expr, op, lit = condition
-    if len(expr) > 1 and isinstance(expr[1], (list, tuple)):
-        # function call, drop the function
-        expr = expr[1:]
-
-    for subexpr in expr:
-        if isinstance(subexpr, (list, tuple)):
-            exploded.extend(explode_complex_condition([subexpr, op, lit], depth + 1))
-        else:
-            exploded.append([subexpr, op, lit])
-
-    return exploded
-
-
-def flatten_conditions(conditions):
-    """Flattens conditions to a simple set of [column, operation, literal] so
-    that `uses_issue` can inspect whether the fake `issue` column was used in any
-    conditions, regardless of whether it was nested in AND/OR lists or used in a
-    complex (function call) condition.
-    """
-    # TODO: need to handle function call conditions somehow: [['foo', ['bar', ['issue']]]]
-    out = []
-    for c in conditions:
-        if is_condition(c):
-            if isinstance(c[0], (list, tuple)):
-                out.extend([ec] for ec in explode_complex_condition(c))
-            else:
-                out.append([c])
-        else:
-            out.append(c)
-
-    return list(chain(*out))
-
-
 def uses_issue(body):
     """
     Returns whether the query references `issue` in groupings, conditions, or
     aggregations. and which issue IDs it specifically selects for, if any.
     """
-    cond = flatten_conditions(body.get('conditions', []))
+
+    def explode_complex_condition(condition, depth=0):
+        """'Explodes' out a complex condition into a list of [column, operation, literal]
+        over each *argument* used in the complex condition.
+
+        For example:
+        [['foo', ['bar', ['issue'], 'other_arg']], '=', 1]
+        Results in:
+        [['issue', '=', 1], ['other_arg', '=', 1]]
+
+        It is assumed that the functions being applied don't matter to the caller,
+        and they just want to know what possible columns were compared to what literals.
+        """
+        exploded = []
+
+        expr, op, lit = condition
+        if len(expr) > 1 and isinstance(expr[1], (list, tuple)):
+            # function call, drop the function
+            expr = expr[1:]
+
+        for subexpr in expr:
+            if isinstance(subexpr, (list, tuple)):
+                exploded.extend(explode_complex_condition([subexpr, op, lit], depth + 1))
+            else:
+                exploded.append([subexpr, op, lit])
+
+        return exploded
+
+    def flatten_conditions(conditions):
+        """Flattens conditions to a simple set of [column, operation, literal] so
+        that `uses_issue` can inspect whether the fake `issue` column was used in any
+        conditions, regardless of whether it was nested in AND/OR lists or used in a
+        complex (function call) condition.
+        """
+        # TODO: need to handle function call conditions somehow: [['foo', ['bar', ['issue']]]]
+        out = []
+        for c in conditions:
+            if is_condition(c):
+                if isinstance(c[0], (list, tuple)):
+                    out.extend([ec] for ec in explode_complex_condition(c))
+                else:
+                    out.append([c])
+            else:
+                out.append(c)
+
+        return list(chain(*out))
 
     used_ids = set()
-    for (col, op, lit) in cond:
+    for (col, op, lit) in flatten_conditions(body.get('conditions', [])):
         # TODO: handle `NOT IN` and `!=`
         if col == 'issue':
             if op == '=':
                 used_ids.add(lit)
-            elif op == 'IN' and isinstance(lit, list):
+            elif op == 'IN' and isinstance(lit, (list, tuple)):
                 used_ids.update(set(lit))
 
-    uses = (
+    uses = bool(
         used_ids or
         'issue' in to_list(body.get('groupby', [])) or
         any(col == 'issue' for (_, col, _) in body.get('aggregations', []))
