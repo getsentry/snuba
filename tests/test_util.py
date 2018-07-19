@@ -111,7 +111,7 @@ class TestUtil(BaseTest):
 
         # Test special output format of LIKE
         conditions = [['primary_hash', 'LIKE', '%foo%']]
-        assert condition_expr(conditions, body.copy()) == 'like(toString(primary_hash), \'%foo%\')'
+        assert condition_expr(conditions, body.copy()) == 'primary_hash LIKE \'%foo%\''
 
         conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
         assert condition_expr(conditions, body.copy()) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'

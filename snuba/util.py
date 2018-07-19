@@ -210,10 +210,6 @@ def condition_expr(conditions, body, depth=0):
 
         if isinstance(lhs, six.string_types):
             lhs = column_expr(lhs, body)
-            if op == 'LIKE':
-                return u'like({}, {})'.format(string_col(lhs), lit)
-            elif op == 'NOT LIKE':
-                return u'notLike({}, {})'.format(string_col(lhs), lit)
         elif isinstance(lhs, tuple) and isinstance(lhs[1], tuple):
             lhs = complex_condition_expr(lhs, body)
         else:
