@@ -203,6 +203,7 @@ class TestUtil(BaseTest):
         assert complex_condition_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
         assert complex_condition_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
         assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
+        assert complex_condition_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
     def test_flatten_conditions(self):
         assert flatten_conditions([['issue', '=', 1]]) == [['issue', '=', 1]]
