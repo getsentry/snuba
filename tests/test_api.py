@@ -521,6 +521,14 @@ class TestApi(BaseTest):
         assert len(result['data']) == 180
         assert result['data'][0] == {'message': 'a message', 'platform': 'a'}
 
+    def test_nullable_datetime_columns(self):
+        # Test that requesting a Nullable(DateTime) column does not throw
+        query = {
+            'project': 1,
+            'selected_columns': ['received'],
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+
     def test_test_endpoints(self):
         project_id = 73
         event = {
