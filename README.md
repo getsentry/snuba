@@ -106,6 +106,105 @@ Aggregations are also included in the output columns automatically.
 
 #### conditions
 
+Conditions are used to construct the WHERE clause, and consist of an
+array of 3-tuples (in their most basic form):
+
+    [column_name, operation, literal]
+
+Valid operations:
+
+    ['>', '<', '>=', '<=', '=', '!=', 'IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE'],
+
+For example:
+
+    [
+        ['platform', '=', 'python'],
+    ]
+
+    platform = 'python'
+
+Top-level sibling conditions are `AND`ed together:
+
+    [
+        ['w', '=', '1'],
+        ['x', '=', '2'],
+    ]
+
+    w = '1' AND x = '2'
+
+The first position (column_name) can be replaced with an array that
+represents a function call. The first item is a function name, and nested
+arrays represent the arguments supplied to the preceding function:
+
+    [
+        [['fn1', []], '=', '1'],
+    ]
+
+    fn1() = '1'
+
+Multiple arguments can be provided:
+
+    [
+        [['fn2', ['arg', 'arg']], '=', '2'],
+    ]
+
+    fn2(arg, arg) = '2'
+
+Function calls can be nested:
+
+    [
+        [['fn3', ['fn4', ['arg']]], '=', '3'],
+    ]
+
+    fn3(fn4(arg)) = '3'
+
+An alias can be provided at the end of the top-level function array. This
+alias can then be used elsewhere in the query, such as `selected_columns`:
+
+    [
+        [['fn1', [], 'alias'], '=', '1'],
+    ]
+
+    (fn1() AS alias) = '1'
+
+To do an `OR`, nest the array one level deeper:
+
+    [
+        [
+            ['w', '=', '1'],
+            ['x', '=', '2'],
+        ],
+    ]
+
+    (w = '1' OR x = '2')
+
+Sibling arrays at the second level are `AND`ed (note this is the same
+as the simpler `AND` above):
+
+    [
+        [
+            ['w', '=', '1'],
+        ],
+        [
+            ['x', '=', '2'],
+        ],
+    ]
+
+    (w = '1' AND x = '2')
+
+And these two can be combined to mix `OR` and `AND`:
+
+    [
+        [
+            ['w', '=', '1'], ['x', '=', '2']
+        ],
+        [
+            ['y', '=', '3'], ['z', '=', '4']
+        ],
+    ]
+
+    (w = '1' OR x = '2') AND (y = '3' OR z = '4')
+
 #### from_date / to_date
 
 #### granularity
