@@ -1,8 +1,10 @@
 deploy:
   services:
     - name: snuba-api
-      chef_roles: snuba-api
       healthcheck: sleep 3 && curl -fsI 127.0.0.1:11218/health
+      chef_roles:
+        - snuba-api
     - name: snuba-consumer
-      chef_roles: snuba-consumer
       percent: 1.0
+      chef_roles:
+       - snuba-consumer
