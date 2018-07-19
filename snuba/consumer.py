@@ -4,7 +4,7 @@ import simplejson as json
 import time
 
 from clickhouse_driver import errors
-from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from . import settings
 from .processor import process_message
@@ -79,7 +79,7 @@ class BatchingKafkaConsumer(object):
     """
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, auto_offset_reset='error',
+                 bootstrap_servers, group_id, commit_log_topic, auto_offset_reset='error',
                  queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
                  queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
@@ -88,6 +88,9 @@ class BatchingKafkaConsumer(object):
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time
         self.metrics = metrics
+
+        self.group_id = group_id
+        self.commit_log_topic = commit_log_topic
 
         self.shutdown = False
         self.batch = []
@@ -102,6 +105,8 @@ class BatchingKafkaConsumer(object):
             topics, bootstrap_servers, group_id, auto_offset_reset,
             queued_max_messages_kbytes, queued_min_messages
         )
+
+        self.producer = self.create_producer(bootstrap_servers)
 
     def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
             queued_max_messages_kbytes, queued_min_messages):
@@ -136,6 +141,12 @@ class BatchingKafkaConsumer(object):
 
         return consumer
 
+    def create_producer(self, bootstrap_servers):
+        return Producer({
+            'bootstrap.servers': ','.join(bootstrap_servers),
+            'partitioner': 'consistent',
+        })
+
     def run(self):
         "The main run loop, see class docstring for more information."
 
@@ -147,6 +158,8 @@ class BatchingKafkaConsumer(object):
 
     def _run_once(self):
         self._flush()
+
+        self.producer.poll(0.0)
 
         msg = self.consumer.poll(timeout=1.0)
 
@@ -224,6 +237,10 @@ class BatchingKafkaConsumer(object):
 
                 self._reset_batch()
 
+    def _commit_message_delivery_callback(self, error, message):
+        if error is not None:
+            logger.warning('Failed to deliver commit message (code: %s): %r', error, message)
+
     def _commit(self):
         retries = 3
         while True:
@@ -243,6 +260,14 @@ class BatchingKafkaConsumer(object):
                     continue
                 else:
                     raise
+
+        for item in offsets:
+            self.producer.produce(
+                self.commit_log_topic,
+                key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
+                value='{}'.format(item.offset).encode('utf-8'),
+                on_delivery=self._commit_message_delivery_callback,
+            )
 
 
 class ConsumerWorker(AbstractBatchWorker):
