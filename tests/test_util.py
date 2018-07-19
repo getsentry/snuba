@@ -122,6 +122,18 @@ class TestUtil(BaseTest):
         conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
         assert condition_expr(conditions, body.copy()) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
 
+        conditions = tuplify([
+            [
+                [['notEmpty', ['tags[sentry:environment]']], '=', 'dev'], [['notEmpty', ['tags[sentry:environment]']], '=', 'prod']
+            ],
+            [
+                [['notEmpty', ['tags[sentry:user]']], '=', 'joe'], [['notEmpty', ['tags[sentry:user]']], '=', 'bob']
+            ],
+        ])
+        assert condition_expr(conditions, body.copy()) == \
+            """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty(`tags[sentry:user]`) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+
+
     def test_duplicate_expression_alias(self):
         body = {
             'issues': [(1, ['a', 'b']), (2, 'c')],
