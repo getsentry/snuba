@@ -11,10 +11,11 @@ RUN apt-get update && \
 ARG PYPY_SUFFIX
 RUN ln -s /usr/local/bin/pypy${PYPY_SUFFIX} /usr/local/bin/python
 
-RUN cd && curl -L https://github.com/edenhill/librdkafka/archive/v0.11.4.tar.gz -O && \
-    tar xf v0.11.4.tar.gz && cd librdkafka-0.11.4/ && \
+ARG LIBRDKAFKA_VERSION=0.11.5
+RUN cd && curl -L https://github.com/edenhill/librdkafka/archive/v${LIBRDKAFKA_VERSION}.tar.gz -O && \
+    tar xf v${LIBRDKAFKA_VERSION}.tar.gz && cd librdkafka-${LIBRDKAFKA_VERSION}/ && \
     ./configure --prefix=/usr && make && PREFIX=/usr make install && \
-    cd && rm -rf v0.11.4.tar.gz librdkafka-0.11.4/
+    cd && rm -rf v${LIBRDKAFKA_VERSION}.tar.gz librdkafka-${LIBRDKAFKA_VERSION}/
 
 RUN useradd -m -s /bin/bash snuba
 WORKDIR /home/snuba
