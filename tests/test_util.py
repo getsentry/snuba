@@ -217,6 +217,10 @@ class TestUtil(BaseTest):
         assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
         assert complex_condition_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
+        # we may move these to special Snuba function calls in the future
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
+
     def test_flatten_conditions(self):
         assert flatten_conditions([['issue', '=', 1]]) == [['issue', '=', 1]]
         assert flatten_conditions([['issue', 'IN', 1]]) == [['issue', 'IN', 1]]
