@@ -20,9 +20,13 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^[a-zA-Z_]*$')
+ESCAPE_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_\.]*$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
+
+
+class InvalidConditionException(Exception):
+    pass
 
 
 class Literal(object):
@@ -35,7 +39,9 @@ def to_list(value):
 
 
 def escape_col(col):
-    if ESCAPE_RE.match(col):
+    if not col:
+        return col
+    elif ESCAPE_RE.match(col):
         return col
     else:
         return '`{}`'.format(col)
@@ -64,6 +70,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     Needs the body of the request for some extra data used to expand column expressions.
     """
     assert column_name or aggregate
+    assert not aggregate or (aggregate and (column_name or alias))
     column_name = column_name or ''
 
     if column_name == settings.TIME_GROUP_COLUMN:
@@ -83,7 +90,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         else:  # This is the "count()" case where the '()' is already provided
             expr = aggregate
 
-    alias = escape_col(alias or column_name or aggregate)
+    alias = escape_col(alias or column_name)
 
     return alias_expr(expr, alias, body)
 
@@ -167,11 +174,15 @@ def tags_expr(column_name, body):
 
 
 def is_condition(cond_or_list):
-    return len(cond_or_list) == 3 and isinstance(cond_or_list[0], six.string_types)
+    if not (len(cond_or_list) == 3 and isinstance(cond_or_list[1], six.string_types)):
+        return False
 
+    # string: ['foo', '=', 'bar'] == foo = 'bar'
+    # list or tuple: [['foo', ['bar']], '=', 'qux'] == foo(bar) = 'qux'
+    if isinstance(cond_or_list[0], (six.string_types, tuple, list)):
+        return True
 
-def flat_conditions(conditions):
-    return list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+    return False
 
 
 def tuplify(nested):
@@ -194,20 +205,66 @@ def condition_expr(conditions, body, depth=0):
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
-        col, op, lit = conditions
-        col = column_expr(col, body)
-        lit = escape_literal(tuple(lit) if isinstance(lit, list) else lit)
-        if op == 'LIKE':
-            return u'like({}, {})'.format(string_col(col), lit)
-        elif op == 'NOT LIKE':
-            return u'notLike({}, {})'.format(string_col(col), lit)
+        lhs, op, lit = conditions
+        lit = escape_literal(lit)
+
+        if isinstance(lhs, six.string_types):
+            lhs = column_expr(lhs, body)
+            if op == 'LIKE':
+                return u'like({}, {})'.format(string_col(lhs), lit)
+            elif op == 'NOT LIKE':
+                return u'notLike({}, {})'.format(string_col(lhs), lit)
+        elif isinstance(lhs, tuple) and isinstance(lhs[1], tuple):
+            lhs = complex_condition_expr(lhs, body)
         else:
-            return u'{} {} {}'.format(col, op, lit)
+            raise InvalidConditionException(str(conditions))
+
+        return u'{} {} {}'.format(lhs, op, lit)
     elif depth == 1:
         sub = (condition_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = u' OR '.join(sub)
         return u'({})'.format(res) if len(sub) > 1 else res
+    else:
+        raise InvalidConditionException(str(conditions))
+
+
+def complex_condition_expr(expr, body, depth=0):
+    if depth == 0:
+        # we know the first item is a function
+        ret = expr[0]
+        expr = expr[1:]
+
+        # if the last item of the toplevel is a string, it's an alias
+        alias = None
+        if len(expr) > 1 and isinstance(expr[-1], six.string_types):
+            alias = expr[-1]
+            expr = expr[:-1]
+    else:
+        # is this a nested function call?
+        if len(expr) > 1 and isinstance(expr[1], tuple):
+            ret = expr[0]
+            expr = expr[1:]
+        else:
+            ret = ''
+
+    first = True
+    for subexpr in expr:
+        if isinstance(subexpr, tuple):
+            ret += '(' + complex_condition_expr(subexpr, body, depth + 1) + ')'
+        else:
+            if not first:
+                ret += ', '
+            if isinstance(subexpr, six.string_types):
+                ret += column_expr(subexpr, body)
+            else:
+                ret += escape_literal(subexpr)
+        first = False
+
+    if depth == 0 and alias:
+        return alias_expr(ret, alias, body)
+
+    return ret
 
 
 def escape_literal(value):
@@ -358,19 +415,69 @@ def uses_issue(body):
     Returns whether the query references `issue` in groupings, conditions, or
     aggregations. and which issue IDs it specifically selects for, if any.
     """
-    cond = flat_conditions(body.get('conditions', []))
-    used_ids = [set([lit]) for (col, op, lit) in cond if col == 'issue' and op == '='] +\
-        [set(lit) for (col, op, lit) in cond if col == 'issue'
-         and op == 'IN' and isinstance(lit, list)]
-    # TODO handle NOT IN or not equal
-    used_ids = set.union(*used_ids) if used_ids else None
 
-    uses = (
-        used_ids is not None or
+    def explode_complex_condition(condition, depth=0):
+        """'Explodes' out a complex condition into a list of [column, operation, literal]
+        over each *argument* used in the complex condition.
+
+        For example:
+        [['foo', ['bar', ['issue'], 'other_arg']], '=', 1]
+        Results in:
+        [['issue', '=', 1], ['other_arg', '=', 1]]
+
+        It is assumed that the functions being applied don't matter to the caller,
+        and they just want to know what possible columns were compared to what literals.
+        """
+        exploded = []
+
+        expr, op, lit = condition
+        if len(expr) > 1 and isinstance(expr[1], (list, tuple)):
+            # function call, drop the function
+            expr = expr[1:]
+
+        for subexpr in expr:
+            if isinstance(subexpr, (list, tuple)):
+                exploded.extend(explode_complex_condition([subexpr, op, lit], depth + 1))
+            else:
+                exploded.append([subexpr, op, lit])
+
+        return exploded
+
+    def flatten_conditions(conditions):
+        """Flattens conditions to a simple set of [column, operation, literal] so
+        that `uses_issue` can inspect whether the fake `issue` column was used in any
+        conditions, regardless of whether it was nested in AND/OR lists or used in a
+        complex (function call) condition.
+        """
+        # TODO: need to handle function call conditions somehow: [['foo', ['bar', ['issue']]]]
+        out = []
+        for c in conditions:
+            if is_condition(c):
+                if isinstance(c[0], (list, tuple)):
+                    out.extend([ec] for ec in explode_complex_condition(c))
+                else:
+                    out.append([c])
+            else:
+                out.append(c)
+
+        return list(chain(*out))
+
+    used_ids = set()
+    for (col, op, lit) in flatten_conditions(body.get('conditions', [])):
+        # TODO: handle `NOT IN` and `!=`
+        if col == 'issue':
+            if op == '=':
+                used_ids.add(lit)
+            elif op == 'IN' and isinstance(lit, (list, tuple)):
+                used_ids.update(set(lit))
+
+    uses = bool(
+        used_ids or
         'issue' in to_list(body.get('groupby', [])) or
         any(col == 'issue' for (_, col, _) in body.get('aggregations', []))
     )
-    return (uses, used_ids)
+
+    return (uses, used_ids or None)
 
 
 def issue_expr(body, hash_column='primary_hash'):

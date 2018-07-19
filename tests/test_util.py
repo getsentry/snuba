@@ -35,15 +35,15 @@ class TestUtil(BaseTest):
         assert column_expr('col', body.copy(), aggregate='sum') ==\
             "(sum(col) AS col)"
 
-        assert column_expr(None, body.copy(), aggregate='sum') ==\
+        assert column_expr(None, body.copy(), alias='sum', aggregate='sum') ==\
             "sum"  # This should probably be an error as its an aggregate with no column
 
         assert column_expr('col', body.copy(), alias='summation', aggregate='sum') ==\
             "(sum(col) AS summation)"
 
         # Special cases where count() doesn't need a column
-        assert column_expr('', body.copy(), aggregate='count()') ==\
-            "(count() AS `count()`)"
+        assert column_expr('', body.copy(), alias='count', aggregate='count()') ==\
+            "(count() AS count)"
 
         assert column_expr('', body.copy(), alias='aggregate', aggregate='count()') ==\
             "(count() AS aggregate)"
@@ -112,6 +112,27 @@ class TestUtil(BaseTest):
         # Test special output format of LIKE
         conditions = [['primary_hash', 'LIKE', '%foo%']]
         assert condition_expr(conditions, body.copy()) == 'like(toString(primary_hash), \'%foo%\')'
+
+        conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
+        assert condition_expr(conditions, body.copy()) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+
+        conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
+        assert condition_expr(conditions, body.copy()) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
+
+        conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
+        assert condition_expr(conditions, body.copy()) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
+
+        conditions = tuplify([
+            [
+                [['notEmpty', ['tags[sentry:environment]']], '=', 'dev'], [['notEmpty', ['tags[sentry:environment]']], '=', 'prod']
+            ],
+            [
+                [['notEmpty', ['tags[sentry:user]']], '=', 'joe'], [['notEmpty', ['tags[sentry:user]']], '=', 'bob']
+            ],
+        ])
+        assert condition_expr(conditions, body.copy()) == \
+            """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty(`tags[sentry:user]`) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+
 
     def test_duplicate_expression_alias(self):
         body = {
@@ -184,3 +205,27 @@ class TestUtil(BaseTest):
         }
         assert '[1,1,2]' in issue_expr(body)
         assert '[99,99,100]' in issue_expr(body)
+
+    def test_complex_condition_expr(self):
+        body = {}
+
+        assert complex_condition_expr(tuplify(['count', []]), body.copy()) == 'count()'
+        assert complex_condition_expr(tuplify(['notEmpty', ['foo']]), body.copy()) == 'notEmpty(foo)'
+        assert complex_condition_expr(tuplify(['notEmpty', ['arrayElement', ['foo', 1]]]), body.copy()) == 'notEmpty(arrayElement(foo, 1))'
+        assert complex_condition_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
+        assert complex_condition_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
+        assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
+        assert complex_condition_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
+
+        # we may move these to special Snuba function calls in the future
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
+
+    def test_uses_issue(self):
+        assert uses_issue({'conditions': [['issue', '=', 1]]}) == (True, set([1]))
+        assert uses_issue({'conditions': [['issue', 'IN', [1]]]}) == (True, set([1]))
+        assert uses_issue({'conditions': [[['issue', '=', 1], ['issue', '=', 2]]]}) == (True, set([1, 2]))
+        assert uses_issue({'conditions': [[['function', ['issue']], '=', 1]]}) == (True, set([1]))
+        assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux', 'issue']]], '=', 1]]}) == (True, set([1]))
+        assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux']], 'issue'], '=', 1]]}) == (True, set([1]))
+        assert uses_issue({'conditions': [['foo', '=', 1]]}) == (False, None)
