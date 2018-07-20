@@ -23,6 +23,8 @@ logger = logging.getLogger('snuba.util')
 ESCAPE_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_\.]*$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
+DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
+DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 
 
 class InvalidConditionException(Exception):
@@ -395,10 +397,10 @@ def scrub_ch_data(data, meta):
     for col in meta:
         # Convert naive datetime strings back to TZ aware ones, and stringify
         # TODO maybe this should be in the json serializer
-        if col['type'].startswith('DateTime'):
+        if DATETIME_TYPE_RE.match(col['type']):
             for d in data:
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
-        elif col['type'].startswith('Date'):
+        elif DATE_TYPE_RE.match(col['type']):
             for d in data:
                 dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
                 d[col['name']] = dt.isoformat()
