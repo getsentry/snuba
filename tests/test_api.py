@@ -209,13 +209,13 @@ class TestApi(BaseTest):
         assert len(result['data']) == 1
         assert result['data'][0]['project_id'] == 2
 
-        # offset without limit is invalid
+        # limit over max-limit is invalid
         result = self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
             'groupby': ['project_id'],
             'aggregations': [['count()', '', 'count']],
             'orderby': '-count',
-            'offset': 1,
+            'limit': 1000000,
         }))
         assert result.status_code == 400
 
