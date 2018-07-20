@@ -120,7 +120,9 @@ QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'limit': {
-            'type': 'number'
+            'type': 'number',
+            'default': 1000,
+            'maximum': 10000,
         },
         'offset': {
             'type': 'number',
@@ -138,7 +140,6 @@ QUERY_SCHEMA = {
     'required': ['project'],
     'dependencies': {
         'offset': ['limit'],
-        'limit': ['orderby'],
     },
 
     'definitions': {
