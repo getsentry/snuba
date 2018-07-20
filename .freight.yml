@@ -8,3 +8,7 @@ deploy:
       percent: 1.0
       chef_roles:
        - snuba-consumer
+    - name: snuba-consumer-monthly
+      percent: 1.0
+      chef_roles:
+       - snuba-consumer
