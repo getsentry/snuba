@@ -18,19 +18,20 @@ rds = redis.StrictRedis(
 )
 kfk = None
 
+ratelimit_prefix = 'snuba-ratelimit:'
+query_lock_prefix = 'snuba-query-lock:'
+query_cache_prefix = 'snuba-query-cache:'
+config_hash = 'snuba-config'
+queries_list = 'snuba-queries'
+
+##### Rate Limiting and Deduplication
+
 # Window for concurrent query counting
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
 # Amount of time we keep rate history
 rate_history_s = 3600
-
-
-ratelimit_prefix = 'snuba-ratelimit:'
-query_lock_prefix = 'snuba-query-lock:'
-query_cache_prefix = 'snuba-query-cache:'
-config_hash = 'snuba-config'
-queries_list = 'snuba-queries'
 
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
@@ -99,6 +100,61 @@ def get_rates(bucket, rollup=60):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
 
+
+@contextmanager
+def deduper(query_id):
+    """
+    A simple redis distributed lock on a query_id to prevent multiple
+    concurrent queries running with the same id. Blocks subsequent
+    queries until the first is finished.
+
+    When used in conjunction with caching this means that the subsequent
+    queries can then use the cached result from the first query.
+    """
+
+    unlock = '''
+        if redis.call('get', KEYS[1]) == ARGV[1]
+        then
+            return redis.call('del', KEYS[1])
+        else
+            return 0
+        end
+    '''
+
+    if query_id is None:
+        yield False
+    else:
+        lock = '{}{}'.format(query_lock_prefix, query_id)
+        nonce = uuid.uuid4()
+        try:
+            is_dupe = False
+            while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
+                is_dupe = True
+                time.sleep(0.01)
+            yield is_dupe
+        finally:
+            rds.eval(unlock, 1, lock, nonce)
+
+
+##### Runtime Configuration
+
+class memoize():
+    """
+    Simple expiring memoizer for functions with no args.
+    """
+    def __init__(self, timeout=1):
+        self.timeout = timeout
+        self.saved = None
+        self.at = 0
+
+    def __call__(self, func):
+        def wrapper():
+            now = time.time()
+            if now > self.at + self.timeout or self.saved is None:
+                self.saved, self.at = func(), now
+            return self.saved
+        return wrapper
+
 def _int(value):
     try:
         return int(value)
@@ -133,13 +189,14 @@ def get_config(key, default=None):
 
 
 def get_configs(key_defaults):
-    configs = rds.hmget(config_hash, *[kd[0] for kd in key_defaults])
-    return [key_defaults[i][1] if c is None else _int(c) for i, c in enumerate(configs)]
+    all_confs = get_all_configs()
+    return [all_confs.get(k, d) for k, d in key_defaults]
 
 
+@memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
 def get_all_configs():
     all_configs = rds.hgetall(config_hash)
-    return {k: _int(v) for k, v in six.iteritems(all_configs)}
+    return {k: _int(v) for k, v in six.iteritems(all_configs) if v is not None}
 
 def delete_config(key):
     try:
@@ -148,6 +205,7 @@ def delete_config(key):
         logger.error(ex)
         pass
 
+##### Query Recording
 
 def record_query(data):
     global kfk
@@ -196,37 +254,3 @@ def set_result(query_id, result):
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
     return rds.set(key, json.dumps(result), ex=timeout)
-
-@contextmanager
-def deduper(query_id):
-    """
-    A simple redis distributed lock on a query_id to prevent multiple
-    concurrent queries running with the same id. Blocks subsequent
-    queries until the first is finished.
-
-    When used in conjunction with caching this means that the subsequent
-    queries can then use the cached result from the first query.
-    """
-
-    unlock = '''
-        if redis.call('get', KEYS[1]) == ARGV[1]
-        then
-            return redis.call('del', KEYS[1])
-        else
-            return 0
-        end
-    '''
-
-    if query_id is None:
-        yield False
-    else:
-        lock = '{}{}'.format(query_lock_prefix, query_id)
-        nonce = uuid.uuid4()
-        try:
-            is_dupe = False
-            while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
-                is_dupe = True
-                time.sleep(0.01)
-            yield is_dupe
-        finally:
-            rds.eval(unlock, 1, lock, nonce)

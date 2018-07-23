@@ -1,12 +1,17 @@
 from base import BaseTest
 from functools import partial
 from mock import patch
+import random
 import simplejson as json
 from threading import Thread
 import time
 import uuid
 
 from snuba import state
+
+@state.memoize(0.1)
+def rand():
+    return random.random()
 
 
 class TestState(BaseTest):
@@ -144,3 +149,10 @@ class TestState(BaseTest):
         finally:
             state.delete_config('use_query_id')
             state.delete_config('use_cache')
+
+    def test_memoize(self):
+        assert rand() == rand()
+        rand1 = rand()
+        assert rand1 == rand()
+        time.sleep(0.1)
+        assert rand1 != rand()
