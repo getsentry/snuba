@@ -1,6 +1,8 @@
 from confluent_kafka import Producer
 from contextlib import contextmanager
 import logging
+import random
+import re
 import redis
 import simplejson as json
 import six
@@ -161,6 +163,30 @@ def _int(value):
     except ValueError:
         return value
 
+ABTEST_RE = re.compile('(?:(\d+)(?:\:(\d+))?\/?)')
+def abtest(value):
+    """
+    Recognizes a value that consists of a '/'-separated sequence of
+    value:weight tuples, weight is optional. Returns a weighted random
+    value from the set of values..
+    eg.
+    1000/2000 => returns 1000 or 2000 with equal weight
+    1000:1/2000:1 => returns 1000 or 2000 with equal weight
+    1000:2/2000:1 => returns 1000 twice as often as 2000
+    """
+    if isinstance(value, six.string_types) and ABTEST_RE.match(value):
+        values = ABTEST_RE.findall(value)
+        total_weight = sum(int(weight or 1) for (_, weight) in values)
+        r = random.randint(1, total_weight)
+        i = 0
+        for (v, weight) in values:
+            i += int(weight or 1)
+            if i >= r:
+                return _int(v)
+    else:
+        return value
+
+
 def set_config(key, value):
     if value is None:
         delete_config(key)
@@ -178,25 +204,22 @@ def set_configs(values):
 
 
 def get_config(key, default=None):
-    try:
-        result = rds.hget(config_hash, key)
-        if result is not None:
-            return _int(result)
-    except Exception as ex:
-        logger.error(ex)
-        pass
-    return default
+    return abtest(get_all_configs().get(key, default))
 
 
 def get_configs(key_defaults):
     all_confs = get_all_configs()
-    return [all_confs.get(k, d) for k, d in key_defaults]
+    return [abtest(all_confs.get(k, d)) for k, d in key_defaults]
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
 def get_all_configs():
-    all_configs = rds.hgetall(config_hash)
-    return {k: _int(v) for k, v in six.iteritems(all_configs) if v is not None}
+    try:
+        all_configs = rds.hgetall(config_hash)
+        return {k: _int(v) for k, v in six.iteritems(all_configs) if v is not None}
+    except Exception as ex:
+        logger.error(ex)
+        return {}
 
 def delete_config(key):
     try:
