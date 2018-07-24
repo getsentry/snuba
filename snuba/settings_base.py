@@ -38,6 +38,9 @@ REDIS_DB = 1
 RECORD_QUERIES = False
 QUERIES_TOPIC = 'snuba-queries'
 
+# Runtime Config Options
+CONFIG_MEMOIZE_TIMEOUT = 10
+
 # Sentry Options
 SENTRY_DSN = None
 

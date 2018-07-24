@@ -77,7 +77,7 @@
                 <div>
                   <h2>Config:</h2>
                     <ul>
-                      {Object.keys(this.state.controls).map(key => (
+                      {Object.keys(this.state.controls).sort().map(key => (
                           <li key={key} className={"option" + (this.state.controls[key] == null ? " disabled":"")}>
                             <label htmlFor={key}>{key}</label>
                             <input type="text" name={key} value={this.state.controls[key] == null ? '' : this.state.controls[key]} onChange={this.handleChange} />

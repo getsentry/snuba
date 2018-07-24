@@ -295,19 +295,18 @@ def raw_query(body, sql, client, timer, stats=None):
     fix some of the formatting issues in the result JSON
     """
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache, query_settings = state.get_configs([
+    grl, gcl, prl, pcl, use_cache = state.get_configs([
         ('global_per_second_limit', 1000),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
         ('use_cache', 0),
-        ('query_settings_json', None),
     ])
-    try:
-        query_settings = json.loads(query_settings)
-    except (TypeError, ValueError):
-        query_settings = {}
+
+    all_confs = six.iteritems(state.get_all_configs())
+    query_settings = {k.split('/', 1)[1]: v for k, v in all_confs if k.startswith('query_settings/')}
     stats.update(query_settings)
+
     timer.mark('get_configs')
 
     with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
