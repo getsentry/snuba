@@ -167,8 +167,8 @@ ABTEST_RE = re.compile('(?:(\d+)(?:\:(\d+))?\/?)')
 def abtest(value):
     """
     Recognizes a value that consists of a '/'-separated sequence of
-    value:weight tuples, weight is optional and defaults to 1. Returns a
-    weighted random value from the set of values.
+    value:weight tuples. Value is an integer. Weight is an optional integer and
+    defaults to 1. Returns a weighted random value from the set of values.
     eg.
     1000/2000 => returns 1000 or 2000 with equal weight
     1000:1/2000:1 => returns 1000 or 2000 with equal weight

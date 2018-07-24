@@ -9,11 +9,6 @@ import uuid
 
 from snuba import state
 
-@state.memoize(0.1)
-def rand():
-    return random.random()
-
-
 class TestState(BaseTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
@@ -153,6 +148,11 @@ class TestState(BaseTest):
             state.delete_config('use_cache')
 
     def test_memoize(self):
+
+        @state.memoize(0.1)
+        def rand():
+            return random.random()
+
         assert rand() == rand()
         rand1 = rand()
         assert rand1 == rand()
