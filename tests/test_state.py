@@ -85,7 +85,8 @@ class TestState(BaseTest):
         assert state.get_config('foo') == 1
         assert state.get_config('bar') == 2
         assert state.get_config('noexist', 4) == 4
-        assert state.get_all_configs() == {b'foo': 1, b'bar': 2, b'baz': 3}
+        all_configs = state.get_all_configs()
+        assert all(all_configs[k] == v for k, v in [(b'foo', 1), (b'bar', 2), (b'baz', 3)])
         assert state.get_configs([
             ('foo', 100),
             ('bar', 200),
@@ -94,7 +95,8 @@ class TestState(BaseTest):
 
 
         state.set_configs({'bar': 'quux'})
-        assert state.get_all_configs() == {b'foo': 1, b'bar': b'quux', b'baz': 3}
+        all_configs = state.get_all_configs()
+        assert all(all_configs[k] == v for k, v in [(b'foo', 1), (b'bar', b'quux'), (b'baz', 3)])
 
     def test_dedupe(self):
         try:
@@ -156,3 +158,9 @@ class TestState(BaseTest):
         assert rand1 == rand()
         time.sleep(0.1)
         assert rand1 != rand()
+
+    def test_abtest(self):
+        assert state.abtest('1000:1/2000:1') in (1000, 2000)
+        assert state.abtest('1000/2000') in (1000, 2000)
+        assert state.abtest('1000/2000:5') in (1000, 2000)
+        assert state.abtest('1000/2000:0') == 1000

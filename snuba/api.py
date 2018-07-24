@@ -85,10 +85,10 @@ def dashboard(fmt='html'):
 def config(fmt='html'):
     if fmt == 'json':
         if request.method == 'GET':
-            return (json.dumps(state.get_all_configs()), 200, {'Content-Type': 'application/json'})
+            return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
         elif request.method == 'POST':
             state.set_configs(json.loads(request.data))
-            return (json.dumps(state.get_all_configs()), 200, {'Content-Type': 'application/json'})
+            return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('config.html')
 

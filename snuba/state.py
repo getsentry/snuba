@@ -167,8 +167,8 @@ ABTEST_RE = re.compile('(?:(\d+)(?:\:(\d+))?\/?)')
 def abtest(value):
     """
     Recognizes a value that consists of a '/'-separated sequence of
-    value:weight tuples, weight is optional. Returns a weighted random
-    value from the set of values..
+    value:weight tuples, weight is optional and defaults to 1. Returns a
+    weighted random value from the set of values.
     eg.
     1000/2000 => returns 1000 or 2000 with equal weight
     1000:1/2000:1 => returns 1000 or 2000 with equal weight
@@ -204,16 +204,20 @@ def set_configs(values):
 
 
 def get_config(key, default=None):
-    return abtest(get_all_configs().get(key, default))
+    return get_all_configs().get(key, default)
 
 
 def get_configs(key_defaults):
     all_confs = get_all_configs()
-    return [abtest(all_confs.get(k, d)) for k, d in key_defaults]
+    return [all_confs.get(k, d) for k, d in key_defaults]
+
+
+def get_all_configs():
+    return {k: abtest(v) for k, v in six.iteritems(get_raw_configs())}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_all_configs():
+def get_raw_configs():
     try:
         all_configs = rds.hgetall(config_hash)
         return {k: _int(v) for k, v in six.iteritems(all_configs) if v is not None}
@@ -221,12 +225,14 @@ def get_all_configs():
         logger.error(ex)
         return {}
 
+
 def delete_config(key):
     try:
         rds.hdel(config_hash, key)
     except Exception as ex:
         logger.error(ex)
         pass
+
 
 ##### Query Recording
 
