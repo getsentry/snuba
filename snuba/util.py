@@ -304,7 +304,7 @@ def raw_query(body, sql, client, timer, stats=None):
     ])
 
     all_confs = six.iteritems(state.get_all_configs())
-    query_settings = {k.split(b'/', 1)[1]: v for k, v in all_confs if k.startswith(b'query_settings/')}
+    query_settings = {k.split('/', 1)[1]: v for k, v in all_confs if k.startswith('query_settings/')}
     stats.update(query_settings)
 
     timer.mark('get_configs')

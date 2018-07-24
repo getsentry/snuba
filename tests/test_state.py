@@ -86,7 +86,7 @@ class TestState(BaseTest):
         assert state.get_config('bar') == 2
         assert state.get_config('noexist', 4) == 4
         all_configs = state.get_all_configs()
-        assert all(all_configs[k] == v for k, v in [(b'foo', 1), (b'bar', 2), (b'baz', 3)])
+        assert all(all_configs[k] == v for k, v in [('foo', 1), ('bar', 2), ('baz', 3)])
         assert state.get_configs([
             ('foo', 100),
             ('bar', 200),
@@ -96,7 +96,7 @@ class TestState(BaseTest):
 
         state.set_configs({'bar': 'quux'})
         all_configs = state.get_all_configs()
-        assert all(all_configs[k] == v for k, v in [(b'foo', 1), (b'bar', b'quux'), (b'baz', 3)])
+        assert all(all_configs[k] == v for k, v in [('foo', 1), ('bar', 'quux'), ('baz', 3)])
 
     def test_dedupe(self):
         try:

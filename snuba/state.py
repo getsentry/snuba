@@ -220,7 +220,7 @@ def get_all_configs():
 def get_raw_configs():
     try:
         all_configs = rds.hgetall(config_hash)
-        return {k: _int(v) for k, v in six.iteritems(all_configs) if v is not None}
+        return {k.decode('utf-8'): _int(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
     except Exception as ex:
         logger.error(ex)
         return {}
