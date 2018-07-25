@@ -137,7 +137,7 @@ QUERY_SCHEMA = {
         },
         'sample': {
             'type': 'number',
-            'min': 0.01,
+            'min': 0,
         }
     },
     # Need to select down to the project level for customer isolation and performance

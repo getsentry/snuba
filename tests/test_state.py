@@ -164,3 +164,4 @@ class TestState(BaseTest):
         assert state.abtest('1000/2000') in (1000, 2000)
         assert state.abtest('1000/2000:5') in (1000, 2000)
         assert state.abtest('1000/2000:0') == 1000
+        assert state.abtest('1.5:1/-1.5:1') in (1.5, -1.5)

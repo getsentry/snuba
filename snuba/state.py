@@ -157,17 +157,20 @@ class memoize():
             return self.saved
         return wrapper
 
-def _int(value):
+def numeric(value):
     try:
         return int(value)
     except ValueError:
-        return value
+        try:
+            return float(value)
+        except ValueError:
+            return value
 
-ABTEST_RE = re.compile('(?:(\d+)(?:\:(\d+))?\/?)')
+ABTEST_RE = re.compile('(?:(-?\d+\.?\d*)(?:\:(\d+))?\/?)')
 def abtest(value):
     """
     Recognizes a value that consists of a '/'-separated sequence of
-    value:weight tuples. Value is an integer. Weight is an optional integer and
+    value:weight tuples. Value is numeric. Weight is an optional integer and
     defaults to 1. Returns a weighted random value from the set of values.
     eg.
     1000/2000 => returns 1000 or 2000 with equal weight
@@ -182,7 +185,7 @@ def abtest(value):
         for (v, weight) in values:
             i += int(weight or 1)
             if i >= r:
-                return _int(v)
+                return numeric(v)
     else:
         return value
 
@@ -220,7 +223,7 @@ def get_all_configs():
 def get_raw_configs():
     try:
         all_configs = rds.hgetall(config_hash)
-        return {k.decode('utf-8'): _int(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
+        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
     except Exception as ex:
         logger.error(ex)
         return {}
