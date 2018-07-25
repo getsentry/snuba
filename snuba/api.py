@@ -120,10 +120,11 @@ def query(validated_body=None, timer=None):
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
         return render_template('query.html', query_template=template_str)
 
-    max_days, table, date_align = state.get_configs([
+    max_days, table, date_align, config_sample = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
+        ('sample', 1),
     ])
     body = deepcopy(validated_body)
     stats = {}
@@ -156,10 +157,11 @@ def query(validated_body=None, timer=None):
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
-    if body['sample'] == 1:
+    sample = body.get('sample', config_sample)
+    if sample == 1:
         from_clause = u'FROM {}'.format(table)
     else:
-        from_clause = u'FROM {} SAMPLE {}'.format(table, body['sample'])
+        from_clause = u'FROM {} SAMPLE {}'.format(table, sample)
 
     joins = []
     issue_expr = util.issue_expr(body)
