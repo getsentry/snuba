@@ -228,6 +228,22 @@ Eg, to count the number of events by hour, you would do
 
 #### project
 
+#### sample
+
+Sample is a numeric value. If it is < 1, then it is interpreted to mean "read
+this percentage of rows". eg.
+
+    "sample": 0.5
+
+Will read 50% of all rows.
+
+If it is > 1, it means "read up to this number of rows", eg.
+
+    "sample": 1000
+
+Will read 1000 rows maximum, and then return a result.
+
+
 ### Issues / Groups
 
 Snuba provides a magic column `issue` that can be used to group events by issue.

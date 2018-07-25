@@ -156,7 +156,10 @@ def query(validated_body=None, timer=None):
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
-    from_clause = u'FROM {}'.format(table)
+    if body['sample'] == 1:
+        from_clause = u'FROM {}'.format(table)
+    else:
+        from_clause = u'FROM {} SAMPLE {}'.format(table, body['sample'])
 
     joins = []
     issue_expr = util.issue_expr(body)
