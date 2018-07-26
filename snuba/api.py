@@ -241,6 +241,7 @@ def query(validated_body=None, timer=None):
         'num_projects': len(project_ids),
         'num_issues': len(body.get('issues', [])),
         'num_hashes': sum(len(i[-1]) for i in body.get('issues', [])),
+        'sample': sample,
     })
 
     result, status = util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
