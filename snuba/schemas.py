@@ -141,6 +141,7 @@ QUERY_SCHEMA = {
     'dependencies': {
         'offset': ['limit'],
     },
+    'additionalProperties': False,
 
     'definitions': {
         'fingerprint_hash': {
