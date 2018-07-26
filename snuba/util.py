@@ -294,6 +294,8 @@ def raw_query(body, sql, client, timer, stats=None):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
+    project_ids = to_list(body['project'])
+    project_id = project_ids[0] # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache = state.get_configs([
         ('global_per_second_limit', 1000),
@@ -301,6 +303,12 @@ def raw_query(body, sql, client, timer, stats=None):
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
         ('use_cache', 0),
+    ])
+
+    # Specific projects can have their rate limits overridden
+    prl, pcl = state.get_configs([
+        ('project_per_second_limit_{}'.format(project_id), prl),
+        ('project_concurrent_limit_{}'.format(project_id), pcl),
     ])
 
     all_confs = six.iteritems(state.get_all_configs())
@@ -313,9 +321,7 @@ def raw_query(body, sql, client, timer, stats=None):
         metrics.gauge('query.global_concurrent', g_concurr)
         stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
 
-        # TODO rate limit on every project in the list?
-        project_ids = to_list(body['project'])
-        with state.rate_limit(project_ids[0], prl, pcl) as (p_allowed, p_rate, p_concurr):
+        with state.rate_limit(project_id, prl, pcl) as (p_allowed, p_rate, p_concurr):
             stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
             timer.mark('rate_limit')
 
