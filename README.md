@@ -228,6 +228,33 @@ Eg, to count the number of events by hour, you would do
 
 #### project
 
+#### sample
+
+Sample is a numeric value. If it is < 1, then it is interpreted to mean "read
+this percentage of rows". eg.
+
+    "sample": 0.5
+
+Will read 50% of all rows.
+
+If it is > 1, it means "read up to this number of rows", eg.
+
+    "sample": 1000
+
+Will read 1000 rows maximum, and then return a result.
+
+Note that sampling does not do any adjustment/correction of aggregates. so if
+you do a count() with 10% sampling, you should multiply the results by 10 to
+get an approximate value for the 'real' count. For sample > 1 you cannot do
+this adjustment as there is no way to tell what percentage of rows were read.
+For other aggregations like uniq(), min(), max(), there is no adjustment you
+can do, the results will simply deviate more and more from the real value in an
+unpredictable way as the sampling rate approaches 0.
+
+Queries with sampling are stable. Ie the same query with the same sampling
+factor over the same data should consistently return the exact same result.
+
+
 ### Issues / Groups
 
 Snuba provides a magic column `issue` that can be used to group events by issue.

@@ -135,6 +135,10 @@ QUERY_SCHEMA = {
             ],
             'default': [],
         },
+        'sample': {
+            'type': 'number',
+            'min': 0,
+        }
     },
     # Need to select down to the project level for customer isolation and performance
     'required': ['project'],

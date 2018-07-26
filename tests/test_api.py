@@ -407,6 +407,23 @@ class TestApi(BaseTest):
         assert "issue = 0" in sql
         assert "issue = 1" in sql
 
+    @mock.patch('snuba.util.raw_query')
+    def test_sampling_expansion(self, raw_query):
+        raw_query.return_value = ({'data': [], 'meta': []}, 200)
+        json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'sample': 1000,
+        })).data)
+        sql = raw_query.call_args[0][1]
+        assert "SAMPLE 1000" in sql
+
+        json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'sample': 0.1,
+        })).data)
+        sql = raw_query.call_args[0][1]
+        assert "SAMPLE 0.1" in sql
+
     def test_promoted_expansion(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
