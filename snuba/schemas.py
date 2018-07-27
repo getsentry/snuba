@@ -177,7 +177,12 @@ QUERY_SCHEMA = {
         },
         'column_list': {
             'type': 'array',
-            'items': {'$ref': '#/definitions/column_name'},
+            'items': {
+                'anyOf': [
+                    {'$ref': '#/definitions/column_name'},
+                    {'$ref': '#/definitions/nested_expr'},
+                ]
+            },
             'minItems': 1,
         },
         # TODO: can the complex nested expr actually be encoded here?

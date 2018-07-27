@@ -152,7 +152,7 @@ def query(validated_body=None, timer=None):
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(colname, body) for colname in body['selected_columns']]
+    selected_cols = [util.column_expr(util.tuplify(colname), body) for colname in body['selected_columns']]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 

@@ -75,7 +75,9 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     assert not aggregate or (aggregate and (column_name or alias))
     column_name = column_name or ''
 
-    if column_name == settings.TIME_GROUP_COLUMN:
+    if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
+        return complex_condition_expr(column_name, body)
+    elif column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS[body['granularity']]
     elif settings.NESTED_COL_EXPR.match(column_name):
         expr = tag_expr(column_name)
@@ -210,12 +212,7 @@ def condition_expr(conditions, body, depth=0):
         lhs, op, lit = conditions
         lit = escape_literal(lit)
 
-        if isinstance(lhs, six.string_types):
-            lhs = column_expr(lhs, body)
-        elif isinstance(lhs, tuple) and isinstance(lhs[1], tuple):
-            lhs = complex_condition_expr(lhs, body)
-        else:
-            raise InvalidConditionException(str(conditions))
+        lhs = column_expr(lhs, body)
 
         return u'{} {} {}'.format(lhs, op, lit)
     elif depth == 1:
