@@ -40,6 +40,7 @@ class TestApi(BaseTest):
         state.delete_config('global_concurrent_limit')
         state.delete_config('global_per_second_limit')
         state.delete_config('project_concurrent_limit')
+        state.delete_config('project_concurrent_limit_1')
         state.delete_config('project_per_second_limit')
         state.delete_config('date_align_seconds')
 
@@ -508,10 +509,27 @@ class TestApi(BaseTest):
         assert 'timing' in result
         assert 'timestamp' in result['timing']
 
-    def test_rate_limiting(self):
+    def test_global_rate_limiting(self):
         state.set_config('global_concurrent_limit', 0)
         response = self.app.post('/query', data=json.dumps({
             'project': 1,
+        }))
+        assert response.status_code == 429
+
+    def test_project_rate_limiting(self):
+        # All projects except project 1 are allowed
+        state.set_config('project_concurrent_limit', 1)
+        state.set_config('project_concurrent_limit_1', 0)
+
+        response = self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'selected_columns': ['platform']
+        }))
+        assert response.status_code == 200
+
+        response = self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['platform']
         }))
         assert response.status_code == 429
 
