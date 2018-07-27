@@ -554,7 +554,20 @@ class TestApi(BaseTest):
         }
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert len(result['data']) == 180
+        assert 'platform' in result['data'][0]
+        assert 'notEmpty(exception_stacks.type)' in result['data'][0]
         assert result['data'][0]['notEmpty(exception_stacks.type)'] == 0
+
+        # Check that aliasing works too
+        query = {
+            'project': 1,
+            'selected_columns': ['platform', ['notEmpty', ['exception_stacks.type'], 'type_not_empty']],
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        assert len(result['data']) == 180
+        assert 'platform' in result['data'][0]
+        assert 'type_not_empty' in result['data'][0]
+        assert result['data'][0]['type_not_empty'] == 0
 
     def test_nullable_datetime_columns(self):
         # Test that requesting a Nullable(DateTime) column does not throw
