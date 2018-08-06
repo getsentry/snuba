@@ -397,13 +397,11 @@ class TestApi(BaseTest):
         assert len(result['data']) == 1
         assert result['data'][0]['aggregate'] == 90
 
-    @mock.patch('snuba.util.raw_query')
-    def test_column_expansion(self, raw_query):
+    def test_column_expansion(self):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
-        raw_query.return_value = ({'data': [], 'meta': []}, 200)
         issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
-        json.loads(self.app.post('/query', data=json.dumps({
+        response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
@@ -414,26 +412,21 @@ class TestApi(BaseTest):
             ]
         })).data)
         # Issue is expanded once, and alias used subsequently
-        sql = raw_query.call_args[0][1]
-        assert "issue = 0" in sql
-        assert "issue = 1" in sql
+        assert "issue = 0" in response['sql']
+        assert "issue = 1" in response['sql']
 
-    @mock.patch('snuba.util.raw_query')
-    def test_sampling_expansion(self, raw_query):
-        raw_query.return_value = ({'data': [], 'meta': []}, 200)
-        json.loads(self.app.post('/query', data=json.dumps({
+    def test_sampling_expansion(self):
+        response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'sample': 1000,
         })).data)
-        sql = raw_query.call_args[0][1]
-        assert "SAMPLE 1000" in sql
+        assert "SAMPLE 1000" in response['sql']
 
-        json.loads(self.app.post('/query', data=json.dumps({
+        response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'sample': 0.1,
         })).data)
-        sql = raw_query.call_args[0][1]
-        assert "SAMPLE 0.1" in sql
+        assert "SAMPLE 0.1" in response['sql']
 
     def test_promoted_expansion(self):
         result = json.loads(self.app.post('/query', data=json.dumps({

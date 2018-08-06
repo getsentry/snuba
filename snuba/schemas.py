@@ -138,6 +138,9 @@ QUERY_SCHEMA = {
         'sample': {
             'type': 'number',
             'min': 0,
+        },
+        'debug': {
+            'type': 'boolean',
         }
     },
     # Need to select down to the project level for customer isolation and performance

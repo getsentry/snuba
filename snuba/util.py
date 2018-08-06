@@ -385,8 +385,9 @@ def raw_query(body, sql, client, timer, stats=None):
         timer.record(metrics)
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE:
+    if settings.STATS_IN_RESPONSE or body.get('debug', False):
         result['stats'] = stats
+        result['sql'] = sql
 
     return (result, status)
 
