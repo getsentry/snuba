@@ -113,7 +113,7 @@ array of 3-tuples (in their most basic form):
 
 Valid operations:
 
-    ['>', '<', '>=', '<=', '=', '!=', 'IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE'],
+    ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE'],
 
 For example:
 

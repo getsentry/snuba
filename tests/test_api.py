@@ -232,6 +232,16 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
+            'granularity': 3600,
+            'aggregations': [['count()', '', 'count']],
+            'groupby': 'platform',
+            'conditions': [['platform', 'NOT IN', ['b', 'c', 'd', 'e', 'f']]]
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['platform'] == 'a'
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
             'selected_columns': ['event_id'],
             'conditions': [['message', 'LIKE', 'a mess%']],
             'orderby': 'event_id',
