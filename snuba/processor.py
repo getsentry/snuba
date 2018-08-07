@@ -13,7 +13,7 @@ logger = logging.getLogger('snuba.processor')
 
 
 HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
-MAX_UINT32 = 2 * 32 - 1
+MAX_UINT32 = 2 ** 32 - 1
 INSERT = object()
 DELETE = object()
 
