@@ -435,7 +435,7 @@ class TestProcessor(BaseTest):
                                           u'invoke0',
                                           u'main'],
             'exception_frames.in_app': [False, False, False, False, False, False, True],
-            'exception_frames.lineno': [None, None, None, 43, 62, None, 17],
+            'exception_frames.lineno': [748, 293, 498, 43, 62, None, 17],
             'exception_frames.module': [u'java.lang.Thread',
                                         u'org.codehaus.mojo.exec.ExecJavaMojo$1',
                                         u'java.lang.reflect.Method',
