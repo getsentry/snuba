@@ -99,6 +99,51 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     return alias_expr(expr, alias, body)
 
 
+def complex_condition_expr(expr, body, depth=0):
+    if depth == 0:
+        # we know the first item is a function
+        ret = expr[0]
+        expr = expr[1:]
+
+        # if the last item of the toplevel is a string, it's an alias
+        alias = None
+        if len(expr) > 1 and isinstance(expr[-1], six.string_types):
+            alias = expr[-1]
+            expr = expr[:-1]
+    else:
+        # is this a nested function call?
+        if len(expr) > 1 and isinstance(expr[1], tuple):
+            ret = expr[0]
+            expr = expr[1:]
+        else:
+            ret = ''
+
+    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
+    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
+    # way to disambiguate column names from string literals in complex functions.
+    if ret == 'emptyIfNull' and len(expr) >= 1 and isinstance(expr[0], tuple):
+        ret = 'ifNull'
+        expr = (expr[0] + (Literal('\'\''),),) + expr[1:]
+
+    first = True
+    for subexpr in expr:
+        if isinstance(subexpr, tuple):
+            ret += '(' + complex_condition_expr(subexpr, body, depth + 1) + ')'
+        else:
+            if not first:
+                ret += ', '
+            if isinstance(subexpr, six.string_types):
+                ret += column_expr(subexpr, body)
+            else:
+                ret += escape_literal(subexpr)
+        first = False
+
+    if depth == 0 and alias:
+        return alias_expr(ret, alias, body)
+
+    return ret
+
+
 def alias_expr(expr, alias, body):
     """
     Return the correct expression to use in the final SQL. Keeps a cache of
@@ -222,44 +267,6 @@ def condition_expr(conditions, body, depth=0):
         return u'({})'.format(res) if len(sub) > 1 else res
     else:
         raise InvalidConditionException(str(conditions))
-
-
-def complex_condition_expr(expr, body, depth=0):
-    if depth == 0:
-        # we know the first item is a function
-        ret = expr[0]
-        expr = expr[1:]
-
-        # if the last item of the toplevel is a string, it's an alias
-        alias = None
-        if len(expr) > 1 and isinstance(expr[-1], six.string_types):
-            alias = expr[-1]
-            expr = expr[:-1]
-    else:
-        # is this a nested function call?
-        if len(expr) > 1 and isinstance(expr[1], tuple):
-            ret = expr[0]
-            expr = expr[1:]
-        else:
-            ret = ''
-
-    first = True
-    for subexpr in expr:
-        if isinstance(subexpr, tuple):
-            ret += '(' + complex_condition_expr(subexpr, body, depth + 1) + ')'
-        else:
-            if not first:
-                ret += ', '
-            if isinstance(subexpr, six.string_types):
-                ret += column_expr(subexpr, body)
-            else:
-                ret += escape_literal(subexpr)
-        first = False
-
-    if depth == 0 and alias:
-        return alias_expr(ret, alias, body)
-
-    return ret
 
 
 def escape_literal(value):
