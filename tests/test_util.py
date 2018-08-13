@@ -221,6 +221,9 @@ class TestUtil(BaseTest):
         assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
         assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
 
+        assert complex_condition_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
+        assert complex_condition_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
+
     def test_uses_issue(self):
         assert uses_issue({'conditions': [['issue', '=', 1]]}) == (True, set([1]))
         assert uses_issue({'conditions': [['issue', 'IN', [1]]]}) == (True, set([1]))
