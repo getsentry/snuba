@@ -731,3 +731,37 @@ class TestApi(BaseTest):
             # issue 2
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
+
+    def test_generalizer(self):
+        try:
+            state.set_config('use_cache', 1)
+            state.set_config('use_query_id', 1)
+
+            # First get the results for 1 tag
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'aggregations': [['count()', '', 'count']],
+                'conditions': [['tags[os.name]', '!=', '']],
+                'orderby': '-count',
+            })).data)
+            assert result['data'] == [{'count': 180}]
+            assert result['stats']['cache_hit'] == False
+            query_1_id = result['stats']['query_id']
+
+            # Then get the results for another tag, which we should be able
+            # to serve from the cached resut from the first query
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'aggregations': [['count()', '', 'count']],
+                'conditions': [['tags[sentry:dist]', '!=', '']],
+                'orderby': '-count',
+            })).data)
+            assert result['data'] == [{'count': 180}]
+            assert result['stats']['cache_hit'] == True
+            result['stats']['query_id'] == query_1_id
+
+        finally:
+            state.delete_config('use_query_id')
+            state.delete_config('use_cache')

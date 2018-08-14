@@ -9,7 +9,7 @@ from markdown import markdown
 from raven.contrib.flask import Sentry
 import simplejson as json
 
-from snuba import settings, util, schemas, state
+from snuba import generalizer, schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 
 
@@ -115,6 +115,19 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
+    result, status = parse_and_run_query(validated_body, timer)
+    return (
+        json.dumps(
+            result,
+            for_json=True,
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+        status,
+        {'Content-Type': 'application/json'}
+    )
+
+
+@generalizer.generalize
+def parse_and_run_query(validated_body, timer):
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
@@ -244,16 +257,7 @@ def query(validated_body=None, timer=None):
         'sample': sample,
     })
 
-    result, status = util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
-
-    return (
-        json.dumps(
-            result,
-            for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
-        status,
-        {'Content-Type': 'application/json'}
-    )
+    return util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
 
 
 if application.debug or application.testing:
