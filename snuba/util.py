@@ -321,32 +321,32 @@ def raw_query(body, sql, client, timer, stats=None):
 
     timer.mark('get_configs')
 
-    with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
-        metrics.gauge('query.global_concurrent', g_concurr)
-        stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
+    query_id = md5(force_bytes(sql)).hexdigest()
+    with state.deduper(query_id) as is_dupe:
+        timer.mark('dedupe_wait')
 
-        with state.rate_limit(project_id, prl, pcl) as (p_allowed, p_rate, p_concurr):
-            stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
-            timer.mark('rate_limit')
+        result = state.get_result(query_id) if use_cache else None
+        timer.mark('cache_get')
 
-            if g_allowed and p_allowed:
-                query_id = md5(force_bytes(sql)).hexdigest()
-                with state.deduper(query_id) as is_dupe:
-                    timer.mark('dedupe_wait')
+        stats.update({
+            'is_duplicate': is_dupe,
+            'query_id': query_id,
+            'use_cache': bool(use_cache),
+            'cache_hit': bool(result)}
+        ),
 
-                    result = state.get_result(query_id) if use_cache else None
-                    timer.mark('cache_get')
+        if result:
+            status = 200
+        else:
+            with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
+                metrics.gauge('query.global_concurrent', g_concurr)
+                stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
 
-                    stats.update({
-                        'is_duplicate': is_dupe,
-                        'query_id': query_id,
-                        'use_cache': bool(use_cache),
-                        'cache_hit': bool(result)}
-                    ),
+                with state.rate_limit(project_id, prl, pcl) as (p_allowed, p_rate, p_concurr):
+                    stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
+                    timer.mark('rate_limit')
 
-                    if result:
-                        status = 200
-                    else:
+                    if g_allowed and p_allowed:
                         try:
                             data, meta = client.execute(
                                 sql,
@@ -376,9 +376,10 @@ def raw_query(body, sql, client, timer, stats=None):
                             status = 500
                             logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
                             result = {'error': error}
-            else:
-                status = 429
-                result = {'error': 'rate limit exceeded'}
+
+                    else:
+                        status = 429
+                        result = {'error': 'rate limit exceeded'}
 
     state.record_query({
         'request': body,
