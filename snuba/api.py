@@ -126,6 +126,7 @@ def query(validated_body=None, timer=None):
     )
 
 
+@generalizer.generalize
 def parse_and_run_query(validated_body, timer):
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)

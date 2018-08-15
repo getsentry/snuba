@@ -1,4 +1,4 @@
-from snuba import settings, util
+from snuba import settings, state, util
 import six
 
 """
@@ -35,8 +35,9 @@ def generalize(func):
             if c and isinstance(c[0], six.string_types) and
             settings.NESTED_COL_EXPR.match(c[0])
         ]
-        aggregations = [agg[2] for agg in body['aggregations'] if agg[2]]
+        aggregations = [agg[2] for agg in body['aggregations'] if agg[2] and agg[0] == 'count()']
         if (
+                state.get_config('generalize_query', 0) and
                 # no selected columns or exisiting groups
                 body['selected_columns'] == [] and
                 util.to_list(body['groupby']) == [] and

@@ -731,11 +731,11 @@ class TestApi(BaseTest):
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
 
-    @pytest.mark.xfail
     def test_generalizer(self):
         try:
             state.set_config('use_cache', 1)
             state.set_config('use_query_id', 1)
+            state.set_config('generalize_query', 1)
 
             # First get the results for 1 tag
             result = json.loads(self.app.post('/query', data=json.dumps({
@@ -775,3 +775,4 @@ class TestApi(BaseTest):
         finally:
             state.delete_config('use_query_id')
             state.delete_config('use_cache')
+            state.delete_config('generalize_query')
