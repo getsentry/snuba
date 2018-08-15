@@ -3,7 +3,6 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
-import mock
 import simplejson as json
 import six
 import time
@@ -11,7 +10,7 @@ import uuid
 import pytest
 import pytz
 
-from snuba import state, settings, processor
+from snuba import processor, settings, state
 
 from base import BaseTest
 
@@ -731,3 +730,47 @@ class TestApi(BaseTest):
             # issue 2
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
+
+    def test_generalizer(self):
+        try:
+            state.set_config('use_cache', 1)
+            state.set_config('use_query_id', 1)
+
+            # First get the results for 1 tag
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['count()', '', 'count']],
+                'conditions': [
+                    ['tags[os.name]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
+                'orderby': '-count',
+            })).data)
+            assert result['data'] == [{'count': 90}]
+            assert result['stats']['cache_hit'] == False
+            query_1_id = result['stats']['query_id']
+
+            # Then get the results for another tag, which we should be able
+            # to serve from the cached resut from the first query
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['count()', '', 'count']],
+                'conditions': [
+                    ['tags[sentry:dist]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
+                'orderby': '-count',
+            })).data)
+            assert result['data'] == [{'count': 90}]
+            assert result['stats']['cache_hit'] == True
+            result['stats']['query_id'] == query_1_id
+
+        finally:
+            state.delete_config('use_query_id')
+            state.delete_config('use_cache')

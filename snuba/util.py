@@ -173,8 +173,7 @@ def tag_expr(column_name):
     For tags/contexts, we expand the expression depending on whether the tag is
     "promoted" to a top level column, or whether we have to look in the tags map.
     """
-    match = settings.NESTED_COL_EXPR.match(column_name)
-    col, tag = match.group(1), match.group(2)
+    col, tag = settings.NESTED_COL_EXPR.match(column_name).group(1, 2)
 
     # For promoted tags, return the column name.
     if col in settings.PROMOTED_COLS:
