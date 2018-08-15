@@ -1,4 +1,5 @@
 from snuba import settings, util
+import six
 
 """
 The generalizer attempts to rewrite some queries as more general queries
@@ -21,31 +22,44 @@ specific queries to follow.
 def generalize(func):
     def wrapper(*args, **kwargs):
         """
-            First experiment: replace a query for a simple count() of a
-            single tag field with a count() GROUP BY tags_key
+        First experiment, a non-grouped query with aggregations
+        and a condition on a tags[] field is changed to the same
+        query with GROUP BY tags_key, to effectively get the same
+        data for all tags in one pass.
         """
         tag = None
         body = args[0]
+        tag_conditions = [
+            (c, settings.NESTED_COL_EXPR.match(c[0]).group(1, 2))
+            for c in body['conditions']
+            if c and isinstance(c[0], six.string_types) and
+            settings.NESTED_COL_EXPR.match(c[0])
+        ]
+        aggregations = [agg[2] for agg in body['aggregations'] if agg[2]]
         if (
-                len(body['aggregations']) == 1 and
-                body['aggregations'][0][:2] == ['count()', ''] and
-                len(body['conditions']) == 1 and
-                settings.NESTED_COL_EXPR.match(body['conditions'][0][0]) and
-                body['conditions'][0][1:] == ['!=', ''] and
+                # no selected columns or exisiting groups
                 body['selected_columns'] == [] and
-                util.to_list(body['groupby']) == []
+                util.to_list(body['groupby']) == [] and
+                # at least 1 aggretation and a tags[] type condition
+                aggregations and tag_conditions and
+                all(col == 'tags' for (cond, (col, tag)) in tag_conditions) and
+                # all tags[] conditions refer to the same tag
+                len(set(tag for (cond, (col, tag)) in tag_conditions)) == 1
             ):
 
-            agg = body['aggregations'][0][2]
-            col, tag = settings.NESTED_COL_EXPR.match(body['conditions'][0][0]).group(1, 2)
-            if col == 'tags':
-                body['conditions'] = [['tags_value', '!=', '']]
-                body['groupby'] = 'tags_key'
-            # TODO Change any LIMIT to LIMIT N BY tags_key
+            tag = tag_conditions[0][1][1]
+            body['groupby'] = 'tags_key'
+            for (cond, _) in tag_conditions:
+                cond[0] = 'tags_key'
+            if 'limit' in body:
+                body['limitby'] = [body.pop('limit'), 'tags_key']
 
         result, status = func(*args, **kwargs)
         if tag is not None:
-            result['data'] = [{agg: d[agg]} for d in result['data'] if d['tags_key'] == tag]
+            result['data'] = [
+                {agg: d[agg] for agg in aggregations}
+                for d in result['data'] if d['tags_key'] == tag
+            ]
 
         return result, status
     return wrapper

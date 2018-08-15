@@ -3,7 +3,6 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
-import mock
 import simplejson as json
 import six
 import time
@@ -11,7 +10,7 @@ import uuid
 import pytest
 import pytz
 
-from snuba import state, settings, processor
+from snuba import processor, settings, state
 
 from base import BaseTest
 
@@ -732,7 +731,6 @@ class TestApi(BaseTest):
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
 
-    @mock.patch('time.time', mock.MagicMock(return_value=time.time()))
     def test_generalizer(self):
         try:
             state.set_config('use_cache', 1)
@@ -742,6 +740,8 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 1,
                 'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [['count()', '', 'count']],
                 'conditions': [
                     ['tags[os.name]', '!=', ''],
@@ -758,6 +758,8 @@ class TestApi(BaseTest):
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 1,
                 'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [['count()', '', 'count']],
                 'conditions': [
                     ['tags[sentry:dist]', '!=', ''],

@@ -229,6 +229,10 @@ def parse_and_run_query(validated_body, timer):
             util.column_expr(orderby, body), 'DESC' if desc else 'ASC'
         )
 
+    limitby_clause = ''
+    if 'limitby' in body:
+        limit_clause = 'LIMIT {} BY {}'.format(*body['limitby'])
+
     limit_clause = ''
     if 'limit' in body:
         limit_clause = 'LIMIT {}, {}'.format(body.get('offset', 0), body['limit'])
@@ -242,6 +246,7 @@ def parse_and_run_query(validated_body, timer):
         group_clause,
         having_clause,
         order_clause,
+        limitby_clause,
         limit_clause
     ] if c])
 

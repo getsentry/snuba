@@ -119,6 +119,13 @@ QUERY_SCHEMA = {
         'orderby': {
             '$ref': '#/definitions/column_name',
         },
+        'limitby': {
+            'type': 'array',
+            'items': [
+                {'type': 'number'},
+                {'$ref': '#/definitions/column_name'},
+            ]
+        },
         'limit': {
             'type': 'number',
             'default': 1000,
