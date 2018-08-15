@@ -732,6 +732,7 @@ class TestApi(BaseTest):
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
 
+    @mock.patch('time.time', mock.MagicMock(return_value=time.time()))
     def test_generalizer(self):
         try:
             state.set_config('use_cache', 1)
@@ -742,10 +743,13 @@ class TestApi(BaseTest):
                 'project': 1,
                 'groupby': [],
                 'aggregations': [['count()', '', 'count']],
-                'conditions': [['tags[os.name]', '!=', '']],
+                'conditions': [
+                    ['tags[os.name]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
                 'orderby': '-count',
             })).data)
-            assert result['data'] == [{'count': 180}]
+            assert result['data'] == [{'count': 90}]
             assert result['stats']['cache_hit'] == False
             query_1_id = result['stats']['query_id']
 
@@ -755,10 +759,13 @@ class TestApi(BaseTest):
                 'project': 1,
                 'groupby': [],
                 'aggregations': [['count()', '', 'count']],
-                'conditions': [['tags[sentry:dist]', '!=', '']],
+                'conditions': [
+                    ['tags[sentry:dist]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
                 'orderby': '-count',
             })).data)
-            assert result['data'] == [{'count': 180}]
+            assert result['data'] == [{'count': 90}]
             assert result['stats']['cache_hit'] == True
             result['stats']['query_id'] == query_1_id
 
