@@ -731,6 +731,7 @@ class TestApi(BaseTest):
             {'count': 1, 'issue': 2, 'project_id': 2},
         ]
 
+    @pytest.mark.xfail
     def test_generalizer(self):
         try:
             state.set_config('use_cache', 1)
