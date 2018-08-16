@@ -772,6 +772,42 @@ class TestApi(BaseTest):
             assert result['stats']['cache_hit'] == True
             result['stats']['query_id'] == query_1_id
 
+            # Example 2: uniqes
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['uniq', 'tags[sentry:release]', 'unique_values']],
+                'conditions': [
+                    ['tags[sentry:release]', '!=', ''],
+
+                    ['environment', '=', 'test']
+                ],
+                'orderby': '-unique_values',
+            })).data)
+            assert result['data'] == [{'unique_values': 90}]
+            assert result['stats']['cache_hit'] == False
+            query_1_id = result['stats']['query_id']
+
+            # Then get the results for another tag, which we should be able
+            # to serve from the cached resut from the first query
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [['uniq', 'tags[os.name]', 'unique_values']],
+                'conditions': [
+                    ['tags[os.name]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
+                'orderby': '-unique_values',
+            })).data)
+            assert result['data'] == [{'unique_values': 1}]
+            assert result['stats']['cache_hit'] == True
+            result['stats']['query_id'] == query_1_id
+
         finally:
             state.delete_config('use_query_id')
             state.delete_config('use_cache')
