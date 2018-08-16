@@ -67,7 +67,7 @@ METADATA_COLUMNS = [
     'offset',
     'partition',
 ]
-PROMOTED_TAGS = [
+PROMOTED_TAG_COLUMNS = [
     # These are the classic tags, they are saved in Snuba exactly as they
     # appear in the event body.
     'level',
@@ -81,7 +81,7 @@ PROMOTED_TAGS = [
     'site',
     'url',
 ]
-PROMOTED_CONTEXT_TAGS = [
+PROMOTED_CONTEXT_TAG_COLUMNS = [
     # These are promoted tags that come in in `tags`, but are more closely
     # related to contexts.  To avoid naming confusion with Clickhouse nested
     # columns, they are stored in the database with s/./_/
@@ -96,7 +96,7 @@ PROMOTED_CONTEXT_TAGS = [
     'os_name',
     'os_rooted',
 ]
-PROMOTED_CONTEXTS = [
+PROMOTED_CONTEXT_COLUMNS = [
     'os_build',
     'os_kernel_version',
     'device_name',
@@ -132,7 +132,7 @@ WRITER_COLUMNS = [
     'sdk_version',
     'type',
     'version',
-] + METADATA_COLUMNS + PROMOTED_CONTEXTS + PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS + [
+] + METADATA_COLUMNS + PROMOTED_CONTEXT_COLUMNS + PROMOTED_TAG_COLUMNS + PROMOTED_CONTEXT_TAG_COLUMNS + [
     'tags.key',
     'tags.value',
     'contexts.key',
@@ -160,20 +160,27 @@ NESTED_COL_EXPR = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 # The set of columns, and associated keys that have been promoted
 # to the top level table namespace.
 PROMOTED_COLS = {
-    'tags': frozenset(PROMOTED_TAGS + PROMOTED_CONTEXT_TAGS),
-    'contexts': frozenset(PROMOTED_CONTEXTS),
+    'tags': frozenset(PROMOTED_TAG_COLUMNS + PROMOTED_CONTEXT_TAG_COLUMNS),
+    'contexts': frozenset(PROMOTED_CONTEXT_COLUMNS),
 }
 
-# For every item in PROMOTED_COLS, a map of translations from the column
+# For every applicable promoted column,  a map of translations from the column
 # name  we save in the database to the tag we receive in the query.
 COLUMN_TAG_MAP = {
-    'tags': {t: t.replace('_', '.') for t in PROMOTED_CONTEXT_TAGS},
+    'tags': {t: t.replace('_', '.') for t in PROMOTED_CONTEXT_TAG_COLUMNS},
     'contexts': {}
 }
 
 # And a reverse map from the tags the client expects to the database columns
 TAG_COLUMN_MAP = {
     col: dict(map(reversed, trans.items())) for col, trans in COLUMN_TAG_MAP.items()
+}
+
+# The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
+# and they can/will use a promoted column.
+PROMOTED_TAGS = {
+    col: [COLUMN_TAG_MAP[col].get(x, x) for x in PROMOTED_COLS[col]]
+    for col in PROMOTED_COLS
 }
 
 # Column Definitions (Name, Type)
