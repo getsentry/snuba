@@ -74,6 +74,7 @@ singledispatch==3.4.0.3
 six==1.11.0
 traceback2==1.4.0
 traitlets==4.3.2
+ujson==1.35
 unittest2==1.1.0
 urllib3==1.23
 uWSGI==2.0.17

@@ -8,6 +8,7 @@ import simplejson as json
 import six
 import time
 import uuid
+import ujson
 
 from snuba import settings
 
@@ -280,9 +281,9 @@ def get_queries():
 def get_result(query_id):
     key = '{}{}'.format(query_cache_prefix, query_id)
     result = rds.get(key)
-    return result and json.loads(result)
+    return result and ujson.loads(result)
 
 def set_result(query_id, result):
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
-    return rds.set(key, json.dumps(result), ex=timeout)
+    return rds.set(key, ujson.dumps(result), ex=timeout)

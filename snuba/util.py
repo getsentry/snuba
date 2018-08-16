@@ -13,6 +13,7 @@ import re
 import simplejson as json
 import six
 import time
+import ujson
 
 from snuba import schemas, settings, state
 
@@ -602,7 +603,7 @@ def validate_request(schema):
 
             if request.method == 'POST':
                 try:
-                    body = json.loads(request.data)
+                    body = ujson.loads(request.data)
                     schemas.validate(body, schema)
                     kwargs['validated_body'] = body
                     if kwargs.get('timer'):
