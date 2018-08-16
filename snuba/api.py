@@ -115,6 +115,11 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
+    if request.method == 'GET':
+        query_template = schemas.generate(schemas.QUERY_SCHEMA)
+        template_str = json.dumps(query_template, sort_keys=True, indent=4)
+        return render_template('query.html', query_template=template_str)
+
     result, status = parse_and_run_query(validated_body, timer)
     return (
         json.dumps(
@@ -128,11 +133,6 @@ def query(validated_body=None, timer=None):
 
 @generalizer.generalize
 def parse_and_run_query(validated_body, timer):
-    if request.method == 'GET':
-        query_template = schemas.generate(schemas.QUERY_SCHEMA)
-        template_str = json.dumps(query_template, sort_keys=True, indent=4)
-        return render_template('query.html', query_template=template_str)
-
     max_days, table, date_align, config_sample = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
