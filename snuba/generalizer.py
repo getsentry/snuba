@@ -56,7 +56,7 @@ def generalize(func):
                 body['limitby'] = [body.pop('limit'), 'tags_key']
 
         result, status = func(*args, **kwargs)
-        if tag is not None:
+        if tag is not None and 'data' in result:
             result['data'] = [
                 {agg: d[agg] for agg in aggregations}
                 for d in result['data'] if d['tags_key'] == tag
