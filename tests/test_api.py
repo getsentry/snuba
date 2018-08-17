@@ -2,6 +2,7 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
+from dateutil.tz import tz
 from functools import partial
 import simplejson as json
 import six
@@ -811,6 +812,53 @@ class TestApi(BaseTest):
             }]
             assert result['stats']['cache_hit'] == True
             result['stats']['query_id'] == query_1_id
+
+            # Example 3: top values for key
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 3,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [
+                    ['count()', '', 'times_seen'],
+                    ['min', 'timestamp', 'first_seen']
+                ],
+                'conditions': [
+                    ['tags[sentry:release]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
+                'groupby': ['tags[sentry:release]'],
+                'orderby': '-times_seen',
+                'limit': 30,
+            })).data)
+            assert len(result['data']) == 30
+            assert sorted([int(d['tags[sentry:release]']) for d in result['data']]) == range(2, self.minutes, 6)
+            assert result['stats']['cache_hit'] == False
+            query_1_id = result['stats']['query_id']
+
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 3,
+                'groupby': [],
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'aggregations': [
+                    ['count()', '', 'times_seen'],
+                    ['min', 'timestamp', 'first_seen']
+                ],
+                'conditions': [
+                    ['tags[os.name]', '!=', ''],
+                    ['environment', '=', 'test']
+                ],
+                'groupby': ['tags[os.name]'],
+                'orderby': '-times_seen',
+                'limit': 30,
+            })).data)
+            assert result['data'] == [{
+                'times_seen': 30,
+                'tags[os.name]': 'windows',
+                'first_seen': (self.base_time + timedelta(minutes=2)).replace(tzinfo=tz.tzutc()).isoformat(),
+            }]
+            assert result['stats']['cache_hit'] == True
 
         finally:
             state.delete_config('use_query_id')

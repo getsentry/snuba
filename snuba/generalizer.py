@@ -27,34 +27,32 @@ def generalize(func):
         query with GROUP BY tags_key, to effectively get the same
         data for all tags in one pass.
         """
+        TAG_RE = settings.NESTED_COL_EXPR
         generalized = False
         body = args[0]
         tag_cond = [
             c for c in body['conditions']
-            if c and isinstance(c[0], six.string_types) and
-            settings.NESTED_COL_EXPR.match(c[0])
+            if c and isinstance(c[0], six.string_types) and TAG_RE.match(c[0])
         ]
         aggs = body['aggregations']
         tag_aggs = [
-                a for a in aggs
-                if a and isinstance(a[1], six.string_types) and
-                settings.NESTED_COL_EXPR.match(a[1])
+            a for a in aggs
+            if a and isinstance(a[1], six.string_types) and TAG_RE.match(a[1])
         ]
-        tags = [settings.NESTED_COL_EXPR.match(c[0]).group(1, 2) for c in tag_cond] +\
-               [settings.NESTED_COL_EXPR.match(a[1]).group(1, 2) for a in tag_aggs]
+        tags = list(set([c[0] for c in tag_cond] + [a[1] for a in tag_aggs]))
+        if tags:
+            tag, tagcol, tagval = TAG_RE.match(tags[0]).group(0, 1, 2)
 
         if (
                 state.get_config('generalize_query', 0) and
-                # no selected columns or exisiting groups
+                # no selected columns
                 body['selected_columns'] == [] and
-                util.to_list(body['groupby']) == [] and
-                # only a single unique tag is used in any tags[] conditions or aggregations
-                len(set(tags)) == 1 and tags[0][0] == 'tags' and
-                tags[0][1] in settings.PROMOTED_TAGS['tags'] and
                 # at least 1 tags[] based condition
                 tag_cond and
                 # all aggregations have aliases
-                all(alias for (_, _, alias) in aggs)
+                all(alias for (_, _, alias) in aggs) and
+                # only a single unique tag is used in any tags[] conditions or aggregations
+                len(tags) == 1 and tagcol == 'tags' and tagval in settings.PROMOTED_TAGS[tagcol]
             ):
 
             generalized = True
@@ -64,20 +62,30 @@ def generalize(func):
             for agg in tag_aggs:
                 agg[1] = 'tags_value'
 
-            body['groupby'] = 'tags_key'
+
+            fwd, rev = {tag: 'tags_value'}, {'tags_value': tag}
+            groupby = util.to_list(body['groupby'])
+            groupby = [fwd.get(gb, gb) for gb in groupby]
+
+            output_columns = [alias for (_, _, alias) in aggs] + groupby
+            # add `tags_key` to the grouping so that we get a set of results for each tag
+            groupby.append('tags_key')
+            body['groupby'] = groupby
+
+            # Limit the tags to just promoted ones so that we don't blow up everything
             body['conditions'].append(['tags_key', 'IN', settings.PROMOTED_TAGS['tags']])
 
             if 'limit' in body:
                 body['limitby'] = [body.pop('limit'), 'tags_key']
 
-            output_columns = [alias for (_, _, alias) in aggs]
 
         result, status = func(*args, **kwargs)
+
         if generalized:
             if 'data' in result:
                 result['data'] = [
-                    {col: d[col] for col in output_columns}
-                    for d in result['data'] if d.get('tags_key') == tags[0][1]
+                    {rev.get(col, col): d[col] for col in output_columns}
+                    for d in result['data'] if d.get('tags_key') == tagval
                 ]
             if 'meta' in result:
                 result['meta'] = [m for m in result['meta'] if m['name'] in output_columns]
