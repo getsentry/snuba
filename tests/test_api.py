@@ -805,6 +805,10 @@ class TestApi(BaseTest):
                 'orderby': '-unique_values',
             })).data)
             assert result['data'] == [{'unique_values': 1}]
+            assert result['meta'] == [{
+                'name': 'unique_values',
+                'type': 'UInt64'
+            }]
             assert result['stats']['cache_hit'] == True
             result['stats']['query_id'] == query_1_id
 

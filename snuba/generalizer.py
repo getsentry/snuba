@@ -70,12 +70,17 @@ def generalize(func):
             if 'limit' in body:
                 body['limitby'] = [body.pop('limit'), 'tags_key']
 
+            output_columns = [alias for (_, _, alias) in aggs]
+
         result, status = func(*args, **kwargs)
-        if generalized and 'data' in result:
-            result['data'] = [
-                {alias: d[alias] for (_, _, alias) in aggs}
-                for d in result['data'] if d.get('tags_key') == tags[0][1]
-            ]
+        if generalized:
+            if 'data' in result:
+                result['data'] = [
+                    {col: d[col] for col in output_columns}
+                    for d in result['data'] if d.get('tags_key') == tags[0][1]
+                ]
+            if 'meta' in result:
+                result['meta'] = [m for m in result['meta'] if m['name'] in output_columns]
 
         return result, status
     return wrapper
