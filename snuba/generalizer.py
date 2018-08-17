@@ -52,7 +52,9 @@ def generalize(func):
                 # all aggregations have aliases
                 all(alias for (_, _, alias) in aggs) and
                 # only a single unique tag is used in any tags[] conditions or aggregations
-                len(tags) == 1 and tagcol == 'tags' and tagval in settings.PROMOTED_TAGS[tagcol]
+                len(tags) == 1 and tagcol == 'tags' and tagval in settings.PROMOTED_TAGS[tagcol] and
+                # if the query already has a groupby, make sure it also has a low limit
+                (len(body['groupby']) == 0 or body['limit'] < 100)
             ):
 
             generalized = True
@@ -89,6 +91,9 @@ def generalize(func):
                 ]
             if 'meta' in result:
                 result['meta'] = [m for m in result['meta'] if m['name'] in output_columns]
+                for m in result['meta']:
+                    m['name'] = rev.get(m['name'], m['name'])
+
 
         return result, status
     return wrapper

@@ -231,7 +231,7 @@ def parse_and_run_query(validated_body, timer):
 
     limitby_clause = ''
     if 'limitby' in body:
-        limit_clause = 'LIMIT {} BY {}'.format(*body['limitby'])
+        limitby_clause = 'LIMIT {} BY {}'.format(*body['limitby'])
 
     limit_clause = ''
     if 'limit' in body:

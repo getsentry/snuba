@@ -220,6 +220,18 @@ class TestApi(BaseTest):
         }))
         assert result.status_code == 400
 
+        # LIMIT BY
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id'],
+            'aggregations': [['count()', '', 'count']],
+            'orderby': '-count',
+            'groupby': 'environment',
+            'limitby': [100, 'environment'],
+            'debug': True
+        })).data)
+        assert 'LIMIT 100 BY environment' in result['sql']
+
     def test_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
@@ -786,6 +798,7 @@ class TestApi(BaseTest):
                     ['environment', '=', 'test']
                 ],
                 'orderby': '-unique_values',
+                'limit': 200,
             })).data)
             assert result['data'] == [{'unique_values': 90}]
             assert result['stats']['cache_hit'] == False
@@ -804,6 +817,7 @@ class TestApi(BaseTest):
                     ['environment', '=', 'test']
                 ],
                 'orderby': '-unique_values',
+                'limit': 200,
             })).data)
             assert result['data'] == [{'unique_values': 1}]
             assert result['meta'] == [{
@@ -833,6 +847,7 @@ class TestApi(BaseTest):
             })).data)
             assert len(result['data']) == 30
             assert sorted([int(d['tags[sentry:release]']) for d in result['data']]) == list(range(2, self.minutes, 6))
+            assert set([c['name'] for c in result['meta']]) == set(['times_seen', 'first_seen', 'tags[sentry:release]'])
             assert result['stats']['cache_hit'] == False
             query_1_id = result['stats']['query_id']
 
@@ -858,6 +873,7 @@ class TestApi(BaseTest):
                 'tags[os.name]': 'windows',
                 'first_seen': (self.base_time + timedelta(minutes=2)).replace(tzinfo=tz.tzutc()).isoformat(),
             }]
+            assert set([c['name'] for c in result['meta']]) == set(['times_seen', 'first_seen', 'tags[os.name]'])
             assert result['stats']['cache_hit'] == True
 
         finally:
