@@ -832,7 +832,7 @@ class TestApi(BaseTest):
                 'limit': 30,
             })).data)
             assert len(result['data']) == 30
-            assert sorted([int(d['tags[sentry:release]']) for d in result['data']]) == range(2, self.minutes, 6)
+            assert sorted([int(d['tags[sentry:release]']) for d in result['data']]) == list(range(2, self.minutes, 6))
             assert result['stats']['cache_hit'] == False
             query_1_id = result['stats']['query_id']
 
