@@ -220,6 +220,24 @@ class TestApi(BaseTest):
         }))
         assert result.status_code == 400
 
+    def test_totals(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id'],
+            'totals': True,
+            'aggregations': [['count()', '', 'count']],
+            'orderby': '-count',
+            'limit': 1,
+        })).data)
+        assert len(result['data']) == 2
+        # project row
+        assert result['data'][0]['project_id'] == 1
+        assert result['data'][0]['count'] == 180
+
+        # totals row
+        assert result['data'][1]['project_id'] == 0 # totals row is zero or empty for non-aggregate cols
+        assert result['data'][1]['count'] == 180 + 90 + 60
+
         # LIMIT BY
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,

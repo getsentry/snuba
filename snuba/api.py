@@ -219,7 +219,10 @@ def parse_and_run_query(validated_body, timer):
 
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:
-        group_clause = 'GROUP BY ({})'.format(group_clause)
+        if body.get('totals', False):
+            group_clause = 'GROUP BY ({}) WITH TOTALS'.format(group_clause)
+        else:
+            group_clause = 'GROUP BY ({})'.format(group_clause)
 
     order_clause = ''
     if body.get('orderby'):
