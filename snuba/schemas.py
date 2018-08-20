@@ -86,6 +86,10 @@ QUERY_SCHEMA = {
             ],
             'default': [],
         },
+        'totals': {
+            'type': 'boolean',
+            'default': False
+        },
         'aggregations': {
             'type': 'array',
             'items': {
@@ -154,6 +158,7 @@ QUERY_SCHEMA = {
     'required': ['project'],
     'dependencies': {
         'offset': ['limit'],
+        'totals': ['groupby']
     },
     'additionalProperties': False,
 
