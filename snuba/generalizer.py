@@ -53,8 +53,11 @@ def generalize(func):
                 all(alias for (_, _, alias) in aggs) and
                 # only a single unique tag is used in any tags[] conditions or aggregations
                 len(tags) == 1 and tagcol == 'tags' and tagval in settings.PROMOTED_TAGS[tagcol] and
-                # if the query already has a groupby, make sure it also has a low limit
-                (len(body['groupby']) == 0 or body['limit'] < 100)
+
+                # Queries that already have a groupby "eg  top_tag_values" are more expensive
+                # to add a second groupby to, as we get back (#tags * #values) rows in the response.
+                # So gate these separately
+                (len(body['groupby']) == 0 or state.get_config('generalize_grouped_query', 0))
             ):
 
             generalized = True

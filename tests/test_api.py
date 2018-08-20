@@ -827,7 +827,21 @@ class TestApi(BaseTest):
             assert result['stats']['cache_hit'] == True
             result['stats']['query_id'] == query_1_id
 
-            # Example 3: top values for key
+        finally:
+            state.delete_config('use_query_id')
+            state.delete_config('use_cache')
+            state.delete_config('generalize_query')
+
+    def test_generalizer_grouped_query(self):
+        # This is the same as above, generalizing a query by adding a `GROUP BY tags_key`
+        # but these queries are already grouped by tags_value, so tend to be a bit more
+        # expensive already, and may not be worth generalizing
+        try:
+            state.set_config('use_cache', 1)
+            state.set_config('use_query_id', 1)
+            state.set_config('generalize_query', 1)
+            state.set_config('generalize_grouped_query', 1)
+
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 3,
                 'groupby': [],
@@ -880,3 +894,4 @@ class TestApi(BaseTest):
             state.delete_config('use_query_id')
             state.delete_config('use_cache')
             state.delete_config('generalize_query')
+            state.delete_config('generalize_grouped_query')
