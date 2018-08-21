@@ -77,6 +77,8 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
         return complex_condition_expr(column_name, body)
+    elif isinstance(column_name, six.string_types) and re.match('^\'.*\'$', column_name):
+        return escape_literal(Literal(column_name))
     elif column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS[body['granularity']]
     elif settings.NESTED_COL_EXPR.match(column_name):
@@ -100,6 +102,8 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
 
 def complex_condition_expr(expr, body, depth=0):
+    # TODO instead of the mutual recursion between column_expr and complex_condition_expr
+    # we should probably encapsulate all this logic in a single recursive column_expr
     if depth == 0:
         # we know the first item is a function
         ret = expr[0]
@@ -272,10 +276,12 @@ def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
     """
+    # TODO in both the Literal and the raw string cases, we need to
+    # sanitize the string from potential SQL injection.
     if isinstance(value, Literal):
         return value.literal
     elif isinstance(value, six.string_types):
-        value = value.replace("'", "\\'")  # TODO this escaping is garbage
+        value = value.replace("'", "\\'")
         return u"'{}'".format(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
