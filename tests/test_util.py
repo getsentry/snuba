@@ -51,6 +51,12 @@ class TestUtil(BaseTest):
         # Columns that need escaping
         assert column_expr('sentry:release', body.copy()) == '`sentry:release`'
 
+        # A 'column' that is actually a string literal
+        assert column_expr('\'hello world\'', body.copy()) == '\'hello world\''
+
+        # Complex expressions (function calls) involving both string and column arguments
+        assert column_expr(tuplify(['concat', ['a', '\':\'', 'b']]), body.copy()) == 'concat(a, \':\', b)'
+
     def test_alias_in_alias(self):
         body = {}
         assert column_expr('tags_key', body) == (
