@@ -356,8 +356,13 @@ def raw_query(body, sql, client, timer, stats=None):
                                 query_id=query_id
                             )
                             data, meta = scrub_ch_data(data, meta)
-                            result = {'data': data, 'meta': meta}
                             status = 200
+                            if body['totals']:
+                                assert len(data) > 0
+                                data, totals = data[:-1], data[-1]
+                                result = {'data': data, 'meta': meta, 'totals': totals}
+                            else:
+                                result = {'data': data, 'meta': meta}
 
                             logger.debug(sql)
                             timer.mark('execute')
