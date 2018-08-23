@@ -322,7 +322,6 @@ def raw_query(body, sql, client, timer, stats=None):
 
     all_confs = six.iteritems(state.get_all_configs())
     query_settings = {k.split('/', 1)[1]: v for k, v in all_confs if k.startswith('query_settings/')}
-    stats.update(query_settings)
 
     timer.mark('get_configs')
 
@@ -355,9 +354,9 @@ def raw_query(body, sql, client, timer, stats=None):
 
                         # Experiment, reduce max threads by 1 for each extra concurrent query
                         # that a project has running beyond the first one
-                        if 'max_threads' in query_settings:
+                        if 'max_threads' in query_settings and p_concurr > 1:
                             maxt = query_settings['max_threads']
-                            query_settings['max_threads'] = min(maxt, max(1, maxt - g_concurr + 1))
+                            query_settings['max_threads'] = max(1, maxt - p_concurr + 1)
 
                         try:
                             data, meta = client.execute(
@@ -398,6 +397,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         status = 429
                         result = {'error': 'rate limit exceeded'}
 
+    stats.update(query_settings)
     state.record_query({
         'request': body,
         'sql': sql,
