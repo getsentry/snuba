@@ -352,6 +352,13 @@ def raw_query(body, sql, client, timer, stats=None):
                     timer.mark('rate_limit')
 
                     if g_allowed and p_allowed:
+
+                        # Experiment, reduce max threads by 1 for each extra concurrent query
+                        # that a project has running beyond the first one
+                        if 'max_threads' in query_settings:
+                            maxt = query_settings['max_threads']
+                            query_settings['max_threads'] = min(maxt, max(1, maxt - g_concurr + 1))
+
                         try:
                             data, meta = client.execute(
                                 sql,
