@@ -11,7 +11,7 @@ Snuba assumes a Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `loca
     mkvirtualenv snuba
 
     # Run API server
-    ./bin/api
+    snuba api
 
 ## API
 
@@ -34,8 +34,7 @@ Settings are found in `settings.py`
     docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 \
       --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server
 
-    pip install -r requirements-py2.txt
-    python setup.py develop
+    pip install -e .
 
     pytest
 
