@@ -16,7 +16,8 @@ logger = logging.getLogger('snuba.state')
 rds = redis.StrictRedis(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
-    db=settings.REDIS_DB
+    db=settings.REDIS_DB,
+    socket_keepalive=True
 )
 kfk = None
 
