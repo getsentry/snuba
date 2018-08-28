@@ -23,7 +23,7 @@ class BaseTest(object):
         self.database = 'default'
         self.table = settings.CLICKHOUSE_TABLE
 
-        self.clickhouse = ClickhousePool('localhost')
+        self.clickhouse = ClickhousePool()
 
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
         self.clickhouse.execute(

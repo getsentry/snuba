@@ -37,7 +37,10 @@ Settings are found in `settings.py`
     pip install -r requirements-py2.txt
     python setup.py develop
 
-    pytest
+    # If you're using docker-machine get the VM's IP
+    export CLICKHOUSE_SERVER=$(docker-machine ip):9000
+
+    make test
 
 ## Querying
 
