@@ -33,8 +33,6 @@ queries_list = 'snuba-queries'
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
-# Amount of time we keep rate history
-rate_history_s = 3600
 
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
@@ -59,6 +57,14 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     query_id = uuid.uuid4()
     now = time.time()
+    bypass_rate_limit, rate_history_s = get_configs([
+        ('bypass_rate_limit', 0),
+        ('rate_history_sec', 3600)
+    ])
+
+    if bypass_rate_limit == 1:
+        yield (True, 0, 0)
+        return
 
     pipe = rds.pipeline(transaction=False)
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
@@ -99,6 +105,7 @@ def get_rates(bucket, rollup=60):
     now = int(time.time())
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
+    rate_history_s = get_config('rate_history_sec', 3600)
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, '({:f}'.format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
