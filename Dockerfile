@@ -1,10 +1,6 @@
 ARG PYTHON_VERSION=2
-FROM pypy:${PYTHON_VERSION}-slim
+FROM python:${PYTHON_VERSION}-slim
 
-# pypy:2-slim binary: /usr/local/bin/pypy
-# pypy:3-slim binary: /usr/local/bin/pypy3
-ARG PYPY_SUFFIX
-RUN ln -s /usr/local/bin/pypy${PYPY_SUFFIX} /usr/local/bin/python
 
 RUN groupadd -r snuba && useradd -r -g snuba snuba
 
