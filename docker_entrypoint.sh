@@ -11,11 +11,11 @@ fi
 if [ "$1" = 'api' ]; then
   if [ "$#" -gt 1 ]; then
     echo "Running Snuba API server with arguments:" "${@:2}"
-    set -- uwsgi --master --manage-script-name --pypy-wsgi snuba.api "${@:2}"
+    set -- uwsgi --master --manage-script-name --mount /=snuba.api:application "${@:2}"
   else
     _default_args="--socket /tmp/snuba.sock --http 0.0.0.0:1218 --http-keepalive"
     echo "Running Snuba API server with default arguments: $_default_args"
-    set -- uwsgi --master --manage-script-name --pypy-wsgi snuba.api $_default_args
+    set -- uwsgi --master --manage-script-name --mount /=snuba.api:application $_default_args
   fi
   set -- gosu snuba "$@"
 fi
