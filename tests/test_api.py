@@ -4,12 +4,15 @@ from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from dateutil.tz import tz
 from functools import partial
-import simplejson as json
-import six
-import time
-import uuid
 import pytest
 import pytz
+import sentry_sdk
+from sentry_sdk import Hub, Client
+import simplejson as json
+import six
+import sys
+import time
+import uuid
 
 from snuba import processor, settings, state
 
@@ -21,6 +24,8 @@ class TestApi(BaseTest):
         super(TestApi, self).setup_method(test_method)
         from snuba.api import application
         assert application.testing == True
+        application.config['PROPAGATE_EXCEPTIONS'] = False
+
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
@@ -359,14 +364,14 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 0
 
-        with pytest.raises(AssertionError):
-            # HAVING fails with no GROUP BY
-            result = json.loads(self.app.post('/query', data=json.dumps({
-                'project': 2,
-                'groupby': [],
-                'having': [['times_seen', '>', 1]],
-                'aggregations': [['count()', '', 'times_seen']],
-            })).data)
+        # HAVING fails with no GROUP BY
+        result = self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'groupby': [],
+            'having': [['times_seen', '>', 1]],
+            'aggregations': [['count()', '', 'times_seen']],
+        }))
+        assert result.status_code == 500
 
         # unknown field times_seen
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -919,3 +924,13 @@ class TestApi(BaseTest):
         response = self.app.get('/config')
         assert response.status_code == 200
         assert len(response.data) > 100
+
+    def test_exception_captured_by_sentry(self):
+        events = []
+        with Hub(Client(transport=events.append)):
+            # This endpoint should return 500 as it internally raises an exception
+            response = self.app.get('/tests/error')
+
+            assert response.status_code == 500
+            assert len(events) == 1
+            assert events[0]['exception']['values'][0]['type'] == 'ZeroDivisionError'
