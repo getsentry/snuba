@@ -69,7 +69,6 @@ pytest-watch==4.2.0
 python-dateutil==2.7.3
 pytz==2018.4
 PyYAML==3.12
-git+https://github.com/getsentry/sentry-python.git#egg=sentry-sdk
 redis==2.10.6
 requests==2.19.1
 scandir==1.7
