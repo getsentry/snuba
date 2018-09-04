@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 from hashlib import md5
 from markdown import markdown
-from raven.contrib.flask import Sentry
 import simplejson as json
 
 from snuba import generalizer, schemas, settings, state, util
