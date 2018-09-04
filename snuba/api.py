@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 from hashlib import md5
 from markdown import markdown
-import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
+from raven.contrib.flask import Sentry
 import simplejson as json
 
 from snuba import generalizer, schemas, settings, state, util
@@ -47,7 +46,7 @@ application = Flask(__name__, static_url_path='')
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
-sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[FlaskIntegration()])
+#sentry = Sentry(application, dsn=settings.SENTRY_DSN)
 
 
 @application.route('/')
@@ -309,7 +308,3 @@ if application.debug or application.testing:
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
         ensure_table_exists()
         return ('ok', 200, {'Content-Type': 'text/plain'})
-
-    @application.route('/tests/error')
-    def error():
-        1/0

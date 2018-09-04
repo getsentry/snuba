@@ -22,7 +22,6 @@ RUN set -ex; \
         libpcre3 \
         libpcre3-dev \
         liblz4-1 \
-        git \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -66,6 +65,8 @@ RUN set -ex; \
 
 # This is required in addition to the PYTHON_VERSION ARG at the top, because
 # apparently the one before FROM is not in scope here.
+ARG PYTHON_VERSION=2
+COPY requirements-py${PYTHON_VERSION}.txt ./
 RUN set -ex; \
     \
     buildDeps=' \
@@ -75,6 +76,8 @@ RUN set -ex; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
+    pip install -r requirements-py${PYTHON_VERSION}.txt; \
+    \
     apt-get purge -y --auto-remove $buildDeps
 
 COPY snuba ./snuba/
@@ -82,7 +85,7 @@ COPY setup.py README.md ./
 
 RUN chown -R snuba:snuba /usr/src/snuba/
 
-RUN pip install -e . --process-dependency-links && snuba --help
+RUN pip install -e . && snuba --help
 
 ENV CLICKHOUSE_SERVER clickhouse-server:9000
 ENV CLICKHOUSE_TABLE sentry
