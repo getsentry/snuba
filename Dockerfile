@@ -22,6 +22,7 @@ RUN set -ex; \
         libpcre3 \
         libpcre3-dev \
         liblz4-1 \
+        git \
     ; \
     rm -rf /var/lib/apt/lists/*
 
