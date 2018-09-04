@@ -915,3 +915,7 @@ class TestApi(BaseTest):
             state.delete_config('generalize_query')
             state.delete_config('generalize_grouped_query')
 
+    def test_static_page_renders(self):
+        response = self.app.get('/config')
+        assert response.status_code == 200
+        assert len(response.data) > 100
