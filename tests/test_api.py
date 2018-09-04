@@ -930,3 +930,8 @@ class TestApi(BaseTest):
             assert response.status_code == 500
             assert len(events) == 1
             assert events[0]['exception']['values'][0]['type'] == 'ZeroDivisionError'
+
+    def test_static_page_renders(self):
+        response = self.app.get('/config')
+        assert response.status_code == 200
+        assert len(response.data) > 100

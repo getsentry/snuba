@@ -3,7 +3,7 @@ import os
 
 from copy import deepcopy
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, send_file
 from hashlib import md5
 from markdown import markdown
 import sentry_sdk
@@ -58,13 +58,13 @@ def root():
 
 @application.route('/css/<path:path>')
 def send_css(path):
-    return application.send_static_file(os.path.join('css', path))
+    return send_file(os.path.join(application.static_folder, 'css', path))
 
 
 @application.route('/img/<path:path>')
 @application.route('/snuba/static/img/<path:path>')
 def send_img(path):
-    return application.send_static_file(os.path.join('img', path))
+    return send_file(os.path.join(application.static_folder, 'img', path))
 
 
 @application.route('/dashboard')
@@ -78,7 +78,7 @@ def dashboard(fmt='html'):
         }
         return (json.dumps(result), 200, {'Content-Type': 'application/json'})
     else:
-        return application.send_static_file('dashboard.html')
+        return send_file(os.path.join(application.static_folder, 'dashboard.html'))
 
 
 @application.route('/config')
@@ -91,7 +91,7 @@ def config(fmt='html'):
             state.set_configs(json.loads(request.data))
             return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
     else:
-        return application.send_static_file('config.html')
+        return send_file(os.path.join(application.static_folder, 'config.html'))
 
 
 @application.route('/health')
@@ -111,6 +111,9 @@ def health():
 
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
+@application.route('/path')
+def path():
+    return ('asdf', 200, {'Content-Type': 'application/json'})
 
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
