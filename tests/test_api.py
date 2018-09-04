@@ -914,3 +914,4 @@ class TestApi(BaseTest):
             state.delete_config('use_cache')
             state.delete_config('generalize_query')
             state.delete_config('generalize_grouped_query')
+
