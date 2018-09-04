@@ -185,7 +185,6 @@ setup(
     install_requires=(py2_reqs if sys.version_info[0] == 2 else py3_reqs),
     dependency_links= [
         'git+https://github.com/getsentry/sentry-python.git@0.2.0#egg=sentry-sdk-0.2.0',
-        #'https://github.com/getsentry/sentry-python/tarball/0.2.0#egg=sentry-sdk-0.2.0',
     ],
     entry_points={
         'console_scripts': [
