@@ -218,7 +218,7 @@ QUERY_SCHEMA = {
                 }, {
                     # Literal
                     'anyOf': [
-                        {'type': ['string', 'number', 'null']},
+                        {'type': ['string', 'number', 'boolean', 'null']},
                         {
                             'type': 'array',
                             'items': {'type': ['string', 'number']}
