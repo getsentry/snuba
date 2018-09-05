@@ -280,6 +280,8 @@ def escape_literal(value):
     # sanitize the string from potential SQL injection.
     if isinstance(value, Literal):
         return value.literal
+    elif isinstance(value, bool):
+        return int(value)
     elif isinstance(value, six.string_types):
         value = value.replace("'", "\\'")
         return u"'{}'".format(value)
