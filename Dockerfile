@@ -16,7 +16,6 @@ RUN set -ex; \
         libffi6 \
         libpcre3 \
         liblz4-1 \
-        git \
     ; \
     rm -rf /var/lib/apt/lists/*
 
