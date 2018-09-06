@@ -7,6 +7,7 @@ from flask import Flask, render_template, request
 from hashlib import md5
 from markdown import markdown
 import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 import simplejson as json
 
 from snuba import generalizer, schemas, settings, state, util
@@ -46,7 +47,7 @@ application = Flask(__name__, static_url_path='')
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
-sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[sentry_sdk.integrations.flask.FlaskIntegration()])
+sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[FlaskIntegration()])
 
 
 @application.route('/')
