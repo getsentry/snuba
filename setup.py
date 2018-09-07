@@ -182,6 +182,7 @@ setup(
     name='snuba',
     packages=find_packages(exclude=['tests']),
     zip_safe=False,
+    include_package_data=True,
     install_requires=(py2_reqs if sys.version_info[0] == 2 else py3_reqs),
     entry_points={
         'console_scripts': [
