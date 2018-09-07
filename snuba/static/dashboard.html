@@ -251,7 +251,8 @@
                     },{
                       Header: 'project',
                       width: 80,
-                      accessor: 'request.project'
+                      id: 'project',
+                      accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
                     },{
                       Header: 'referrer',
                       width: 80,
