@@ -69,6 +69,11 @@ RUN set -ex; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
+COPY snuba ./snuba/
+COPY setup.py README.md ./
+
+RUN chown -R snuba:snuba /usr/src/snuba/
+
 # Install PyPy at /pypy, for running the consumer code. Note that PyPy is built
 # against libssl1.0.0, so this is required for using the SSL module, which is
 # required to bootstrap pip. Since this is a short term stopgap it seemed better
@@ -99,7 +104,7 @@ RUN set -ex; \
     /pypy/bin/pypy get-pip.py; \
     rm -rf get-pip.py; \
     \
-    /pypy/bin/pip install -r requirements-py2.txt; \
+    /pypy/bin/pip install -e . && /pypy/bin/snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
@@ -115,15 +120,9 @@ RUN set -ex; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
+    pip install -e . && snuba --help; \
+    \
     apt-get purge -y --auto-remove $buildDeps
-
-COPY snuba ./snuba/
-COPY setup.py README.md ./
-
-RUN chown -R snuba:snuba /usr/src/snuba/
-
-RUN /pypy/bin/pip install -e . && /pypy/bin/snuba --help
-RUN pip install -e . && snuba --help
 
 ENV CLICKHOUSE_SERVER clickhouse-server:9000
 ENV CLICKHOUSE_TABLE sentry
