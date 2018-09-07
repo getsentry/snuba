@@ -37,12 +37,13 @@ def consumer(raw_events_topic, consumer_group, bootstrap_server, clickhouse_serv
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes, queued_min_messages,
              log_level, dogstatsd_host, dogstatsd_port, commit_log_topic):
 
-    from raven import Client as RavenClient
+
+    import sentry_sdk
     from snuba import util
     from snuba.clickhouse import ClickhousePool
     from snuba.consumer import BatchingKafkaConsumer, ConsumerWorker
 
-    RavenClient(dsn=settings.SENTRY_DSN)
+    sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
