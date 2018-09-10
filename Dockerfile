@@ -70,7 +70,7 @@ RUN set -ex; \
     apt-get purge -y --auto-remove $buildDeps
 
 COPY snuba ./snuba/
-COPY setup.py README.md ./
+COPY setup.py README.md MANIFEST.in ./
 
 RUN chown -R snuba:snuba /usr/src/snuba/
 

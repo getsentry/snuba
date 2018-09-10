@@ -1,0 +1,2 @@
+include setup.py MANIFEST.in README.md
+recursive-include snuba *
