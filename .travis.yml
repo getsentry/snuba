@@ -31,7 +31,7 @@ script:
 before_deploy:
   - docker pull "$IMAGE_NAME" || true
   # docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" --build-arg PYTHON_VERSION=3 --build-arg PYPY_SUFFIX=3 .
-  - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" .
+  - docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" --build-arg GIT_SHA=$(git rev-parse HEAD) .
   - docker save $IMAGE_NAME | gzip > $CACHE_FILE_SNUBA
   - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
   - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:latest"
