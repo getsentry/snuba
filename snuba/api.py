@@ -47,7 +47,11 @@ application = Flask(__name__, static_url_path='')
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 
-sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[FlaskIntegration()])
+sentry_sdk.init(
+    dsn=settings.SENTRY_DSN,
+    integrations=[FlaskIntegration()],
+    release=os.getenv('SNUBA_RELEASE')
+)
 
 
 @application.route('/')
