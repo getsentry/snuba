@@ -1,22 +1,24 @@
+from __future__ import absolute_import
+
 from confluent_kafka import Producer
 from contextlib import contextmanager
 import logging
 import random
 import re
 from redis import StrictRedis
-from rediscluster import StrictRedisCluster
 import simplejson as json
 import six
 import time
 import uuid
 
 from snuba import settings
+from snuba.redis import RetryingStrictRedisCluster
 
 
 logger = logging.getLogger('snuba.state')
 
 if settings.USE_REDIS_CLUSTER:
-    rds = StrictRedisCluster(
+    rds = RetryingStrictRedisCluster(
         startup_nodes=[{
             'host': settings.REDIS_HOST,
             'port': settings.REDIS_PORT,
