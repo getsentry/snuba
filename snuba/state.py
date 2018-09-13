@@ -1,24 +1,37 @@
+from __future__ import absolute_import
+
 from confluent_kafka import Producer
 from contextlib import contextmanager
 import logging
 import random
 import re
-import redis
+from redis import StrictRedis
 import simplejson as json
 import six
 import time
 import uuid
 
 from snuba import settings
+from snuba.redis import RetryingStrictRedisCluster
+
 
 logger = logging.getLogger('snuba.state')
 
-rds = redis.StrictRedis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    db=settings.REDIS_DB,
-    socket_keepalive=True
-)
+if settings.USE_REDIS_CLUSTER:
+    rds = RetryingStrictRedisCluster(
+        startup_nodes=[{
+            'host': settings.REDIS_HOST,
+            'port': settings.REDIS_PORT,
+        }],
+        socket_keepalive=True
+    )
+else:
+    rds = StrictRedis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        db=settings.REDIS_DB,
+        socket_keepalive=True
+    )
 kfk = None
 
 ratelimit_prefix = 'snuba-ratelimit:'
