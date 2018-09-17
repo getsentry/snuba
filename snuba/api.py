@@ -154,14 +154,14 @@ def parse_and_run_query(validated_body, timer):
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
-    where_conditions = body['conditions']
+    where_conditions = body.get('conditions', [])
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
         ('deleted', '=', 0),
-        ('project_id', 'IN', project_ids),
+        (('project_id', 'IN', project_ids) if project_ids else ('project_id', 'IS NOT NULL', None)),
     ])
-    having_conditions = body['having']
+    having_conditions = body.get('having', [])
 
     aggregate_exprs = [
         util.column_expr(col, body, alias, agg)
@@ -170,7 +170,8 @@ def parse_and_run_query(validated_body, timer):
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(util.tuplify(colname), body) for colname in body['selected_columns']]
+    selected_cols = [util.column_expr(util.tuplify(colname), body)
+                     for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
@@ -271,6 +272,30 @@ def parse_and_run_query(validated_body, timer):
     })
 
     return util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
+
+
+# Special internal endpoints that compute global aggregate data that we want to
+# use internally.
+
+@application.route('/sdk-stats', methods=['POST'])
+@util.time_request('sdk-stats')
+@util.validate_request(schemas.SDK_STATS_SCHEMA)
+def sdk_distribution(validated_body, timer):
+    validated_body['project'] = []
+    validated_body['aggregations'] = [
+        ['uniq', 'project_id', 'projects'],
+        ['count()', None, 'count'],
+    ]
+    validated_body['groupby'] = ['sdk_name', 'time']
+    result, status = parse_and_run_query(validated_body, timer)
+    return (
+        json.dumps(
+            result,
+            for_json=True,
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+        status,
+        {'Content-Type': 'application/json'}
+    )
 
 
 if application.debug or application.testing:

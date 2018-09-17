@@ -31,7 +31,7 @@ def generalize(func):
         generalized = False
         body = args[0]
         tag_cond = [
-            c for c in body['conditions']
+            c for c in body.get('conditions', [])
             if c and isinstance(c[0], six.string_types) and TAG_RE.match(c[0])
         ]
         aggs = body['aggregations']

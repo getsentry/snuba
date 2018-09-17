@@ -3,6 +3,7 @@ from flask import request
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
+from functools import wraps
 from hashlib import md5
 from itertools import chain
 import calendar
@@ -304,7 +305,7 @@ def raw_query(body, sql, client, timer, stats=None):
     fix some of the formatting issues in the result JSON
     """
     project_ids = to_list(body['project'])
-    project_id = project_ids[0] # TODO rate limit on every project in the list?
+    project_id = project_ids[0] if project_ids else 0 # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache = state.get_configs([
         ('global_per_second_limit', 1000),
@@ -369,7 +370,7 @@ def raw_query(body, sql, client, timer, stats=None):
                             )
                             data, meta = scrub_ch_data(data, meta)
                             status = 200
-                            if body['totals']:
+                            if body.get('totals', False):
                                 assert len(data) > 0
                                 data, totals = data[:-1], data[-1]
                                 result = {'data': data, 'meta': meta, 'totals': totals}
@@ -390,7 +391,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         except BaseException as ex:
                             error = six.text_type(ex)
                             status = 500
-                            logger.error("Error running query: %s\nClickhouse error: %s" % (sql, error))
+                            logger.error("Error running query: %s\n%s" % (sql, error))
                             result = {'error': error}
 
                     else:
@@ -610,6 +611,7 @@ def validate_request(schema):
     Decorator to validate that a request body matches the given schema.
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
 
             def default_encode(value):
@@ -672,6 +674,7 @@ class Timer(object):
 
 def time_request(name):
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             kwargs['timer'] = Timer(name)
             return func(*args, **kwargs)
