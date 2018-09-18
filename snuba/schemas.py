@@ -3,6 +3,27 @@ import jsonschema
 import copy
 import six
 
+SDK_STATS_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'from_date': {
+            'type': 'string',
+            'format': 'date-time',
+            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=1)).isoformat()
+        },
+        'to_date': {
+            'type': 'string',
+            'format': 'date-time',
+            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
+        },
+        'granularity': {
+            'type': 'number',
+            'default': 86400, # SDK stats query defaults to 1-day bucketing
+        },
+    },
+    'additionalProperties': False,
+}
+
 QUERY_SCHEMA = {
     'type': 'object',
     'properties': {

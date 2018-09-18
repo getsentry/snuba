@@ -146,7 +146,6 @@ def parse_and_run_query(validated_body, timer):
     ])
     body = deepcopy(validated_body)
     stats = {}
-    project_ids = util.to_list(body['project'])
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
     assert from_date <= to_date
@@ -154,14 +153,20 @@ def parse_and_run_query(validated_body, timer):
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
-    where_conditions = body['conditions']
+    where_conditions = body.get('conditions', [])
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
         ('deleted', '=', 0),
-        ('project_id', 'IN', project_ids),
     ])
-    having_conditions = body['having']
+    # NOTE: we rely entirely on the schema to make sure that regular snuba
+    # queries are required to send a project_id filter. Some other special
+    # internal query types do not require a project_id filter.
+    project_ids = util.to_list(body['project'])
+    if project_ids:
+        where_conditions.append(('project_id', 'IN', project_ids))
+
+    having_conditions = body.get('having', [])
 
     aggregate_exprs = [
         util.column_expr(col, body, alias, agg)
@@ -170,7 +175,8 @@ def parse_and_run_query(validated_body, timer):
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(util.tuplify(colname), body) for colname in body['selected_columns']]
+    selected_cols = [util.column_expr(util.tuplify(colname), body)
+                     for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
 
@@ -271,6 +277,30 @@ def parse_and_run_query(validated_body, timer):
     })
 
     return util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
+
+
+# Special internal endpoints that compute global aggregate data that we want to
+# use internally.
+
+@application.route('/internal/sdk-stats', methods=['POST'])
+@util.time_request('sdk-stats')
+@util.validate_request(schemas.SDK_STATS_SCHEMA)
+def sdk_distribution(validated_body, timer):
+    validated_body['project'] = []
+    validated_body['aggregations'] = [
+        ['uniq', 'project_id', 'projects'],
+        ['count()', None, 'count'],
+    ]
+    validated_body['groupby'] = ['sdk_name', 'time']
+    result, status = parse_and_run_query(validated_body, timer)
+    return (
+        json.dumps(
+            result,
+            for_json=True,
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+        status,
+        {'Content-Type': 'application/json'}
+    )
 
 
 if application.debug or application.testing:
