@@ -146,7 +146,6 @@ def parse_and_run_query(validated_body, timer):
     ])
     body = deepcopy(validated_body)
     stats = {}
-    project_ids = util.to_list(body['project'])
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
     assert from_date <= to_date
@@ -159,8 +158,14 @@ def parse_and_run_query(validated_body, timer):
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
         ('deleted', '=', 0),
-        (('project_id', 'IN', project_ids) if project_ids else ('project_id', 'IS NOT NULL', None)),
     ])
+    # NOTE: we rely entirely on the schema to make sure that regular snuba
+    # queries are required to send a project_id filter. Some other special
+    # internal query types do not require a project_id filter.
+    project_ids = util.to_list(body['project'])
+    if project_ids:
+        where_conditions.append(('project_id', 'IN', project_ids))
+
     having_conditions = body.get('having', [])
 
     aggregate_exprs = [
@@ -277,7 +282,7 @@ def parse_and_run_query(validated_body, timer):
 # Special internal endpoints that compute global aggregate data that we want to
 # use internally.
 
-@application.route('/sdk-stats', methods=['POST'])
+@application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 @util.validate_request(schemas.SDK_STATS_SCHEMA)
 def sdk_distribution(validated_body, timer):
