@@ -1,9 +1,10 @@
-import logging
-import simplejson as json
-import six
-import re
 from datetime import datetime, timedelta
 from hashlib import md5
+import logging
+import re
+import simplejson as json
+import six
+import _strptime # fixes _strptime deferred import issue
 
 from snuba import settings
 from snuba.util import force_bytes
