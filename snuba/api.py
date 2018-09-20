@@ -4,7 +4,6 @@ import os
 from copy import deepcopy
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request
-from hashlib import md5
 from markdown import markdown
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -39,7 +38,7 @@ else:
 def check_clickhouse():
     try:
         return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse_ro.execute('show tables'))
-    except IndexError:
+    except Exception:
         return False
 
 
@@ -101,7 +100,8 @@ def config(fmt='html'):
 @application.route('/health')
 def health():
     down_file_exists = check_down_file_exists()
-    clickhouse_health = check_clickhouse()
+    thorough = request.args.get('thorough', False)
+    clickhouse_health = check_clickhouse() if thorough else True
 
     if not down_file_exists and clickhouse_health:
         body = {'status': 'ok'}
@@ -109,8 +109,9 @@ def health():
     else:
         body = {
             'down_file_exists': down_file_exists,
-            'clickhouse_ok': clickhouse_health,
         }
+        if thorough:
+            body['clickhouse_ok'] = clickhouse_health
         status = 502
 
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
@@ -209,9 +210,9 @@ def parse_and_run_query(validated_body, timer):
     prewhere_conditions = []
     # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
     if 'issues' in body \
-        and (len(body['issues']) == 1) \
-        and (len(body['issues'][0][2]) == 1) \
-        and (len(project_ids) == 1):
+            and (len(body['issues']) == 1) \
+            and (len(body['issues'][0][2]) == 1) \
+            and (len(project_ids) == 1):
 
         hash_ = body['issues'][0][2][0]
         hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_  # strip out tombstone
@@ -346,4 +347,4 @@ if application.debug or application.testing:
 
     @application.route('/tests/error')
     def error():
-        1/0
+        1 / 0
