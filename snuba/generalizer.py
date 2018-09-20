@@ -46,7 +46,7 @@ def generalize(func):
         if (
                 state.get_config('generalize_query', 0) and
                 # no selected columns
-                body['selected_columns'] == [] and
+                body.get('selected_columns', []) == [] and
                 # at least 1 tags[] based condition
                 tag_cond and
                 # all aggregations have aliases
