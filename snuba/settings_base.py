@@ -115,6 +115,7 @@ PROMOTED_CONTEXT_COLUMNS = [
 WRITER_COLUMNS = [
     'event_id',
     'project_id',
+    'group_id',
     'timestamp',
     'deleted',
     'retention_days',
@@ -189,6 +190,7 @@ SCHEMA_COLUMNS = [
     # required
     ('event_id', 'FixedString(32)'),
     ('project_id', 'UInt64'),
+    ('group_id', 'UInt64'),
     ('timestamp', 'DateTime'),
     ('deleted', 'UInt8'),
     ('retention_days', 'UInt16'),

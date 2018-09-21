@@ -4,7 +4,7 @@ import logging
 import re
 import simplejson as json
 import six
-import _strptime # fixes _strptime deferred import issue
+import _strptime  # fixes _strptime deferred import issue
 
 from snuba import settings
 from snuba.util import force_bytes
@@ -84,6 +84,7 @@ def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
+    output['group_id'] = message['group_id']
     timestamp = datetime.strptime(message['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)

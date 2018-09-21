@@ -68,6 +68,7 @@ class TestApi(BaseTest):
                         'message': 'a message',
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
+                        'group_id': int(self.hashes[(tock * p) % len(self.hashes)][:16], 16),
                         'retention_days': settings.DEFAULT_RETENTION_DAYS,
                         'data': {
                             # Project N sends every Nth (mod len(hashes)) hash (and platform)
@@ -241,7 +242,7 @@ class TestApi(BaseTest):
         assert result['data'][0]['count'] == 180
 
         # totals row
-        assert result['totals']['project_id'] == 0 # totals row is zero or empty for non-aggregate cols
+        assert result['totals']['project_id'] == 0  # totals row is zero or empty for non-aggregate cols
         assert result['totals']['count'] == 180 + 90 + 60
 
         # LIMIT BY
@@ -585,6 +586,7 @@ class TestApi(BaseTest):
         self.write_processed_events([{
             'event_id': '9' * 32,
             'project_id': 1,
+            'group_id': 1,
             'timestamp': self.base_time,
             'deleted': 1,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
@@ -640,6 +642,7 @@ class TestApi(BaseTest):
             'event_id': '9' * 32,
             'primary_hash': '1' * 32,
             'project_id': project_id,
+            'group_id': 1,
             'datetime': self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'deleted': 1,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
@@ -673,6 +676,7 @@ class TestApi(BaseTest):
         hash = 'a' * 32
         base_event = {
             'project_id': project_id,
+            'group_id': 1,
             'event_id': uuid.uuid4().hex,
             'deleted': 0,
             'primary_hash': hash,
@@ -740,6 +744,7 @@ class TestApi(BaseTest):
             'message': 'a message',
             'platform': self.platforms[0],
             'primary_hash': hash,
+            'group_id': 1,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
             'data': {
                 'received': calendar.timegm((self.base_time).timetuple()),
