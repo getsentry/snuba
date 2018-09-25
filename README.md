@@ -9,9 +9,43 @@ Snuba assumes a Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `loca
 ## Install / Run
 
     mkvirtualenv snuba
+    workon snuba
 
     # Run API server
     snuba api
+    
+## Sentry + Snuba
+
+Add the following line to `sentry.conf.py`:
+
+    SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
+
+Create a docker volume for Clickhouse:
+
+    `docker volume create clickhouse`
+    
+Run the clickhouse server:
+    
+    docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 --name=clickhouse -v clickhouse:/var/lib/clickhouse --ulimit nofile=262144:262144 yandex/clickhouse-server:1.1
+
+This can be managed with `docker stop clickhouse` and `docker start clickhouse` to stop/start the service.
+
+Prepare Snuba environment
+
+    git clone git@github.com:getsentry/snuba.git
+    mkvirtualenv snuba
+    pip install -e .
+  
+Run Snuba
+
+    snuba api
+    
+Access raw clickhouse client (similar to psql):
+    
+    docker run --rm --net=host -it yandex/clickhouse-client
+    
+Data is written into the table `dev`: `select count() from dev;`
+
 
 ## API
 
