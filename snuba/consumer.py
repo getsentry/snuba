@@ -6,8 +6,8 @@ import time
 from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
-from . import settings
-from .processor import process_message
+from . import processor, settings
+from .clickhouse import get_shard_replica_connections
 from .writer import row_from_processed_event, write_rows
 
 
@@ -270,30 +270,42 @@ class BatchingKafkaConsumer(object):
             )
 
 
+class InvalidActionType(Exception):
+    pass
+
+
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, table_name):
+    def __init__(self, clickhouse, dist_table_name, local_table_name):
         self.clickhouse = clickhouse
-        self.table_name = table_name
+        self.dist_table_name = dist_table_name
+        self.local_table_name = local_table_name
 
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = process_message(value)
+        processed = processor.process_message(value)
         if processed is None:
             return None
 
-        message_type, key, processed_event = processed
+        action_type, processed_message = processed
 
-        processed_event['offset'] = message.offset()
-        processed_event['partition'] = message.partition()
+        if action_type == processor.INSERT:
+            processed_message['offset'] = message.offset()
+            processed_message['partition'] = message.partition()
 
-        return row_from_processed_event(processed_event)
+            return row_from_processed_event(processed_message)
+        elif action_type == processor.ALTER:
+            query = processed_message
+            for conn in get_shard_replica_connections(self.clickhouse):
+                conn.execute(query % {'local_table_name': self.local_table_name})
+        else:
+            raise InvalidActionType("Invalid action type: {}".format(action_type))
 
     def flush_batch(self, batch):
         retries = 3
         while True:
             try:
-                write_rows(self.clickhouse, self.table_name, settings.WRITER_COLUMNS, batch)
+                write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, batch)
 
                 break  # success
             except (errors.NetworkError, errors.SocketTimeoutError) as e:

@@ -14,7 +14,7 @@ class TestWriter(BaseTest):
         assert res[0][0] == 1
 
     def test_columns_match_schema(self):
-        _, _, processed = process_message(self.event)
+        _, processed = process_message(self.event)
         row = row_from_processed_event(processed)
 
         # verify that the 'count of columns from event' + 'count of columns from metadata'
@@ -26,7 +26,7 @@ class TestWriter(BaseTest):
         """Fields in a processed events are ignored if they don't have
         a corresponding Clickhouse column declared."""
 
-        _, _, processed = process_message(self.event)
+        _, processed = process_message(self.event)
 
         assert 'sdk_name' in processed
         sdk_name = processed['sdk_name']

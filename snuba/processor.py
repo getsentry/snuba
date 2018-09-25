@@ -4,7 +4,7 @@ import logging
 import re
 import simplejson as json
 import six
-import _strptime # fixes _strptime deferred import issue
+import _strptime  # fixes _strptime deferred import issue
 
 from snuba import settings
 from snuba.util import force_bytes
@@ -15,8 +15,10 @@ logger = logging.getLogger('snuba.processor')
 
 HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 ** 32 - 1
+
+# action types
 INSERT = object()
-DELETE = object()
+ALTER = object()
 
 
 class EventTooOld(Exception):
@@ -71,13 +73,6 @@ def _unicodify(s):
         return json.dumps(s)
 
     return six.text_type(s)
-
-
-def get_key(message):
-    # send the same (project_id, event_id) to the same kafka partition
-    project_id = message['project_id']
-    event_id = message['event_id']
-    return '%s:%s' % (project_id, event_id)
 
 
 def extract_required(output, message):
@@ -282,43 +277,50 @@ class InvalidMessageVersion(Exception):
 
 def process_message(message):
     """\
-    Process a raw message into a tuple of (message_type, key, processed_message):
-    * message_type: one of the sentinel values INSERT or DELETE
-    * key: string used for output partitioning
+    Process a raw message into a tuple of (action_type, processed_message):
+    * action_type: one of the sentinel values INSERT or ALTER
     * processed_message: dict representing the processed column -> value(s)
 
     Returns `None` if the event is too old to be written.
     """
-    message_type = None
+    action_type = None
 
-    try:
-        if isinstance(message, dict):
-            # deprecated unwrapped event message == insert
-            message_type = INSERT
+    if isinstance(message, dict):
+        # deprecated unwrapped event message == insert
+        action_type = INSERT
+        try:
             processed = process_insert(message)
-        elif isinstance(message, (list, tuple)) and len(message) >= 2:
-            version = message[0]
+        except EventTooOld:
+            return None
+    elif isinstance(message, (list, tuple)) and len(message) >= 2:
+        version = message[0]
 
-            if version in (0, 1):
-                # version 0: (version, type, data)
-                # version 1: (version, type, data, state)
-                type_, event = message[1:3]
-                if type_ == 'insert':
-                    message_type = INSERT
+        if version in (0, 1):
+            # version 0: (version, type, data)
+            # version 1: (version, type, data, state)
+            type_, event = message[1:3]
+            if type_ == 'insert':
+                action_type = INSERT
+                try:
                     processed = process_insert(event)
-                elif type_ == 'delete':
-                    message_type = DELETE
-                    processed = process_delete(event)
-                else:
-                    raise InvalidMessageType("Invalid message type: {}".format(type_))
+                except EventTooOld:
+                    return None
+            elif type_ == 'delete_groups':
+                action_type = ALTER
+                processed = process_delete_groups(event)
+            elif type_ == 'merge':
+                action_type = ALTER
+                processed = process_merge(event)
+            elif type_ == 'unmerge':
+                action_type = ALTER
+                processed = process_unmerge(event)
+            else:
+                raise InvalidMessageType("Invalid message type: {}".format(type_))
 
-        if message_type is None:
-            raise InvalidMessageVersion("Unknown message format: " + str(message))
+    if action_type is None:
+        raise InvalidMessageVersion("Unknown message format: " + str(message))
 
-        key = get_key(processed).encode('utf-8')
-        return (message_type, key, processed)
-    except EventTooOld:
-        return None
+    return (action_type, processed)
 
 
 def process_insert(message):
@@ -356,8 +358,40 @@ def process_insert(message):
     return processed
 
 
-def process_delete(message):
-    processed = {'deleted': 1}
-    extract_required(processed, message)
+def process_delete_groups(message):
+    # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
+    return """
+        ALTER TABLE %%(local_table_name)s
+        UPDATE deleted = 1
+        WHERE project_id = %(project_id)s
+        AND group_id IN (%(group_ids)s)
+    """ % {
+        'project_id': message['project_id'],
+        'group_ids': ", ".join(str(gid) for gid in message['group_ids']),
+    }
 
-    return processed
+
+def process_merge(message):
+    return """
+        ALTER TABLE %%(local_table_name)s
+        UPDATE group_id = %(new_group_id)s
+        WHERE project_id = %(project_id)s
+        AND event_id IN (%(event_ids)s)
+    """ % {
+        'new_group_id': message['new_group_id'],
+        'project_id': message['project_id'],
+        'event_ids': ", ".join("'%s'" % eid for eid in message['event_ids']),
+    }
+
+
+def process_unmerge(message):
+    return """
+        ALTER TABLE %%(local_table_name)s
+        UPDATE group_id = %(new_group_id)s
+        WHERE project_id = %(project_id)s
+        AND group_id = %(old_group_id)s
+    """ % {
+        'new_group_id': message['new_group_id'],
+        'project_id': message['project_id'],
+        'old_group_id': message['old_group_id'],
+    }

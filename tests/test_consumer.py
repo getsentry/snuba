@@ -1,6 +1,7 @@
 import calendar
+import re
 from datetime import datetime, timedelta
-from mock import patch
+from mock import patch, MagicMock
 import simplejson as json
 import time
 from datadog import statsd
@@ -206,7 +207,7 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -215,7 +216,7 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -229,3 +230,56 @@ class TestConsumer(BaseTest):
                 return json.dumps((0, 'insert', event))
 
         assert test_worker.process_message(FakeMessage()) is None
+
+    def test_delete_groups(self):
+        self.clickhouse.execute = MagicMock()
+
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'delete_groups', {
+                    'project_id': 1,
+                    'group_ids': [1, 2, 3],
+                }))
+
+        assert test_worker.process_message(FakeMessage()) is None
+
+        assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
+            "ALTER TABLE test UPDATE deleted = 1 WHERE project_id = 1 AND group_id IN (1, 2, 3)"
+
+    def test_merge(self):
+        self.clickhouse.execute = MagicMock()
+
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'merge', {
+                    'project_id': 1,
+                    'new_group_id': 1,
+                    'event_ids': ['a' * 32, 'b' * 32]
+                }))
+
+        assert test_worker.process_message(FakeMessage()) is None
+
+        assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
+            "ALTER TABLE test UPDATE group_id = 1 WHERE project_id = 1 AND event_id IN ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')"
+
+    def test_unmerge(self):
+        self.clickhouse.execute = MagicMock()
+
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'unmerge', {
+                    'project_id': 1,
+                    'new_group_id': 2,
+                    'old_group_id': 1,
+                }))
+
+        assert test_worker.process_message(FakeMessage()) is None
+
+        assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
+            "ALTER TABLE test UPDATE group_id = 2 WHERE project_id = 1 AND group_id = 1"

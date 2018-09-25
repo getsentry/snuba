@@ -50,7 +50,6 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-
     def _create_conn(self):
         return Client(
             host=self.host,
@@ -68,6 +67,47 @@ class ClickhousePool(object):
                     conn.disconnect()
         except queue.Empty:
             pass
+
+
+_REPLICA_CONN_CACHE = None
+
+
+def get_shard_replica_connections(clickhouse):
+    global _REPLICA_CONN_CACHE
+
+    if settings.CLICKHOUSE_CLUSTER:
+        if _REPLICA_CONN_CACHE:
+            return _REPLICA_CONN_CACHE
+
+        # ALTERs need to be run against each shard, they are then
+        # replicated within the shard itself by ClickHouse,
+        # so we discover available shard replicas by using the
+        # system.clusters table
+        replicas = clickhouse.execute(
+            """
+            SELECT shard_num, host_name, port
+            FROM system.clusters
+            WHERE cluster = %(cluster)s
+            ORDER BY shard_num, host_name
+            """,
+            {'cluster': settings.CLICKHOUSE_CLUSTER}
+        )
+
+        # pick the first replica for each shard
+        seen_shards = set()
+        replicas = [
+            seen_shards.add(row[0]) or (row[1], row[2])
+            for row in replicas
+            if row[0] not in seen_shards
+        ]
+
+        conns = [ClickhousePool(host=r[0], port=r[1]) for r in replicas]
+
+        _REPLICA_CONN_CACHE = conns
+        return _REPLICA_CONN_CACHE
+    else:
+        # local development mode, just return the (only) connection
+        return [clickhouse]
 
 
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
@@ -122,13 +162,20 @@ def get_distributed_engine(cluster, database, local_table,
     }
 
 
-LOCAL_TABLE_DEFINITION = get_table_definition(
-    settings.DEFAULT_LOCAL_TABLE, get_replicated_engine(name=settings.DEFAULT_LOCAL_TABLE))
-DIST_TABLE_DEFINITION = get_table_definition(
-    settings.DEFAULT_DIST_TABLE,
-    get_distributed_engine(
-        cluster=settings.CLICKHOUSE_CLUSTER,
-        database='default',
-        local_table=settings.DEFAULT_LOCAL_TABLE,
+def get_local_table_definition():
+    return get_table_definition(
+        settings.DEFAULT_LOCAL_TABLE, get_replicated_engine(name=settings.DEFAULT_LOCAL_TABLE)
     )
-)
+
+
+def get_dist_table_definition():
+    assert settings.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
+
+    return get_table_definition(
+        settings.DEFAULT_DIST_TABLE,
+        get_distributed_engine(
+            cluster=settings.CLICKHOUSE_CLUSTER,
+            database='default',
+            local_table=settings.DEFAULT_LOCAL_TABLE,
+        )
+    )

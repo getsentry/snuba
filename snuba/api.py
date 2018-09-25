@@ -331,7 +331,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            _, _, processed = process_message(event)
+            _, processed = process_message(event)
             row = row_from_processed_event(processed)
             rows.append(row)
 
