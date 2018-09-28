@@ -20,6 +20,14 @@ SDK_STATS_SCHEMA = {
             'type': 'number',
             'default': 86400, # SDK stats query defaults to 1-day bucketing
         },
+        'groupby': {
+            'type': 'array',
+            'items': {
+                # at the moment the only additional thing you can group by is project_id
+                'enum': ['project_id']
+            },
+            'default': [],
+        },
     },
     'additionalProperties': False,
 }
