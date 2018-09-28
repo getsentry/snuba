@@ -360,6 +360,10 @@ def process_insert(message):
 
 def process_delete_groups(message):
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
+    group_ids = message['group_ids']
+    assert len(group_ids) > 0
+    assert all(isinstance(gid, int) for gid in group_ids)
+
     return """
         ALTER TABLE %%(local_table_name)s
         UPDATE deleted = 1
@@ -367,11 +371,15 @@ def process_delete_groups(message):
         AND group_id IN (%(group_ids)s)
     """ % {
         'project_id': message['project_id'],
-        'group_ids': ", ".join(str(gid) for gid in message['group_ids']),
+        'group_ids': ", ".join(str(gid) for gid in group_ids),
     }
 
 
 def process_merge(message):
+    event_ids = message['event_ids']
+    assert len(event_ids) > 0
+    assert all(isinstance(eid, six.string_types) for eid in event_ids)
+
     return """
         ALTER TABLE %%(local_table_name)s
         UPDATE group_id = %(new_group_id)s
@@ -380,7 +388,7 @@ def process_merge(message):
     """ % {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
-        'event_ids': ", ".join("'%s'" % eid for eid in message['event_ids']),
+        'event_ids': ", ".join("'%s'" % eid for eid in event_ids),
     }
 
 
