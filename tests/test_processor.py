@@ -1,5 +1,6 @@
 import calendar
 import pytest
+import pytz
 import re
 from datetime import datetime
 
@@ -93,36 +94,68 @@ class TestProcessor(BaseTest):
         }
 
     def test_delete_groups(self):
+        timestamp = datetime.now(tz=pytz.utc)
         message = (0, 'delete_groups', {
             'project_id': 1,
             'group_ids': [1, 2, 3],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        _, processed = processor.process_message(message)
-        assert re.sub("[\n ]+", " ", processed).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE deleted = 1 WHERE project_id = 1 AND group_id IN (1, 2, 3)"
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE deleted = 1 WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'group_ids': '1, 2, 3',
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
 
     def test_merge(self):
+        timestamp = datetime.now(tz=pytz.utc)
         message = (0, 'merge', {
             'project_id': 1,
             'new_group_id': 2,
             'event_ids': ["a" * 32, "b" * 32],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        _, processed = processor.process_message(message)
-        assert re.sub("[\n ]+", " ", processed).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE group_id = 2 WHERE project_id = 1 AND event_id IN ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')"
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND event_id IN (%(event_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'event_ids': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            'new_group_id': 2,
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
 
     def test_unmerge(self):
+        timestamp = datetime.now(tz=pytz.utc)
         message = (0, 'unmerge', {
             'project_id': 1,
             'new_group_id': 2,
             'old_group_id': 1,
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        _, processed = processor.process_message(message)
-        assert re.sub("[\n ]+", " ", processed).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE group_id = 2 WHERE project_id = 1 AND group_id = 1"
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(old_group_id)s AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'new_group_id': 2,
+            'old_group_id': 1,
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
 
     def test_extract_sdk(self):
         sdk = {

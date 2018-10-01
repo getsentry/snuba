@@ -295,9 +295,10 @@ class ConsumerWorker(AbstractBatchWorker):
 
             return row_from_processed_event(processed_message)
         elif action_type == processor.ALTER:
-            query = processed_message
+            query, args = processed_message
+            args.update({'local_table_name': self.local_table_name})
             for conn in get_shard_replica_connections(self.clickhouse):
-                conn.execute(query % {'local_table_name': self.local_table_name})
+                conn.execute(query % args)
         else:
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 

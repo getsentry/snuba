@@ -2,6 +2,7 @@ import calendar
 import re
 from datetime import datetime, timedelta
 from mock import patch, MagicMock
+import pytz
 import simplejson as json
 import time
 from datadog import statsd
@@ -12,6 +13,7 @@ from confluent_kafka import TopicPartition
 from base import BaseTest
 
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer, ConsumerWorker
+from snuba.processor import PAYLOAD_DATETIME_FORMAT, CLICKHOUSE_DATETIME_FORMAT
 
 
 class FakeKafkaMessage(object):
@@ -235,41 +237,46 @@ class TestConsumer(BaseTest):
         self.clickhouse.execute = MagicMock()
 
         test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        timestamp = datetime.now(tz=pytz.utc)
 
         class FakeMessage(object):
             def value(self):
                 return json.dumps((0, 'delete_groups', {
                     'project_id': 1,
                     'group_ids': [1, 2, 3],
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 
         assert test_worker.process_message(FakeMessage()) is None
 
         assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
-            "ALTER TABLE test UPDATE deleted = 1 WHERE project_id = 1 AND group_id IN (1, 2, 3)"
+            "ALTER TABLE test UPDATE deleted = 1 WHERE project_id = 1 AND group_id IN (1, 2, 3) AND timestamp <= CAST('%s' AS DateTime)" % timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT)
 
     def test_merge(self):
         self.clickhouse.execute = MagicMock()
 
         test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        timestamp = datetime.now(tz=pytz.utc)
 
         class FakeMessage(object):
             def value(self):
                 return json.dumps((0, 'merge', {
                     'project_id': 1,
                     'new_group_id': 1,
-                    'event_ids': ['a' * 32, 'b' * 32]
+                    'event_ids': ['a' * 32, 'b' * 32],
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 
         assert test_worker.process_message(FakeMessage()) is None
 
         assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
-            "ALTER TABLE test UPDATE group_id = 1 WHERE project_id = 1 AND event_id IN ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')"
+            "ALTER TABLE test UPDATE group_id = 1 WHERE project_id = 1 AND event_id IN ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') AND timestamp <= CAST('%s' AS DateTime)" % timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT)
 
     def test_unmerge(self):
         self.clickhouse.execute = MagicMock()
 
         test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        timestamp = datetime.now(tz=pytz.utc)
 
         class FakeMessage(object):
             def value(self):
@@ -277,9 +284,10 @@ class TestConsumer(BaseTest):
                     'project_id': 1,
                     'new_group_id': 2,
                     'old_group_id': 1,
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 
         assert test_worker.process_message(FakeMessage()) is None
 
         assert re.sub("[\n ]+", " ", self.clickhouse.execute.call_args[0][0]).strip() == \
-            "ALTER TABLE test UPDATE group_id = 2 WHERE project_id = 1 AND group_id = 1"
+            "ALTER TABLE test UPDATE group_id = 2 WHERE project_id = 1 AND group_id = 1 AND timestamp <= CAST('%s' AS DateTime)" % timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT)

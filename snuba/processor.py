@@ -20,6 +20,9 @@ MAX_UINT32 = 2 ** 32 - 1
 INSERT = object()
 ALTER = object()
 
+PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 
 class EventTooOld(Exception):
     pass
@@ -79,7 +82,7 @@ def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
-    timestamp = datetime.strptime(message['datetime'], "%Y-%m-%dT%H:%M:%S.%fZ")
+    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
@@ -360,46 +363,55 @@ def process_insert(message):
 
 def process_delete_groups(message):
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
+    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
     assert len(group_ids) > 0
     assert all(isinstance(gid, int) for gid in group_ids)
 
-    return """
-        ALTER TABLE %%(local_table_name)s
+    return ("""
+        ALTER TABLE %(local_table_name)s
         UPDATE deleted = 1
         WHERE project_id = %(project_id)s
         AND group_id IN (%(group_ids)s)
-    """ % {
+        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+    """, {
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),
-    }
+        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+    })
 
 
 def process_merge(message):
+    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     event_ids = message['event_ids']
     assert len(event_ids) > 0
     assert all(isinstance(eid, six.string_types) for eid in event_ids)
 
-    return """
-        ALTER TABLE %%(local_table_name)s
+    return ("""
+        ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
         AND event_id IN (%(event_ids)s)
-    """ % {
+        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+    """, {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
         'event_ids': ", ".join("'%s'" % eid for eid in event_ids),
-    }
+        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+    })
 
 
 def process_unmerge(message):
-    return """
-        ALTER TABLE %%(local_table_name)s
+    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
+    return ("""
+        ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
         AND group_id = %(old_group_id)s
-    """ % {
+        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+    """, {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
         'old_group_id': message['old_group_id'],
-    }
+        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+    })
