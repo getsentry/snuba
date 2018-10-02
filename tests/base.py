@@ -38,6 +38,7 @@ class BaseTest(object):
         event = {
             'event_id': uuid.uuid4().hex,
             'project_id': 1,
+            'group_id': 1,
             'deleted': 0,
         }
         event['timestamp'] = dt
@@ -55,6 +56,7 @@ class BaseTest(object):
 
         return {
             'event_id': event['id'],
+            'group_id': int(primary_hash[:16], 16),
             'primary_hash': primary_hash,
             'project_id': event['project'],
             'message': event['message'],

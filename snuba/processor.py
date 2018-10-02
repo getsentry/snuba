@@ -82,6 +82,7 @@ def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
+    output['group_id'] = message['group_id']
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
