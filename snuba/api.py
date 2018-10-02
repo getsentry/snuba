@@ -331,9 +331,6 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            # Temporary hack until we get `group_id` into all Sentry tests
-            event.setdefault('group_id', 0)
-
             _, processed = process_message(event)
             row = row_from_processed_event(processed)
             rows.append(row)
