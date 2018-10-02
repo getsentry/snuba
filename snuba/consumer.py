@@ -293,21 +293,45 @@ class ConsumerWorker(AbstractBatchWorker):
             processed_message['offset'] = message.offset()
             processed_message['partition'] = message.partition()
 
-            return row_from_processed_event(processed_message)
+            result = row_from_processed_event(processed_message)
         elif action_type == processor.ALTER:
             query, args = processed_message
             args.update({'local_table_name': self.local_table_name})
-            for conn in get_shard_replica_connections(self.clickhouse):
-                conn.execute(query % args)
+            result = query % args
+
         else:
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
+        return (action_type, result)
+
     def flush_batch(self, batch):
+        """First write out all new INSERTs as a single batch, then handle any ALTER statements
+        by sending them to each shard in the cluster."""
+        inserts = []
+        alters = []
+
+        for action_type, data in batch:
+            if action_type == processor.INSERT:
+                inserts.append(data)
+            elif action_type == processor.ALTER:
+                alters.append(data)
+
+        if inserts:
+            self._clickhouse_execute_robust(
+                write_rows,
+                self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts
+            )
+
+        if alters:
+            for conn in get_shard_replica_connections(self.clickhouse):
+                for query in alters:
+                    self._clickhouse_execute_robust(conn.execute, query)
+
+    def _clickhouse_execute_robust(self, func, *args, **kwargs):
         retries = 3
         while True:
             try:
-                write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, batch)
-
+                func(*args, **kwargs)
                 break  # success
             except (errors.NetworkError, errors.SocketTimeoutError) as e:
                 logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
