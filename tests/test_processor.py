@@ -62,6 +62,7 @@ class TestProcessor(BaseTest):
         event = {
             'event_id': '1' * 32,
             'project_id': 100,
+            'group_id': 10,
             'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
         output = {}
@@ -70,6 +71,7 @@ class TestProcessor(BaseTest):
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
+            'group_id': 10,
             'timestamp': now,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
         }
@@ -103,6 +105,7 @@ class TestProcessor(BaseTest):
         message = (0, 'delete', {
             'event_id': '1' * 32,
             'project_id': 100,
+            'group_id': 10,
             'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'deleted': True,
         })
@@ -111,6 +114,7 @@ class TestProcessor(BaseTest):
         assert processed == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
+            'group_id': 10,
             'timestamp': now,
             'deleted': True,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
