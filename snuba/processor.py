@@ -386,7 +386,7 @@ def process_delete_groups(message):
     })
 
 
-def process_merge(message):
+def process_unmerge(message):
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     event_ids = message['event_ids']
     assert len(event_ids) > 0
@@ -406,17 +406,17 @@ def process_merge(message):
     })
 
 
-def process_unmerge(message):
+def process_merge(message):
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     return ("""
         ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
-        AND group_id = %(old_group_id)s
+        AND group_id = %(previous_group_id)s
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
     """, {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
-        'old_group_id': message['old_group_id'],
+        'previous_group_id': message['previous_group_id'],
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     })

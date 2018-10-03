@@ -277,7 +277,7 @@ class TestConsumer(BaseTest):
 
         assert self._await_true(group_count_query, lambda resp: resp[0][0] == 0)
 
-    def test_merge(self):
+    def test_unmerge(self):
         self.event['project_id'] = 1
         self.event['group_id'] = 1
         self.event['event_id'] = 'a' * 32
@@ -302,7 +302,7 @@ class TestConsumer(BaseTest):
 
         class FakeMessage(object):
             def value(self):
-                return json.dumps((0, 'merge', {
+                return json.dumps((0, 'unmerge', {
                     'project_id': 1,
                     'new_group_id': 2,
                     'event_ids': ['a' * 32],
@@ -315,7 +315,7 @@ class TestConsumer(BaseTest):
         assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 0)
         assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 1)
 
-    def test_unmerge(self):
+    def test_merge(self):
         self.event['project_id'] = 1
         self.event['group_id'] = 1
         self.write_raw_events(self.event)
@@ -339,10 +339,10 @@ class TestConsumer(BaseTest):
 
         class FakeMessage(object):
             def value(self):
-                return json.dumps((0, 'unmerge', {
+                return json.dumps((0, 'merge', {
                     'project_id': 1,
                     'new_group_id': 2,
-                    'old_group_id': 1,
+                    'previous_group_id': 1,
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 

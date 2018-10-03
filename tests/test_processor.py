@@ -115,9 +115,9 @@ class TestProcessor(BaseTest):
             'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
         }
 
-    def test_merge(self):
+    def test_unmerge(self):
         timestamp = datetime.now(tz=pytz.utc)
-        message = (0, 'merge', {
+        message = (0, 'unmerge', {
             'project_id': 1,
             'new_group_id': 2,
             'event_ids': ["a" * 32, "b" * 32],
@@ -137,12 +137,12 @@ class TestProcessor(BaseTest):
             'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
         }
 
-    def test_unmerge(self):
+    def test_merge(self):
         timestamp = datetime.now(tz=pytz.utc)
-        message = (0, 'unmerge', {
+        message = (0, 'merge', {
             'project_id': 1,
             'new_group_id': 2,
-            'old_group_id': 1,
+            'previous_group_id': 1,
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
@@ -151,10 +151,10 @@ class TestProcessor(BaseTest):
 
         query, args = processed
         assert re.sub("[\n ]+", " ", query).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(old_group_id)s AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
         assert args == {
             'new_group_id': 2,
-            'old_group_id': 1,
+            'previous_group_id': 1,
             'project_id': 1,
             'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
         }
