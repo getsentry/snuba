@@ -366,6 +366,10 @@ def process_delete_groups(message):
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
+
+    if isinstance(group_ids, (int, long)):
+        group_ids = [group_ids]
+
     assert len(group_ids) > 0
     assert all(isinstance(gid, int) for gid in group_ids)
 
