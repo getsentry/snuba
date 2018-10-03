@@ -367,7 +367,7 @@ def process_delete_groups(message):
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
 
-    if isinstance(group_ids, (int, long)):
+    if isinstance(group_ids, six.integer_types):
         group_ids = [group_ids]
 
     assert len(group_ids) > 0
