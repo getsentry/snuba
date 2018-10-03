@@ -6,8 +6,8 @@ import time
 from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
-from . import settings
-from .processor import process_message
+from . import processor, settings
+from .clickhouse import get_shard_replica_connections
 from .writer import row_from_processed_event, write_rows
 
 
@@ -270,31 +270,68 @@ class BatchingKafkaConsumer(object):
             )
 
 
+class InvalidActionType(Exception):
+    pass
+
+
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, table_name):
+    def __init__(self, clickhouse, dist_table_name, local_table_name):
         self.clickhouse = clickhouse
-        self.table_name = table_name
+        self.dist_table_name = dist_table_name
+        self.local_table_name = local_table_name
 
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = process_message(value)
+        processed = processor.process_message(value)
         if processed is None:
             return None
 
-        message_type, key, processed_event = processed
+        action_type, processed_message = processed
 
-        processed_event['offset'] = message.offset()
-        processed_event['partition'] = message.partition()
+        if action_type == processor.INSERT:
+            processed_message['offset'] = message.offset()
+            processed_message['partition'] = message.partition()
 
-        return row_from_processed_event(processed_event)
+            result = row_from_processed_event(processed_message)
+        elif action_type == processor.ALTER:
+            query, args = processed_message
+            args.update({'local_table_name': self.local_table_name})
+            result = query % args
+
+        else:
+            raise InvalidActionType("Invalid action type: {}".format(action_type))
+
+        return (action_type, result)
 
     def flush_batch(self, batch):
+        """First write out all new INSERTs as a single batch, then handle any ALTER statements
+        by sending them to each shard in the cluster."""
+        inserts = []
+        alters = []
+
+        for action_type, data in batch:
+            if action_type == processor.INSERT:
+                inserts.append(data)
+            elif action_type == processor.ALTER:
+                alters.append(data)
+
+        if inserts:
+            self._clickhouse_execute_robust(
+                write_rows,
+                self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts
+            )
+
+        if alters:
+            for conn in get_shard_replica_connections(self.clickhouse):
+                for query in alters:
+                    self._clickhouse_execute_robust(conn.execute, query)
+
+    def _clickhouse_execute_robust(self, func, *args, **kwargs):
         retries = 3
         while True:
             try:
-                write_rows(self.clickhouse, self.table_name, settings.WRITER_COLUMNS, batch)
-
+                func(*args, **kwargs)
                 break  # success
             except (errors.NetworkError, errors.SocketTimeoutError) as e:
                 logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))

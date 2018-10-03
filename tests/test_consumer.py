@@ -1,6 +1,8 @@
 import calendar
+import re
 from datetime import datetime, timedelta
-from mock import patch
+from mock import patch, MagicMock
+import pytz
 import simplejson as json
 import time
 from datadog import statsd
@@ -11,6 +13,7 @@ from confluent_kafka import TopicPartition
 from base import BaseTest
 
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer, ConsumerWorker
+from snuba.processor import PAYLOAD_DATETIME_FORMAT, CLICKHOUSE_DATETIME_FORMAT
 
 
 class FakeKafkaMessage(object):
@@ -206,7 +209,7 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -215,7 +218,7 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -229,3 +232,122 @@ class TestConsumer(BaseTest):
                 return json.dumps((0, 'insert', event))
 
         assert test_worker.process_message(FakeMessage()) is None
+
+    def _await_true(self, query, test_fn, timeout=5.0):
+        """ALTERs in ClickHouse run async, so to keep tests fast we run the
+        assert query repeatedly for N seconds and exit early if it True,
+        otherwise exit False."""
+
+        started = time.time()
+        while (time.time() - started) < timeout:
+            resp = self.clickhouse.execute(query)
+            if test_fn(resp):
+                return True
+            time.sleep(0.1)
+        return False
+
+    def test_delete_groups(self):
+        self.event['project_id'] = 1
+        self.event['group_id'] = 1
+        self.write_raw_events(self.event)
+
+        group_count_query = """
+            SELECT count()
+            FROM %s
+            WHERE project_id = 1
+            AND group_id = 1
+            AND deleted = 0
+        """ % self.table
+
+        assert self._await_true(group_count_query, lambda resp: resp[0][0] == 1)
+
+        timestamp = datetime.now(tz=pytz.utc)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'delete_groups', {
+                    'project_id': 1,
+                    'group_ids': [1],
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                }))
+
+        processed = test_worker.process_message(FakeMessage())
+        test_worker.flush_batch([processed])
+
+        assert self._await_true(group_count_query, lambda resp: resp[0][0] == 0)
+
+    def test_merge(self):
+        self.event['project_id'] = 1
+        self.event['group_id'] = 1
+        self.event['event_id'] = 'a' * 32
+        self.write_raw_events(self.event)
+
+        base_query = """
+            SELECT count()
+            FROM %s
+            WHERE project_id = 1
+            AND group_id = %s
+            AND deleted = 0
+        """
+
+        group1_count_query = base_query % (self.table, 1)
+        group2_count_query = base_query % (self.table, 2)
+
+        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 1)
+        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 0)
+
+        timestamp = datetime.now(tz=pytz.utc)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'merge', {
+                    'project_id': 1,
+                    'new_group_id': 2,
+                    'event_ids': ['a' * 32],
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                }))
+
+        processed = test_worker.process_message(FakeMessage())
+        test_worker.flush_batch([processed])
+
+        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 0)
+        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 1)
+
+    def test_unmerge(self):
+        self.event['project_id'] = 1
+        self.event['group_id'] = 1
+        self.write_raw_events(self.event)
+
+        base_query = """
+            SELECT count()
+            FROM %s
+            WHERE project_id = 1
+            AND group_id = %s
+            AND deleted = 0
+        """
+
+        group1_count_query = base_query % (self.table, 1)
+        group2_count_query = base_query % (self.table, 2)
+
+        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 1)
+        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 0)
+
+        timestamp = datetime.now(tz=pytz.utc)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((0, 'unmerge', {
+                    'project_id': 1,
+                    'new_group_id': 2,
+                    'old_group_id': 1,
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                }))
+
+        processed = test_worker.process_message(FakeMessage())
+        test_worker.flush_batch([processed])
+
+        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 0)
+        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 1)

@@ -1,29 +1,24 @@
 import calendar
 import pytest
-import sys
+import pytz
+import re
 from datetime import datetime
 
 from base import BaseTest
 
 from snuba import processor, settings
-from snuba.processor import InvalidMessageType, InvalidMessageVersion, get_key, process_message
+from snuba.processor import InvalidMessageType, InvalidMessageVersion, process_message
 
 
 class TestProcessor(BaseTest):
-    def test_key(self):
-        key = get_key(self.event)
-
-        assert self.event['event_id'] in key
-        assert str(self.event['project_id']) in key
-
     def test_simple(self):
-        _, _, processed = process_message(self.event)
+        _, processed = process_message(self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
     def test_simple_version_0(self):
-        _, _, processed = process_message((0, 'insert', self.event))
+        _, processed = process_message((0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
@@ -46,14 +41,14 @@ class TestProcessor(BaseTest):
     def test_unexpected_obj(self):
         self.event['message'] = {'what': 'why is this in the message'}
 
-        _, _, processed = process_message(self.event)
+        _, processed = process_message(self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
 
-        _, _, processed = process_message(self.event)
+        _, processed = process_message(self.event)
 
         assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
@@ -100,24 +95,68 @@ class TestProcessor(BaseTest):
             'version': '6',
         }
 
-    def test_deleted(self):
-        now = datetime.utcnow()
-        message = (0, 'delete', {
-            'event_id': '1' * 32,
-            'project_id': 100,
-            'group_id': 10,
-            'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'deleted': True,
+    def test_delete_groups(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (0, 'delete_groups', {
+            'project_id': 1,
+            'group_ids': [1, 2, 3],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        _, _, processed = processor.process_message(message)
-        assert processed == {
-            'event_id': '11111111111111111111111111111111',
-            'project_id': 100,
-            'group_id': 10,
-            'timestamp': now,
-            'deleted': True,
-            'retention_days': settings.DEFAULT_RETENTION_DAYS,
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE deleted = 1 WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'group_ids': '1, 2, 3',
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+    def test_merge(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (0, 'merge', {
+            'project_id': 1,
+            'new_group_id': 2,
+            'event_ids': ["a" * 32, "b" * 32],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        })
+
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND event_id IN (%(event_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'event_ids': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            'new_group_id': 2,
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+    def test_unmerge(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (0, 'unmerge', {
+            'project_id': 1,
+            'new_group_id': 2,
+            'old_group_id': 1,
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        })
+
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(old_group_id)s AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'new_group_id': 2,
+            'old_group_id': 1,
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
         }
 
     def test_extract_sdk(self):

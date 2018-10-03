@@ -18,6 +18,8 @@ from snuba import settings
               help='Clickhouse server to write to.')
 @click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
               help='Clickhouse table name for the "meta" Distributed table.')
+@click.option('--local-table-name', default=settings.DEFAULT_LOCAL_TABLE,
+              help='Clickhouse table name for the local replicated table that the dist table targets.')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
               help='Max number of messages to batch in memory before writing to Kafka.')
 @click.option('--max-batch-time-ms', default=settings.DEFAULT_MAX_BATCH_TIME_MS,
@@ -34,9 +36,8 @@ from snuba import settings
 @click.option('--commit-log-topic', default='snuba-commit-log',
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 def consumer(raw_events_topic, consumer_group, bootstrap_server, clickhouse_server, distributed_table_name,
-             max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes, queued_min_messages,
-             log_level, dogstatsd_host, dogstatsd_port, commit_log_topic):
-
+             local_table_name, max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
+             queued_min_messages, log_level, dogstatsd_host, dogstatsd_port, commit_log_topic):
 
     import sentry_sdk
     from snuba import util
@@ -54,7 +55,7 @@ def consumer(raw_events_topic, consumer_group, bootstrap_server, clickhouse_serv
 
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ConsumerWorker(clickhouse, distributed_table_name),
+        worker=ConsumerWorker(clickhouse, distributed_table_name, local_table_name),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
