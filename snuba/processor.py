@@ -366,6 +366,10 @@ def process_insert(message):
 
 
 def process_delete_groups(message):
+    # HACK: disable ALTERs while we investigate other options
+    # that hopefully involve less mutations
+    return None
+
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
@@ -390,7 +394,7 @@ def process_delete_groups(message):
 
 
 def process_unmerge(message):
-    # HACK: disable unmerge ALTERs while we investigate other options
+    # HACK: disable ALTERs while we investigate other options
     # that hopefully involve less mutations
     return None
 
@@ -414,6 +418,10 @@ def process_unmerge(message):
 
 
 def process_merge(message):
+    # HACK: disable ALTERs while we investigate other options
+    # that hopefully involve less mutations
+    return None
+
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     return ("""
         ALTER TABLE %(local_table_name)s
