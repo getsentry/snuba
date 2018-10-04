@@ -275,10 +275,11 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, local_table_name):
+    def __init__(self, clickhouse, dist_table_name, local_table_name, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
         self.local_table_name = local_table_name
+        self.metrics = metrics
 
     def process_message(self, message):
         value = json.loads(message.value())
@@ -322,10 +323,16 @@ class ConsumerWorker(AbstractBatchWorker):
                 self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts
             )
 
+            if self.metrics:
+                self.metrics.timing('inserts', len(inserts))
+
         if alters:
             for conn in get_shard_replica_connections(self.clickhouse):
                 for query in alters:
                     self._clickhouse_execute_robust(conn.execute, query)
+
+            if self.metrics:
+                self.metrics.timing('alters', len(alters))
 
     def _clickhouse_execute_robust(self, func, *args, **kwargs):
         retries = 3
