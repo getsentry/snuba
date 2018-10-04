@@ -95,69 +95,78 @@ class TestProcessor(BaseTest):
             'version': '6',
         }
 
-    # def test_delete_groups(self):
-    #     timestamp = datetime.now(tz=pytz.utc)
-    #     message = (0, 'delete_groups', {
-    #         'project_id': 1,
-    #         'group_ids': [1, 2, 3],
-    #         'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-    #     })
+    def test_v1_delete_groups_skipped(self):
+        assert processor.process_message((1, 'delete_groups', {})) is None
 
-    #     action_type, processed = processor.process_message(message)
-    #     assert action_type is processor.ALTER
+    def test_v1_merge_skipped(self):
+        assert processor.process_message((1, 'merge', {})) is None
 
-    #     query, args = processed
-    #     assert re.sub("[\n ]+", " ", query).strip() == \
-    #         "ALTER TABLE %(local_table_name)s UPDATE deleted = 1 WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
-    #     assert args == {
-    #         'group_ids': '1, 2, 3',
-    #         'project_id': 1,
-    #         'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
-    #     }
+    def test_v1_unmerge_skipped(self):
+        assert processor.process_message((1, 'unmerge', {})) is None
 
-    # def test_unmerge(self):
-    #     timestamp = datetime.now(tz=pytz.utc)
-    #     message = (0, 'unmerge', {
-    #         'project_id': 1,
-    #         'new_group_id': 2,
-    #         'event_ids': ["a" * 32, "b" * 32],
-    #         'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-    #     })
+    def test_delete_groups(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (2, 'delete_groups', {
+            'project_id': 1,
+            'group_ids': [1, 2, 3],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        })
 
-    #     action_type, processed = processor.process_message(message)
-    #     assert action_type is processor.ALTER
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
 
-    #     query, args = processed
-    #     assert re.sub("[\n ]+", " ", query).strip() == \
-    #         "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND event_id IN (%(event_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
-    #     assert args == {
-    #         'event_ids': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
-    #         'new_group_id': 2,
-    #         'project_id': 1,
-    #         'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
-    #     }
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE deleted = 1 WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'group_ids': '1, 2, 3',
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
 
-    # def test_merge(self):
-    #     timestamp = datetime.now(tz=pytz.utc)
-    #     message = (0, 'merge', {
-    #         'project_id': 1,
-    #         'new_group_id': 2,
-    #         'previous_group_id': 1,
-    #         'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-    #     })
+    def test_unmerge(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (2, 'unmerge', {
+            'project_id': 1,
+            'new_group_id': 2,
+            'hashes': ["a" * 32, "b" * 32],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        })
 
-    #     action_type, processed = processor.process_message(message)
-    #     assert action_type is processor.ALTER
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
 
-    #     query, args = processed
-    #     assert re.sub("[\n ]+", " ", query).strip() == \
-    #         "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
-    #     assert args == {
-    #         'new_group_id': 2,
-    #         'previous_group_id': 1,
-    #         'project_id': 1,
-    #         'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
-    #     }
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'hashes': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            'new_group_id': 2,
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+    def test_merge(self):
+        timestamp = datetime.now(tz=pytz.utc)
+        message = (2, 'merge', {
+            'project_id': 1,
+            'new_group_id': 2,
+            'previous_group_ids': [1, 2],
+            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+        })
+
+        action_type, processed = processor.process_message(message)
+        assert action_type is processor.ALTER
+
+        query, args = processed
+        assert re.sub("[\n ]+", " ", query).strip() == \
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+        assert args == {
+            'new_group_id': 2,
+            'previous_group_ids': ", ".join(str(gid) for gid in [1, 2]),
+            'project_id': 1,
+            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+        }
 
     def test_extract_sdk(self):
         sdk = {

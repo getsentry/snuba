@@ -299,9 +299,11 @@ def process_message(message):
     elif isinstance(message, (list, tuple)) and len(message) >= 2:
         version = message[0]
 
-        if version in (0, 1):
-            # version 0: (version, type, data)
-            # version 1: (version, type, data, state)
+        if version in (0, 1, 2):
+            # version 0: (0, 'insert', data)
+            # version 1: (1, type, data, [state])
+            #   NOTE: types 'delete_groups', 'merge' and 'unmerge' are ignored
+            # version 2: (2, type, data, [state])
             type_, event = message[1:3]
             if type_ == 'insert':
                 action_type = INSERT
@@ -309,17 +311,24 @@ def process_message(message):
                     processed = process_insert(event)
                 except EventTooOld:
                     return None
-            elif type_ == 'delete_groups':
-                action_type = ALTER
-                processed = process_delete_groups(event)
-            elif type_ == 'merge':
-                action_type = ALTER
-                processed = process_merge(event)
-            elif type_ == 'unmerge':
-                action_type = ALTER
-                processed = process_unmerge(event)
             else:
-                raise InvalidMessageType("Invalid message type: {}".format(type_))
+                if version in (0, 1):
+                    if type_ in ('delete_groups', 'merge', 'unmerge'):
+                        return None
+                    else:
+                        raise InvalidMessageType("Invalid message type: {}".format(type_))
+                elif version == 2:
+                    if type_ == 'delete_groups':
+                        action_type = ALTER
+                        processed = process_delete_groups(event)
+                    elif type_ == 'merge':
+                        action_type = ALTER
+                        processed = process_merge(event)
+                    elif type_ == 'unmerge':
+                        action_type = ALTER
+                        processed = process_unmerge(event)
+                    else:
+                        raise InvalidMessageType("Invalid message type: {}".format(type_))
 
     if action_type is None:
         raise InvalidMessageVersion("Unknown message format: " + str(message))
@@ -366,19 +375,11 @@ def process_insert(message):
 
 
 def process_delete_groups(message):
-    # HACK: disable ALTERs while we investigate other options
-    # that hopefully involve less mutations
-    return None
-
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
-
-    if isinstance(group_ids, six.integer_types):
-        group_ids = [group_ids]
-
     assert len(group_ids) > 0
-    assert all(isinstance(gid, int) for gid in group_ids)
+    assert all(isinstance(gid, six.integer_types) for gid in group_ids)
 
     return ("""
         ALTER TABLE %(local_table_name)s
@@ -394,44 +395,40 @@ def process_delete_groups(message):
 
 
 def process_unmerge(message):
-    # HACK: disable ALTERs while we investigate other options
-    # that hopefully involve less mutations
-    return None
-
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
-    event_ids = message['event_ids']
-    assert len(event_ids) > 0
-    assert all(isinstance(eid, six.string_types) for eid in event_ids)
+    hashes = message['hashes']
+    assert len(hashes) > 0
+    assert all(isinstance(h, six.string_types) for h in hashes)
 
     return ("""
         ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
-        AND event_id IN (%(event_ids)s)
+        AND primary_hash IN (%(hashes)s)
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
     """, {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
-        'event_ids': ", ".join("'%s'" % eid for eid in event_ids),
+        'hashes': ", ".join("'%s'" % h for h in hashes),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     })
 
 
 def process_merge(message):
-    # HACK: disable ALTERs while we investigate other options
-    # that hopefully involve less mutations
-    return None
-
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
+    previous_group_ids = message['previous_group_ids']
+    assert len(previous_group_ids) > 0
+    assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
+
     return ("""
         ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
-        AND group_id = %(previous_group_id)s
+        AND group_id IN (%(previous_group_ids)s)
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
     """, {
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
-        'previous_group_id': message['previous_group_id'],
+        'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     })
