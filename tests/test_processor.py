@@ -115,27 +115,27 @@ class TestProcessor(BaseTest):
             'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
         }
 
-    def test_unmerge(self):
-        timestamp = datetime.now(tz=pytz.utc)
-        message = (0, 'unmerge', {
-            'project_id': 1,
-            'new_group_id': 2,
-            'event_ids': ["a" * 32, "b" * 32],
-            'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
-        })
+    # def test_unmerge(self):
+    #     timestamp = datetime.now(tz=pytz.utc)
+    #     message = (0, 'unmerge', {
+    #         'project_id': 1,
+    #         'new_group_id': 2,
+    #         'event_ids': ["a" * 32, "b" * 32],
+    #         'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
+    #     })
 
-        action_type, processed = processor.process_message(message)
-        assert action_type is processor.ALTER
+    #     action_type, processed = processor.process_message(message)
+    #     assert action_type is processor.ALTER
 
-        query, args = processed
-        assert re.sub("[\n ]+", " ", query).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND event_id IN (%(event_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
-        assert args == {
-            'event_ids': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
-            'new_group_id': 2,
-            'project_id': 1,
-            'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
-        }
+    #     query, args = processed
+    #     assert re.sub("[\n ]+", " ", query).strip() == \
+    #         "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND event_id IN (%(event_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+    #     assert args == {
+    #         'event_ids': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+    #         'new_group_id': 2,
+    #         'project_id': 1,
+    #         'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
+    #     }
 
     def test_merge(self):
         timestamp = datetime.now(tz=pytz.utc)

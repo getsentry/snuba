@@ -324,6 +324,9 @@ def process_message(message):
     if action_type is None:
         raise InvalidMessageVersion("Unknown message format: " + str(message))
 
+    if processed is None:
+        return None
+
     return (action_type, processed)
 
 
@@ -387,6 +390,10 @@ def process_delete_groups(message):
 
 
 def process_unmerge(message):
+    # HACK: disable unmerge ALTERs while we investigate other options
+    # that hopefully involve less mutations
+    return None
+
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     event_ids = message['event_ids']
     assert len(event_ids) > 0
