@@ -304,6 +304,7 @@ class TestConsumer(BaseTest):
             def value(self):
                 return json.dumps((2, 'end_unmerge', {
                     'project_id': 1,
+                    'previous_group_id': 1,
                     'new_group_id': 2,
                     'hashes': ['a' * 32],
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),

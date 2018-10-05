@@ -406,9 +406,11 @@ def process_unmerge(message):
         ALTER TABLE %(local_table_name)s
         UPDATE group_id = %(new_group_id)s
         WHERE project_id = %(project_id)s
+        AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
     """, {
+        'previous_group_id': message['previous_group_id'],
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
         'hashes': ", ".join("'%s'" % h for h in hashes),

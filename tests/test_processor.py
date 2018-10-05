@@ -128,6 +128,7 @@ class TestProcessor(BaseTest):
         timestamp = datetime.now(tz=pytz.utc)
         message = (2, 'end_unmerge', {
             'project_id': 1,
+            'previous_group_id': 1,
             'new_group_id': 2,
             'hashes': ["a" * 32, "b" * 32],
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
@@ -138,9 +139,10 @@ class TestProcessor(BaseTest):
 
         query, args = processed
         assert re.sub("[\n ]+", " ", query).strip() == \
-            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
+            "ALTER TABLE %(local_table_name)s UPDATE group_id = %(new_group_id)s WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime)"
         assert args == {
             'hashes': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
+            'previous_group_id': 1,
             'new_group_id': 2,
             'project_id': 1,
             'timestamp': timestamp.strftime(processor.CLICKHOUSE_DATETIME_FORMAT),
