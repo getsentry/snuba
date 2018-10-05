@@ -318,13 +318,15 @@ def process_message(message):
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
                 elif version == 2:
-                    if type_ == 'delete_groups':
+                    if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
+                        return None
+                    elif type_ == 'end_delete_groups':
                         action_type = ALTER
                         processed = process_delete_groups(event)
-                    elif type_ == 'merge':
+                    elif type_ == 'end_merge':
                         action_type = ALTER
                         processed = process_merge(event)
-                    elif type_ == 'unmerge':
+                    elif type_ == 'end_unmerge':
                         action_type = ALTER
                         processed = process_unmerge(event)
                     else:

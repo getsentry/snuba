@@ -106,7 +106,7 @@ class TestProcessor(BaseTest):
 
     def test_delete_groups(self):
         timestamp = datetime.now(tz=pytz.utc)
-        message = (2, 'delete_groups', {
+        message = (2, 'end_delete_groups', {
             'project_id': 1,
             'group_ids': [1, 2, 3],
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
@@ -126,7 +126,7 @@ class TestProcessor(BaseTest):
 
     def test_unmerge(self):
         timestamp = datetime.now(tz=pytz.utc)
-        message = (2, 'unmerge', {
+        message = (2, 'end_unmerge', {
             'project_id': 1,
             'new_group_id': 2,
             'hashes': ["a" * 32, "b" * 32],
@@ -148,7 +148,7 @@ class TestProcessor(BaseTest):
 
     def test_merge(self):
         timestamp = datetime.now(tz=pytz.utc)
-        message = (2, 'merge', {
+        message = (2, 'end_merge', {
             'project_id': 1,
             'new_group_id': 2,
             'previous_group_ids': [1, 2],

@@ -266,7 +266,7 @@ class TestConsumer(BaseTest):
 
         class FakeMessage(object):
             def value(self):
-                return json.dumps((2, 'delete_groups', {
+                return json.dumps((2, 'end_delete_groups', {
                     'project_id': 1,
                     'group_ids': [1],
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
@@ -302,7 +302,7 @@ class TestConsumer(BaseTest):
 
         class FakeMessage(object):
             def value(self):
-                return json.dumps((2, 'unmerge', {
+                return json.dumps((2, 'end_unmerge', {
                     'project_id': 1,
                     'new_group_id': 2,
                     'hashes': ['a' * 32],
@@ -339,7 +339,7 @@ class TestConsumer(BaseTest):
 
         class FakeMessage(object):
             def value(self):
-                return json.dumps((2, 'merge', {
+                return json.dumps((2, 'end_merge', {
                     'project_id': 1,
                     'new_group_id': 2,
                     'previous_group_ids': [1],
