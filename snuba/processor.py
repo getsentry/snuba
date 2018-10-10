@@ -312,7 +312,9 @@ def process_message(message):
                 except EventTooOld:
                     return None
             else:
-                if version in (0, 1):
+                if version == 0:
+                    raise InvalidMessageType("Invalid message type: {}".format(type_))
+                elif version == 1:
                     if type_ in ('delete_groups', 'merge', 'unmerge'):
                         return None
                     else:
