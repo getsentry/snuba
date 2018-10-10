@@ -320,6 +320,9 @@ def process_message(message):
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
                 elif version == 2:
+                    # HACK: temporarily incorrently sent these message types from Sentry
+                    if type_ in ('delete_groups', 'merge'):
+                        return None
                     if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
                         return None
                     elif type_ == 'end_delete_groups':
