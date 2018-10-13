@@ -323,9 +323,12 @@ def process_message(message):
                     # HACK: temporarily incorrently sent these message types from Sentry
                     if type_ in ('delete_groups', 'merge'):
                         return None
+
+                    # For now we don't care about start events
                     if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
                         return None
-                    elif type_ == 'end_delete_groups':
+
+                    if type_ == 'end_delete_groups':
                         action_type = ALTER
                         processed = process_delete_groups(event)
                     elif type_ == 'end_merge':
@@ -382,6 +385,9 @@ def process_insert(message):
 
 
 def process_delete_groups(message):
+    if not settings.CLICKHOUSE_ALTERS_ENABLED:
+        return None
+
     # NOTE: This could also use ALTER DELETE but deletes take a lot more work than updates in ClickHouse
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     group_ids = message['group_ids']
@@ -402,6 +408,9 @@ def process_delete_groups(message):
 
 
 def process_unmerge(message):
+    if not settings.CLICKHOUSE_ALTERS_ENABLED:
+        return None
+
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     hashes = message['hashes']
     assert len(hashes) > 0
@@ -424,6 +433,9 @@ def process_unmerge(message):
 
 
 def process_merge(message):
+    if not settings.CLICKHOUSE_ALTERS_ENABLED:
+        return None
+
     timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
     previous_group_ids = message['previous_group_ids']
     assert len(previous_group_ids) > 0
