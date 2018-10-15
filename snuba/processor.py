@@ -78,6 +78,12 @@ def _unicodify(s):
     return six.text_type(s)
 
 
+def _hashify(h):
+    if HASH_RE.match(h):
+        return h
+    return md5(force_bytes(h)).hexdigest()
+
+
 def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
@@ -102,10 +108,7 @@ def extract_required(output, message):
 def extract_common(output, message, data):
     output['platform'] = _unicodify(message['platform'])
     output['message'] = _unicodify(message['message'])
-    primary_hash = message['primary_hash']
-    if not HASH_RE.match(primary_hash):
-        primary_hash = md5(force_bytes(primary_hash)).hexdigest()
-    output['primary_hash'] = primary_hash
+    output['primary_hash'] = _hashify(message['primary_hash'])
     output['received'] = datetime.utcfromtimestamp(int(data['received']))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
@@ -427,7 +430,7 @@ def process_unmerge(message):
         'previous_group_id': message['previous_group_id'],
         'new_group_id': message['new_group_id'],
         'project_id': message['project_id'],
-        'hashes': ", ".join("'%s'" % h for h in hashes),
+        'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     })
 
