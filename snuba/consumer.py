@@ -297,7 +297,6 @@ class ConsumerWorker(AbstractBatchWorker):
             query, args = processed_message
             args.update({'dist_table_name': self.dist_table_name})
             result = query % args
-
         else:
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
@@ -326,10 +325,12 @@ class ConsumerWorker(AbstractBatchWorker):
 
         if replacements:
             for query in replacements:
+                t = time.time()
                 self._clickhouse_execute_robust(self.clickhouse.execute, query)
-
-            if self.metrics:
-                self.metrics.timing('replacements', len(replacements))
+                duration = int((time.time() - t) * 1000)
+                logger.info("Replacement took %sms" % duration)
+                if self.metrics:
+                    self.metrics.timing('replacements', duration)
 
     def _clickhouse_execute_robust(self, func, *args, **kwargs):
         retries = 3
