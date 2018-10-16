@@ -326,7 +326,11 @@ class ConsumerWorker(AbstractBatchWorker):
         if replacements:
             for query in replacements:
                 t = time.time()
-                self._clickhouse_execute_robust(self.clickhouse.execute, query)
+                try:
+                    self._clickhouse_execute_robust(self.clickhouse.execute, query)
+                except Exception:
+                    # HACK: Temporary before we have batching
+                    logger.error("BAD QUERY: %s" % query)
                 duration = int((time.time() - t) * 1000)
                 logger.info("Replacement took %sms" % duration)
                 if self.metrics:
