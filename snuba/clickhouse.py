@@ -69,47 +69,6 @@ class ClickhousePool(object):
             pass
 
 
-_REPLICA_CONN_CACHE = None
-
-
-def get_shard_replica_connections(clickhouse):
-    global _REPLICA_CONN_CACHE
-
-    if settings.CLICKHOUSE_CLUSTER:
-        if _REPLICA_CONN_CACHE:
-            return _REPLICA_CONN_CACHE
-
-        # ALTERs need to be run against each shard, they are then
-        # replicated within the shard itself by ClickHouse,
-        # so we discover available shard replicas by using the
-        # system.clusters table
-        replicas = clickhouse.execute(
-            """
-            SELECT shard_num, host_name, port
-            FROM system.clusters
-            WHERE cluster = %(cluster)s
-            ORDER BY shard_num, host_name
-            """,
-            {'cluster': settings.CLICKHOUSE_CLUSTER}
-        )
-
-        # pick the first replica for each shard
-        seen_shards = set()
-        replicas = [
-            seen_shards.add(row[0]) or (row[1], row[2])
-            for row in replicas
-            if row[0] not in seen_shards
-        ]
-
-        conns = [ClickhousePool(host=r[0], port=r[1]) for r in replicas]
-
-        _REPLICA_CONN_CACHE = conns
-        return _REPLICA_CONN_CACHE
-    else:
-        # local development mode, just return the (only) connection
-        return [clickhouse]
-
-
 def get_table_definition(name, engine, columns=settings.SCHEMA_COLUMNS):
     return """
     CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
