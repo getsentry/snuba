@@ -7,7 +7,6 @@ from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from . import processor, settings
-from .clickhouse import get_shard_replica_connections
 from .writer import row_from_processed_event, write_rows
 
 
@@ -275,10 +274,9 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, local_table_name, metrics=None):
+    def __init__(self, clickhouse, dist_table_name, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
-        self.local_table_name = local_table_name
         self.metrics = metrics
 
     def process_message(self, message):
@@ -295,9 +293,9 @@ class ConsumerWorker(AbstractBatchWorker):
             processed_message['partition'] = message.partition()
 
             result = row_from_processed_event(processed_message)
-        elif action_type == processor.ALTER:
+        elif action_type == processor.REPLACE:
             query, args = processed_message
-            args.update({'local_table_name': self.local_table_name})
+            args.update({'dist_table_name': self.dist_table_name})
             result = query % args
 
         else:
@@ -306,16 +304,16 @@ class ConsumerWorker(AbstractBatchWorker):
         return (action_type, result)
 
     def flush_batch(self, batch):
-        """First write out all new INSERTs as a single batch, then handle any ALTER statements
-        by sending them to each shard in the cluster."""
+        """First write out all new INSERTs as a single batch, then handle any event replacements
+        such as deletions, merges and unmerges."""
         inserts = []
-        alters = []
+        replacements = []
 
         for action_type, data in batch:
             if action_type == processor.INSERT:
                 inserts.append(data)
-            elif action_type == processor.ALTER:
-                alters.append(data)
+            elif action_type == processor.REPLACE:
+                replacements.append(data)
 
         if inserts:
             self._clickhouse_execute_robust(
@@ -326,13 +324,12 @@ class ConsumerWorker(AbstractBatchWorker):
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
 
-        if alters:
-            for conn in get_shard_replica_connections(self.clickhouse):
-                for query in alters:
-                    self._clickhouse_execute_robust(conn.execute, query)
+        if replacements:
+            for query in replacements:
+                self._clickhouse_execute_robust(self.clickhouse.execute, query)
 
             if self.metrics:
-                self.metrics.timing('alters', len(alters))
+                self.metrics.timing('replacements', len(replacements))
 
     def _clickhouse_execute_robust(self, func, *args, **kwargs):
         retries = 3

@@ -209,7 +209,7 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -218,7 +218,7 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -233,19 +233,6 @@ class TestConsumer(BaseTest):
 
         assert test_worker.process_message(FakeMessage()) is None
 
-    def _await_true(self, query, test_fn, timeout=5.0):
-        """ALTERs in ClickHouse run async, so to keep tests fast we run the
-        assert query repeatedly for N seconds and exit early if it True,
-        otherwise exit False."""
-
-        started = time.time()
-        while (time.time() - started) < timeout:
-            resp = self.clickhouse.execute(query)
-            if test_fn(resp):
-                return True
-            time.sleep(0.1)
-        return False
-
     def test_delete_groups(self):
         self.event['project_id'] = 1
         self.event['group_id'] = 1
@@ -253,16 +240,16 @@ class TestConsumer(BaseTest):
 
         group_count_query = """
             SELECT count()
-            FROM %s
+            FROM %s FINAL
             WHERE project_id = 1
             AND group_id = 1
             AND deleted = 0
         """ % self.table
 
-        assert self._await_true(group_count_query, lambda resp: resp[0][0] == 1)
+        assert self.clickhouse.execute(group_count_query)[0][0] == 1
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
 
         class FakeMessage(object):
             def value(self):
@@ -275,7 +262,44 @@ class TestConsumer(BaseTest):
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])
 
-        assert self._await_true(group_count_query, lambda resp: resp[0][0] == 0)
+        assert self.clickhouse.execute(group_count_query)[0][0] == 0
+
+    def test_merge(self):
+        self.event['project_id'] = 1
+        self.event['group_id'] = 1
+        self.write_raw_events(self.event)
+
+        base_query = """
+            SELECT count()
+            FROM %s FINAL
+            WHERE project_id = 1
+            AND group_id = %s
+            AND deleted = 0
+        """
+
+        group1_count_query = base_query % (self.table, 1)
+        group2_count_query = base_query % (self.table, 2)
+
+        assert self.clickhouse.execute(group1_count_query)[0][0] == 1
+        assert self.clickhouse.execute(group2_count_query)[0][0] == 0
+
+        timestamp = datetime.now(tz=pytz.utc)
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
+
+        class FakeMessage(object):
+            def value(self):
+                return json.dumps((2, 'end_merge', {
+                    'project_id': 1,
+                    'new_group_id': 2,
+                    'previous_group_ids': [1],
+                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                }))
+
+        processed = test_worker.process_message(FakeMessage())
+        test_worker.flush_batch([processed])
+
+        assert self.clickhouse.execute(group1_count_query)[0][0] == 0
+        assert self.clickhouse.execute(group2_count_query)[0][0] == 1
 
     def test_unmerge(self):
         self.event['project_id'] = 1
@@ -285,7 +309,7 @@ class TestConsumer(BaseTest):
 
         base_query = """
             SELECT count()
-            FROM %s
+            FROM %s FINAL
             WHERE project_id = 1
             AND group_id = %s
             AND deleted = 0
@@ -294,11 +318,11 @@ class TestConsumer(BaseTest):
         group1_count_query = base_query % (self.table, 1)
         group2_count_query = base_query % (self.table, 2)
 
-        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 1)
-        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 0)
+        assert self.clickhouse.execute(group1_count_query)[0][0] == 1
+        assert self.clickhouse.execute(group2_count_query)[0][0] == 0
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table)
 
         class FakeMessage(object):
             def value(self):
@@ -313,42 +337,5 @@ class TestConsumer(BaseTest):
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])
 
-        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 0)
-        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 1)
-
-    def test_merge(self):
-        self.event['project_id'] = 1
-        self.event['group_id'] = 1
-        self.write_raw_events(self.event)
-
-        base_query = """
-            SELECT count()
-            FROM %s
-            WHERE project_id = 1
-            AND group_id = %s
-            AND deleted = 0
-        """
-
-        group1_count_query = base_query % (self.table, 1)
-        group2_count_query = base_query % (self.table, 2)
-
-        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 1)
-        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 0)
-
-        timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table, self.table)
-
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((2, 'end_merge', {
-                    'project_id': 1,
-                    'new_group_id': 2,
-                    'previous_group_ids': [1],
-                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                }))
-
-        processed = test_worker.process_message(FakeMessage())
-        test_worker.flush_batch([processed])
-
-        assert self._await_true(group1_count_query, lambda resp: resp[0][0] == 0)
-        assert self._await_true(group2_count_query, lambda resp: resp[0][0] == 1)
+        assert self.clickhouse.execute(group1_count_query)[0][0] == 0
+        assert self.clickhouse.execute(group2_count_query)[0][0] == 1
