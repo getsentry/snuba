@@ -294,17 +294,15 @@ class ConsumerWorker(AbstractBatchWorker):
 
             result = row_from_processed_event(processed_message)
         elif action_type == processor.REPLACE:
-            query, args = processed_message
-            args.update({'dist_table_name': self.dist_table_name})
-            result = query % args
+            result = processed_message
         else:
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
         return (action_type, result)
 
     def flush_batch(self, batch):
-        """First write out all new INSERTs as a single batch, then handle any event replacements
-        such as deletions, merges and unmerges."""
+        """First write out all new INSERTs as a single batch, then reproduce any
+        event replacements such as deletions, merges and unmerges."""
         inserts = []
         replacements = []
 
@@ -315,47 +313,12 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            self._clickhouse_execute_robust(
-                write_rows,
-                self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts
-            )
-
+            write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
 
         if replacements:
-            for query in replacements:
-                t = time.time()
-                try:
-                    self._clickhouse_execute_robust(self.clickhouse.execute, query)
-                except Exception:
-                    # HACK: Temporary before we have batching
-                    logger.error("BAD QUERY: %s" % query)
-                duration = int((time.time() - t) * 1000)
-                logger.info("Replacement took %sms" % duration)
-                if self.metrics:
-                    self.metrics.timing('replacements', duration)
-
-    def _clickhouse_execute_robust(self, func, *args, **kwargs):
-        retries = 3
-        while True:
-            try:
-                func(*args, **kwargs)
-                break  # success
-            except (errors.NetworkError, errors.SocketTimeoutError) as e:
-                logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
-                if retries <= 0:
-                    raise
-                retries -= 1
-                time.sleep(1)
-                continue
-            except errors.ServerException as e:
-                logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
-                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    time.sleep(1)
-                    continue
-                else:
-                    raise
+            pass  # TODO: produce to Kafka
 
     def shutdown(self):
         pass

@@ -1,4 +1,5 @@
 import logging
+import time
 
 from contextlib import contextmanager
 from six.moves import queue, range
@@ -49,6 +50,26 @@ class ClickhousePool(object):
                 raise e
         finally:
             self.pool.put(conn, block=False)
+
+    def execute_robust(self, *args, **kwargs):
+        retries = 3
+        while True:
+            try:
+                return self.execute(*args, **kwargs)
+            except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
+                if retries <= 0:
+                    raise
+                retries -= 1
+                time.sleep(1)
+                continue
+            except errors.ServerException as e:
+                logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
+                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    time.sleep(1)
+                    continue
+                else:
+                    raise
 
     def _create_conn(self):
         return Client(

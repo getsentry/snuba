@@ -7,7 +7,7 @@ import six
 import _strptime  # fixes _strptime deferred import issue
 
 from snuba import settings
-from snuba.util import force_bytes, escape_col
+from snuba.util import force_bytes
 
 
 logger = logging.getLogger('snuba.processor')
@@ -19,12 +19,6 @@ MAX_UINT32 = 2 ** 32 - 1
 # action types
 INSERT = object()
 REPLACE = object()
-
-PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
-CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-REQUIRED_COLUMNS = list(map(escape_col, settings.REQUIRED_COLUMNS))
-ALL_COLUMNS = list(map(escape_col, settings.WRITER_COLUMNS))
 
 
 class EventTooOld(Exception):
@@ -92,7 +86,7 @@ def extract_required(output, message):
     project_id = message['project_id']
     output['project_id'] = project_id
     output['group_id'] = message['group_id']
-    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
+    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
@@ -330,19 +324,11 @@ def process_message(message):
                     if type_ in ('delete_groups', 'merge'):
                         return None
 
-                    # For now we don't care about start events
-                    if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
-                        return None
-
-                    if type_ == 'end_delete_groups':
+                    if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge',
+                                 'end_delete_groups', 'end_merge', 'end_unmerge'):
+                        # pass raw events along to republish
                         action_type = REPLACE
-                        processed = process_delete_groups(event)
-                    elif type_ == 'end_merge':
-                        action_type = REPLACE
-                        processed = process_merge(event)
-                    elif type_ == 'end_unmerge':
-                        action_type = REPLACE
-                        processed = process_unmerge(event)
+                        processed = event
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -388,86 +374,3 @@ def process_insert(message):
     extract_stacktraces(processed, stacks)
 
     return processed
-
-
-def process_delete_groups(message):
-    if not settings.CLICKHOUSE_REPLACEMENTS_ENABLED:
-        return None
-
-    group_ids = message['group_ids']
-    assert len(group_ids) > 0
-    assert all(isinstance(gid, six.integer_types) for gid in group_ids)
-    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMNS)
-
-    return ("""
-        INSERT INTO %(dist_table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s
-        WHERE project_id = %(project_id)s
-            AND group_id IN (%(group_ids)s)
-            AND timestamp <= CAST('%(timestamp)s' AS DateTime)
-            AND NOT deleted
-    """, {
-        'required_columns': ', '.join(REQUIRED_COLUMNS),
-        'select_columns': ', '.join(select_columns),
-        'project_id': message['project_id'],
-        'group_ids': ", ".join(str(gid) for gid in group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    })
-
-
-def process_merge(message):
-    if not settings.CLICKHOUSE_REPLACEMENTS_ENABLED:
-        return None
-
-    previous_group_ids = message['previous_group_ids']
-    assert len(previous_group_ids) > 0
-    assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
-    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
-
-    return ("""
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s
-        WHERE project_id = %(project_id)s
-            AND group_id IN (%(previous_group_ids)s)
-            AND timestamp <= CAST('%(timestamp)s' AS DateTime)
-            AND NOT deleted
-    """, {
-        'all_columns': ', '.join(ALL_COLUMNS),
-        'select_columns': ', '.join(select_columns),
-        'project_id': message['project_id'],
-        'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    })
-
-
-def process_unmerge(message):
-    if not settings.CLICKHOUSE_REPLACEMENTS_ENABLED:
-        return None
-
-    hashes = message['hashes']
-    assert len(hashes) > 0
-    assert all(isinstance(h, six.string_types) for h in hashes)
-    timestamp = datetime.strptime(message['datetime'], PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
-
-    return ("""
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s
-        WHERE project_id = %(project_id)s
-            AND group_id = %(previous_group_id)s
-            AND primary_hash IN (%(hashes)s)
-            AND timestamp <= CAST('%(timestamp)s' AS DateTime)
-            AND NOT deleted
-    """, {
-        'all_columns': ', '.join(ALL_COLUMNS),
-        'select_columns': ', '.join(select_columns),
-        'previous_group_id': message['previous_group_id'],
-        'project_id': message['project_id'],
-        'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    })

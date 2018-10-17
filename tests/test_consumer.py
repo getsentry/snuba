@@ -13,7 +13,8 @@ from confluent_kafka import TopicPartition
 from base import BaseTest
 
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer, ConsumerWorker
-from snuba.processor import PAYLOAD_DATETIME_FORMAT, CLICKHOUSE_DATETIME_FORMAT
+from snuba.replacer import CLICKHOUSE_DATETIME_FORMAT
+from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
 class FakeKafkaMessage(object):
