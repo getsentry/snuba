@@ -144,7 +144,7 @@ def parse_and_run_query(validated_body, timer):
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
-        ('use_final', 1),
+        ('use_final', 0),
     ])
     body = deepcopy(validated_body)
     stats = {}
