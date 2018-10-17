@@ -78,7 +78,7 @@ class BatchingKafkaConsumer(object):
     """
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, commit_log_topic, auto_offset_reset='error',
+                 bootstrap_servers, group_id, producer, commit_log_topic, auto_offset_reset='error',
                  queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
                  queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
@@ -105,7 +105,7 @@ class BatchingKafkaConsumer(object):
             queued_max_messages_kbytes, queued_min_messages
         )
 
-        self.producer = self.create_producer(bootstrap_servers)
+        self.producer = producer
 
     def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
             queued_max_messages_kbytes, queued_min_messages):
@@ -139,12 +139,6 @@ class BatchingKafkaConsumer(object):
         )
 
         return consumer
-
-    def create_producer(self, bootstrap_servers):
-        return Producer({
-            'bootstrap.servers': ','.join(bootstrap_servers),
-            'partitioner': 'consistent',
-        })
 
     def run(self):
         "The main run loop, see class docstring for more information."
@@ -274,9 +268,11 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, metrics=None):
+    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
+        self.producer = producer
+        self.replacements_topic = replacements_topic
         self.metrics = metrics
 
     def process_message(self, message):
@@ -318,7 +314,14 @@ class ConsumerWorker(AbstractBatchWorker):
                 self.metrics.timing('inserts', len(inserts))
 
         if replacements:
-            pass  # TODO: produce to Kafka
+            for key, replacement in replacements:
+                self.producer.produce(
+                    self.replacements_topic,
+                    key=key.encode('utf-8'),
+                    value=json.dumps(replacement).encode('utf-8'),
+                )
+
+            self.producer.flush()
 
     def shutdown(self):
         pass

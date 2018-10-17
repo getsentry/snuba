@@ -3,7 +3,6 @@ import signal
 
 import click
 
-
 from snuba import settings
 
 

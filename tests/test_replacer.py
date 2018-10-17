@@ -1,6 +1,7 @@
 import pytz
 import re
 from datetime import datetime
+import simplejson as json
 
 from base import BaseTest
 
@@ -14,6 +15,16 @@ class TestReplacer(BaseTest):
         super(TestReplacer, self).setup_method(test_method)
         self.replacer = replacer.ReplacerWorker(self.clickhouse, self.table)
 
+    def _wrap(self, msg):
+        class FakeKafkaMessage(object):
+            def __init__(self, msg):
+                self.msg = msg
+
+            def value(self):
+                return json.dumps(self.msg).encode('utf-8')
+
+        return FakeKafkaMessage(msg)
+
     def test_delete_groups(self):
         timestamp = datetime.now(tz=pytz.utc)
         message = (2, 'end_delete_groups', {
@@ -22,12 +33,13 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        action_type, processed = self.replacer.process_message(message)
+        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
 
-        query, args = processed
-        assert re.sub("[\n ]+", " ", query).strip() == \
+        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+            "SELECT count() FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
             "INSERT INTO %(dist_table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert args == {
+        assert query_args == {
             'group_ids': '1, 2, 3',
             'project_id': 1,
             'required_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days',
@@ -44,12 +56,13 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        action_type, processed = self.replacer.process_message(message)
+        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
 
-        query, args = processed
-        assert re.sub("[\n ]+", " ", query).strip() == \
+        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+            "SELECT count() FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
             "INSERT INTO %(dist_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert args == {
+        assert query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level',
             'select_columns': 'event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, received, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level',
             'previous_group_ids': ", ".join(str(gid) for gid in [1, 2]),
@@ -67,12 +80,13 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        action_type, processed = self.replacer.process_message(message)
+        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
 
-        query, args = processed
-        assert re.sub("[\n ]+", " ", query).strip() == \
+        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+            "SELECT count() FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
             "INSERT INTO %(dist_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_table_name)s WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND timestamp <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert args == {
+        assert query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level',
             'select_columns': 'event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, received, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level',
             'hashes': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",

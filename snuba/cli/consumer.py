@@ -2,7 +2,7 @@ import logging
 import signal
 
 import click
-
+from confluent_kafka import Producer
 
 from snuba import settings
 
@@ -10,6 +10,8 @@ from snuba import settings
 @click.command()
 @click.option('--raw-events-topic', default='events',
               help='Topic to consume raw events from.')
+@click.option('--replacements-topic', default='replacements',
+              help='Topic to produce replacement messages info.')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
@@ -33,9 +35,10 @@ from snuba import settings
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 @click.option('--commit-log-topic', default='snuba-commit-log',
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
-def consumer(raw_events_topic, consumer_group, bootstrap_server, clickhouse_server, distributed_table_name,
-             max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
-             queued_min_messages, log_level, dogstatsd_host, dogstatsd_port, commit_log_topic):
+def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_server, clickhouse_server,
+             distributed_table_name, max_batch_size, max_batch_time_ms, auto_offset_reset,
+             queued_max_messages_kbytes, queued_min_messages, log_level, dogstatsd_host, dogstatsd_port,
+             commit_log_topic):
 
     import sentry_sdk
     from snuba import util
@@ -51,14 +54,21 @@ def consumer(raw_events_topic, consumer_group, bootstrap_server, clickhouse_serv
 
     clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
 
+    producer = Producer({
+        'bootstrap.servers': ','.join(bootstrap_server),
+        'partitioner': 'consistent',
+        'message.max.bytes': 50000000,  # 50MB, default is 1MB
+    })
+
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ConsumerWorker(clickhouse, distributed_table_name, metrics=metrics),
+        worker=ConsumerWorker(clickhouse, distributed_table_name, producer, replacements_topic, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
+        producer=producer,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
     )
