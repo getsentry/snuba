@@ -53,15 +53,15 @@ class ReplacerWorker(AbstractBatchWorker):
         return processed
 
     def flush_batch(self, batch):
-        self.clickhouse.execute("set max_block_size = 4192")
+        self.clickhouse.execute("set max_block_size = 2048")
 
         for count_query_template, insert_query_template, args in batch:
             args.update({'dist_table_name': self.dist_table_name})
 
-            print("Count: %s" % self.clickhouse.execute_robust(count_query_template % args)[0][0])
+            logger.info("Count: %s" % self.clickhouse.execute_robust(count_query_template % args)[0][0])
 
             t = time.time()
-            print(insert_query_template % args)
+            logger.debug("Executing replace query: %s" % (insert_query_template % args))
             self.clickhouse.execute_robust(insert_query_template % args)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacement took %sms" % duration)
