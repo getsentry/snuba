@@ -1,9 +1,9 @@
 import abc
 import logging
 import simplejson as json
+import six
 import time
 
-from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from . import processor, settings
@@ -322,7 +322,7 @@ class ConsumerWorker(AbstractBatchWorker):
             for key, replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic,
-                    key=key.encode('utf-8'),
+                    key=six.text_type(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
                 )
