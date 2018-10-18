@@ -52,7 +52,7 @@ def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_ser
         dogstatsd_host, dogstatsd_port, 'snuba.consumer', tags=["group:%s" % consumer_group]
     )
 
-    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
+    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]), metrics=metrics)
 
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),

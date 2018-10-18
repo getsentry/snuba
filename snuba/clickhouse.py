@@ -20,13 +20,15 @@ class ClickhousePool(object):
                  connect_timeout=1,
                  send_receive_timeout=300,
                  max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
-                 client_settings={}
+                 client_settings={},
+                 metrics=None,
                  ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
+        self.metrics = metrics
 
         self.pool = queue.LifoQueue(max_pool_size)
 
@@ -61,11 +63,18 @@ class ClickhousePool(object):
                 if retries <= 0:
                     raise
                 retries -= 1
+
+                if self.metrics:
+                    self.metrics.increment('clickhouse.network-error')
+
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
                 logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
+                    if self.metrics:
+                        self.metrics.increment('clickhouse.too-many-queries')
+
                     time.sleep(1)
                     continue
                 else:
