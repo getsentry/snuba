@@ -32,11 +32,6 @@ class ReplacerWorker(AbstractBatchWorker):
         if version == 2:
             type_, event = message[1:3]
 
-            # HACK: Remove below
-            if type_ == 'insert':
-                return None
-            # HACK: Remove above
-
             if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
                 return None
             elif type_ == 'end_delete_groups':
