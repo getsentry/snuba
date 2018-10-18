@@ -296,6 +296,11 @@ class ConsumerWorker(AbstractBatchWorker):
 
         return (action_type, result)
 
+    def delivery_callback(self, error, message):
+        if error is not None:
+            # errors are KafkaError objects and inherit from BaseException
+            raise error
+
     def flush_batch(self, batch):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
@@ -319,6 +324,7 @@ class ConsumerWorker(AbstractBatchWorker):
                     self.replacements_topic,
                     key=key.encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
+                    on_delivery=self.delivery_callback,
                 )
 
             self.producer.flush()
