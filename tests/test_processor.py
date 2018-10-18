@@ -1,7 +1,6 @@
 import calendar
 import pytest
-import pytz
-import re
+import six
 from datetime import datetime
 
 from base import BaseTest
@@ -103,6 +102,46 @@ class TestProcessor(BaseTest):
 
     def test_v1_unmerge_skipped(self):
         assert processor.process_message((1, 'unmerge', {})) is None
+
+    def test_v2_invalid_type(self):
+        with pytest.raises(processor.InvalidMessageType):
+            assert processor.process_message((2, '__invalid__', {})) == 1
+
+    def test_v2_start_delete_groups(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'start_delete_groups', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_end_delete_groups(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'end_delete_groups', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_start_merge(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'start_merge', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_end_merge(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'end_merge', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_start_unmerge(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'start_unmerge', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_end_unmerge(self):
+        project_id = 1
+        message = {'project_id': project_id}
+        assert processor.process_message((2, 'end_unmerge', message)) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_extract_sdk(self):
         sdk = {

@@ -316,11 +316,12 @@ def process_message(message):
                     raise InvalidMessageType("Invalid message type: {}".format(type_))
                 elif version == 1:
                     if type_ in ('delete_groups', 'merge', 'unmerge'):
+                        # these didn't contain the necessary data to handle replacements
                         return None
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
                 elif version == 2:
-                    # HACK: temporarily incorrently sent these message types from Sentry
+                    # we temporarily sent these invalid message types from Sentry
                     if type_ in ('delete_groups', 'merge'):
                         return None
 
@@ -328,7 +329,7 @@ def process_message(message):
                                  'end_delete_groups', 'end_merge', 'end_unmerge'):
                         # pass raw events along to republish
                         action_type = REPLACE
-                        processed = (event['project_id'], event)
+                        processed = (six.text_type(event['project_id']), event)
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
 

@@ -3,11 +3,9 @@ import re
 from datetime import datetime
 import simplejson as json
 
-from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
+from base import BaseTest, FakeKafkaMessage
 
-from snuba import settings
 from snuba import replacer
-from snuba.processor import InvalidMessageType, InvalidMessageVersion, process_message
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
