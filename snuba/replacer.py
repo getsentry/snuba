@@ -85,19 +85,19 @@ def process_delete_groups(message):
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMNS)
 
-    where = """
+    where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(group_ids)s)
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
-    count_query_template = """
+    count_query_template = """\
         SELECT count()
         FROM %(dist_table_name)s
     """ + where
 
-    insert_query_template = """
+    insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
         FROM %(dist_table_name)s
@@ -121,19 +121,19 @@ def process_merge(message):
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
 
-    where = """
+    where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(previous_group_ids)s)
         AND timestamp <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
-    count_query_template = """
+    count_query_template = """\
         SELECT count()
         FROM %(dist_table_name)s
     """ + where
 
-    insert_query_template = """
+    insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
         FROM %(dist_table_name)s
@@ -157,7 +157,7 @@ def process_unmerge(message):
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
 
-    where = """
+    where = """\
         WHERE project_id = %(project_id)s
         AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
@@ -165,12 +165,12 @@ def process_unmerge(message):
         AND NOT deleted
     """
 
-    count_query_template = """
+    count_query_template = """\
         SELECT count()
         FROM %(dist_table_name)s
     """ + where
 
-    insert_query_template = """
+    insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
         FROM %(dist_table_name)s

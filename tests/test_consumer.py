@@ -8,6 +8,7 @@ from six.moves import range
 
 from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
 
+from snuba import processor
 from snuba.consumer import ConsumerWorker
 
 
@@ -122,3 +123,16 @@ class TestConsumer(BaseTest):
                 return json.dumps((0, 'insert', event))
 
         assert test_worker.process_message(FakeMessage()) is None
+
+    def test_produce_replacement_messages(self):
+        topic = 'topic'
+        producer = FakeKafkaProducer()
+        test_worker = ConsumerWorker(self.clickhouse, self.table, producer, topic)
+
+        test_worker.flush_batch([
+            (processor.REPLACE, ('1', {'project_id': 1})),
+            (processor.REPLACE, ('2', {'project_id': 2})),
+        ])
+
+        assert [(m._topic, m._key, m._value) for m in producer.messages] == \
+            [('topic', b'1', b'{"project_id": 1}'), ('topic', b'2', b'{"project_id": 2}')]
