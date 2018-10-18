@@ -139,11 +139,12 @@ def query(validated_body=None, timer=None):
 
 @generalizer.generalize
 def parse_and_run_query(validated_body, timer):
-    max_days, table, date_align, config_sample = state.get_configs([
+    max_days, table, date_align, config_sample, use_final = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
+        ('use_final', 0),
     ])
     body = deepcopy(validated_body)
     stats = {}
@@ -180,13 +181,16 @@ def parse_and_run_query(validated_body, timer):
                      for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
-
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
+
+    from_clause = u'FROM {}'.format(table)
+
+    if use_final:
+        from_clause = u'{} FINAL'.format(from_clause)
+
     sample = body.get('sample', config_sample)
-    if sample == 1:
-        from_clause = u'FROM {}'.format(table)
-    else:
-        from_clause = u'FROM {} SAMPLE {}'.format(table, sample)
+    if sample != 1:
+        from_clause = u'{} SAMPLE {}'.format(from_clause, sample)
 
     joins = []
     issue_expr = util.issue_expr(body)

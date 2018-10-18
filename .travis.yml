@@ -22,7 +22,7 @@ cache:
   - $CACHE_DIR
 before_install:
   - mkdir -p $CACHE_DIR
-  - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:18.12.17
+  - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:18.14.9
   - make install-librdkafka
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi

@@ -26,7 +26,7 @@ Create a docker volume for Clickhouse:
     
 Run the clickhouse server:
     
-    docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 --name=clickhouse -v clickhouse:/var/lib/clickhouse --ulimit nofile=262144:262144 yandex/clickhouse-server:1.1
+    docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 --name=clickhouse -v clickhouse:/var/lib/clickhouse --ulimit nofile=262144:262144 yandex/clickhouse-server:18.14.9
 
 This can be managed with `docker stop clickhouse` and `docker start clickhouse` to stop/start the service.
 
