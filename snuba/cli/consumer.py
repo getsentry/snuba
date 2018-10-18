@@ -62,7 +62,10 @@ def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_ser
 
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ConsumerWorker(clickhouse, distributed_table_name, producer, replacements_topic, metrics=metrics),
+        worker=ConsumerWorker(
+            clickhouse, distributed_table_name,
+            producer=producer, replacements_topic=replacements_topic, metrics=metrics
+        ),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

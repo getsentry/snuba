@@ -102,9 +102,6 @@ class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
     def create_consumer(self, *args, **kwargs):
         return FakeKafkaConsumer()
 
-    def create_producer(self, *args, **kwargs):
-        return FakeKafkaProducer()
-
 
 class FakeWorker(AbstractBatchWorker):
     def __init__(self, *args, **kwargs):
@@ -135,6 +132,7 @@ class TestConsumer(BaseTest):
             bootstrap_servers=None,
             group_id='group',
             commit_log_topic='commits',
+            producer=FakeKafkaProducer(),
         )
 
         consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
@@ -165,6 +163,7 @@ class TestConsumer(BaseTest):
             bootstrap_servers=None,
             group_id='group',
             commit_log_topic='commits',
+            producer=FakeKafkaProducer(),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
@@ -210,7 +209,7 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -219,7 +218,7 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -250,7 +249,7 @@ class TestConsumer(BaseTest):
         assert self.clickhouse.execute(group_count_query)[0][0] == 1
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
 
         class FakeMessage(object):
             def value(self):
@@ -285,7 +284,7 @@ class TestConsumer(BaseTest):
         assert self.clickhouse.execute(group2_count_query)[0][0] == 0
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
 
         class FakeMessage(object):
             def value(self):
@@ -323,7 +322,7 @@ class TestConsumer(BaseTest):
         assert self.clickhouse.execute(group2_count_query)[0][0] == 0
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = ConsumerWorker(self.clickhouse, self.table)
+        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
 
         class FakeMessage(object):
             def value(self):
