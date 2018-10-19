@@ -111,11 +111,12 @@ SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
 def process_merge(message):
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
-    txn = message['transaction_id']
-    if txn in SEEN_MERGE_TXN_CACHE:
-        return None
-    else:
-        SEEN_MERGE_TXN_CACHE.append(txn)
+    txn = message.get('transaction_id')
+    if txn:
+        if txn in SEEN_MERGE_TXN_CACHE:
+            return None
+        else:
+            SEEN_MERGE_TXN_CACHE.append(txn)
 
     previous_group_ids = message['previous_group_ids']
     assert len(previous_group_ids) > 0
