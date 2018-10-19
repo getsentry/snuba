@@ -1,6 +1,7 @@
 import logging
 import six
 import time
+from collections import deque
 from datetime import datetime
 import simplejson as json
 
@@ -104,7 +105,18 @@ def process_delete_groups(message):
     return (count_query_template, insert_query_template, query_args)
 
 
+SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
+
+
 def process_merge(message):
+    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+    # this is only for performance of the backlog.
+    txn = message['transaction_id']
+    if txn in SEEN_MERGE_TXN_CACHE:
+        return None
+    else:
+        SEEN_MERGE_TXN_CACHE.append(txn)
+
     previous_group_ids = message['previous_group_ids']
     assert len(previous_group_ids) > 0
     assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
