@@ -52,6 +52,9 @@ class ReplacerWorker(AbstractBatchWorker):
             args.update({'dist_table_name': self.dist_table_name})
             count = self.clickhouse.execute_robust(count_query_template % args)[0][0]
 
+            if count == 0:
+                continue
+
             t = time.time()
             logger.debug("Executing replace query: %s" % (insert_query_template % args))
             self.clickhouse.execute_robust(insert_query_template % args)
