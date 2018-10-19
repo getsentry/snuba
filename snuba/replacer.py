@@ -48,14 +48,6 @@ class ReplacerWorker(AbstractBatchWorker):
         return processed
 
     def flush_batch(self, batch):
-        # Replacing existing rows requires reconstructing the entire tuple for each
-        # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
-        # the default settings it's common for ClickHouse to go over the default max_memory_usage
-        # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
-        # max_memory_usage gives the query more breathing room.
-        self.clickhouse.execute("set max_block_size = %s" % settings.REPLACER_MAX_BLOCK_SIZE)
-        self.clickhouse.execute("set max_memory_usage = %s" % settings.REPLACER_MAX_MEMORY_USAGE)
-
         for count_query_template, insert_query_template, args in batch:
             args.update({'dist_table_name': self.dist_table_name})
             count = self.clickhouse.execute_robust(count_query_template % args)[0][0]
