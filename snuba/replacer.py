@@ -84,7 +84,7 @@ def process_delete_groups(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
@@ -120,7 +120,7 @@ def process_merge(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
@@ -157,7 +157,7 @@ def process_unmerge(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
