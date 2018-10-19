@@ -78,7 +78,8 @@ class BatchingKafkaConsumer(object):
     """
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, producer, commit_log_topic, auto_offset_reset='error',
+                 bootstrap_servers, group_id, producer=None, commit_log_topic=None,
+                 auto_offset_reset='error',
                  queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
                  queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
@@ -152,7 +153,8 @@ class BatchingKafkaConsumer(object):
     def _run_once(self):
         self._flush()
 
-        self.producer.poll(0.0)
+        if self.commit_log_topic:
+            self.producer.poll(0.0)
 
         msg = self.consumer.poll(timeout=1.0)
 
@@ -254,13 +256,14 @@ class BatchingKafkaConsumer(object):
                 else:
                     raise
 
-        for item in offsets:
-            self.producer.produce(
-                self.commit_log_topic,
-                key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
-                value='{}'.format(item.offset).encode('utf-8'),
-                on_delivery=self._commit_message_delivery_callback,
-            )
+        if self.commit_log_topic:
+            for item in offsets:
+                self.producer.produce(
+                    self.commit_log_topic,
+                    key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
+                    value='{}'.format(item.offset).encode('utf-8'),
+                    on_delivery=self._commit_message_delivery_callback,
+                )
 
 
 class InvalidActionType(Exception):
