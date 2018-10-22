@@ -109,38 +109,38 @@ class TestProcessor(BaseTest):
 
     def test_v2_start_delete_groups(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'start_delete_groups', message)) == \
+        message = (2, 'start_delete_groups', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_delete_groups(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'end_delete_groups', message)) == \
+        message = (2, 'end_delete_groups', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_merge(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'start_merge', message)) == \
+        message = (2, 'start_merge', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_merge(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'end_merge', message)) == \
+        message = (2, 'end_merge', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_unmerge(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'start_unmerge', message)) == \
+        message = (2, 'start_unmerge', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_unmerge(self):
         project_id = 1
-        message = {'project_id': project_id}
-        assert processor.process_message((2, 'end_unmerge', message)) == \
+        message = (2, 'end_unmerge', {'project_id': project_id})
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_extract_sdk(self):
