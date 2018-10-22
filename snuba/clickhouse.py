@@ -59,7 +59,7 @@ class ClickhousePool(object):
             try:
                 return self.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError) as e:
-                logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
+                logger.warning("Write to ClickHouse failed: %s (%d retries)", str(e), retries)
                 if retries <= 0:
                     raise
                 retries -= 1
@@ -70,7 +70,7 @@ class ClickhousePool(object):
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
-                logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
+                logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     if self.metrics:
                         self.metrics.increment('clickhouse.too-many-queries')
