@@ -392,7 +392,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         except BaseException as ex:
                             error = six.text_type(ex)
                             status = 500
-                            logger.error("Error running query: %s\n%s" % (sql, error))
+                            logger.error("Error running query: %s\n%s", sql, error)
                             result = {'error': error}
 
                     else:
