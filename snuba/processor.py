@@ -329,7 +329,7 @@ def process_message(message):
                                  'end_delete_groups', 'end_merge', 'end_unmerge'):
                         # pass raw events along to republish
                         action_type = REPLACE
-                        processed = (six.text_type(event['project_id']), event)
+                        processed = (six.text_type(event['project_id']), message)
                     else:
                         raise InvalidMessageType("Invalid message type: {}".format(type_))
 
