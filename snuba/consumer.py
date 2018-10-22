@@ -234,7 +234,8 @@ class BatchingKafkaConsumer(object):
 
     def _commit_message_delivery_callback(self, error, message):
         if error is not None:
-            logger.warning('Failed to deliver commit message (code: %s): %r', error, message)
+            # errors are KafkaError objects and inherit from BaseException
+            raise error
 
     def _commit(self):
         retries = 3
