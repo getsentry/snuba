@@ -7,7 +7,7 @@ from snuba import settings
 
 
 @click.command()
-@click.option('--replacements-topic', default='replacements',
+@click.option('--replacements-topic', default='event-replacements',
               help='Topic to consume replacement messages from.')
 @click.option('--consumer-group', default='snuba-replacers',
               help='Consumer group use for consuming the replacements topic.')

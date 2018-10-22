@@ -10,7 +10,7 @@ from snuba import settings
 @click.command()
 @click.option('--raw-events-topic', default='events',
               help='Topic to consume raw events from.')
-@click.option('--replacements-topic', default='replacements',
+@click.option('--replacements-topic', default='event-replacements',
               help='Topic to produce replacement messages info.')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
