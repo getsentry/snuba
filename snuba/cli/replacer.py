@@ -2,18 +2,15 @@ import logging
 import signal
 
 import click
-from confluent_kafka import Producer
 
 from snuba import settings
 
 
 @click.command()
-@click.option('--raw-events-topic', default='events',
-              help='Topic to consume raw events from.')
 @click.option('--replacements-topic', default='event-replacements',
-              help='Topic to produce replacement messages info.')
-@click.option('--consumer-group', default='snuba-consumers',
-              help='Consumer group use for consuming the raw events topic.')
+              help='Topic to consume replacement messages from.')
+@click.option('--consumer-group', default='snuba-replacers',
+              help='Consumer group use for consuming the replacements topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
@@ -33,52 +30,57 @@ from snuba import settings
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-@click.option('--commit-log-topic', default='snuba-commit-log',
-              help='Topic for committed offsets to be written to, triggering post-processing task(s)')
-def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_server, clickhouse_server,
-             distributed_table_name, max_batch_size, max_batch_time_ms, auto_offset_reset,
-             queued_max_messages_kbytes, queued_min_messages, log_level, dogstatsd_host, dogstatsd_port,
-             commit_log_topic):
+def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, distributed_table_name,
+             max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
+             queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse import ClickhousePool
-    from snuba.consumer import BatchingKafkaConsumer, ConsumerWorker
+    from snuba.consumer import BatchingKafkaConsumer
+    from snuba.replacer import ReplacerWorker
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.consumer', tags=["group:%s" % consumer_group]
+        dogstatsd_host, dogstatsd_port, 'snuba.replacer', tags=["group:%s" % consumer_group]
     )
 
-    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]), metrics=metrics)
+    client_settings = {
+        # Replacing existing rows requires reconstructing the entire tuple for each
+        # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
+        # the default settings it's common for ClickHouse to go over the default max_memory_usage
+        # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
+        # max_memory_usage gives the query more breathing room.
+        'max_block_size': settings.REPLACER_MAX_BLOCK_SIZE,
+        'max_memory_usage': settings.REPLACER_MAX_MEMORY_USAGE,
+        # Don't use up production cache for the count() queries.
+        'use_uncompressed_cache': 0,
+    }
 
-    producer = Producer({
-        'bootstrap.servers': ','.join(bootstrap_server),
-        'partitioner': 'consistent',
-        'message.max.bytes': 50000000,  # 50MB, default is 1MB
-    })
+    clickhouse = ClickhousePool(
+        host=clickhouse_server.split(':')[0],
+        port=int(clickhouse_server.split(':')[1]),
+        client_settings=client_settings,
+    )
 
-    consumer = BatchingKafkaConsumer(
-        raw_events_topic,
-        worker=ConsumerWorker(
-            clickhouse, distributed_table_name,
-            producer=producer, replacements_topic=replacements_topic, metrics=metrics
-        ),
+    replacer = BatchingKafkaConsumer(
+        replacements_topic,
+        worker=ReplacerWorker(clickhouse, distributed_table_name, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
-        producer=producer,
-        commit_log_topic=commit_log_topic,
+        producer=None,
+        commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,
     )
 
     def handler(signum, frame):
-        consumer.signal_shutdown()
+        replacer.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)
 
-    consumer.run()
+    replacer.run()

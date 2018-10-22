@@ -48,7 +48,7 @@ def _create_missing_array(colname, event):
 
 
 def write_rows(connection, table, columns, rows, types_check=False):
-    connection.execute("""
+    connection.execute_robust("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
         'colnames': ", ".join('`{}`'.format(c) for c in columns),
         'table': table,

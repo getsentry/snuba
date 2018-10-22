@@ -1,9 +1,9 @@
 import abc
 import logging
 import simplejson as json
+import six
 import time
 
-from clickhouse_driver import errors
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from . import processor, settings
@@ -78,7 +78,8 @@ class BatchingKafkaConsumer(object):
     """
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, commit_log_topic, auto_offset_reset='error',
+                 bootstrap_servers, group_id, producer=None, commit_log_topic=None,
+                 auto_offset_reset='error',
                  queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
                  queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
@@ -105,7 +106,7 @@ class BatchingKafkaConsumer(object):
             queued_max_messages_kbytes, queued_min_messages
         )
 
-        self.producer = self.create_producer(bootstrap_servers)
+        self.producer = producer
 
     def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
             queued_max_messages_kbytes, queued_min_messages):
@@ -140,12 +141,6 @@ class BatchingKafkaConsumer(object):
 
         return consumer
 
-    def create_producer(self, bootstrap_servers):
-        return Producer({
-            'bootstrap.servers': ','.join(bootstrap_servers),
-            'partitioner': 'consistent',
-        })
-
     def run(self):
         "The main run loop, see class docstring for more information."
 
@@ -158,7 +153,8 @@ class BatchingKafkaConsumer(object):
     def _run_once(self):
         self._flush()
 
-        self.producer.poll(0.0)
+        if self.commit_log_topic:
+            self.producer.poll(0.0)
 
         msg = self.consumer.poll(timeout=1.0)
 
@@ -238,7 +234,8 @@ class BatchingKafkaConsumer(object):
 
     def _commit_message_delivery_callback(self, error, message):
         if error is not None:
-            logger.warning('Failed to deliver commit message (code: %s): %r', error, message)
+            # errors are KafkaError objects and inherit from BaseException
+            raise error
 
     def _commit(self):
         retries = 3
@@ -260,13 +257,14 @@ class BatchingKafkaConsumer(object):
                 else:
                     raise
 
-        for item in offsets:
-            self.producer.produce(
-                self.commit_log_topic,
-                key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
-                value='{}'.format(item.offset).encode('utf-8'),
-                on_delivery=self._commit_message_delivery_callback,
-            )
+        if self.commit_log_topic:
+            for item in offsets:
+                self.producer.produce(
+                    self.commit_log_topic,
+                    key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
+                    value='{}'.format(item.offset).encode('utf-8'),
+                    on_delivery=self._commit_message_delivery_callback,
+                )
 
 
 class InvalidActionType(Exception):
@@ -274,9 +272,11 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, metrics=None):
+    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
+        self.producer = producer
+        self.replacements_topic = replacements_topic
         self.metrics = metrics
 
     def process_message(self, message):
@@ -294,17 +294,20 @@ class ConsumerWorker(AbstractBatchWorker):
 
             result = row_from_processed_event(processed_message)
         elif action_type == processor.REPLACE:
-            query, args = processed_message
-            args.update({'dist_table_name': self.dist_table_name})
-            result = query % args
+            result = processed_message
         else:
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
         return (action_type, result)
 
+    def delivery_callback(self, error, message):
+        if error is not None:
+            # errors are KafkaError objects and inherit from BaseException
+            raise error
+
     def flush_batch(self, batch):
-        """First write out all new INSERTs as a single batch, then handle any event replacements
-        such as deletions, merges and unmerges."""
+        """First write out all new INSERTs as a single batch, then reproduce any
+        event replacements such as deletions, merges and unmerges."""
         inserts = []
         replacements = []
 
@@ -315,47 +318,20 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            self._clickhouse_execute_robust(
-                write_rows,
-                self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts
-            )
-
+            write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
 
         if replacements:
-            for query in replacements:
-                t = time.time()
-                try:
-                    self._clickhouse_execute_robust(self.clickhouse.execute, query)
-                except Exception:
-                    # HACK: Temporary before we have batching
-                    logger.error("BAD QUERY: %s" % query)
-                duration = int((time.time() - t) * 1000)
-                logger.info("Replacement took %sms" % duration)
-                if self.metrics:
-                    self.metrics.timing('replacements', duration)
+            for key, replacement in replacements:
+                self.producer.produce(
+                    self.replacements_topic,
+                    key=six.text_type(key).encode('utf-8'),
+                    value=json.dumps(replacement).encode('utf-8'),
+                    on_delivery=self.delivery_callback,
+                )
 
-    def _clickhouse_execute_robust(self, func, *args, **kwargs):
-        retries = 3
-        while True:
-            try:
-                func(*args, **kwargs)
-                break  # success
-            except (errors.NetworkError, errors.SocketTimeoutError) as e:
-                logger.warning("Write to Clickhouse failed: %s (%d retries)" % (str(e), retries))
-                if retries <= 0:
-                    raise
-                retries -= 1
-                time.sleep(1)
-                continue
-            except errors.ServerException as e:
-                logger.warning("Write to Clickhouse failed: %s (retrying)" % str(e))
-                if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
-                    time.sleep(1)
-                    continue
-                else:
-                    raise
+            self.producer.flush()
 
     def shutdown(self):
         pass
