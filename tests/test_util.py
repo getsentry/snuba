@@ -51,6 +51,11 @@ class TestUtil(BaseTest):
         # Columns that need escaping
         assert column_expr('sentry:release', body.copy()) == '`sentry:release`'
 
+        # Columns that start with a negative sign (used in orderby to signify
+        # sort order) retain the '-' sign outside the escaping backticks (if any)
+        assert column_expr('-timestamp', body.copy()) == '-timestamp'
+        assert column_expr('-sentry:release', body.copy()) == '-`sentry:release`'
+
         # A 'column' that is actually a string literal
         assert column_expr('\'hello world\'', body.copy()) == '\'hello world\''
 
