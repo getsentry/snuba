@@ -239,7 +239,7 @@ def parse_and_run_query(validated_body, timer):
     order_clause = ''
     if body.get('orderby'):
         orderby = [util.column_expr(util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
-        orderby = ['{} {}'.format(
+        orderby = [u'{} {}'.format(
             ob.lstrip('-'),
             'DESC' if ob.startswith('-') else 'ASC'
         ) for ob in orderby]

@@ -49,7 +49,7 @@ def escape_col(col):
     elif ESCAPE_RE.match(col):
         return col
     else:
-        return '{}`{}`'.format(*NEGATE_RE.match(col).groups())
+        return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 
 
 def string_col(col):
