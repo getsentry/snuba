@@ -295,6 +295,9 @@ def get_hash_state_map(connection, keys):
         return {row[:2]: row[2:] for row in cursor.fetchall()}
 
 
+group_id_column_index = settings.WRITER_COLUMNS.index('group_id')
+
+
 def repair_batch_inserts(connection, epoch, records):
     """
     Batch repair insertions that occurred prior to the export epoch.
@@ -304,15 +307,17 @@ def repair_batch_inserts(connection, epoch, records):
     associated with the event's primary hash in the export to account for
     merging/unmerging activity.
     """
-    records_to_repair = map(
-        lambda (index, record): (
-            index,
-            get_hash_state_key_from_insert_record(record),
-        ),
-        filter(
-            lambda (index, record): record['data']['received'] >= epoch,
-            enumerate(records),
-        ),
+    records_to_repair = list(
+        map(
+            lambda (index, record): (
+                index,
+                get_hash_state_key_from_insert_record(record),
+            ),
+            filter(
+                lambda (index, record): record['data']['received'] >= epoch,
+                enumerate(records),
+            ),
+        )
     )
 
     hash_state_map = get_hash_state_map(
@@ -331,7 +336,7 @@ def repair_batch_inserts(connection, epoch, records):
             del records[index]
             deleted_records = deleted_records + 1
         else:
-            record[settings.WRITER_COLUMNS.index('group_id')] = group_id
+            record[group_id_column_index] = group_id
 
 
 def repair_batch_replacements(epoch, records):
