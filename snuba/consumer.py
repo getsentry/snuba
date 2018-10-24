@@ -1,5 +1,7 @@
 import abc
 import logging
+import itertools
+import operator
 import simplejson as json
 import six
 import time
@@ -271,6 +273,79 @@ class InvalidActionType(Exception):
     pass
 
 
+get_hash_state_key_from_insert_record = operator.itemgetter(
+    *map(settings.WRITER_COLUMNS.index, [
+        'project_id',
+        'primary_hash',
+    ])
+)
+
+
+def get_hash_state_map(connection, keys):
+    parameters = list(itertools.chain.from_iterable(keys))
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            u'SELECT project_id, hash, group_id, deleted_at FROM grouphashstates WHERE {conditions}'.format(
+                conditions=u' OR '.join(['(project_id = %s AND hash = %s)'] * len(keys)),
+            ),
+            parameters,
+        )
+
+        return {row[:2]: row[2:] for row in cursor.fetchall()}
+
+
+def repair_batch_inserts(connection, epoch, records):
+    """
+    Batch repair insertions that occurred prior to the export epoch.
+
+    Inserts that would later be deleted are removed from the batch. The
+    remaining inserts have their group ID columns rewritten to the group ID
+    associated with the event's primary hash in the export to account for
+    merging/unmerging activity.
+    """
+    records_to_repair = map(
+        lambda (index, record): (
+            index,
+            get_hash_state_key_from_insert_record(record),
+        ),
+        filter(
+            lambda (index, record): record['data']['received'] >= epoch,
+            enumerate(records),
+        ),
+    )
+
+    hash_state_map = get_hash_state_map(
+        connection,
+        [hash_state_key for index, hash_state_key in records_to_repair],
+    )
+
+    deleted_records = 0
+    for original_index, hash_state_key in records_to_repair:
+        # TODO: If this raises a KeyError, we have problems.
+        group_id, deleted_at = hash_state_map[hash_state_key]
+
+        index = original_index - deleted_records
+        record = records[index]
+        if record['data']['received'] < deleted_at:
+            del records[index]
+            deleted_records = deleted_records + 1
+        else:
+            record[settings.WRITER_COLUMNS.index('group_id')] = group_id
+
+
+def repair_batch_replacements(epoch, records):
+    """
+    Batch remove replacements that occurred prior to the export epoch.
+    """
+    i = 0
+    while i < len(records):
+        if records[i]['datetime'] < epoch:
+            del records[i]
+        else:
+            i = i + 1
+
+
 class ConsumerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
@@ -316,6 +391,9 @@ class ConsumerWorker(AbstractBatchWorker):
                 inserts.append(data)
             elif action_type == processor.REPLACE:
                 replacements.append(data)
+
+        repair_batch_inserts(connection, epoch, inserts)
+        repair_batch_replacements(epoch, replacements)
 
         if inserts:
             write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)
