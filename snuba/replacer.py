@@ -81,7 +81,7 @@ def process_delete_groups(message):
     where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(group_ids)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -131,7 +131,7 @@ def process_merge(message):
     where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(previous_group_ids)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -170,7 +170,7 @@ def process_unmerge(message):
         WHERE project_id = %(project_id)s
         AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
