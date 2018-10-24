@@ -150,7 +150,19 @@ QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'orderby': {
-            '$ref': '#/definitions/column_name',
+            'anyOf': [
+                {'$ref': '#/definitions/column_name'},
+                {'$ref': '#/definitions/nested_expr'},
+                {
+                    'type': 'array',
+                    'items': {
+                        'anyOf': [
+                            {'$ref': '#/definitions/column_name'},
+                            {'$ref': '#/definitions/nested_expr'},
+                        ],
+                    }
+                }
+            ]
         },
         'limitby': {
             'type': 'array',

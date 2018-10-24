@@ -628,6 +628,26 @@ class TestApi(BaseTest):
         assert 'type_not_empty' in result['data'][0]
         assert result['data'][0]['type_not_empty'] == 0
 
+    def test_complex_order(self):
+        # sort by a complex sort key with an expression, and a regular column,
+        # and both ASC and DESC sorts.
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['environment', 'time'],
+            'orderby': [['-substringUTF8', ['environment', 1, 3]], 'time'],
+            'debug': True,
+        })).data)
+        assert len(result['data']) == 180
+
+        # all `test` events first as we sorted DESC by (the prefix of) environment
+        assert all(d['environment'] == 'test' for d in result['data'][:90])
+        assert all(d['environment'] == u'prød' for d in result['data'][90:])
+
+        # within a value of environment, timestamps should be sorted ascending
+        test_timestamps = [d['time'] for d in result['data'][:90]]
+        assert sorted(test_timestamps) == test_timestamps
+
+
     def test_nullable_datetime_columns(self):
         # Test that requesting a Nullable(DateTime) column does not throw
         query = {
