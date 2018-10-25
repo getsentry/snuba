@@ -322,7 +322,7 @@ def repair_batch_inserts(connection, epoch, records):
 
     hash_state_map = get_hash_state_map(
         connection,
-        [hash_state_key for index, hash_state_key in records_to_repair],
+        set(hash_state_key for index, hash_state_key in records_to_repair),
     )
 
     deleted_records = 0
