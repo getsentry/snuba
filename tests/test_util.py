@@ -1,8 +1,16 @@
+from datetime import date, datetime
+
 from base import BaseTest
 
-from snuba import util
-from snuba.util import *
-from mock import patch
+from snuba.util import (
+    column_expr,
+    complex_condition_expr,
+    condition_expr,
+    escape_literal,
+    issue_expr,
+    tuplify,
+    uses_issue,
+)
 
 
 class TestUtil(BaseTest):
@@ -61,6 +69,10 @@ class TestUtil(BaseTest):
 
         # Complex expressions (function calls) involving both string and column arguments
         assert column_expr(tuplify(['concat', ['a', '\':\'', 'b']]), body.copy()) == 'concat(a, \':\', b)'
+
+        group_id_body = body.copy()
+        group_id_body['use_group_id_column'] = True
+        assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
     def test_alias_in_alias(self):
         body = {}
@@ -143,7 +155,6 @@ class TestUtil(BaseTest):
         ])
         assert condition_expr(conditions, body.copy()) == \
             """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty(`tags[sentry:user]`) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
-
 
     def test_duplicate_expression_alias(self):
         body = {
