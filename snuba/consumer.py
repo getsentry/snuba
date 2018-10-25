@@ -284,16 +284,14 @@ get_hash_state_key_from_insert_record = operator.itemgetter(
 
 def get_hash_state_map(connection, keys):
     parameters = list(itertools.chain.from_iterable(keys))
-
     with connection.cursor() as cursor:
         cursor.execute(
-            u'SELECT project_id, hash, group_id, deleted_at FROM grouphashstates WHERE {conditions}'.format(
-                conditions=u' OR '.join(['(project_id = %s AND hash = %s)'] * len(keys)),
+            u'SELECT project_id, hash, group_id, deleted_at FROM grouphash_state WHERE (project_id, hash) IN (VALUES {conditions})'.format(
+                conditions=u', '.join([u'(%s, %s)'] * len(keys)),
             ),
             parameters,
         )
-
-        return {row[:2]: row[2:] for row in cursor.fetchall()}
+        return {tuple(row[:2]): tuple(row[2:]) for row in cursor.fetchall()}
 
 
 group_id_column_index = settings.WRITER_COLUMNS.index('group_id')
