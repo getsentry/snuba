@@ -5,6 +5,7 @@ import operator
 import simplejson as json
 import six
 import time
+from datetime import datetime
 
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
@@ -345,7 +346,7 @@ def repair_batch_replacements(epoch, records):
     """
     i = 0
     while i < len(records):
-        if records[i]['datetime'] < epoch:
+        if datetime.strptime(records[i]['datetime'], settings.PAYLOAD_DATETIME_FORMAT) < epoch:
             del records[i]
         else:
             i = i + 1
