@@ -145,6 +145,7 @@ py3_reqs = [
     'pbr==4.0.4',
     'petname==2.2',
     'pexpect==4.6.0',
+    'pg8000==1.12.3',
     'pickleshare==0.7.4',
     'pluggy==0.6.0',
     'prompt-toolkit==1.0.15',
