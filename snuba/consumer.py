@@ -314,7 +314,7 @@ def repair_batch_inserts(connection, epoch, records):
                 get_hash_state_key_from_insert_record(record),
             ),
             filter(
-                lambda (index, record): record['data']['received'] >= epoch,
+                lambda (index, record): record['received'] >= epoch,
                 enumerate(records),
             ),
         )
@@ -332,7 +332,7 @@ def repair_batch_inserts(connection, epoch, records):
 
         index = original_index - deleted_records
         record = records[index]
-        if record['data']['received'] < deleted_at:
+        if record['received'] < deleted_at:
             del records[index]
             deleted_records = deleted_records + 1
         else:
