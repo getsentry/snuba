@@ -7,6 +7,8 @@ import six
 import time
 from datetime import datetime
 
+import pg8000
+import pytz
 from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
 
 from . import processor, settings
@@ -313,7 +315,7 @@ def repair_batch_inserts(connection, epoch, records):
                 get_hash_state_key_from_insert_record(record),
             ),
             filter(
-                lambda (index, record): record['received'] >= epoch,
+                lambda (index, record): record['received'].replace(tzinfo=pytz.utc) >= epoch,
                 enumerate(records),
             ),
         )
@@ -331,7 +333,7 @@ def repair_batch_inserts(connection, epoch, records):
 
         index = original_index - deleted_records
         record = records[index]
-        if record['received'] < deleted_at:
+        if record['received'].replace(tzinfo=pytz.utc) < deleted_at:
             del records[index]
             deleted_records = deleted_records + 1
         else:
@@ -358,7 +360,6 @@ class ConsumerWorker(AbstractBatchWorker):
         self.replacements_topic = replacements_topic
         self.metrics = metrics
 
-        import pg8000, pytz
         self.backfill_export_connection = pg8000.connect(user='postgres', database='getsentry')
         self.backfill_export_epoch = datetime(2018, 10, 25, 17, 27, 07, 6685, tzinfo=pytz.utc)
 
