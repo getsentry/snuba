@@ -361,7 +361,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.metrics = metrics
 
         self.backfill_export_connection = pg8000.connect(user='postgres', database='getsentry')
-        self.backfill_export_epoch = datetime(2018, 10, 25, 17, 27, 07, 6685, tzinfo=pytz.utc)
+        self.backfill_export_epoch = datetime(2018, 10, 25, 17, 27, 7, 6685, tzinfo=pytz.utc)
 
     def process_message(self, message):
         value = json.loads(message.value())
