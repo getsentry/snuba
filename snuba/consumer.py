@@ -353,12 +353,15 @@ def repair_batch_replacements(epoch, records):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
+    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, backfill_export_connection, backfill_export_epoch, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
+
+        self.backfill_export_connection = backfill_export_dsn
+        self.backfill_export_epoch = backfill_export_epoch
 
     def process_message(self, message):
         value = json.loads(message.value())
@@ -398,8 +401,8 @@ class ConsumerWorker(AbstractBatchWorker):
             elif action_type == processor.REPLACE:
                 replacements.append(data)
 
-        repair_batch_inserts(connection, epoch, inserts)
-        repair_batch_replacements(epoch, replacements)
+        repair_batch_inserts(self.backfill_export_connection, self.backfill_export_epoch, inserts)
+        repair_batch_replacements(self.backfill_export_epoch, replacements)
 
         if inserts:
             write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)

@@ -2,6 +2,7 @@ import logging
 import signal
 
 import click
+import psycopg2
 from confluent_kafka import Producer
 
 from snuba import settings
@@ -35,10 +36,12 @@ from snuba import settings
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 @click.option('--commit-log-topic', default='snuba-commit-log',
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
+@click.option('--backfill-export-dsn', help='PostgreSQL DSN for backfill export data.')
+@click.option('--backfill-export-epoch', help='Timestamp when backfill export was taken.')
 def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_server, clickhouse_server,
              distributed_table_name, max_batch_size, max_batch_time_ms, auto_offset_reset,
              queued_max_messages_kbytes, queued_min_messages, log_level, dogstatsd_host, dogstatsd_port,
-             commit_log_topic):
+             commit_log_topic, backfill_export_dsn, backfill_export_epoch):
 
     import sentry_sdk
     from snuba import util
@@ -60,11 +63,14 @@ def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_ser
         'message.max.bytes': 50000000,  # 50MB, default is 1MB
     })
 
+    with psycopg2.connect(backfill_export_dsn) as backfill_export_connection:
+
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
         worker=ConsumerWorker(
             clickhouse, distributed_table_name,
-            producer=producer, replacements_topic=replacements_topic, metrics=metrics
+            producer=producer, replacements_topic=replacements_topic, metrics=metrics,
+            backfill_export_connection=backfill_export_connecton, backfill_export_epoch=backfill_export_epoch,
         ),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
