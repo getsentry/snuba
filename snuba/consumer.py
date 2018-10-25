@@ -310,12 +310,12 @@ def repair_batch_inserts(connection, epoch, records):
     """
     records_to_repair = list(
         map(
-            lambda (index, record): (
-                index,
-                get_hash_state_key_from_insert_record(record),
+            lambda i: (
+                i[0],
+                get_hash_state_key_from_insert_record(i[1]),
             ),
             filter(
-                lambda (index, record): record['received'].replace(tzinfo=pytz.utc) >= epoch,
+                lambda i: i[1]['received'].replace(tzinfo=pytz.utc) >= epoch,
                 enumerate(records),
             ),
         )
