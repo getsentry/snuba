@@ -308,7 +308,7 @@ def repair_batch_inserts(connection, epoch, records):
     associated with the event's primary hash in the export to account for
     merging/unmerging activity.
     """
-    records_to_repair = list(
+    records_to_repair = list(  # (original index, lookup key)
         map(
             lambda i: (
                 i[0],
@@ -333,10 +333,11 @@ def repair_batch_inserts(connection, epoch, records):
 
         index = original_index - deleted_records
         record = records[index]
-        if record['received'].replace(tzinfo=pytz.utc) < deleted_at:
+        if deleted_at is not None and record['received'].replace(tzinfo=pytz.utc) < deleted_at:
             del records[index]
             deleted_records = deleted_records + 1
         else:
+            assert group_id is not None
             record[group_id_column_index] = group_id
 
 
