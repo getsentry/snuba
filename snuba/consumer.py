@@ -353,7 +353,7 @@ def repair_batch_replacements(epoch, records):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, backfill_export_connection, backfill_export_epoch, metrics=None):
+    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.dist_table_name = dist_table_name
         self.producer = producer
