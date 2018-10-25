@@ -359,8 +359,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-
-        self.backfill_export_connection = backfill_export_dsn
+        self.backfill_export_connection = backfill_export_connection
         self.backfill_export_epoch = backfill_export_epoch
 
     def process_message(self, message):
