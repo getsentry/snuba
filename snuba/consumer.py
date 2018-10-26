@@ -344,8 +344,10 @@ def repair_batch_inserts(connection, epoch, records):
             del records[index]
             deleted_records_count = deleted_records_count + 1
         else:
-            assert group_id is not None
-            if record[group_id_column_index] != group_id:
+            if group_id is None:  # group was discarded, but no hash tombstone
+                del records[index]
+                deleted_records_count = deleted_records_count + 1
+            elif record[group_id_column_index] != group_id:
                 record[group_id_column_index] = group_id
                 updated_records_count = updated_records_count + 1
 
