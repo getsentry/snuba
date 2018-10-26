@@ -336,20 +336,24 @@ def repair_batch_inserts(connection, epoch, records):
 
     for original_index, hash_state_key in records_to_repair:
         # TODO: If this raises a KeyError, we have problems.
-        group_id, deleted_at = hash_state_map[hash_state_key]
-
         index = original_index - deleted_records_count
         record = records[index]
-        if deleted_at is not None and get_received_datetime(record) < deleted_at:
+        try:
+            group_id, deleted_at = hash_state_map[hash_state_key]
+        except KeyError:  # probably a project deletion
             del records[index]
             deleted_records_count = deleted_records_count + 1
         else:
-            if group_id is None:  # group was discarded, but no hash tombstone
+            if deleted_at is not None and get_received_datetime(record) < deleted_at:
                 del records[index]
                 deleted_records_count = deleted_records_count + 1
-            elif record[group_id_column_index] != group_id:
-                record[group_id_column_index] = group_id
-                updated_records_count = updated_records_count + 1
+            else:
+                if group_id is None:  # group was discarded, but no hash tombstone
+                    del records[index]
+                    deleted_records_count = deleted_records_count + 1
+                elif record[group_id_column_index] != group_id:
+                    record[group_id_column_index] = group_id
+                    updated_records_count = updated_records_count + 1
 
     return updated_records_count
 
