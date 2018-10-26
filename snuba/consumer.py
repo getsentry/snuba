@@ -326,19 +326,25 @@ def repair_batch_inserts(connection, epoch, records):
         set(hash_state_key for index, hash_state_key in records_to_repair),
     )
 
-    deleted_records = 0
+    updated_records_count = 0
+    deleted_records_count = 0
+
     for original_index, hash_state_key in records_to_repair:
         # TODO: If this raises a KeyError, we have problems.
         group_id, deleted_at = hash_state_map[hash_state_key]
 
-        index = original_index - deleted_records
+        index = original_index - deleted_records_count
         record = records[index]
         if deleted_at is not None and record['received'].replace(tzinfo=pytz.utc) < deleted_at:
             del records[index]
-            deleted_records = deleted_records + 1
+            deleted_records_count = deleted_records_count + 1
         else:
             assert group_id is not None
-            record[group_id_column_index] = group_id
+            if record[group_id_column_index] != group_id:
+                record[group_id_column_index] = group_id
+                updated_records_count = updated_records_count + 1
+
+    return updated_records_count
 
 
 def repair_batch_replacements(epoch, records):
@@ -404,13 +410,20 @@ class ConsumerWorker(AbstractBatchWorker):
             elif action_type == processor.REPLACE:
                 replacements.append(data)
 
-        repair_batch_inserts(self.backfill_export_connection, self.backfill_export_epoch, inserts)
-        repair_batch_replacements(self.backfill_export_epoch, replacements)
+        if inserts:
+            original_insert_count = len(inserts)
+            updated_insert_count = repair_batch_inserts(self.backfill_export_connection, self.backfill_export_epoch, inserts)
+            logger.debug('Repaired %s insert records, %s remaining after filtering (%s updated.)', original_insert_count, len(inserts), updated_insert_count)
 
         if inserts:
             write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
+
+        if replacements:
+            original_replacement_count = len(replacements)
+            repair_batch_replacements(self.backfill_export_epoch, replacements)
+            logger.debug('Repaired %s replacement records, %s remaining after filtering.', original_replacement_count, len(replacements))
 
         if replacements:
             for key, replacement in replacements:
