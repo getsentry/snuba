@@ -297,6 +297,11 @@ def get_hash_state_map(connection, keys):
 
 
 group_id_column_index = settings.WRITER_COLUMNS.index('group_id')
+received_column_index = settings.WRITER_COLUMNS.index('received')
+
+
+def get_received_datetime(record):
+    return record[received_column_index].replace(tzinfo=pytz.utc)
 
 
 def repair_batch_inserts(connection, epoch, records):
@@ -315,7 +320,7 @@ def repair_batch_inserts(connection, epoch, records):
                 get_hash_state_key_from_insert_record(i[1]),
             ),
             filter(
-                lambda i: i[1]['received'].replace(tzinfo=pytz.utc) >= epoch,
+                lambda i: get_received_datetime(i[1]),
                 enumerate(records),
             ),
         )
@@ -335,7 +340,7 @@ def repair_batch_inserts(connection, epoch, records):
 
         index = original_index - deleted_records_count
         record = records[index]
-        if deleted_at is not None and record['received'].replace(tzinfo=pytz.utc) < deleted_at:
+        if deleted_at is not None and get_received_datetime(record) < deleted_at:
             del records[index]
             deleted_records_count = deleted_records_count + 1
         else:
