@@ -5,33 +5,17 @@ from contextlib import contextmanager
 import logging
 import random
 import re
-from redis import StrictRedis
 import simplejson as json
 import six
 import time
 import uuid
 
 from snuba import settings
-from snuba.redis import RetryingStrictRedisCluster
+from snuba.redis import redis_client as rds
 
 
 logger = logging.getLogger('snuba.state')
 
-if settings.USE_REDIS_CLUSTER:
-    rds = RetryingStrictRedisCluster(
-        startup_nodes=[{
-            'host': settings.REDIS_HOST,
-            'port': settings.REDIS_PORT,
-        }],
-        socket_keepalive=True
-    )
-else:
-    rds = StrictRedis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=settings.REDIS_DB,
-        socket_keepalive=True
-    )
 kfk = None
 
 ratelimit_prefix = 'snuba-ratelimit:'

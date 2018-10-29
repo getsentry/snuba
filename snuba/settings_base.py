@@ -323,3 +323,7 @@ PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 REPLACER_MAX_BLOCK_SIZE = 512
 REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
+# TLL of Redis key that denotes whether a project had replacements
+# run recently. Useful for decidig whether or not to add FINAL clause
+# to queries.
+REPLACER_KEY_TTL = 12 * 60 * 60

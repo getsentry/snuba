@@ -12,6 +12,7 @@ import simplejson as json
 
 from snuba import generalizer, schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
+from snuba.replacer import get_projects_have_replacements
 
 
 logger = logging.getLogger('snuba.api')
@@ -186,7 +187,7 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    if use_final:
+    if use_final or get_projects_have_replacements(project_ids):
         from_clause = u'{} FINAL'.format(from_clause)
 
     sample = body.get('sample', config_sample)
