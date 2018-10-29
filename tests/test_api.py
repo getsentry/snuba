@@ -320,6 +320,15 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 1
 
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['event_id', 'received'],
+            'conditions': [['received', '=', str(self.base_time)]],
+            'orderby': 'event_id',
+            'limit': 1,
+        })).data)
+        assert len(result['data']) == 1
+
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
