@@ -378,7 +378,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.replacements_topic = replacements_topic
         self.metrics = metrics
 
-        self.backfill_export_connection = pg8000.connect(user='postgres', database='getsentry', port=6432)
+        self.backfill_export_connection = pg8000.connect(user='postgres', database='getsentry')
         self.backfill_export_connection.autocommit = True
 
         self.backfill_export_epoch = datetime(2018, 10, 25, 17, 27, 7, 6685, tzinfo=pytz.utc)
