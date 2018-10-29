@@ -10,7 +10,7 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 import simplejson as json
 
-from snuba import generalizer, schemas, settings, state, util
+from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 
 
@@ -138,7 +138,6 @@ def query(validated_body=None, timer=None):
     )
 
 
-@generalizer.generalize
 def parse_and_run_query(validated_body, timer):
     max_days, table, date_align, config_sample, use_final = state.get_configs([
         ('max_days', None),
