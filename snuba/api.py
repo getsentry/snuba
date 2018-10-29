@@ -158,7 +158,11 @@ def parse_and_run_query(validated_body, timer):
 
     where_conditions = body.get('conditions', [])
     for condition in where_conditions:
-        if (len(condition) == 3 and condition[0] in ('received', 'timestamp')):
+        if (
+            len(condition) == 3 and
+            condition[0] in ('received', 'timestamp') and
+            condition[1] in ('>', '<', '>=', '<=', '=', '!=')
+        ):
             condition[2] = util.parse_datetime(condition[2], date_align)
 
     where_conditions.extend([
