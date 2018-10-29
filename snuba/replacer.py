@@ -93,7 +93,7 @@ def process_delete_groups(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -143,7 +143,7 @@ def process_merge(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -182,7 +182,7 @@ def process_unmerge(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {
