@@ -40,12 +40,13 @@ query_cache_prefix = 'snuba-query-cache:'
 config_hash = 'snuba-config'
 queries_list = 'snuba-queries'
 
-##### Rate Limiting and Deduplication
+# Rate Limiting and Deduplication
 
 # Window for concurrent query counting
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
+
 
 @contextmanager
 def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
@@ -88,7 +89,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
         _, _, rate, concurrent = pipe.execute()
     except Exception as ex:
         logger.error(ex)
-        yield (True, 0, 0) # fail open if redis is having issues
+        yield (True, 0, 0)  # fail open if redis is having issues
         return
 
     per_second = rate / float(rate_lookback_s)
@@ -159,12 +160,13 @@ def deduper(query_id):
             rds.eval(unlock, 1, lock, nonce)
 
 
-##### Runtime Configuration
+# Runtime Configuration
 
 class memoize():
     """
     Simple expiring memoizer for functions with no args.
     """
+
     def __init__(self, timeout=1):
         self.timeout = timeout
         self.saved = None
@@ -178,6 +180,7 @@ class memoize():
             return self.saved
         return wrapper
 
+
 def numeric(value):
     try:
         return int(value)
@@ -187,7 +190,10 @@ def numeric(value):
         except ValueError:
             return value
 
+
 ABTEST_RE = re.compile('(?:(-?\d+\.?\d*)(?:\:(\d+))?\/?)')
+
+
 def abtest(value):
     """
     Recognizes a value that consists of a '/'-separated sequence of
@@ -258,7 +264,7 @@ def delete_config(key):
         pass
 
 
-##### Query Recording
+# Query Recording
 
 def record_query(data):
     global kfk
@@ -298,10 +304,12 @@ def get_queries():
 
     return queries
 
+
 def get_result(query_id):
     key = '{}{}'.format(query_cache_prefix, query_id)
     result = rds.get(key)
     return result and json.loads(result)
+
 
 def set_result(query_id, result):
     timeout = get_config('cache_expiry_sec', 1)

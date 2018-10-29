@@ -9,6 +9,7 @@ import uuid
 
 from snuba import state
 
+
 class TestState(BaseTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
@@ -88,7 +89,6 @@ class TestState(BaseTest):
             ('noexist', 300)
         ]) == [1, 2, 300]
 
-
         state.set_configs({'bar': 'quux'})
         all_configs = state.get_all_configs()
         assert all(all_configs[k] == v for k, v in [('foo', 1), ('bar', 'quux'), ('baz', 3)])
@@ -98,6 +98,7 @@ class TestState(BaseTest):
             state.set_config('use_query_id', 1)
             state.set_config('use_cache', 1)
             uniq_name = uuid.uuid4().hex[:8]
+
             def do_request(result_container):
                 result = json.loads(self.app.post('/query', data=json.dumps({
                     'project': 1,
