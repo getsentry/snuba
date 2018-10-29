@@ -4,7 +4,7 @@ import simplejson as json
 import six
 import time
 
-from confluent_kafka import Consumer, KafkaError, KafkaException, Producer
+from confluent_kafka import Consumer, KafkaError, KafkaException
 
 from . import processor, settings
 from .writer import row_from_processed_event, write_rows
@@ -234,8 +234,7 @@ class BatchingKafkaConsumer(object):
 
     def _commit_message_delivery_callback(self, error, message):
         if error is not None:
-            # errors are KafkaError objects and inherit from BaseException
-            raise error
+            raise Exception(error.str())
 
     def _commit(self):
         retries = 3
