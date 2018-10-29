@@ -276,6 +276,18 @@ class InvalidActionType(Exception):
     pass
 
 
+def chunked(iterator, size):
+    chunk = []
+    for item in iterator:
+        chunk.append(item)
+        if len(chunk) == size:
+            yield chunk
+            chunk = []
+
+    if chunk:
+        yield chunk
+
+
 get_hash_state_key_from_insert_record = operator.itemgetter(
     *map(settings.WRITER_COLUMNS.index, [
         'project_id',
