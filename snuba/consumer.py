@@ -379,7 +379,8 @@ def repair_batch_replacements(epoch, records):
     """
     i = 0
     while i < len(records):
-        if datetime.strptime(records[i]['datetime'], settings.PAYLOAD_DATETIME_FORMAT) < epoch:
+        _, payload = records[i]  # processed record is (project_id, replacement data payload)
+        if datetime.strptime(payload['datetime'], settings.PAYLOAD_DATETIME_FORMAT) < epoch:
             del records[i]
         else:
             i = i + 1
