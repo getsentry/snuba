@@ -71,7 +71,9 @@ class ReplacerWorker(AbstractBatchWorker):
 
 def process_delete_groups(message):
     group_ids = message['group_ids']
-    assert len(group_ids) > 0
+    if not group_ids:
+        return None
+
     assert all(isinstance(gid, six.integer_types) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMNS)
@@ -79,7 +81,7 @@ def process_delete_groups(message):
     where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(group_ids)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -91,7 +93,7 @@ def process_delete_groups(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -119,7 +121,9 @@ def process_merge(message):
             SEEN_MERGE_TXN_CACHE.append(txn)
 
     previous_group_ids = message['previous_group_ids']
-    assert len(previous_group_ids) > 0
+    if not previous_group_ids:
+        return None
+
     assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
@@ -127,7 +131,7 @@ def process_merge(message):
     where = """\
         WHERE project_id = %(project_id)s
         AND group_id IN (%(previous_group_ids)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -139,7 +143,7 @@ def process_merge(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -155,7 +159,9 @@ def process_merge(message):
 
 def process_unmerge(message):
     hashes = message['hashes']
-    assert len(hashes) > 0
+    if not hashes:
+        return None
+
     assert all(isinstance(h, six.string_types) for h in hashes)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS)
@@ -164,7 +170,7 @@ def process_unmerge(message):
         WHERE project_id = %(project_id)s
         AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
-        AND timestamp <= CAST('%(timestamp)s' AS DateTime)
+        AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
 
@@ -176,7 +182,7 @@ def process_unmerge(message):
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s
+        FROM %(dist_table_name)s FINAL
     """ + where
 
     query_args = {

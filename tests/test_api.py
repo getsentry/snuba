@@ -6,11 +6,9 @@ from dateutil.tz import tz
 from functools import partial
 import pytest
 import pytz
-import sentry_sdk
 from sentry_sdk import Hub, Client
 import simplejson as json
 import six
-import sys
 import time
 import uuid
 
@@ -19,11 +17,15 @@ from snuba import processor, settings, state
 from base import BaseTest
 
 
+def hash_to_group_id(hash):
+    return int(hash[:16], 16)
+
+
 class TestApi(BaseTest):
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
         from snuba.api import application
-        assert application.testing == True
+        assert application.testing is True
         application.config['PROPAGATE_EXCEPTIONS'] = False
 
         self.app = application.test_client()
@@ -68,7 +70,7 @@ class TestApi(BaseTest):
                         'message': 'a message',
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
-                        'group_id': int(self.hashes[(tock * p) % len(self.hashes)][:16], 16),
+                        'group_id': hash_to_group_id(self.hashes[(tock * p) % len(self.hashes)]),
                         'retention_days': settings.DEFAULT_RETENTION_DAYS,
                         'data': {
                             # Project N sends every Nth (mod len(hashes)) hash (and platform)
@@ -177,6 +179,21 @@ class TestApi(BaseTest):
             issues_expected = set(range(0, len(self.hashes), p))
             assert issues_found - issues_expected == set()
 
+        # test with use_group_id_column == True
+        for p in self.project_ids:
+            issues = [hash_to_group_id(h) for h in self.hashes]
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': p,
+                'granularity': 3600,
+                'issues': [],
+                'conditions': [['issue', 'IN', issues]],
+                'groupby': 'issue',
+                'use_group_id_column': True,
+            })).data)
+            issues_found = set([d['issue'] for d in result['data']])
+            issues_expected = set(issues)
+            assert issues_found - issues_expected == set()
+
     def test_no_issues(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -248,7 +265,6 @@ class TestApi(BaseTest):
         # LIMIT BY
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
-            'groupby': ['project_id'],
             'aggregations': [['count()', '', 'count']],
             'orderby': '-count',
             'groupby': 'environment',
@@ -628,13 +644,32 @@ class TestApi(BaseTest):
         assert 'type_not_empty' in result['data'][0]
         assert result['data'][0]['type_not_empty'] == 0
 
+    def test_complex_order(self):
+        # sort by a complex sort key with an expression, and a regular column,
+        # and both ASC and DESC sorts.
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['environment', 'time'],
+            'orderby': [['-substringUTF8', ['environment', 1, 3]], 'time'],
+            'debug': True,
+        })).data)
+        assert len(result['data']) == 180
+
+        # all `test` events first as we sorted DESC by (the prefix of) environment
+        assert all(d['environment'] == 'test' for d in result['data'][:90])
+        assert all(d['environment'] == u'prød' for d in result['data'][90:])
+
+        # within a value of environment, timestamps should be sorted ascending
+        test_timestamps = [d['time'] for d in result['data'][:90]]
+        assert sorted(test_timestamps) == test_timestamps
+
     def test_nullable_datetime_columns(self):
         # Test that requesting a Nullable(DateTime) column does not throw
         query = {
             'project': 1,
             'selected_columns': ['received'],
         }
-        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        json.loads(self.app.post('/query', data=json.dumps(query)).data)
 
     def test_test_endpoints(self):
         project_id = 73
@@ -793,7 +828,7 @@ class TestApi(BaseTest):
                 'orderby': '-count',
             })).data)
             assert result['data'] == [{'count': 90}]
-            assert result['stats']['cache_hit'] == False
+            assert result['stats']['cache_hit'] is False
             query_1_id = result['stats']['query_id']
 
             # Then get the results for another tag, which we should be able
@@ -811,7 +846,7 @@ class TestApi(BaseTest):
                 'orderby': '-count',
             })).data)
             assert result['data'] == [{'count': 90}]
-            assert result['stats']['cache_hit'] == True
+            assert result['stats']['cache_hit'] is True
             result['stats']['query_id'] == query_1_id
 
             # Example 2: uniqes
@@ -830,7 +865,7 @@ class TestApi(BaseTest):
                 'limit': 200,
             })).data)
             assert result['data'] == [{'unique_values': 90}]
-            assert result['stats']['cache_hit'] == False
+            assert result['stats']['cache_hit'] is False
             query_1_id = result['stats']['query_id']
 
             # Then get the results for another tag, which we should be able
@@ -853,7 +888,7 @@ class TestApi(BaseTest):
                 'name': 'unique_values',
                 'type': 'UInt64'
             }]
-            assert result['stats']['cache_hit'] == True
+            assert result['stats']['cache_hit'] is True
             result['stats']['query_id'] == query_1_id
 
         finally:
@@ -873,7 +908,6 @@ class TestApi(BaseTest):
 
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 3,
-                'groupby': [],
                 'from_date': self.base_time.isoformat(),
                 'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [
@@ -891,12 +925,11 @@ class TestApi(BaseTest):
             assert len(result['data']) == 30
             assert sorted([int(d['tags[sentry:release]']) for d in result['data']]) == list(range(2, self.minutes, 6))
             assert set([c['name'] for c in result['meta']]) == set(['times_seen', 'first_seen', 'tags[sentry:release]'])
-            assert result['stats']['cache_hit'] == False
-            query_1_id = result['stats']['query_id']
+            assert result['stats']['cache_hit'] is False
+            result['stats']['query_id']
 
             result = json.loads(self.app.post('/query', data=json.dumps({
                 'project': 3,
-                'groupby': [],
                 'from_date': self.base_time.isoformat(),
                 'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
                 'aggregations': [
@@ -917,7 +950,7 @@ class TestApi(BaseTest):
                 'first_seen': (self.base_time + timedelta(minutes=2)).replace(tzinfo=tz.tzutc()).isoformat(),
             }]
             assert set([c['name'] for c in result['meta']]) == set(['times_seen', 'first_seen', 'tags[os.name]'])
-            assert result['stats']['cache_hit'] == True
+            assert result['stats']['cache_hit'] is True
 
         finally:
             state.delete_config('use_query_id')

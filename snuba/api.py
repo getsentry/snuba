@@ -1,5 +1,6 @@
 import logging
 import os
+import six
 
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -193,14 +194,31 @@ def parse_and_run_query(validated_body, timer):
         from_clause = u'{} SAMPLE {}'.format(from_clause, sample)
 
     joins = []
-    issue_expr = util.issue_expr(body)
-    if issue_expr:
-        joins.append(issue_expr)
-        where_conditions.append(
-            ('timestamp', '>', util.Literal(
-                'ifNull(hash_timestamp, CAST(\'1970-01-01 00:00:00\', \'DateTime\'))')
+    prewhere_clause = ''
+    prewhere_conditions = []
+
+    issues = body.get('issues', [])
+    use_group_id_column = body.get('use_group_id_column')
+    if not use_group_id_column:
+        issue_expr = util.issue_expr(body)
+        if issue_expr:
+            joins.append(issue_expr)
+            where_conditions.append(
+                ('timestamp', '>', util.Literal(
+                    'ifNull(hash_timestamp, CAST(\'1970-01-01 00:00:00\', \'DateTime\'))')
+                )
             )
-        )
+
+        # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
+        if issues \
+                and (len(issues) == 1) \
+                and (len(issues[0][2]) == 1) \
+                and (len(project_ids) == 1):
+
+            hash_ = issues[0][2][0]
+            hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_  # strip out tombstone
+            prewhere_conditions.append(['primary_hash', '=', hash_])
+
     if 'arrayjoin' in body:
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)
@@ -209,18 +227,6 @@ def parse_and_run_query(validated_body, timer):
     if where_conditions:
         where_conditions = list(set(util.tuplify(where_conditions)))
         where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
-
-    prewhere_clause = ''
-    prewhere_conditions = []
-    # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
-    if 'issues' in body \
-            and (len(body['issues']) == 1) \
-            and (len(body['issues'][0][2]) == 1) \
-            and (len(project_ids) == 1):
-
-        hash_ = body['issues'][0][2][0]
-        hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_  # strip out tombstone
-        prewhere_conditions.append(['primary_hash', '=', hash_])
 
     if not prewhere_conditions and settings.PREWHERE_KEYS:
         prewhere_conditions.extend([c for c in where_conditions if c and c[0] in settings.PREWHERE_KEYS])
@@ -242,11 +248,12 @@ def parse_and_run_query(validated_body, timer):
 
     order_clause = ''
     if body.get('orderby'):
-        desc = body['orderby'].startswith('-')
-        orderby = body['orderby'].lstrip('-')
-        order_clause = u'ORDER BY {} {}'.format(
-            util.column_expr(orderby, body), 'DESC' if desc else 'ASC'
-        )
+        orderby = [util.column_expr(util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
+        orderby = [u'{} {}'.format(
+            ob.lstrip('-'),
+            'DESC' if ob.startswith('-') else 'ASC'
+        ) for ob in orderby]
+        order_clause = u'ORDER BY {}'.format(', '.join(orderby))
 
     limitby_clause = ''
     if 'limitby' in body:
@@ -276,8 +283,8 @@ def parse_and_run_query(validated_body, timer):
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'num_issues': len(body.get('issues', [])),
-        'num_hashes': sum(len(i[-1]) for i in body.get('issues', [])),
+        'num_issues': len(issues),
+        'num_hashes': sum(len(i[-1]) for i in issues) if not use_group_id_column else 0,
         'sample': sample,
     })
 

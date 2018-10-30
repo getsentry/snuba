@@ -19,6 +19,7 @@ The result of this single query can be used to return results for all the more
 specific queries to follow.
 """
 
+
 def generalize(func):
     def wrapper(*args, **kwargs):
         """
@@ -54,11 +55,11 @@ def generalize(func):
                 # only a single unique tag is used in any tags[] conditions or aggregations
                 len(tags) == 1 and tagcol == 'tags' and tagval in settings.PROMOTED_TAGS[tagcol] and
 
-                # Queries that already have a groupby "eg  top_tag_values" are more expensive
-                # to add a second groupby to, as we get back (#tags * #values) rows in the response.
-                # So gate these separately
-                (len(body['groupby']) == 0 or state.get_config('generalize_grouped_query', 0))
-            ):
+            # Queries that already have a groupby "eg  top_tag_values" are more expensive
+            # to add a second groupby to, as we get back (#tags * #values) rows in the response.
+            # So gate these separately
+            (len(body['groupby']) == 0 or state.get_config('generalize_grouped_query', 0))
+        ):
 
             generalized = True
             # replace all tags[] columns in conditions and aggregations with tags_value
@@ -66,7 +67,6 @@ def generalize(func):
                 cond[0] = 'tags_value'
             for agg in tag_aggs:
                 agg[1] = 'tags_value'
-
 
             fwd, rev = {tag: 'tags_value'}, {'tags_value': tag}
             groupby = util.to_list(body['groupby'])
@@ -83,7 +83,6 @@ def generalize(func):
             if 'limit' in body:
                 body['limitby'] = [body.pop('limit'), 'tags_key']
 
-
         result, status = func(*args, **kwargs)
 
         if generalized:
@@ -97,8 +96,5 @@ def generalize(func):
                 for m in result['meta']:
                     m['name'] = rev.get(m['name'], m['name'])
 
-
         return result, status
     return wrapper
-
-

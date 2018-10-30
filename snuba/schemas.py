@@ -18,7 +18,7 @@ SDK_STATS_SCHEMA = {
         },
         'granularity': {
             'type': 'number',
-            'default': 86400, # SDK stats query defaults to 1-day bucketing
+            'default': 86400,  # SDK stats query defaults to 1-day bucketing
         },
         'groupby': {
             'type': 'array',
@@ -73,6 +73,10 @@ QUERY_SCHEMA = {
         'granularity': {
             'type': 'number',
             'default': 3600,
+        },
+        'use_group_id_column': {
+            'type': 'boolean',
+            'default': False
         },
         'issues': {
             'type': 'array',
@@ -150,7 +154,19 @@ QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'orderby': {
-            '$ref': '#/definitions/column_name',
+            'anyOf': [
+                {'$ref': '#/definitions/column_name'},
+                {'$ref': '#/definitions/nested_expr'},
+                {
+                    'type': 'array',
+                    'items': {
+                        'anyOf': [
+                            {'$ref': '#/definitions/column_name'},
+                            {'$ref': '#/definitions/nested_expr'},
+                        ],
+                    }
+                }
+            ]
         },
         'limitby': {
             'type': 'array',

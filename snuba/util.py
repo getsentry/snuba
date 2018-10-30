@@ -13,7 +13,7 @@ import numbers
 import re
 import simplejson as json
 import six
-import _strptime # fixes _strptime deferred import issue
+import _strptime  # fixes _strptime deferred import issue
 import time
 
 from snuba import schemas, settings, state
@@ -22,7 +22,8 @@ from snuba import schemas, settings, state
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_\.]*$')
+ESCAPE_RE = re.compile(r'^-?[a-zA-Z][a-zA-Z0-9_\.]*$')
+NEGATE_RE = re.compile(r'^(-?)(.*)$')
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
@@ -48,7 +49,7 @@ def escape_col(col):
     elif ESCAPE_RE.match(col):
         return col
     else:
-        return '`{}`'.format(col)
+        return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 
 
 def string_col(col):
@@ -87,6 +88,8 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = tag_expr(column_name)
     elif column_name in ['tags_key', 'tags_value']:
         expr = tags_expr(column_name, body)
+    elif body.get('use_group_id_column') and column_name == 'issue':
+        expr = 'group_id'
     else:
         expr = escape_col(column_name)
 
@@ -306,7 +309,7 @@ def raw_query(body, sql, client, timer, stats=None):
     fix some of the formatting issues in the result JSON
     """
     project_ids = to_list(body['project'])
-    project_id = project_ids[0] if project_ids else 0 # TODO rate limit on every project in the list?
+    project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache = state.get_configs([
         ('global_per_second_limit', 1000),

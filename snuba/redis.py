@@ -1,5 +1,6 @@
 from rediscluster import StrictRedisCluster
 
+
 class RetryingStrictRedisCluster(StrictRedisCluster):
     """
     Execute a command with cluster reinitialization retry logic.
