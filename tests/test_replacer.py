@@ -201,13 +201,13 @@ class TestReplacer(BaseTest):
             *(replacer.get_project_replacements_key(project_id) for project_id in project_ids)
         )
 
-        assert replacer.get_projects_have_replacements(project_ids) is False
+        assert replacer.get_projects_with_replacements(project_ids) is False
 
         replacer.set_project_replacements_key(100)
-        assert replacer.get_projects_have_replacements(project_ids) is False
+        assert replacer.get_projects_with_replacements(project_ids) is False
 
         replacer.set_project_replacements_key(1)
-        assert replacer.get_projects_have_replacements(project_ids) is True
+        assert replacer.get_projects_with_replacements(project_ids) is True
 
         replacer.set_project_replacements_key(2)
-        assert replacer.get_projects_have_replacements(project_ids) is True
+        assert replacer.get_projects_with_replacements(project_ids) is True

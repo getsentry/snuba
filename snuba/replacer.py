@@ -31,8 +31,8 @@ def set_project_replacements_key(project_id):
     )
 
 
-def get_projects_have_replacements(project_ids):
-    keys = [get_project_replacements_key(project_id) for project_id in project_ids]
+def get_projects_with_replacements(project_ids):
+    keys = {get_project_replacements_key(project_id) for project_id in project_ids}
     return any(redis_client.mget(keys))
 
 
