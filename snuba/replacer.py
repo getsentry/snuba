@@ -28,7 +28,14 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def process_message(self, message):
         message = json.loads(message.value())
-        version = message[0]
+
+        try:
+            version = message[0]
+        except KeyError:
+            # this message was produced erroneously during backfill because some commits from
+            # master were (temporarily) not in the backfill branch. skip this event because
+            # we are going to replay the backfill from those times in order to generate correct events
+            return None
 
         if version == 2:
             type_, event = message[1:3]
