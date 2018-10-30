@@ -4,7 +4,7 @@ from base import BaseTest
 
 from snuba.util import (
     column_expr,
-    complex_condition_expr,
+    complex_column_expr,
     condition_expr,
     escape_literal,
     issue_expr,
@@ -231,20 +231,20 @@ class TestUtil(BaseTest):
     def test_complex_condition_expr(self):
         body = {}
 
-        assert complex_condition_expr(tuplify(['count', []]), body.copy()) == 'count()'
-        assert complex_condition_expr(tuplify(['notEmpty', ['foo']]), body.copy()) == 'notEmpty(foo)'
-        assert complex_condition_expr(tuplify(['notEmpty', ['arrayElement', ['foo', 1]]]), body.copy()) == 'notEmpty(arrayElement(foo, 1))'
-        assert complex_condition_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
-        assert complex_condition_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
-        assert complex_condition_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
-        assert complex_condition_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
+        assert complex_column_expr(tuplify(['count', []]), body.copy()) == 'count()'
+        assert complex_column_expr(tuplify(['notEmpty', ['foo']]), body.copy()) == 'notEmpty(foo)'
+        assert complex_column_expr(tuplify(['notEmpty', ['arrayElement', ['foo', 1]]]), body.copy()) == 'notEmpty(arrayElement(foo, 1))'
+        assert complex_column_expr(tuplify(['foo', ['bar', ['qux'], 'baz']]), body.copy()) == 'foo(bar(qux), baz)'
+        assert complex_column_expr(tuplify(['foo', [], 'a']), body.copy()) == '(foo() AS a)'
+        assert complex_column_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
+        assert complex_column_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
         # we may move these to special Snuba function calls in the future
-        assert complex_condition_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
-        assert complex_condition_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
+        assert complex_column_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_column_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
 
-        assert complex_condition_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
-        assert complex_condition_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
+        assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
+        assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 
     def test_uses_issue(self):
         assert uses_issue({'conditions': [['issue', '=', 1]]}) == (True, set([1]))
