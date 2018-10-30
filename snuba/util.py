@@ -263,6 +263,14 @@ def condition_expr(conditions, body, depth=0):
         return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         lhs, op, lit = conditions
+
+        if (
+            lhs in ('received', 'timestamp') and
+            op in ('>', '<', '>=', '<=', '=', '!=') and
+            isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit, 1)
+
         lit = escape_literal(lit)
 
         lhs = column_expr(lhs, body)
