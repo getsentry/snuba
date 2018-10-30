@@ -226,9 +226,6 @@ def set_config(key, value, user=None):
 
     try:
         original_value = rds.hget(config_hash, key)
-        if original_value is not None:
-            original_value = original_value.decode('utf-8')
-
         if value == original_value:
             return
 
