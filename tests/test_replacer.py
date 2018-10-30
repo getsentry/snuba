@@ -6,6 +6,7 @@ import simplejson as json
 from base import BaseTest, FakeKafkaMessage
 
 from snuba import replacer
+from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
@@ -193,3 +194,20 @@ class TestReplacer(BaseTest):
 
         assert self.clickhouse.execute(group1_count_query)[0][0] == 0
         assert self.clickhouse.execute(group2_count_query)[0][0] == 1
+
+    def test_replacements_key(self):
+        project_ids = [1, 2]
+        redis_client.delete(
+            *(replacer.get_project_replacements_key(project_id) for project_id in project_ids)
+        )
+
+        assert replacer.get_projects_with_replacements(project_ids) is False
+
+        replacer.set_project_replacements_key(100)
+        assert replacer.get_projects_with_replacements(project_ids) is False
+
+        replacer.set_project_replacements_key(1)
+        assert replacer.get_projects_with_replacements(project_ids) is True
+
+        replacer.set_project_replacements_key(2)
+        assert replacer.get_projects_with_replacements(project_ids) is True

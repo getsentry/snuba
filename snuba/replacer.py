@@ -8,6 +8,7 @@ import simplejson as json
 from . import settings
 from snuba.consumer import AbstractBatchWorker
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
+from snuba.redis import redis_client
 from snuba.util import escape_col
 
 
@@ -18,6 +19,21 @@ CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 REQUIRED_COLUMNS = list(map(escape_col, settings.REQUIRED_COLUMNS))
 ALL_COLUMNS = list(map(escape_col, settings.WRITER_COLUMNS))
+
+
+def get_project_replacements_key(project_id):
+    return "project_replacements:%s" % project_id
+
+
+def set_project_replacements_key(project_id):
+    return redis_client.set(
+        get_project_replacements_key(project_id), True, ex=settings.REPLACER_KEY_TTL
+    )
+
+
+def get_projects_with_replacements(project_ids):
+    keys = {get_project_replacements_key(project_id) for project_id in project_ids}
+    return any(redis_client.mget(keys))
 
 
 class ReplacerWorker(AbstractBatchWorker):
@@ -55,6 +71,8 @@ class ReplacerWorker(AbstractBatchWorker):
 
             if count == 0:
                 continue
+
+            set_project_replacements_key(args['project_id'])
 
             t = time.time()
             logger.debug("Executing replace query: %s" % (insert_query_template % args))
