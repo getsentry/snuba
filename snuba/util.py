@@ -79,7 +79,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     column_name = column_name or ''
 
     if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
-        return complex_condition_expr(column_name, body)
+        return complex_column_expr(column_name, body)
     elif isinstance(column_name, six.string_types) and re.match('^\'.*\'$', column_name):
         return escape_literal(Literal(column_name))
     elif column_name == settings.TIME_GROUP_COLUMN:
@@ -106,8 +106,8 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     return alias_expr(expr, alias, body)
 
 
-def complex_condition_expr(expr, body, depth=0):
-    # TODO instead of the mutual recursion between column_expr and complex_condition_expr
+def complex_column_expr(expr, body, depth=0):
+    # TODO instead of the mutual recursion between column_expr and complex_column_expr
     # we should probably encapsulate all this logic in a single recursive column_expr
     if depth == 0:
         # we know the first item is a function
@@ -137,7 +137,7 @@ def complex_condition_expr(expr, body, depth=0):
     first = True
     for subexpr in expr:
         if isinstance(subexpr, tuple):
-            ret += '(' + complex_condition_expr(subexpr, body, depth + 1) + ')'
+            ret += '(' + complex_column_expr(subexpr, body, depth + 1) + ')'
         else:
             if not first:
                 ret += ', '
