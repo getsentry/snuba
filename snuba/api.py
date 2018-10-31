@@ -92,10 +92,19 @@ def config(fmt='html'):
         if request.method == 'GET':
             return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
         elif request.method == 'POST':
-            state.set_configs(json.loads(request.data))
+            state.set_configs(json.loads(request.data), user=request.headers.get('x-forwarded-email'))
             return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('config.html')
+
+
+@application.route('/config/changes.json')
+def config_changes():
+    return (
+        json.dumps(state.get_config_changes()),
+        200,
+        {'Content-Type': 'application/json'},
+    )
 
 
 @application.route('/health')
