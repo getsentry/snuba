@@ -61,7 +61,7 @@ def string_col(col):
         return 'toString({})'.format(escape_col(col))
 
 
-def parse_datetime(value, alignment):
+def parse_datetime(value, alignment=1):
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
@@ -269,7 +269,7 @@ def condition_expr(conditions, body, depth=0):
             op in ('>', '<', '>=', '<=', '=', '!=') and
             isinstance(lit, str)
         ):
-            lit = parse_datetime(lit, 1)
+            lit = parse_datetime(lit)
 
         lit = escape_literal(lit)
 
