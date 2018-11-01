@@ -254,3 +254,6 @@ class TestUtil(BaseTest):
         assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux', 'issue']]], '=', 1]]}) == (True, set([1]))
         assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux']], 'issue'], '=', 1]]}) == (True, set([1]))
         assert uses_issue({'conditions': [['foo', '=', 1]]}) == (False, None)
+
+        assert uses_issue({'selected_columns': ['issue']}) == (True, None)
+        assert uses_issue({'selected_columns': ['non-issue']}) == (False, None)

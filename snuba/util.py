@@ -513,6 +513,7 @@ def uses_issue(body):
     uses = bool(
         used_ids or
         'issue' in to_list(body.get('groupby', [])) or
+        'issue' in to_list(body.get('selected_columns', [])) or
         any(col == 'issue' for (_, col, _) in body.get('aggregations', []))
     )
 
