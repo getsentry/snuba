@@ -349,7 +349,6 @@ def repair_batch_inserts(connection, epoch, records):
     deleted_records_count = 0
 
     for original_index, hash_state_key in records_to_repair:
-        # TODO: If this raises a KeyError, we have problems.
         index = original_index - deleted_records_count
         record = records[index]
         try:
