@@ -334,7 +334,7 @@ def repair_batch_inserts(connection, epoch, records):
                 get_hash_state_key_from_insert_record(i[1]),
             ),
             filter(
-                lambda i: get_received_datetime(i[1]),
+                lambda i: get_received_datetime(i[1]) < epoch,
                 enumerate(records),
             ),
         )
