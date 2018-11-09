@@ -195,6 +195,10 @@ QUERY_SCHEMA = {
             'type': 'number',
             'min': 0,
         },
+        'turbo': {  # never add FINAL to queries, enable sampling
+            'type': 'boolean',
+            'default': False,
+        },
         'debug': {
             'type': 'boolean',
         }

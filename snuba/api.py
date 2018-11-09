@@ -194,10 +194,11 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    if use_final or get_projects_with_replacements(project_ids):
+    turbo = body.get('turbo', False)
+    if not turbo and (use_final or get_projects_with_replacements(project_ids)):
         from_clause = u'{} FINAL'.format(from_clause)
 
-    sample = body.get('sample', config_sample)
+    sample = body.get('sample', settings.TURBO_SAMPLE_RATE if turbo else config_sample)
     if sample != 1:
         from_clause = u'{} SAMPLE {}'.format(from_clause, sample)
 
