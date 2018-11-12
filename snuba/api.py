@@ -148,14 +148,16 @@ def query(validated_body=None, timer=None):
 
 
 def parse_and_run_query(validated_body, timer):
-    max_days, table, date_align, config_sample, use_final = state.get_configs([
+    body = deepcopy(validated_body)
+    turbo = body.get('turbo', False)
+    max_days, table, date_align, config_sample, force_final = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
-        ('use_final', 0),
+        # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
+        ('force_final', 0 if turbo else None),
     ])
-    body = deepcopy(validated_body)
     stats = {}
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
@@ -194,8 +196,7 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    turbo = body.get('turbo', False)
-    if not turbo and (use_final or get_projects_with_replacements(project_ids)):
+    if force_final == 1 or (force_final is None and get_projects_with_replacements(project_ids)):
         from_clause = u'{} FINAL'.format(from_clause)
 
     sample = body.get('sample', settings.TURBO_SAMPLE_RATE if turbo else config_sample)

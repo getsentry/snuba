@@ -86,8 +86,9 @@ class TestState(BaseTest):
         assert state.get_configs([
             ('foo', 100),
             ('bar', 200),
-            ('noexist', 300)
-        ]) == [1, 2, 300]
+            ('noexist', 300),
+            ('noexist-2', None)
+        ]) == [1, 2, 300, None]
 
         state.set_configs({'bar': 'quux'})
         all_configs = state.get_all_configs()
