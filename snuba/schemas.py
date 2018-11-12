@@ -76,7 +76,7 @@ QUERY_SCHEMA = {
         },
         'use_group_id_column': {
             'type': ['boolean', 'number'],
-            'default': False
+            'default': True
         },
         'issues': {
             'type': 'array',

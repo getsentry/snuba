@@ -17,10 +17,6 @@ from snuba import processor, settings, state
 from base import BaseTest
 
 
-def hash_to_group_id(hash):
-    return int(hash[:16], 16)
-
-
 class TestApi(BaseTest):
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
@@ -36,6 +32,7 @@ class TestApi(BaseTest):
         self.environments = [u'prød', 'test']  # 2 environments
         self.platforms = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 platforms
         self.hashes = [x * 32 for x in '0123456789ab']  # 12 hashes
+        self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
         self.minutes = 180
 
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - \
@@ -70,7 +67,7 @@ class TestApi(BaseTest):
                         'message': 'a message',
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
-                        'group_id': hash_to_group_id(self.hashes[(tock * p) % len(self.hashes)]),
+                        'group_id': self.group_ids[(tock * p) % len(self.hashes)],
                         'retention_days': settings.DEFAULT_RETENTION_DAYS,
                         'data': {
                             # Project N sends every Nth (mod len(hashes)) hash (and platform)
@@ -163,37 +160,6 @@ class TestApi(BaseTest):
         bucket_time = parse_datetime(result['data'][0]['time']).replace(tzinfo=None)
         assert bucket_time == self.base_time
 
-    def test_issues(self):
-        """
-        Test that issues are grouped correctly when passing an 'issues' list
-        to the query.
-        """
-        for p in self.project_ids:
-            result = json.loads(self.app.post('/query', data=json.dumps({
-                'project': p,
-                'granularity': 3600,
-                'issues': [(i, p, [j]) for i, j in enumerate(self.hashes)],
-                'groupby': 'issue',
-            })).data)
-            issues_found = set([d['issue'] for d in result['data']])
-            issues_expected = set(range(0, len(self.hashes), p))
-            assert issues_found - issues_expected == set()
-
-        # test with use_group_id_column == True
-        for p in self.project_ids:
-            issues = [hash_to_group_id(h) for h in self.hashes]
-            result = json.loads(self.app.post('/query', data=json.dumps({
-                'project': p,
-                'granularity': 3600,
-                'issues': [],
-                'conditions': [['issue', 'IN', issues]],
-                'groupby': 'issue',
-                'use_group_id_column': True,
-            })).data)
-            issues_found = set([d['issue'] for d in result['data']])
-            issues_expected = set(issues)
-            assert issues_found - issues_expected == set()
-
     def test_no_issues(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -277,11 +243,10 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
-            'issues': [(i, 2, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
-            'conditions': [[], ['issue', 'IN', [0, 1, 2, 3, 4]]]
+            'conditions': [[], ['issue', 'IN', self.group_ids[:5]]]
         })).data)
-        assert set([d['issue'] for d in result['data']]) == set([0, 4])
+        assert set([d['issue'] for d in result['data']]) == set([self.group_ids[0], self.group_ids[4]])
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -332,11 +297,15 @@ class TestApi(BaseTest):
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
-        assert sorted(result['data'][0]['aggregate']) == [0, 3, 6, 9]
+        assert sorted(result['data'][0]['aggregate']) == [
+            self.group_ids[0],
+            self.group_ids[3],
+            self.group_ids[6],
+            self.group_ids[9],
+        ]
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
@@ -713,58 +682,6 @@ class TestApi(BaseTest):
 
         assert settings.CLICKHOUSE_TABLE not in self.clickhouse.execute("SHOW TABLES")
 
-    def test_issues_with_tombstone(self):
-        now = datetime.utcnow()
-
-        project_id = 100
-        hash = 'a' * 32
-        base_event = {
-            'project_id': project_id,
-            'group_id': 1,
-            'event_id': uuid.uuid4().hex,
-            'deleted': 0,
-            'primary_hash': hash,
-            'retention_days': 90,
-        }
-
-        event1 = base_event.copy()
-        event1['timestamp'] = now - timedelta(days=1)
-
-        event2 = base_event.copy()
-        event2['timestamp'] = now - timedelta(days=3)
-
-        self.write_processed_events([event1, event2])
-
-        result = json.loads(self.app.post('/query', data=json.dumps({
-            'project': project_id,
-            'issues': [(0, project_id, [hash])],
-            'groupby': 'issue',
-            'aggregations': [
-                ['count()', '', 'count']
-            ]
-        })).data)
-        assert result['data'] == [{'count': 2, 'issue': 0}]
-
-        result = json.loads(self.app.post('/query', data=json.dumps({
-            'project': project_id,
-            'issues': [(0, project_id, [(hash, None)])],
-            'groupby': 'issue',
-            'aggregations': [
-                ['count()', '', 'count']
-            ]
-        })).data)
-        assert result['data'] == [{'count': 2, 'issue': 0}]
-
-        result = json.loads(self.app.post('/query', data=json.dumps({
-            'project': project_id,
-            'issues': [(0, project_id, [(hash, (now - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S"))])],
-            'groupby': 'issue',
-            'aggregations': [
-                ['count()', '', 'count']
-            ]
-        })).data)
-        assert result['data'] == [{'count': 1, 'issue': 0}]
-
     @pytest.mark.xfail
     def test_row_stats(self):
         query = {
@@ -776,46 +693,6 @@ class TestApi(BaseTest):
         assert 'rows_read' in result['stats']
         assert 'bytes_read' in result['stats']
         assert result['stats']['bytes_read'] > 0
-
-    def test_multi_project_issues(self):
-        hash = 'a' * 32
-
-        self.write_processed_events(processor.process_insert({
-            'project_id': 2,
-            'event_id': uuid.uuid4().hex,
-            'deleted': 0,
-            'datetime': (self.base_time).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-            'message': 'a message',
-            'platform': self.platforms[0],
-            'primary_hash': hash,
-            'group_id': 1,
-            'retention_days': settings.DEFAULT_RETENTION_DAYS,
-            'data': {
-                'received': calendar.timegm((self.base_time).timetuple()),
-            }
-        }))
-
-        result = json.loads(self.app.post('/query', data=json.dumps({
-            'project': [1, 2],
-            'issues': [
-                (1, 1, [(hash, None)]),
-                (2, 2, [(hash, None)]),
-            ],
-            'groupby': ['project_id', 'issue'],
-            'aggregations': [
-                ['count()', '', 'count']
-            ],
-            'orderby': '-count',
-        })).data)
-
-        assert result['data'] == [
-            # 15 events naturally exist (via the setup method) for project 1
-            # with hash 'a' * 32, under issue 1
-            {'count': 15, 'issue': 1, 'project_id': 1},
-            # 1 event was created under project 2 with hash 'a' * 32, under
-            # issue 2
-            {'count': 1, 'issue': 2, 'project_id': 2},
-        ]
 
     def test_static_page_renders(self):
         response = self.app.get('/config')
