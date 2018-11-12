@@ -123,11 +123,11 @@ def extract_promoted_tags(output, tags):
 
 
 def extract_promoted_contexts(output, contexts, tags):
-    app_ctx = contexts.get('app', {})
+    app_ctx = contexts.get('app', None) or {}
     output['app_device'] = _unicodify(tags.get('app.device', None))
     app_ctx.pop('device_app_hash', None)  # tag=app.device
 
-    os_ctx = contexts.get('os', {})
+    os_ctx = contexts.get('os', None) or {}
     output['os'] = _unicodify(tags.get('os', None))
     output['os_name'] = _unicodify(tags.get('os.name', None))
     os_ctx.pop('name', None)  # tag=os and/or os.name
@@ -137,19 +137,19 @@ def extract_promoted_contexts(output, contexts, tags):
     output['os_build'] = _unicodify(os_ctx.pop('build', None))
     output['os_kernel_version'] = _unicodify(os_ctx.pop('kernel_version', None))
 
-    runtime_ctx = contexts.get('runtime', {})
+    runtime_ctx = contexts.get('runtime', None) or {}
     output['runtime'] = _unicodify(tags.get('runtime', None))
     output['runtime_name'] = _unicodify(tags.get('runtime.name', None))
     runtime_ctx.pop('name', None)  # tag=runtime and/or runtime.name
     runtime_ctx.pop('version', None)  # tag=runtime
 
-    browser_ctx = contexts.get('browser', {})
+    browser_ctx = contexts.get('browser', None) or {}
     output['browser'] = _unicodify(tags.get('browser', None))
     output['browser_name'] = _unicodify(tags.get('browser.name', None))
     browser_ctx.pop('name', None)  # tag=browser and/or browser.name
     browser_ctx.pop('version', None)  # tag=browser
 
-    device_ctx = contexts.get('device', {})
+    device_ctx = contexts.get('device', None) or {}
     output['device'] = _unicodify(tags.get('device', None))
     device_ctx.pop('model', None)  # tag=device
     output['device_family'] = _unicodify(tags.get('device.family', None))
@@ -213,7 +213,7 @@ def extract_geo(output, geo):
 
 def extract_http(output, http):
     output['http_method'] = _unicodify(http.get('method', None))
-    http_headers = dict(http.get('headers', []))
+    http_headers = dict(http.get('headers', None) or {})
     output['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
 
@@ -238,11 +238,11 @@ def extract_stacktraces(output, stacks):
         stack_types.append(_unicodify(stack.get('type', None)))
         stack_values.append(_unicodify(stack.get('value', None)))
 
-        mechanism = stack.get('mechanism', {})
+        mechanism = stack.get('mechanism', None) or {}
         stack_mechanism_types.append(_unicodify(mechanism.get('type', None)))
         stack_mechanism_handled.append(_boolify(mechanism.get('handled', None)))
 
-        frames = stack.get('stacktrace', {}).get('frames', [])
+        frames = (stack.get('stacktrace', None) or {}).get('frames', None) or []
         for frame in frames:
             frame_abs_paths.append(_unicodify(frame.get('abs_path', None)))
             frame_filenames.append(_unicodify(frame.get('filename', None)))
@@ -349,29 +349,29 @@ def process_insert(message):
     data = message.get('data', {})
     extract_common(processed, message, data)
 
-    sdk = data.get('sdk', {})
+    sdk = data.get('sdk', None) or {}
     extract_sdk(processed, sdk)
 
-    tags = dict(data.get('tags', []))
+    tags = dict(data.get('tags', None) or {})
     extract_promoted_tags(processed, tags)
 
-    contexts = data.get('contexts', {})
+    contexts = data.get('contexts', None) or {}
     extract_promoted_contexts(processed, contexts, tags)
 
-    user = data.get('user', data.get('sentry.interfaces.User', {}))
+    user = data.get('user', data.get('sentry.interfaces.User', None)) or {}
     extract_user(processed, user)
 
-    geo = user.get('geo', {})
+    geo = user.get('geo', None) or {}
     extract_geo(processed, geo)
 
-    http = data.get('http', data.get('sentry.interfaces.Http', {}))
+    http = data.get('http', data.get('sentry.interfaces.Http', None)) or {}
     extract_http(processed, http)
 
     extract_extra_contexts(processed, contexts)
     extract_extra_tags(processed, tags)
 
-    exception = data.get('exception', data.get('sentry.interfaces.Exception', {}))
-    stacks = exception.get('values', [])
+    exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
+    stacks = exception.get('values', None) or []
     extract_stacktraces(processed, stacks)
 
     return processed
