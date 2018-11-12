@@ -477,3 +477,41 @@ class TestProcessor(BaseTest):
             'exception_stacks.mechanism_handled': [False],
             'exception_stacks.mechanism_type': [u'promise'],
         }
+
+    def test_null_values_dont_throw(self):
+        event = {
+            'event_id': 'bce76c2473324fa387b33564eacf34a0',
+            'group_id': 1,
+            'primary_hash': 'a' * 32,
+            'project_id': 70156,
+            'message': None,
+            'platform': None,
+            'datetime': '2018-11-12T17:50:15.917125Z',
+            'data': {
+                'received': 1542066715,
+                'culprit': None,
+                'errors': None,
+                'extra': None,
+                'fingerprint': None,
+                'http': None,
+                'id': 'bce76c2473324fa387b33564eacf34a0',
+                'message': None,
+                'metadata': None,
+                'platform': None,
+                'project': 70156,
+                'release': None,
+                'dist': None,
+                'sdk': None,
+                'sentry.interfaces.Exception': {
+                    'exc_omitted': None,
+                    'values': None
+                },
+                'sentry.interfaces.Message': None,
+                'tags': None,
+                'time_spent': None,
+                'type': None,
+                'version': None
+            }
+        }
+
+        processor.process_insert(event)
