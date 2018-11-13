@@ -78,7 +78,7 @@ def get_projects_query_flags(project_ids):
     results = p.execute()
 
     enforce_final = any(results[0])
-    exclude_groups = {int(group_id) for group_id in sum(results[1:len(project_ids) + 1], [])}
+    exclude_groups = sorted({int(group_id) for group_id in sum(results[1:len(project_ids) + 1], [])})
 
     return (enforce_final, exclude_groups)
 
