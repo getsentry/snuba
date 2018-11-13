@@ -26,7 +26,7 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
+        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
 
         assert re.sub("[\n ]+", " ", count_query_template).strip() == \
             "SELECT count() FROM %(dist_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
@@ -39,6 +39,7 @@ class TestReplacer(BaseTest):
             'select_columns': 'event_id, project_id, group_id, timestamp, 1, retention_days',
             'timestamp': timestamp.strftime(replacer.CLICKHOUSE_DATETIME_FORMAT),
         }
+        assert query_time_flags == (replacer.EXCLUDE_GROUPS, 1, [1, 2, 3])
 
     def test_merge_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -49,7 +50,7 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
+        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
 
         assert re.sub("[\n ]+", " ", count_query_template).strip() == \
             "SELECT count() FROM %(dist_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
@@ -62,6 +63,7 @@ class TestReplacer(BaseTest):
             'project_id': 1,
             'timestamp': timestamp.strftime(replacer.CLICKHOUSE_DATETIME_FORMAT),
         }
+        assert query_time_flags == (replacer.EXCLUDE_GROUPS, 1, [1, 2])
 
     def test_unmerge_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -73,7 +75,7 @@ class TestReplacer(BaseTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args = self.replacer.process_message(self._wrap(message))
+        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
 
         assert re.sub("[\n ]+", " ", count_query_template).strip() == \
             "SELECT count() FROM %(dist_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
@@ -87,6 +89,7 @@ class TestReplacer(BaseTest):
             'project_id': 1,
             'timestamp': timestamp.strftime(replacer.CLICKHOUSE_DATETIME_FORMAT),
         }
+        assert query_time_flags == (replacer.ENFORCE_FINAL, 1)
 
     def test_delete_groups_insert(self):
         self.event['project_id'] = 1
@@ -195,19 +198,24 @@ class TestReplacer(BaseTest):
         assert self.clickhouse.execute(group1_count_query)[0][0] == 0
         assert self.clickhouse.execute(group2_count_query)[0][0] == 1
 
-    def test_replacements_key(self):
+    def test_query_time_flags(self):
         project_ids = [1, 2]
         redis_client.delete(
-            *(replacer.get_project_replacements_key(project_id) for project_id in project_ids)
+            *([replacer.get_project_enforce_final_key(project_id) for project_id in project_ids]
+            + [replacer.get_project_exclude_groups_key(project_id) for project_id in project_ids])
         )
 
-        assert replacer.get_projects_with_replacements(project_ids) is False
+        assert replacer.get_projects_query_flags(project_ids) == (False, set())
 
-        replacer.set_project_replacements_key(100)
-        assert replacer.get_projects_with_replacements(project_ids) is False
+        replacer.set_project_enforce_final(100)
+        assert replacer.get_projects_query_flags(project_ids) == (False, set())
 
-        replacer.set_project_replacements_key(1)
-        assert replacer.get_projects_with_replacements(project_ids) is True
+        replacer.set_project_enforce_final(1)
+        assert replacer.get_projects_query_flags(project_ids) == (True, set())
 
-        replacer.set_project_replacements_key(2)
-        assert replacer.get_projects_with_replacements(project_ids) is True
+        replacer.set_project_enforce_final(2)
+        assert replacer.get_projects_query_flags(project_ids) == (True, set())
+
+        replacer.set_project_exclude_groups(1, [1, 2])
+        replacer.set_project_exclude_groups(2, [3, 4])
+        assert replacer.get_projects_query_flags(project_ids) == (True, set([1, 2, 3, 4]))

@@ -11,7 +11,7 @@ import simplejson as json
 
 from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
-from snuba.replacer import get_projects_with_replacements
+from snuba.replacer import get_projects_query_flags
 
 
 logger = logging.getLogger('snuba.api')
@@ -196,8 +196,16 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    if force_final == 1 or (force_final is None and get_projects_with_replacements(project_ids)):
+    enforce_final, exclude_group_ids = get_projects_query_flags(project_ids)
+    if len(exclude_group_ids) > settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE:
+        # Cap the number of groups to exclude by query and flip to using FINAL if necessary
+        enforce_final = True
+        exclude_group_ids = []
+
+    if force_final == 1 or (force_final is None and enforce_final):
         from_clause = u'{} FINAL'.format(from_clause)
+    elif exclude_group_ids:
+        where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
 
     sample = body.get('sample', settings.TURBO_SAMPLE_RATE if turbo else config_sample)
     if sample != 1:
