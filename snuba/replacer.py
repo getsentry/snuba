@@ -63,12 +63,15 @@ def get_projects_query_flags(project_ids):
     Returns (needs_final, group_ids_to_exclude)
     """
 
+    project_ids = set(project_ids)
     now = time.time()
     p = redis_client.pipeline()
 
-    p.mget({get_project_needs_final_key(project_id) for project_id in project_ids})
+    needs_final_keys = [get_project_needs_final_key(project_id) for project_id in project_ids]
+    for needs_final_key in needs_final_keys:
+        p.get(needs_final_key)
 
-    exclude_groups_keys = {get_project_exclude_groups_key(project_id) for project_id in project_ids}
+    exclude_groups_keys = [get_project_exclude_groups_key(project_id) for project_id in project_ids]
     for exclude_groups_key in exclude_groups_keys:
         p.zrevrangebyscore(exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL)
 
@@ -77,8 +80,11 @@ def get_projects_query_flags(project_ids):
 
     results = p.execute()
 
-    needs_final = any(results[0])
-    exclude_groups = sorted({int(group_id) for group_id in sum(results[1:len(project_ids) + 1], [])})
+    needs_final = any(results[:len(project_ids)])
+    exclude_groups = sorted({
+        int(group_id) for group_id
+        in sum(results[len(project_ids):len(project_ids) * 2], [])
+    })
 
     return (needs_final, exclude_groups)
 
