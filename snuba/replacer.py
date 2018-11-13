@@ -39,7 +39,7 @@ def set_project_exclude_groups(project_id, group_ids):
 
     p.zadd(key, **{str(group_id): now for group_id in group_ids})
     p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
-    p.expire(key, int(now + settings.REPLACER_KEY_TTL))
+    p.expire(key, int(settings.REPLACER_KEY_TTL))
 
     p.execute()
 
