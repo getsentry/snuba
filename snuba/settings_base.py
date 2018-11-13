@@ -327,5 +327,6 @@ REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
 # run recently. Useful for decidig whether or not to add FINAL clause
 # to queries.
 REPLACER_KEY_TTL = 12 * 60 * 60
+REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 
 TURBO_SAMPLE_RATE = 0.1

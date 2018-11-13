@@ -20,20 +20,67 @@ CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 REQUIRED_COLUMNS = list(map(escape_col, settings.REQUIRED_COLUMNS))
 ALL_COLUMNS = list(map(escape_col, settings.WRITER_COLUMNS))
 
+EXCLUDE_GROUPS = object()
+NEEDS_FINAL = object()
 
-def get_project_replacements_key(project_id):
-    return "project_replacements:%s" % project_id
+
+def get_project_exclude_groups_key(project_id):
+    return "project_exclude_groups:%s" % project_id
 
 
-def set_project_replacements_key(project_id):
+def set_project_exclude_groups(project_id, group_ids):
+    """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
+    remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
+    the entire ZSET incase it's rarely touched."""
+
+    now = time.time()
+    key = get_project_exclude_groups_key(project_id)
+    p = redis_client.pipeline()
+
+    p.zadd(key, **{str(group_id): now for group_id in group_ids})
+    p.zremrangebyscore(key, -1, now - settings.REPLACER_KEY_TTL)
+    p.expire(key, int(settings.REPLACER_KEY_TTL))
+
+    p.execute()
+
+
+def get_project_needs_final_key(project_id):
+    return "project_needs_final:%s" % project_id
+
+
+def set_project_needs_final(project_id):
     return redis_client.set(
-        get_project_replacements_key(project_id), True, ex=settings.REPLACER_KEY_TTL
+        get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
     )
 
 
-def get_projects_with_replacements(project_ids):
-    keys = {get_project_replacements_key(project_id) for project_id in project_ids}
-    return any(redis_client.mget(keys))
+def get_projects_query_flags(project_ids):
+    """\
+    1. Fetch `needs_final` for each Project
+    2. Fetch groups to exclude for each Project
+    3. Trim groups to exclude ZSET for each Project
+
+    Returns (needs_final, group_ids_to_exclude)
+    """
+
+    now = time.time()
+    p = redis_client.pipeline()
+
+    p.mget({get_project_needs_final_key(project_id) for project_id in project_ids})
+
+    exclude_groups_keys = {get_project_exclude_groups_key(project_id) for project_id in project_ids}
+    for exclude_groups_key in exclude_groups_keys:
+        p.zrevrangebyscore(exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL)
+
+    for exclude_groups_key in exclude_groups_keys:
+        p.zremrangebyscore(exclude_groups_key, float('-inf'), now - settings.REPLACER_KEY_TTL)
+
+    results = p.execute()
+
+    needs_final = any(results[0])
+    exclude_groups = sorted({int(group_id) for group_id in sum(results[1:len(project_ids) + 1], [])})
+
+    return (needs_final, exclude_groups)
 
 
 class ReplacerWorker(AbstractBatchWorker):
@@ -65,18 +112,24 @@ class ReplacerWorker(AbstractBatchWorker):
         return processed
 
     def flush_batch(self, batch):
-        for count_query_template, insert_query_template, args in batch:
-            args.update({'dist_table_name': self.dist_table_name})
-            count = self.clickhouse.execute_robust(count_query_template % args)[0][0]
+        for count_query_template, insert_query_template, query_args, query_time_flags in batch:
+            query_args.update({'dist_table_name': self.dist_table_name})
+            count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
 
             if count == 0:
                 continue
 
-            set_project_replacements_key(args['project_id'])
+            # query_time_flags == (type, project_id, [...data...])
+            flag_type, project_id = query_time_flags[:2]
+            if flag_type == NEEDS_FINAL:
+                set_project_needs_final(project_id)
+            elif flag_type == EXCLUDE_GROUPS:
+                group_ids = query_time_flags[2]
+                set_project_exclude_groups(project_id, group_ids)
 
             t = time.time()
-            logger.debug("Executing replace query: %s" % (insert_query_template % args))
-            self.clickhouse.execute_robust(insert_query_template % args)
+            logger.debug("Executing replace query: %s" % (insert_query_template % query_args))
+            self.clickhouse.execute_robust(insert_query_template % query_args)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
             if self.metrics:
@@ -122,7 +175,9 @@ def process_delete_groups(message):
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 
-    return (count_query_template, insert_query_template, query_args)
+    query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
+
+    return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
@@ -172,7 +227,9 @@ def process_merge(message):
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 
-    return (count_query_template, insert_query_template, query_args)
+    query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
+
+    return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
 def process_unmerge(message):
@@ -212,4 +269,6 @@ def process_unmerge(message):
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 
-    return (count_query_template, insert_query_template, query_args)
+    query_time_flags = (NEEDS_FINAL, message['project_id'])
+
+    return (count_query_template, insert_query_template, query_args, query_time_flags)
