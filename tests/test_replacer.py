@@ -31,7 +31,6 @@ class TestReplacer(BaseTest):
             'project': [project_id],
             'aggregations': [['count()', '', 'count']],
             'groupby': ['issue'],
-            'use_group_id_column': True,
         }
 
         if group_id:
