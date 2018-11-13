@@ -27,7 +27,7 @@ before_install:
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
-  - make test
+  - make travis-test
 before_deploy:
   - docker pull "$IMAGE_NAME" || true
   # docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" --build-arg PYTHON_VERSION=3 --build-arg PYPY_SUFFIX=3 .

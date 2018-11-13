@@ -9,6 +9,9 @@ endif
 test:
 	SNUBA_SETTINGS=test py.test -vv
 
+travis-test:
+	SNUBA_SETTINGS=travis py.test -vv
+
 install-python-dependencies:
 	pip install -e .
 
