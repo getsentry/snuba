@@ -88,7 +88,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = tag_expr(column_name)
     elif column_name in ['tags_key', 'tags_value']:
         expr = tags_expr(column_name, body)
-    elif body.get('use_group_id_column') and column_name == 'issue':
+    elif column_name == 'issue':
         expr = 'group_id'
     else:
         expr = escape_col(column_name)

@@ -75,6 +75,8 @@ QUERY_SCHEMA = {
             'default': 3600,
         },
         'use_group_id_column': {
+            # TODO this flag is deprecated and is ignored by the code.
+            # Remove it when clients are no longer sending it.
             'type': ['boolean', 'number'],
             'default': True
         },

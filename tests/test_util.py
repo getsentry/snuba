@@ -69,7 +69,6 @@ class TestUtil(BaseTest):
         assert column_expr(tuplify(['concat', ['a', '\':\'', 'b']]), body.copy()) == 'concat(a, \':\', b)'
 
         group_id_body = body.copy()
-        group_id_body['use_group_id_column'] = True
         assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
     def test_alias_in_alias(self):
