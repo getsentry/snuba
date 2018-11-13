@@ -218,28 +218,6 @@ def parse_and_run_query(validated_body, timer):
     prewhere_clause = ''
     prewhere_conditions = []
 
-    issues = body.get('issues', [])
-    use_group_id_column = body.get('use_group_id_column')
-    if not use_group_id_column:
-        issue_expr = util.issue_expr(body)
-        if issue_expr:
-            joins.append(issue_expr)
-            where_conditions.append(
-                ('timestamp', '>', util.Literal(
-                    'ifNull(hash_timestamp, CAST(\'1970-01-01 00:00:00\', \'DateTime\'))')
-                )
-            )
-
-        # Experiment, if only a single issue with a single hash, add that as a condition in PREWHERE
-        if issues \
-                and (len(issues) == 1) \
-                and (len(issues[0][2]) == 1) \
-                and (len(project_ids) == 1):
-
-            hash_ = issues[0][2][0]
-            hash_ = hash_[0] if isinstance(hash_, (list, tuple)) else hash_  # strip out tombstone
-            prewhere_conditions.append(['primary_hash', '=', hash_])
-
     if 'arrayjoin' in body:
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)
@@ -305,8 +283,6 @@ def parse_and_run_query(validated_body, timer):
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'num_issues': len(issues),
-        'num_hashes': sum(len(i[-1]) for i in issues) if not use_group_id_column else 0,
         'sample': sample,
     })
 

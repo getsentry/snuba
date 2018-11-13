@@ -7,9 +7,7 @@ from snuba.util import (
     complex_column_expr,
     condition_expr,
     escape_literal,
-    issue_expr,
     tuplify,
-    uses_issue,
 )
 
 
@@ -71,7 +69,6 @@ class TestUtil(BaseTest):
         assert column_expr(tuplify(['concat', ['a', '\':\'', 'b']]), body.copy()) == 'concat(a, \':\', b)'
 
         group_id_body = body.copy()
-        group_id_body['use_group_id_column'] = True
         assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
     def test_alias_in_alias(self):
@@ -96,54 +93,51 @@ class TestUtil(BaseTest):
             "(1, 'a', toDate('2001-01-01'))"
 
     def test_condition_expr(self):
-        body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
-        }
-
         conditions = [['a', '=', 1]]
-        assert condition_expr(conditions, body.copy()) == 'a = 1'
+        assert condition_expr(conditions, {}) == 'a = 1'
 
         conditions = [[['a', '=', 1]]]
-        assert condition_expr(conditions, body.copy()) == 'a = 1'
+        assert condition_expr(conditions, {}) == 'a = 1'
 
         conditions = [['a', '=', 1], ['b', '=', 2]]
-        assert condition_expr(conditions, body.copy()) == 'a = 1 AND b = 2'
+        assert condition_expr(conditions, {}) == 'a = 1 AND b = 2'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]]]
-        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2)'
+        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2)'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], ['c', '=', 3]]
-        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2) AND c = 3'
+        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2) AND c = 3'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], [['c', '=', 3], ['d', '=', 4]]]
-        assert condition_expr(conditions, body.copy()) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
+        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
 
         # Malformed condition input
         conditions = [[['a', '=', 1], []]]
-        assert condition_expr(conditions, body.copy()) == 'a = 1'
+        assert condition_expr(conditions, {}) == 'a = 1'
 
         # Test column expansion
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        expanded = column_expr('tags[foo]', body.copy())
-        assert condition_expr(conditions, body.copy()) == '({} = 1 OR b = 2)'.format(expanded)
+        expanded = column_expr('tags[foo]', {})
+        assert condition_expr(conditions, {}) == '({} = 1 OR b = 2)'.format(expanded)
 
         # Test using alias if column has already been expanded in SELECT clause
+        reuse_body = {}
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        column_expr('tags[foo]', body)  # Expand it once so the next time is aliased
-        assert condition_expr(conditions, body) == '(`tags[foo]` = 1 OR b = 2)'
+        column_expr('tags[foo]', reuse_body)  # Expand it once so the next time is aliased
+        assert condition_expr(conditions, reuse_body) == '(`tags[foo]` = 1 OR b = 2)'
 
         # Test special output format of LIKE
         conditions = [['primary_hash', 'LIKE', '%foo%']]
-        assert condition_expr(conditions, body.copy()) == 'primary_hash LIKE \'%foo%\''
+        assert condition_expr(conditions, {}) == 'primary_hash LIKE \'%foo%\''
 
         conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
-        assert condition_expr(conditions, body.copy()) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+        assert condition_expr(conditions, {}) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
-        assert condition_expr(conditions, body.copy()) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
+        assert condition_expr(conditions, {}) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
-        assert condition_expr(conditions, body.copy()) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
+        assert condition_expr(conditions, {}) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
 
         conditions = tuplify([
             [
@@ -153,12 +147,11 @@ class TestUtil(BaseTest):
                 [['notEmpty', ['tags[sentry:user]']], '=', 'joe'], [['notEmpty', ['tags[sentry:user]']], '=', 'bob']
             ],
         ])
-        assert condition_expr(conditions, body.copy()) == \
-            """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty(`tags[sentry:user]`) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+        assert condition_expr(conditions, {}) == \
+                """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
 
     def test_duplicate_expression_alias(self):
         body = {
-            'issues': [(1, ['a', 'b']), (2, 'c')],
             'aggregations': [
                 ['topK(3)', 'logger', 'dupe_alias'],
                 ['uniq', 'environment', 'dupe_alias'],
@@ -172,61 +165,6 @@ class TestUtil(BaseTest):
             for (agg, col, alias) in body['aggregations']
         ]
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
-
-    def test_issue_expr(self):
-        # Provides list of issues but doesn't use them
-        body = {
-            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
-        }
-        assert issue_expr(body) == ''
-
-        # Uses issue in groupby, expands all issues
-        body = {
-            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
-            'groupby': ['timestamp', 'issue']
-        }
-        assert '[1,1,2]' in issue_expr(body)
-
-        # Issue in condition, expands only that issue
-        body = {
-            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
-            'conditions': [['issue', '=', 1]]
-        }
-        assert '[1,1]' in issue_expr(body)
-
-        # Issue in aggregation, expands all.
-        body = {
-            'issues': [(1, 2, ['a', 'b']), (2, 3, 'c')],
-            'aggregations': [['topK(3)', 'issue', 'top_issues']]
-        }
-        assert '[1,1,2]' in issue_expr(body)
-
-        # No issues to expand, and no reference to any specific issue, but
-        # still need `issue` defined for groupby so we expand the issue
-        # expression with empty lists
-        body = {
-            'issues': [],
-            'groupby': ['issue']
-        }
-        assert 'ANY INNER JOIN' in issue_expr(body)
-        assert '[]' in issue_expr(body)
-
-        # No issues to expand, but a condition on a specific issue. Creates
-        # issue join expresssion with single Null value to avoid comparison bug.
-        body = {
-            'issues': [],
-            'conditions': [['issue', '=', 4]]
-        }
-        assert 'ANY INNER JOIN' in issue_expr(body)
-        assert '[Null]' in issue_expr(body)
-
-        # Ensure project_id expression is in the INNER JOIN
-        body = {
-            'issues': [(1, 99, ['a', 'b']), (2, 100, 'c')],
-            'conditions': [['issue', 'IN', [1, 2]]]
-        }
-        assert '[1,1,2]' in issue_expr(body)
-        assert '[99,99,100]' in issue_expr(body)
 
     def test_complex_condition_expr(self):
         body = {}
@@ -245,15 +183,3 @@ class TestUtil(BaseTest):
 
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
-
-    def test_uses_issue(self):
-        assert uses_issue({'conditions': [['issue', '=', 1]]}) == (True, set([1]))
-        assert uses_issue({'conditions': [['issue', 'IN', [1]]]}) == (True, set([1]))
-        assert uses_issue({'conditions': [[['issue', '=', 1], ['issue', '=', 2]]]}) == (True, set([1, 2]))
-        assert uses_issue({'conditions': [[['function', ['issue']], '=', 1]]}) == (True, set([1]))
-        assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux', 'issue']]], '=', 1]]}) == (True, set([1]))
-        assert uses_issue({'conditions': [[['foo', ['bar', ['baz', 'qux']], 'issue'], '=', 1]]}) == (True, set([1]))
-        assert uses_issue({'conditions': [['foo', '=', 1]]}) == (False, None)
-
-        assert uses_issue({'selected_columns': ['issue']}) == (True, None)
-        assert uses_issue({'selected_columns': ['non-issue']}) == (False, None)
