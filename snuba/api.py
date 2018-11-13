@@ -147,51 +147,6 @@ def query(validated_body=None, timer=None):
     )
 
 
-def incrementalize(query_func):
-    """
-    If a function is:
-        - ORDER BY timestamp DESC
-        - has no grouping
-        - has an offset/limit
-        - has a large time range
-    We know we have to reverse-sort the entire set of rows to return the small
-    chunk at the end of the time range, so optimistically split the time range
-    into smaller increments, and start with the last one, so that we can potentially
-    avoid querying the entire range.
-    """
-    def wrapper(*args, **kwargs):
-        body = args[0]
-        date_align = state.get_configs('date_align_seconds', 1)
-        to_date = util.parse_datetime(body['to_date'], date_align)
-        from_date = util.parse_datetime(body['from_date'], date_align)
-        limit = body['limit']
-
-        if limit and not body['groupby'] and body['orderby'] == '-timestamp': # TODO check time range
-
-            increment = 6 * 3600 # 6 hours
-            result = None
-            incr_start = from_date
-            incr_end = min(incr_start + timedelta(seconds=increment), to_date)
-            while incr_start < incr_end and (result is None or len(result['data']) < limit): 
-                body['from_date'] = incr_start.isoformat()
-                body['to_date'] = incr_end.isoformat()
-                # TODO offset
-                r = query_func(*args, **kwargs)
-                if result is None:
-                    result = r
-                else:
-                    result['data'].extend(r[['data'])
-
-                rlen = max(1, len(r['data']))
-                increment = increment * math.ceil(body['limit'] / rlen)
-                incr_start = incr_end
-                incr_end = min(incr_start + timedelta(seconds=increment), to_date)
-            return result
-        else:
-            return query_func(*args, **kwargs)
-    
-
-@incrementalize
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
     turbo = body.get('turbo', False)
