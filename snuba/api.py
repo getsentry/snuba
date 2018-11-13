@@ -150,13 +150,14 @@ def query(validated_body=None, timer=None):
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
     turbo = body.get('turbo', False)
-    max_days, table, date_align, config_sample, force_final = state.get_configs([
+    max_days, table, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
         # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
         ('force_final', 0 if turbo else None),
+        ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
     ])
     stats = {}
     to_date = util.parse_datetime(body['to_date'], date_align)
@@ -197,13 +198,15 @@ def parse_and_run_query(validated_body, timer):
     from_clause = u'FROM {}'.format(table)
 
     needs_final, exclude_group_ids = get_projects_query_flags(project_ids)
-    if len(exclude_group_ids) > settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE:
+    if len(exclude_group_ids) > max_group_ids_exclude:
         # Cap the number of groups to exclude by query and flip to using FINAL if necessary
         needs_final = True
         exclude_group_ids = []
 
+    used_final = False
     if force_final == 1 or (force_final is None and needs_final):
         from_clause = u'{} FINAL'.format(from_clause)
+        used_final = True
     elif exclude_group_ids:
         where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
 
@@ -298,6 +301,7 @@ def parse_and_run_query(validated_body, timer):
 
     stats.update({
         'clickhouse_table': table,
+        'final': used_final,
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
