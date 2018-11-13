@@ -9,6 +9,7 @@ from confluent_kafka import TopicPartition
 from snuba import settings
 from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.redis import redis_client
 from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, write_rows
 
@@ -145,6 +146,13 @@ class BaseTest(object):
             )
         )
 
+        redis_client.flushdb()
+
+    def teardown_method(self, test_method):
+        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+
+        redis_client.flushdb()
+
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
             'event_id': uuid.uuid4().hex,
@@ -155,9 +163,6 @@ class BaseTest(object):
         event['timestamp'] = dt
         event['retention_days'] = retention_days
         return event
-
-    def teardown_method(self, test_method):
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
 
     def wrap_raw_event(self, event):
         "Wrap a raw event like the Sentry codebase does before sending to Kafka."

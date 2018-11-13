@@ -21,7 +21,7 @@ REQUIRED_COLUMNS = list(map(escape_col, settings.REQUIRED_COLUMNS))
 ALL_COLUMNS = list(map(escape_col, settings.WRITER_COLUMNS))
 
 EXCLUDE_GROUPS = object()
-ENFORCE_FINAL = object()
+NEEDS_FINAL = object()
 
 
 def get_project_exclude_groups_key(project_id):
@@ -44,29 +44,29 @@ def set_project_exclude_groups(project_id, group_ids):
     p.execute()
 
 
-def get_project_enforce_final_key(project_id):
-    return "project_enforce_final:%s" % project_id
+def get_project_needs_final_key(project_id):
+    return "project_needs_final:%s" % project_id
 
 
-def set_project_enforce_final(project_id):
+def set_project_needs_final(project_id):
     return redis_client.set(
-        get_project_enforce_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
+        get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
     )
 
 
 def get_projects_query_flags(project_ids):
     """\
-    1. Fetch `enforce_final` for each Project
+    1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
     3. Trim groups to exclude ZSET for each Project
 
-    Returns (enforce_final, group_ids_to_exclude)
+    Returns (needs_final, group_ids_to_exclude)
     """
 
     now = time.time()
     p = redis_client.pipeline()
 
-    p.mget({get_project_enforce_final_key(project_id) for project_id in project_ids})
+    p.mget({get_project_needs_final_key(project_id) for project_id in project_ids})
 
     exclude_groups_keys = {get_project_exclude_groups_key(project_id) for project_id in project_ids}
     for exclude_groups_key in exclude_groups_keys:
@@ -77,10 +77,10 @@ def get_projects_query_flags(project_ids):
 
     results = p.execute()
 
-    enforce_final = any(results[0])
+    needs_final = any(results[0])
     exclude_groups = sorted({int(group_id) for group_id in sum(results[1:len(project_ids) + 1], [])})
 
-    return (enforce_final, exclude_groups)
+    return (needs_final, exclude_groups)
 
 
 class ReplacerWorker(AbstractBatchWorker):
@@ -121,8 +121,8 @@ class ReplacerWorker(AbstractBatchWorker):
 
             # query_time_flags == (type, project_id, [...data...])
             flag_type, project_id = query_time_flags[:2]
-            if flag_type == ENFORCE_FINAL:
-                set_project_enforce_final(project_id)
+            if flag_type == NEEDS_FINAL:
+                set_project_needs_final(project_id)
             elif flag_type == EXCLUDE_GROUPS:
                 group_ids = query_time_flags[2]
                 set_project_exclude_groups(project_id, group_ids)
@@ -269,6 +269,6 @@ def process_unmerge(message):
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 
-    query_time_flags = (ENFORCE_FINAL, message['project_id'])
+    query_time_flags = (NEEDS_FINAL, message['project_id'])
 
     return (count_query_template, insert_query_template, query_args, query_time_flags)

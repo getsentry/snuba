@@ -7,7 +7,6 @@ import simplejson as json
 from base import BaseTest, FakeKafkaMessage
 
 from snuba import replacer
-from snuba.redis import redis_client
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
@@ -23,16 +22,9 @@ class TestReplacer(BaseTest):
         self.replacer = replacer.ReplacerWorker(self.clickhouse, self.table)
 
         self.project_id = 1
-        self._clear_replacer_keys([self.project_id])
 
     def _wrap(self, msg):
         return FakeKafkaMessage('topic', 0, 0, json.dumps(msg).encode('utf-8'))
-
-    def _clear_replacer_keys(self, project_ids):
-        redis_client.delete(
-            *([replacer.get_project_enforce_final_key(project_id) for project_id in project_ids]
-            + [replacer.get_project_exclude_groups_key(project_id) for project_id in project_ids])
-        )
 
     def _issue_count(self, project_id, group_id=None):
         args = {
@@ -118,7 +110,7 @@ class TestReplacer(BaseTest):
             'project_id': self.project_id,
             'timestamp': timestamp.strftime(replacer.CLICKHOUSE_DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.ENFORCE_FINAL, self.project_id)
+        assert query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
 
     def test_delete_groups_insert(self):
         self.event['project_id'] = self.project_id
@@ -201,17 +193,16 @@ class TestReplacer(BaseTest):
 
     def test_query_time_flags(self):
         project_ids = [1, 2]
-        self._clear_replacer_keys(project_ids)
 
         assert replacer.get_projects_query_flags(project_ids) == (False, [])
 
-        replacer.set_project_enforce_final(100)
+        replacer.set_project_needs_final(100)
         assert replacer.get_projects_query_flags(project_ids) == (False, [])
 
-        replacer.set_project_enforce_final(1)
+        replacer.set_project_needs_final(1)
         assert replacer.get_projects_query_flags(project_ids) == (True, [])
 
-        replacer.set_project_enforce_final(2)
+        replacer.set_project_needs_final(2)
         assert replacer.get_projects_query_flags(project_ids) == (True, [])
 
         replacer.set_project_exclude_groups(1, [1, 2])

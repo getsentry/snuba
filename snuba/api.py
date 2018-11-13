@@ -196,13 +196,13 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    enforce_final, exclude_group_ids = get_projects_query_flags(project_ids)
+    needs_final, exclude_group_ids = get_projects_query_flags(project_ids)
     if len(exclude_group_ids) > settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE:
         # Cap the number of groups to exclude by query and flip to using FINAL if necessary
-        enforce_final = True
+        needs_final = True
         exclude_group_ids = []
 
-    if force_final == 1 or (force_final is None and enforce_final):
+    if force_final == 1 or (force_final is None and needs_final):
         from_clause = u'{} FINAL'.format(from_clause)
     elif exclude_group_ids:
         where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
