@@ -73,17 +73,15 @@ def get_projects_query_flags(project_ids):
 
     exclude_groups_keys = [get_project_exclude_groups_key(project_id) for project_id in project_ids]
     for exclude_groups_key in exclude_groups_keys:
-        p.zrevrangebyscore(exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL)
-
-    for exclude_groups_key in exclude_groups_keys:
         p.zremrangebyscore(exclude_groups_key, float('-inf'), now - settings.REPLACER_KEY_TTL)
+        p.zrevrangebyscore(exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL)
 
     results = p.execute()
 
     needs_final = any(results[:len(project_ids)])
     exclude_groups = sorted({
         int(group_id) for group_id
-        in sum(results[len(project_ids):len(project_ids) * 2], [])
+        in sum(results[(len(project_ids) + 1)::2], [])
     })
 
     return (needs_final, exclude_groups)
