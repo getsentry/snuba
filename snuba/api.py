@@ -12,6 +12,7 @@ import simplejson as json
 from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 from snuba.replacer import get_projects_query_flags
+from snuba.split import split_query
 
 
 logger = logging.getLogger('snuba.api')
@@ -147,6 +148,7 @@ def query(validated_body=None, timer=None):
     )
 
 
+@split_query
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
     turbo = body.get('turbo', False)

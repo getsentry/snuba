@@ -708,3 +708,94 @@ class TestApi(BaseTest):
             assert response.status_code == 500
             assert len(events) == 1
             assert events[0]['exception']['values'][0]['type'] == 'ZeroDivisionError'
+
+    def test_split_query(self):
+        state.set_config('use_split', 1)
+        state.set_config('split_step', 3600) # first batch will be 1 hour
+        try:
+
+            # Test getting the last 150 events, should happen in 2 batches
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 150,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(30, 180)))
+
+            # Test getting the last 150 events, offset by 10
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 150,
+                'offset': 10,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(20, 170)))
+
+            # Test asking for more events than there are
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 200,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(0, 180)))
+
+            # Test offset by more events than there are
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 10,
+                'offset': 180,
+            })).data)
+            assert result['data'] == []
+
+            # Test offset that spans batches
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 10,
+                'offset': 55,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(115, 125)))
+
+            # Test offset by the size of the first batch retrieved. (the first batch will be discarded/trimmed)
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'limit': 10,
+                'offset': 60,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(110, 120)))
+
+            # Test condition that means 0 events will be returned
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': ['tags[sentry:release]', 'timestamp'],
+                'conditions': [['message', '=', 'doesnt exist']],
+                'limit': 10,
+                'offset': 55,
+            })).data)
+            assert result['data'] == []
+
+        finally:
+            state.set_config('use_split', 0)
