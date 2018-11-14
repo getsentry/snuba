@@ -82,5 +82,5 @@ travis-start-redis-cluster:
 	echo "$$REDIS_CLUSTER_NODE3_CONF" | redis-server -
 	sleep 5
 	# Join all nodes in the cluster
-	redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002
+	echo yes | redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002
 	sleep 5
