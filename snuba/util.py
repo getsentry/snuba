@@ -271,6 +271,9 @@ def all_referenced_columns(body):
         flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in body['conditions']]))
         col_exprs.extend([c[0] for c in flat_conditions])
 
+    if 'aggregations' in body:
+        col_exprs.extend([a[1] for a in body['aggregations']])
+
 
     # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))

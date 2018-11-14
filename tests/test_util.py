@@ -250,6 +250,9 @@ class TestUtil(BaseTest):
                 'issue',
                 'time',
                 ['foo', ['c', ['bar', ['d']]]] # foo(c, bar(d))
+            ],
+            'aggregations': [
+                ['uniq', 'tags_value', 'values_seen']
             ]
         }
-        assert all_referenced_columns(body) == set(['tags_key', 'time', 'issue', 'c', 'd'])
+        assert all_referenced_columns(body) == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])
