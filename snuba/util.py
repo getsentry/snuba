@@ -261,19 +261,18 @@ def all_referenced_columns(body):
     """
     col_exprs = []
 
+    # These fields can reference column names
+    for field in ['arrayjoin', 'groupby', 'orderby', 'selected_columns']:
+        if field in body:
+            col_exprs.extend(to_list(body[field]))
+
+    # Conditions need flattening as they can be nested as AND/OR
     if 'conditions' in body:
         flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in body['conditions']]))
         col_exprs.extend([c[0] for c in flat_conditions])
-    if 'arrayjoin' in body:
-        col_exprs.extend(to_list(body['arrayjoin']))
-    if 'groupby' in body:
-        col_exprs.extend(to_list(body['groupby']))
-    if 'orderby' in body:
-        col_exprs.extend(to_list(body['orderby']))
-    if 'selected_columns' in body:
-        col_exprs.extend(to_list(body['selected_columns']))
 
-    # Return the set of all columns contained in all expressions
+
+    # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
 
