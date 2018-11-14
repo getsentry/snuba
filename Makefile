@@ -1,5 +1,4 @@
 UNAME := $(shell uname -s)
-PATH := ./redis-git/src:${PATH}
 
 ifeq ($(UNAME),Darwin)
 	librdkafka_cmd = install-librdkafka-homebrew
@@ -77,15 +76,11 @@ export REDIS_CLUSTER_NODE2_CONF
 export REDIS_CLUSTER_NODE3_CONF
 
 travis-start-redis-cluster:
-	[ ! -e redis-git ] && git clone https://github.com/antirez/redis.git redis-git || true
-	make -C redis-git -j4
-	gem install redis
-	sleep 5
 	# Start all cluster nodes
 	echo "$$REDIS_CLUSTER_NODE1_CONF" | redis-server -
 	echo "$$REDIS_CLUSTER_NODE2_CONF" | redis-server -
 	echo "$$REDIS_CLUSTER_NODE3_CONF" | redis-server -
 	sleep 5
 	# Join all nodes in the cluster
-	echo "yes" | ruby redis-git/src/redis-trib.rb create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002
+	redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002
 	sleep 5
