@@ -1,7 +1,6 @@
 sudo: required
 services:
   - docker
-  - redis-server
 dist: trusty
 language: python
 python:
@@ -23,11 +22,17 @@ cache:
 before_install:
   - mkdir -p $CACHE_DIR
   - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:18.14.9
+  - sudo add-apt-repository ppa:chris-lea/redis-server -y
+  - sudo apt-get update
+  - sudo apt-get install redis
+  - redis-server --version
+  - redis-cli --version
+  - make travis-start-redis-cluster
   - make install-librdkafka
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
-  - make test
+  - make travis-test
 before_deploy:
   - docker pull "$IMAGE_NAME" || true
   # docker build --pull --cache-from "$IMAGE_NAME" --tag "$IMAGE_NAME" --build-arg PYTHON_VERSION=3 --build-arg PYPY_SUFFIX=3 .
