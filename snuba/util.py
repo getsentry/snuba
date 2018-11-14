@@ -205,6 +205,8 @@ def tags_expr(column_name, body):
     assert column_name in ['tags_key', 'tags_value']
     col, k_or_v = column_name.split('_', 1)
     nested_tags_only = state.get_config('nested_tags_only', 1)
+
+    # Generate parallel lists of keys and values to arrayJoin on
     if nested_tags_only:
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)
@@ -219,27 +221,77 @@ def tags_expr(column_name, body):
             ', '.join(string_col(p) for p in promoted),
             col
         )
-    expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
-        key_list,
-        val_list
-    )
 
-    # put the tag expression in the alias cache so we can use the alias
-    # to refer to it next time instead of expanding it again.
-    expr = alias_expr(expr, 'all_tags', body)
-    return u'({})'.format(expr) + ('[1]' if k_or_v == 'key' else '[2]')
+    cols_used = all_referenced_columns(body) & set(['tags_key', 'tags_value'])
+    if len(cols_used) == 2:
+        # If we use both tags_key and tags_value in this query, arrayjoin
+        # on (key, value) tag tuples.
+        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
+            key_list,
+            val_list
+        )
+
+        # put the all_tags expression in the alias cache so we can use the alias
+        # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
+        # expanding the whole tags expression again.
+        expr = alias_expr(expr, 'all_tags', body)
+        return u'({})[{}]'.format(expr, 1 if k_or_v == 'key' else 2)
+    else:
+        # If we are only ever going to use one of tags_key or tags_value, don't
+        # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
+        # to re-use as we won't need it.
+        return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
 
 def is_condition(cond_or_list):
-    if not (len(cond_or_list) == 3 and isinstance(cond_or_list[1], six.string_types)):
-        return False
+    return (
+        # A condition is:
+        # a 3-tuple
+        len(cond_or_list) == 3 and
+        # where the middle element is an operator
+        cond_or_list[1] in schemas.CONDITION_OPERATORS and
+        # and the first element looks like a column name or expression
+        isinstance(cond_or_list[0], (six.string_types, tuple, list))
+    )
 
-    # string: ['foo', '=', 'bar'] == foo = 'bar'
-    # list or tuple: [['foo', ['bar']], '=', 'qux'] == foo(bar) = 'qux'
-    if isinstance(cond_or_list[0], (six.string_types, tuple, list)):
-        return True
 
-    return False
+def all_referenced_columns(body):
+    """
+    Return the set of all columns that are used by a query.
+    """
+    col_exprs = []
+
+    # These fields can reference column names
+    for field in ['arrayjoin', 'groupby', 'orderby', 'selected_columns']:
+        if field in body:
+            col_exprs.extend(to_list(body[field]))
+
+    # Conditions need flattening as they can be nested as AND/OR
+    if 'conditions' in body:
+        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in body['conditions']]))
+        col_exprs.extend([c[0] for c in flat_conditions])
+
+
+    # Return the set of all columns referenced in any expression
+    return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
+
+
+def columns_in_expr(expr):
+    """
+    Get the set of columns that are referenced by a single column expression.
+    Either it is a simple string with the column name, or a nested function
+    that could reference multiple columns
+    """
+    cols = []
+    # TODO possibly exclude quoted args to functions as those are
+    # string literals, not column names.
+    if isinstance(expr, six.string_types):
+        cols.append(expr.lstrip('-'))
+    elif (isinstance(expr, (list, tuple)) and len(expr) >= 2
+          and isinstance(expr[1], (list, tuple))):
+        for func_arg in expr[1]:
+            cols.extend(columns_in_expr(func_arg))
+    return cols
 
 
 def tuplify(nested):

@@ -3,6 +3,7 @@ import jsonschema
 import copy
 import six
 
+CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 SDK_STATS_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -265,7 +266,7 @@ QUERY_SCHEMA = {
                     # Operator
                     'type': 'string',
                     # TODO  enforce literal = NULL for unary operators
-                    'enum': ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE'],
+                    'enum': CONDITION_OPERATORS,
                 }, {
                     # Literal
                     'anyOf': [

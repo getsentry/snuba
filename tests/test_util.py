@@ -3,6 +3,7 @@ from datetime import date, datetime
 from base import BaseTest
 
 from snuba.util import (
+    all_referenced_columns,
     column_expr,
     complex_column_expr,
     condition_expr,
@@ -31,6 +32,14 @@ class TestUtil(BaseTest):
 
         # All tag keys expression
         assert column_expr('tags_key', body.copy()) == (
+            '(arrayJoin(tags.key) AS tags_key)'
+        )
+
+        # If we are going to use both tags_key and tags_value, expand both
+        tag_group_body = {
+            'groupby': ['tags_key', 'tags_value']
+        }
+        assert column_expr('tags_key', tag_group_body) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
             'AS all_tags))[1] AS tags_key)'
         )
@@ -72,7 +81,9 @@ class TestUtil(BaseTest):
         assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
     def test_alias_in_alias(self):
-        body = {}
+        body = {
+            'groupby': ['tags_key', 'tags_value']
+        }
         assert column_expr('tags_key', body) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
             'AS all_tags))[1] AS tags_key)'
@@ -137,7 +148,7 @@ class TestUtil(BaseTest):
         assert condition_expr(conditions, {}) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
-        assert condition_expr(conditions, {}) == 'notEmpty((((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] AS tags_key)) = 1'
+        assert condition_expr(conditions, {}) == 'notEmpty((arrayJoin(tags.key) AS tags_key)) = 1'
 
         conditions = tuplify([
             [
@@ -183,3 +194,62 @@ class TestUtil(BaseTest):
 
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
+
+    def test_referenced_columns(self):
+        # a = 1 AND b = 1
+        body = {
+            'conditions': [
+                ['a', '=', '1'],
+                ['b', '=', '1'],
+            ]
+        }
+        assert all_referenced_columns(body) == set(['a', 'b'])
+
+        # a = 1 AND (b = 1 OR c = 1)
+        body = {
+            'conditions': [
+                ['a', '=', '1'],
+                [
+                    ['b', '=', '1'],
+                    ['c', '=', '1'],
+                ],
+            ]
+        }
+        assert all_referenced_columns(body) == set(['a', 'b', 'c'])
+
+        # a = 1 AND (b = 1 OR foo(c) = 1)
+        body = {
+            'conditions': [
+                ['a', '=', '1'],
+                [
+                    ['b', '=', '1'],
+                    [['foo', ['c']], '=', '1'],
+                ],
+            ]
+        }
+        assert all_referenced_columns(body) == set(['a', 'b', 'c'])
+
+        # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
+        body = {
+            'conditions': [
+                ['a', '=', '1'],
+                [
+                    ['b', '=', '1'],
+                    [['foo', ['c', ['bar', ['d']]]], '=', '1'],
+                ],
+            ]
+        }
+        assert all_referenced_columns(body) == set(['a', 'b', 'c', 'd'])
+
+        # Other fields, including expressions in selected columns
+        body = {
+            'arrayjoin': 'tags_key',
+            'groupby': ['time', 'issue'],
+            'orderby': '-time',
+            'selected_columns': [
+                'issue',
+                'time',
+                ['foo', ['c', ['bar', ['d']]]] # foo(c, bar(d))
+            ]
+        }
+        assert all_referenced_columns(body) == set(['tags_key', 'time', 'issue', 'c', 'd'])
