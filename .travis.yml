@@ -22,7 +22,7 @@ cache:
 before_install:
   - mkdir -p $CACHE_DIR
   - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:18.14.9
-  - docker run -d --name redis-cluster --net host grokzen/redis-cluster:5.0.0
+  - make travis-start-redis-cluster
   - make install-librdkafka
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
