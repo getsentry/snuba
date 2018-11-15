@@ -215,8 +215,6 @@ def parse_and_run_query(validated_body, timer):
         from_clause = u'{} SAMPLE {}'.format(from_clause, sample)
 
     joins = []
-    prewhere_clause = ''
-    prewhere_conditions = []
 
     if 'arrayjoin' in body:
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
@@ -227,15 +225,24 @@ def parse_and_run_query(validated_body, timer):
         where_conditions = list(set(util.tuplify(where_conditions)))
         where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
 
-    if not prewhere_conditions and settings.PREWHERE_KEYS:
+    prewhere_conditions = []
+    if settings.PREWHERE_KEYS:
         # Add any condition to PREWHERE if:
         # - It is a single top-level condition (not OR-nested), and
-        # - It references any of the columns in PREWHERE_KEYS
-        prewhere_conditions.extend([
-            c for c in where_conditions if util.is_condition(c) and
-            (set(util.columns_in_expr(c[0])) & set(settings.PREWHERE_KEYS))
+        # - Any of its referenced columns are in PREWHERE_KEYS
+        prewhere_candidates = [
+            (util.columns_in_expr(cond[0]), cond)
+            for cond in where_conditions if util.is_condition(cond) and
+            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
+        ]
+        prewhere_candidates = sorted([
+            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
+            for cols, cond in prewhere_candidates
         ])
+        if prewhere_candidates:
+            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
 
+    prewhere_clause = ''
     if prewhere_conditions:
         prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
 

@@ -316,6 +316,7 @@ RETENTION_OVERRIDES = {}
 
 # the list of keys that will upgrade from a WHERE condition to a PREWHERE
 PREWHERE_KEYS = ['project_id']
+MAX_PREWHERE_CONDITIONS = 1
 
 STATS_IN_RESPONSE = False
 
