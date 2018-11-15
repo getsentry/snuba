@@ -242,7 +242,7 @@ def extract_stacktraces(output, stacks):
         stack_mechanism_types.append(_unicodify(mechanism.get('type', None)))
         stack_mechanism_handled.append(_boolify(mechanism.get('handled', None)))
 
-        frames = (stack.get('stacktrace', None) or {}).get('frames', None) or []
+        frames = list(filter(None, (stack.get('stacktrace', None) or {}).get('frames', None) or []))
         for frame in frames:
             frame_abs_paths.append(_unicodify(frame.get('abs_path', None)))
             frame_filenames.append(_unicodify(frame.get('filename', None)))
@@ -371,7 +371,7 @@ def process_insert(message):
     extract_extra_tags(processed, tags)
 
     exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
-    stacks = exception.get('values', None) or []
+    stacks = list(filter(None, exception.get('values', None) or []))
     extract_stacktraces(processed, stacks)
 
     return processed
