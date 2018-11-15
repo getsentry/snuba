@@ -294,6 +294,18 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 1
 
+    def test_prewhere_conditions(self):
+        settings.PREWHERE_KEYS = ['message']
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['event_id'],
+            'conditions': [[['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]],
+            'limit': 1,
+            'debug': True
+        })).data)
+        assert "PREWHERE positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+
+
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,

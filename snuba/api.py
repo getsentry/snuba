@@ -228,7 +228,13 @@ def parse_and_run_query(validated_body, timer):
         where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
 
     if not prewhere_conditions and settings.PREWHERE_KEYS:
-        prewhere_conditions.extend([c for c in where_conditions if c and c[0] in settings.PREWHERE_KEYS])
+        # Add any condition to PREWHERE if:
+        # - It is a single top-level condition (not OR-nested), and
+        # - It references any of the columns in PREWHERE_KEYS
+        prewhere_conditions.extend([
+            c for c in where_conditions if util.is_condition(c) and
+            (set(util.columns_in_expr(c[0])) & set(settings.PREWHERE_KEYS))
+        ])
 
     if prewhere_conditions:
         prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
