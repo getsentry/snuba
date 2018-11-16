@@ -5,7 +5,7 @@ from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
-from itertools import chain
+from itertools import chain, groupby
 import calendar
 import jsonschema
 import logging
@@ -475,7 +475,7 @@ def raw_query(body, sql, client, timer, stats=None):
     })
 
     if settings.RECORD_QUERIES:
-        timer.record(metrics)
+        timer.send_metrics_to(metrics)
     result['timing'] = timer
 
     if settings.STATS_IN_RESPONSE or body.get('debug', False):
@@ -543,6 +543,7 @@ class Timer(object):
         self.final = None
 
     def mark(self, name):
+        self.final = None
         self.marks.append((name, time.time()))
 
     def finish(self):
@@ -550,11 +551,12 @@ class Timer(object):
             start = self.marks[0][1]
             end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
             diff_ms = lambda start, end: int((end - start) * 1000)
+            durations = [(name, diff_ms(self.marks[i][1], ts)) for i, (name, ts) in enumerate(self.marks[1:])]
             self.final = {
                 'timestamp': int(start),
                 'duration_ms': diff_ms(start, end),
                 'marks_ms': {
-                    name: diff_ms(self.marks[i][1], ts) for i, (name, ts) in enumerate(self.marks[1:])
+                    key: sum(d[1] for d in group) for key, group in groupby(sorted(durations), key=lambda x: x[0])
                 }
             }
         return self.final
@@ -562,7 +564,7 @@ class Timer(object):
     def for_json(self):
         return self.finish()
 
-    def record(self, metrics):
+    def send_metrics_to(self, metrics):
         name = self.marks[0][0]
         final = self.finish()
         metrics.timing(name, final['duration_ms'])
