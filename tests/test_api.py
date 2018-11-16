@@ -723,7 +723,7 @@ class TestApi(BaseTest):
                 'selected_columns': ['tags[sentry:release]', 'timestamp'],
                 'limit': 150,
             })).data)
-            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(30, 180)))
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, reversed(range(30, 180))))
 
             # Test getting the last 150 events, offset by 10
             result = json.loads(self.app.post('/query', data=json.dumps({
@@ -735,7 +735,7 @@ class TestApi(BaseTest):
                 'limit': 150,
                 'offset': 10,
             })).data)
-            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(20, 170)))
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, reversed(range(20, 170))))
 
             # Test asking for more events than there are
             result = json.loads(self.app.post('/query', data=json.dumps({
@@ -746,7 +746,7 @@ class TestApi(BaseTest):
                 'selected_columns': ['tags[sentry:release]', 'timestamp'],
                 'limit': 200,
             })).data)
-            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(0, 180)))
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, reversed(range(0, 180))))
 
             # Test offset by more events than there are
             result = json.loads(self.app.post('/query', data=json.dumps({
@@ -770,7 +770,7 @@ class TestApi(BaseTest):
                 'limit': 10,
                 'offset': 55,
             })).data)
-            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(115, 125)))
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, reversed(range(115, 125))))
 
             # Test offset by the size of the first batch retrieved. (the first batch will be discarded/trimmed)
             result = json.loads(self.app.post('/query', data=json.dumps({
@@ -782,7 +782,7 @@ class TestApi(BaseTest):
                 'limit': 10,
                 'offset': 60,
             })).data)
-            assert [d['tags[sentry:release]'] for d in result['data']] == map(str, reversed(range(110, 120)))
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, reversed(range(110, 120))))
 
             # Test condition that means 0 events will be returned
             result = json.loads(self.app.post('/query', data=json.dumps({
