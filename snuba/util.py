@@ -6,7 +6,6 @@ from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
-import calendar
 import jsonschema
 import logging
 import numbers
@@ -17,13 +16,15 @@ import _strptime  # fixes _strptime deferred import issue
 import time
 
 from snuba import schemas, settings, state
+from snuba.clickhouse import escape_col, ALL_COLUMNS, PROMOTED_COLS, TAG_COLUMN_MAP, COLUMN_TAG_MAP
 
 
 logger = logging.getLogger('snuba.util')
 
 
-ESCAPE_RE = re.compile(r'^-?[a-zA-Z][a-zA-Z0-9_\.]*$')
-NEGATE_RE = re.compile(r'^(-?)(.*)$')
+# A column name like "tags[url]"
+NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
+
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
@@ -43,17 +44,9 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def escape_col(col):
-    if not col:
-        return col
-    elif ESCAPE_RE.match(col):
-        return col
-    else:
-        return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
-
-
 def string_col(col):
-    col_type = settings.SCHEMA_MAP.get(col, None)
+    col_type = ALL_COLUMNS.get(col, None)
+    col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
         return escape_col(col)
@@ -84,7 +77,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         return escape_literal(Literal(column_name))
     elif column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS[body['granularity']]
-    elif settings.NESTED_COL_EXPR.match(column_name):
+    elif NESTED_COL_EXPR_RE.match(column_name):
         expr = tag_expr(column_name)
     elif column_name in ['tags_key', 'tags_value']:
         expr = tags_expr(column_name, body)
@@ -182,12 +175,12 @@ def tag_expr(column_name):
     For tags/contexts, we expand the expression depending on whether the tag is
     "promoted" to a top level column, or whether we have to look in the tags map.
     """
-    col, tag = settings.NESTED_COL_EXPR.match(column_name).group(1, 2)
+    col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
 
     # For promoted tags, return the column name.
-    if col in settings.PROMOTED_COLS:
-        actual_tag = settings.TAG_COLUMN_MAP[col].get(tag, tag)
-        if actual_tag in settings.PROMOTED_COLS[col]:
+    if col in PROMOTED_COLS:
+        actual_tag = TAG_COLUMN_MAP[col].get(tag, tag)
+        if actual_tag in PROMOTED_COLS[col]:
             return string_col(actual_tag)
 
     # For the rest, return an expression that looks it up in the nested tags.
@@ -211,8 +204,8 @@ def tags_expr(column_name, body):
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)
     else:
-        promoted = settings.PROMOTED_COLS[col]
-        col_map = settings.COLUMN_TAG_MAP[col]
+        promoted = PROMOTED_COLS[col]
+        col_map = COLUMN_TAG_MAP[col]
         key_list = u'arrayConcat([{}], {}.key)'.format(
             u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
             col
@@ -273,7 +266,6 @@ def all_referenced_columns(body):
 
     if 'aggregations' in body:
         col_exprs.extend([a[1] for a in body['aggregations']])
-
 
     # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))

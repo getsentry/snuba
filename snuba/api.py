@@ -10,7 +10,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import simplejson as json
 
 from snuba import schemas, settings, state, util
-from snuba.clickhouse import ClickhousePool
+from snuba.clickhouse import ClickhousePool, ALL_COLUMNS
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 
@@ -340,7 +340,6 @@ if application.debug or application.testing:
             get_table_definition(
                 name=settings.CLICKHOUSE_TABLE,
                 engine=get_test_engine(),
-                columns=settings.SCHEMA_COLUMNS
             )
         )
 
@@ -360,7 +359,12 @@ if application.debug or application.testing:
             rows.append(row)
 
         ensure_table_exists()
-        write_rows(clickhouse_rw, table=settings.CLICKHOUSE_TABLE, columns=settings.WRITER_COLUMNS, rows=rows)
+        write_rows(
+            clickhouse_rw,
+            table=settings.CLICKHOUSE_TABLE,
+            columns=ALL_COLUMNS.escaped_column_names,
+            rows=rows
+        )
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/drop', methods=['POST'])

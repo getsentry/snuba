@@ -7,6 +7,7 @@ import time
 from confluent_kafka import Consumer, KafkaError, KafkaException
 
 from . import processor, settings
+from .clickhouse import ALL_COLUMNS
 from .writer import row_from_processed_event, write_rows
 
 
@@ -317,7 +318,13 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            write_rows(self.clickhouse, self.dist_table_name, settings.WRITER_COLUMNS, inserts)
+            write_rows(
+                self.clickhouse,
+                self.dist_table_name,
+                ALL_COLUMNS.escaped_column_names,
+                inserts
+            )
+
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
 

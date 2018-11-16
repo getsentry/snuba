@@ -1,12 +1,12 @@
 import logging
 
-from snuba import settings
+from snuba.clickhouse import ALL_COLUMNS
 
 
 logger = logging.getLogger('snuba.writer')
 
 
-def row_from_processed_event(event, columns=settings.WRITER_COLUMNS):
+def row_from_processed_event(event, columns=ALL_COLUMNS.column_names):
     values = []
     for colname in columns:
         value = event.get(colname, None)
@@ -50,6 +50,6 @@ def _create_missing_array(colname, event):
 def write_rows(connection, table, columns, rows, types_check=False):
     connection.execute_robust("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-        'colnames': ", ".join('`{}`'.format(c) for c in columns),
+        'colnames': ", ".join(columns),
         'table': table,
     }, rows, types_check=types_check)

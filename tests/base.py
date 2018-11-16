@@ -7,7 +7,7 @@ import six
 from confluent_kafka import TopicPartition
 
 from snuba import settings
-from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+from snuba.clickhouse import ClickhousePool, ALL_COLUMNS, get_table_definition, get_test_engine
 from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.redis import redis_client
 from snuba.processor import process_message
@@ -142,7 +142,6 @@ class BaseTest(object):
             get_table_definition(
                 name=self.table,
                 engine=get_test_engine(),
-                columns=settings.SCHEMA_COLUMNS
             )
         )
 
@@ -208,5 +207,10 @@ class BaseTest(object):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        write_rows(self.clickhouse, table=self.table, columns=settings.WRITER_COLUMNS,
-                   rows=rows, types_check=True)
+        write_rows(
+            self.clickhouse,
+            table=self.table,
+            columns=ALL_COLUMNS.escaped_column_names,
+            rows=rows,
+            types_check=True
+        )
