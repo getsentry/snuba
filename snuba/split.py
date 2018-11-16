@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 import math
 
 from snuba import state, util
+
 
 def split_query(query_func):
     """
@@ -20,7 +21,7 @@ def split_query(query_func):
         use_split, date_align, split_step = state.get_configs([
             ('use_split', 0),
             ('date_align_seconds', 1),
-            ('split_step', 3600), # default 1 hour
+            ('split_step', 3600),  # default 1 hour
         ])
         to_date = util.parse_datetime(body['to_date'], date_align)
         from_date = util.parse_datetime(body['from_date'], date_align)
@@ -74,7 +75,10 @@ def split_query(query_func):
                         remaining = limit - total_results
                         split_step = split_step * math.ceil(remaining / float(len(result['data'])))
                         split_end = split_start
-                        split_start = max(split_end - timedelta(seconds=split_step), from_date)
+                        try:
+                            split_start = max(split_end - timedelta(seconds=split_step), from_date)
+                        except OverflowError:
+                            split_start = from_date
             return overall_result, status
         else:
             return query_func(*args, **kwargs)
