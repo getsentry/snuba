@@ -167,24 +167,22 @@ class FixedString(ColumnType):
         return 'FixedString({})'.format(self.length)
 
 
-class UInt8(ColumnType):
-    pass
+class UInt(ColumnType):
+    def __init__(self, size):
+        assert size in (8, 16, 32, 64)
+        self.size = size
+
+    def __str__(self):
+        return 'UInt{}'.format(self.size)
 
 
-class UInt16(ColumnType):
-    pass
+class Float(ColumnType):
+    def __init__(self, size):
+        assert size in (32, 64)
+        self.size = size
 
-
-class UInt32(ColumnType):
-    pass
-
-
-class UInt64(ColumnType):
-    pass
-
-
-class Float32(ColumnType):
-    pass
+    def __str__(self):
+        return 'Float{}'.format(self.size)
 
 
 class DateTime(ColumnType):
@@ -260,8 +258,8 @@ class ColumnSet(object):
 
 METADATA_COLUMNS = ColumnSet([
     # optional stream related data
-    ('offset', Nullable(UInt64())),
-    ('partition', Nullable(UInt16())),
+    ('offset', Nullable(UInt(64))),
+    ('partition', Nullable(UInt(16))),
 ])
 
 PROMOTED_TAG_COLUMNS = ColumnSet([
@@ -293,7 +291,7 @@ PROMOTED_CONTEXT_TAG_COLUMNS = ColumnSet([
     ('browser_name', Nullable(String())),
     ('os', Nullable(String())),
     ('os_name', Nullable(String())),
-    ('os_rooted', Nullable(UInt8())),
+    ('os_rooted', Nullable(UInt(8))),
 ])
 
 PROMOTED_CONTEXT_COLUMNS = ColumnSet([
@@ -305,20 +303,20 @@ PROMOTED_CONTEXT_COLUMNS = ColumnSet([
     ('device_uuid', Nullable(String())),
     ('device_model_id', Nullable(String())),
     ('device_arch', Nullable(String())),
-    ('device_battery_level', Nullable(Float32())),
+    ('device_battery_level', Nullable(Float(32))),
     ('device_orientation', Nullable(String())),
-    ('device_simulator', Nullable(UInt8())),
-    ('device_online', Nullable(UInt8())),
-    ('device_charging', Nullable(UInt8())),
+    ('device_simulator', Nullable(UInt(8))),
+    ('device_online', Nullable(UInt(8))),
+    ('device_charging', Nullable(UInt(8))),
 ])
 
 REQUIRED_COLUMNS = ColumnSet([
     ('event_id', FixedString(32)),
-    ('project_id', UInt64()),
-    ('group_id', UInt64()),
+    ('project_id', UInt(64)),
+    ('group_id', UInt(64)),
     ('timestamp', DateTime()),
-    ('deleted', UInt8()),
-    ('retention_days', UInt16()),
+    ('deleted', UInt(8)),
+    ('retention_days', UInt(16)),
 ])
 
 ALL_COLUMNS = REQUIRED_COLUMNS + [
@@ -372,7 +370,7 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
         ('type', Nullable(String())),
         ('value', Nullable(String())),
         ('mechanism_type', Nullable(String())),
-        ('mechanism_handled', Nullable(UInt8())),
+        ('mechanism_handled', Nullable(UInt(8))),
     ])),
     ('exception_frames', Nested([
         ('abs_path', Nullable(String())),
@@ -380,10 +378,10 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
         ('package', Nullable(String())),
         ('module', Nullable(String())),
         ('function', Nullable(String())),
-        ('in_app', Nullable(UInt8())),
-        ('colno', Nullable(UInt32())),
-        ('lineno', Nullable(UInt32())),
-        ('stack_level', UInt16()),
+        ('in_app', Nullable(UInt(8))),
+        ('colno', Nullable(UInt(32))),
+        ('lineno', Nullable(UInt(32))),
+        ('stack_level', UInt(16)),
     ])),
 ]
 
