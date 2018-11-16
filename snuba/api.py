@@ -345,6 +345,10 @@ if application.debug or application.testing:
 
     ensure_table_exists()
 
+    if settings.CLICKHOUSE_TABLE == 'dev':
+        from snuba import migrate
+        migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_message
