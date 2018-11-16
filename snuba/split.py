@@ -44,6 +44,12 @@ def split_query(query_func):
                 body['offset'] = 0
                 body['limit'] = limit - total_results + remaining_offset
                 result, status = query_func(*args, **kwargs)
+
+                # If something failed, discard all progress and just return that
+                if status != 200:
+                    overall_result = result
+                    break
+
                 if overall_result is None:
                     overall_result = result
                 else:
