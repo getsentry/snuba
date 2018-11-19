@@ -8,12 +8,36 @@ logger = logging.getLogger('snuba.cleanup')
 
 
 def run(conn, clickhouse_table):
-    describe = conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
+    from snuba.clickhouse import ALL_COLUMNS
 
-    schema = {}
-    for column, type_, default_type, default_expression in describe:
-        schema[column] = type_
+    get_schema = lambda: {
+        column_name: column_type
+        for column_name, column_type, default_type, default_expr
+        in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
+    }
 
-    if 'group_id' not in schema:
+    local_schema = get_schema()
+
+    # Add/remove known migrations
+    if 'group_id' not in local_schema:
         logger.info("Adding `group_id` column.")
-        conn.execute("ALTER TABLE %s ADD COLUMN group_id DEFAULT 0" % clickhouse_table)
+        conn.execute("ALTER TABLE %s ADD COLUMN group_id UInt64 DEFAULT 0" % clickhouse_table)
+
+    if 'device_model' in local_schema:
+        logger.info("Dropping unused `device_model` column.")
+        conn.execute("ALTER TABLE %s DROP COLUMN device_model" % clickhouse_table)
+
+    # Refresh after alters
+    local_schema = get_schema()
+
+    # Warn user about any *other* schema diffs
+    for column_name, column_type in local_schema.items():
+        if column_name not in ALL_COLUMNS:
+            logger.warn("Column '%s' exists in local ClickHouse but not in schema!", column_name)
+        elif column_type != str(ALL_COLUMNS[column_name]):
+            logger.warn(
+                "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)",
+                column_name,
+                str(ALL_COLUMNS[column_name]),
+                column_type
+            )
