@@ -54,7 +54,7 @@ def string_col(col):
         return 'toString({})'.format(escape_col(col))
 
 
-def parse_datetime(value, alignment=1):
+def parse_datetime(value, alignment):
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
@@ -310,14 +310,6 @@ def condition_expr(conditions, body, depth=0):
         return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         lhs, op, lit = conditions
-
-        if (
-            lhs in ('received', 'timestamp') and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-
         lit = escape_literal(lit)
 
         lhs = column_expr(lhs, body)
