@@ -225,7 +225,7 @@ def parse_and_run_query(validated_body, timer):
     where_clause = ''
     if where_conditions:
         where_conditions = list(set(util.tuplify(where_conditions)))
-        where_clause = u'WHERE {}'.format(util.condition_expr(where_conditions, body))
+        where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -246,12 +246,12 @@ def parse_and_run_query(validated_body, timer):
 
     prewhere_clause = ''
     if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.condition_expr(prewhere_conditions, body))
+        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(prewhere_conditions, body))
 
     having_clause = ''
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.condition_expr(having_conditions, body))
+        having_clause = u'HAVING {}'.format(util.conditions_expr(having_conditions, body))
 
     group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
     if group_clause:

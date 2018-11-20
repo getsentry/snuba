@@ -8,7 +8,7 @@ from snuba.util import (
     all_referenced_columns,
     column_expr,
     complex_column_expr,
-    condition_expr,
+    conditions_expr,
     escape_literal,
     tuplify,
     Timer,
@@ -106,52 +106,52 @@ class TestUtil(BaseTest):
         assert escape_literal([1, 'a', date(2001, 1, 1)]) ==\
             "(1, 'a', toDate('2001-01-01'))"
 
-    def test_condition_expr(self):
+    def test_conditions_expr(self):
         conditions = [['a', '=', 1]]
-        assert condition_expr(conditions, {}) == 'a = 1'
+        assert conditions_expr(conditions, {}) == 'a = 1'
 
         conditions = [[['a', '=', 1]]]
-        assert condition_expr(conditions, {}) == 'a = 1'
+        assert conditions_expr(conditions, {}) == 'a = 1'
 
         conditions = [['a', '=', 1], ['b', '=', 2]]
-        assert condition_expr(conditions, {}) == 'a = 1 AND b = 2'
+        assert conditions_expr(conditions, {}) == 'a = 1 AND b = 2'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]]]
-        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2)'
+        assert conditions_expr(conditions, {}) == '(a = 1 OR b = 2)'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], ['c', '=', 3]]
-        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2) AND c = 3'
+        assert conditions_expr(conditions, {}) == '(a = 1 OR b = 2) AND c = 3'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], [['c', '=', 3], ['d', '=', 4]]]
-        assert condition_expr(conditions, {}) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
+        assert conditions_expr(conditions, {}) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
 
         # Malformed condition input
         conditions = [[['a', '=', 1], []]]
-        assert condition_expr(conditions, {}) == 'a = 1'
+        assert conditions_expr(conditions, {}) == 'a = 1'
 
         # Test column expansion
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
         expanded = column_expr('tags[foo]', {})
-        assert condition_expr(conditions, {}) == '({} = 1 OR b = 2)'.format(expanded)
+        assert conditions_expr(conditions, {}) == '({} = 1 OR b = 2)'.format(expanded)
 
         # Test using alias if column has already been expanded in SELECT clause
         reuse_body = {}
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
         column_expr('tags[foo]', reuse_body)  # Expand it once so the next time is aliased
-        assert condition_expr(conditions, reuse_body) == '(`tags[foo]` = 1 OR b = 2)'
+        assert conditions_expr(conditions, reuse_body) == '(`tags[foo]` = 1 OR b = 2)'
 
         # Test special output format of LIKE
         conditions = [['primary_hash', 'LIKE', '%foo%']]
-        assert condition_expr(conditions, {}) == 'primary_hash LIKE \'%foo%\''
+        assert conditions_expr(conditions, {}) == 'primary_hash LIKE \'%foo%\''
 
         conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
-        assert condition_expr(conditions, {}) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+        assert conditions_expr(conditions, {}) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
-        assert condition_expr(conditions, {}) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
+        assert conditions_expr(conditions, {}) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
-        assert condition_expr(conditions, {}) == 'notEmpty((arrayJoin(tags.key) AS tags_key)) = 1'
+        assert conditions_expr(conditions, {}) == 'notEmpty((arrayJoin(tags.key) AS tags_key)) = 1'
 
         conditions = tuplify([
             [
@@ -161,8 +161,12 @@ class TestUtil(BaseTest):
                 [['notEmpty', ['tags[sentry:user]']], '=', 'joe'], [['notEmpty', ['tags[sentry:user]']], '=', 'bob']
             ],
         ])
-        assert condition_expr(conditions, {}) == \
+        assert conditions_expr(conditions, {}) == \
                 """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+
+        # Test scalar condition on array column is expanded as an iterator.
+        conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
+        assert conditions_expr(conditions, {}) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), exception_frames.filename)'
 
     def test_duplicate_expression_alias(self):
         body = {
@@ -180,7 +184,7 @@ class TestUtil(BaseTest):
         ]
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
 
-    def test_complex_condition_expr(self):
+    def test_complex_conditions_expr(self):
         body = {}
 
         assert complex_column_expr(tuplify(['count', []]), body.copy()) == 'count()'

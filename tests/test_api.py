@@ -85,6 +85,16 @@ class TestApi(BaseTest):
                                 'foo.bar': 'qux',
                                 'os_name': 'linux',
                             },
+                            'exception': {
+                                'values': [
+                                    {'stacktrace': {
+                                        'frames': [
+                                            {'filename': 'foo.py', 'lineno': tock},
+                                            {'filename': 'bar.py', 'lineno': tock * 2}
+                                        ]
+                                    }}
+                                ]
+                            }
                         }
                     }))
         self.write_processed_events(events)
@@ -293,6 +303,25 @@ class TestApi(BaseTest):
             'limit': 1,
         })).data)
         assert len(result['data']) == 1
+
+        # Test that a scalar condition on an array column expands to an iterator
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': ['project_id'],
+            'groupby': 'project_id',
+            'conditions': [
+                # only project 1 should have an event with lineno 5
+                ['exception_frames.lineno', '=', 5],
+                ['exception_frames.filename', 'LIKE', '%bar%'],
+                # TODO these conditions are both separately true for the event,
+                # but they are not both true for a single exception_frame (i.e.
+                # there is no frame with filename:bar and lineno:5). We need to
+                # fix this so that we have one iterator that tests both
+                # conditions, instead of 2 iterators testing 1 condition each.
+            ],
+        })).data)
+        assert len(result['data']) == 1
+        assert result['data'][0]['project_id'] == 1
 
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
@@ -644,7 +673,7 @@ class TestApi(BaseTest):
         assert len(result['data']) == 180
         assert 'platform' in result['data'][0]
         assert 'notEmpty(exception_stacks.type)' in result['data'][0]
-        assert result['data'][0]['notEmpty(exception_stacks.type)'] == 0
+        assert result['data'][0]['notEmpty(exception_stacks.type)'] == 1
 
         # Check that aliasing works too
         query = {
@@ -655,7 +684,7 @@ class TestApi(BaseTest):
         assert len(result['data']) == 180
         assert 'platform' in result['data'][0]
         assert 'type_not_empty' in result['data'][0]
-        assert result['data'][0]['type_not_empty'] == 0
+        assert result['data'][0]['type_not_empty'] == 1
 
     def test_complex_order(self):
         # sort by a complex sort key with an expression, and a regular column,
