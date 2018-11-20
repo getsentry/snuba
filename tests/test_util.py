@@ -164,6 +164,10 @@ class TestUtil(BaseTest):
         assert conditions_expr(conditions, {}) == \
                 """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
 
+        # Test scalar condition on array column is expanded as an iterator.
+        conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
+        assert conditions_expr(conditions, {}) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), exception_frames.filename)'
+
     def test_duplicate_expression_alias(self):
         body = {
             'aggregations': [

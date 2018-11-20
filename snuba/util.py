@@ -15,7 +15,7 @@ import six
 import _strptime  # fixes _strptime deferred import issue
 import time
 
-from snuba import schemas, settings, state
+from snuba import clickhouse, schemas, settings, state
 from snuba.clickhouse import escape_col, ALL_COLUMNS, PROMOTED_COLS, TAG_COLUMN_MAP, COLUMN_TAG_MAP
 
 
@@ -318,11 +318,29 @@ def conditions_expr(conditions, body, depth=0):
         ):
             lit = parse_datetime(lit)
 
-        lit = escape_literal(lit)
+        # If the LHS is a simple column name that refers to an array column
+        # and the RHS is a scalar value, we assume that the user actually means
+        # to check if any item in the array matches the predicate, so we return
+        # an `any(x == value for x in array_column)` type expression
+        # TODO if the condition is `!=` they probably actually mean `all(...)`
+        if (
+            isinstance(lhs, six.string_types) and
+            lhs in ALL_COLUMNS and
+            type(ALL_COLUMNS[lhs]) == clickhouse.Array and
+            not isinstance(lit, (list, tuple))
+            ):
+            return u'arrayExists(x -> assumeNotNull(x {} {}), {})'.format(
+                op,
+                escape_literal(lit),
+                column_expr(lhs, body)
+            )
+        else:
+            return u'{} {} {}'.format(
+                column_expr(lhs, body),
+                op,
+                escape_literal(lit)
+            )
 
-        lhs = column_expr(lhs, body)
-
-        return u'{} {} {}'.format(lhs, op, lit)
     elif depth == 1:
         sub = (conditions_expr(cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
