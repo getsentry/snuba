@@ -1,5 +1,6 @@
 from flask import request
 
+from clickhouse_driver.errors import Error as ClickHouseError
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
@@ -451,11 +452,24 @@ def raw_query(body, sql, client, timer, stats=None):
                             error = six.text_type(ex)
                             status = 500
                             logger.error("Error running query: %s\n%s", sql, error)
-                            result = {'error': error}
+                            if isinstance(ex, ClickHouseError):
+                                result = {'error': {
+                                    'type': 'clickhouse',
+                                    'code': ex.code,
+                                    'message': error,
+                                }}
+                            else:
+                                result = {'error': {
+                                    'type': 'unknown',
+                                    'message': error,
+                                }}
 
                     else:
                         status = 429
-                        result = {'error': 'rate limit exceeded'}
+                        result = {'error': {
+                            'type': 'ratelimit',
+                            'message': 'rate limit exceeded',
+                        }}
 
     stats.update(query_settings)
     state.record_query({
@@ -518,7 +532,10 @@ def validate_request(schema):
                     if kwargs.get('timer'):
                         kwargs['timer'].mark('validate_schema')
                 except (ValueError, jsonschema.ValidationError) as e:
-                    result = {'error': str(e), 'schema': schema}
+                    result = {'error': {
+                        'type': 'schema',
+                        'message': str(e),
+                    }, 'schema': schema}
                     return (
                         json.dumps(result, sort_keys=True, indent=4, default=default_encode),
                         400,
