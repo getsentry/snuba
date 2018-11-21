@@ -28,6 +28,7 @@ before_install:
   - redis-server --version
   - redis-cli --version
   - make travis-start-redis-cluster
+  - make install-librdkafka
   - make install-python-dependencies
   - if [ -f ${CACHE_FILE_SNUBA} ]; then gzip -dc $CACHE_FILE_SNUBA | docker load; fi
 script:
