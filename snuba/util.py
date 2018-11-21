@@ -328,8 +328,8 @@ def conditions_expr(conditions, body, depth=0):
         if (
             isinstance(lhs, six.string_types) and
             lhs in ALL_COLUMNS and
-            type(ALL_COLUMNS[lhs]) == clickhouse.Array and
-            lhs.split('.', 1)[0] != body.get('arrayjoin') and
+            type(ALL_COLUMNS[lhs].type) == clickhouse.Array and
+            ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
             return u'arrayExists(x -> assumeNotNull(x {} {}), {})'.format(

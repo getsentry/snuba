@@ -34,10 +34,13 @@ def run(conn, clickhouse_table):
     for column_name, column_type in local_schema.items():
         if column_name not in ALL_COLUMNS:
             logger.warn("Column '%s' exists in local ClickHouse but not in schema!", column_name)
-        elif column_type != str(ALL_COLUMNS[column_name]):
+            continue
+
+        expected_type = ALL_COLUMNS[column_name].type.for_schema()
+        if column_type != expected_type:
             logger.warn(
                 "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)",
                 column_name,
-                str(ALL_COLUMNS[column_name]),
+                expected_type,
                 column_type
             )

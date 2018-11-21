@@ -321,7 +321,6 @@ class ConsumerWorker(AbstractBatchWorker):
             write_rows(
                 self.clickhouse,
                 self.dist_table_name,
-                ALL_COLUMNS.escaped_column_names,
                 inserts
             )
 

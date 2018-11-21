@@ -111,47 +111,113 @@ class ClickhousePool(object):
             pass
 
 
-class ColumnType(object):
-    def __str__(self):
-        return self.__class__.__name__
+class Column(object):
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
 
     def __repr__(self):
-        return str(self)
+        return 'Column({}, {})'.format(repr(self.name), repr(self.type))
 
-    def flatten(self, prefix):
-        return [(prefix, self)]
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.name == other.name \
+            and self.type == other.type
+
+    def for_schema(self):
+        return '{} {}'.format(escape_col(self.name), self.type.for_schema())
+
+    @staticmethod
+    def to_columns(columns):
+        return [
+            Column(*col) if not isinstance(col, Column) else col
+            for col in columns
+        ]
+
+
+class FlattenedColumn(object):
+    def __init__(self, base_name, name, type):
+        self.base_name = base_name
+        self.name = name
+        self.type = type
+
+        self.flattened_name = '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+
+    def __repr__(self):
+        return 'FlattenedColumn({}, {}, {})'.format(
+            repr(self.base_name), repr(self.name), repr(self.type)
+        )
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.flattened_name == other.flattened_name \
+            and self.type == other.type
+
+
+class ColumnType(object):
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__
+
+    def for_schema(self):
+        return self.__class__.__name__
+
+    def flatten(self, name):
+        return [FlattenedColumn(None, name, self)]
 
 
 class Nullable(ColumnType):
     def __init__(self, inner_type):
         self.inner_type = inner_type
 
-    def __str__(self):
-        return u'Nullable({})'.format(str(self.inner_type))
+    def __repr__(self):
+        return u'Nullable({})'.format(repr(self.inner_type))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.inner_type == other.inner_type
+
+    def for_schema(self):
+        return u'Nullable({})'.format(self.inner_type.for_schema())
 
 
 class Array(ColumnType):
     def __init__(self, inner_type):
         self.inner_type = inner_type
 
-    def __str__(self):
-        return u'Array({})'.format(str(self.inner_type))
+    def __repr__(self):
+        return u'Array({})'.format(repr(self.inner_type))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.inner_type == other.inner_type
+
+    def for_schema(self):
+        return u'Array({})'.format(self.inner_type.for_schema())
 
 
 class Nested(ColumnType):
     def __init__(self, nested_columns):
-        self.nested_columns = nested_columns
+        self.nested_columns = Column.to_columns(nested_columns)
 
-    def __str__(self):
+    def __repr__(self):
+        return u'Nested({})'.format(repr(self.nested_columns))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.nested_columns == other.nested_columns
+
+    def for_schema(self):
         return u'Nested({})'.format(u", ".join(
-            u"{} {}".format(str(column_name), str(column_type))
-            for column_name, column_type in self.nested_columns
+            column.for_schema() for column in self.nested_columns
         ))
 
-    def flatten(self, prefix):
+    def flatten(self, name):
         return [
-            ("{}.{}".format(prefix, column_name), Array(column_type))
-            for column_name, column_type in self.nested_columns
+            FlattenedColumn(name, column.name, Array(column.type))
+            for column in self.nested_columns
         ]
 
 
@@ -163,7 +229,14 @@ class FixedString(ColumnType):
     def __init__(self, length):
         self.length = length
 
-    def __str__(self):
+    def __repr__(self):
+        return 'FixedString({})'.format(self.length)
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.length == other.length
+
+    def for_schema(self):
         return 'FixedString({})'.format(self.length)
 
 
@@ -172,7 +245,14 @@ class UInt(ColumnType):
         assert size in (8, 16, 32, 64)
         self.size = size
 
-    def __str__(self):
+    def __repr__(self):
+        return 'UInt({})'.format(self.size)
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.size == other.size
+
+    def for_schema(self):
         return 'UInt{}'.format(self.size)
 
 
@@ -181,7 +261,14 @@ class Float(ColumnType):
         assert size in (32, 64)
         self.size = size
 
-    def __str__(self):
+    def __repr__(self):
+        return 'Float({})'.format(self.size)
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.size == other.size
+
+    def for_schema(self):
         return 'Float{}'.format(self.size)
 
 
@@ -193,44 +280,48 @@ class ColumnSet(object):
     """\
     A set of columns, unique by column name.
 
-    Initialized with a list of (column_name: String, column_type: ColumnType) tuples.
+    Initialized with a list of Column objects or
+    (column_name: String, column_type: ColumnType) tuples.
 
     Offers simple functionality:
     * ColumnSets can be added together (order is maintained)
     * Columns can be looked up by ClickHouse normalized names, e.g. 'tags.key'
     * `column_names` and `escaped_column_names` offer (same ordered) lists of
       the normalized column names.
+    * `for_schema()` can be used to generate valid ClickHouse column names
+      and types for a table schema.
     """
     def __init__(self, columns):
-        self.columns = columns
+        self.columns = Column.to_columns(columns)
 
         self.column_names = []
         self.escaped_column_names = []
-        self.lookup = {}
-        self.flattened = self.flattened()
+        self._lookup = {}
 
-        for column_name, column_type in self.flattened:
-            if column_name in self.lookup:
-                raise RuntimeError("Duplicate column: {}".format(column_name))
+        self._flattened = []
+        for column in self.columns:
+            self._flattened.extend(column.type.flatten(column.name))
 
-            self.lookup[column_name] = column_type
-            self.column_names.append(column_name)
-            self.escaped_column_names.append(escape_col(column_name))
+        for col in self._flattened:
+            if col.flattened_name in self._lookup:
+                raise RuntimeError("Duplicate column: {}".format(col.flattened_name))
+
+            self._lookup[col.flattened_name] = col
+            self.column_names.append(col.flattened_name)
+            self.escaped_column_names.append(escape_col(col.flattened_name))
 
             # also store it by the escaped name
-            self.lookup[escape_col(column_name)] = column_type
-
-    def __str__(self):
-        return ', '.join(
-            '{} {}'.format(escape_col(column_name), column_type)
-            for column_name, column_type in self.columns
-        )
+            self._lookup[escape_col(col.flattened_name)] = col
 
     def __repr__(self):
-        return str(self)
+        return 'ColumnSet({})'.format(repr(self.columns))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self._flattened == other._flattened
 
     def __len__(self):
-        return len(self.flattened)
+        return len(self._flattened)
 
     def __add__(self, other):
         if isinstance(other, ColumnSet):
@@ -238,10 +329,10 @@ class ColumnSet(object):
         return ColumnSet(self.columns + other)
 
     def __contains__(self, key):
-        return key in self.lookup
+        return key in self._lookup
 
     def __getitem__(self, key):
-        return self.lookup[key]
+        return self._lookup[key]
 
     def get(self, key, default=None):
         try:
@@ -249,11 +340,8 @@ class ColumnSet(object):
         except KeyError:
             return default
 
-    def flattened(self):
-        flattened = []
-        for column_name, column_type in self.columns:
-            flattened.extend(column_type.flatten(column_name))
-        return flattened
+    def for_schema(self):
+        return ', '.join(column.for_schema() for column in self.columns)
 
 
 METADATA_COLUMNS = ColumnSet([
@@ -412,10 +500,10 @@ PROMOTED_TAGS = {
 }
 
 
-def get_table_definition(name, engine, schema=ALL_COLUMNS):
+def get_table_definition(name, engine, columns=ALL_COLUMNS):
     return """
     CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-        'columns': schema,
+        'columns': columns.for_schema(),
         'engine': engine,
         'name': name,
     }
