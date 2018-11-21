@@ -324,10 +324,12 @@ def conditions_expr(conditions, body, depth=0):
         # to check if any item in the array matches the predicate, so we return
         # an `any(x == value for x in array_column)` type expression
         # TODO if the condition is `!=` they probably actually mean `all(...)`
+        # TODO a better way to stop this expansion if we are arrayJoining on the column
         if (
             isinstance(lhs, six.string_types) and
             lhs in ALL_COLUMNS and
             type(ALL_COLUMNS[lhs]) == clickhouse.Array and
+            lhs.split('.', 1)[0] != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
             return u'arrayExists(x -> assumeNotNull(x {} {}), {})'.format(
