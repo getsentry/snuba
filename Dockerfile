@@ -43,32 +43,6 @@ RUN set -ex; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
-RUN set -ex; \
-    LIBRDKAFKA_VERSION=0.11.5; \
-    \
-    buildDeps=' \
-        make \
-        gcc \
-        g++ \
-        libc6-dev \
-        liblz4-dev \
-        wget \
-    '; \
-    apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
-    mkdir -p /usr/src/librdkafka; \
-    cd /usr/src/librdkafka; \
-    wget -O v${LIBRDKAFKA_VERSION}.tar.gz https://github.com/edenhill/librdkafka/archive/v${LIBRDKAFKA_VERSION}.tar.gz; \
-    tar xf v${LIBRDKAFKA_VERSION}.tar.gz --strip-components=1; \
-    ./configure --prefix=/usr; \
-    make; \
-    PREFIX=/usr make install; \
-    rm -r /usr/src/librdkafka; \
-    \
-    apt-get purge -y --auto-remove $buildDeps
-
 COPY snuba ./snuba/
 COPY setup.py README.md MANIFEST.in ./
 
