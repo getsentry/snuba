@@ -9,27 +9,42 @@ ENV PIP_NO_CACHE_DIR=off \
     PIP_DISABLE_PIP_VERSION_CHECK=on \
     PYTHONDONTWRITEBYTECODE=1
 
+COPY snuba ./snuba/
+COPY setup.py README.md MANIFEST.in ./
+
+RUN chown -R snuba:snuba /usr/src/snuba/
+
+# these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
     apt-get update; \
     apt-get install --no-install-recommends -y \
         libexpat1 \
         libffi6 \
-        libpcre3 \
         liblz4-1 \
+        libpcre3 \
     ; \
     rm -rf /var/lib/apt/lists/*
 
 # grab gosu for easy step-down from root
-ENV GOSU_VERSION 1.10
+ENV GOSU_VERSION=1.10
 RUN set -ex; \
     \
+    LIBRDKAFKA_VERSION=0.11.5; \
     buildDeps=' \
+        bzip2 \
         dirmngr \
+        gcc \
+        g++ \
+        gcc \
+        libc6-dev \
+        liblz4-dev \
+        libpcre3-dev \
         gnupg \
+        make \
         wget \
     '; \
     apt-get update; \
-    apt-get install -y --no-install-recommends $buildDeps; \
+    apt-get install -y --no-install-recommends libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
     rm -rf /var/lib/apt/lists/*; \
     \
     wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)"; \
@@ -41,23 +56,6 @@ RUN set -ex; \
     chmod +x /usr/local/bin/gosu; \
     gosu nobody true; \
     \
-    apt-get purge -y --auto-remove $buildDeps
-
-RUN set -ex; \
-    LIBRDKAFKA_VERSION=0.11.5; \
-    \
-    buildDeps=' \
-        make \
-        gcc \
-        g++ \
-        libc6-dev \
-        liblz4-dev \
-        wget \
-    '; \
-    apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
     mkdir -p /usr/src/librdkafka; \
     cd /usr/src/librdkafka; \
     wget -O v${LIBRDKAFKA_VERSION}.tar.gz https://github.com/edenhill/librdkafka/archive/v${LIBRDKAFKA_VERSION}.tar.gz; \
@@ -67,31 +65,11 @@ RUN set -ex; \
     PREFIX=/usr make install; \
     rm -r /usr/src/librdkafka; \
     \
-    apt-get purge -y --auto-remove $buildDeps
-
-COPY snuba ./snuba/
-COPY setup.py README.md MANIFEST.in ./
-
-RUN chown -R snuba:snuba /usr/src/snuba/
-
 # Install PyPy at /pypy, for running the consumer code. Note that PyPy is built
 # against libssl1.0.0, so this is required for using the SSL module, which is
 # required to bootstrap pip. Since this is a short term stopgap it seemed better
 # than building PyPy ourselves.
-RUN set -ex; \
-    \
-    buildDeps=' \
-        bzip2 \
-        gcc \
-        libc6-dev \
-        liblz4-dev \
-        libpcre3-dev \
-        wget \
-    '; \
-    apt-get update; \
-    apt-get install -y $buildDeps --no-install-recommends; \
-    rm -rf /var/lib/apt/lists/*; \
-    \
+    cd ; \
     wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-linux64.tar.bz2; \
     [ "$(sha256sum pypy2-v6.0.0-linux64.tar.bz2)" = '6cbf942ba7c90f504d8d6a2e45d4244e3bf146c8722d64e9410b85eac6b5af67  pypy2-v6.0.0-linux64.tar.bz2' ]; \
     tar xf pypy2-v6.0.0-linux64.tar.bz2; \
