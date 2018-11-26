@@ -210,7 +210,6 @@ class BaseTest(object):
         write_rows(
             self.clickhouse,
             table=self.table,
-            columns=ALL_COLUMNS.escaped_column_names,
             rows=rows,
             types_check=True
         )

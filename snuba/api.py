@@ -366,7 +366,6 @@ if application.debug or application.testing:
         write_rows(
             clickhouse_rw,
             table=settings.CLICKHOUSE_TABLE,
-            columns=ALL_COLUMNS.escaped_column_names,
             rows=rows
         )
         return ('ok', 200, {'Content-Type': 'text/plain'})

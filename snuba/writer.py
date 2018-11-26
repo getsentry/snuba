@@ -47,7 +47,7 @@ def _create_missing_array(colname, event):
     return []
 
 
-def write_rows(connection, table, columns, rows, types_check=False):
+def write_rows(connection, table, rows, types_check=False, columns=ALL_COLUMNS.escaped_column_names):
     connection.execute_robust("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
         'colnames': ", ".join(columns),
