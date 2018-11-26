@@ -304,7 +304,7 @@ class ColumnSet(object):
 
             self._lookup[col.flattened] = col
             # also store it by the escaped name
-            self._lookup[escape_col(col.flattened)] = col
+            self._lookup[col.escaped] = col
 
     def __repr__(self):
         return 'ColumnSet({})'.format(repr(self.columns))
@@ -479,7 +479,7 @@ PROMOTED_COLS = {
 # For every applicable promoted column,  a map of translations from the column
 # name  we save in the database to the tag we receive in the query.
 COLUMN_TAG_MAP = {
-    'tags': {t: t.replace('_', '.') for t in (col.flattened for col in PROMOTED_CONTEXT_TAG_COLUMNS)},
+    'tags': {col.flattened: col.flattened.replace('_', '.') for col in PROMOTED_CONTEXT_TAG_COLUMNS},
     'contexts': {},
 }
 
