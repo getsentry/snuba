@@ -431,9 +431,7 @@ consumer_config = {
     'enable.auto.commit': False,
     'bootstrap.servers': '127.0.0.1:9093',
     'group.id': group_id,
-    'default.topic.config': {
-        'auto.offset.reset': 'error',
-    },
+    'auto.offset.reset': 'error',
 }
 
 consumer = Consumer(consumer_config)
@@ -449,4 +447,3 @@ consumer.commit(offsets=topic_partitions, asynchronous=False)
 
 Start up the consumers and they should pick up at `2018-07-11` (midnight,
 exactly where the copy left off).
-
