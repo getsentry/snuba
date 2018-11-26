@@ -141,7 +141,8 @@ class FlattenedColumn(object):
         self.name = name
         self.type = type
 
-        self.flattened_name = '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+        self.flattened = '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+        self.escaped = escape_col(self.flattened)
 
     def __repr__(self):
         return 'FlattenedColumn({}, {}, {})'.format(
@@ -150,7 +151,7 @@ class FlattenedColumn(object):
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ \
-            and self.flattened_name == other.flattened_name \
+            and self.flattened == other.flattened \
             and self.type == other.type
 
 
@@ -286,32 +287,24 @@ class ColumnSet(object):
     Offers simple functionality:
     * ColumnSets can be added together (order is maintained)
     * Columns can be looked up by ClickHouse normalized names, e.g. 'tags.key'
-    * `column_names` and `escaped_column_names` offer (same ordered) lists of
-      the normalized column names.
     * `for_schema()` can be used to generate valid ClickHouse column names
       and types for a table schema.
     """
     def __init__(self, columns):
         self.columns = Column.to_columns(columns)
 
-        self.column_names = []
-        self.escaped_column_names = []
         self._lookup = {}
-
         self._flattened = []
         for column in self.columns:
             self._flattened.extend(column.type.flatten(column.name))
 
         for col in self._flattened:
-            if col.flattened_name in self._lookup:
-                raise RuntimeError("Duplicate column: {}".format(col.flattened_name))
+            if col.flattened in self._lookup:
+                raise RuntimeError("Duplicate column: {}".format(col.flattened))
 
-            self._lookup[col.flattened_name] = col
-            self.column_names.append(col.flattened_name)
-            self.escaped_column_names.append(escape_col(col.flattened_name))
-
+            self._lookup[col.flattened] = col
             # also store it by the escaped name
-            self._lookup[escape_col(col.flattened_name)] = col
+            self._lookup[escape_col(col.flattened)] = col
 
     def __repr__(self):
         return 'ColumnSet({})'.format(repr(self.columns))
@@ -333,6 +326,9 @@ class ColumnSet(object):
 
     def __getitem__(self, key):
         return self._lookup[key]
+
+    def __iter__(self):
+        return iter(self._flattened)
 
     def get(self, key, default=None):
         try:
@@ -476,14 +472,14 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
 # The set of columns, and associated keys that have been promoted
 # to the top level table namespace.
 PROMOTED_COLS = {
-    'tags': frozenset(PROMOTED_TAG_COLUMNS.column_names + PROMOTED_CONTEXT_TAG_COLUMNS.column_names),
-    'contexts': frozenset(PROMOTED_CONTEXT_COLUMNS.column_names),
+    'tags': frozenset(col.flattened for col in (PROMOTED_TAG_COLUMNS + PROMOTED_CONTEXT_TAG_COLUMNS)),
+    'contexts': frozenset(col.flattened for col in PROMOTED_CONTEXT_COLUMNS),
 }
 
 # For every applicable promoted column,  a map of translations from the column
 # name  we save in the database to the tag we receive in the query.
 COLUMN_TAG_MAP = {
-    'tags': {t: t.replace('_', '.') for t in PROMOTED_CONTEXT_TAG_COLUMNS.column_names},
+    'tags': {t: t.replace('_', '.') for t in (col.flattened for col in PROMOTED_CONTEXT_TAG_COLUMNS)},
     'contexts': {},
 }
 

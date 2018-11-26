@@ -1,17 +1,17 @@
 import logging
 
-from snuba.clickhouse import ALL_COLUMNS
+from snuba.clickhouse import ALL_COLUMNS, Array
 
 
 logger = logging.getLogger('snuba.writer')
 
 
-def row_from_processed_event(event, columns=ALL_COLUMNS.column_names):
+def row_from_processed_event(event, columns=ALL_COLUMNS):
     values = []
-    for colname in columns:
-        value = event.get(colname, None)
-        if value is None and '.' in colname:
-            value = _create_missing_array(colname, event)
+    for col in columns:
+        value = event.get(col.flattened, None)
+        if value is None and isinstance(col.type, Array):
+            value = _create_missing_array(col.flattened, event)
         values.append(value)
 
     return values
@@ -40,16 +40,16 @@ def _create_missing_array(colname, event):
     prefix += '.'
 
     for key in event.keys():
-        if key.startswith(prefix):
+        if key != colname and key.startswith(prefix):
             return [None] * len(event[key])
 
     # no siblings, empty array is safe!
     return []
 
 
-def write_rows(connection, table, rows, types_check=False, columns=ALL_COLUMNS.escaped_column_names):
+def write_rows(connection, table, rows, types_check=False, columns=ALL_COLUMNS):
     connection.execute_robust("""
         INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-        'colnames': ", ".join(columns),
+        'colnames': ", ".join(col.escaped for col in columns),
         'table': table,
     }, rows, types_check=types_check)

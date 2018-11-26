@@ -17,6 +17,9 @@ logger = logging.getLogger('snuba.replacer')
 
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+REQUIRED_COLUMN_NAMES = [col.escaped for col in REQUIRED_COLUMNS]
+ALL_COLUMN_NAMES = [col.escaped for col in ALL_COLUMNS]
+
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
@@ -148,7 +151,7 @@ def process_delete_groups(message):
 
     assert all(isinstance(gid, six.integer_types) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMNS.escaped_column_names)
+    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMN_NAMES)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -169,7 +172,7 @@ def process_delete_groups(message):
     """ + where
 
     query_args = {
-        'required_columns': ', '.join(REQUIRED_COLUMNS.escaped_column_names),
+        'required_columns': ', '.join(REQUIRED_COLUMN_NAMES),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),
@@ -200,7 +203,7 @@ def process_merge(message):
 
     assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS.escaped_column_names)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -221,7 +224,7 @@ def process_merge(message):
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMNS.escaped_column_names),
+        'all_columns': ', '.join(ALL_COLUMN_NAMES),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
@@ -240,7 +243,7 @@ def process_unmerge(message):
 
     assert all(isinstance(h, six.string_types) for h in hashes)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMNS.escaped_column_names)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -262,7 +265,7 @@ def process_unmerge(message):
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMNS.escaped_column_names),
+        'all_columns': ', '.join(ALL_COLUMN_NAMES),
         'select_columns': ', '.join(select_columns),
         'previous_group_id': message['previous_group_id'],
         'project_id': message['project_id'],

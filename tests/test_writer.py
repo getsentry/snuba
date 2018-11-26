@@ -1,7 +1,7 @@
 from base import BaseTest
 
 from snuba import settings
-from snuba.clickhouse import ALL_COLUMNS, METADATA_COLUMNS
+from snuba.clickhouse import ColumnSet, ALL_COLUMNS, METADATA_COLUMNS
 from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, _create_missing_array
 
@@ -32,9 +32,8 @@ class TestWriter(BaseTest):
         assert 'sdk_name' in processed
         sdk_name = processed['sdk_name']
 
-        columns_copy = ALL_COLUMNS.column_names[:]
-        assert 'sdk_name' in columns_copy
-        columns_copy.remove('sdk_name')
+        columns_copy = ColumnSet([col for col in ALL_COLUMNS.columns if not col.name == 'sdk_name'])
+        assert len(columns_copy) == (len(ALL_COLUMNS) - 1)
 
         row = row_from_processed_event(processed, columns_copy)
 
@@ -43,7 +42,7 @@ class TestWriter(BaseTest):
 
     def test_fix_nested_array_size(self):
         # no sibling columns == empty array
-        assert _create_missing_array('foo.bar', {}) == []
+        assert _create_missing_array('foo.bar', {'foo.bar': None}) == []
 
         # empty sibling == empty array
         assert _create_missing_array('foo.bar', {'foo.baz': []}) == []

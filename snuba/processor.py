@@ -118,8 +118,8 @@ def extract_sdk(output, sdk):
 
 
 def extract_promoted_tags(output, tags):
-    output.update({name: _unicodify(tags.get(name, None))
-        for name in PROMOTED_TAG_COLUMNS.column_names
+    output.update({col.name: _unicodify(tags.get(col.name, None))
+        for col in PROMOTED_TAG_COLUMNS
     })
 
 
