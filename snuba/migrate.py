@@ -27,6 +27,10 @@ def run(conn, clickhouse_table):
         logger.info("Dropping unused `device_model` column.")
         conn.execute("ALTER TABLE %s DROP COLUMN device_model" % clickhouse_table)
 
+    if 'culprit' not in local_schema:
+        logger.info("Adding `culprit` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN culprit Nullable(String)" % clickhouse_table)
+
     # Refresh after alters
     local_schema = get_schema()
 

@@ -79,6 +79,7 @@ class TestProcessor(BaseTest):
         }
         data = {
             'received': int(calendar.timegm(now.timetuple())),
+            'culprit': 'the culprit',
             'type': 'error',
             'version': 6,
         }
@@ -90,6 +91,7 @@ class TestProcessor(BaseTest):
             'platform': u'the_platform',
             'primary_hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             'received': now,
+            'culprit': 'the culprit',
             'type': 'error',
             'version': '6',
         }
