@@ -4,6 +4,7 @@ import copy
 import six
 
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
+POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
 SDK_STATS_SCHEMA = {
     'type': 'object',
     'properties': {

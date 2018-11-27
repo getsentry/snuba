@@ -304,7 +304,8 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 1
 
-        # Test that a scalar condition on an array column expands to an iterator
+        # Test that a scalar condition on an array column expands to an all() type
+        # iterator
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': [1, 2, 3],
             'selected_columns': ['project_id'],
@@ -322,6 +323,20 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 1
         assert result['data'][0]['project_id'] == 1
+
+        # Test that a negative scalar condition on an array column expands to an
+        # all() type iterator. Looking for stack traces that do not contain foo.py
+        # at all ie. all(filename != 'foo.py')
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': ['project_id'],
+            'groupby': 'project_id',
+            'debug': True,
+            'conditions': [
+                ['exception_frames.filename', '!=', 'foo.py'],
+            ],
+        })).data)
+        assert len(result['data']) == 0
 
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
