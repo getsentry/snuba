@@ -74,7 +74,7 @@ py2_reqs = [
     'pytz==2018.4',
     'PyYAML==3.13',
     'redis==2.10.6',
-    'redis-py-cluster==1.3.5',
+    'redis-py-cluster==1.3.6',
     'requests==2.19.1',
     'scandir==1.7',
     'sentry-sdk==0.4.3',
