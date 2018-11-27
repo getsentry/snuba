@@ -82,7 +82,9 @@ RUN set -ex; \
     /pypy/bin/pypy get-pip.py; \
     rm -rf get-pip.py; \
     \
-    /pypy/bin/pip install -e . && /pypy/bin/snuba --help; \
+    cd /usr/src/snuba; \
+    /pypy/bin/pip install -e .; \
+    /pypy/bin/snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
@@ -98,7 +100,8 @@ RUN set -ex; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
-    pip install -e . && snuba --help; \
+    pip install -e .; \
+    snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
