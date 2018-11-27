@@ -320,11 +320,14 @@ def conditions_expr(conditions, body, depth=0):
             lit = parse_datetime(lit)
 
         # If the LHS is a simple column name that refers to an array column
-        # and the RHS is a scalar value, we assume that the user actually means
-        # to check if any item in the array matches the predicate, so we return
-        # an `any(x == value for x in array_column)` type expression
-        # TODO if the condition is `!=` they probably actually mean `all(...)`
-        # TODO a better way to stop this expansion if we are arrayJoining on the column
+        # (and we are not arrayJoining on that column, which would make it
+        # scalar again) and the RHS is a scalar value, we assume that the user
+        # actually means to check if any (or all) items in the array match the
+        # predicate, so we return an `any(x == value for x in array_column)`
+        # type expression. We assume that operators looking for a specific value
+        # (IN, =, LIKE) are looking for rows where any array value matches, and
+        # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
+        # where all elements match (eg. all NOT LIKE 'foo').
         if (
             isinstance(lhs, six.string_types) and
             lhs in ALL_COLUMNS and
@@ -332,7 +335,9 @@ def conditions_expr(conditions, body, depth=0):
             ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
-            return u'arrayExists(x -> assumeNotNull(x {} {}), {})'.format(
+            any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
+            return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
+                any_or_all,
                 op,
                 escape_literal(lit),
                 column_expr(lhs, body)

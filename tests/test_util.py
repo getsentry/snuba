@@ -168,6 +168,10 @@ class TestUtil(BaseTest):
         conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
         assert conditions_expr(conditions, {}) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), exception_frames.filename)'
 
+        # Test negative scalar condition on array column is expanded as an all() type iterator.
+        conditions = [['exception_frames.filename', 'NOT LIKE', '%foo%']]
+        assert conditions_expr(conditions, {}) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), exception_frames.filename)'
+
     def test_duplicate_expression_alias(self):
         body = {
             'aggregations': [
