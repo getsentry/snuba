@@ -100,7 +100,8 @@ RUN set -ex; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
-    pip install -e . && snuba --help; \
+    pip install -e .; \
+    snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
