@@ -78,6 +78,10 @@ class BatchingKafkaConsumer(object):
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
+    # Set of logical (not literal) offsets to not publish to the commit log.
+    # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
+    LOGICAL_OFFSETS = frozenset([OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID])
+
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
                  bootstrap_servers, group_id, producer=None, commit_log_topic=None,
                  auto_offset_reset='error',
@@ -259,6 +263,12 @@ class BatchingKafkaConsumer(object):
 
         if self.commit_log_topic:
             for item in offsets:
+                if item.offset in self.LOGICAL_OFFSETS:
+                    logger.debug('Skipped publishing logical offset (%r) to commit log for %s/%s', item.offset, item.topic, item.partiton)
+                    continue
+                elif item.offset < 0:
+                    logger.warning('Found unexpected negative offset (%r) after commit for %s/%s', item.offset, item.topic, item.partiton)
+
                 self.producer.produce(
                     self.commit_log_topic,
                     key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
