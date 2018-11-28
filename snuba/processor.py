@@ -111,10 +111,22 @@ def extract_common(output, message, data):
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
 
+    module_names = []
+    module_versions = []
+    modules = data.get('modules', {})
+    if isinstance(modules, dict):
+        for name, version in modules.items():
+            module_names.append(_unicodify(name))
+            module_versions.append(_unicodify(version))
+
+    output['modules.name'] = module_names
+    output['modules.version'] = module_versions
+
 
 def extract_sdk(output, sdk):
     output['sdk_name'] = _unicodify(sdk.get('name', None))
     output['sdk_version'] = _unicodify(sdk.get('version', None))
+    output['sdk_integrations'] = [_unicodify(i) for i in sdk.get('integrations', [])]
 
 
 def extract_promoted_tags(output, tags):

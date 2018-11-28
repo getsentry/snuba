@@ -81,6 +81,10 @@ class TestProcessor(BaseTest):
             'received': int(calendar.timegm(now.timetuple())),
             'type': 'error',
             'version': 6,
+            'modules': {
+                'foo': '1.0',
+                'bar': '2.0',
+            }
         }
         output = {}
 
@@ -92,6 +96,8 @@ class TestProcessor(BaseTest):
             'received': now,
             'type': 'error',
             'version': '6',
+            'modules.name': [u'foo', u'bar'],
+            'modules.version': [u'1.0', u'2.0'],
         }
 
     def test_v1_delete_groups_skipped(self):
@@ -153,7 +159,11 @@ class TestProcessor(BaseTest):
 
         processor.extract_sdk(output, sdk)
 
-        assert output == {'sdk_name': u'sentry-java', 'sdk_version': u'1.6.1-d1e3a'}
+        assert output == {
+            'sdk_name': u'sentry-java',
+            'sdk_version': u'1.6.1-d1e3a',
+            'sdk_integrations': [u'logback'],
+        }
 
     def test_extract_tags(self):
         orig_tags = {

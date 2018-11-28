@@ -421,9 +421,13 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
     ('geo_region', Nullable(String())),
     ('geo_city', Nullable(String())),
 
-    # optional misc
     ('sdk_name', Nullable(String())),
     ('sdk_version', Nullable(String())),
+    ('sdk_integrations', Array(String())),
+    ('modules', Nested([
+        ('name', String()),
+        ('version', String()),
+    ])),
     ('type', Nullable(String())),
     ('version', Nullable(String())),
 ] + METADATA_COLUMNS \
