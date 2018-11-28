@@ -4,7 +4,7 @@ import simplejson as json
 import six
 import time
 
-from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka import Consumer, KafkaError, KafkaException, OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID
 
 from . import processor, settings
 from .clickhouse import ALL_COLUMNS
