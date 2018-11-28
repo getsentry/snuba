@@ -31,15 +31,11 @@ PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
 DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
+ESCAPE_STRING_CHARS_RE = re.compile(r"(['\\])")
 
 
 class InvalidConditionException(Exception):
     pass
-
-
-class Literal(object):
-    def __init__(self, literal):
-        self.literal = literal
 
 
 def to_list(value):
@@ -127,7 +123,7 @@ def complex_column_expr(expr, body, depth=0):
     # way to disambiguate column names from string literals in complex functions.
     if ret == 'emptyIfNull' and len(expr) >= 1 and isinstance(expr[0], tuple):
         ret = 'ifNull'
-        expr = (expr[0] + (Literal('\'\''),),) + expr[1:]
+        expr = (expr[0] + ("''",),) + expr[1:]
 
     first = True
     for subexpr in expr:
@@ -363,12 +359,9 @@ def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause
     """
-    # TODO in both the Literal and the raw string cases, we need to
-    # sanitize the string from potential SQL injection.
-    if isinstance(value, Literal):
-        return value.literal
-    elif isinstance(value, six.string_types):
-        value = value.replace("'", "\\'")
+    if isinstance(value, six.string_types):
+        # Any backslashes or single quotes escaped with a backslash
+        value = ESCAPE_STRING_CHARS_RE.sub(r"\\\1", value)
         return u"'{}'".format(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
