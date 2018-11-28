@@ -130,12 +130,12 @@ class BatchingKafkaConsumer(object):
 
         consumer = Consumer(consumer_config)
 
-        def on_partitions_assigned(consumer, partitons):
-            logger.info("New partitions assigned: %s" % partitons)
+        def on_partitions_assigned(consumer, partitions):
+            logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(consumer, partitons):
+        def on_partitions_revoked(consumer, partitions):
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Partitions revoked: %s" % partitons)
+            logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
 
         consumer.subscribe(
@@ -217,15 +217,15 @@ class BatchingKafkaConsumer(object):
             batch_by_time = self.timer and time.time() > self.timer
             if (force or batch_by_size or batch_by_time):
                 logger.info(
-                    "Flushing %s items: forced:%s size:%s time:%s" % (
-                        len(self.batch), force, batch_by_size, batch_by_time)
+                    "Flushing %s items: forced:%s size:%s time:%s",
+                        len(self.batch), force, batch_by_size, batch_by_time
                 )
 
                 logger.debug("Flushing batch via worker")
                 t = time.time()
                 self.worker.flush_batch(self.batch)
                 duration = int((time.time() - t) * 1000)
-                logger.info("Worker flush took %sms" % duration)
+                logger.info("Worker flush took %sms", duration)
                 if self.metrics:
                     self.metrics.timing('batch.flush', duration)
 
@@ -233,7 +233,7 @@ class BatchingKafkaConsumer(object):
                 t = time.time()
                 self._commit()
                 duration = int((time.time() - t) * 1000)
-                logger.debug("Kafka offset commit took %sms" % duration)
+                logger.debug("Kafka offset commit took %sms", duration)
 
                 self._reset_batch()
 
@@ -246,13 +246,13 @@ class BatchingKafkaConsumer(object):
         while True:
             try:
                 offsets = self.consumer.commit(asynchronous=False)
-                logger.debug("Committed offsets: %s" % offsets)
+                logger.debug("Committed offsets: %s", offsets)
                 break  # success
             except KafkaException as e:
                 if e.args[0].code() in (KafkaError.REQUEST_TIMED_OUT,
                                         KafkaError.NOT_COORDINATOR_FOR_GROUP,
                                         KafkaError._WAIT_COORD):
-                    logger.warning("Commit failed: %s (%d retries)" % (str(e), retries))
+                    logger.warning("Commit failed: %s (%d retries)", str(e), retries)
                     if retries <= 0:
                         raise
                     retries -= 1
