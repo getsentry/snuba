@@ -264,10 +264,10 @@ class BatchingKafkaConsumer(object):
         if self.commit_log_topic:
             for item in offsets:
                 if item.offset in self.LOGICAL_OFFSETS:
-                    logger.debug('Skipped publishing logical offset (%r) to commit log for %s/%s', item.offset, item.topic, item.partiton)
+                    logger.debug('Skipped publishing logical offset (%r) to commit log for %s/%s', item.offset, item.topic, item.partition)
                     continue
                 elif item.offset < 0:
-                    logger.warning('Found unexpected negative offset (%r) after commit for %s/%s', item.offset, item.topic, item.partiton)
+                    logger.warning('Found unexpected negative offset (%r) after commit for %s/%s', item.offset, item.topic, item.partition)
 
                 self.producer.produce(
                     self.commit_log_topic,
