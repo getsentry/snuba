@@ -32,6 +32,7 @@ DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
 DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 ESCAPE_STRING_RE = re.compile(r"(['\\])")
+SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
 class InvalidConditionException(Exception):
@@ -103,6 +104,7 @@ def complex_column_expr(expr, body, depth=0):
     if depth == 0:
         # we know the first item is a function
         ret = expr[0]
+        assert SAFE_FUNCTION_RE.match(ret)
         expr = expr[1:]
 
         # if the last item of the toplevel is a string, it's an alias
@@ -114,6 +116,7 @@ def complex_column_expr(expr, body, depth=0):
         # is this a nested function call?
         if len(expr) > 1 and isinstance(expr[1], tuple):
             ret = expr[0]
+            assert SAFE_FUNCTION_RE.match(ret)
             expr = expr[1:]
         else:
             ret = ''

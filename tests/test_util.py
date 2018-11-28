@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import pytest
 import simplejson as json
 import time
 
@@ -208,6 +209,18 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 
         assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy()) == "positionCaseInsensitive(message, 'lol \\'single\\' quotes')"
+
+
+        # dangerous characters are allowed but escaped in literals and column names
+        assert complex_column_expr(tuplify(['safe', ['fo`o', "'ba'r'"]]), body.copy()) == r"safe(`fo\`o`, 'ba\'r')"
+
+        # Dangerous characters not allowed in functions
+        with pytest.raises(AssertionError):
+            assert complex_column_expr(tuplify([r"dang'erous", ['message', '`']]), body.copy())
+
+        # Or nested functions
+        with pytest.raises(AssertionError):
+            assert complex_column_expr(tuplify([r"safe", ['dang`erous', ['message']]]), body.copy())
 
     def test_referenced_columns(self):
         # a = 1 AND b = 1
