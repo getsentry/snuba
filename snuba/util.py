@@ -30,6 +30,7 @@ NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
 DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
+QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 
 
 class InvalidConditionException(Exception):
@@ -74,7 +75,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
     if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
         return complex_column_expr(column_name, body)
-    elif isinstance(column_name, six.string_types) and re.match('^\'.*\'$', column_name):
+    elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     elif column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS[body['granularity']]
