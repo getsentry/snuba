@@ -31,7 +31,7 @@ PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})', (\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
 DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
-ESCAPE_STRING_CHARS_RE = re.compile(r"(['\\])")
+ESCAPE_STRING_RE = re.compile(r"(['\\])")
 
 
 class InvalidConditionException(Exception):
@@ -361,7 +361,7 @@ def escape_literal(value):
     """
     if isinstance(value, six.string_types):
         # Any backslashes or single quotes escaped with a backslash
-        value = ESCAPE_STRING_CHARS_RE.sub(r"\\\1", value)
+        value = ESCAPE_STRING_RE.sub(r"\\\1", value)
         return u"'{}'".format(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)

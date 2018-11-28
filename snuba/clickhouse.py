@@ -12,16 +12,18 @@ from snuba import settings
 logger = logging.getLogger('snuba.clickhouse')
 
 
-ESCAPE_RE = re.compile(r'^-?[a-zA-Z][a-zA-Z0-9_\.]*$')
+SAFE_RE = re.compile(r'^-?[a-zA-Z][a-zA-Z0-9_\.]*$')
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
+ESCAPE_COL_RE = re.compile(r"([`\\])")
 
 
 def escape_col(col):
     if not col:
         return col
-    elif ESCAPE_RE.match(col):
-        return col
+    elif SAFE_RE.match(col):
+        return col # Column is safe to use unescaped.
     else:
+        col = ESCAPE_COL_RE.sub(r"\\\1", col)
         return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 
 
