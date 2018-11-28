@@ -1,6 +1,7 @@
 from flask import request
 
 from clickhouse_driver.errors import Error as ClickHouseError
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
@@ -631,6 +632,20 @@ def force_bytes(s):
     if isinstance(s, bytes):
         return s
     return s.encode('utf-8', 'replace')
+
+
+@contextmanager
+def settings_override(overrides):
+    previous = {}
+    for k, v in overrides.items():
+        previous[k] = getattr(settings, k, None)
+        setattr(settings, k, v)
+
+    try:
+        yield
+    finally:
+        for k, v in previous.items():
+            setattr(settings, k, v)
 
 
 def create_metrics(host, port, prefix, tags=None):
