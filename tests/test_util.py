@@ -206,6 +206,8 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 
+        assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy()) == "positionCaseInsensitive(message, 'lol \\'single\\' quotes')"
+
     def test_referenced_columns(self):
         # a = 1 AND b = 1
         body = {

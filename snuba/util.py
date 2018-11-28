@@ -75,7 +75,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
         return complex_column_expr(column_name, body)
     elif isinstance(column_name, six.string_types) and re.match('^\'.*\'$', column_name):
-        return escape_literal(Literal(column_name))
+        return escape_literal(column_name[1:-1])
     elif column_name == settings.TIME_GROUP_COLUMN:
         expr = settings.TIME_GROUPS[body['granularity']]
     elif NESTED_COL_EXPR_RE.match(column_name):
