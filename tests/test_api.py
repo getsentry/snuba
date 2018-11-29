@@ -338,6 +338,34 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 0
 
+    def test_escaping(self):
+        # Escape single quotes so we don't get Bobby Tables'd
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'aggregations': [['count()', '', 'count']],
+            'groupby': 'platform',
+            'conditions': [['platform', '=', r"production'; DROP TABLE test; --"]]
+        })).data)
+
+        # Make sure we still got our table
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'aggregations': [['count()', '', 'count']],
+        })).data)
+        assert result['data'][0]['count'] == 180
+
+        # Need to escape backslash as well otherwise the unescped
+        # backslash would nullify the escaping on the quote.
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'aggregations': [['count()', '', 'count']],
+            'groupby': 'platform',
+            'conditions': [['platform', '=', r"\'"]]
+        })).data)
+        assert 'error' not in result
+
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
         settings.PREWHERE_KEYS = ['message']

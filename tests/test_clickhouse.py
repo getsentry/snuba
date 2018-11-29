@@ -15,6 +15,12 @@ class TestClickhouse(BaseTest):
         assert escape_col('foo.bar') == 'foo.bar'
         assert escape_col('foo:bar') == '`foo:bar`'
 
+        # Even though backtick characters in columns should be
+        # disallowed by the query schema, make sure we dont allow
+        # injection anyway.
+        assert escape_col("`") == r"`\``"
+        assert escape_col("production`; --") == "`production\`; --`"
+
     def test_flattened(self):
         assert ALL_COLUMNS['group_id'].type == UInt(64)
         assert ALL_COLUMNS['group_id'].name == 'group_id'
