@@ -424,6 +424,7 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
     # optional misc
     ('sdk_name', Nullable(String())),
     ('sdk_version', Nullable(String())),
+    ('culprit', Nullable(String())),
     ('type', Nullable(String())),
     ('version', Nullable(String())),
 ] + METADATA_COLUMNS \
