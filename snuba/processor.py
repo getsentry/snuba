@@ -116,7 +116,9 @@ def extract_common(output, message, data):
     modules = data.get('modules', {})
     if isinstance(modules, dict):
         for name, version in modules.items():
-            module_names.append(_unicodify(name) or '')
+            module_names.append(_unicodify(name))
+            # Being extra careful about a stray (incorrect by spec) `null`
+            # value blowing up the write.
             module_versions.append(_unicodify(version) or '')
 
     output['modules.name'] = module_names

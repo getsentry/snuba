@@ -1,6 +1,7 @@
 import calendar
 import pytest
 import six
+from collections import OrderedDict
 from datetime import datetime
 
 from base import BaseTest
@@ -81,10 +82,11 @@ class TestProcessor(BaseTest):
             'received': int(calendar.timegm(now.timetuple())),
             'type': 'error',
             'version': 6,
-            'modules': {
-                'foo': '1.0',
-                'bar': '2.0',
-            }
+            'modules': OrderedDict([
+                ('foo', '1.0'),
+                ('bar', '2.0'),
+                ('baz', None),
+            ])
         }
         output = {}
 
@@ -96,8 +98,8 @@ class TestProcessor(BaseTest):
             'received': now,
             'type': 'error',
             'version': '6',
-            'modules.name': [u'foo', u'bar'],
-            'modules.version': [u'1.0', u'2.0'],
+            'modules.name': [u'foo', u'bar', u'baz'],
+            'modules.version': [u'1.0', u'2.0', u''],
         }
 
     def test_v1_delete_groups_skipped(self):
