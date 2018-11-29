@@ -47,7 +47,8 @@ def get_messages(events_file):
     return messages
 
 
-def run(events_file, clickhouse, table_name, repeat=1, profile_process=False, profile_write=False):
+def run(events_file, clickhouse, table_name, repeat=1,
+        profile_process=False, profile_write=False):
     from snuba.clickhouse import get_table_definition, get_test_engine
     from snuba.consumer import ConsumerWorker
 
@@ -81,12 +82,12 @@ def run(events_file, clickhouse, table_name, repeat=1, profile_process=False, pr
 
     time_start = time.time()
     if profile_process:
-        cProfile.runctx('process()', globals(), locals())
+        cProfile.runctx('process()', globals(), locals(), sort='cumulative')
     else:
         process()
     time_write = time.time()
     if profile_write:
-        cProfile.runctx('write()', globals(), locals())
+        cProfile.runctx('write()', globals(), locals(), sort='cumulative')
     else:
         write()
     time_finish = time.time()
