@@ -27,6 +27,14 @@ def run(conn, clickhouse_table):
         logger.info("Dropping unused `device_model` column.")
         conn.execute("ALTER TABLE %s DROP COLUMN device_model" % clickhouse_table)
 
+    if 'sdk_integrations' not in local_schema:
+        logger.info("Adding `sdk_integrations` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN sdk_integrations Array(String)" % clickhouse_table)
+
+    if 'modules.name' not in local_schema:
+        logger.info("Adding `modules` columns.")
+        conn.execute("ALTER TABLE %s ADD COLUMN modules Nested(name String, version String)" % clickhouse_table)
+
     if 'culprit' not in local_schema:
         logger.info("Adding `culprit` column.")
         conn.execute("ALTER TABLE %s ADD COLUMN culprit Nullable(String)" % clickhouse_table)

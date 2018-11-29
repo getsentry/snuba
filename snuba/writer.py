@@ -36,6 +36,10 @@ def _create_missing_array(colname, event):
     Once the processor is updated and the writer moves on to those new
     events, this method will not be called.
     """
+    # This is plain array, not a nested column.
+    if '.' not in colname:
+        return []
+
     prefix, _ = colname.split('.', 1)
     prefix += '.'
 
