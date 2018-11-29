@@ -35,6 +35,10 @@ def run(conn, clickhouse_table):
         logger.info("Adding `modules` columns.")
         conn.execute("ALTER TABLE %s ADD COLUMN modules Nested(name String, version String)" % clickhouse_table)
 
+    if 'culprit' not in local_schema:
+        logger.info("Adding `culprit` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN culprit Nullable(String)" % clickhouse_table)
+
     # Refresh after alters
     local_schema = get_schema()
 

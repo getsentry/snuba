@@ -428,6 +428,7 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
         ('name', String()),
         ('version', String()),
     ])),
+    ('culprit', Nullable(String())),
     ('type', Nullable(String())),
     ('version', Nullable(String())),
 ] + METADATA_COLUMNS \

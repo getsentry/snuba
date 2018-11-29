@@ -108,6 +108,7 @@ def extract_common(output, message, data):
     output['message'] = _unicodify(message['message'])
     output['primary_hash'] = _hashify(message['primary_hash'])
     output['received'] = datetime.utcfromtimestamp(int(data['received']))
+    output['culprit'] = _unicodify(data.get('culprit', None))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
 
