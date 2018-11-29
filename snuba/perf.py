@@ -104,4 +104,4 @@ def run(events_file, clickhouse, table_name, repeat=1,
     logger.info("Total process:    %sms" % format_time(time_to_process))
     logger.info("Total write:      %sms" % format_time(time_to_write))
     logger.info("Process event:    %sms/ea" % format_time(time_to_process / num_events))
-    logger.info("Writer event:     %sms/ea" % format_time(time_to_process / num_events))
+    logger.info("Write event:      %sms/ea" % format_time(time_to_write / num_events))
