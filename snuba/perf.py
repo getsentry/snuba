@@ -1,3 +1,4 @@
+import cProfile
 import logging
 import six
 import time
@@ -46,7 +47,7 @@ def get_messages(events_file):
     return messages
 
 
-def run(events_file, clickhouse, table_name, repeat=1):
+def run(events_file, clickhouse, table_name, repeat=1, profile_process=False, profile_write=False):
     from snuba.clickhouse import get_table_definition, get_test_engine
     from snuba.consumer import ConsumerWorker
 
@@ -66,18 +67,28 @@ def run(events_file, clickhouse, table_name, repeat=1):
 
     messages = get_messages(events_file)
     messages = chain(*([messages] * repeat))
-
-    time_start = time.time()
     processed = []
 
-    with settings_override({'DISCARD_OLD_EVENTS': False}):
-        for message in messages:
-            result = consumer.process_message(message)
-            if result is not None:
-                processed.append(result)
+    def process():
+        with settings_override({'DISCARD_OLD_EVENTS': False}):
+            for message in messages:
+                result = consumer.process_message(message)
+                if result is not None:
+                    processed.append(result)
 
+    def write():
+        consumer.flush_batch(processed)
+
+    time_start = time.time()
+    if profile_process:
+        cProfile.runctx('process()', globals(), locals())
+    else:
+        process()
     time_write = time.time()
-    consumer.flush_batch(processed)
+    if profile_write:
+        cProfile.runctx('write()', globals(), locals())
+    else:
+        write()
     time_finish = time.time()
 
     format_time = lambda t: ("%.2f" % t).rjust(10, ' ')

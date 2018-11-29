@@ -24,11 +24,15 @@ from snuba import settings
 @click.command()
 @click.option('--events-file', help='Event JSON input file.')
 @click.option('--repeat', default=1, help='Number of times to repeat the input.')
+@click.option('--profile-process/--no-profile-process',
+              default=False, help='Whether or not to profile processing.')
+@click.option('--profile-write/--no-profile-write',
+              default=False, help='Whether or not to profile writing.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to run perf against.')
 @click.option('--table-name', default='perf', help='Table name to use for inserts.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, clickhouse_server, table_name, log_level):
+def perf(events_file, repeat, profile_process, profile_write, clickhouse_server, table_name, log_level):
     from snuba.clickhouse import ClickhousePool
     from snuba.perf import run, logger
 
@@ -39,4 +43,7 @@ def perf(events_file, repeat, clickhouse_server, table_name, log_level):
         sys.exit(1)
 
     clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
-    run(events_file, clickhouse, table_name, repeat=repeat)
+    run(
+        events_file, clickhouse, table_name,
+        repeat=repeat, profile_process=profile_process, profile_write=profile_write
+    )
