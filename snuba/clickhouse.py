@@ -21,8 +21,13 @@ def escape_col(col):
     if not col:
         return col
     elif SAFE_COL_RE.match(col):
-        return col # Column is safe to use unescaped.
+        # Column is safe to use without wrapping.
+        return col
     else:
+        # Column needs special characters escaped, and to be wrapped with
+        # backticks. If the column starts with a '-', keep that outside the
+        # backticks as it is not part of the column name, but used by the query
+        # generator to signify the sort order if we are sorting by this column.
         col = ESCAPE_COL_RE.sub(r"\\\1", col)
         return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 

@@ -360,10 +360,9 @@ def conditions_expr(conditions, body, depth=0):
 
 def escape_literal(value):
     """
-    Escape a literal value for use in a SQL clause
+    Escape a literal value for use in a SQL clause.
     """
     if isinstance(value, six.string_types):
-        # Any backslashes or single quotes escaped with a backslash
         value = ESCAPE_STRING_RE.sub(r"\\\1", value)
         return u"'{}'".format(value)
     elif isinstance(value, datetime):
