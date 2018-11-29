@@ -96,7 +96,7 @@ def extract_required(output, message):
     # TODO: We may need to allow for older events in the future when post
     # processing triggers are based off of Snuba. Or this branch could be put
     # behind a "backfill-only" optional switch.
-    if timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
+    if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
         raise EventTooOld
 
     output['timestamp'] = timestamp

@@ -4,7 +4,7 @@ Simple schema migration tool. Only intended for local development environment.
 
 import logging
 
-logger = logging.getLogger('snuba.cleanup')
+logger = logging.getLogger('snuba.migrate')
 
 
 def run(conn, clickhouse_table):

@@ -62,6 +62,7 @@ DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 20000
+DISCARD_OLD_EVENTS = True
 
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_SAMPLE_EXPR = 'cityHash64(toString(event_id))'
