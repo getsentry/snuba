@@ -1,11 +1,13 @@
 """\
 Snuba "perf" is a small script to help track the consumer (inserter) performance.
 
-snuba perf --events-file tests/perf-event.json --repeat 1000
-Time to process: 0.421278953552s
-Time to write: 0.404555082321s
-Time total: 0.826051950455s
-Number of events processed: 1000
+snuba perf --events-file tests/perf-event.json --repeat 5000
+Number of events:       5000
+Total:               3835.98ms
+Total process:       1815.71ms
+Total write:         2020.27ms
+Process event:          0.36ms/ea
+Writer event:           0.36ms/ea
 
 The `events-file` should be newline delimited JSON events, as seen from the
 main `events` topic. Retrieving a sample file is left as an excercise for the

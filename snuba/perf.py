@@ -1,4 +1,5 @@
 import logging
+import six
 import time
 from itertools import chain
 
@@ -75,11 +76,20 @@ def run(events_file, clickhouse, table_name, repeat=1):
             if result is not None:
                 processed.append(result)
 
-    logger.info("Time to process: %ss" % (time.time() - time_start))
-
     time_write = time.time()
     consumer.flush_batch(processed)
+    time_finish = time.time()
 
-    logger.info("Time to write: %ss" % (time.time() - time_write))
-    logger.info("Time total: %ss" % (time.time() - time_start))
-    logger.info("Number of events processed: %s" % len(processed))
+    format_time = lambda t: ("%.2f" % t).rjust(10, ' ')
+
+    time_to_process = (time_write - time_start) * 1000
+    time_to_write = (time_finish - time_write) * 1000
+    time_total = (time_finish - time_start) * 1000
+    num_events = len(processed)
+
+    logger.info("Number of events: %s" % six.text_type(num_events).rjust(10, ' '))
+    logger.info("Total:            %sms" % format_time(time_total))
+    logger.info("Total process:    %sms" % format_time(time_to_process))
+    logger.info("Total write:      %sms" % format_time(time_to_write))
+    logger.info("Process event:    %sms/ea" % format_time(time_to_process / num_events))
+    logger.info("Writer event:     %sms/ea" % format_time(time_to_process / num_events))
