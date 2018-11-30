@@ -10,7 +10,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 import simplejson as json
 
 from snuba import schemas, settings, state, util
-from snuba.clickhouse import ClickhousePool, ALL_COLUMNS
+from snuba.clickhouse import ClickhousePool
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 
@@ -21,6 +21,10 @@ logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='
 clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={
     'readonly': True,
+})
+clickhouse_ro_seq = ClickhousePool(client_settings={
+    'readonly': True,
+    'select_sequential_consistency': True,
 })
 
 
@@ -152,7 +156,8 @@ def query(validated_body=None, timer=None):
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
     turbo = body.get('turbo', False)
-    max_days, table, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
+    (max_days, table, date_align, config_sample,
+     force_final, max_group_ids_exclude, sequential_consistency) = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
@@ -160,6 +165,7 @@ def parse_and_run_query(validated_body, timer):
         # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
         ('force_final', 0 if turbo else None),
         ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
+        ('sequential_consistency', False),
     ])
     stats = {}
     to_date = util.parse_datetime(body['to_date'], date_align)
@@ -301,7 +307,9 @@ def parse_and_run_query(validated_body, timer):
         'sample': sample,
     })
 
-    return util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
+    return util.raw_query(
+        validated_body, sql, clickhouse_ro_seq if sequential_consistency else clickhouse_ro, timer, stats
+    )
 
 
 # Special internal endpoints that compute global aggregate data that we want to
