@@ -22,9 +22,9 @@ clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={
     'readonly': True,
 })
-clickhouse_ro_seq = ClickhousePool(client_settings={
+clickhouse_ro_ordered = ClickhousePool(client_settings={
     'readonly': True,
-    'select_sequential_consistency': True,
+    'load_balancing': 'in_order',
 })
 
 
@@ -157,7 +157,7 @@ def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
     turbo = body.get('turbo', False)
     (max_days, table, date_align, config_sample,
-     force_final, max_group_ids_exclude, sequential_consistency) = state.get_configs([
+     force_final, max_group_ids_exclude, load_balancing_ordered) = state.get_configs([
         ('max_days', None),
         ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
@@ -165,7 +165,7 @@ def parse_and_run_query(validated_body, timer):
         # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
         ('force_final', 0 if turbo else None),
         ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
-        ('sequential_consistency', False),
+        ('load_balancing_ordered', False),
     ])
     stats = {}
     to_date = util.parse_datetime(body['to_date'], date_align)
@@ -308,7 +308,7 @@ def parse_and_run_query(validated_body, timer):
     })
 
     return util.raw_query(
-        validated_body, sql, clickhouse_ro_seq if sequential_consistency else clickhouse_ro, timer, stats
+        validated_body, sql, clickhouse_ro_ordered if load_balancing_ordered else clickhouse_ro, timer, stats
     )
 
 
