@@ -148,10 +148,9 @@ QUERY_SCHEMA = {
                         'type': ['string', 'null'],
                     },
                 ],
-                'minLength': 3,
-                'maxLength': 3,
+                'minItems': 3,
+                'maxItems': 3,
             },
-            'minLength': 1,
             'default': [],
         },
         'arrayjoin': {
@@ -279,8 +278,8 @@ QUERY_SCHEMA = {
                     ],
                 },
             ],
-            'minLength': 3,
-            'maxLength': 3,
+            'minItems': 3,
+            'maxItems': 3,
         }
     }
 }
