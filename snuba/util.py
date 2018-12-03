@@ -494,16 +494,24 @@ def raw_query(body, sql, client, timer, stats=None):
                         }}
 
     stats.update(query_settings)
-    state.record_query({
-        'request': body,
-        'sql': sql,
-        'timing': timer,
-        'stats': stats,
-        'status': status,
-    })
 
     if settings.RECORD_QUERIES:
-        timer.send_metrics_to(metrics)
+        # send to redis
+        state.record_query({
+            'request': body,
+            'sql': sql,
+            'timing': timer,
+            'stats': stats,
+            'status': status,
+        })
+
+        # send to datadog
+        tags = [
+            'status:{}'.format(status),
+            'referrer:{}'.format(body.get('referrer', 'none'))
+        ]
+        timer.send_metrics_to(metrics, tags=tags)
+
     result['timing'] = timer
 
     if settings.STATS_IN_RESPONSE or body.get('debug', False):
@@ -595,12 +603,12 @@ class Timer(object):
     def for_json(self):
         return self.finish()
 
-    def send_metrics_to(self, metrics):
+    def send_metrics_to(self, metrics, tags=None):
         name = self.marks[0][0]
         final = self.finish()
-        metrics.timing(name, final['duration_ms'])
+        metrics.timing(name, final['duration_ms'], tags=tags)
         for mark, duration in six.iteritems(final['marks_ms']):
-            metrics.timing('{}.{}'.format(name, mark), duration)
+            metrics.timing('{}.{}'.format(name, mark), duration, tags=tags)
 
 
 def time_request(name):
