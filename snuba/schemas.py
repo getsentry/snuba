@@ -151,7 +151,6 @@ QUERY_SCHEMA = {
                 'minItems': 3,
                 'maxItems': 3,
             },
-            'minItems': 1,
             'default': [],
         },
         'arrayjoin': {
