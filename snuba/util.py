@@ -508,7 +508,8 @@ def raw_query(body, sql, client, timer, stats=None):
         # send to datadog
         tags = [
             'status:{}'.format(status),
-            'referrer:{}'.format(stats.get('referrer', 'none'))
+            'referrer:{}'.format(stats.get('referrer', 'none')),
+            'final:{}'.format(stats.get('final', False))
         ]
         timer.send_metrics_to(metrics, tags=tags)
 
