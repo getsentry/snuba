@@ -14,7 +14,7 @@ py2_reqs = [
     'certifi==2018.4.16',
     'chardet==3.0.4',
     'click==6.7',
-    'clickhouse-driver==0.0.11',
+    'clickhouse-driver==0.0.16',
     'colorama==0.3.9',
     'configparser==3.5.0',
     'confluent-kafka==0.11.5',
