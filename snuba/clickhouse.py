@@ -430,12 +430,6 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
 
     ('sdk_name', Nullable(String())),
     ('sdk_version', Nullable(String())),
-    ('sdk_integrations', Array(String())),
-    ('modules', Nested([
-        ('name', String()),
-        ('version', String()),
-    ])),
-    ('culprit', Nullable(String())),
     ('type', Nullable(String())),
     ('version', Nullable(String())),
 ] + METADATA_COLUMNS \
@@ -478,6 +472,17 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
         ('colno', Nullable(UInt(32))),
         ('lineno', Nullable(UInt(32))),
         ('stack_level', UInt(16)),
+    ])),
+
+    # These are columns we added later in the life of the (current) production
+    # database. They don't necessarily belong here in a logical/readability sense
+    # but they are here to match the order of columns in production becase
+    # `insert_distributed_sync` is very sensitive to column existence and ordering.
+    ('culprit', Nullable(String())),
+    ('sdk_integrations', Array(String())),
+    ('modules', Nested([
+        ('name', String()),
+        ('version', String()),
     ])),
 ]
 
