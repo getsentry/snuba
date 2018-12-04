@@ -403,8 +403,12 @@ def raw_query(body, sql, client, timer, stats=None):
         ('project_concurrent_limit_{}'.format(project_id), pcl),
     ])
 
-    all_confs = six.iteritems(state.get_all_configs())
-    query_settings = {k.split('/', 1)[1]: v for k, v in all_confs if k.startswith('query_settings/')}
+    all_confs = state.get_all_configs()
+    query_settings = {
+        k.split('/', 1)[1]: v
+        for k, v in six.iteritems(all_confs)
+        if k.startswith('query_settings/')
+    }
 
     timer.mark('get_configs')
 
@@ -440,6 +444,15 @@ def raw_query(body, sql, client, timer, stats=None):
                         if 'max_threads' in query_settings and p_concurr > 1:
                             maxt = query_settings['max_threads']
                             query_settings['max_threads'] = max(1, maxt - p_concurr + 1)
+
+                        # Force query to use the first shard replica, which
+                        # should have synchronously received any cluster writes
+                        # before this query is run.
+                        consistent = body.get('consistent', False)
+                        stats['consistent'] = consistent
+                        if consistent:
+                            query_settings['load_balancing'] = 'in_order'
+                            query_settings['max_threads'] = 1
 
                         try:
                             data, meta = client.execute(

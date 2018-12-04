@@ -198,7 +198,15 @@ QUERY_SCHEMA = {
             'type': 'number',
             'min': 0,
         },
-        'turbo': {  # never add FINAL to queries, enable sampling
+        # Never add FINAL to queries, enable sampling
+        'turbo': {
+            'type': 'boolean',
+            'default': False,
+        },
+        # Force queries to hit the first shard replica, ensuring the query
+        # sees data that was written before the query. This burdens the
+        # first replica, so should only be used when absolutely necessary.
+        'consistent': {
             'type': 'boolean',
             'default': False,
         },

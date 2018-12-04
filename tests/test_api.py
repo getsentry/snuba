@@ -400,7 +400,6 @@ class TestApi(BaseTest):
         })).data)
         assert "PREWHERE project_id IN (1) AND positionCaseInsensitive(message, 'abc') != 0" in result['sql']
 
-
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
@@ -906,3 +905,12 @@ class TestApi(BaseTest):
 
         finally:
             state.set_config('use_split', 0)
+
+    def test_consistent(self):
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 2,
+            'aggregations': [['count()', '', 'aggregate']],
+            'consistent': True,
+            'debug': True,
+        })).data)
+        assert response['stats']['consistent']
