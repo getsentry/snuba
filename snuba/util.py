@@ -511,7 +511,10 @@ def raw_query(body, sql, client, timer, stats=None):
             'referrer:{}'.format(stats.get('referrer', 'none')),
             'final:{}'.format(stats.get('final', False))
         ]
-        timer.send_metrics_to(metrics, tags=tags)
+        mark_tags = [
+            'final:{}'.format(stats.get('final', False))
+        ]
+        timer.send_metrics_to(metrics, tags=tags, mark_tags=mark_tags)
 
     result['timing'] = timer
 
@@ -604,12 +607,12 @@ class Timer(object):
     def for_json(self):
         return self.finish()
 
-    def send_metrics_to(self, metrics, tags=None):
+    def send_metrics_to(self, metrics, tags=None, mark_tags=None):
         name = self.marks[0][0]
         final = self.finish()
         metrics.timing(name, final['duration_ms'], tags=tags)
         for mark, duration in six.iteritems(final['marks_ms']):
-            metrics.timing('{}.{}'.format(name, mark), duration, tags=tags)
+            metrics.timing('{}.{}'.format(name, mark), duration, tags=mark_tags)
 
 
 def time_request(name):
