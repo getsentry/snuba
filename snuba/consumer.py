@@ -5,6 +5,7 @@ import six
 import time
 
 from confluent_kafka import Consumer, KafkaError, KafkaException, OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID
+from sentry_sdk import capture_message, configure_scope
 
 from . import processor, settings
 from .clickhouse import ALL_COLUMNS
@@ -12,6 +13,41 @@ from .writer import row_from_processed_event, write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
+
+FIELD_OFFSETS = dict((name, offset) for offset, name in list(enumerate(col.flattened for col in ALL_COLUMNS._flattened)))
+
+
+def _verify_read_your_writes(clickhouse, table, inserts):
+    import random
+
+    row = random.choice(inserts)
+    project_id = row[FIELD_OFFSETS['project_id']]
+    timestamp = row[FIELD_OFFSETS['timestamp']]
+    event_id = row[FIELD_OFFSETS['event_id']]
+
+    res = clickhouse.execute(
+        """
+        SELECT count()
+        FROM %s
+        WHERE project_id = %%(project_id)s
+            AND timestamp = CAST(%%(timestamp)s AS DateTime)
+            AND event_id = %%(event_id)s
+        """ % table,
+        {
+            'project_id': project_id,
+            'timestamp': timestamp,
+            'event_id': event_id,
+        }
+    )
+
+    count = res[0][0]
+    if count != 1:
+        with configure_scope() as scope:
+            scope.set_extra('project_id', project_id)
+            scope.set_extra('timestamp', timestamp)
+            scope.set_extra('event_id', event_id)
+            scope.set_extra('count', count)
+            capture_message("Failed to read our writes. :(")
 
 
 class AbstractBatchWorker(object):
@@ -218,7 +254,7 @@ class BatchingKafkaConsumer(object):
             if (force or batch_by_size or batch_by_time):
                 logger.info(
                     "Flushing %s items: forced:%s size:%s time:%s",
-                        len(self.batch), force, batch_by_size, batch_by_time
+                    len(self.batch), force, batch_by_size, batch_by_time
                 )
 
                 logger.debug("Flushing batch via worker")
@@ -333,6 +369,8 @@ class ConsumerWorker(AbstractBatchWorker):
                 self.dist_table_name,
                 inserts
             )
+
+            _verify_read_your_writes(self.clickhouse, self.dist_table_name, inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
