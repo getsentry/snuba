@@ -32,6 +32,7 @@ def _verify_read_your_writes(clickhouse, table, inserts):
         WHERE project_id = %%(project_id)s
             AND timestamp = CAST(%%(timestamp)s AS DateTime)
             AND event_id = %%(event_id)s
+            AND deleted = 0
         """ % table,
         {
             'project_id': project_id,
