@@ -45,13 +45,11 @@ def _hack_record_events_to_redis(rows):
 
     now = time.time()
 
+    event_ids = [e[0] for e in rows]
     hasher = lambda eid: int(md5(eid.encode('utf-8')).hexdigest(), 16)
-    event_ids_to_write = filter(
-        lambda h: h % settings.HACK_POST_PROCESS_REDIS_SAMPLE_RATE == 0,
-        [hasher(e[0]) for e in rows]
-    )
+    should_write = lambda eid: hasher(eid) % settings.HACK_POST_PROCESS_REDIS_SAMPLE_RATE == 0
 
-    for event_id in event_ids_to_write:
+    for event_id in filter(should_write, event_ids):
         redis_cluster_short.set(
             "_hack_post_process_sampled_events:%s" % event_id,
             now,
