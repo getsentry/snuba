@@ -14,6 +14,49 @@ from .writer import row_from_processed_event, write_rows
 logger = logging.getLogger('snuba.consumer')
 
 
+redis_cluster_short = None
+
+
+def _hack_record_events_to_redis(rows):
+    from hashlib import md5
+    from rediscluster import StrictRedisCluster
+
+    if settings.TESTING or not settings.HACK_POST_PROCESS_REDIS_SAMPLE_RATE:
+        return
+
+    global redis_cluster_short
+
+    if redis_cluster_short is None:
+        redis_cluster_short = StrictRedisCluster(
+            startup_nodes=[{
+                'host': "rc-short-0.i.getsentry.net",
+                'port': 6300,
+            },
+                {
+                'host': "rc-short-1.i.getsentry.net",
+                'port': 6300,
+            },
+                {
+                'host': "rc-short-2.i.getsentry.net",
+                'port': 6300,
+            }],
+            socket_keepalive=True,
+        )
+
+    now = time.time()
+
+    event_ids = [e[0] for e in rows]
+    hasher = lambda eid: int(md5(eid.encode('utf-8')).hexdigest(), 16)
+    should_write = lambda eid: hasher(eid) % settings.HACK_POST_PROCESS_REDIS_SAMPLE_RATE == 0
+
+    for event_id in filter(should_write, event_ids):
+        redis_cluster_short.set(
+            "_hack_post_process_sampled_events:%s" % event_id,
+            now,
+            ex=60 * 60
+        )
+
+
 class AbstractBatchWorker(object):
     """The `BatchingKafkaConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
@@ -218,7 +261,7 @@ class BatchingKafkaConsumer(object):
             if (force or batch_by_size or batch_by_time):
                 logger.info(
                     "Flushing %s items: forced:%s size:%s time:%s",
-                        len(self.batch), force, batch_by_size, batch_by_time
+                    len(self.batch), force, batch_by_size, batch_by_time
                 )
 
                 logger.debug("Flushing batch via worker")
@@ -333,6 +376,8 @@ class ConsumerWorker(AbstractBatchWorker):
                 self.dist_table_name,
                 inserts
             )
+
+            _hack_record_events_to_redis(inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
