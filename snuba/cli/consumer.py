@@ -56,7 +56,7 @@ def consumer(raw_events_topic, replacements_topic, consumer_group, bootstrap_ser
         host=clickhouse_server.split(':')[0],
         port=int(clickhouse_server.split(':')[1]),
         client_settings={
-            'load_balancing': 'in_order',
+            'insert_quorum': 2,
             'insert_distributed_sync': True,
         },
         metrics=metrics

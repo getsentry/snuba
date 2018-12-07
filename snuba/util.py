@@ -450,9 +450,10 @@ def raw_query(body, sql, client, timer, stats=None):
                         # before this query is run.
                         consistent = body.get('consistent', False)
                         stats['consistent'] = consistent
-                        if consistent:
-                            query_settings['load_balancing'] = 'in_order'
-                            query_settings['max_threads'] = 1
+                        # Disabled to test quorum writes.
+                        # if consistent:
+                        #     query_settings['load_balancing'] = 'in_order'
+                        #     query_settings['max_threads'] = 1
 
                         try:
                             data, meta = client.execute(
