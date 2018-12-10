@@ -377,7 +377,7 @@ def process_insert(message):
     data = message.get('data', {})
     # HACK: https://sentry.io/sentry/snuba/issues/802102397/
     if not data:
-        logger.error('No data for event: %s', message)
+        logger.error('No data for event: %s', message, exc_info=True)
         return None
     extract_common(processed, message, data)
 
