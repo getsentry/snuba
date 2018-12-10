@@ -75,7 +75,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     try:
         _, _, rate, concurrent = pipe.execute()
     except Exception as ex:
-        logger.error(ex)
+        logger.exception(ex)
         yield (True, 0, 0)  # fail open if redis is having issues
         return
 
@@ -92,7 +92,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
             else:
                 rds.zrem(bucket, query_id)  # not allowed / not counted
         except Exception as ex:
-            logger.error(ex)
+            logger.exception(ex)
             pass
 
 
@@ -223,7 +223,7 @@ def set_config(key, value, user=None):
         rds.lpush(config_changes_list, json.dumps((key, change_record)))
         rds.ltrim(config_changes_list, 0, config_changes_list_limit)
     except Exception as ex:
-        logger.error(ex)
+        logger.exception(ex)
 
 
 def set_configs(values, user=None):
@@ -250,7 +250,7 @@ def get_raw_configs():
         all_configs = rds.hgetall(config_hash)
         return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
     except Exception as ex:
-        logger.error(ex)
+        logger.exception(ex)
         return {}
 
 
@@ -288,7 +288,7 @@ def record_query(data):
                 data.encode('utf-8'),
             )
     except Exception as ex:
-        logger.error(ex)
+        logger.exception(ex)
         pass
 
 
@@ -301,7 +301,7 @@ def get_queries():
             except BaseException:
                 pass
     except Exception as ex:
-        logger.error(ex)
+        logger.exception(ex)
 
     return queries
 

@@ -486,7 +486,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         except BaseException as ex:
                             error = six.text_type(ex)
                             status = 500
-                            logger.error("Error running query: %s\n%s", sql, error)
+                            logger.exception("Error running query: %s\n%s", sql, error)
                             if isinstance(ex, ClickHouseError):
                                 result = {'error': {
                                     'type': 'clickhouse',
