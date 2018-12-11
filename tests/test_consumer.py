@@ -136,3 +136,31 @@ class TestConsumer(BaseTest):
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == \
             [('topic', b'1', b'{"project_id": 1}'), ('topic', b'2', b'{"project_id": 2}')]
+
+    def test_dead_letter_topic(self):
+        class FailingFakeWorker(FakeWorker):
+            def process_message(*args, **kwargs):
+                1 / 0
+
+        producer = FakeKafkaProducer()
+        consumer = FakeBatchingKafkaConsumer(
+            'topic',
+            worker=FailingFakeWorker(),
+            max_batch_size=100,
+            max_batch_time=2000,
+            metrics=statsd,
+            bootstrap_servers=None,
+            group_id='group',
+            producer=producer,
+            dead_letter_topic='dlt'
+        )
+
+        message = FakeKafkaMessage('topic', partition=0, offset=0, key='key', value='value')
+        consumer.consumer.items = [message]
+        consumer._run_once()
+
+        assert len(producer.messages) == 1
+        produced_message = producer.messages[0]
+
+        assert ('dlt', message.key(), message.value()) \
+            == (produced_message.topic(), produced_message.key(), produced_message.value())
