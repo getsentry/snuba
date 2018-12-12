@@ -10,7 +10,7 @@ steps:
             'build',
             '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:latest',
             '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
-            '--build-arg', 'GETSENTRY_VERSION_SHA=$COMMIT_SHA',
+            '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
             '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:latest',
             '.'
         ]
@@ -20,4 +20,3 @@ images: [
   ]
 timeout: 60m
 logsBucket: 'gs://sentryio-cloudbuild-logs'
-
