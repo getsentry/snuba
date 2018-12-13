@@ -71,6 +71,8 @@ class BatchingKafkaConsumer(object):
       then Kafka offsets are immediately committed (in the same thread/loop)
     * Users need only provide an implementation of what it means to process a raw message
       and flush a batch of events
+    * Supports an optional "dead letter topic" where messages that raise an exception during
+      `process_message` are sent so as not to block the pipeline.
 
     NOTE: This does not eliminate the possibility of duplicates if the consumer process
     crashes between writing to its backend and commiting Kafka offsets. This should eliminate
@@ -83,8 +85,8 @@ class BatchingKafkaConsumer(object):
     LOGICAL_OFFSETS = frozenset([OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID])
 
     def __init__(self, topics, worker, max_batch_size, max_batch_time, metrics,
-                 bootstrap_servers, group_id, producer=None, commit_log_topic=None,
-                 auto_offset_reset='error',
+                 bootstrap_servers, group_id, producer=None, dead_letter_topic=None,
+                 commit_log_topic=None, auto_offset_reset='error',
                  queued_max_messages_kbytes=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
                  queued_min_messages=settings.DEFAULT_QUEUED_MIN_MESSAGES):
         assert isinstance(worker, AbstractBatchWorker)
@@ -93,9 +95,7 @@ class BatchingKafkaConsumer(object):
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time
         self.metrics = metrics
-
         self.group_id = group_id
-        self.commit_log_topic = commit_log_topic
 
         self.shutdown = False
         self.batch = []
@@ -112,6 +112,8 @@ class BatchingKafkaConsumer(object):
         )
 
         self.producer = producer
+        self.commit_log_topic = commit_log_topic
+        self.dead_letter_topic = dead_letter_topic
 
     def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
             queued_max_messages_kbytes, queued_min_messages):
@@ -158,7 +160,7 @@ class BatchingKafkaConsumer(object):
     def _run_once(self):
         self._flush()
 
-        if self.commit_log_topic:
+        if self.producer:
             self.producer.poll(0.0)
 
         msg = self.consumer.poll(timeout=1.0)
@@ -186,9 +188,27 @@ class BatchingKafkaConsumer(object):
         if not self.timer:
             self.timer = self.max_batch_time / 1000.0 + time.time()
 
-        result = self.worker.process_message(msg)
-        if result is not None:
-            self.batch.append(result)
+        try:
+            result = self.worker.process_message(msg)
+        except Exception:
+            if self.dead_letter_topic:
+                logger.exception("Error handling message, sending to dead letter topic.")
+                self.producer.produce(
+                    self.dead_letter_topic,
+                    key=msg.key(),
+                    value=msg.value(),
+                    headers={
+                        'partition': six.text_type(msg.partition()) if msg.partition() else None,
+                        'offset': six.text_type(msg.offset()) if msg.offset() else None,
+                        'topic': msg.topic(),
+                    },
+                    on_delivery=self._commit_message_delivery_callback,
+                )
+            else:
+                raise
+        else:
+            if result is not None:
+                self.batch.append(result)
 
     def _shutdown(self):
         logger.debug("Stopping")
@@ -218,7 +238,7 @@ class BatchingKafkaConsumer(object):
             if (force or batch_by_size or batch_by_time):
                 logger.info(
                     "Flushing %s items: forced:%s size:%s time:%s",
-                        len(self.batch), force, batch_by_size, batch_by_time
+                    len(self.batch), force, batch_by_size, batch_by_time
                 )
 
                 logger.debug("Flushing batch via worker")
