@@ -29,13 +29,14 @@ class FakeKafkaProducer(object):
     def flush(self):
         return self.poll()
 
-    def produce(self, topic, value, key=None, on_delivery=None):
+    def produce(self, topic, value, key=None, headers=None, on_delivery=None):
         message = FakeKafkaMessage(
             topic=topic,
             partition=None,  # XXX: the partition is unknown (depends on librdkafka)
             offset=None,  # XXX: the offset is unknown (depends on state)
             key=key,
             value=value,
+            headers=headers,
         )
         self.messages.append(message)
         if on_delivery is not None:

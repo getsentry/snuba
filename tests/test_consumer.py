@@ -155,7 +155,7 @@ class TestConsumer(BaseTest):
             dead_letter_topic='dlt'
         )
 
-        message = FakeKafkaMessage('topic', partition=0, offset=0, key='key', value='value')
+        message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
         consumer.consumer.items = [message]
         consumer._run_once()
 
@@ -164,3 +164,5 @@ class TestConsumer(BaseTest):
 
         assert ('dlt', message.key(), message.value()) \
             == (produced_message.topic(), produced_message.key(), produced_message.value())
+
+        assert produced_message.headers() == {'partition': '1', 'offset': '2', 'topic': 'topic'}

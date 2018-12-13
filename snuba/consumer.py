@@ -197,6 +197,11 @@ class BatchingKafkaConsumer(object):
                     self.dead_letter_topic,
                     key=msg.key(),
                     value=msg.value(),
+                    headers={
+                        'partition': six.text_type(msg.partition()) if msg.partition() else None,
+                        'offset': six.text_type(msg.offset()) if msg.offset() else None,
+                        'topic': msg.topic(),
+                    },
                     on_delivery=self._commit_message_delivery_callback,
                 )
             else:
