@@ -4,11 +4,11 @@ from datetime import datetime, timedelta
 import uuid
 import six
 
+from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 
 from snuba import settings
 from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
-from snuba.consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
 from snuba.processor import process_message

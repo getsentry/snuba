@@ -5,9 +5,10 @@ from collections import deque
 from datetime import datetime
 import simplejson as json
 
+from batching_kafka_consumer import AbstractBatchWorker
+
 from . import settings
 from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS
-from snuba.consumer import AbstractBatchWorker
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 
