@@ -30,7 +30,7 @@ DOGSTATSD_PORT = 8125
 
 # Redis Options
 USE_REDIS_CLUSTER = False
-REDIS_HOST = 'localhost'
+REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = 6379
 REDIS_DB = 1
 

@@ -1,0 +1,24 @@
+---
+version: '3'
+services:
+  web:
+    ports:
+      - "1218:1218"
+    command:
+      - snuba
+      - api
+    environment: &snuba_env
+      CLICKHOUSE_SERVER: 'clickhouse:9000'
+      REDIS_HOST: 'redis'
+  clickhouse:
+    image: yandex/clickhouse-server:18.14.9
+    ports:
+      - "9000:9000"
+      - "9009:9009"
+      - "8123:8123"
+    volumes:
+      - "clickhouse:/var/lib/clickhouse"
+    ulimit:
+      - "nofile=262144:262144"
+  redis:
+    image: redis:3.2-alpine
