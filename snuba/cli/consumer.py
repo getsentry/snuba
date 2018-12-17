@@ -43,7 +43,8 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse import ClickhousePool
-    from snuba.consumer import BatchingKafkaConsumer, ConsumerWorker
+    from batching_kafka_consumer import BatchingKafkaConsumer
+    from snuba.consumer import ConsumerWorker
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
