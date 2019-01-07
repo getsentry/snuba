@@ -199,11 +199,22 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    needs_final, exclude_group_ids = get_projects_query_flags(project_ids)
-    if len(exclude_group_ids) > max_group_ids_exclude:
-        # Cap the number of groups to exclude by query and flip to using FINAL if necessary
-        needs_final = True
-        exclude_group_ids = []
+    needs_final = False
+    exclude_group_ids = []
+    # For now, we only need FINAL if:
+    #    1. The query references issue/group_id (note this assumes that the only
+    #       thing that is getting mutated in snuba is group_id, this assumption could
+    #       change)
+    #    2. The project has been marked as needing FINAL (in redis) because of recent
+    #       replacements to its group_ids (and it affects too many groups for us just to
+    #       exclude those groups from the query)
+    #    3. OR the force_final setting = 1
+    if util.all_referenced_columns(body) & set(['issue', 'group_id']):
+        needs_final, exclude_group_ids = get_projects_query_flags(project_ids)
+        if len(exclude_group_ids) > max_group_ids_exclude:
+            # Cap the number of groups to exclude by query and flip to using FINAL if necessary
+            needs_final = True
+            exclude_group_ids = []
 
     used_final = False
     if force_final == 1 or (force_final is None and needs_final):
