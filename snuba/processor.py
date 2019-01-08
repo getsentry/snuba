@@ -396,7 +396,7 @@ def process_insert(message):
     geo = user.get('geo', None) or {}
     extract_geo(processed, geo)
 
-    http = data.get('http', data.get('sentry.interfaces.Http', None)) or {}
+    http = data.get('request', data.get('sentry.interfaces.Http', None)) or {}
     extract_http(processed, http)
 
     extract_extra_contexts(processed, contexts)
