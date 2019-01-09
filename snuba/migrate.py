@@ -39,6 +39,18 @@ def run(conn, clickhouse_table):
         logger.info("Adding `culprit` column.")
         conn.execute("ALTER TABLE %s ADD COLUMN culprit Nullable(String)" % clickhouse_table)
 
+    if 'search_message' not in local_schema:
+        logger.info("Adding `search_message` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN search_message Nullable(String)" % clickhouse_table)
+
+    if 'title' not in local_schema:
+        logger.info("Adding `title` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN title Nullable(String)" % clickhouse_table)
+
+    if 'location' not in local_schema:
+        logger.info("Adding `location` column.")
+        conn.execute("ALTER TABLE %s ADD COLUMN location Nullable(String)" % clickhouse_table)
+
     # Refresh after alters
     local_schema = get_schema()
 

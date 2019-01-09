@@ -117,12 +117,38 @@ def extract_required(output, message):
 
 def extract_common(output, message, data):
     output['platform'] = _unicodify(message['platform'])
-    output['message'] = _unicodify(message['message'])
     output['primary_hash'] = _hashify(message['primary_hash'])
     output['received'] = datetime.utcfromtimestamp(int(data['received']))
     output['culprit'] = _unicodify(data.get('culprit', None))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
+    output['title'] = _unicodify(data.get('title', None))
+    output['location'] = _unicodify(data.get('location', None))
+
+    # 2 Scenarios:
+    #   Pre-rename:
+    #        - Payload contains:
+    #             "message": "a long search message"
+    #        - "message" value saved in `message` column
+    #        - `search_message` column nonexistent or Null
+    #   Post-rename:
+    #        - Payload contains:
+    #             "message": "short message"
+    #             "search_message": "a long search message"
+    #        - "search_message" value stored in `search_message` column
+    #        - "message" value stored in `message` column
+    #
+    # When searching:
+    #   If search_message is Null, the event is from pre-rename so the search message
+    #   is stored in the `message` column.
+    #   Otherwise search in the `search_message` column.
+    #   Practically we can achieve this by searching `coalesce(search_message, message)`
+    #
+    # TODO make 100% sure that we are super clear on the message
+    # format and which of these goes where before shipping this.
+    # TODO maybe get these from the event body instead of the top level payload
+    output['message'] = _unicodify(message['message'])
+    output['search_message'] = _unicodify(message.get('search_message', None))
 
     module_names = []
     module_versions = []
