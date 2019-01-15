@@ -248,6 +248,8 @@ def parse_and_run_query(validated_body, timer):
             for cond in where_conditions if util.is_condition(cond) and
             any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
         ]
+        # Use the condition that has the highest priority (based on the
+        # position of its columns in the PREWHERE_KEYS list)
         prewhere_candidates = sorted([
             (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
             for cols, cond in prewhere_candidates
