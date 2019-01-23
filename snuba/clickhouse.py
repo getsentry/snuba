@@ -82,6 +82,10 @@ class ClickhousePool(object):
                     conn = None
                     if attempts_remaining == 0:
                         raise e
+                    else:
+                        # Short sleep to make sure we give the load
+                        # balancer a chance to mark a bad host as down.
+                        time.sleep(0.1)
         finally:
             self.pool.put(conn, block=False)
 
