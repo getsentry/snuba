@@ -34,7 +34,7 @@ def _as_dict_safe(value):
     rv = {}
     if isinstance(value, list):
         for item in value:
-            if isinstance(value, (list, tuple)) and len(value) == 2:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
                 rv[item[0]] = item[1]
     return rv
 
