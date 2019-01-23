@@ -32,9 +32,10 @@ def _as_dict_safe(value):
     if isinstance(value, dict):
         return value
     rv = {}
-    for item in value.items():
-        if item is not None:
-            rv[item[0]] = item[1]
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                rv[item[0]] = item[1]
     return rv
 
 
