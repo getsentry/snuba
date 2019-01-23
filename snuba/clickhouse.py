@@ -67,9 +67,9 @@ class ClickhousePool(object):
         try:
             conn = self.pool.get(block=True)
 
-            tries = 2
-            while tries > 0:
-                tries -= 1
+            attempts_remaining = 2
+            while attempts_remaining > 0:
+                attempts_remaining -= 1
                 # Lazily create connection instances
                 if conn is None:
                     conn = self._create_conn()
@@ -80,7 +80,7 @@ class ClickhousePool(object):
                 except (errors.NetworkError, errors.SocketTimeoutError) as e:
                     # Force a reconnection next time
                     conn = None
-                    if tries  == 0:
+                    if attempts_remaining == 0:
                         raise e
         finally:
             self.pool.put(conn, block=False)
@@ -95,15 +95,15 @@ class ClickhousePool(object):
         write successfully or else quit altogether. Note that each retry in this
         loop will be doubled by the retry in execute()
         """
-        tries = 3
+        attempts_remaining = 3
         while True:
             try:
                 return self.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError) as e:
                 # Try 3 times on connection issues.
-                logger.warning("Write to ClickHouse failed: %s (%d tries left)", str(e), tries)
-                tries -= 1
-                if tries <= 0:
+                logger.warning("Write to ClickHouse failed: %s (%d tries left)", str(e), attempts_remaining)
+                attempts_remaining -= 1
+                if attempts_remaining <= 0:
                     raise
 
                 if self.metrics:
