@@ -26,6 +26,18 @@ class EventTooOld(Exception):
     pass
 
 
+def _as_dict_safe(value):
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    rv = {}
+    for item in value.items():
+        if item is not None:
+            rv[item[0]] = item[1]
+    return rv
+
+
 def _collapse_uint32(n):
     if (n is None) or (n < 0) or (n > MAX_UINT32):
         return None
@@ -235,7 +247,7 @@ def extract_geo(output, geo):
 
 def extract_http(output, http):
     output['http_method'] = _unicodify(http.get('method', None))
-    http_headers = dict(http.get('headers', None) or {})
+    http_headers = _as_dict_safe(http.get('headers', None))
     output['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
 
@@ -384,7 +396,7 @@ def process_insert(message):
     sdk = data.get('sdk', None) or {}
     extract_sdk(processed, sdk)
 
-    tags = dict(data.get('tags', None) or {})
+    tags = _as_dict_safe(data.get('tags', None))
     extract_promoted_tags(processed, tags)
 
     contexts = data.get('contexts', None) or {}
