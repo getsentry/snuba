@@ -1,9 +1,13 @@
 from base import BaseTest
 
+from clickhouse_driver import Client, errors
+from mock import patch, call, Mock
+
 from snuba.clickhouse import (
     ALL_COLUMNS,
     Array, ColumnSet, Nested, Nullable, String, UInt,
-    escape_col
+    escape_col,
+    ClickhousePool
 )
 
 
@@ -43,3 +47,12 @@ class TestClickhouse(BaseTest):
         assert cols.for_schema() == 'foo UInt8, bar Nested(`qux:mux` String)'
         assert cols['foo'].type == UInt(8)
         assert cols['bar.qux:mux'].type == Array(String())
+
+
+    @patch('snuba.clickhouse.Client')
+    def test_reconnect(self, FakeClient):
+        # If the connection NetworkErrors a first time, make sure we call it a second time.
+        FakeClient.return_value.execute.side_effect = [errors.NetworkError, '{"data": "to my face"}']
+        cp = ClickhousePool()
+        cp.execute("SHOW TABLES")
+        assert FakeClient.return_value.execute.mock_calls == [call("SHOW TABLES"), call("SHOW TABLES")]
