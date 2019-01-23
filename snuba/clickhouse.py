@@ -77,7 +77,7 @@ class ClickhousePool(object):
                 try:
                     result = conn.execute(*args, **kwargs)
                     return result
-                except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                     # Force a reconnection next time
                     conn = None
                     if attempts_remaining == 0:
@@ -99,7 +99,7 @@ class ClickhousePool(object):
         while True:
             try:
                 return self.execute(*args, **kwargs)
-            except (errors.NetworkError, errors.SocketTimeoutError) as e:
+            except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
                 logger.warning("Write to ClickHouse failed: %s (%d tries left)", str(e), attempts_remaining)
                 attempts_remaining -= 1
