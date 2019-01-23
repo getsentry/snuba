@@ -27,7 +27,7 @@ class EventTooOld(Exception):
 
 
 def _as_dict_safe(value):
-    if value is not None:
+    if value is None:
         return {}
     if isinstance(value, dict):
         return value
