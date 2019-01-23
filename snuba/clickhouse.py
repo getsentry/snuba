@@ -59,16 +59,21 @@ class ClickhousePool(object):
         try:
             conn = self.pool.get(block=True)
 
-            # Lazily create connection instances
-            if conn is None:
-                conn = self._create_conn()
+            max_tries = 2
+            tries = 0
+            while tries < max_tries:
+                tries += 1
+                # Lazily create connection instances
+                if conn is None:
+                    conn = self._create_conn()
 
-            try:
-                return conn.execute(*args, **kwargs)
-            except (errors.NetworkError, errors.SocketTimeoutError) as e:
-                # Force a reconnection next time
-                conn = None
-                raise e
+                try:
+                    return conn.execute(*args, **kwargs)
+                except (errors.NetworkError, errors.SocketTimeoutError) as e:
+                    # Force a reconnection next time
+                    conn = None
+                    if tries == max_tries:
+                        raise e
         finally:
             self.pool.put(conn, block=False)
 
