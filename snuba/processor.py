@@ -27,15 +27,14 @@ class EventTooOld(Exception):
 
 
 def _as_dict_safe(value):
-    if not value:
+    if value is not None:
         return {}
     if isinstance(value, dict):
         return value
     rv = {}
-    if isinstance(value, list):
-        for item in value:
-            if isinstance(item, (list, tuple)) and len(item) == 2:
-                rv[item[0]] = item[1]
+    for item in value:
+        if item is not None:
+            rv[item[0]] = item[1]
     return rv
 
 
@@ -144,7 +143,7 @@ def extract_sdk(output, sdk):
     output['sdk_version'] = _unicodify(sdk.get('version', None))
 
     sdk_integrations = []
-    for i in sdk.get('integrations', []):
+    for i in sdk.get('integrations', None) or ():
         i = _unicodify(i)
         if i:
             sdk_integrations.append(i)
