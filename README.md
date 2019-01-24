@@ -65,15 +65,15 @@ You can background the containers by adding the `-d` option to `up`. Your
 checkout will be mounted into the container allowing you to interactively work
 with any changes you make.
 
-You will need to rebuild the `web` image if you change any application
+You will need to rebuild the `snuba-api` image if you change any application
 dependencies.
 
 To run sentry's test suite against snuba, uncomment `SNUBA_SETTINGS: test` in
-the `docker-compose.yml` and restart your `web` container with:
+the `docker-compose.yml` and restart your `snuba-api` container with:
 
-    docker-compose kill web
-    docker-compose rm web
-    docker-compose up web
+    docker-compose kill snuba-api
+    docker-compose rm snuba-api
+    docker-compose up snuba-api
 
 ## API
 

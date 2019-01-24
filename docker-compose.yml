@@ -1,7 +1,7 @@
 ---
 version: '3'
 services:
-  web:
+  snuba-api:
     build: ./
     ports:
       - "1218:1218"
@@ -18,7 +18,7 @@ services:
       CLICKHOUSE_SERVER: 'clickhouse:9000'
       REDIS_HOST: 'redis'
       # Uncomment this to run sentry's snuba testsuite
-      # SNUBA_SETTINGS: test
+      #SNUBA_SETTINGS: test
   clickhouse:
     image: yandex/clickhouse-server:18.14.9
     ports:
