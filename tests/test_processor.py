@@ -124,6 +124,23 @@ class TestProcessor(BaseTest):
         processor.extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
 
+        # with optional short message
+        now = datetime.utcnow().replace(microsecond=0)
+        event = {
+            'primary_hash': 'a' * 32,
+            'message': 'the message',
+            'platform': 'the_platform',
+            'search_message': 'the search message',
+        }
+        data = {
+            'received': int(calendar.timegm(now.timetuple())),
+            'message': 'the short message',
+        }
+        output = {}
+        processor.extract_common(output, event, data)
+        assert output['search_message'] == 'the search message'
+        assert output['message'] == 'the short message'
+
     def test_v1_delete_groups_skipped(self):
         assert processor.process_message((1, 'delete_groups', {})) is None
 

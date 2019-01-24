@@ -116,8 +116,11 @@ def extract_required(output, message):
 
 
 def extract_common(output, message, data):
+    # Properties we get from the top level of the message payload
     output['platform'] = _unicodify(message['platform'])
     output['primary_hash'] = _hashify(message['primary_hash'])
+
+    # Properties we get from the "data" dict, which is the actual event body.
     output['received'] = datetime.utcfromtimestamp(int(data['received']))
     output['culprit'] = _unicodify(data.get('culprit', None))
     output['type'] = _unicodify(data.get('type', None))
@@ -125,30 +128,35 @@ def extract_common(output, message, data):
     output['title'] = _unicodify(data.get('title', None))
     output['location'] = _unicodify(data.get('location', None))
 
-    # 2 Scenarios:
+    # The following concerns the change to message/search_message
+    # There are 2 Scenarios:
     #   Pre-rename:
     #        - Payload contains:
     #             "message": "a long search message"
+    #        - Does NOT contain a `search_message` property
     #        - "message" value saved in `message` column
     #        - `search_message` column nonexistent or Null
     #   Post-rename:
     #        - Payload contains:
-    #             "message": "short message"
     #             "search_message": "a long search message"
+    #        - Optionally the payload's "data" dict (event body) contains:
+    #             "message": "short message"
     #        - "search_message" value stored in `search_message` column
     #        - "message" value stored in `message` column
     #
-    # When searching:
+    # When querying the data / searching:
     #   If search_message is Null, the event is from pre-rename so the search message
     #   is stored in the `message` column.
     #   Otherwise search in the `search_message` column.
     #   Practically we can achieve this by searching `coalesce(search_message, message)`
-    #
-    # TODO make 100% sure that we are super clear on the message
-    # format and which of these goes where before shipping this.
-    # TODO maybe get these from the event body instead of the top level payload
-    output['message'] = _unicodify(message['message'])
     output['search_message'] = _unicodify(message.get('search_message', None))
+    if output['search_message'] is None:
+        # Pre-rename scenario, we expect to find "message" at the top level
+        output['message'] = _unicodify(message['message'])
+    else:
+        # Post-rename scenario, we check in case we have the optional
+        # "message" in the event body.
+        output['message'] = _unicodify(data.get('message', None))
 
     module_names = []
     module_versions = []
