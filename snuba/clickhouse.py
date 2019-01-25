@@ -445,6 +445,10 @@ ALL_COLUMNS = REQUIRED_COLUMNS + [
     ('primary_hash', Nullable(FixedString(32))),
     ('received', Nullable(DateTime())),
 
+    ('search_message', Nullable(String())),
+    ('title', Nullable(String())),
+    ('location', Nullable(String())),
+
     # optional user
     ('user_id', Nullable(String())),
     ('username', Nullable(String())),
