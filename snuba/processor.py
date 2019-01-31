@@ -90,8 +90,17 @@ def _unicodify(s):
 
 def _hashify(h):
     if HASH_RE.match(h):
-        return h
+        return j
     return md5(force_bytes(h)).hexdigest()
+
+
+def _ensure_valid_date(dt):
+    if dt is None:
+        return None
+    seconds = (dt - datetime(1970, 1, 1)).total_seconds()
+    if _collapse_uint32(seconds) is None:
+        return None
+    return dt
 
 
 def extract_required(output, message):
@@ -126,8 +135,8 @@ def extract_common(output, message, data):
 
     # Properties we get from the "data" dict, which is the actual event body.
     received = _collapse_uint32(int(data['received']))
-    if received is not None:
-        output['received'] = datetime.utcfromtimestamp(received)
+    output['received'] = datetime.utcfromtimestamp(received) if received is not None else None
+
     output['culprit'] = _unicodify(data.get('culprit', None))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
