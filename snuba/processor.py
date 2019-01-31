@@ -382,7 +382,7 @@ def process_message(message):
             if type_ == 'insert':
                 action_type = INSERT
 
-                if str(event.get("project", None)) == "1041156":
+                if str(event.get("project", None) or event.get("project_id", None)) == "1041156":
                     return None
 
                 try:
