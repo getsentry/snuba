@@ -90,7 +90,7 @@ def _unicodify(s):
 
 def _hashify(h):
     if HASH_RE.match(h):
-        return j
+        return None
     return md5(force_bytes(h)).hexdigest()
 
 
