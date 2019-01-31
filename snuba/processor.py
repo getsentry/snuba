@@ -94,23 +94,14 @@ def _hashify(h):
     return md5(force_bytes(h)).hexdigest()
 
 
-def _ensure_valid_date(dt):
-    if dt is None:
-        return None
-    seconds = (dt - datetime(1970, 1, 1)).total_seconds()
-    if _collapse_uint32(seconds) is None:
-        return None
-    return dt
-
-
 def extract_required(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
     output['group_id'] = message['group_id']
-    timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))
 
     # This is not ideal but it should never happen anyways
+    timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))
     if timestamp is None:
         timestamp = datetime.utcnow()
 
@@ -134,7 +125,9 @@ def extract_common(output, message, data):
     output['primary_hash'] = _hashify(message['primary_hash'])
 
     # Properties we get from the "data" dict, which is the actual event body.
-    output['received'] = _ensure_valid_date(datetime.utcfromtimestamp(int(data['received'])))
+    received = _collapse_uint32(int(data['received']))
+    if received is not None:
+        output['received'] = datetime.utcfromtimestamp(received)
     output['culprit'] = _unicodify(data.get('culprit', None))
     output['type'] = _unicodify(data.get('type', None))
     output['version'] = _unicodify(data.get('version', None))
