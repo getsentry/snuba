@@ -208,7 +208,10 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 
-        assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy()) == "positionCaseInsensitive(message, 'lol \\'single\\' quotes')"
+        # TODO once search_message is filled in everywhere, this can be just 'message' again.
+        message_expr = '(coalesce(search_message, message) AS message)'
+        assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy())\
+                == "positionCaseInsensitive({message_expr}, 'lol \\'single\\' quotes')".format(**locals())
 
 
         # dangerous characters are allowed but escaped in literals and column names

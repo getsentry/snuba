@@ -159,11 +159,6 @@ def extract_common(output, message, data):
     #        - "search_message" value stored in `search_message` column
     #        - "message" value stored in `message` column
     #
-    # When querying the data / searching:
-    #   If search_message is Null, the event is from pre-rename so the search message
-    #   is stored in the `message` column.
-    #   Otherwise search in the `search_message` column.
-    #   Practically we can achieve this by searching `coalesce(search_message, message)`
     output['search_message'] = _unicodify(message.get('search_message', None))
     if output['search_message'] is None:
         # Pre-rename scenario, we expect to find "message" at the top level

@@ -65,6 +65,7 @@ class TestApi(BaseTest):
                         'deleted': 0,
                         'datetime': (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
                         'message': 'a message',
+                        'search_message': 'a long search message' if p == 3 else None,
                         'platform': self.platforms[(tock * p) % len(self.platforms)],
                         'primary_hash': self.hashes[(tock * p) % len(self.hashes)],
                         'group_id': self.group_ids[(tock * p) % len(self.hashes)],
@@ -914,3 +915,22 @@ class TestApi(BaseTest):
             'debug': True,
         })).data)
         assert response['stats']['consistent']
+
+    def test_message_is_search_message(self):
+        # all messages contain 'message'
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1,2,3],
+            'conditions': [['message', 'LIKE', '%message%']],
+            'groupby': 'project_id',
+            'debug': True,
+        })).data)
+        assert sorted(r['project_id'] for r in response['data']) == [1,2,3]
+
+        # only project 3 has a search_message with 'long search' in it
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1,2,3],
+            'conditions': [['message', 'LIKE', '%long search%']],
+            'groupby': 'project_id',
+            'debug': True,
+        })).data)
+        assert sorted(r['project_id'] for r in response['data']) == [3]

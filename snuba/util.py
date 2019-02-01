@@ -83,6 +83,11 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = tags_expr(column_name, body)
     elif column_name == 'issue':
         expr = 'group_id'
+    elif column_name == 'message':
+        # Because of the rename from message->search_message without backfill,
+        # records will have one or the other of these fields.
+        # TODO this can be removed once all data has search_message filled in.
+        expr = 'coalesce(search_message, message)'
     else:
         expr = escape_col(column_name)
 
