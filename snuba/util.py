@@ -504,6 +504,18 @@ def raw_query(body, sql, client, timer, stats=None):
                         result = {'error': {
                             'type': 'ratelimit',
                             'message': 'rate limit exceeded',
+                            'detail': {
+                                'global_rate': g_rate,
+                                'global_rate_limit': grl,
+                                'global_concurrent': g_concurr,
+                                'global_concurrent_limit': gcl,
+                                'global_allowed': g_allowed,
+                                'project_rate': p_rate,
+                                'project_rate_limit': prl,
+                                'project_concurrent': p_concurr,
+                                'project_concurrent_limit': pcl,
+                                'project_allowed': p_allowed,
+                            }
                         }}
 
     stats.update(query_settings)
