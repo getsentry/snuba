@@ -17,7 +17,8 @@ def bootstrap(bootstrap_server, force):
     from confluent_kafka.admin import AdminClient, NewTopic
 
     client = AdminClient({
-        'bootstrap.servers': ','.join(bootstrap_server)
+        'bootstrap.servers': ','.join(bootstrap_server),
+        'socket.timeout.ms': 1000,
     })
 
     topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
