@@ -410,7 +410,8 @@ def process_message(message):
                         return None
 
                     if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge',
-                                 'end_delete_groups', 'end_merge', 'end_unmerge'):
+                                 'start_delete_tag', 'end_delete_groups', 'end_merge',
+                                 'end_unmerge', 'end_delete_tag'):
                         # pass raw events along to republish
                         action_type = REPLACE
                         processed = (six.text_type(event['project_id']), message)

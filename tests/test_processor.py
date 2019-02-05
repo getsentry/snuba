@@ -190,6 +190,18 @@ class TestProcessor(BaseTest):
         assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
+    def test_v2_start_delete_tag(self):
+        project_id = 1
+        message = (2, 'start_delete_tag', {'project_id': project_id})
+        assert processor.process_message(message) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
+    def test_v2_end_delete_tag(self):
+        project_id = 1
+        message = (2, 'end_delete_tag', {'project_id': project_id})
+        assert processor.process_message(message) == \
+            (processor.REPLACE, (six.text_type(project_id), message))
+
     def test_extract_sdk(self):
         sdk = {
             'integrations': ['logback'],
