@@ -11,6 +11,7 @@ from . import settings
 from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
+from snuba.util import escape_string
 
 
 logger = logging.getLogger('snuba.replacer')
@@ -313,11 +314,11 @@ def process_delete_tag(message):
             select_columns.append('NULL')
         elif col.flattened == 'tags.key':
             select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, '%s')), `tags.key`)" % tag
+                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)" % escape_string(tag)
             )
         elif col.flattened == 'tags.value':
             select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.value`, x) != indexOf(`tags.key`, '%s')), `tags.value`)" % tag
+                "arrayFilter(x -> (indexOf(`tags.value`, x) != indexOf(`tags.key`, %s)), `tags.value`)" % escape_string(tag)
             )
         else:
             select_columns.append(col.escaped)
