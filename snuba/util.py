@@ -506,9 +506,17 @@ def raw_query(body, sql, client, timer, stats=None):
 
                     else:
                         status = 429
+                        reasons = [
+                            ('global', 'concurrent', g_concurr, gcl),
+                            ('global', 'per-second', g_rate, grl),
+                            ('project', 'concurrent', p_concurr, pcl),
+                            ('project', 'per-second', p_rate, prl)
+                        ]
+                        reason = next((r for r in reasons if r[2] > r[3]), None)
                         result = {'error': {
                             'type': 'ratelimit',
                             'message': 'rate limit exceeded',
+                            'detail': reason and '{} {} of {:.0f} exceeds limit of {:.0f}'.format(*reason)
                         }}
 
     stats.update(query_settings)
