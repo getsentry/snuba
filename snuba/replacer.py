@@ -287,7 +287,7 @@ def process_delete_tag(message):
     if not tag:
         return None
 
-    assert isinstance(tag, six.text_type)
+    assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     is_promoted = tag in PROMOTED_TAGS['tags']
 
@@ -298,9 +298,9 @@ def process_delete_tag(message):
     """
 
     if is_promoted:
-        where += "AND %(escaped_tag)s IS NOT NULL"
+        where += "AND %(tag_column)s IS NOT NULL"
     else:
-        where += "AND has(`tags.key`, '%(tag)s')"
+        where += "AND has(`tags.key`, %(tag_str)s)"
 
     insert_query_template = """\
         INSERT INTO %(dist_table_name)s (%(all_columns)s)
@@ -327,8 +327,8 @@ def process_delete_tag(message):
         'all_columns': ', '.join(ALL_COLUMN_NAMES),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
-        'tag': tag,
-        'escaped_tag': escape_col(tag),
+        'tag_str': escape_string(tag),
+        'tag_column': escape_col(tag),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 
