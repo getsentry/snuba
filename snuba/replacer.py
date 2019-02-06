@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, escape_col
+from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, TAG_COLUMN_MAP, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -289,6 +289,7 @@ def process_delete_tag(message):
 
     assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+    tag_column_name = TAG_COLUMN_MAP['tags'].get(tag, tag)
     is_promoted = tag in PROMOTED_TAGS['tags']
 
     where = """\
@@ -310,7 +311,7 @@ def process_delete_tag(message):
 
     select_columns = []
     for col in ALL_COLUMNS:
-        if is_promoted and col.flattened == tag:
+        if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
         elif col.flattened == 'tags.key':
             select_columns.append(
@@ -328,7 +329,7 @@ def process_delete_tag(message):
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'tag_str': escape_string(tag),
-        'tag_column': escape_col(tag),
+        'tag_column': escape_col(tag_column_name),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
 

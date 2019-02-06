@@ -241,7 +241,7 @@ class TestReplacer(BaseTest):
     def test_delete_tag_promoted_insert(self):
         self.event['project_id'] = self.project_id
         self.event['group_id'] = 1
-        self.event['data']['tags'].append(['sentry:user', 'foo'])
+        self.event['data']['tags'].append(['browser.name', 'foo'])
         self.write_raw_events(self.event)
 
         project_id = self.project_id
@@ -250,7 +250,7 @@ class TestReplacer(BaseTest):
             return json.loads(self.app.post('/query', data=json.dumps({
                 'project': [project_id],
                 'aggregations': [['count()', '', 'count']],
-                'conditions': [['tags[sentry:user]', '=', 'foo']] if not total else [],
+                'conditions': [['tags[browser.name]', '=', 'foo']] if not total else [],
                 'groupby': ['issue'],
             })).data)['data']
 
@@ -264,7 +264,7 @@ class TestReplacer(BaseTest):
             def value(self):
                 return json.dumps((2, 'end_delete_tag', {
                     'project_id': project_id,
-                    'tag': 'sentry:user',
+                    'tag': 'browser.name',
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 
