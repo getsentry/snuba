@@ -758,11 +758,12 @@ class TestApi(BaseTest):
 
     def test_test_endpoints(self):
         project_id = 73
-        event = {
+        group_id = 74
+        event = (2, 'insert', {
             'event_id': '9' * 32,
             'primary_hash': '1' * 32,
             'project_id': project_id,
-            'group_id': 1,
+            'group_id': group_id,
             'datetime': self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             'deleted': 1,
             'retention_days': settings.DEFAULT_RETENTION_DAYS,
@@ -771,8 +772,8 @@ class TestApi(BaseTest):
             'data': {
                 'received': time.mktime(self.base_time.timetuple()),
             }
-        }
-        response = self.app.post('/tests/insert', data=json.dumps([event]))
+        })
+        response = self.app.post('/tests/eventstream', data=json.dumps(event))
         assert response.status_code == 200
 
         query = {
@@ -780,10 +781,25 @@ class TestApi(BaseTest):
             'groupby': 'project_id',
             'aggregations': [
                 ['count()', '', 'count']
+            ],
+            'conditions': [
+                ['issue', '=', group_id]
             ]
         }
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result['data'] == [{'count': 1, 'project_id': project_id}]
+
+        event = (2, 'end_delete_groups', {
+            'transaction_id': 'foo',
+            'project_id': project_id,
+            'group_ids': [group_id],
+            'datetime': (self.base_time + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        })
+        response = self.app.post('/tests/eventstream', data=json.dumps(event))
+        assert response.status_code == 200
+
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        assert result['data'] == []
 
         assert self.app.post('/tests/drop').status_code == 200
 

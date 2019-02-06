@@ -385,6 +385,42 @@ if application.debug or application.testing:
         )
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
+    @application.route('/tests/eventstream', methods=['POST'])
+    def eventstream():
+        record = json.loads(request.data)
+
+        version = record[0]
+        if version != 2:
+            raise RuntimeError("Unsupported protocol version: %s" % record)
+
+        class Message(object):
+            def __init__(self, value):
+                self._value = value
+
+            def value(self):
+                return self._value
+
+            def partition(self):
+                return None
+
+            def offset(self):
+                return None
+
+        message = Message(request.data)
+
+        type_ = record[1]
+        if type_ == 'insert':
+            from snuba.consumer import ConsumerWorker
+            worker = ConsumerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE, producer=None, replacements_topic=None)
+        else:
+            from snuba.replacer import ReplacerWorker
+            worker = ReplacerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+
+        batch = [worker.process_message(message)]
+        worker.flush_batch(batch)
+
+        return ('ok', 200, {'Content-Type': 'text/plain'})
+
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
