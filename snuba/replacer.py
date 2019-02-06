@@ -8,9 +8,10 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS
+from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, TAG_COLUMN_MAP, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
+from snuba.util import escape_string
 
 
 logger = logging.getLogger('snuba.replacer')
@@ -101,7 +102,7 @@ class ReplacerWorker(AbstractBatchWorker):
         if version == 2:
             type_, event = message[1:3]
 
-            if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge'):
+            if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
                 return None
             elif type_ == 'end_delete_groups':
                 processed = process_delete_groups(event)
@@ -109,6 +110,8 @@ class ReplacerWorker(AbstractBatchWorker):
                 processed = process_merge(event)
             elif type_ == 'end_unmerge':
                 processed = process_unmerge(event)
+            elif type_ == 'end_delete_tag':
+                processed = process_delete_tag(event)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -273,6 +276,67 @@ def process_unmerge(message):
         'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
         'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
     }
+
+    query_time_flags = (NEEDS_FINAL, message['project_id'])
+
+    return (count_query_template, insert_query_template, query_args, query_time_flags)
+
+
+def process_delete_tag(message):
+    tag = message['tag']
+    if not tag:
+        return None
+
+    assert isinstance(tag, six.string_types)
+    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+    tag_column_name = TAG_COLUMN_MAP['tags'].get(tag, tag)
+    is_promoted = tag in PROMOTED_TAGS['tags']
+
+    where = """\
+        WHERE project_id = %(project_id)s
+        AND received <= CAST('%(timestamp)s' AS DateTime)
+        AND NOT deleted
+    """
+
+    if is_promoted:
+        where += "AND %(tag_column)s IS NOT NULL"
+    else:
+        where += "AND has(`tags.key`, %(tag_str)s)"
+
+    insert_query_template = """\
+        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        SELECT %(select_columns)s
+        FROM %(dist_table_name)s FINAL
+    """ + where
+
+    select_columns = []
+    for col in ALL_COLUMNS:
+        if is_promoted and col.flattened == tag_column_name:
+            select_columns.append('NULL')
+        elif col.flattened == 'tags.key':
+            select_columns.append(
+                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)" % escape_string(tag)
+            )
+        elif col.flattened == 'tags.value':
+            select_columns.append(
+                "arrayFilter(x -> (indexOf(`tags.value`, x) != indexOf(`tags.key`, %s)), `tags.value`)" % escape_string(tag)
+            )
+        else:
+            select_columns.append(col.escaped)
+
+    query_args = {
+        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'select_columns': ', '.join(select_columns),
+        'project_id': message['project_id'],
+        'tag_str': escape_string(tag),
+        'tag_column': escape_col(tag_column_name),
+        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+    }
+
+    count_query_template = """\
+        SELECT count()
+        FROM %(dist_table_name)s FINAL
+    """ + where
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
 

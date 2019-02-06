@@ -364,13 +364,17 @@ def conditions_expr(conditions, body, depth=0):
         raise InvalidConditionException(str(conditions))
 
 
+def escape_string(str):
+    str = ESCAPE_STRING_RE.sub(r"\\\1", str)
+    return u"'{}'".format(str)
+
+
 def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause.
     """
     if isinstance(value, six.string_types):
-        value = ESCAPE_STRING_RE.sub(r"\\\1", value)
-        return u"'{}'".format(value)
+        return escape_string(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
         return "toDateTime('{}')".format(value.isoformat())
