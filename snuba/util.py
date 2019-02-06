@@ -35,6 +35,7 @@ DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 ESCAPE_STRING_RE = re.compile(r"(['\\])")
 SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
+TOPK_FUNCTION_RE = re.compile(r'^top([1-9]\d*)$')
 
 
 class InvalidConditionException(Exception):
@@ -69,6 +70,37 @@ def time_expr(alias, granularity):
 
     return template.format(column=column, granularity=granularity)
 
+def function_expr(fn, args_expr=''):
+    """
+    Generate an expression for a given function name and an already-evaluated
+    args expression. This is a place to define convenience functions that evaluate
+    to more complex expressions.
+
+    """
+    # For functions with no args, (or static args) we allow them to already
+    # include them as part of the function name, eg, "count()" or "sleep(1)"
+    if not args_expr and fn.endswith(')'):
+        return fn
+
+    # Convenience topK function eg "top10", "top3" etc.
+    topk = TOPK_FUNCTION_RE.match(fn)
+    if topk:
+        return 'topK({})({})'.format(topk.group(1), args_expr)
+
+    # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where
+    # a number was expected.
+    if fn == 'uniq':
+        return 'ifNull({}({}), 0)'.format(fn, args_expr)
+
+    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
+    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
+    # way to disambiguate column names from string literals in complex functions.
+    if fn == 'emptyIfNull' and args_expr:
+        return 'ifNull({}, \'\')'.format(args_expr)
+
+    # default: just return fn(args_expr)
+    return  u'{}({})'.format(fn, args_expr)
+
 def column_expr(column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
@@ -102,12 +134,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
         expr = escape_col(column_name)
 
     if aggregate:
-        if expr:
-            expr = u'{}({})'.format(aggregate, expr)
-            if aggregate == 'uniq':  # default uniq() result to 0, not null
-                expr = 'ifNull({}, 0)'.format(expr)
-        else:  # This is the "count()" case where the '()' is already provided
-            expr = aggregate
+        expr = function_expr(aggregate, expr)
 
     alias = escape_col(alias or column_name)
 
@@ -137,17 +164,10 @@ def complex_column_expr(expr, body, depth=0):
         else:
             ret = ''
 
-    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
-    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
-    # way to disambiguate column names from string literals in complex functions.
-    if ret == 'emptyIfNull' and len(expr) >= 1 and isinstance(expr[0], tuple):
-        ret = 'ifNull'
-        expr = (expr[0] + ("''",),) + expr[1:]
-
     first = True
     for subexpr in expr:
         if isinstance(subexpr, tuple):
-            ret += '(' + complex_column_expr(subexpr, body, depth + 1) + ')'
+            ret = function_expr(ret, complex_column_expr(subexpr, body, depth + 1))
         else:
             if not first:
                 ret += ', '

@@ -57,9 +57,6 @@ class TestUtil(BaseTest):
         assert column_expr('col', body.copy(), aggregate='sum') ==\
             "(sum(col) AS col)"
 
-        assert column_expr(None, body.copy(), alias='sum', aggregate='sum') ==\
-            "sum"  # This should probably be an error as its an aggregate with no column
-
         assert column_expr('col', body.copy(), alias='summation', aggregate='sum') ==\
             "(sum(col) AS summation)"
 
@@ -188,7 +185,7 @@ class TestUtil(BaseTest):
     def test_duplicate_expression_alias(self):
         body = {
             'aggregations': [
-                ['topK(3)', 'logger', 'dupe_alias'],
+                ['top3', 'logger', 'dupe_alias'],
                 ['uniq', 'environment', 'dupe_alias'],
             ]
         }
@@ -212,9 +209,9 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
         assert complex_column_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
-        # we may move these to special Snuba function calls in the future
         assert complex_column_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
-        assert complex_column_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
+        assert complex_column_expr(tuplify(['top3', ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_column_expr(tuplify(['top10', ['project_id'], 'baz']), body.copy()) == '(topK(10)(project_id) AS baz)'
 
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
