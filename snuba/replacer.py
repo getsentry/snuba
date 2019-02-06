@@ -123,7 +123,6 @@ class ReplacerWorker(AbstractBatchWorker):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
             query_args.update({'dist_table_name': self.dist_table_name})
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
-
             if count == 0:
                 continue
 
