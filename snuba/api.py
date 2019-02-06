@@ -389,10 +389,6 @@ if application.debug or application.testing:
     def eventstream():
         record = json.loads(request.data)
 
-        version = record[0]
-        if version != 2:
-            raise RuntimeError("Unsupported protocol version: %s" % record)
-
         class Message(object):
             def __init__(self, value):
                 self._value = value
