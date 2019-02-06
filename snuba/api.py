@@ -416,8 +416,10 @@ if application.debug or application.testing:
             from snuba.replacer import ReplacerWorker
             worker = ReplacerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE)
 
-        batch = [worker.process_message(message)]
-        worker.flush_batch(batch)
+        processed = worker.process_message(message)
+        if processed is not None:
+            batch = [processed]
+            worker.flush_batch(batch)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
