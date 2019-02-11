@@ -198,7 +198,6 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
         assert complex_column_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
-        assert complex_column_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
         assert complex_column_expr(tuplify(['top3', ['project_id']]), body.copy()) == 'topK(3)(project_id)'
         assert complex_column_expr(tuplify(['top10', ['project_id'], 'baz']), body.copy()) == '(topK(10)(project_id) AS baz)'
 
