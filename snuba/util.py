@@ -101,6 +101,39 @@ def function_expr(fn, args_expr=''):
     # default: just return fn(args_expr)
     return  u'{}({})'.format(fn, args_expr)
 
+def is_function(column_expr, depth=0):
+    """
+    Returns a 3-tuple of (name, args, alias) if column_expr is a function,
+    otherwise None.
+
+    A function expression is of the form:
+
+        [func, [arg1, arg2]]  => func(arg1, arg2)
+
+    If a string argument is followed by list arg, the pair of them is assumed
+    to be a nested function call, with extra args to the outer function afterward.
+
+        [func1, [func2, [arg1, arg2], arg3]]  => func1(func2(arg1, arg2), arg3)
+
+    Although at the top level, there is no outer function call, and the optional
+    3rd argument is interpreted as an alias for the entire expression.
+
+        [func, [arg1] alias] => function(arg1) AS alias
+
+    """
+    if (isinstance(column_expr, (tuple, list))
+            and len(column_expr) >= 2
+            and isinstance(column_expr[0], six.string_types)
+            and isinstance(column_expr[1], (tuple, list))
+            and (depth > 0 or len(column_expr) <= 3)):
+        assert SAFE_FUNCTION_RE.match(column_expr[0])
+        if len(column_expr) == 2:
+            return tuple(column_expr) + (None,)
+        else:
+            return tuple(column_expr)
+    else:
+        return None
+
 def column_expr(column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
@@ -113,7 +146,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     assert not aggregate or (aggregate and (column_name or alias))
     column_name = column_name or ''
 
-    if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
+    if is_function(column_name, 0):
         return complex_column_expr(column_name, body)
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
@@ -142,44 +175,26 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
 
 def complex_column_expr(expr, body, depth=0):
-    # TODO instead of the mutual recursion between column_expr and complex_column_expr
-    # we should probably encapsulate all this logic in a single recursive column_expr
-    if depth == 0:
-        # we know the first item is a function
-        ret = expr[0]
-        assert SAFE_FUNCTION_RE.match(ret)
-        expr = expr[1:]
-
-        # if the last item of the toplevel is a string, it's an alias
-        alias = None
-        if len(expr) > 1 and isinstance(expr[-1], six.string_types):
-            alias = expr[-1]
-            expr = expr[:-1]
-    else:
-        # is this a nested function call?
-        if len(expr) > 1 and isinstance(expr[1], tuple):
-            ret = expr[0]
-            assert SAFE_FUNCTION_RE.match(ret)
-            expr = expr[1:]
+    name, args, alias = is_function(expr, depth)
+    out = []
+    i = 0
+    while i < len(args):
+        next_2 = args[i:i+2]
+        if is_function(next_2, depth+1):
+            out.append(complex_column_expr(next_2, body, depth+1))
+            i += 2
         else:
-            ret = ''
-
-    first = True
-    for subexpr in expr:
-        if isinstance(subexpr, tuple):
-            ret = function_expr(ret, complex_column_expr(subexpr, body, depth + 1))
-        else:
-            if not first:
-                ret += ', '
-            if isinstance(subexpr, six.string_types):
-                ret += column_expr(subexpr, body)
+            nxt = args[i]
+            assert not isinstance(nxt, (list, tuple)), "nested functions do not support array arguments"
+            if isinstance(nxt, six.string_types):
+                out.append(column_expr(nxt, body))
             else:
-                ret += escape_literal(subexpr)
-        first = False
+                 out.append(escape_literal(nxt))
+            i += 1
 
-    if depth == 0 and alias:
-        return alias_expr(ret, alias, body)
-
+    ret = function_expr(name, ', '.join(out))
+    if alias:
+        ret = alias_expr(ret, alias, body)
     return ret
 
 
