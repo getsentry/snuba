@@ -2,7 +2,7 @@ import calendar
 import pytest
 import six
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from base import BaseTest
 
@@ -549,9 +549,7 @@ class TestProcessor(BaseTest):
             'project_id': 70156,
             'message': None,
             'platform': None,
-            'datetime': '2018-11-12T17:50:15.917125Z',
             'data': {
-                'received': 1542066715,
                 'culprit': None,
                 'errors': None,
                 'extra': None,
@@ -576,5 +574,9 @@ class TestProcessor(BaseTest):
                 'version': None
             }
         }
+
+        timestamp = datetime.utcnow()
+        event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        event['data']['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
 
         processor.process_insert(event)
