@@ -318,7 +318,7 @@ def process_delete_tag(message):
             )
         elif col.flattened == 'tags.value':
             select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.value`, x) != indexOf(`tags.key`, %s)), `tags.value`)" % escape_string(tag)
+                "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))" % escape_string(tag)
             )
         else:
             select_columns.append(col.escaped)
