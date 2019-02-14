@@ -16,6 +16,7 @@ travis-test:
 
 install-python-dependencies:
 	pip install -e .
+	pip install git+git://github.com/mitsuhiko/clickhouse-driver@ef53bb1ee0bafaa51e434df324340d8a298e356d
 
 install-librdkafka-homebrew:
 	brew install librdkafka
