@@ -10,7 +10,7 @@ ENV PIP_NO_CACHE_DIR=off \
     PYTHONDONTWRITEBYTECODE=1
 
 COPY snuba ./snuba/
-COPY setup.py README.md MANIFEST.in ./
+COPY setup.py Makefile README.md MANIFEST.in ./
 
 RUN chown -R snuba:snuba /usr/src/snuba/
 
@@ -33,7 +33,7 @@ RUN set -ex; \
     buildDeps=' \
         bzip2 \
         dirmngr \
-        gcc \
+        git \
         g++ \
         gcc \
         libc6-dev \
@@ -89,7 +89,7 @@ RUN set -ex; \
     rm -rf get-pip.py; \
     \
     cd /usr/src/snuba; \
-    /pypy/bin/pip install -e .; \
+    PATH=/pypy/bin:$PATH make install-python-dependencies; \
     /pypy/bin/snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
@@ -97,16 +97,18 @@ RUN set -ex; \
 RUN set -ex; \
     \
     buildDeps=' \
+        git \
         gcc \
         libc6-dev \
         liblz4-dev \
         libpcre3-dev \
+        make \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
-    pip install -e .; \
+    make install-python-dependencies; \
     snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
