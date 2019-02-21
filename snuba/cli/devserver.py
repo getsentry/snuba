@@ -7,8 +7,22 @@ from snuba import settings
 def devserver():
     "Starts all Snuba processes for local development."
     import sys
+    import time
     from subprocess import list2cmdline, check_output
     from honcho.manager import Manager
+
+    from snuba.clickhouse import ClickhousePool
+
+    attempts = 0
+    while True:
+        try:
+            ClickhousePool().execute('SELECT 1')
+            break
+        except Exception:
+            attempts += 1
+            if attempts == 10:
+                raise
+            time.sleep(1)
 
     check_output(['snuba', 'bootstrap', '--force'])
 
