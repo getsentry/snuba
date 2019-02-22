@@ -1,33 +1,25 @@
 import click
 
-from snuba import settings
-
 
 @click.command()
-def devserver():
+@click.option('--bootstrap/--no-bootstrap', default=True)
+def devserver(bootstrap):
     "Starts all Snuba processes for local development."
+    import os
     import sys
     import time
-    from subprocess import list2cmdline, check_output
+    from subprocess import list2cmdline, call
     from honcho.manager import Manager
 
-    from snuba.clickhouse import ClickhousePool
+    os.environ['PYTHONUNBUFFERED'] = '1'
 
-    attempts = 0
-    while True:
-        try:
-            ClickhousePool().execute('SELECT 1')
-            break
-        except Exception:
-            attempts += 1
-            if attempts == 10:
-                raise
-            time.sleep(1)
-
-    check_output(['snuba', 'bootstrap', '--force'])
+    if bootstrap:
+        returncode = call(['snuba', 'bootstrap', '--force'])
+        if returncode > 0:
+            sys.exit(returncode)
 
     daemons = [
-        ('api', ['snuba', 'api']),
+        ('api', ['uwsgi', '--master', '--manage-script-name', '--wsgi-file', 'snuba/api.py', '--http', '0.0.0.0:1218', '--http-keepalive']),
         ('consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug']),
         ('replacer', ['snuba', 'replacer', '--auto-offset-reset=latest', '--log-level=debug']),
     ]

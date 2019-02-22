@@ -14,12 +14,24 @@ def bootstrap(bootstrap_server, force):
     if not force:
         raise click.ClickException('Must use --force to run')
 
+    import time
     from confluent_kafka.admin import AdminClient, NewTopic
 
-    client = AdminClient({
-        'bootstrap.servers': ','.join(bootstrap_server),
-        'socket.timeout.ms': 1000,
-    })
+    attempts = 0
+    while True:
+        try:
+            client = AdminClient({
+                'bootstrap.servers': ','.join(bootstrap_server),
+                'socket.timeout.ms': 1000,
+            })
+            client.list_topics(timeout=1)
+            break
+        except Exception as e:
+            print(e)
+            attempts += 1
+            if attempts == 10:
+                raise
+            time.sleep(1)
 
     topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
 
@@ -31,6 +43,18 @@ def bootstrap(bootstrap_server, force):
             print("Failed to create topic %s: %s" % (topic, e))
 
     from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+
+    attempts = 0
+    while True:
+        try:
+            ClickhousePool().execute('SELECT 1')
+            break
+        except Exception as e:
+            print(e)
+            attempts += 1
+            if attempts == 10:
+                raise
+            time.sleep(1)
 
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
