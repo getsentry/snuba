@@ -3,7 +3,8 @@ import click
 
 @click.command()
 @click.option('--bootstrap/--no-bootstrap', default=True)
-def devserver(bootstrap):
+@click.option('--workers/--no-workers', default=True)
+def devserver(bootstrap, workers):
     "Starts all Snuba processes for local development."
     import os
     import sys
@@ -14,12 +15,21 @@ def devserver(bootstrap):
     os.environ['PYTHONUNBUFFERED'] = '1'
 
     if bootstrap:
-        returncode = call(['snuba', 'bootstrap', '--force'])
+        cmd = ['snuba', 'bootstrap', '--force']
+        if not workers:
+            cmd.append('--no-kafka')
+        returncode = call(cmd)
         if returncode > 0:
             sys.exit(returncode)
 
     daemons = [
         ('api', ['uwsgi', '--master', '--manage-script-name', '--wsgi-file', 'snuba/api.py', '--http', '0.0.0.0:1218', '--http-keepalive']),
+    ]
+
+    if not workers:
+        os.execvp(daemons[0][1][0], daemons[0][1])
+
+    daemons += [
         ('consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug']),
         ('replacer', ['snuba', 'replacer', '--auto-offset-reset=latest', '--log-level=debug']),
     ]
