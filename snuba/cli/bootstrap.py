@@ -32,7 +32,7 @@ def bootstrap(bootstrap_server, kafka, force):
             except Exception as e:
                 print(e)
                 attempts += 1
-                if attempts == 10:
+                if attempts == 60:
                     raise
                 time.sleep(1)
 
@@ -55,7 +55,7 @@ def bootstrap(bootstrap_server, kafka, force):
         except Exception as e:
             print(e)
             attempts += 1
-            if attempts == 10:
+            if attempts == 60:
                 raise
             time.sleep(1)
 
