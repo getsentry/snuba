@@ -345,7 +345,14 @@ if application.debug or application.testing:
     # is checked to avoid scary production mishaps.
     assert settings.CLICKHOUSE_TABLE in ('dev', 'test')
 
-    def ensure_table_exists():
+    _ensured = False
+
+    def ensure_table_exists(force=False):
+        global _ensured
+
+        if not force and _ensured:
+            return
+
         from snuba.clickhouse import get_table_definition, get_test_engine
 
         clickhouse_rw.execute(
@@ -358,6 +365,8 @@ if application.debug or application.testing:
         if settings.CLICKHOUSE_TABLE == 'dev':
             from snuba import migrate
             migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+
+        _ensured = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
@@ -422,7 +431,7 @@ if application.debug or application.testing:
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
-        ensure_table_exists()
+        ensure_table_exists(force=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/error')
