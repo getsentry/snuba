@@ -13,7 +13,7 @@ def run(conn, clickhouse_table):
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr
-        in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
+        in [cols[:4] for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)]
     }
 
     local_schema = get_schema()
