@@ -132,6 +132,8 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
+    ensure_table_exists()
+
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
@@ -353,17 +355,16 @@ if application.debug or application.testing:
             )
         )
 
-    ensure_table_exists()
-
-    if settings.CLICKHOUSE_TABLE == 'dev':
-        from snuba import migrate
-        migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+        if settings.CLICKHOUSE_TABLE == 'dev':
+            from snuba import migrate
+            migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
+        ensure_table_exists()
         body = json.loads(request.data)
 
         rows = []
@@ -372,7 +373,6 @@ if application.debug or application.testing:
             row = row_from_processed_event(processed)
             rows.append(row)
 
-        ensure_table_exists()
         write_rows(
             clickhouse_rw,
             table=settings.CLICKHOUSE_TABLE,
@@ -382,6 +382,7 @@ if application.debug or application.testing:
 
     @application.route('/tests/eventstream', methods=['POST'])
     def eventstream():
+        ensure_table_exists()
         record = json.loads(request.data)
 
         version = record[0]
@@ -427,3 +428,6 @@ if application.debug or application.testing:
     @application.route('/tests/error')
     def error():
         1 / 0
+else:
+    def ensure_table_exists():
+        pass
