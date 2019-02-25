@@ -11,9 +11,9 @@ def run(conn, clickhouse_table):
     from snuba.clickhouse import ALL_COLUMNS
 
     get_schema = lambda: {
-        column_name: column_type
-        for column_name, column_type, default_type, default_expr
-        in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
+        # column_name: column_type
+        row[0]: row[1]
+        for row in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
     }
 
     local_schema = get_schema()
