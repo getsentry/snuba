@@ -5,14 +5,8 @@ RUN groupadd -r snuba && useradd -r -g snuba snuba
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
-ENV PIP_NO_CACHE_DIR=off \
-    PIP_DISABLE_PIP_VERSION_CHECK=on \
+ENV PIP_DISABLE_PIP_VERSION_CHECK=on \
     PYTHONDONTWRITEBYTECODE=1
-
-COPY snuba ./snuba/
-COPY setup.py Makefile README.md MANIFEST.in ./
-
-RUN chown -R snuba:snuba /usr/src/snuba/
 
 # these are required all the way through, and removing them will cause bad things
 RUN set -ex; \
@@ -88,11 +82,12 @@ RUN set -ex; \
     /pypy/bin/pypy get-pip.py; \
     rm -rf get-pip.py; \
     \
-    cd /usr/src/snuba; \
-    PATH=/pypy/bin:$PATH make install-python-dependencies; \
-    /pypy/bin/snuba --help; \
-    \
     apt-get purge -y --auto-remove $buildDeps
+
+COPY snuba ./snuba/
+COPY setup.py Makefile README.md MANIFEST.in ./
+
+RUN chown -R snuba:snuba /usr/src/snuba/
 
 RUN set -ex; \
     \
@@ -110,11 +105,13 @@ RUN set -ex; \
     \
     make install-python-dependencies; \
     snuba --help; \
+    PATH=/pypy/bin:$PATH make install-python-dependencies; \
+    /pypy/bin/snuba --help; \
     \
+    rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
 ENV CLICKHOUSE_SERVER clickhouse-server:9000
-ENV CLICKHOUSE_TABLE sentry
 ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
