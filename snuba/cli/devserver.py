@@ -26,7 +26,7 @@ def devserver(bootstrap, workers):
             'uwsgi', '--master', '--manage-script-name',
             '--wsgi-file', 'snuba/api.py',
             '--http', '0.0.0.0:1218',
-            '--http-keepalive', '--need-app',
+            '--http-keepalive', '--need-app', '--die-on-term',
         ]),
     ]
 
