@@ -1,18 +1,120 @@
 import calendar
+from datadog import statsd
 from datetime import datetime, timedelta
 from mock import patch
+import pytest
 import simplejson as json
 import time
-from datadog import statsd
+import six
 from six.moves import range
 
 from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
 
-from snuba import processor
 from snuba.consumer import ConsumerWorker
+from snuba.processor import InvalidMessage, Processor
 
 
 class TestConsumer(BaseTest):
+    def setup_method(self, test_method):
+        super(TestConsumer, self).setup_method(test_method)
+
+        self.test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), 'topic')
+
+    def test_simple_version_0(self):
+        action, processed = self.dataset.PROCESSOR.validate_message((0, 'insert', self.event))
+
+        assert action == Processor.INSERT
+        for field in ('event_id', 'project_id', 'message', 'platform'):
+            assert processed[field] == self.event[field]
+
+    def test_simple_version_1(self):
+        assert (self.dataset.PROCESSOR.validate_message((0, 'insert', self.event)) ==
+                self.dataset.PROCESSOR.validate_message((1, 'insert', self.event, {})))
+
+    def test_invalid_type_version_0(self):
+        with pytest.raises(InvalidMessage):
+            self.dataset.PROCESSOR.validate_message((0, 'invalid', self.event))
+
+    def test_invalid_version(self):
+        with pytest.raises(InvalidMessage):
+            self.dataset.PROCESSOR.validate_message((2 ** 32 - 1, 'insert', self.event))
+
+    def test_invalid_format(self):
+        with pytest.raises(InvalidMessage):
+            self.dataset.PROCESSOR.validate_message((-1, 'insert', self.event))
+
+    def test_v1_invalid_actions(self):
+        # These actions were previously ignored as we had a brief
+        # period when we sent them in actual messages but didn't mean to.
+        # Now that we know we will never see them again, they should error.
+        with pytest.raises(InvalidMessage):
+            assert self.dataset.PROCESSOR.validate_message((1, 'delete_groups', {})) is None
+
+        with pytest.raises(InvalidMessage):
+            assert self.dataset.PROCESSOR.validate_message((1, 'merge', {})) is None
+
+        with pytest.raises(InvalidMessage):
+            assert self.dataset.PROCESSOR.validate_message((1, 'unmerge', {})) is None
+
+    def test_v2_invalid_type(self):
+        with pytest.raises(InvalidMessage):
+            self.dataset.PROCESSOR.validate_message((2, '__invalid__', {}))
+
+    def test_v2_start_delete_groups(self):
+        project_id = 1
+        message = (2, 'start_delete_groups', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_end_delete_groups(self):
+        project_id = 1
+        message = (2, 'end_delete_groups', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_start_merge(self):
+        project_id = 1
+        message = (2, 'start_merge', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_end_merge(self):
+        project_id = 1
+        message = (2, 'end_merge', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_start_unmerge(self):
+        project_id = 1
+        message = (2, 'start_unmerge', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_end_unmerge(self):
+        project_id = 1
+        message = (2, 'end_unmerge', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_start_delete_tag(self):
+        project_id = 1
+        message = (2, 'start_delete_tag', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_v2_end_delete_tag(self):
+        project_id = 1
+        message = (2, 'end_delete_tag', {'project_id': project_id})
+        assert self.dataset.PROCESSOR.validate_message(message) == \
+            (Processor.REPLACE, message)
+
+    def test_simple(self):
+        _, processed = self.dataset.PROCESSOR.validate_message((2, 'insert', self.event))
+
+
+        for field in ('event_id', 'project_id', 'message', 'platform'):
+            assert processed[field] == self.event[field]
+
     def test_batch_size(self):
         consumer = FakeBatchingKafkaConsumer(
             'topic',
@@ -100,17 +202,15 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
-        batch = [test_worker.process_message(FakeMessage())]
-        test_worker.flush_batch(batch)
+        batch = [self.test_worker.process_message(FakeMessage())]
+        self.test_worker.flush_batch(batch)
 
         assert self.clickhouse.execute(
-            "SELECT project_id, event_id, offset, partition FROM %s" % self.table
+            "SELECT project_id, event_id, offset, partition FROM %s" % self.dataset.SCHEMA.QUERY_TABLE
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
-    def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
 
+    def test_skip_too_old(self):
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
         old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -122,20 +222,26 @@ class TestConsumer(BaseTest):
             def value(self):
                 return json.dumps((0, 'insert', event))
 
-        assert test_worker.process_message(FakeMessage()) is None
+            def offset(self):
+                return 123
+
+            def partition(self):
+                return 456
+
+        assert self.test_worker.process_message(FakeMessage()) is None
 
     def test_produce_replacement_messages(self):
         topic = 'topic'
-        producer = FakeKafkaProducer()
-        test_worker = ConsumerWorker(self.clickhouse, self.table, producer, topic)
 
-        test_worker.flush_batch([
-            (processor.REPLACE, ('1', {'project_id': 1})),
-            (processor.REPLACE, ('2', {'project_id': 2})),
+        self.test_worker.flush_batch([
+            (Processor.REPLACE, (2, 'start_merge', {'project_id': 1})),
+            (Processor.REPLACE, (2, 'start_merge', {'project_id': 2})),
         ])
 
-        assert [(m._topic, m._key, m._value) for m in producer.messages] == \
-            [('topic', b'1', b'{"project_id": 1}'), ('topic', b'2', b'{"project_id": 2}')]
+        assert [(m._topic, m._key, m._value) for m in self.test_worker.producer.messages] == \
+            [
+                ('topic', b'1', b'[2, "start_merge", {"project_id": 1}]'),
+                ('topic', b'2', b'[2, "start_merge", {"project_id": 2}]')]
 
     def test_dead_letter_topic(self):
         class FailingFakeWorker(FakeWorker):

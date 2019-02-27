@@ -4,21 +4,28 @@ import six
 
 from batching_kafka_consumer import AbstractBatchWorker
 
-from . import processor
-from .writer import row_from_processed_event, write_rows
+from .writer import write_rows
+from .processor import Processor
 
 
 logger = logging.getLogger('snuba.consumer')
 
 
-class InvalidActionType(Exception):
-    pass
-
-
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
+    """
+    ConsumerWorker processes the raw stream of events coming
+    from Kafka, validates that they have the correct format
+    and does one of 2 things:
+
+        - If they are INSERTs, creates insertable rows from them
+          and batches and inserts those rows to clickhouse.
+        - If they are REPLACEs, forwards them to the replacements
+          Kafka topic, so that the Replacements consumer can deal
+          with them.
+    """
+    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+        self.dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
@@ -26,23 +33,27 @@ class ConsumerWorker(AbstractBatchWorker):
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = processor.process_message(value)
-        if processed is None:
+        validated = self.dataset.PROCESSOR.validate_message(value)
+        if validated is None:
             return None
 
-        action_type, processed_message = processed
+        action_type, data = validated
 
-        if action_type == processor.INSERT:
-            processed_message['offset'] = message.offset()
-            processed_message['partition'] = message.partition()
+        if action_type == Processor.INSERT:
+            # Add these things to the message that we only know about once
+            # we've consumed it.
+            data.update({
+                'offset': message.offset(),
+                'partition': message.partition()
+            })
+            processed = self.dataset.PROCESSOR.process_insert(data)
+            if processed is None:
+                return None
 
-            result = row_from_processed_event(processed_message)
-        elif action_type == processor.REPLACE:
-            result = processed_message
-        else:
-            raise InvalidActionType("Invalid action type: {}".format(action_type))
+        elif action_type == Processor.REPLACE:
+            processed = data
 
-        return (action_type, result)
+        return (action_type, processed)
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -56,26 +67,23 @@ class ConsumerWorker(AbstractBatchWorker):
         replacements = []
 
         for action_type, data in batch:
-            if action_type == processor.INSERT:
+            if action_type == Processor.INSERT:
                 inserts.append(data)
-            elif action_type == processor.REPLACE:
+            elif action_type == Processor.REPLACE:
                 replacements.append(data)
 
         if inserts:
-            write_rows(
-                self.clickhouse,
-                self.dist_table_name,
-                inserts
-            )
+            write_rows(self.clickhouse, self.dataset, inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))
 
         if replacements:
-            for key, replacement in replacements:
+            key_func = self.dataset.PROCESSOR.key_function
+            for replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic,
-                    key=six.text_type(key).encode('utf-8'),
+                    key=key_func(replacement),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
                 )

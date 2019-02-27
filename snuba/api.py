@@ -133,8 +133,6 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
-    ensure_table_exists()
-
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
@@ -154,10 +152,15 @@ def query(validated_body=None, timer=None):
 @split_query
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
+
+    name = body.get('dataset', settings.DEFAULT_DATASET_TYPE)
+    dataset = settings.get_dataset(name)
+    ensure_table_exists(dataset)
+    table = dataset.SCHEMA.QUERY_TABLE
+
     turbo = body.get('turbo', False)
-    max_days, table, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
+    max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
         ('max_days', None),
-        ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
         # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
@@ -176,8 +179,9 @@ def parse_and_run_query(validated_body, timer):
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('deleted', '=', 0),
     ])
+    where_conditions.extend(dataset.default_conditions(body))
+
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
@@ -188,13 +192,13 @@ def parse_and_run_query(validated_body, timer):
     having_conditions = body.get('having', [])
 
     aggregate_exprs = [
-        util.column_expr(col, body, alias, agg)
+        util.column_expr(dataset, col, body, alias, agg)
         for (agg, col, alias) in body['aggregations']
     ]
     groupby = util.to_list(body['groupby'])
-    group_exprs = [util.column_expr(gb, body) for gb in groupby]
+    group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(util.tuplify(colname), body)
+    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body)
                      for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
@@ -234,7 +238,7 @@ def parse_and_run_query(validated_body, timer):
     where_clause = ''
     if where_conditions:
         where_conditions = util.tuplify(where_conditions)
-        where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
+        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -257,14 +261,14 @@ def parse_and_run_query(validated_body, timer):
 
     prewhere_clause = ''
     if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(prewhere_conditions, body))
+        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
 
     having_clause = ''
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.conditions_expr(having_conditions, body))
+        having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
 
-    group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
+    group_clause = ', '.join(util.column_expr(dataset, gb, body) for gb in groupby)
     if group_clause:
         if body.get('totals', False):
             group_clause = 'GROUP BY ({}) WITH TOTALS'.format(group_clause)
@@ -273,7 +277,7 @@ def parse_and_run_query(validated_body, timer):
 
     order_clause = ''
     if body.get('orderby'):
-        orderby = [util.column_expr(util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
+        orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
         orderby = [u'{} {}'.format(
             ob.lstrip('-'),
             'DESC' if ob.startswith('-') else 'ASC'
@@ -344,55 +348,45 @@ def sdk_distribution(validated_body, timer):
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
-    assert settings.CLICKHOUSE_TABLE in ('dev', 'test')
 
-    _ensured = False
+    _ensured = {}
 
-    def ensure_table_exists(force=False):
+    def ensure_table_exists(dataset, force=False, drop=False):
         global _ensured
 
-        if not force and _ensured:
+        if not force and _ensured.get(dataset, False):
             return
 
-        from snuba.clickhouse import get_table_definition, get_test_engine
+        # only run table creation statements on non-prod datasets
+        if not dataset.PROD:
+            if drop:
+                clickhouse_rw.execute(dataset.SCHEMA.get_local_table_drop())
+            clickhouse_rw.execute(dataset.SCHEMA.get_local_table_definition())
+            # TODO this is awkward, table creating above returns a
+            # statement to be executed here, but migrate takes a clickhouse
+            # connection to execute statements on
+            dataset.SCHEMA.migrate(clickhouse_rw)
 
-        clickhouse_rw.execute(
-            get_table_definition(
-                name=settings.CLICKHOUSE_TABLE,
-                engine=get_test_engine(),
-            )
-        )
-
-        if settings.CLICKHOUSE_TABLE == 'dev':
-            from snuba import migrate
-            migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
-
-        _ensured = True
+        _ensured[dataset] = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import process_message
-        from snuba.writer import row_from_processed_event, write_rows
+        from snuba.writer import write_rows
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset)
 
-        ensure_table_exists()
         body = json.loads(request.data)
-
-        rows = []
-        for event in body:
-            _, processed = process_message(event)
-            row = row_from_processed_event(processed)
-            rows.append(row)
-
-        write_rows(
-            clickhouse_rw,
-            table=settings.CLICKHOUSE_TABLE,
-            rows=rows
-        )
+        rows = [dataset.PROCESSOR.process_insert((2, 'insert', event)) for event in body]
+        write_rows(clickhouse_rw, dataset, rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
     def eventstream():
-        ensure_table_exists()
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset)
+
         record = json.loads(request.data)
 
         version = record[0]
@@ -417,10 +411,10 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+            worker = ReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -431,13 +425,14 @@ if application.debug or application.testing:
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
-        ensure_table_exists(force=True)
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset, force=True, drop=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/error')
     def error():
         1 / 0
 else:
-    def ensure_table_exists():
+    def ensure_table_exists(*args, **kwargs):
         pass

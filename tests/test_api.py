@@ -12,7 +12,7 @@ import six
 import time
 import uuid
 
-from snuba import processor, settings, state
+from snuba import settings, state
 
 from base import BaseTest
 
@@ -59,7 +59,7 @@ class TestApi(BaseTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(processor.process_insert({
+                    events.append({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
@@ -97,14 +97,14 @@ class TestApi(BaseTest):
                                 ]
                             }
                         }
-                    }))
-        self.write_processed_events(events)
+                    })
+        self.write_raw_events(events)
 
     def test_count(self):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        res = self.clickhouse.execute("SELECT count() FROM %s" % self.table)
+        res = self.clickhouse.execute("SELECT count() FROM %s" % self.dataset.SCHEMA.QUERY_TABLE)
         assert res[0][0] == 330
 
         rollup_mins = 60

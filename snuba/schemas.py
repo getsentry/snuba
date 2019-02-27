@@ -3,6 +3,8 @@ import jsonschema
 import copy
 import six
 
+from snuba import settings
+
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
 SDK_STATS_SCHEMA = {
@@ -37,6 +39,9 @@ SDK_STATS_SCHEMA = {
 QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
+        'dataset': {
+            'enum': list(settings.DATASETS.keys()),
+        },
         # A condition is a 3-tuple of (column, operator, literal)
         # `conditions` is an array of conditions, or an array of arrays of conditions.
         # Conditions at the the top level are ANDed together.
@@ -294,7 +299,7 @@ QUERY_SCHEMA = {
 
 
 def validate(value, schema, set_defaults=True):
-    orig = jsonschema.Draft4Validator.VALIDATORS['properties']
+    orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
         for property, subschema in six.iteritems(properties):
@@ -310,7 +315,7 @@ def validate(value, schema, set_defaults=True):
     validator_cls = jsonschema.validators.extend(
         jsonschema.Draft4Validator,
         {'properties': validate_and_default}
-    ) if set_defaults else jsonschema.Draft4Validator
+    ) if set_defaults else jsonschema.Draft6Validator
 
     validator_cls(
         schema,

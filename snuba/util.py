@@ -19,17 +19,14 @@ import _strptime  # fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse import escape_col, ALL_COLUMNS, PROMOTED_COLS, TAG_COLUMN_MAP, COLUMN_TAG_MAP
+from snuba.clickhouse import escape_col
 
 
 logger = logging.getLogger('snuba.util')
 
 
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
-
 # example partition name: "('2018-03-13 00:00:00', 90)"
-PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
+PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)") # TODO this is specific to events dataset
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
 DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
@@ -45,22 +42,11 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def string_col(col):
-    col_type = ALL_COLUMNS.get(col, None)
-    col_type = str(col_type) if col_type else None
-
-    if col_type and 'String' in col_type and 'FixedString' not in col_type:
-        return escape_col(col)
-    else:
-        return 'toString({})'.format(escape_col(col))
-
-
 def parse_datetime(value, alignment=1):
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
-def time_expr(alias, granularity):
-    column = settings.TIME_GROUP_COLUMNS[alias]
+def time_expr(column, granularity):
     template = {
         3600: 'toStartOfHour({column})',
         60: 'toStartOfMinute({column})',
@@ -69,7 +55,7 @@ def time_expr(alias, granularity):
 
     return template.format(column=column, granularity=granularity)
 
-def column_expr(column_name, body, alias=None, aggregate=None):
+def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
     a 2-tuple of:
@@ -82,23 +68,13 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     column_name = column_name or ''
 
     if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
-        return complex_column_expr(column_name, body)
+        return complex_column_expr(dataset, column_name, body)
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
-    elif column_name in settings.TIME_GROUP_COLUMNS:
-        expr = time_expr(column_name, body['granularity'])
-    elif NESTED_COL_EXPR_RE.match(column_name):
-        expr = tag_expr(column_name)
-    elif column_name in ['tags_key', 'tags_value']:
-        expr = tags_expr(column_name, body)
-    elif column_name == 'issue':
-        expr = 'group_id'
-    elif column_name == 'message':
-        # Because of the rename from message->search_message without backfill,
-        # records will have one or the other of these fields.
-        # TODO this can be removed once all data has search_message filled in.
-        expr = 'coalesce(search_message, message)'
     else:
+        expr = dataset.column_expr(column_name, body)
+
+    if expr is None:
         expr = escape_col(column_name)
 
     if aggregate:
@@ -114,7 +90,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     return alias_expr(expr, alias, body)
 
 
-def complex_column_expr(expr, body, depth=0):
+def complex_column_expr(dataset, expr, body, depth=0):
     # TODO instead of the mutual recursion between column_expr and complex_column_expr
     # we should probably encapsulate all this logic in a single recursive column_expr
     if depth == 0:
@@ -147,12 +123,12 @@ def complex_column_expr(expr, body, depth=0):
     first = True
     for subexpr in expr:
         if isinstance(subexpr, tuple):
-            ret += '(' + complex_column_expr(subexpr, body, depth + 1) + ')'
+            ret += '(' + complex_column_expr(dataset, subexpr, body, depth + 1) + ')'
         else:
             if not first:
                 ret += ', '
             if isinstance(subexpr, six.string_types):
-                ret += column_expr(subexpr, body)
+                ret += column_expr(dataset, subexpr, body)
             else:
                 ret += escape_literal(subexpr)
         first = False
@@ -183,74 +159,6 @@ def alias_expr(expr, alias, body):
     else:
         alias_cache.append(alias)
         return u'({} AS {})'.format(expr, alias)
-
-
-def tag_expr(column_name):
-    """
-    Return an expression for the value of a single named tag.
-
-    For tags/contexts, we expand the expression depending on whether the tag is
-    "promoted" to a top level column, or whether we have to look in the tags map.
-    """
-    col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
-
-    # For promoted tags, return the column name.
-    if col in PROMOTED_COLS:
-        actual_tag = TAG_COLUMN_MAP[col].get(tag, tag)
-        if actual_tag in PROMOTED_COLS[col]:
-            return string_col(actual_tag)
-
-    # For the rest, return an expression that looks it up in the nested tags.
-    return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
-        'col': col,
-        'tag': escape_literal(tag)
-    })
-
-
-def tags_expr(column_name, body):
-    """
-    Return an expression that array-joins on tags to produce an output with one
-    row per tag.
-    """
-    assert column_name in ['tags_key', 'tags_value']
-    col, k_or_v = column_name.split('_', 1)
-    nested_tags_only = state.get_config('nested_tags_only', 1)
-
-    # Generate parallel lists of keys and values to arrayJoin on
-    if nested_tags_only:
-        key_list = '{}.key'.format(col)
-        val_list = '{}.value'.format(col)
-    else:
-        promoted = PROMOTED_COLS[col]
-        col_map = COLUMN_TAG_MAP[col]
-        key_list = u'arrayConcat([{}], {}.key)'.format(
-            u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-            col
-        )
-        val_list = u'arrayConcat([{}], {}.value)'.format(
-            ', '.join(string_col(p) for p in promoted),
-            col
-        )
-
-    cols_used = all_referenced_columns(body) & set(['tags_key', 'tags_value'])
-    if len(cols_used) == 2:
-        # If we use both tags_key and tags_value in this query, arrayjoin
-        # on (key, value) tag tuples.
-        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
-            key_list,
-            val_list
-        )
-
-        # put the all_tags expression in the alias cache so we can use the alias
-        # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
-        # expanding the whole tags expression again.
-        expr = alias_expr(expr, 'all_tags', body)
-        return u'({})[{}]'.format(expr, 1 if k_or_v == 'key' else 2)
-    else:
-        # If we are only ever going to use one of tags_key or tags_value, don't
-        # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
-        # to re-use as we won't need it.
-        return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
 
 def is_condition(cond_or_list):
@@ -312,7 +220,7 @@ def tuplify(nested):
     return nested
 
 
-def conditions_expr(conditions, body, depth=0):
+def conditions_expr(dataset, conditions, body, depth=0):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
     query.  The expression is constructed by ANDing groups of OR expressions.
@@ -324,54 +232,25 @@ def conditions_expr(conditions, body, depth=0):
 
     if depth == 0:
         # dedupe conditions at top level, but keep them in order
-        sub = OrderedDict((conditions_expr(cond, body, depth + 1), None) for cond in conditions)
+        sub = OrderedDict((conditions_expr(dataset, cond, body, depth + 1), None) for cond in conditions)
         return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
-        lhs, op, lit = conditions
+        # It's a single (column, operator, literal) tuple
+        condition = conditions
 
-        if (
-            lhs in ('received', 'timestamp') and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
-
-        # facilitate deduping IN conditions by sorting them.
-        if op in ('IN', 'NOT IN') and isinstance(lit, tuple):
-            lit = tuple(sorted(lit))
-
-        # If the LHS is a simple column name that refers to an array column
-        # (and we are not arrayJoining on that column, which would make it
-        # scalar again) and the RHS is a scalar value, we assume that the user
-        # actually means to check if any (or all) items in the array match the
-        # predicate, so we return an `any(x == value for x in array_column)`
-        # type expression. We assume that operators looking for a specific value
-        # (IN, =, LIKE) are looking for rows where any array value matches, and
-        # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
-        # where all elements match (eg. all NOT LIKE 'foo').
-        if (
-            isinstance(lhs, six.string_types) and
-            lhs in ALL_COLUMNS and
-            type(ALL_COLUMNS[lhs].type) == clickhouse.Array and
-            ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
-            not isinstance(lit, (list, tuple))
-            ):
-            any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
-            return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
-                any_or_all,
-                op,
-                escape_literal(lit),
-                column_expr(lhs, body)
-            )
+        custom = dataset.condition_expr(condition, body)
+        if custom is not None:
+            return custom
         else:
+            lhs, op, lit = condition
             return u'{} {} {}'.format(
-                column_expr(lhs, body),
+                column_expr(dataset, lhs, body),
                 op,
                 escape_literal(lit)
             )
 
     elif depth == 1:
-        sub = (conditions_expr(cond, body, depth + 1) for cond in conditions)
+        sub = (conditions_expr(dataset, cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = u' OR '.join(sub)
         return u'({})'.format(res) if len(sub) > 1 else res

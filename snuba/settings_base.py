@@ -1,4 +1,5 @@
 import os
+import six
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
@@ -7,10 +8,23 @@ DEBUG = True
 
 PORT = 1218
 
+DEFAULT_DATASET_TYPE = 'events'
+DATASETS = {
+    'events': 'snuba.datasets.events.DevEventsDataSet',
+    # 'spans': 'snuba.datasets.spans.DevSpansDataSet',
+}
+def get_dataset(name):
+    assert name in DATASETS
+    dataset = DATASETS[name]
+    if isinstance(dataset, six.string_types):
+        path = dataset.split('.')
+        assert len(path) >= 2
+        mod = __import__('.'.join(path[:-1]), fromlist=path[-1:])
+        dataset = DATASETS[name] = getattr(mod, path[-1])()
+    return dataset
+
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
-CLICKHOUSE_CLUSTER = None
-CLICKHOUSE_TABLE = 'dev'
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
@@ -33,15 +47,6 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 # Sentry Options
 SENTRY_DSN = None
 
-# Snuba Options
-
-# Convenience columns that evaluate to a bucketed time, the
-# bucketing depends on the granularity parameter.
-TIME_GROUP_COLUMNS = {
-    'time': 'timestamp',
-    'rtime': 'received'
-}
-
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9093']
 DEFAULT_MAX_BATCH_SIZE = 50000
@@ -49,34 +54,9 @@ DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 20000
 DISCARD_OLD_EVENTS = True
-KAFKA_TOPICS = {
-    'raw-events': {
-        'topic': 'events',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'replacements': {
-        'topic': 'event-replacements',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'commit-log': {
-        'topic': 'snuba-commit-log',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-}
 
-# project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
-DEFAULT_SAMPLE_EXPR = 'cityHash64(toString(event_id))'
-DEFAULT_ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % DEFAULT_SAMPLE_EXPR
-DEFAULT_PARTITION_BY = '(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))'
-DEFAULT_VERSION_COLUMN = 'deleted'
-DEFAULT_SHARDING_KEY = 'cityHash64(toString(event_id))'
-DEFAULT_LOCAL_TABLE = 'sentry_local'
-DEFAULT_DIST_TABLE = 'sentry_dist'
+# TODO datasets should also define their own retention
 DEFAULT_RETENTION_DAYS = 90
-
 RETENTION_OVERRIDES = {}
 
 # the list of keys that will upgrade from a WHERE condition to a PREWHERE

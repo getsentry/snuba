@@ -8,10 +8,9 @@ from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 
 from snuba import settings
-from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
-from snuba.processor import process_message
 from snuba.writer import row_from_processed_event, write_rows
 
 
@@ -107,26 +106,28 @@ class BaseTest(object):
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
-        self.table = settings.CLICKHOUSE_TABLE
 
+        # These tests are currently coupled pretty hard to the events dataset,
+        # but eventually the base test should support multiple datasets.
+        self.dataset = settings.get_dataset('events')
         self.clickhouse = ClickhousePool()
 
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(
-            get_table_definition(
-                name=self.table,
-                engine=get_test_engine(),
-            )
-        )
-
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_drop())
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_definition())
         redis_client.flushdb()
 
     def teardown_method(self, test_method):
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_drop())
         redis_client.flushdb()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
+        """
+        Creates a "processed" event, ie a flat dictionary that can directly be
+        turned into a database row.
+        """
+        # TODO since this intermediate state is basically never seen by any code
+        # as the processor.process_insert() returns a row now, perhaps we don't need
+        # tests that rely on write_processed_events
         event = {
             'event_id': uuid.uuid4().hex,
             'project_id': 1,
@@ -138,8 +139,9 @@ class BaseTest(object):
         return event
 
     def wrap_raw_event(self, event):
-        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
-
+        """
+        Wrap a raw event like the Sentry codebase does before sending to Kafka.
+        """
         unique = "%s:%s" % (str(event['project']), event['id'])
         primary_hash = md5(unique.encode('utf-8')).hexdigest()
 
@@ -158,32 +160,18 @@ class BaseTest(object):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        out = []
+        rows = []
         for event in events:
             if 'primary_hash' not in event:
                 event = self.wrap_raw_event(event)
-            _, processed = process_message(event)
-            out.append(processed)
 
-        return self.write_processed_events(out)
+            rows.append(self.dataset.PROCESSOR.process_insert(event))
+
+        write_rows(self.clickhouse, self.dataset, rows, types_check=True)
 
     def write_processed_events(self, events):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        rows = []
-        for event in events:
-            rows.append(row_from_processed_event(event))
-
-        return self.write_rows(rows)
-
-    def write_rows(self, rows):
-        if not isinstance(rows, (list, tuple)):
-            rows = [rows]
-
-        write_rows(
-            self.clickhouse,
-            table=self.table,
-            rows=rows,
-            types_check=True
-        )
+        rows = [row_from_processed_event(self.dataset.SCHEMA, event) for event in events]
+        write_rows(self.clickhouse, self.dataset, rows, types_check=True)

@@ -36,7 +36,19 @@ def bootstrap(bootstrap_server, kafka, force):
                     raise
                 time.sleep(1)
 
-        topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
+        topics = []
+        for name in settings.DATASETS.keys():
+            dataset = settings.get_dataset(name)
+            topics.extend([
+                dataset.PROCESSOR.MESSAGE_TOPIC,
+                dataset.PROCESSOR.REPLACEMENTS_TOPIC,
+                dataset.PROCESSOR.COMMIT_LOG_TOPIC,
+            ])
+
+        topics = [NewTopic(name, {
+            'replication_factor': 1,
+            'num_partitions': 1,
+        }) for name in topics if name]
 
         for topic, future in client.create_topics(topics).items():
             try:
@@ -59,11 +71,11 @@ def bootstrap(bootstrap_server, kafka, force):
                 raise
             time.sleep(1)
 
+
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
-    ClickhousePool().execute(
-        get_table_definition(
-            settings.DEFAULT_LOCAL_TABLE,
-            get_test_engine(),
-        )
-    )
+
+    # For now just create the table for every dataset.
+    for name in settings.DATASETS.keys():
+        dataset = settings.get_dataset(name)
+        ClickhousePool().execute(dataset.SCHEMA.get_local_table_definition())

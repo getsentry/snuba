@@ -16,6 +16,7 @@ SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
 ESCAPE_COL_RE = re.compile(r"([`\\])")
 
+CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def escape_col(col):
     if not col:
@@ -375,245 +376,78 @@ class ColumnSet(object):
         return ', '.join(column.for_schema() for column in self.columns)
 
 
-METADATA_COLUMNS = ColumnSet([
-    # optional stream related data
-    ('offset', Nullable(UInt(64))),
-    ('partition', Nullable(UInt(16))),
-])
+class TableSchema(object):
+    """
+    Represents the full set of columns in a clickhouse table, with accessors
+    for getting the local and distributed table definitions.
+    """
 
-PROMOTED_TAG_COLUMNS = ColumnSet([
-    # These are the classic tags, they are saved in Snuba exactly as they
-    # appear in the event body.
-    ('level', Nullable(String())),
-    ('logger', Nullable(String())),
-    ('server_name', Nullable(String())),  # future name: device_id?
-    ('transaction', Nullable(String())),
-    ('environment', Nullable(String())),
-    ('sentry:release', Nullable(String())),
-    ('sentry:dist', Nullable(String())),
-    ('sentry:user', Nullable(String())),
-    ('site', Nullable(String())),
-    ('url', Nullable(String())),
-])
+    def __init__(self):
+        self.CLICKHOUSE_CLUSTER = None
+        self.DATABASE = None
+        self.LOCAL_TABLE = None
+        self.DIST_TABLE = None
+        self.QUERY_TABLE = None
+        self.CAN_DROP = False
 
-PROMOTED_CONTEXT_TAG_COLUMNS = ColumnSet([
-    # These are promoted tags that come in in `tags`, but are more closely
-    # related to contexts.  To avoid naming confusion with Clickhouse nested
-    # columns, they are stored in the database with s/./_/
-    # promoted tags
-    ('app_device', Nullable(String())),
-    ('device', Nullable(String())),
-    ('device_family', Nullable(String())),
-    ('runtime', Nullable(String())),
-    ('runtime_name', Nullable(String())),
-    ('browser', Nullable(String())),
-    ('browser_name', Nullable(String())),
-    ('os', Nullable(String())),
-    ('os_name', Nullable(String())),
-    ('os_rooted', Nullable(UInt(8))),
-])
+        self.SAMPLE_EXPR = None
+        self.ORDER_BY = None
+        self.PARTITION_BY = None
+        self.VERSION_COLUMN = None
+        self.SHARDING_KEY = None
+        self.RETENTION_DAYS = None
 
-PROMOTED_CONTEXT_COLUMNS = ColumnSet([
-    ('os_build', Nullable(String())),
-    ('os_kernel_version', Nullable(String())),
-    ('device_name', Nullable(String())),
-    ('device_brand', Nullable(String())),
-    ('device_locale', Nullable(String())),
-    ('device_uuid', Nullable(String())),
-    ('device_model_id', Nullable(String())),
-    ('device_arch', Nullable(String())),
-    ('device_battery_level', Nullable(Float(32))),
-    ('device_orientation', Nullable(String())),
-    ('device_simulator', Nullable(UInt(8))),
-    ('device_online', Nullable(UInt(8))),
-    ('device_charging', Nullable(UInt(8))),
-])
+        self.ALL_COLUMNS = ColumnSet([])
 
-REQUIRED_COLUMNS = ColumnSet([
-    ('event_id', FixedString(32)),
-    ('project_id', UInt(64)),
-    ('group_id', UInt(64)),
-    ('timestamp', DateTime()),
-    ('deleted', UInt(8)),
-    ('retention_days', UInt(16)),
-])
+    def get_local_engine(self):
+        return """
+            ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}', %(version_column)s)
+            PARTITION BY %(partition_by)s
+            ORDER BY %(order_by)s
+            SAMPLE BY %(sample_expr)s;""" % {
+            'name': self.LOCAL_TABLE,
+            'order_by': self.ORDER_BY,
+            'partition_by': self.PARTITION_BY,
+            'version_column': self.VERSION_COLUMN,
+            'sample_expr': self.SAMPLE_EXPR,
+        }
 
-ALL_COLUMNS = REQUIRED_COLUMNS + [
-    # required for non-deleted
-    ('platform', Nullable(String())),
-    ('message', Nullable(String())),
-    ('primary_hash', Nullable(FixedString(32))),
-    ('received', Nullable(DateTime())),
+    def get_distributed_engine(self):
+        return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
+            'cluster': self.CLICKHOUSE_CLUSTER,
+            'database': self.DATABASE,
+            'local_table': self.LOCAL_TABLE,
+            'sharding_key': self.SHARDING_KEY,
+        }
 
-    ('search_message', Nullable(String())),
-    ('title', Nullable(String())),
-    ('location', Nullable(String())),
+    def get_table_definition(self, name, engine):
+        return """
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self.ALL_COLUMNS.for_schema(),
+            'engine': engine,
+            'name': name,
+        }
 
-    # optional user
-    ('user_id', Nullable(String())),
-    ('username', Nullable(String())),
-    ('email', Nullable(String())),
-    ('ip_address', Nullable(String())),
-
-    # optional geo
-    ('geo_country_code', Nullable(String())),
-    ('geo_region', Nullable(String())),
-    ('geo_city', Nullable(String())),
-
-    ('sdk_name', Nullable(String())),
-    ('sdk_version', Nullable(String())),
-    ('type', Nullable(String())),
-    ('version', Nullable(String())),
-] + METADATA_COLUMNS \
-  + PROMOTED_CONTEXT_COLUMNS \
-  + PROMOTED_TAG_COLUMNS \
-  + PROMOTED_CONTEXT_TAG_COLUMNS \
-  + [
-    # other tags
-    ('tags', Nested([
-        ('key', String()),
-        ('value', String()),
-    ])),
-
-    # other context
-    ('contexts', Nested([
-        ('key', String()),
-        ('value', String()),
-    ])),
-
-    # interfaces
-
-    # http interface
-    ('http_method', Nullable(String())),
-    ('http_referer', Nullable(String())),
-
-    # exception interface
-    ('exception_stacks', Nested([
-        ('type', Nullable(String())),
-        ('value', Nullable(String())),
-        ('mechanism_type', Nullable(String())),
-        ('mechanism_handled', Nullable(UInt(8))),
-    ])),
-    ('exception_frames', Nested([
-        ('abs_path', Nullable(String())),
-        ('filename', Nullable(String())),
-        ('package', Nullable(String())),
-        ('module', Nullable(String())),
-        ('function', Nullable(String())),
-        ('in_app', Nullable(UInt(8))),
-        ('colno', Nullable(UInt(32))),
-        ('lineno', Nullable(UInt(32))),
-        ('stack_level', UInt(16)),
-    ])),
-
-    # These are columns we added later in the life of the (current) production
-    # database. They don't necessarily belong here in a logical/readability sense
-    # but they are here to match the order of columns in production becase
-    # `insert_distributed_sync` is very sensitive to column existence and ordering.
-    ('culprit', Nullable(String())),
-    ('sdk_integrations', Array(String())),
-    ('modules', Nested([
-        ('name', String()),
-        ('version', String()),
-    ])),
-]
-
-# The set of columns, and associated keys that have been promoted
-# to the top level table namespace.
-PROMOTED_COLS = {
-    'tags': frozenset(col.flattened for col in (PROMOTED_TAG_COLUMNS + PROMOTED_CONTEXT_TAG_COLUMNS)),
-    'contexts': frozenset(col.flattened for col in PROMOTED_CONTEXT_COLUMNS),
-}
-
-# For every applicable promoted column,  a map of translations from the column
-# name  we save in the database to the tag we receive in the query.
-COLUMN_TAG_MAP = {
-    'tags': {col.flattened: col.flattened.replace('_', '.') for col in PROMOTED_CONTEXT_TAG_COLUMNS},
-    'contexts': {},
-}
-
-# And a reverse map from the tags the client expects to the database columns
-TAG_COLUMN_MAP = {
-    col: dict(map(reversed, trans.items())) for col, trans in COLUMN_TAG_MAP.items()
-}
-
-# The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
-# and they can/will use a promoted column.
-PROMOTED_TAGS = {
-    col: [COLUMN_TAG_MAP[col].get(x, x) for x in PROMOTED_COLS[col]]
-    for col in PROMOTED_COLS
-}
-
-
-def get_table_definition(name, engine, columns=ALL_COLUMNS):
-    return """
-    CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-        'columns': columns.for_schema(),
-        'engine': engine,
-        'name': name,
-    }
-
-
-def get_test_engine(
-        order_by=settings.DEFAULT_ORDER_BY,
-        partition_by=settings.DEFAULT_PARTITION_BY,
-        version_column=settings.DEFAULT_VERSION_COLUMN,
-        sample_expr=settings.DEFAULT_SAMPLE_EXPR):
-    return """
-        ReplacingMergeTree(%(version_column)s)
-        PARTITION BY %(partition_by)s
-        ORDER BY %(order_by)s
-        SAMPLE BY %(sample_expr)s ;""" % {
-        'order_by': settings.DEFAULT_ORDER_BY,
-        'partition_by': settings.DEFAULT_PARTITION_BY,
-        'version_column': settings.DEFAULT_VERSION_COLUMN,
-        'sample_expr': settings.DEFAULT_SAMPLE_EXPR,
-    }
-
-
-def get_replicated_engine(
-        name,
-        order_by=settings.DEFAULT_ORDER_BY,
-        partition_by=settings.DEFAULT_PARTITION_BY,
-        version_column=settings.DEFAULT_VERSION_COLUMN,
-        sample_expr=settings.DEFAULT_SAMPLE_EXPR):
-    return """
-        ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}', %(version_column)s)
-        PARTITION BY %(partition_by)s
-        ORDER BY %(order_by)s
-        SAMPLE BY %(sample_expr)s;""" % {
-        'name': name,
-        'order_by': order_by,
-        'partition_by': partition_by,
-        'version_column': version_column,
-        'sample_expr': sample_expr,
-    }
-
-
-def get_distributed_engine(cluster, database, local_table,
-                           sharding_key=settings.DEFAULT_SHARDING_KEY):
-    return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
-        'cluster': cluster,
-        'database': database,
-        'local_table': local_table,
-        'sharding_key': sharding_key,
-    }
-
-
-def get_local_table_definition():
-    return get_table_definition(
-        settings.DEFAULT_LOCAL_TABLE, get_replicated_engine(name=settings.DEFAULT_LOCAL_TABLE)
-    )
-
-
-def get_dist_table_definition():
-    assert settings.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
-
-    return get_table_definition(
-        settings.DEFAULT_DIST_TABLE,
-        get_distributed_engine(
-            cluster=settings.CLICKHOUSE_CLUSTER,
-            database='default',
-            local_table=settings.DEFAULT_LOCAL_TABLE,
+    def get_local_table_definition(self):
+        return self.get_table_definition(
+            self.LOCAL_TABLE,
+            self.get_local_engine()
         )
-    )
+
+    # TODO what calls this?
+    def get_dist_table_definition(self):
+        assert self.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
+
+        return self.get_table_definition(
+            self.DIST_TABLE,
+            self.get_distributed_engine()
+        )
+
+    def get_local_table_drop(self):
+        if not self.CAN_DROP:
+            raise RuntimeError("Can't drop this")
+
+        return "DROP TABLE IF EXISTS %s" % self.LOCAL_TABLE
+
+    def migrate(self, clickhouse):
+        pass
