@@ -2,7 +2,23 @@
 
 A service providing fast event searching, filtering and aggregation on arbitrary fields.
 
-## Requirements
+## Sentry + Snuba
+
+Add the following line to `~/.sentry/sentry.conf.py`:
+
+    SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
+
+Run:
+
+    sentry devservices up
+
+Access raw clickhouse client (similar to psql):
+
+    docker exec -it sentry_clickhouse clickhouse-client
+
+Data is written into the table `dev`: `select count() from dev;`
+
+## Requirements (Only required if you are developing against Snuba)
 
 Snuba assumes:
 
@@ -10,70 +26,13 @@ Snuba assumes:
 2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
    `6379`
 
-## Install / Run
+## Install / Run (Only required if you are developing against Snuba)
 
     mkvirtualenv snuba
     workon snuba
 
     # Run API server
     snuba api
-
-## Sentry + Snuba
-
-Add the following line to `sentry.conf.py`:
-
-    SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
-
-Create a docker volume for Clickhouse:
-
-    `docker volume create clickhouse`
-
-Run the clickhouse server:
-
-    docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 --name=clickhouse -v clickhouse:/var/lib/clickhouse --ulimit nofile=262144:262144 yandex/clickhouse-server:18.14.9
-
-This can be managed with `docker stop clickhouse` and `docker start clickhouse` to stop/start the service.
-
-Prepare Snuba environment
-
-    git clone git@github.com:getsentry/snuba.git
-    mkvirtualenv snuba
-    pip install -e .
-
-Run Snuba
-
-    snuba api
-
-Access raw clickhouse client (similar to psql):
-
-    docker run --rm --net=host -it yandex/clickhouse-client
-
-Data is written into the table `dev`: `select count() from dev;`
-
-
-### Using docker-compose
-
-Snuba and its related services can be run via `docker-compose` which is a good
-option if you need a quick way to get snuba up and running to passively run it
-or to run sentry's test suites.
-
-To start the containers run
-
-    docker-compose up
-
-You can background the containers by adding the `-d` option to `up`. Your
-checkout will be mounted into the container allowing you to interactively work
-with any changes you make.
-
-You will need to rebuild the `snuba-api` image if you change any application
-dependencies.
-
-To run sentry's test suite against snuba, uncomment `SNUBA_SETTINGS: test` in
-the `docker-compose.yml` and restart your `snuba-api` container with:
-
-    docker-compose kill snuba-api
-    docker-compose rm snuba-api
-    docker-compose up snuba-api
 
 ## API
 
@@ -94,13 +53,9 @@ Settings are found in `settings.py`
 
 ## Tests
 
-    docker run -d -p 9000:9000 -p 9009:9009 -p 8123:8123 \
-      --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server
-
     pip install -e .
 
-    # If you're using docker-machine get the VM's IP
-    export CLICKHOUSE_SERVER=$(docker-machine ip):9000
+    export CLICKHOUSE_SERVER=127.0.0.1:9000
 
     make test
 
