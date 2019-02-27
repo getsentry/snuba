@@ -1,14 +1,5 @@
 import os
-from collections import defaultdict
-
-
-class dynamicdict(defaultdict):
-    def __missing__(self, key):
-        if self.default_factory:
-            self.__setitem__(key, self.default_factory(key))
-            return self[key]
-        else:
-            return super(dynamicdict, self).__missing__(key)
+import six
 
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
@@ -18,10 +9,21 @@ DEBUG = True
 
 PORT = 1218
 
+DEFAULT_DATASET_TYPE = 'events'
+DATASETS = {
+    'events': 'snuba.datasets.DevEventsDataSet',
+    # 'spans': 'snuba.datasets.DevSpansDataSet',
+}
+def get_dataset(name):
+    assert name in DATASETS
+    dataset = DATASETS[name]
+    if isinstance(dataset, six.string_types):
+        cls = __import__(dataset)
+        dataet = DATASETS[name] = cls()
+    return dataset
+
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
-CLICKHOUSE_CLUSTER = None
-CLICKHOUSE_TABLE = 'dev'
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
@@ -43,18 +45,6 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 
 # Sentry Options
 SENTRY_DSN = None
-
-# Snuba Options
-TIME_GROUPS = dynamicdict(
-    lambda sec: 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(sec),
-    {
-        3600: 'toStartOfHour(timestamp)',
-        60: 'toStartOfMinute(timestamp)',
-        86400: 'toDate(timestamp)',
-    }
-)
-
-TIME_GROUP_COLUMN = 'time'
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9093']
@@ -81,6 +71,7 @@ KAFKA_TOPICS = {
     },
 }
 
+# TODO These all need to go as they have bee incorporated into datasets
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_SAMPLE_EXPR = 'cityHash64(toString(event_id))'
 DEFAULT_ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % DEFAULT_SAMPLE_EXPR

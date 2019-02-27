@@ -13,7 +13,7 @@ from snuba import settings
               help="If true, only print which partitions would be dropped.")
 @click.option('--database', default='default',
               help='Name of the database to target.')
-@click.option('--table', default=settings.DEFAULT_LOCAL_TABLE,
+@click.option('--table',
               help='Name of the table to target.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 def cleanup(clickhouse_server, dry_run, database, table, log_level):
@@ -22,6 +22,9 @@ def cleanup(clickhouse_server, dry_run, database, table, log_level):
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
+    if not table:
+        logger.error("Must provide a table name.")
+        sys.exit(1)
     if not clickhouse_server:
         logger.error("Must provide at least one Clickhouse server.")
         sys.exit(1)
