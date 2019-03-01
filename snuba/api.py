@@ -387,6 +387,10 @@ if application.debug or application.testing:
 
     @application.route('/tests/eventstream', methods=['POST'])
     def eventstream():
+
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+
         record = json.loads(request.data)
 
         version = record[0]
@@ -413,8 +417,10 @@ if application.debug or application.testing:
             from snuba.consumer import ConsumerWorker
             worker = ConsumerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE, producer=None, replacements_topic=None)
         else:
-            from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+            # TODO having the dataset speciify its own replacer is probably the better design here
+            # So that this code doesn't have to know about the EventsReplacerWorker instance
+            from snuba.replacer import EventsReplacerWorker
+            worker = EventsReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)
         if processed is not None:

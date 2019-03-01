@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, TAG_COLUMN_MAP, escape_col
+from snuba.clickhouse import escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -17,15 +17,15 @@ from snuba.util import escape_string
 logger = logging.getLogger('snuba.replacer')
 
 
+# TODO should this be in clickhouse.py
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-REQUIRED_COLUMN_NAMES = [col.escaped for col in REQUIRED_COLUMNS]
-ALL_COLUMN_NAMES = [col.escaped for col in ALL_COLUMNS]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
 
+# TODO the whole needs_final calculation here is also specific to the events dataset
+# specifically the reliance on a list of groups.
 def get_project_exclude_groups_key(project_id):
     return "project_exclude_groups:%s" % project_id
 
@@ -89,11 +89,24 @@ def get_projects_query_flags(project_ids):
     return (needs_final, exclude_groups)
 
 
-class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, metrics=None):
+class EventsReplacerWorker(AbstractBatchWorker):
+    """
+    A consumer/worker that processes replacements for the events dataset.
+
+    A replacement is a message in kafka describing an action that mutates snuba
+    data. We process this action message into replacement event row(s) with new
+    values for some columns. These are inserted into Clickhouse and will replace
+    the existing rows with the same primary key upon the next OPTIMIZE.
+    """
+    def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+        self.dataset = dataset
         self.metrics = metrics
+
+        self.REQUIRED_COLUMN_NAMES = [col.escaped for col in self.dataset.SCHEMA.REQUIRED_COLUMNS]
+        self.ALL_COLUMN_NAMES = [col.escaped for col in self.dataset.SCHEMA.ALL_COLUMNS]
+
+        self.SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
 
     def process_message(self, message):
         message = json.loads(message.value())
@@ -105,13 +118,13 @@ class ReplacerWorker(AbstractBatchWorker):
             if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
                 return None
             elif type_ == 'end_delete_groups':
-                processed = process_delete_groups(event)
+                processed = self.process_delete_groups(event)
             elif type_ == 'end_merge':
-                processed = process_merge(event)
+                processed = self.process_merge(event)
             elif type_ == 'end_unmerge':
-                processed = process_unmerge(event)
+                processed = self.process_unmerge(event)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event)
+                processed = self.process_delete_tag(event)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -121,7 +134,7 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dist_table_name})
+            query_args.update({'dist_table_name': self.dataset.SCHEMA.DIST_TABLE})
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:
                 continue
@@ -146,197 +159,193 @@ class ReplacerWorker(AbstractBatchWorker):
     def shutdown(self):
         pass
 
-
-def process_delete_groups(message):
-    group_ids = message['group_ids']
-    if not group_ids:
-        return None
-
-    assert all(isinstance(gid, six.integer_types) for gid in group_ids)
-    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMN_NAMES)
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id IN (%(group_ids)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = """\
-        SELECT count()
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(required_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    query_args = {
-        'required_columns': ', '.join(REQUIRED_COLUMN_NAMES),
-        'select_columns': ', '.join(select_columns),
-        'project_id': message['project_id'],
-        'group_ids': ", ".join(str(gid) for gid in group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    }
-
-    query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
-
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
-
-
-SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
-
-
-def process_merge(message):
-    # HACK: We were sending duplicates of the `end_merge` message from Sentry,
-    # this is only for performance of the backlog.
-    txn = message.get('transaction_id')
-    if txn:
-        if txn in SEEN_MERGE_TXN_CACHE:
+    def process_delete_groups(self, message):
+        group_ids = message['group_ids']
+        if not group_ids:
             return None
+
+        assert all(isinstance(gid, six.integer_types) for gid in group_ids)
+        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        select_columns = map(lambda i: i if i != 'deleted' else '1', self.REQUIRED_COLUMN_NAMES)
+
+        where = """\
+            WHERE project_id = %(project_id)s
+            AND group_id IN (%(group_ids)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+
+        count_query_template = """\
+            SELECT count()
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        insert_query_template = """\
+            INSERT INTO %(dist_table_name)s (%(required_columns)s)
+            SELECT %(select_columns)s
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        query_args = {
+            'required_columns': ', '.join(self.REQUIRED_COLUMN_NAMES),
+            'select_columns': ', '.join(select_columns),
+            'project_id': message['project_id'],
+            'group_ids': ", ".join(str(gid) for gid in group_ids),
+            'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+        query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
+
+        return (count_query_template, insert_query_template, query_args, query_time_flags)
+
+
+    def process_merge(self, message):
+        # HACK: We were sending duplicates of the `end_merge` message from Sentry,
+        # this is only for performance of the backlog.
+        txn = message.get('transaction_id')
+        if txn:
+            if txn in self.SEEN_MERGE_TXN_CACHE:
+                return None
+            else:
+                self.SEEN_MERGE_TXN_CACHE.append(txn)
+
+        previous_group_ids = message['previous_group_ids']
+        if not previous_group_ids:
+            return None
+
+        assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
+        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), self.ALL_COLUMN_NAMES)
+
+        where = """\
+            WHERE project_id = %(project_id)s
+            AND group_id IN (%(previous_group_ids)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+
+        count_query_template = """\
+            SELECT count()
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        insert_query_template = """\
+            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            SELECT %(select_columns)s
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        query_args = {
+            'all_columns': ', '.join(self.ALL_COLUMN_NAMES),
+            'select_columns': ', '.join(select_columns),
+            'project_id': message['project_id'],
+            'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
+            'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+        query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
+
+        return (count_query_template, insert_query_template, query_args, query_time_flags)
+
+
+    def process_unmerge(self, message):
+        hashes = message['hashes']
+        if not hashes:
+            return None
+
+        assert all(isinstance(h, six.string_types) for h in hashes)
+        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), self.ALL_COLUMN_NAMES)
+
+        where = """\
+            WHERE project_id = %(project_id)s
+            AND group_id = %(previous_group_id)s
+            AND primary_hash IN (%(hashes)s)
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+
+        count_query_template = """\
+            SELECT count()
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        insert_query_template = """\
+            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            SELECT %(select_columns)s
+            FROM %(dist_table_name)s FINAL
+        """ + where
+
+        query_args = {
+            'all_columns': ', '.join(self.ALL_COLUMN_NAMES),
+            'select_columns': ', '.join(select_columns),
+            'previous_group_id': message['previous_group_id'],
+            'project_id': message['project_id'],
+            'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
+            'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        }
+
+        query_time_flags = (NEEDS_FINAL, message['project_id'])
+
+        return (count_query_template, insert_query_template, query_args, query_time_flags)
+
+
+    def process_delete_tag(self, message):
+        tag = message['tag']
+        if not tag:
+            return None
+
+        assert isinstance(tag, six.string_types)
+        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        tag_column_name = self.dataset.SCHEMA.TAG_COLUMN_MAP['tags'].get(tag, tag)
+        is_promoted = tag in self.dataset.SCHEMA.PROMOTED_TAGS['tags']
+
+        where = """\
+            WHERE project_id = %(project_id)s
+            AND received <= CAST('%(timestamp)s' AS DateTime)
+            AND NOT deleted
+        """
+
+        if is_promoted:
+            where += "AND %(tag_column)s IS NOT NULL"
         else:
-            SEEN_MERGE_TXN_CACHE.append(txn)
+            where += "AND has(`tags.key`, %(tag_str)s)"
 
-    previous_group_ids = message['previous_group_ids']
-    if not previous_group_ids:
-        return None
+        insert_query_template = """\
+            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            SELECT %(select_columns)s
+            FROM %(dist_table_name)s FINAL
+        """ + where
 
-    assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
-    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
+        select_columns = []
+        for col in self.dataset.SCHEMA.ALL_COLUMNS:
+            if is_promoted and col.flattened == tag_column_name:
+                select_columns.append('NULL')
+            elif col.flattened == 'tags.key':
+                select_columns.append(
+                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)" % escape_string(tag)
+                )
+            elif col.flattened == 'tags.value':
+                select_columns.append(
+                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))" % escape_string(tag)
+                )
+            else:
+                select_columns.append(col.escaped)
 
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id IN (%(previous_group_ids)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
+        query_args = {
+            'all_columns': ', '.join(self.ALL_COLUMN_NAMES),
+            'select_columns': ', '.join(select_columns),
+            'project_id': message['project_id'],
+            'tag_str': escape_string(tag),
+            'tag_column': escape_col(tag_column_name),
+            'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        }
 
-    count_query_template = """\
-        SELECT count()
-        FROM %(dist_table_name)s FINAL
-    """ + where
+        count_query_template = """\
+            SELECT count()
+            FROM %(dist_table_name)s FINAL
+        """ + where
 
-    insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
-    """ + where
+        query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-    query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
-        'select_columns': ', '.join(select_columns),
-        'project_id': message['project_id'],
-        'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    }
-
-    query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
-
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
-
-
-def process_unmerge(message):
-    hashes = message['hashes']
-    if not hashes:
-        return None
-
-    assert all(isinstance(h, six.string_types) for h in hashes)
-    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND group_id = %(previous_group_id)s
-        AND primary_hash IN (%(hashes)s)
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    count_query_template = """\
-        SELECT count()
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
-        'select_columns': ', '.join(select_columns),
-        'previous_group_id': message['previous_group_id'],
-        'project_id': message['project_id'],
-        'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    }
-
-    query_time_flags = (NEEDS_FINAL, message['project_id'])
-
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
-
-
-def process_delete_tag(message):
-    tag = message['tag']
-    if not tag:
-        return None
-
-    assert isinstance(tag, six.string_types)
-    timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = TAG_COLUMN_MAP['tags'].get(tag, tag)
-    is_promoted = tag in PROMOTED_TAGS['tags']
-
-    where = """\
-        WHERE project_id = %(project_id)s
-        AND received <= CAST('%(timestamp)s' AS DateTime)
-        AND NOT deleted
-    """
-
-    if is_promoted:
-        where += "AND %(tag_column)s IS NOT NULL"
-    else:
-        where += "AND has(`tags.key`, %(tag_str)s)"
-
-    insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
-        SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    select_columns = []
-    for col in ALL_COLUMNS:
-        if is_promoted and col.flattened == tag_column_name:
-            select_columns.append('NULL')
-        elif col.flattened == 'tags.key':
-            select_columns.append(
-                "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)" % escape_string(tag)
-            )
-        elif col.flattened == 'tags.value':
-            select_columns.append(
-                "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))" % escape_string(tag)
-            )
-        else:
-            select_columns.append(col.escaped)
-
-    query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
-        'select_columns': ', '.join(select_columns),
-        'project_id': message['project_id'],
-        'tag_str': escape_string(tag),
-        'tag_column': escape_col(tag_column_name),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
-    }
-
-    count_query_template = """\
-        SELECT count()
-        FROM %(dist_table_name)s FINAL
-    """ + where
-
-    query_time_flags = (NEEDS_FINAL, message['project_id'])
-
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+        return (count_query_template, insert_query_template, query_args, query_time_flags)
