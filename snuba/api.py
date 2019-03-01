@@ -154,7 +154,7 @@ def parse_and_run_query(validated_body, timer):
 
     name = body.get('dataset', settings.DEFAULT_DATASET_TYPE)
     dataset = settings.get_dataset(name)
-    table = dataset.SCHEMA.DIST_TABLE
+    table = dataset.SCHEMA.QUERY_TABLE
 
     turbo = body.get('turbo', False)
     max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
@@ -369,20 +369,19 @@ if application.debug or application.testing:
         from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+
         body = json.loads(request.data)
 
         rows = []
         for event in body:
             _, processed = process_message(event)
-            row = row_from_processed_event(processed)
+            row = row_from_processed_event(dataset, processed)
             rows.append(row)
 
         ensure_table_exists()
-        write_rows(
-            clickhouse_rw,
-            table=settings.CLICKHOUSE_TABLE,
-            rows=rows
-        )
+        write_rows(clickhouse_rw, dataset, rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
@@ -415,7 +414,7 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
         else:
             # TODO having the dataset speciify its own replacer is probably the better design here
             # So that this code doesn't have to know about the EventsReplacerWorker instance
