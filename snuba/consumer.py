@@ -16,9 +16,9 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
+    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+        self.dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
@@ -26,6 +26,7 @@ class ConsumerWorker(AbstractBatchWorker):
     def process_message(self, message):
         value = json.loads(message.value())
 
+        # TODO use the processor for the current dataset
         processed = processor.process_message(value)
         if processed is None:
             return None
@@ -36,7 +37,8 @@ class ConsumerWorker(AbstractBatchWorker):
             processed_message['offset'] = message.offset()
             processed_message['partition'] = message.partition()
 
-            result = row_from_processed_event(processed_message)
+            # TODO get row from processed event needs to know about this datasets' cols
+            result = row_from_processed_event(self.dataset, processed_message)
         elif action_type == processor.REPLACE:
             result = processed_message
         else:
@@ -62,11 +64,7 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            write_rows(
-                self.clickhouse,
-                self.dist_table_name,
-                inserts
-            )
+            write_rows(self.clickhouse, self.dataset, inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))

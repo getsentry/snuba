@@ -98,6 +98,9 @@ class EventsReplacerWorker(AbstractBatchWorker):
     values for some columns. These are inserted into Clickhouse and will replace
     the existing rows with the same primary key upon the next OPTIMIZE.
     """
+    # TODO should we make this more like the ConsumerWorker ie generic worker that
+    # calls out to a replacements processor to interpret the messages and generate
+    # the inserts.
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -134,7 +137,7 @@ class EventsReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dataset.SCHEMA.DIST_TABLE})
+            query_args.update({'table_name': self.dataset.SCHEMA.QUERY_TABLE})
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:
                 continue
@@ -177,13 +180,13 @@ class EventsReplacerWorker(AbstractBatchWorker):
 
         count_query_template = """\
             SELECT count()
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         insert_query_template = """\
-            INSERT INTO %(dist_table_name)s (%(required_columns)s)
+            INSERT INTO %(table_name)s (%(required_columns)s)
             SELECT %(select_columns)s
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         query_args = {
@@ -226,13 +229,13 @@ class EventsReplacerWorker(AbstractBatchWorker):
 
         count_query_template = """\
             SELECT count()
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         insert_query_template = """\
-            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         query_args = {
@@ -267,13 +270,13 @@ class EventsReplacerWorker(AbstractBatchWorker):
 
         count_query_template = """\
             SELECT count()
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         insert_query_template = """\
-            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         query_args = {
@@ -312,9 +315,9 @@ class EventsReplacerWorker(AbstractBatchWorker):
             where += "AND has(`tags.key`, %(tag_str)s)"
 
         insert_query_template = """\
-            INSERT INTO %(dist_table_name)s (%(all_columns)s)
+            INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         select_columns = []
@@ -343,7 +346,7 @@ class EventsReplacerWorker(AbstractBatchWorker):
 
         count_query_template = """\
             SELECT count()
-            FROM %(dist_table_name)s FINAL
+            FROM %(table_name)s FINAL
         """ + where
 
         query_time_flags = (NEEDS_FINAL, message['project_id'])

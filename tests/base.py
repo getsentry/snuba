@@ -8,7 +8,7 @@ from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 
 from snuba import settings
-from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
 from snuba.processor import process_message
@@ -107,23 +107,18 @@ class BaseTest(object):
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
-        self.table = settings.CLICKHOUSE_TABLE
 
+        # These tests are currently coupled pretty hard to the events dataset,
+        # but eventually the base test should support multiple datasets.
+        self.dataset = settings.get_dataset('events')
         self.clickhouse = ClickhousePool()
 
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(
-            get_table_definition(
-                name=self.table,
-                engine=get_test_engine(),
-            )
-        )
-
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_drop())
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_definition())
         redis_client.flushdb()
 
     def teardown_method(self, test_method):
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-
+        self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_drop())
         redis_client.flushdb()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
@@ -173,17 +168,6 @@ class BaseTest(object):
 
         rows = []
         for event in events:
-            rows.append(row_from_processed_event(event))
+            rows.append(row_from_processed_event(self.dataset, event))
 
-        return self.write_rows(rows)
-
-    def write_rows(self, rows):
-        if not isinstance(rows, (list, tuple)):
-            rows = [rows]
-
-        write_rows(
-            self.clickhouse,
-            table=self.table,
-            rows=rows,
-            types_check=True
-        )
+        write_rows(self.clickhouse, self.dataset, rows, types_check=True)

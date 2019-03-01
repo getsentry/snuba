@@ -386,6 +386,9 @@ class TableSchema(object):
         self.DATABASE = None
         self.LOCAL_TABLE = None
         self.DIST_TABLE = None
+        # TODO should there be a QUERY_TABLE so that the client doesn't have to understand
+        # whether to select from the local or dist table?
+        self.CAN_DROP = False
 
         self.SAMPLE_EXPR = None
         self.ORDER_BY = None
@@ -396,29 +399,7 @@ class TableSchema(object):
 
         self.ALL_COLUMNS = ColumnSet([])
 
-    def get_table_definition(self, name, engine):
-        return """
-        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.ALL_COLUMNS.for_schema(),
-            'engine': engine,
-            'name': name,
-        }
-
-
-    def get_test_engine(self):
-        return """
-            ReplacingMergeTree(%(version_column)s)
-            PARTITION BY %(partition_by)s
-            ORDER BY %(order_by)s
-            SAMPLE BY %(sample_expr)s ;""" % {
-            'order_by': self.ORDER_BY,
-            'partition_by': self.PARTITION_BY,
-            'version_column': self.VERSION_COLUMN,
-            'sample_expr': self.SAMPLE_EXPR,
-        }
-
-
-    def get_replicated_engine(self):
+    def get_local_engine(self):
         return """
             ReplicatedReplacingMergeTree('/clickhouse/tables/{shard}/%(name)s', '{replica}', %(version_column)s)
             PARTITION BY %(partition_by)s
@@ -431,7 +412,6 @@ class TableSchema(object):
             'sample_expr': self.SAMPLE_EXPR,
         }
 
-
     def get_distributed_engine(self):
         return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
             'cluster': self.CLICKHOUSE_CLUSTER,
@@ -440,14 +420,21 @@ class TableSchema(object):
             'sharding_key': self.SHARDING_KEY,
         }
 
+    def get_table_definition(self, name, engine):
+        return """
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self.ALL_COLUMNS.for_schema(),
+            'engine': engine,
+            'name': name,
+        }
 
     def get_local_table_definition(self):
         return self.get_table_definition(
             self.LOCAL_TABLE,
-            self.get_replicated_engine()
+            self.get_local_engine()
         )
 
-
+    # TODO what calls this?
     def get_dist_table_definition(self):
         assert self.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
 
@@ -455,6 +442,13 @@ class TableSchema(object):
             self.DIST_TABLE,
             self.get_distributed_engine()
         )
+
+    def get_local_table_drop(self):
+        if not self.CAN_DROP:
+            raise RuntimeError("Can't drop this")
+
+        return "DROP TABLE IF EXISTS %s" % self.LOCAL_TABLE
+
 
 class EventsTableSchema(TableSchema):
     def __init__(self, *args, **kwargs):
@@ -464,6 +458,8 @@ class EventsTableSchema(TableSchema):
         self.DATABASE = 'default'
         self.LOCAL_TABLE = 'sentry_local'
         self.DIST_TABLE = 'sentry_dist'
+        self.QUERY_TABLE = self.DIST_TABLE # For prod, queries are run against the dist table
+        self.CAN_DROP = False
 
         self.SAMPLE_EXPR = 'cityHash64(toString(event_id))'
         self.ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % self.SAMPLE_EXPR
@@ -644,14 +640,34 @@ class EventsTableSchema(TableSchema):
             for col in self.PROMOTED_COLS
         }
 
-class TestEventsTableSchema(EventsTableSchema):
-    def __init__(self, *args, **kwargs):
-        super(TestEventsTableSchema, self).__init__(*args, **kwargs)
-
-        self.LOCAL_TABLE = 'test'
-
+# Dev and Test tables use the same column schema as the production schema,
+# but return a different (non-replicated) table engine for the local table.
 class DevEventsTableSchema(EventsTableSchema):
     def __init__(self, *args, **kwargs):
         super(DevEventsTableSchema, self).__init__(*args, **kwargs)
 
         self.LOCAL_TABLE = 'dev'
+        self.QUERY_TABLE = self.LOCAL_TABLE # For dev/test, queries are run against the local table
+        self.CAN_DROP = True
+
+    def get_local_engine(self):
+        return """
+            ReplacingMergeTree(%(version_column)s)
+            PARTITION BY %(partition_by)s
+            ORDER BY %(order_by)s
+            SAMPLE BY %(sample_expr)s ;""" % {
+            'order_by': self.ORDER_BY,
+            'partition_by': self.PARTITION_BY,
+            'version_column': self.VERSION_COLUMN,
+            'sample_expr': self.SAMPLE_EXPR,
+        }
+
+
+class TestEventsTableSchema(DevEventsTableSchema):
+    def __init__(self, *args, **kwargs):
+        super(TestEventsTableSchema, self).__init__(*args, **kwargs)
+
+        self.LOCAL_TABLE = 'test'
+        self.QUERY_TABLE = self.LOCAL_TABLE
+        self.CAN_DROP = True
+

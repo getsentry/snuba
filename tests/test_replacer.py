@@ -7,7 +7,7 @@ import simplejson as json
 from base import BaseTest, FakeKafkaMessage
 
 from snuba import replacer
-from snuba.settings import PAYLOAD_DATETIME_FORMAT, get_dataset
+from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
 class TestEventsReplacer(BaseTest):
@@ -20,8 +20,7 @@ class TestEventsReplacer(BaseTest):
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
-        self.dataset = get_dataset('events')
-        # TODO would also be nice here to just use self.dataset.replacer?
+        # TODO would also be nice here to just have the dataset define its own replacer class
         self.replacer = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
 
         self.project_id = 1
