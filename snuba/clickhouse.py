@@ -387,8 +387,7 @@ class TableSchema(object):
         self.DATABASE = None
         self.LOCAL_TABLE = None
         self.DIST_TABLE = None
-        # TODO should there be a QUERY_TABLE so that the client doesn't have to understand
-        # whether to select from the local or dist table?
+        self.QUERY_TABLE = None
         self.CAN_DROP = False
 
         self.SAMPLE_EXPR = None

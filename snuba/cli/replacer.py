@@ -15,7 +15,6 @@ from snuba import settings
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')
-# TODO replacers for other datasets
 @click.option('--dataset', default='events', type=click.Choice(['events']),
               help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
