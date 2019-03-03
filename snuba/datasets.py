@@ -43,15 +43,6 @@ class EventsDataSet(DataSet):
         self.PROCESSOR = processor.EventsProcessor(self.SCHEMA)
         self.PROD = True
 
-        # TODO is the query side processing logically its own class too?
-        # ie should we have a SCHEMA, EVENT_PROCESSOR, and QUERY_PROCESSOR?
-
-
-        # TODO use the right redis db where applicable?
-        # all our usage of redis might be global anyway and maybe
-        # each dataset doesn't need its own
-        self.REDIS_DB = 1
-
         # TODO is this, and TIME_GROUPS really a global feature, not limited to events dataset?
         self.TIME_GROUP_COLUMN = 'time'
         self.TIME_GROUPS = util.dynamicdict(
