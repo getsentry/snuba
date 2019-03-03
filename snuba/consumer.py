@@ -5,7 +5,7 @@ import six
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import processor
-from .writer import row_from_processed_event, write_rows
+from .writer import write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
@@ -14,8 +14,22 @@ logger = logging.getLogger('snuba.consumer')
 class InvalidActionType(Exception):
     pass
 
+# action types
+INSERT = object()
+REPLACE = object()
 
 class ConsumerWorker(AbstractBatchWorker):
+    """
+    ConsumerWorker processes the raw stream of events coming
+    from Kafka, validates that they have the correct format
+    and does one of 2 things:
+
+        - If they are INSERTs, creates rows to insert from them
+          and batches and inserts those rows to clickhouse.
+        - If they are REPLACEs, forwards them to the replacements
+          Kafka topic, so that the Replacements consumer can deal
+          with them.
+    """
     def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -26,25 +40,28 @@ class ConsumerWorker(AbstractBatchWorker):
     def process_message(self, message):
         value = json.loads(message.value())
 
-        # TODO use the processor for the current dataset
-        processed = processor.process_message(value)
-        if processed is None:
+        validated = self.validate_message(value)
+        if validated is None:
             return None
 
-        action_type, processed_message = processed
+        action_type, data = validated
 
-        if action_type == processor.INSERT:
-            processed_message['offset'] = message.offset()
-            processed_message['partition'] = message.partition()
+        if action_type == INSERT:
+            # Add these things to the message that we only know about once
+            # we've consumed it.
+            data.update({
+                'offset': message.offset(),
+                'partition': message.partition()
+            })
+            try:
+                processed = self.dataset.PROCESSOR.process_insert(data)
+            except processor.EventTooOld:
+                return None
 
-            # TODO get row from processed event needs to know about this datasets' cols
-            result = row_from_processed_event(self.dataset, processed_message)
-        elif action_type == processor.REPLACE:
-            result = processed_message
-        else:
-            raise InvalidActionType("Invalid action type: {}".format(action_type))
+        elif action_type == REPLACE:
+            processed = data
 
-        return (action_type, result)
+        return (action_type, processed)
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -58,9 +75,9 @@ class ConsumerWorker(AbstractBatchWorker):
         replacements = []
 
         for action_type, data in batch:
-            if action_type == processor.INSERT:
+            if action_type == INSERT:
                 inserts.append(data)
-            elif action_type == processor.REPLACE:
+            elif action_type == REPLACE:
                 replacements.append(data)
 
         if inserts:
@@ -79,6 +96,65 @@ class ConsumerWorker(AbstractBatchWorker):
                 )
 
             self.producer.flush()
+
+    def validate_message(self, message):
+        """
+        Validate a raw mesage from kafka, with 1 of 3 results.
+          - A tuple of (action_type, data) is returned to be handled by the proper
+            handler/processor for that action type.
+          - None is returned, indicating we should silently ignore this message.
+          - An exeption is raised, inditcating something is wrong and we should stop.
+        """
+        action_type = None
+
+        if isinstance(message, dict):
+            # deprecated unwrapped event message == insert
+            action_type = INSERT
+            processed = message
+        elif isinstance(message, (list, tuple)) and len(message) >= 2:
+            version = message[0]
+
+            if version in (0, 1, 2):
+                # version 0: (0, 'insert', data)
+                # version 1: (1, type, data, [state])
+                #   NOTE: types 'delete_groups', 'merge' and 'unmerge' are ignored
+                # version 2: (2, type, data, [state])
+                type_, event = message[1:3]
+                if type_ == 'insert':
+                    action_type = INSERT
+                    data = event
+                else:
+                    if version == 0:
+                        raise InvalidMessageType("Invalid message type: {}".format(type_))
+                    elif version == 1:
+                        if type_ in ('delete_groups', 'merge', 'unmerge'):
+                            # these didn't contain the necessary data to handle replacements
+                            return None
+                        else:
+                            raise InvalidMessageType("Invalid message type: {}".format(type_))
+                    elif version == 2:
+                        # we temporarily sent these invalid message types from Sentry
+                        if type_ in ('delete_groups', 'merge'):
+                            return None
+
+                        if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge',
+                                     'start_delete_tag', 'end_delete_groups', 'end_merge',
+                                     'end_unmerge', 'end_delete_tag'):
+                            action_type = REPLACE
+                            data = (six.text_type(event['project_id']), message)
+                        else:
+                            raise InvalidMessageType("Invalid message type: {}".format(type_))
+
+        if action_type is None:
+            raise InvalidMessageVersion("Unknown message format: " + str(message))
+
+        if action_type not in (INSERT, REPLACE):
+            raise InvalidActionType("Invalid action type: {}".format(action_type))
+
+        if data is None:
+            return None
+
+        return (action_type, data)
 
     def shutdown(self):
         pass

@@ -7,8 +7,9 @@ import logging
 logger = logging.getLogger('snuba.migrate')
 
 
-def run(conn, clickhouse_table):
-    from snuba.clickhouse import ALL_COLUMNS
+def run(conn, SCHEMA):
+
+    clickhouse_table = SCHEMA.QUERY_TABLE
 
     get_schema = lambda: {
         column_name: column_type
@@ -56,11 +57,11 @@ def run(conn, clickhouse_table):
 
     # Warn user about any *other* schema diffs
     for column_name, column_type in local_schema.items():
-        if column_name not in ALL_COLUMNS:
+        if column_name not in SCHEMA.ALL_COLUMNS:
             logger.warn("Column '%s' exists in local ClickHouse but not in schema!", column_name)
             continue
 
-        expected_type = ALL_COLUMNS[column_name].type.for_schema()
+        expected_type = SCHEMA.ALL_COLUMNS[column_name].type.for_schema()
         if column_type != expected_type:
             logger.warn(
                 "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)",

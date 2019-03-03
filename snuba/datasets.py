@@ -1,6 +1,6 @@
 import re, six
 
-from snuba import clickhouse, schemas, state, util
+from snuba import clickhouse, schemas, state, util, processor
 from snuba.clickhouse import escape_col
 
 class DataSet(object):
@@ -10,8 +10,12 @@ class DataSet(object):
         - Consume, transform, and insert data payloads from Kafka into Clickhouse.
         - Define how Snuba API queries are transformed into SQL.
     """
+    def __init__(self, *args, **kwargs):
+        self.SCHEMA = None
+        self.PROCESSOR = None
+        self.PROD = False
 
-    def condition_expr(condition, body):
+    def condition_expr(self, condition, body):
         """
         If this dataset has a particular way of turning an individual
         (column, operator, literal) condition tuple into SQL, return it here.
@@ -36,7 +40,16 @@ class EventsDataSet(DataSet):
         super(EventsDataSet, self).__init__()
 
         self.SCHEMA = clickhouse.EventsTableSchema()
+        self.PROCESSOR = processor.EventsProcessor(self.SCHEMA)
+        self.PROD = True
 
+        # TODO is the query side processing logically its own class too?
+        # ie should we have a SCHEMA, EVENT_PROCESSOR, and QUERY_PROCESSOR?
+
+
+        # TODO use the right redis db where applicable?
+        # all our usage of redis might be global anyway and maybe
+        # each dataset doesn't need its own
         self.REDIS_DB = 1
 
         # TODO is this, and TIME_GROUPS really a global feature, not limited to events dataset?
@@ -191,6 +204,8 @@ class TestEventsDataSet(EventsDataSet):
         super(TestEventsDataSet, self).__init__(*args, **kwargs)
 
         self.SCHEMA = clickhouse.TestEventsTableSchema()
+        self.PROCESSOR = processor.EventsProcessor(self.SCHEMA)
+        self.PROD = False
 
 
 class DevEventsDataSet(EventsDataSet):
@@ -198,4 +213,5 @@ class DevEventsDataSet(EventsDataSet):
         super(DevEventsDataSet, self).__init__(*args, **kwargs)
 
         self.SCHEMA = clickhouse.DevEventsTableSchema()
-
+        self.PROCESSOR = processor.EventsProcessor(self.SCHEMA)
+        self.PROD = False

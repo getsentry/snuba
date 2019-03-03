@@ -449,6 +449,9 @@ class TableSchema(object):
 
         return "DROP TABLE IF EXISTS %s" % self.LOCAL_TABLE
 
+    def migrate(self, clickhouse):
+        pass
+
 
 class EventsTableSchema(TableSchema):
     def __init__(self, *args, **kwargs):
@@ -646,7 +649,7 @@ class DevEventsTableSchema(EventsTableSchema):
     def __init__(self, *args, **kwargs):
         super(DevEventsTableSchema, self).__init__(*args, **kwargs)
 
-        self.LOCAL_TABLE = 'dev'
+        self.LOCAL_TABLE = 'dev_events'
         self.QUERY_TABLE = self.LOCAL_TABLE # For dev/test, queries are run against the local table
         self.CAN_DROP = True
 
@@ -662,12 +665,18 @@ class DevEventsTableSchema(EventsTableSchema):
             'sample_expr': self.SAMPLE_EXPR,
         }
 
+    def migrate(self, clickhouse):
+        from snuba import migrate
+        migrate.run(clickhouse, self)
+
 
 class TestEventsTableSchema(DevEventsTableSchema):
     def __init__(self, *args, **kwargs):
         super(TestEventsTableSchema, self).__init__(*args, **kwargs)
 
-        self.LOCAL_TABLE = 'test'
+        self.LOCAL_TABLE = 'test_events'
         self.QUERY_TABLE = self.LOCAL_TABLE
         self.CAN_DROP = True
 
+    def migrate(self, clickhouse):
+        pass

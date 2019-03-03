@@ -39,7 +39,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     from snuba import util
     from snuba.clickhouse import ClickhousePool
     from batching_kafka_consumer import BatchingKafkaConsumer
-    from snuba.replacer import EventsReplacerWorker
+    from snuba.replacer import ReplacerWorker
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
@@ -69,7 +69,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
 
     replacer = BatchingKafkaConsumer(
         replacements_topic,
-        worker=EventsReplacerWorker(clickhouse, dataset, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

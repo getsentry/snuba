@@ -11,7 +11,7 @@ from snuba import settings
 from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
-from snuba.processor import process_message
+from snuba.consumer import validate_message
 from snuba.writer import row_from_processed_event, write_rows
 
 
@@ -122,6 +122,13 @@ class BaseTest(object):
         redis_client.flushdb()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
+        """
+        Creates a "processed" event, ie a flat dictionary that can directly be
+        turned into a database row.
+        """
+        # TODO since this intermediate state is basically never seen by any code
+        # as the processor.process_insert() returns a row now, perhaps we don't need
+        # tests that rely on write_processed_events
         event = {
             'event_id': uuid.uuid4().hex,
             'project_id': 1,
@@ -133,8 +140,9 @@ class BaseTest(object):
         return event
 
     def wrap_raw_event(self, event):
-        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
-
+        """
+        Wrap a raw event like the Sentry codebase does before sending to Kafka.
+        """
         unique = "%s:%s" % (str(event['project']), event['id'])
         primary_hash = md5(unique.encode('utf-8')).hexdigest()
 
@@ -153,21 +161,18 @@ class BaseTest(object):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        out = []
+        rows = []
         for event in events:
             if 'primary_hash' not in event:
                 event = self.wrap_raw_event(event)
-            _, processed = process_message(event)
-            out.append(processed)
 
-        return self.write_processed_events(out)
+            rows.append(self.dataset.PROCESSOR.process_insert(event))
+
+        write_rows(self.clickhouse, self.dataset, rows, types_check=True)
 
     def write_processed_events(self, events):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        rows = []
-        for event in events:
-            rows.append(row_from_processed_event(self.dataset, event))
-
+        rows = [row_from_processed_event(self.dataset, event) for event in events]
         write_rows(self.clickhouse, self.dataset, rows, types_check=True)

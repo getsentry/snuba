@@ -18,8 +18,10 @@ def get_dataset(name):
     assert name in DATASETS
     dataset = DATASETS[name]
     if isinstance(dataset, six.string_types):
-        cls = __import__(dataset)
-        dataet = DATASETS[name] = cls()
+        path = dataset.split('.')
+        assert len(path) >= 2
+        mod = __import__('.'.join(path[:-1]), fromlist=path[-1:])
+        dataset = DATASETS[name] = getattr(mod, path[-1])()
     return dataset
 
 # Clickhouse Options
