@@ -347,8 +347,6 @@ def sdk_distribution(validated_body, timer):
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
-    # TODO replace with a DataSource that references TestEventsTableSchema, etc.
-    assert settings.CLICKHOUSE_TABLE in ('dev', 'test')
 
     _ensured = False
 
@@ -358,37 +356,27 @@ if application.debug or application.testing:
         if not force and _ensured:
             return
 
-        from snuba.clickhouse import get_table_definition, get_test_engine
-
-        clickhouse_rw.execute(
-            get_table_definition(
-                name=settings.CLICKHOUSE_TABLE,
-                engine=get_test_engine(),
-            )
-        )
-
-        if settings.CLICKHOUSE_TABLE == 'dev':
-            from snuba import migrate
-            migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+        for name in ['events']: # ...spans
+            dataset = settings.get_dataset(name)
+            # only run table creation statements on non-prod datasets
+            if not dataset.PROD:
+                clickhouse_rw.execute(dataset.SCHEMA.get_local_table_definition())
+                # TODO this is awkward, table creating above returns a
+                # statement to be executed here, but migrate takes a clickhouse
+                # connection to execute statements on
+                dataset.SCHEMA.migrate(clickhouse_rw)
 
         _ensured = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import process_message
-        from snuba.writer import row_from_processed_event, write_rows
+        from snuba.writer import write_rows
 
         # TODO we need to make this work for multiple datasets
         dataset = settings.get_dataset('events')
 
         body = json.loads(request.data)
-
-        rows = []
-        for event in body:
-            _, processed = process_message(event)
-            row = row_from_processed_event(dataset, processed)
-            rows.append(row)
-
+        rows = [dataset.PROCESSOR.process_insert(event) for event in body]
         ensure_table_exists()
         write_rows(clickhouse_rw, dataset, rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
@@ -426,10 +414,8 @@ if application.debug or application.testing:
             from snuba.consumer import ConsumerWorker
             worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
         else:
-            # TODO having the dataset speciify its own replacer is probably the better design here
-            # So that this code doesn't have to know about the EventsReplacerWorker instance
-            from snuba.replacer import EventsReplacerWorker
-            worker = EventsReplacerWorker(clickhouse_rw, dataset)
+            from snuba.replacer import ReplacerWorker
+            worker = ReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -440,7 +426,7 @@ if application.debug or application.testing:
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
+        clickhouse_rw.execute(dataset.SCHEMA.get_local_table_drop())
         ensure_table_exists(force=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 

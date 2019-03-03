@@ -1,14 +1,14 @@
 import logging
 
-from snuba.clickhouse import ALL_COLUMNS, Array
+from snuba.clickhouse import Array
 
 
 logger = logging.getLogger('snuba.writer')
 
 
-def row_from_processed_event(dataset, event):
+def row_from_processed_event(schema, event):
     values = []
-    for col in dataset.SCHEMA.ALL_COLUMNS:
+    for col in schema.ALL_COLUMNS:
         value = event.get(col.flattened, None)
         if value is None and isinstance(col.type, Array):
             value = []

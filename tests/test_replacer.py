@@ -21,7 +21,7 @@ class TestEventsReplacer(BaseTest):
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # TODO would also be nice here to just have the dataset define its own replacer class
-        self.replacer = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
+        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         self.project_id = 1
 
@@ -169,7 +169,7 @@ class TestEventsReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -194,7 +194,7 @@ class TestEventsReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -221,7 +221,7 @@ class TestEventsReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -261,7 +261,7 @@ class TestEventsReplacer(BaseTest):
         assert _issue_count(total=True) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.EventsReplacerWorker(self.clickhouse, self.dataset)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         class FakeMessage(object):
             def value(self):
