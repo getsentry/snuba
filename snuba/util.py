@@ -78,7 +78,7 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
-        expr = dataset.column_expr(dataset, column_name, body)
+        expr = dataset.column_expr(column_name, body)
 
     if expr is None:
         expr = escape_col(column_name)
@@ -237,7 +237,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         return ''
 
     if depth == 0:
-        sub = (conditions_expr(cond, body, depth + 1) for cond in conditions)
+        sub = (conditions_expr(dataset, cond, body, depth + 1) for cond in conditions)
         return u' AND '.join(s for s in sub if s)
     elif is_condition(conditions):
         # It's a single (column, operator, literal) tuple

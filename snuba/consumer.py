@@ -4,15 +4,23 @@ import six
 
 from batching_kafka_consumer import AbstractBatchWorker
 
-from . import processor
 from .writer import write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
 
 
+class InvalidMessageType(Exception):
+    pass
+
+
+class InvalidMessageVersion(Exception):
+    pass
+
+
 class InvalidActionType(Exception):
     pass
+
 
 # action types
 INSERT = object()
@@ -53,9 +61,8 @@ class ConsumerWorker(AbstractBatchWorker):
                 'offset': message.offset(),
                 'partition': message.partition()
             })
-            try:
-                processed = self.dataset.PROCESSOR.process_insert(data)
-            except processor.EventTooOld:
+            processed = self.dataset.PROCESSOR.process_insert(data)
+            if processed is None:
                 return None
 
         elif action_type == REPLACE:
@@ -97,7 +104,8 @@ class ConsumerWorker(AbstractBatchWorker):
 
             self.producer.flush()
 
-    def validate_message(self, message):
+    @staticmethod
+    def validate_message(message):
         """
         Validate a raw mesage from kafka, with 1 of 3 results.
           - A tuple of (action_type, data) is returned to be handled by the proper
@@ -106,11 +114,12 @@ class ConsumerWorker(AbstractBatchWorker):
           - An exeption is raised, inditcating something is wrong and we should stop.
         """
         action_type = None
+        data = None
 
         if isinstance(message, dict):
             # deprecated unwrapped event message == insert
             action_type = INSERT
-            processed = message
+            data = message
         elif isinstance(message, (list, tuple)) and len(message) >= 2:
             version = message[0]
 

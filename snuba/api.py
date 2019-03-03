@@ -132,8 +132,6 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
-    ensure_table_exists()
-
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
@@ -156,6 +154,7 @@ def parse_and_run_query(validated_body, timer):
 
     name = body.get('dataset', settings.DEFAULT_DATASET_TYPE)
     dataset = settings.get_dataset(name)
+    ensure_table_exists(dataset)
     table = dataset.SCHEMA.QUERY_TABLE
 
     turbo = body.get('turbo', False)
@@ -348,45 +347,43 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = False
+    _ensured = {}
 
-    def ensure_table_exists(force=False):
+    def ensure_table_exists(dataset, force=False, drop=False):
         global _ensured
 
-        if not force and _ensured:
+        if not force and _ensured.get(dataset, False):
             return
 
-        for name in ['events']: # ...spans
-            dataset = settings.get_dataset(name)
-            # only run table creation statements on non-prod datasets
-            if not dataset.PROD:
-                clickhouse_rw.execute(dataset.SCHEMA.get_local_table_definition())
-                # TODO this is awkward, table creating above returns a
-                # statement to be executed here, but migrate takes a clickhouse
-                # connection to execute statements on
-                dataset.SCHEMA.migrate(clickhouse_rw)
+        # only run table creation statements on non-prod datasets
+        if not dataset.PROD:
+            if drop:
+                clickhouse_rw.execute(dataset.SCHEMA.get_local_table_drop())
+            clickhouse_rw.execute(dataset.SCHEMA.get_local_table_definition())
+            # TODO this is awkward, table creating above returns a
+            # statement to be executed here, but migrate takes a clickhouse
+            # connection to execute statements on
+            dataset.SCHEMA.migrate(clickhouse_rw)
 
-        _ensured = True
+        _ensured[dataset] = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.writer import write_rows
-
         # TODO we need to make this work for multiple datasets
         dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset)
 
         body = json.loads(request.data)
         rows = [dataset.PROCESSOR.process_insert(event) for event in body]
-        ensure_table_exists()
         write_rows(clickhouse_rw, dataset, rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
     def eventstream():
-        ensure_table_exists()
-
         # TODO we need to make this work for multiple datasets
         dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset)
 
         record = json.loads(request.data)
 
@@ -426,13 +423,14 @@ if application.debug or application.testing:
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse_rw.execute(dataset.SCHEMA.get_local_table_drop())
-        ensure_table_exists(force=True)
+        # TODO we need to make this work for multiple datasets
+        dataset = settings.get_dataset('events')
+        ensure_table_exists(dataset, force=True, drop=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/error')
     def error():
         1 / 0
 else:
-    def ensure_table_exists():
+    def ensure_table_exists(*args, **kwargs):
         pass

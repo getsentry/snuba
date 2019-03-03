@@ -180,20 +180,20 @@ class EventsDataSet(DataSet):
                 any_or_all,
                 op,
                 util.escape_literal(lit),
-                util.column_expr(lhs, body)
+                util.column_expr(self, lhs, body)
             )
 
         return None
 
 
-        def string_col(self, col):
-            col_type = self.SCHEMA.ALL_COLUMNS.get(col, None)
-            col_type = str(col_type) if col_type else None
+    def string_col(self, col):
+        col_type = self.SCHEMA.ALL_COLUMNS.get(col, None)
+        col_type = str(col_type) if col_type else None
 
-            if col_type and 'String' in col_type and 'FixedString' not in col_type:
-                return escape_col(col)
-            else:
-                return 'toString({})'.format(escape_col(col))
+        if col_type and 'String' in col_type and 'FixedString' not in col_type:
+            return escape_col(col)
+        else:
+            return 'toString({})'.format(escape_col(col))
 
 
 # TODO if the only thing that is different about these is the table name
