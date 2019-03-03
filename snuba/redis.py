@@ -25,10 +25,7 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
 
 if settings.USE_REDIS_CLUSTER:
     redis_client = RetryingStrictRedisCluster(
-        startup_nodes=[{
-            'host': settings.REDIS_HOST,
-            'port': settings.REDIS_PORT,
-        }],
+        startup_nodes=[{'host': settings.REDIS_HOST, 'port': settings.REDIS_PORT}],
         socket_keepalive=True,
     )
 else:

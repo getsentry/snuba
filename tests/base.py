@@ -63,8 +63,7 @@ class FakeKafkaConsumer(object):
         self.commit_calls += 1
         return [
             TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in
-            six.iteritems(self.positions)
+            for (topic, partition), offset in six.iteritems(self.positions)
         ]
 
     def close(self, *args, **kwargs):
@@ -96,13 +95,19 @@ class FakeWorker(AbstractBatchWorker):
 
 class BaseTest(object):
     def setup_method(self, test_method):
-        assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+        assert (
+            settings.TESTING
+        ), "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
         from fixtures import raw_event
 
         timestamp = datetime.utcnow()
-        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
+        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        )
+        raw_event['received'] = int(
+            calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
+        )
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
@@ -153,7 +158,7 @@ class BaseTest(object):
             'message': event['message'],
             'platform': event['platform'],
             'datetime': event['datetime'],
-            'data': event
+            'data': event,
         }
 
     def write_raw_events(self, events):
@@ -173,5 +178,7 @@ class BaseTest(object):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        rows = [row_from_processed_event(self.dataset.SCHEMA, event) for event in events]
+        rows = [
+            row_from_processed_event(self.dataset.SCHEMA, event) for event in events
+        ]
         write_rows(self.clickhouse, self.dataset, rows, types_check=True)

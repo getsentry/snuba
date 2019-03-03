@@ -14,33 +14,30 @@ def run_optimize(clickhouse, database, table, before=None):
 
 
 def get_partitions_to_optimize(clickhouse, database, table, before=None):
-    engine = clickhouse.execute("""
+    engine = clickhouse.execute(
+        """
         SELECT engine
         FROM system.tables
         WHERE (database = %(database)s) AND (name = %(table)s)
         """,
-        {
-            'database': database,
-            'table': table,
-        }
+        {'database': database, 'table': table},
     )
 
     if not engine:
-        logger.warning("Table %s.%s doesn't exist on %s:%s" % (
-            database, table, clickhouse.host, clickhouse.port
-        ))
+        logger.warning(
+            "Table %s.%s doesn't exist on %s:%s"
+            % (database, table, clickhouse.host, clickhouse.port)
+        )
         return []
 
     if engine[0][0].startswith('Replicated'):
-        is_leader = clickhouse.execute("""
+        is_leader = clickhouse.execute(
+            """
             SELECT is_leader
             FROM system.replicas
             WHERE (database = %(database)s) AND (table = %(table)s)
             """,
-            {
-                'database': database,
-                'table': table,
-            }
+            {'database': database, 'table': table},
         )
 
         # response: [(0,)] for non-leader or [(1,)] for leader
@@ -60,16 +57,15 @@ def get_partitions_to_optimize(clickhouse, database, table, before=None):
         HAVING c > 1
         ORDER BY c DESC, partition
         """,
-        {
-            'database': database,
-            'table': table,
-        }
+        {'database': database, 'table': table},
     )
 
     parts = [util.decode_part_str(part) for part, count in active_parts]
 
     if before:
-        parts = filter(lambda p: (p[0] + timedelta(days=6 - p[0].weekday())) < before, parts)
+        parts = filter(
+            lambda p: (p[0] + timedelta(days=6 - p[0].weekday())) < before, parts
+        )
 
     return parts
 

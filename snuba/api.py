@@ -16,20 +16,24 @@ from snuba.split import split_query
 
 
 logger = logging.getLogger('snuba.api')
-logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s'
+)
 
 clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={
-    'readonly': True,
-})
+clickhouse_ro = ClickhousePool(client_settings={'readonly': True})
 
 
 try:
     import uwsgi
 except ImportError:
+
     def check_down_file_exists():
         return False
+
+
 else:
+
     def check_down_file_exists():
         try:
             return os.stat('/tmp/snuba.down').st_mtime > uwsgi.started_on
@@ -39,7 +43,10 @@ else:
 
 def check_clickhouse():
     try:
-        return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse_ro.execute('show tables'))
+        return any(
+            settings.CLICKHOUSE_TABLE == r[0]
+            for r in clickhouse_ro.execute('show tables')
+        )
     except Exception:
         return False
 
@@ -51,7 +58,7 @@ application.debug = settings.DEBUG
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
     integrations=[FlaskIntegration()],
-    release=os.getenv('SNUBA_RELEASE')
+    release=os.getenv('SNUBA_RELEASE'),
 )
 
 
@@ -91,10 +98,20 @@ def dashboard(fmt='html'):
 def config(fmt='html'):
     if fmt == 'json':
         if request.method == 'GET':
-            return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
+            return (
+                json.dumps(state.get_raw_configs()),
+                200,
+                {'Content-Type': 'application/json'},
+            )
         elif request.method == 'POST':
-            state.set_configs(json.loads(request.data), user=request.headers.get('x-forwarded-email'))
-            return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
+            state.set_configs(
+                json.loads(request.data), user=request.headers.get('x-forwarded-email')
+            )
+            return (
+                json.dumps(state.get_raw_configs()),
+                200,
+                {'Content-Type': 'application/json'},
+            )
     else:
         return application.send_static_file('config.html')
 
@@ -118,9 +135,7 @@ def health():
         body = {'status': 'ok'}
         status = 200
     else:
-        body = {
-            'down_file_exists': down_file_exists,
-        }
+        body = {'down_file_exists': down_file_exists}
         if thorough:
             body['clickhouse_ok'] = clickhouse_health
         status = 502
@@ -142,9 +157,10 @@ def query(validated_body=None, timer=None):
         json.dumps(
             result,
             for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
+        ),
         status,
-        {'Content-Type': 'application/json'}
+        {'Content-Type': 'application/json'},
     )
 
 
@@ -157,14 +173,16 @@ def parse_and_run_query(validated_body, timer):
     table = dataset.SCHEMA.QUERY_TABLE
 
     turbo = body.get('turbo', False)
-    max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-        ('sample', 1),
-        # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
-        ('force_final', 0 if turbo else None),
-        ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
-    ])
+    max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs(
+        [
+            ('max_days', None),
+            ('date_align_seconds', 1),
+            ('sample', 1),
+            # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
+            ('force_final', 0 if turbo else None),
+            ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
+        ]
+    )
     stats = {}
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
@@ -174,11 +192,13 @@ def parse_and_run_query(validated_body, timer):
         from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body.get('conditions', [])
-    where_conditions.extend([
-        ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
-        ('deleted', '=', 0),
-    ])
+    where_conditions.extend(
+        [
+            ('timestamp', '>=', from_date),
+            ('timestamp', '<', to_date),
+            ('deleted', '=', 0),
+        ]
+    )
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
@@ -195,8 +215,10 @@ def parse_and_run_query(validated_body, timer):
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body)
-                     for colname in body.get('selected_columns', [])]
+    selected_cols = [
+        util.column_expr(dataset, util.tuplify(colname), body)
+        for colname in body.get('selected_columns', [])
+    ]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
     select_clause = u'SELECT {}'.format(', '.join(select_exprs))
@@ -235,7 +257,9 @@ def parse_and_run_query(validated_body, timer):
     where_clause = ''
     if where_conditions:
         where_conditions = list(set(util.tuplify(where_conditions)))
-        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
+        where_clause = u'WHERE {}'.format(
+            util.conditions_expr(dataset, where_conditions, body)
+        )
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -244,26 +268,44 @@ def parse_and_run_query(validated_body, timer):
         # - Any of its referenced columns are in PREWHERE_KEYS
         prewhere_candidates = [
             (util.columns_in_expr(cond[0]), cond)
-            for cond in where_conditions if util.is_condition(cond) and
-            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
+            for cond in where_conditions
+            if util.is_condition(cond)
+            and any(
+                col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0])
+            )
         ]
         # Use the condition that has the highest priority (based on the
         # position of its columns in the PREWHERE_KEYS list)
-        prewhere_candidates = sorted([
-            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
-            for cols, cond in prewhere_candidates
-        ])
+        prewhere_candidates = sorted(
+            [
+                (
+                    min(
+                        settings.PREWHERE_KEYS.index(col)
+                        for col in cols
+                        if col in settings.PREWHERE_KEYS
+                    ),
+                    cond,
+                )
+                for cols, cond in prewhere_candidates
+            ]
+        )
         if prewhere_candidates:
-            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+            prewhere_conditions = [cond for _, cond in prewhere_candidates][
+                : settings.MAX_PREWHERE_CONDITIONS
+            ]
 
     prewhere_clause = ''
     if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
+        prewhere_clause = u'PREWHERE {}'.format(
+            util.conditions_expr(dataset, prewhere_conditions, body)
+        )
 
     having_clause = ''
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
+        having_clause = u'HAVING {}'.format(
+            util.conditions_expr(dataset, having_conditions, body)
+        )
 
     group_clause = ', '.join(util.column_expr(dataset, gb, body) for gb in groupby)
     if group_clause:
@@ -274,11 +316,14 @@ def parse_and_run_query(validated_body, timer):
 
     order_clause = ''
     if body.get('orderby'):
-        orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
-        orderby = [u'{} {}'.format(
-            ob.lstrip('-'),
-            'DESC' if ob.startswith('-') else 'ASC'
-        ) for ob in orderby]
+        orderby = [
+            util.column_expr(dataset, util.tuplify(ob), body)
+            for ob in util.to_list(body['orderby'])
+        ]
+        orderby = [
+            u'{} {}'.format(ob.lstrip('-'), 'DESC' if ob.startswith('-') else 'ASC')
+            for ob in orderby
+        ]
         order_clause = u'ORDER BY {}'.format(', '.join(orderby))
 
     limitby_clause = ''
@@ -289,37 +334,44 @@ def parse_and_run_query(validated_body, timer):
     if 'limit' in body:
         limit_clause = 'LIMIT {}, {}'.format(body.get('offset', 0), body['limit'])
 
-    sql = ' '.join([c for c in [
-        select_clause,
-        from_clause,
-        join_clause,
-        prewhere_clause,
-        where_clause,
-        group_clause,
-        having_clause,
-        order_clause,
-        limitby_clause,
-        limit_clause
-    ] if c])
+    sql = ' '.join(
+        [
+            c
+            for c in [
+                select_clause,
+                from_clause,
+                join_clause,
+                prewhere_clause,
+                where_clause,
+                group_clause,
+                having_clause,
+                order_clause,
+                limitby_clause,
+                limit_clause,
+            ]
+            if c
+        ]
+    )
 
     timer.mark('prepare_query')
 
-    stats.update({
-        'clickhouse_table': table,
-        'final': used_final,
-        'referrer': request.referrer,
-        'num_days': (to_date - from_date).days,
-        'num_projects': len(project_ids),
-        'sample': sample,
-    })
-
-    return util.raw_query(
-        validated_body, sql, clickhouse_ro, timer, stats
+    stats.update(
+        {
+            'clickhouse_table': table,
+            'final': used_final,
+            'referrer': request.referrer,
+            'num_days': (to_date - from_date).days,
+            'num_projects': len(project_ids),
+            'sample': sample,
+        }
     )
+
+    return util.raw_query(validated_body, sql, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
 # use internally.
+
 
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
@@ -336,9 +388,10 @@ def sdk_distribution(validated_body, timer):
         json.dumps(
             result,
             for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
+        ),
         status,
-        {'Content-Type': 'application/json'}
+        {'Content-Type': 'application/json'},
     )
 
 
@@ -349,7 +402,7 @@ if application.debug or application.testing:
     def ensure_table_exists(dataset):
         clickhouse_rw.execute(dataset.SCHEMA.get_local_table_definition())
 
-    for name in ['events']: # ...spans
+    for name in ['events']:  # ...spans
         dataset = settings.get_dataset(name)
         assert not dataset.PROD
         ensure_table_exists(dataset)
@@ -401,9 +454,13 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
+
+            worker = ConsumerWorker(
+                clickhouse_rw, dataset, producer=None, replacements_topic=None
+            )
         else:
             from snuba.replacer import ReplacerWorker
+
             worker = ReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)

@@ -26,6 +26,7 @@ class InvalidActionType(Exception):
 INSERT = object()
 REPLACE = object()
 
+
 class ConsumerWorker(AbstractBatchWorker):
     """
     ConsumerWorker processes the raw stream of events coming
@@ -38,6 +39,7 @@ class ConsumerWorker(AbstractBatchWorker):
           Kafka topic, so that the Replacements consumer can deal
           with them.
     """
+
     def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -57,10 +59,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if action_type == INSERT:
             # Add these things to the message that we only know about once
             # we've consumed it.
-            data.update({
-                'offset': message.offset(),
-                'partition': message.partition()
-            })
+            data.update({'offset': message.offset(), 'partition': message.partition()})
             processed = self.dataset.PROCESSOR.process_insert(data)
             if processed is None:
                 return None
@@ -134,25 +133,38 @@ class ConsumerWorker(AbstractBatchWorker):
                     data = event
                 else:
                     if version == 0:
-                        raise InvalidMessageType("Invalid message type: {}".format(type_))
+                        raise InvalidMessageType(
+                            "Invalid message type: {}".format(type_)
+                        )
                     elif version == 1:
                         if type_ in ('delete_groups', 'merge', 'unmerge'):
                             # these didn't contain the necessary data to handle replacements
                             return None
                         else:
-                            raise InvalidMessageType("Invalid message type: {}".format(type_))
+                            raise InvalidMessageType(
+                                "Invalid message type: {}".format(type_)
+                            )
                     elif version == 2:
                         # we temporarily sent these invalid message types from Sentry
                         if type_ in ('delete_groups', 'merge'):
                             return None
 
-                        if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge',
-                                     'start_delete_tag', 'end_delete_groups', 'end_merge',
-                                     'end_unmerge', 'end_delete_tag'):
+                        if type_ in (
+                            'start_delete_groups',
+                            'start_merge',
+                            'start_unmerge',
+                            'start_delete_tag',
+                            'end_delete_groups',
+                            'end_merge',
+                            'end_unmerge',
+                            'end_delete_tag',
+                        ):
                             action_type = REPLACE
                             data = (six.text_type(event['project_id']), message)
                         else:
-                            raise InvalidMessageType("Invalid message type: {}".format(type_))
+                            raise InvalidMessageType(
+                                "Invalid message type: {}".format(type_)
+                            )
 
         if action_type is None:
             raise InvalidMessageVersion("Unknown message format: " + str(message))

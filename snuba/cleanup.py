@@ -23,10 +23,7 @@ def get_active_partitions(clickhouse, database, table):
         AND table = %(table)s
         AND active = 1
         """,
-        {
-            'database': database,
-            'table': table,
-        }
+        {'database': database, 'table': table},
     )
 
     return [util.decode_part_str(part) for part, in response]

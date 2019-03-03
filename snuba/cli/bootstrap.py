@@ -4,8 +4,12 @@ from snuba import settings
 
 
 @click.command()
-@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
-              help='Kafka bootstrap server to use.')
+@click.option(
+    '--bootstrap-server',
+    default=settings.DEFAULT_BROKERS,
+    multiple=True,
+    help='Kafka bootstrap server to use.',
+)
 @click.option('--force', is_flag=True)
 def bootstrap(bootstrap_server, force):
     """
@@ -16,10 +20,9 @@ def bootstrap(bootstrap_server, force):
 
     from confluent_kafka.admin import AdminClient, NewTopic
 
-    client = AdminClient({
-        'bootstrap.servers': ','.join(bootstrap_server),
-        'socket.timeout.ms': 1000,
-    })
+    client = AdminClient(
+        {'bootstrap.servers': ','.join(bootstrap_server), 'socket.timeout.ms': 1000}
+    )
 
     topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
 
@@ -35,8 +38,5 @@ def bootstrap(bootstrap_server, force):
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
     ClickhousePool().execute(
-        get_table_definition(
-            settings.DEFAULT_LOCAL_TABLE,
-            get_test_engine(),
-        )
+        get_table_definition(settings.DEFAULT_LOCAL_TABLE, get_test_engine())
     )

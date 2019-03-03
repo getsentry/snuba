@@ -3,7 +3,20 @@ import jsonschema
 import copy
 import six
 
-CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
+CONDITION_OPERATORS = [
+    '>',
+    '<',
+    '>=',
+    '<=',
+    '=',
+    '!=',
+    'IN',
+    'NOT IN',
+    'IS NULL',
+    'IS NOT NULL',
+    'LIKE',
+    'NOT LIKE',
+]
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
 SDK_STATS_SCHEMA = {
     'type': 'object',
@@ -11,12 +24,14 @@ SDK_STATS_SCHEMA = {
         'from_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=1)).isoformat()
+            'default': lambda: (
+                datetime.utcnow().replace(microsecond=0) - timedelta(days=1)
+            ).isoformat(),
         },
         'to_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
+            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat(),
         },
         'granularity': {
             'type': 'number',
@@ -37,9 +52,7 @@ SDK_STATS_SCHEMA = {
 QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
-        'dataset': {
-            'enum': ['events', 'spans'],
-        },
+        'dataset': {'enum': ['events', 'spans']},
         # A condition is a 3-tuple of (column, operator, literal)
         # `conditions` is an array of conditions, or an array of arrays of conditions.
         # Conditions at the the top level are ANDed together.
@@ -51,11 +64,8 @@ QUERY_SCHEMA = {
             'items': {
                 'anyOf': [
                     {'$ref': '#/definitions/condition'},
-                    {
-                        'type': 'array',
-                        'items': {'$ref': '#/definitions/condition'},
-                    },
-                ],
+                    {'type': 'array', 'items': {'$ref': '#/definitions/condition'}},
+                ]
             },
             'default': [],
         },
@@ -68,22 +78,21 @@ QUERY_SCHEMA = {
         'from_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=5)).isoformat()
+            'default': lambda: (
+                datetime.utcnow().replace(microsecond=0) - timedelta(days=5)
+            ).isoformat(),
         },
         'to_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
+            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat(),
         },
-        'granularity': {
-            'type': 'number',
-            'default': 3600,
-        },
+        'granularity': {'type': 'number', 'default': 3600},
         'use_group_id_column': {
             # TODO this flag is deprecated and is ignored by the code.
             # Remove it when clients are no longer sending it.
             'type': ['boolean', 'number'],
-            'default': True
+            'default': True,
         },
         'issues': {
             'type': 'array',
@@ -99,8 +108,10 @@ QUERY_SCHEMA = {
                         'items': {
                             'anyOf': [
                                 {'$ref': '#/definitions/fingerprint_hash'},
-                                {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
-                            ],
+                                {
+                                    '$ref': '#/definitions/fingerprint_hash_with_tombstone'
+                                },
+                            ]
                         },
                         'minItems': 1,
                     },
@@ -111,11 +122,7 @@ QUERY_SCHEMA = {
         'project': {
             'anyOf': [
                 {'type': 'number'},
-                {
-                    'type': 'array',
-                    'items': {'type': 'number'},
-                    'minItems': 1,
-                },
+                {'type': 'array', 'items': {'type': 'number'}, 'minItems': 1},
             ]
         },
         'groupby': {
@@ -126,10 +133,7 @@ QUERY_SCHEMA = {
             ],
             'default': [],
         },
-        'totals': {
-            'type': 'boolean',
-            'default': False
-        },
+        'totals': {'type': 'boolean', 'default': False},
         'aggregations': {
             'type': 'array',
             'items': {
@@ -138,17 +142,19 @@ QUERY_SCHEMA = {
                     {
                         # Aggregation function
                         # TODO this should eventually become more restrictive again.
-                        'type': 'string',
-                    }, {
+                        'type': 'string'
+                    },
+                    {
                         # Aggregate column
                         'anyOf': [
                             {'$ref': '#/definitions/column_name'},
                             {'enum': ['']},
                             {'type': 'null'},
-                        ],
-                    }, {
+                        ]
+                    },
+                    {
                         # Alias
-                        'type': ['string', 'null'],
+                        'type': ['string', 'null']
                     },
                 ],
                 'minItems': 3,
@@ -156,9 +162,7 @@ QUERY_SCHEMA = {
             },
             'default': [],
         },
-        'arrayjoin': {
-            '$ref': '#/definitions/column_name',
-        },
+        'arrayjoin': {'$ref': '#/definitions/column_name'},
         'orderby': {
             'anyOf': [
                 {'$ref': '#/definitions/column_name'},
@@ -169,26 +173,17 @@ QUERY_SCHEMA = {
                         'anyOf': [
                             {'$ref': '#/definitions/column_name'},
                             {'$ref': '#/definitions/nested_expr'},
-                        ],
-                    }
-                }
+                        ]
+                    },
+                },
             ]
         },
         'limitby': {
             'type': 'array',
-            'items': [
-                {'type': 'number'},
-                {'$ref': '#/definitions/column_name'},
-            ]
+            'items': [{'type': 'number'}, {'$ref': '#/definitions/column_name'}],
         },
-        'limit': {
-            'type': 'number',
-            'default': 1000,
-            'maximum': 10000,
-        },
-        'offset': {
-            'type': 'number',
-        },
+        'limit': {'type': 'number', 'default': 1000, 'maximum': 10000},
+        'offset': {'type': 'number'},
         'selected_columns': {
             'anyOf': [
                 {'$ref': '#/definitions/column_name'},
@@ -197,34 +192,19 @@ QUERY_SCHEMA = {
             ],
             'default': [],
         },
-        'sample': {
-            'type': 'number',
-            'min': 0,
-        },
+        'sample': {'type': 'number', 'min': 0},
         # Never add FINAL to queries, enable sampling
-        'turbo': {
-            'type': 'boolean',
-            'default': False,
-        },
+        'turbo': {'type': 'boolean', 'default': False},
         # Force queries to hit the first shard replica, ensuring the query
         # sees data that was written before the query. This burdens the
         # first replica, so should only be used when absolutely necessary.
-        'consistent': {
-            'type': 'boolean',
-            'default': False,
-        },
-        'debug': {
-            'type': 'boolean',
-        }
+        'consistent': {'type': 'boolean', 'default': False},
+        'debug': {'type': 'boolean'},
     },
     # Need to select down to the project level for customer isolation and performance
     'required': ['project'],
-    'dependencies': {
-        'offset': ['limit'],
-        'totals': ['groupby']
-    },
+    'dependencies': {'offset': ['limit'], 'totals': ['groupby']},
     'additionalProperties': False,
-
     'definitions': {
         'fingerprint_hash': {
             'type': 'string',
@@ -249,8 +229,8 @@ QUERY_SCHEMA = {
             'anyOf': [
                 # Special computed column created from `issues` definition
                 {'enum': ['issue', '-issue']},
-                {'pattern': '^-?[a-zA-Z0-9_.]+$', },
-                {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
+                {'pattern': '^-?[a-zA-Z0-9_.]+$'},
+                {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$'},
             ],
         },
         'column_list': {
@@ -272,27 +252,26 @@ QUERY_SCHEMA = {
                     'anyOf': [
                         {'$ref': '#/definitions/column_name'},
                         {'$ref': '#/definitions/nested_expr'},
-                    ],
-                }, {
+                    ]
+                },
+                {
                     # Operator
                     'type': 'string',
                     # TODO  enforce literal = NULL for unary operators
                     'enum': CONDITION_OPERATORS,
-                }, {
+                },
+                {
                     # Literal
                     'anyOf': [
                         {'type': ['string', 'number', 'null']},
-                        {
-                            'type': 'array',
-                            'items': {'type': ['string', 'number']}
-                        },
-                    ],
+                        {'type': 'array', 'items': {'type': ['string', 'number']}},
+                    ]
                 },
             ],
             'minItems': 3,
             'maxItems': 3,
-        }
-    }
+        },
+    },
 }
 
 
@@ -310,15 +289,18 @@ def validate(value, schema, set_defaults=True):
         for error in orig(validator, properties, instance, schema):
             yield error
 
-    validator_cls = jsonschema.validators.extend(
-        jsonschema.Draft4Validator,
-        {'properties': validate_and_default}
-    ) if set_defaults else jsonschema.Draft4Validator
+    validator_cls = (
+        jsonschema.validators.extend(
+            jsonschema.Draft4Validator, {'properties': validate_and_default}
+        )
+        if set_defaults
+        else jsonschema.Draft4Validator
+    )
 
     validator_cls(
         schema,
         types={'array': (list, tuple)},
-        format_checker=jsonschema.FormatChecker()
+        format_checker=jsonschema.FormatChecker(),
     ).validate(value, schema)
 
 
@@ -332,7 +314,10 @@ def generate(schema):
         default = schema['default']
         return default() if callable(default) else default
     elif typ == 'object':
-        return {prop: generate(subschema) for prop, subschema in six.iteritems(schema.get('properties', {}))}
+        return {
+            prop: generate(subschema)
+            for prop, subschema in six.iteritems(schema.get('properties', {}))
+        }
     elif typ == 'array':
         return []
     elif typ == 'string':

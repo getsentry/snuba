@@ -11,16 +11,17 @@ from snuba import settings
 def migrate(log_level):
     from snuba.migrate import logger, run
 
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s'
+    )
 
     if settings.CLICKHOUSE_TABLE != 'dev':
-        logger.error("The migration tool is only intended for local development environment.")
+        logger.error(
+            "The migration tool is only intended for local development environment."
+        )
         sys.exit(1)
 
     host, port = settings.CLICKHOUSE_SERVER.split(':')
-    clickhouse = Client(
-        host=host,
-        port=port,
-    )
+    clickhouse = Client(host=host, port=port)
 
     run(clickhouse, settings.CLICKHOUSE_TABLE)

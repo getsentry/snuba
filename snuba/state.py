@@ -58,17 +58,18 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     query_id = uuid.uuid4()
     now = time.time()
-    bypass_rate_limit, rate_history_s = get_configs([
-        ('bypass_rate_limit', 0),
-        ('rate_history_sec', 3600)
-    ])
+    bypass_rate_limit, rate_history_s = get_configs(
+        [('bypass_rate_limit', 0), ('rate_history_sec', 3600)]
+    )
 
     if bypass_rate_limit == 1:
         yield (True, 0, 0)
         return
 
     pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
+    pipe.zremrangebyscore(
+        bucket, '-inf', '({:f}'.format(now - rate_history_s)
+    )  # cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
     pipe.zcount(bucket, now - rate_lookback_s, now)  # get rate
     pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
@@ -80,8 +81,9 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
         return
 
     per_second = rate / float(rate_lookback_s)
-    allowed = (per_second_limit is None or per_second <= per_second_limit) and\
-        (concurrent_limit is None or concurrent <= concurrent_limit)
+    allowed = (per_second_limit is None or per_second <= per_second_limit) and (
+        concurrent_limit is None or concurrent <= concurrent_limit
+    )
     try:
         yield (allowed, per_second, concurrent)
     finally:
@@ -149,7 +151,8 @@ def deduper(query_id):
 
 # Runtime Configuration
 
-class memoize():
+
+class memoize:
     """
     Simple expiring memoizer for functions with no args.
     """
@@ -165,6 +168,7 @@ class memoize():
             if now > self.at + self.timeout or self.saved is None:
                 self.saved, self.at = func(), now
             return self.saved
+
         return wrapper
 
 
@@ -248,7 +252,11 @@ def get_all_configs():
 def get_raw_configs():
     try:
         all_configs = rds.hgetall(config_hash)
-        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
+        return {
+            k.decode('utf-8'): numeric(v.decode('utf-8'))
+            for k, v in six.iteritems(all_configs)
+            if v is not None
+        }
     except Exception as ex:
         logger.exception(ex)
         return {}
@@ -259,34 +267,28 @@ def delete_config(key, user=None):
 
 
 def get_config_changes():
-    return map(
-        json.loads,
-        rds.lrange(config_changes_list, 0, -1),
-    )
+    return map(json.loads, rds.lrange(config_changes_list, 0, -1))
 
 
 # Query Recording
+
 
 def record_query(data):
     global kfk
     max_redis_queries = 200
     data = json.dumps(data, for_json=True)
     try:
-        rds.pipeline(transaction=False)\
-            .lpush(queries_list, data)\
-            .ltrim(queries_list, 0, max_redis_queries - 1)\
-            .execute()
+        rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
+            queries_list, 0, max_redis_queries - 1
+        ).execute()
 
         if settings.RECORD_QUERIES:
             if kfk is None:
-                kfk = Producer({
-                    'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
-                })
+                kfk = Producer(
+                    {'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)}
+                )
 
-            kfk.produce(
-                settings.QUERIES_TOPIC,
-                data.encode('utf-8'),
-            )
+            kfk.produce(settings.QUERIES_TOPIC, data.encode('utf-8'))
     except Exception as ex:
         logger.exception(ex)
         pass

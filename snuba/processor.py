@@ -108,6 +108,7 @@ class Processor(object):
     The Processor is responsible for converting an incoming message body from the
     event stream into a row or statement to be inserted or executed agsinst clickhouseinserted or executed agsinst clickhouse.
     """
+
     def __init__(self, SCHEMA):
         self.SCHEMA = SCHEMA
 
@@ -127,18 +128,21 @@ class Processor(object):
         """
         raise NotImplementedError
 
+
 class EventsProcessor(Processor):
     """
     A processor for regular (error type) events.
     """
+
     def __init__(self, SCHEMA):
         super(EventsProcessor, self).__init__(SCHEMA)
 
-        self.REQUIRED_COLUMN_NAMES = [col.escaped for col in self.SCHEMA.REQUIRED_COLUMNS]
+        self.REQUIRED_COLUMN_NAMES = [
+            col.escaped for col in self.SCHEMA.REQUIRED_COLUMNS
+        ]
         self.ALL_COLUMN_NAMES = [col.escaped for col in self.SCHEMA.ALL_COLUMNS]
 
         self.SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
-
 
     def process_insert(self, message):
         processed = {'deleted': 0}
@@ -178,7 +182,9 @@ class EventsProcessor(Processor):
         self.extract_extra_contexts(processed, contexts)
         self.extract_extra_tags(processed, tags)
 
-        exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
+        exception = (
+            data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
+        )
         stacks = exception.get('values', None) or []
         self.extract_stacktraces(processed, stacks)
 
@@ -205,18 +211,24 @@ class EventsProcessor(Processor):
         output['group_id'] = message['group_id']
 
         # This is not ideal but it should never happen anyways
-        timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))
+        timestamp = _ensure_valid_date(
+            datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        )
         if timestamp is None:
             timestamp = datetime.utcnow()
 
         retention_days = settings.RETENTION_OVERRIDES.get(project_id)
         if retention_days is None:
-            retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+            retention_days = int(
+                message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS
+            )
 
         # TODO: We may need to allow for older events in the future when post
         # processing triggers are based off of Snuba. Or this branch could be put
         # behind a "backfill-only" optional switch.
-        if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
+        if settings.DISCARD_OLD_EVENTS and timestamp < (
+            datetime.utcnow() - timedelta(days=retention_days)
+        ):
             raise EventTooOld
 
         output['timestamp'] = timestamp
@@ -234,7 +246,9 @@ class EventsProcessor(Processor):
 
         # Properties we get from the "data" dict, which is the actual event body.
         received = _collapse_uint32(int(data['received']))
-        output['received'] = datetime.utcfromtimestamp(received) if received is not None else None
+        output['received'] = (
+            datetime.utcfromtimestamp(received) if received is not None else None
+        )
 
         output['culprit'] = _unicodify(data.get('culprit', None))
         output['type'] = _unicodify(data.get('type', None))
@@ -292,9 +306,12 @@ class EventsProcessor(Processor):
         output['sdk_integrations'] = sdk_integrations
 
     def extract_promoted_tags(self, output, tags):
-        output.update({col.name: _unicodify(tags.get(col.name, None))
-            for col in self.SCHEMA.PROMOTED_TAG_COLUMNS
-        })
+        output.update(
+            {
+                col.name: _unicodify(tags.get(col.name, None))
+                for col in self.SCHEMA.PROMOTED_TAG_COLUMNS
+            }
+        )
 
     def extract_promoted_contexts(self, output, contexts, tags):
         app_ctx = contexts.get('app', None) or {}
@@ -334,7 +351,9 @@ class EventsProcessor(Processor):
         output['device_uuid'] = _unicodify(device_ctx.pop('uuid', None))
         output['device_model_id'] = _unicodify(device_ctx.pop('model_id', None))
         output['device_arch'] = _unicodify(device_ctx.pop('arch', None))
-        output['device_battery_level'] = _floatify(device_ctx.pop('battery_level', None))
+        output['device_battery_level'] = _floatify(
+            device_ctx.pop('battery_level', None)
+        )
         output['device_orientation'] = _unicodify(device_ctx.pop('orientation', None))
         output['device_simulator'] = _boolify(device_ctx.pop('simulator', None))
         output['device_online'] = _boolify(device_ctx.pop('online', None))
@@ -450,8 +469,12 @@ class EventsProcessor(Processor):
             return None
 
         assert all(isinstance(gid, six.integer_types) for gid in group_ids)
-        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-        select_columns = map(lambda i: i if i != 'deleted' else '1', self.REQUIRED_COLUMN_NAMES)
+        timestamp = datetime.strptime(
+            message['datetime'], settings.PAYLOAD_DATETIME_FORMAT
+        )
+        select_columns = map(
+            lambda i: i if i != 'deleted' else '1', self.REQUIRED_COLUMN_NAMES
+        )
 
         where = """\
             WHERE project_id = %(project_id)s
@@ -460,16 +483,22 @@ class EventsProcessor(Processor):
             AND NOT deleted
         """
 
-        count_query_template = """\
+        count_query_template = (
+            """\
             SELECT count()
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
-        insert_query_template = """\
+        insert_query_template = (
+            """\
             INSERT INTO %(table_name)s (%(required_columns)s)
             SELECT %(select_columns)s
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
         query_args = {
             'required_columns': ', '.join(self.REQUIRED_COLUMN_NAMES),
@@ -481,8 +510,12 @@ class EventsProcessor(Processor):
 
         query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
 
-        return (count_query_template, insert_query_template, query_args, query_time_flags)
-
+        return (
+            count_query_template,
+            insert_query_template,
+            query_args,
+            query_time_flags,
+        )
 
     def process_merge(self, message):
         # HACK: We were sending duplicates of the `end_merge` message from Sentry,
@@ -499,8 +532,13 @@ class EventsProcessor(Processor):
             return None
 
         assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
-        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-        select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), self.ALL_COLUMN_NAMES)
+        timestamp = datetime.strptime(
+            message['datetime'], settings.PAYLOAD_DATETIME_FORMAT
+        )
+        select_columns = map(
+            lambda i: i if i != 'group_id' else str(message['new_group_id']),
+            self.ALL_COLUMN_NAMES,
+        )
 
         where = """\
             WHERE project_id = %(project_id)s
@@ -509,16 +547,22 @@ class EventsProcessor(Processor):
             AND NOT deleted
         """
 
-        count_query_template = """\
+        count_query_template = (
+            """\
             SELECT count()
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
-        insert_query_template = """\
+        insert_query_template = (
+            """\
             INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
         query_args = {
             'all_columns': ', '.join(self.ALL_COLUMN_NAMES),
@@ -530,8 +574,12 @@ class EventsProcessor(Processor):
 
         query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
 
-        return (count_query_template, insert_query_template, query_args, query_time_flags)
-
+        return (
+            count_query_template,
+            insert_query_template,
+            query_args,
+            query_time_flags,
+        )
 
     def process_unmerge(self, message):
         hashes = message['hashes']
@@ -539,8 +587,13 @@ class EventsProcessor(Processor):
             return None
 
         assert all(isinstance(h, six.string_types) for h in hashes)
-        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-        select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), self.ALL_COLUMN_NAMES)
+        timestamp = datetime.strptime(
+            message['datetime'], settings.PAYLOAD_DATETIME_FORMAT
+        )
+        select_columns = map(
+            lambda i: i if i != 'group_id' else str(message['new_group_id']),
+            self.ALL_COLUMN_NAMES,
+        )
 
         where = """\
             WHERE project_id = %(project_id)s
@@ -550,16 +603,22 @@ class EventsProcessor(Processor):
             AND NOT deleted
         """
 
-        count_query_template = """\
+        count_query_template = (
+            """\
             SELECT count()
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
-        insert_query_template = """\
+        insert_query_template = (
+            """\
             INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
         query_args = {
             'all_columns': ', '.join(self.ALL_COLUMN_NAMES),
@@ -572,8 +631,12 @@ class EventsProcessor(Processor):
 
         query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-        return (count_query_template, insert_query_template, query_args, query_time_flags)
-
+        return (
+            count_query_template,
+            insert_query_template,
+            query_args,
+            query_time_flags,
+        )
 
     def process_delete_tag(self, message):
         tag = message['tag']
@@ -581,7 +644,9 @@ class EventsProcessor(Processor):
             return None
 
         assert isinstance(tag, six.string_types)
-        timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        timestamp = datetime.strptime(
+            message['datetime'], settings.PAYLOAD_DATETIME_FORMAT
+        )
         tag_column_name = self.SCHEMA.TAG_COLUMN_MAP['tags'].get(tag, tag)
         is_promoted = tag in self.SCHEMA.PROMOTED_TAGS['tags']
 
@@ -596,11 +661,14 @@ class EventsProcessor(Processor):
         else:
             where += "AND has(`tags.key`, %(tag_str)s)"
 
-        insert_query_template = """\
+        insert_query_template = (
+            """\
             INSERT INTO %(table_name)s (%(all_columns)s)
             SELECT %(select_columns)s
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
         select_columns = []
         for col in self.SCHEMA.ALL_COLUMNS:
@@ -608,11 +676,13 @@ class EventsProcessor(Processor):
                 select_columns.append('NULL')
             elif col.flattened == 'tags.key':
                 select_columns.append(
-                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)" % escape_string(tag)
+                    "arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, %s)), `tags.key`)"
+                    % escape_string(tag)
                 )
             elif col.flattened == 'tags.value':
                 select_columns.append(
-                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))" % escape_string(tag)
+                    "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
+                    % escape_string(tag)
                 )
             else:
                 select_columns.append(col.escaped)
@@ -626,11 +696,19 @@ class EventsProcessor(Processor):
             'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
         }
 
-        count_query_template = """\
+        count_query_template = (
+            """\
             SELECT count()
             FROM %(table_name)s FINAL
-        """ + where
+        """
+            + where
+        )
 
         query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-        return (count_query_template, insert_query_template, query_args, query_time_flags)
+        return (
+            count_query_template,
+            insert_query_template,
+            query_args,
+            query_time_flags,
+        )

@@ -43,11 +43,7 @@ class TestProcessor(BaseTest):
             'version': 6,
             'title': 'FooError',
             'location': 'bar.py',
-            'modules': OrderedDict([
-                ('foo', '1.0'),
-                ('bar', '2.0'),
-                ('baz', None),
-            ])
+            'modules': OrderedDict([('foo', '1.0'), ('bar', '2.0'), ('baz', None)]),
         }
         output = {}
 
@@ -75,9 +71,7 @@ class TestProcessor(BaseTest):
             'platform': 'the_platform',
             'search_message': 'the search message',
         }
-        data = {
-            'received': int(calendar.timegm(now.timetuple())),
-        }
+        data = {'received': int(calendar.timegm(now.timetuple()))}
         output = {}
         self.dataset.PROCESSOR.extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
@@ -103,7 +97,7 @@ class TestProcessor(BaseTest):
         sdk = {
             'integrations': ['logback'],
             'name': 'sentry-java',
-            'version': '1.6.1-d1e3a'
+            'version': '1.6.1-d1e3a',
         }
         output = {}
 
@@ -155,14 +149,12 @@ class TestProcessor(BaseTest):
         valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
         assert extra_output == {
             'tags.key': [k for k, v in valid_items],
-            'tags.value': [v for k, v in valid_items]
+            'tags.value': [v for k, v in valid_items],
         }
 
     def test_extract_tags_empty_string(self):
         # verify our text field extraction doesn't coerce '' to None
-        tags = {
-            'environment': '',
-        }
+        tags = {'environment': ''}
         output = {}
 
         self.dataset.PROCESSOR.extract_promoted_tags(output, tags)
@@ -171,9 +163,7 @@ class TestProcessor(BaseTest):
 
     def test_extract_contexts(self):
         contexts = {
-            'app': {
-                'device_app_hash': 'the_app_device_uuid',
-            },
+            'app': {'device_app_hash': 'the_app_device_uuid'},
             'os': {
                 'name': 'the_os_name',
                 'version': 'the_os_version',
@@ -181,14 +171,8 @@ class TestProcessor(BaseTest):
                 'build': 'the_os_build',
                 'kernel_version': 'the_os_kernel_version',
             },
-            'runtime': {
-                'name': 'the_runtime_name',
-                'version': 'the_runtime_version',
-            },
-            'browser': {
-                'name': 'the_browser_name',
-                'version': 'the_browser_version',
-            },
+            'runtime': {'name': 'the_runtime_name', 'version': 'the_runtime_version'},
+            'browser': {'name': 'the_browser_name', 'version': 'the_browser_version'},
             'device': {
                 'model': 'the_device_model',
                 'family': 'the_device_family',
@@ -212,7 +196,7 @@ class TestProcessor(BaseTest):
                 'list': [1, 2, 3],
                 'dict': {'key': 'value'},
                 'str': 'string',
-            }
+            },
         }
         orig_tags = {
             'app.device': 'the_app_device_uuid',
@@ -294,17 +278,15 @@ class TestProcessor(BaseTest):
 
         self.dataset.PROCESSOR.extract_user(output, user)
 
-        assert output == {'email': u'user_email',
-                          'ip_address': u'user_ip_address',
-                          'user_id': u'user_id',
-                          'username': u'user_username'}
+        assert output == {
+            'email': u'user_email',
+            'ip_address': u'user_ip_address',
+            'user_id': u'user_id',
+            'username': u'user_username',
+        }
 
     def test_extract_geo(self):
-        geo = {
-            'country_code': 'US',
-            'city': 'San Francisco',
-            'region': 'CA',
-        }
+        geo = {'country_code': 'US', 'city': 'San Francisco', 'region': 'CA'}
         output = {}
 
         self.dataset.PROCESSOR.extract_geo(output, geo)
@@ -321,7 +303,7 @@ class TestProcessor(BaseTest):
             'headers': [
                 ['Referer', 'https://sentry.io'],
                 ['Host', 'https://google.com'],
-            ]
+            ],
         }
         output = {}
 
@@ -331,106 +313,134 @@ class TestProcessor(BaseTest):
 
     def test_extract_stacktraces(self):
         stacks = [
-            {'module': 'java.lang',
-             'mechanism': {
-                 'type': 'promise',
-                 'description': 'globally unhandled promise rejection',
-                 'help_link': 'http://example.com',
-                 'handled': False,
-                 'data': {
-                     'polyfill': 'Bluebird'
-                 },
-                 'meta': {
-                     'errno': {
-                         'number': 123112,
-                         'name': ''
-                     }
-                 }
-             },
-             'stacktrace': {
-                 'frames': [
-                     {'abs_path': 'Thread.java',
-                      'filename': 'Thread.java',
-                      'function': 'run',
-                      'in_app': False,
-                      'lineno': 748,
-                      'module': 'java.lang.Thread'},
-                     {'abs_path': 'ExecJavaMojo.java',
-                      'filename': 'ExecJavaMojo.java',
-                      'function': 'run',
-                      'in_app': False,
-                      'lineno': 293,
-                      'module': 'org.codehaus.mojo.exec.ExecJavaMojo$1'},
-                     {'abs_path': 'Method.java',
-                      'filename': 'Method.java',
-                      'function': 'invoke',
-                      'in_app': False,
-                      'colno': 19,
-                      'lineno': 498,
-                      'module': 'java.lang.reflect.Method'},
-                     {'abs_path': 'DelegatingMethodAccessorImpl.java',
-                      'filename': 'DelegatingMethodAccessorImpl.java',
-                      'function': 'invoke',
-                      'in_app': False,
-                      'package': 'foo.bar',
-                      'lineno': 43,
-                      'module': 'sun.reflect.DelegatingMethodAccessorImpl'},
-                     {'abs_path': 'NativeMethodAccessorImpl.java',
-                      'filename': 'NativeMethodAccessorImpl.java',
-                      'function': 'invoke',
-                      'in_app': False,
-                      'lineno': 62,
-                      'module': 'sun.reflect.NativeMethodAccessorImpl'},
-                     {'abs_path': 'NativeMethodAccessorImpl.java',
-                      'filename': 'NativeMethodAccessorImpl.java',
-                      'function': 'invoke0',
-                      'in_app': False,
-                      'module': 'sun.reflect.NativeMethodAccessorImpl'},
-                     {'abs_path': 'Application.java',
-                      'filename': 'Application.java',
-                      'function': 'main',
-                      'in_app': True,
-                      'lineno': 17,
-                      'module': 'io.sentry.example.Application'}]},
-             'type': 'ArithmeticException',
-             'value': '/ by zero'}]
+            {
+                'module': 'java.lang',
+                'mechanism': {
+                    'type': 'promise',
+                    'description': 'globally unhandled promise rejection',
+                    'help_link': 'http://example.com',
+                    'handled': False,
+                    'data': {'polyfill': 'Bluebird'},
+                    'meta': {'errno': {'number': 123112, 'name': ''}},
+                },
+                'stacktrace': {
+                    'frames': [
+                        {
+                            'abs_path': 'Thread.java',
+                            'filename': 'Thread.java',
+                            'function': 'run',
+                            'in_app': False,
+                            'lineno': 748,
+                            'module': 'java.lang.Thread',
+                        },
+                        {
+                            'abs_path': 'ExecJavaMojo.java',
+                            'filename': 'ExecJavaMojo.java',
+                            'function': 'run',
+                            'in_app': False,
+                            'lineno': 293,
+                            'module': 'org.codehaus.mojo.exec.ExecJavaMojo$1',
+                        },
+                        {
+                            'abs_path': 'Method.java',
+                            'filename': 'Method.java',
+                            'function': 'invoke',
+                            'in_app': False,
+                            'colno': 19,
+                            'lineno': 498,
+                            'module': 'java.lang.reflect.Method',
+                        },
+                        {
+                            'abs_path': 'DelegatingMethodAccessorImpl.java',
+                            'filename': 'DelegatingMethodAccessorImpl.java',
+                            'function': 'invoke',
+                            'in_app': False,
+                            'package': 'foo.bar',
+                            'lineno': 43,
+                            'module': 'sun.reflect.DelegatingMethodAccessorImpl',
+                        },
+                        {
+                            'abs_path': 'NativeMethodAccessorImpl.java',
+                            'filename': 'NativeMethodAccessorImpl.java',
+                            'function': 'invoke',
+                            'in_app': False,
+                            'lineno': 62,
+                            'module': 'sun.reflect.NativeMethodAccessorImpl',
+                        },
+                        {
+                            'abs_path': 'NativeMethodAccessorImpl.java',
+                            'filename': 'NativeMethodAccessorImpl.java',
+                            'function': 'invoke0',
+                            'in_app': False,
+                            'module': 'sun.reflect.NativeMethodAccessorImpl',
+                        },
+                        {
+                            'abs_path': 'Application.java',
+                            'filename': 'Application.java',
+                            'function': 'main',
+                            'in_app': True,
+                            'lineno': 17,
+                            'module': 'io.sentry.example.Application',
+                        },
+                    ]
+                },
+                'type': 'ArithmeticException',
+                'value': '/ by zero',
+            }
+        ]
         output = {}
 
         self.dataset.PROCESSOR.extract_stacktraces(output, stacks)
 
         assert output == {
-            'exception_frames.abs_path': [u'Thread.java',
-                                          u'ExecJavaMojo.java',
-                                          u'Method.java',
-                                          u'DelegatingMethodAccessorImpl.java',
-                                          u'NativeMethodAccessorImpl.java',
-                                          u'NativeMethodAccessorImpl.java',
-                                          u'Application.java'],
+            'exception_frames.abs_path': [
+                u'Thread.java',
+                u'ExecJavaMojo.java',
+                u'Method.java',
+                u'DelegatingMethodAccessorImpl.java',
+                u'NativeMethodAccessorImpl.java',
+                u'NativeMethodAccessorImpl.java',
+                u'Application.java',
+            ],
             'exception_frames.colno': [None, None, 19, None, None, None, None],
-            'exception_frames.filename': [u'Thread.java',
-                                          u'ExecJavaMojo.java',
-                                          u'Method.java',
-                                          u'DelegatingMethodAccessorImpl.java',
-                                          u'NativeMethodAccessorImpl.java',
-                                          u'NativeMethodAccessorImpl.java',
-                                          u'Application.java'],
-            'exception_frames.function': [u'run',
-                                          u'run',
-                                          u'invoke',
-                                          u'invoke',
-                                          u'invoke',
-                                          u'invoke0',
-                                          u'main'],
+            'exception_frames.filename': [
+                u'Thread.java',
+                u'ExecJavaMojo.java',
+                u'Method.java',
+                u'DelegatingMethodAccessorImpl.java',
+                u'NativeMethodAccessorImpl.java',
+                u'NativeMethodAccessorImpl.java',
+                u'Application.java',
+            ],
+            'exception_frames.function': [
+                u'run',
+                u'run',
+                u'invoke',
+                u'invoke',
+                u'invoke',
+                u'invoke0',
+                u'main',
+            ],
             'exception_frames.in_app': [False, False, False, False, False, False, True],
             'exception_frames.lineno': [748, 293, 498, 43, 62, None, 17],
-            'exception_frames.module': [u'java.lang.Thread',
-                                        u'org.codehaus.mojo.exec.ExecJavaMojo$1',
-                                        u'java.lang.reflect.Method',
-                                        u'sun.reflect.DelegatingMethodAccessorImpl',
-                                        u'sun.reflect.NativeMethodAccessorImpl',
-                                        u'sun.reflect.NativeMethodAccessorImpl',
-                                        u'io.sentry.example.Application'],
-            'exception_frames.package': [None, None, None, u'foo.bar', None, None, None],
+            'exception_frames.module': [
+                u'java.lang.Thread',
+                u'org.codehaus.mojo.exec.ExecJavaMojo$1',
+                u'java.lang.reflect.Method',
+                u'sun.reflect.DelegatingMethodAccessorImpl',
+                u'sun.reflect.NativeMethodAccessorImpl',
+                u'sun.reflect.NativeMethodAccessorImpl',
+                u'io.sentry.example.Application',
+            ],
+            'exception_frames.package': [
+                None,
+                None,
+                None,
+                u'foo.bar',
+                None,
+                None,
+                None,
+            ],
             'exception_frames.stack_level': [0, 0, 0, 0, 0, 0, 0],
             'exception_stacks.type': [u'ArithmeticException'],
             'exception_stacks.value': [u'/ by zero'],
@@ -460,26 +470,29 @@ class TestProcessor(BaseTest):
                 'release': None,
                 'dist': None,
                 'sdk': None,
-                'sentry.interfaces.Exception': {
-                    'exc_omitted': None,
-                    'values': None
-                },
+                'sentry.interfaces.Exception': {'exc_omitted': None, 'values': None},
                 'sentry.interfaces.Message': None,
                 'tags': None,
                 'time_spent': None,
                 'type': None,
-                'version': None
-            }
+                'version': None,
+            },
         }
 
         timestamp = datetime.utcnow()
-        event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        event['data']['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
+        event['datetime'] = (timestamp - timedelta(seconds=2)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        )
+        event['data']['received'] = int(
+            calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
+        )
 
         self.dataset.PROCESSOR.process_insert(event)
 
     def test_hash_invalid_primary_hash(self):
-        self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
+        self.event[
+            'primary_hash'
+        ] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
         row = self.dataset.PROCESSOR.process_insert(self.event)
         assert 'a52ccc1a61c2258e918b43b5aff50db1' in row
 

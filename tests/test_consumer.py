@@ -8,16 +8,30 @@ import time
 import six
 from six.moves import range
 
-from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
+from base import (
+    BaseTest,
+    FakeBatchingKafkaConsumer,
+    FakeWorker,
+    FakeKafkaMessage,
+    FakeKafkaProducer,
+)
 
-from snuba.consumer import ConsumerWorker, InvalidMessageType, InvalidMessageVersion, INSERT, REPLACE
+from snuba.consumer import (
+    ConsumerWorker,
+    InvalidMessageType,
+    InvalidMessageVersion,
+    INSERT,
+    REPLACE,
+)
 
 
 class TestConsumer(BaseTest):
     def setup_method(self, test_method):
         super(TestConsumer, self).setup_method(test_method)
 
-        self.test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), 'topic')
+        self.test_worker = ConsumerWorker(
+            self.clickhouse, self.dataset, FakeKafkaProducer(), 'topic'
+        )
 
     def test_simple_version_0(self):
         action, processed = ConsumerWorker.validate_message((0, 'insert', self.event))
@@ -27,8 +41,9 @@ class TestConsumer(BaseTest):
             assert processed[field] == self.event[field]
 
     def test_simple_version_1(self):
-        assert (ConsumerWorker.validate_message((0, 'insert', self.event)) ==
-                ConsumerWorker.validate_message((1, 'insert', self.event, {})))
+        assert ConsumerWorker.validate_message(
+            (0, 'insert', self.event)
+        ) == ConsumerWorker.validate_message((1, 'insert', self.event, {}))
 
     def test_invalid_type_version_0(self):
         with pytest.raises(InvalidMessageType):
@@ -58,50 +73,66 @@ class TestConsumer(BaseTest):
     def test_v2_start_delete_groups(self):
         project_id = 1
         message = (2, 'start_delete_groups', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_end_delete_groups(self):
         project_id = 1
         message = (2, 'end_delete_groups', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_start_merge(self):
         project_id = 1
         message = (2, 'start_merge', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_end_merge(self):
         project_id = 1
         message = (2, 'end_merge', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_start_unmerge(self):
         project_id = 1
         message = (2, 'start_unmerge', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_end_unmerge(self):
         project_id = 1
         message = (2, 'end_unmerge', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_start_delete_tag(self):
         project_id = 1
         message = (2, 'start_delete_tag', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_v2_end_delete_tag(self):
         project_id = 1
         message = (2, 'end_delete_tag', {'project_id': project_id})
-        assert ConsumerWorker.validate_message(message) == \
-            (REPLACE, (six.text_type(project_id), message))
+        assert ConsumerWorker.validate_message(message) == (
+            REPLACE,
+            (six.text_type(project_id), message),
+        )
 
     def test_simple(self):
         _, processed = ConsumerWorker.validate_message(self.event)
@@ -122,7 +153,9 @@ class TestConsumer(BaseTest):
             producer=FakeKafkaProducer(),
         )
 
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [
+            FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
         consumer._shutdown()
@@ -136,8 +169,12 @@ class TestConsumer(BaseTest):
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
         assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(2 + 1).encode('utf-8')  # offsets are last processed message offset + 1
+        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode(
+            'utf-8'
+        )
+        assert commit_message.value() == '{}'.format(2 + 1).encode(
+            'utf-8'
+        )  # offsets are last processed message offset + 1
 
     @patch('time.time')
     def test_batch_time(self, mock_time):
@@ -154,17 +191,23 @@ class TestConsumer(BaseTest):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [
+            FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]]
+        consumer.consumer.items = [
+            FakeKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]]
+        consumer.consumer.items = [
+            FakeKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
@@ -179,8 +222,12 @@ class TestConsumer(BaseTest):
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
         assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
+        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode(
+            'utf-8'
+        )
+        assert commit_message.value() == '{}'.format(6 + 1).encode(
+            'utf-8'
+        )  # offsets are last processed message offset + 1
 
     def test_offsets(self):
         event = self.event
@@ -200,9 +247,9 @@ class TestConsumer(BaseTest):
         self.test_worker.flush_batch(batch)
 
         assert self.clickhouse.execute(
-            "SELECT project_id, event_id, offset, partition FROM %s" % self.dataset.SCHEMA.QUERY_TABLE
+            "SELECT project_id, event_id, offset, partition FROM %s"
+            % self.dataset.SCHEMA.QUERY_TABLE
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
-
 
     def test_skip_too_old(self):
         event = self.event
@@ -227,13 +274,16 @@ class TestConsumer(BaseTest):
     def test_produce_replacement_messages(self):
         topic = 'topic'
 
-        self.test_worker.flush_batch([
-            (REPLACE, ('1', {'project_id': 1})),
-            (REPLACE, ('2', {'project_id': 2})),
-        ])
+        self.test_worker.flush_batch(
+            [(REPLACE, ('1', {'project_id': 1})), (REPLACE, ('2', {'project_id': 2}))]
+        )
 
-        assert [(m._topic, m._key, m._value) for m in self.test_worker.producer.messages] == \
-            [('topic', b'1', b'{"project_id": 1}'), ('topic', b'2', b'{"project_id": 2}')]
+        assert [
+            (m._topic, m._key, m._value) for m in self.test_worker.producer.messages
+        ] == [
+            ('topic', b'1', b'{"project_id": 1}'),
+            ('topic', b'2', b'{"project_id": 2}'),
+        ]
 
     def test_dead_letter_topic(self):
         class FailingFakeWorker(FakeWorker):
@@ -250,17 +300,26 @@ class TestConsumer(BaseTest):
             bootstrap_servers=None,
             group_id='group',
             producer=producer,
-            dead_letter_topic='dlt'
+            dead_letter_topic='dlt',
         )
 
-        message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
+        message = FakeKafkaMessage(
+            'topic', partition=1, offset=2, key='key', value='value'
+        )
         consumer.consumer.items = [message]
         consumer._run_once()
 
         assert len(producer.messages) == 1
         produced_message = producer.messages[0]
 
-        assert ('dlt', message.key(), message.value()) \
-            == (produced_message.topic(), produced_message.key(), produced_message.value())
+        assert ('dlt', message.key(), message.value()) == (
+            produced_message.topic(),
+            produced_message.key(),
+            produced_message.value(),
+        )
 
-        assert produced_message.headers() == {'partition': '1', 'offset': '2', 'topic': 'topic'}
+        assert produced_message.headers() == {
+            'partition': '1',
+            'offset': '2',
+            'topic': 'topic',
+        }

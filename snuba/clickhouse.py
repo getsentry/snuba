@@ -18,6 +18,7 @@ ESCAPE_COL_RE = re.compile(r"([`\\])")
 
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+
 def escape_col(col):
     if not col:
         return col
@@ -34,15 +35,16 @@ def escape_col(col):
 
 
 class ClickhousePool(object):
-    def __init__(self,
-                 host=settings.CLICKHOUSE_SERVER.split(':')[0],
-                 port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
-                 connect_timeout=1,
-                 send_receive_timeout=300,
-                 max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
-                 client_settings={},
-                 metrics=None,
-                 ):
+    def __init__(
+        self,
+        host=settings.CLICKHOUSE_SERVER.split(':')[0],
+        port=int(settings.CLICKHOUSE_SERVER.split(':')[1]),
+        connect_timeout=1,
+        send_receive_timeout=300,
+        max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
+        client_settings={},
+        metrics=None,
+    ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
@@ -106,7 +108,11 @@ class ClickhousePool(object):
                 return self.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
-                logger.warning("Write to ClickHouse failed: %s (%d tries left)", str(e), attempts_remaining)
+                logger.warning(
+                    "Write to ClickHouse failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
                     raise
@@ -134,7 +140,7 @@ class ClickhousePool(object):
             port=self.port,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
-            settings=self.client_settings
+            settings=self.client_settings,
         )
 
     def close(self):
@@ -156,19 +162,18 @@ class Column(object):
         return 'Column({}, {})'.format(repr(self.name), repr(self.type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.name == other.name \
+        return (
+            self.__class__ == other.__class__
+            and self.name == other.name
             and self.type == other.type
+        )
 
     def for_schema(self):
         return '{} {}'.format(escape_col(self.name), self.type.for_schema())
 
     @staticmethod
     def to_columns(columns):
-        return [
-            Column(*col) if not isinstance(col, Column) else col
-            for col in columns
-        ]
+        return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
 
 class FlattenedColumn(object):
@@ -177,7 +182,9 @@ class FlattenedColumn(object):
         self.name = name
         self.type = type
 
-        self.flattened = '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+        self.flattened = (
+            '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+        )
         self.escaped = escape_col(self.flattened)
 
     def __repr__(self):
@@ -186,9 +193,11 @@ class FlattenedColumn(object):
         )
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.flattened == other.flattened \
+        return (
+            self.__class__ == other.__class__
+            and self.flattened == other.flattened
             and self.type == other.type
+        )
 
 
 class ColumnType(object):
@@ -213,8 +222,7 @@ class Nullable(ColumnType):
         return u'Nullable({})'.format(repr(self.inner_type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
 
     def for_schema(self):
         return u'Nullable({})'.format(self.inner_type.for_schema())
@@ -228,8 +236,7 @@ class Array(ColumnType):
         return u'Array({})'.format(repr(self.inner_type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
 
     def for_schema(self):
         return u'Array({})'.format(self.inner_type.for_schema())
@@ -243,13 +250,15 @@ class Nested(ColumnType):
         return u'Nested({})'.format(repr(self.nested_columns))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
+        return (
+            self.__class__ == other.__class__
             and self.nested_columns == other.nested_columns
+        )
 
     def for_schema(self):
-        return u'Nested({})'.format(u", ".join(
-            column.for_schema() for column in self.nested_columns
-        ))
+        return u'Nested({})'.format(
+            u", ".join(column.for_schema() for column in self.nested_columns)
+        )
 
     def flatten(self, name):
         return [
@@ -270,8 +279,7 @@ class FixedString(ColumnType):
         return 'FixedString({})'.format(self.length)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.length == other.length
+        return self.__class__ == other.__class__ and self.length == other.length
 
     def for_schema(self):
         return 'FixedString({})'.format(self.length)
@@ -286,8 +294,7 @@ class UInt(ColumnType):
         return 'UInt({})'.format(self.size)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.size == other.size
+        return self.__class__ == other.__class__ and self.size == other.size
 
     def for_schema(self):
         return 'UInt{}'.format(self.size)
@@ -302,8 +309,7 @@ class Float(ColumnType):
         return 'Float({})'.format(self.size)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.size == other.size
+        return self.__class__ == other.__class__ and self.size == other.size
 
     def for_schema(self):
         return 'Float{}'.format(self.size)
@@ -326,6 +332,7 @@ class ColumnSet(object):
     * `for_schema()` can be used to generate valid ClickHouse column names
       and types for a table schema.
     """
+
     def __init__(self, columns):
         self.columns = Column.to_columns(columns)
 
@@ -346,8 +353,7 @@ class ColumnSet(object):
         return 'ColumnSet({})'.format(repr(self.columns))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self._flattened == other._flattened
+        return self.__class__ == other.__class__ and self._flattened == other._flattened
 
     def __len__(self):
         return len(self._flattened)
@@ -414,12 +420,15 @@ class TableSchema(object):
         }
 
     def get_distributed_engine(self):
-        return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
-            'cluster': self.CLICKHOUSE_CLUSTER,
-            'database': self.DATABASE,
-            'local_table': self.LOCAL_TABLE,
-            'sharding_key': self.SHARDING_KEY,
-        }
+        return (
+            """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);"""
+            % {
+                'cluster': self.CLICKHOUSE_CLUSTER,
+                'database': self.DATABASE,
+                'local_table': self.LOCAL_TABLE,
+                'sharding_key': self.SHARDING_KEY,
+            }
+        )
 
     def get_table_definition(self, name, engine):
         return """
@@ -430,19 +439,13 @@ class TableSchema(object):
         }
 
     def get_local_table_definition(self):
-        return self.get_table_definition(
-            self.LOCAL_TABLE,
-            self.get_local_engine()
-        )
+        return self.get_table_definition(self.LOCAL_TABLE, self.get_local_engine())
 
     # TODO what calls this?
     def get_dist_table_definition(self):
         assert self.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
 
-        return self.get_table_definition(
-            self.DIST_TABLE,
-            self.get_distributed_engine()
-        )
+        return self.get_table_definition(self.DIST_TABLE, self.get_distributed_engine())
 
     def get_local_table_drop(self):
         if not self.CAN_DROP:
@@ -462,158 +465,168 @@ class EventsTableSchema(TableSchema):
         self.DATABASE = 'default'
         self.LOCAL_TABLE = 'sentry_local'
         self.DIST_TABLE = 'sentry_dist'
-        self.QUERY_TABLE = self.DIST_TABLE # For prod, queries are run against the dist table
+        self.QUERY_TABLE = (
+            self.DIST_TABLE
+        )  # For prod, queries are run against the dist table
         self.CAN_DROP = False
 
         self.SAMPLE_EXPR = 'cityHash64(toString(event_id))'
         self.ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % self.SAMPLE_EXPR
-        self.PARTITION_BY = '(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))'
+        self.PARTITION_BY = (
+            '(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))'
+        )
         self.VERSION_COLUMN = 'deleted'
         self.SHARDING_KEY = 'cityHash64(toString(event_id))'
         self.RETENTION_DAYS = 90
 
-        self.METADATA_COLUMNS = ColumnSet([
-            # optional stream related data
-            ('offset', Nullable(UInt(64))),
-            ('partition', Nullable(UInt(16))),
-        ])
+        self.METADATA_COLUMNS = ColumnSet(
+            [
+                # optional stream related data
+                ('offset', Nullable(UInt(64))),
+                ('partition', Nullable(UInt(16))),
+            ]
+        )
 
-        self.PROMOTED_TAG_COLUMNS = ColumnSet([
-            # These are the classic tags, they are saved in Snuba exactly as they
-            # appear in the event body.
-            ('level', Nullable(String())),
-            ('logger', Nullable(String())),
-            ('server_name', Nullable(String())),  # future name: device_id?
-            ('transaction', Nullable(String())),
-            ('environment', Nullable(String())),
-            ('sentry:release', Nullable(String())),
-            ('sentry:dist', Nullable(String())),
-            ('sentry:user', Nullable(String())),
-            ('site', Nullable(String())),
-            ('url', Nullable(String())),
-        ])
+        self.PROMOTED_TAG_COLUMNS = ColumnSet(
+            [
+                # These are the classic tags, they are saved in Snuba exactly as they
+                # appear in the event body.
+                ('level', Nullable(String())),
+                ('logger', Nullable(String())),
+                ('server_name', Nullable(String())),  # future name: device_id?
+                ('transaction', Nullable(String())),
+                ('environment', Nullable(String())),
+                ('sentry:release', Nullable(String())),
+                ('sentry:dist', Nullable(String())),
+                ('sentry:user', Nullable(String())),
+                ('site', Nullable(String())),
+                ('url', Nullable(String())),
+            ]
+        )
 
-        self.PROMOTED_CONTEXT_TAG_COLUMNS = ColumnSet([
-            # These are promoted tags that come in in `tags`, but are more closely
-            # related to contexts.  To avoid naming confusion with Clickhouse nested
-            # columns, they are stored in the database with s/./_/
-            # promoted tags
-            ('app_device', Nullable(String())),
-            ('device', Nullable(String())),
-            ('device_family', Nullable(String())),
-            ('runtime', Nullable(String())),
-            ('runtime_name', Nullable(String())),
-            ('browser', Nullable(String())),
-            ('browser_name', Nullable(String())),
-            ('os', Nullable(String())),
-            ('os_name', Nullable(String())),
-            ('os_rooted', Nullable(UInt(8))),
-        ])
+        self.PROMOTED_CONTEXT_TAG_COLUMNS = ColumnSet(
+            [
+                # These are promoted tags that come in in `tags`, but are more closely
+                # related to contexts.  To avoid naming confusion with Clickhouse nested
+                # columns, they are stored in the database with s/./_/
+                # promoted tags
+                ('app_device', Nullable(String())),
+                ('device', Nullable(String())),
+                ('device_family', Nullable(String())),
+                ('runtime', Nullable(String())),
+                ('runtime_name', Nullable(String())),
+                ('browser', Nullable(String())),
+                ('browser_name', Nullable(String())),
+                ('os', Nullable(String())),
+                ('os_name', Nullable(String())),
+                ('os_rooted', Nullable(UInt(8))),
+            ]
+        )
 
-        self.PROMOTED_CONTEXT_COLUMNS = ColumnSet([
-            ('os_build', Nullable(String())),
-            ('os_kernel_version', Nullable(String())),
-            ('device_name', Nullable(String())),
-            ('device_brand', Nullable(String())),
-            ('device_locale', Nullable(String())),
-            ('device_uuid', Nullable(String())),
-            ('device_model_id', Nullable(String())),
-            ('device_arch', Nullable(String())),
-            ('device_battery_level', Nullable(Float(32))),
-            ('device_orientation', Nullable(String())),
-            ('device_simulator', Nullable(UInt(8))),
-            ('device_online', Nullable(UInt(8))),
-            ('device_charging', Nullable(UInt(8))),
-        ])
+        self.PROMOTED_CONTEXT_COLUMNS = ColumnSet(
+            [
+                ('os_build', Nullable(String())),
+                ('os_kernel_version', Nullable(String())),
+                ('device_name', Nullable(String())),
+                ('device_brand', Nullable(String())),
+                ('device_locale', Nullable(String())),
+                ('device_uuid', Nullable(String())),
+                ('device_model_id', Nullable(String())),
+                ('device_arch', Nullable(String())),
+                ('device_battery_level', Nullable(Float(32))),
+                ('device_orientation', Nullable(String())),
+                ('device_simulator', Nullable(UInt(8))),
+                ('device_online', Nullable(UInt(8))),
+                ('device_charging', Nullable(UInt(8))),
+            ]
+        )
 
-        self.REQUIRED_COLUMNS = ColumnSet([
-            ('event_id', FixedString(32)),
-            ('project_id', UInt(64)),
-            ('group_id', UInt(64)),
-            ('timestamp', DateTime()),
-            ('deleted', UInt(8)),
-            ('retention_days', UInt(16)),
-        ])
+        self.REQUIRED_COLUMNS = ColumnSet(
+            [
+                ('event_id', FixedString(32)),
+                ('project_id', UInt(64)),
+                ('group_id', UInt(64)),
+                ('timestamp', DateTime()),
+                ('deleted', UInt(8)),
+                ('retention_days', UInt(16)),
+            ]
+        )
 
-        self.ALL_COLUMNS = self.REQUIRED_COLUMNS + [
-            # required for non-deleted
-            ('platform', Nullable(String())),
-            ('message', Nullable(String())),
-            ('primary_hash', Nullable(FixedString(32))),
-            ('received', Nullable(DateTime())),
-
-            ('search_message', Nullable(String())),
-            ('title', Nullable(String())),
-            ('location', Nullable(String())),
-
-            # optional user
-            ('user_id', Nullable(String())),
-            ('username', Nullable(String())),
-            ('email', Nullable(String())),
-            ('ip_address', Nullable(String())),
-
-            # optional geo
-            ('geo_country_code', Nullable(String())),
-            ('geo_region', Nullable(String())),
-            ('geo_city', Nullable(String())),
-
-            ('sdk_name', Nullable(String())),
-            ('sdk_version', Nullable(String())),
-            ('type', Nullable(String())),
-            ('version', Nullable(String())),
-        ] + self.METADATA_COLUMNS \
-          + self.PROMOTED_CONTEXT_COLUMNS \
-          + self.PROMOTED_TAG_COLUMNS \
-          + self.PROMOTED_CONTEXT_TAG_COLUMNS \
-          + [
-            # other tags
-            ('tags', Nested([
-                ('key', String()),
-                ('value', String()),
-            ])),
-
-            # other context
-            ('contexts', Nested([
-                ('key', String()),
-                ('value', String()),
-            ])),
-
-            # interfaces
-
-            # http interface
-            ('http_method', Nullable(String())),
-            ('http_referer', Nullable(String())),
-
-            # exception interface
-            ('exception_stacks', Nested([
+        self.ALL_COLUMNS = (
+            self.REQUIRED_COLUMNS
+            + [
+                # required for non-deleted
+                ('platform', Nullable(String())),
+                ('message', Nullable(String())),
+                ('primary_hash', Nullable(FixedString(32))),
+                ('received', Nullable(DateTime())),
+                ('search_message', Nullable(String())),
+                ('title', Nullable(String())),
+                ('location', Nullable(String())),
+                # optional user
+                ('user_id', Nullable(String())),
+                ('username', Nullable(String())),
+                ('email', Nullable(String())),
+                ('ip_address', Nullable(String())),
+                # optional geo
+                ('geo_country_code', Nullable(String())),
+                ('geo_region', Nullable(String())),
+                ('geo_city', Nullable(String())),
+                ('sdk_name', Nullable(String())),
+                ('sdk_version', Nullable(String())),
                 ('type', Nullable(String())),
-                ('value', Nullable(String())),
-                ('mechanism_type', Nullable(String())),
-                ('mechanism_handled', Nullable(UInt(8))),
-            ])),
-            ('exception_frames', Nested([
-                ('abs_path', Nullable(String())),
-                ('filename', Nullable(String())),
-                ('package', Nullable(String())),
-                ('module', Nullable(String())),
-                ('function', Nullable(String())),
-                ('in_app', Nullable(UInt(8))),
-                ('colno', Nullable(UInt(32))),
-                ('lineno', Nullable(UInt(32))),
-                ('stack_level', UInt(16)),
-            ])),
-
-            # These are columns we added later in the life of the (current) production
-            # database. They don't necessarily belong here in a logical/readability sense
-            # but they are here to match the order of columns in production becase
-            # `insert_distributed_sync` is very sensitive to column existence and ordering.
-            ('culprit', Nullable(String())),
-            ('sdk_integrations', Array(String())),
-            ('modules', Nested([
-                ('name', String()),
-                ('version', String()),
-            ])),
-        ]
+                ('version', Nullable(String())),
+            ]
+            + self.METADATA_COLUMNS
+            + self.PROMOTED_CONTEXT_COLUMNS
+            + self.PROMOTED_TAG_COLUMNS
+            + self.PROMOTED_CONTEXT_TAG_COLUMNS
+            + [
+                # other tags
+                ('tags', Nested([('key', String()), ('value', String())])),
+                # other context
+                ('contexts', Nested([('key', String()), ('value', String())])),
+                # interfaces
+                # http interface
+                ('http_method', Nullable(String())),
+                ('http_referer', Nullable(String())),
+                # exception interface
+                (
+                    'exception_stacks',
+                    Nested(
+                        [
+                            ('type', Nullable(String())),
+                            ('value', Nullable(String())),
+                            ('mechanism_type', Nullable(String())),
+                            ('mechanism_handled', Nullable(UInt(8))),
+                        ]
+                    ),
+                ),
+                (
+                    'exception_frames',
+                    Nested(
+                        [
+                            ('abs_path', Nullable(String())),
+                            ('filename', Nullable(String())),
+                            ('package', Nullable(String())),
+                            ('module', Nullable(String())),
+                            ('function', Nullable(String())),
+                            ('in_app', Nullable(UInt(8))),
+                            ('colno', Nullable(UInt(32))),
+                            ('lineno', Nullable(UInt(32))),
+                            ('stack_level', UInt(16)),
+                        ]
+                    ),
+                ),
+                # These are columns we added later in the life of the (current) production
+                # database. They don't necessarily belong here in a logical/readability sense
+                # but they are here to match the order of columns in production becase
+                # `insert_distributed_sync` is very sensitive to column existence and ordering.
+                ('culprit', Nullable(String())),
+                ('sdk_integrations', Array(String())),
+                ('modules', Nested([('name', String()), ('version', String())])),
+            ]
+        )
 
         # TODO the following mappings are only used by the EventsDataSet to
         # expand tags[] expressions so perhaps they should be defined there.
@@ -621,20 +634,31 @@ class EventsTableSchema(TableSchema):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
         self.PROMOTED_COLS = {
-            'tags': frozenset(col.flattened for col in (self.PROMOTED_TAG_COLUMNS + self.PROMOTED_CONTEXT_TAG_COLUMNS)),
-            'contexts': frozenset(col.flattened for col in self.PROMOTED_CONTEXT_COLUMNS),
+            'tags': frozenset(
+                col.flattened
+                for col in (
+                    self.PROMOTED_TAG_COLUMNS + self.PROMOTED_CONTEXT_TAG_COLUMNS
+                )
+            ),
+            'contexts': frozenset(
+                col.flattened for col in self.PROMOTED_CONTEXT_COLUMNS
+            ),
         }
 
         # For every applicable promoted column,  a map of translations from the column
         # name  we save in the database to the tag we receive in the query.
         self.COLUMN_TAG_MAP = {
-            'tags': {col.flattened: col.flattened.replace('_', '.') for col in self.PROMOTED_CONTEXT_TAG_COLUMNS},
+            'tags': {
+                col.flattened: col.flattened.replace('_', '.')
+                for col in self.PROMOTED_CONTEXT_TAG_COLUMNS
+            },
             'contexts': {},
         }
 
         # And a reverse map from the tags the client expects to the database columns
         self.TAG_COLUMN_MAP = {
-            col: dict(map(reversed, trans.items())) for col, trans in self.COLUMN_TAG_MAP.items()
+            col: dict(map(reversed, trans.items()))
+            for col, trans in self.COLUMN_TAG_MAP.items()
         }
 
         # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
@@ -644,6 +668,7 @@ class EventsTableSchema(TableSchema):
             for col in self.PROMOTED_COLS
         }
 
+
 # Dev and Test tables use the same column schema as the production schema,
 # but return a different (non-replicated) table engine for the local table.
 class DevEventsTableSchema(EventsTableSchema):
@@ -651,7 +676,9 @@ class DevEventsTableSchema(EventsTableSchema):
         super(DevEventsTableSchema, self).__init__(*args, **kwargs)
 
         self.LOCAL_TABLE = 'dev_events'
-        self.QUERY_TABLE = self.LOCAL_TABLE # For dev/test, queries are run against the local table
+        self.QUERY_TABLE = (
+            self.LOCAL_TABLE
+        )  # For dev/test, queries are run against the local table
         self.CAN_DROP = True
 
     def get_local_engine(self):
@@ -668,6 +695,7 @@ class DevEventsTableSchema(EventsTableSchema):
 
     def migrate(self, clickhouse):
         from snuba import migrate
+
         migrate.run(clickhouse, self)
 
 

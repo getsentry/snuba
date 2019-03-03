@@ -11,16 +11,22 @@ logger = logging.getLogger('snuba.perf')
 
 
 class FakeKafkaMessage(object):
-    def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
+    def __init__(
+        self, topic, partition, offset, value, key=None, headers=None, error=None
+    ):
         self._topic = topic
         self._partition = partition
         self._offset = offset
         self._value = value
         self._key = key
-        self._headers = {
-            six.text_type(k): six.text_type(v) if v else None
-            for k, v in six.iteritems(headers)
-        } if headers else None
+        self._headers = (
+            {
+                six.text_type(k): six.text_type(v) if v else None
+                for k, v in six.iteritems(headers)
+            }
+            if headers
+            else None
+        )
         self._headers = headers
         self._error = error
 
@@ -55,17 +61,20 @@ def get_messages(events_file):
     return messages
 
 
-def run(events_file, clickhouse, dataset, repeat=1,
-        profile_process=False, profile_write=False):
+def run(
+    events_file,
+    clickhouse,
+    dataset,
+    repeat=1,
+    profile_process=False,
+    profile_write=False,
+):
     from snuba.consumer import ConsumerWorker
 
     clickhouse.execute(dataset.SCHEMA.get_local_table_definition())
 
     consumer = ConsumerWorker(
-        clickhouse=clickhouse,
-        dataset=dataset,
-        producer=None,
-        replacements_topic=None,
+        clickhouse=clickhouse, dataset=dataset, producer=None, replacements_topic=None
     )
 
     messages = get_messages(events_file)

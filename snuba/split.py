@@ -16,20 +16,25 @@ def split_query(query_func):
     into smaller increments, and start with the last one, so that we can potentially
     avoid querying the entire range.
     """
+
     def wrapper(*args, **kwargs):
         body = args[0]
-        use_split, date_align, split_step = state.get_configs([
-            ('use_split', 0),
-            ('date_align_seconds', 1),
-            ('split_step', 3600),  # default 1 hour
-        ])
+        use_split, date_align, split_step = state.get_configs(
+            [
+                ('use_split', 0),
+                ('date_align_seconds', 1),
+                ('split_step', 3600),  # default 1 hour
+            ]
+        )
         to_date = util.parse_datetime(body['to_date'], date_align)
         from_date = util.parse_datetime(body['from_date'], date_align)
         limit = body.get('limit', 0)
         remaining_offset = body.get('offset', 0)
 
         if (
-            use_split and limit and not body.get('groupby')
+            use_split
+            and limit
+            and not body.get('groupby')
             and body.get('orderby') == '-timestamp'
         ):
             overall_result = None
@@ -73,13 +78,18 @@ def split_query(query_func):
                         # how many results we got for our last query and its time range, and how
                         # many we have left to fetch
                         remaining = limit - total_results
-                        split_step = split_step * math.ceil(remaining / float(len(result['data'])))
+                        split_step = split_step * math.ceil(
+                            remaining / float(len(result['data']))
+                        )
                         split_end = split_start
                         try:
-                            split_start = max(split_end - timedelta(seconds=split_step), from_date)
+                            split_start = max(
+                                split_end - timedelta(seconds=split_step), from_date
+                            )
                         except OverflowError:
                             split_start = from_date
             return overall_result, status
         else:
             return query_func(*args, **kwargs)
+
     return wrapper

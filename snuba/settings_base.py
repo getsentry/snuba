@@ -14,6 +14,8 @@ DATASETS = {
     'events': 'snuba.datasets.DevEventsDataSet',
     # 'spans': 'snuba.datasets.DevSpansDataSet',
 }
+
+
 def get_dataset(name):
     assert name in DATASETS
     dataset = DATASETS[name]
@@ -23,6 +25,7 @@ def get_dataset(name):
         mod = __import__('.'.join(path[:-1]), fromlist=path[-1:])
         dataset = DATASETS[name] = getattr(mod, path[-1])()
     return dataset
+
 
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
@@ -56,11 +59,7 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 20000
 DISCARD_OLD_EVENTS = True
 KAFKA_TOPICS = {
-    'raw-events': {
-        'topic': 'events',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
+    'raw-events': {'topic': 'events', 'replication_factor': 1, 'num_partitions': 1},
     'replacements': {
         'topic': 'event-replacements',
         'replication_factor': 1,
@@ -95,7 +94,7 @@ STATS_IN_RESPONSE = False
 PAYLOAD_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 REPLACER_MAX_BLOCK_SIZE = 512
-REPLACER_MAX_MEMORY_USAGE = 10 * (1024**3)  # 10GB
+REPLACER_MAX_MEMORY_USAGE = 10 * (1024 ** 3)  # 10GB
 # TLL of Redis key that denotes whether a project had replacements
 # run recently. Useful for decidig whether or not to add FINAL clause
 # to queries.

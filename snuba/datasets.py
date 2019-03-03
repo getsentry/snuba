@@ -3,6 +3,7 @@ import re, six
 from snuba import clickhouse, schemas, state, util, processor
 from snuba.clickhouse import escape_col
 
+
 class DataSet(object):
     """
     A DataSet defines the complete set of data sources, schemas, and
@@ -10,6 +11,7 @@ class DataSet(object):
         - Consume, transform, and insert data payloads from Kafka into Clickhouse.
         - Define how Snuba API queries are transformed into SQL.
     """
+
     def __init__(self, *args, **kwargs):
         self.SCHEMA = None
         self.PROCESSOR = None
@@ -30,6 +32,7 @@ class DataSet(object):
         """
         return None
 
+
 class EventsDataSet(DataSet):
     """
     Represents the collection of classic sentry "error" type events
@@ -46,7 +49,6 @@ class EventsDataSet(DataSet):
         # TODO is the query side processing logically its own class too?
         # ie should we have a SCHEMA, EVENT_PROCESSOR, and QUERY_PROCESSOR?
 
-
         # TODO use the right redis db where applicable?
         # all our usage of redis might be global anyway and maybe
         # each dataset doesn't need its own
@@ -55,12 +57,14 @@ class EventsDataSet(DataSet):
         # TODO is this, and TIME_GROUPS really a global feature, not limited to events dataset?
         self.TIME_GROUP_COLUMN = 'time'
         self.TIME_GROUPS = util.dynamicdict(
-            lambda sec: 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(sec),
+            lambda sec: 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(
+                sec
+            ),
             {
                 3600: 'toStartOfHour(timestamp)',
                 60: 'toStartOfMinute(timestamp)',
                 86400: 'toDate(timestamp)',
-            }
+            },
         )
 
         # A column name like "tags[url]"
@@ -99,11 +103,9 @@ class EventsDataSet(DataSet):
                 return self.string_col(actual_tag)
 
         # For the rest, return an expression that looks it up in the nested tags.
-        return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
-            'col': col,
-            'tag': util.escape_literal(tag)
-        })
-
+        return u'{col}.value[indexOf({col}.key, {tag})]'.format(
+            **{'col': col, 'tag': util.escape_literal(tag)}
+        )
 
     def tags_expr(self, column_name, body):
         """
@@ -122,12 +124,10 @@ class EventsDataSet(DataSet):
             promoted = self.SCHEMA.PROMOTED_COLS[col]
             col_map = self.SCHEMA.COLUMN_TAG_MAP[col]
             key_list = u'arrayConcat([{}], {}.key)'.format(
-                u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-                col
+                u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted), col
             )
             val_list = u'arrayConcat([{}], {}.value)'.format(
-                ', '.join(self.string_col(p) for p in promoted),
-                col
+                ', '.join(self.string_col(p) for p in promoted), col
             )
 
         cols_used = util.all_referenced_columns(body) & set(['tags_key', 'tags_value'])
@@ -135,8 +135,7 @@ class EventsDataSet(DataSet):
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.
             expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
-                key_list,
-                val_list
+                key_list, val_list
             )
 
             # put the all_tags expression in the alias cache so we can use the alias
@@ -153,9 +152,9 @@ class EventsDataSet(DataSet):
     def condition_expr(self, condition, body):
         lhs, op, lit = condition
         if (
-            lhs in ('received', 'timestamp') and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
+            lhs in ('received', 'timestamp')
+            and op in ('>', '<', '>=', '<=', '=', '!=')
+            and isinstance(lit, str)
         ):
             lit = util.parse_datetime(lit)
 
@@ -169,22 +168,23 @@ class EventsDataSet(DataSet):
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
         if (
-            isinstance(lhs, six.string_types) and
-            lhs in self.SCHEMA.ALL_COLUMNS and
-            type(self.SCHEMA.ALL_COLUMNS[lhs].type) == clickhouse.Array and
-            self.SCHEMA.ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
-            not isinstance(lit, (list, tuple))
-            ):
-            any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
+            isinstance(lhs, six.string_types)
+            and lhs in self.SCHEMA.ALL_COLUMNS
+            and type(self.SCHEMA.ALL_COLUMNS[lhs].type) == clickhouse.Array
+            and self.SCHEMA.ALL_COLUMNS[lhs].base_name != body.get('arrayjoin')
+            and not isinstance(lit, (list, tuple))
+        ):
+            any_or_all = (
+                'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
+            )
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,
                 op,
                 util.escape_literal(lit),
-                util.column_expr(self, lhs, body)
+                util.column_expr(self, lhs, body),
             )
 
         return None
-
 
     def string_col(self, col):
         col_type = self.SCHEMA.ALL_COLUMNS.get(col, None)

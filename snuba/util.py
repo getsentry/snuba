@@ -40,6 +40,7 @@ class dynamicdict(defaultdict):
     default_factory with the missing key to generate a default
     value specific to the requested key.
     """
+
     def __missing__(self, key):
         if self.default_factory:
             self.__setitem__(key, self.default_factory(key))
@@ -73,9 +74,13 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     assert not aggregate or (aggregate and (column_name or alias))
     column_name = column_name or ''
 
-    if isinstance(column_name, (tuple, list)) and isinstance(column_name[1], (tuple, list)):
+    if isinstance(column_name, (tuple, list)) and isinstance(
+        column_name[1], (tuple, list)
+    ):
         return complex_column_expr(dataset, column_name, body)
-    elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
+    elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(
+        column_name
+    ):
         return escape_literal(column_name[1:-1])
     else:
         expr = dataset.column_expr(column_name, body)
@@ -171,9 +176,11 @@ def is_condition(cond_or_list):
     return (
         # A condition is:
         # a 3-tuple
-        len(cond_or_list) == 3 and
+        len(cond_or_list) == 3
+        and
         # where the middle element is an operator
-        cond_or_list[1] in schemas.CONDITION_OPERATORS and
+        cond_or_list[1] in schemas.CONDITION_OPERATORS
+        and
         # and the first element looks like a column name or expression
         isinstance(cond_or_list[0], (six.string_types, tuple, list))
     )
@@ -192,7 +199,9 @@ def all_referenced_columns(body):
 
     # Conditions need flattening as they can be nested as AND/OR
     if 'conditions' in body:
-        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in body['conditions']]))
+        flat_conditions = list(
+            chain(*[[c] if is_condition(c) else c for c in body['conditions']])
+        )
         col_exprs.extend([c[0] for c in flat_conditions])
 
     if 'aggregations' in body:
@@ -213,8 +222,11 @@ def columns_in_expr(expr):
     # string literals, not column names.
     if isinstance(expr, six.string_types):
         cols.append(expr.lstrip('-'))
-    elif (isinstance(expr, (list, tuple)) and len(expr) >= 2
-          and isinstance(expr[1], (list, tuple))):
+    elif (
+        isinstance(expr, (list, tuple))
+        and len(expr) >= 2
+        and isinstance(expr[1], (list, tuple))
+    ):
         for func_arg in expr[1]:
             cols.extend(columns_in_expr(func_arg))
     return cols
@@ -249,9 +261,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         else:
             lhs, op, lit = condition
             return u'{} {} {}'.format(
-                column_expr(dataset, lhs, body),
-                op,
-                escape_literal(lit)
+                column_expr(dataset, lhs, body), op, escape_literal(lit)
             )
 
     elif depth == 1:
@@ -295,21 +305,27 @@ def raw_query(body, sql, client, timer, stats=None):
     fix some of the formatting issues in the result JSON
     """
     project_ids = to_list(body['project'])
-    project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
+    project_id = (
+        project_ids[0] if project_ids else 0
+    )  # TODO rate limit on every project in the list?
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache = state.get_configs([
-        ('global_per_second_limit', 1000),
-        ('global_concurrent_limit', 1000),
-        ('project_per_second_limit', 1000),
-        ('project_concurrent_limit', 1000),
-        ('use_cache', 0),
-    ])
+    grl, gcl, prl, pcl, use_cache = state.get_configs(
+        [
+            ('global_per_second_limit', 1000),
+            ('global_concurrent_limit', 1000),
+            ('project_per_second_limit', 1000),
+            ('project_concurrent_limit', 1000),
+            ('use_cache', 0),
+        ]
+    )
 
     # Specific projects can have their rate limits overridden
-    prl, pcl = state.get_configs([
-        ('project_per_second_limit_{}'.format(project_id), prl),
-        ('project_concurrent_limit_{}'.format(project_id), pcl),
-    ])
+    prl, pcl = state.get_configs(
+        [
+            ('project_per_second_limit_{}'.format(project_id), prl),
+            ('project_concurrent_limit_{}'.format(project_id), pcl),
+        ]
+    )
 
     all_confs = state.get_all_configs()
     query_settings = {
@@ -327,11 +343,13 @@ def raw_query(body, sql, client, timer, stats=None):
         result = state.get_result(query_id) if use_cache else None
         timer.mark('cache_get')
 
-        stats.update({
-            'is_duplicate': is_dupe,
-            'query_id': query_id,
-            'use_cache': bool(use_cache),
-            'cache_hit': bool(result)}
+        stats.update(
+            {
+                'is_duplicate': is_dupe,
+                'query_id': query_id,
+                'use_cache': bool(use_cache),
+                'cache_hit': bool(result),
+            }
         ),
 
         if result:
@@ -341,8 +359,14 @@ def raw_query(body, sql, client, timer, stats=None):
                 metrics.gauge('query.global_concurrent', g_concurr)
                 stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
 
-                with state.rate_limit(project_id, prl, pcl) as (p_allowed, p_rate, p_concurr):
-                    stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
+                with state.rate_limit(project_id, prl, pcl) as (
+                    p_allowed,
+                    p_rate,
+                    p_concurr,
+                ):
+                    stats.update(
+                        {'project_rate': p_rate, 'project_concurrent': p_concurr}
+                    )
                     timer.mark('rate_limit')
 
                     if g_allowed and p_allowed:
@@ -369,7 +393,7 @@ def raw_query(body, sql, client, timer, stats=None):
                                 settings=query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
-                                query_id=query_id
+                                query_id=query_id,
                             )
                             data, meta = scrub_ch_data(data, meta)
                             status = 200
@@ -382,10 +406,9 @@ def raw_query(body, sql, client, timer, stats=None):
 
                             logger.debug(sql)
                             timer.mark('execute')
-                            stats.update({
-                                'result_rows': len(data),
-                                'result_cols': len(meta),
-                            })
+                            stats.update(
+                                {'result_rows': len(data), 'result_cols': len(meta)}
+                            )
 
                             if use_cache:
                                 state.set_result(query_id, result)
@@ -396,16 +419,17 @@ def raw_query(body, sql, client, timer, stats=None):
                             status = 500
                             logger.exception("Error running query: %s\n%s", sql, error)
                             if isinstance(ex, ClickHouseError):
-                                result = {'error': {
-                                    'type': 'clickhouse',
-                                    'code': ex.code,
-                                    'message': error,
-                                }}
+                                result = {
+                                    'error': {
+                                        'type': 'clickhouse',
+                                        'code': ex.code,
+                                        'message': error,
+                                    }
+                                }
                             else:
-                                result = {'error': {
-                                    'type': 'unknown',
-                                    'message': error,
-                                }}
+                                result = {
+                                    'error': {'type': 'unknown', 'message': error}
+                                }
 
                     else:
                         status = 429
@@ -413,36 +437,41 @@ def raw_query(body, sql, client, timer, stats=None):
                             ('global', 'concurrent', g_concurr, gcl),
                             ('global', 'per-second', g_rate, grl),
                             ('project', 'concurrent', p_concurr, pcl),
-                            ('project', 'per-second', p_rate, prl)
+                            ('project', 'per-second', p_rate, prl),
                         ]
                         reason = next((r for r in reasons if r[2] > r[3]), None)
-                        result = {'error': {
-                            'type': 'ratelimit',
-                            'message': 'rate limit exceeded',
-                            'detail': reason and '{} {} of {:.0f} exceeds limit of {:.0f}'.format(*reason)
-                        }}
+                        result = {
+                            'error': {
+                                'type': 'ratelimit',
+                                'message': 'rate limit exceeded',
+                                'detail': reason
+                                and '{} {} of {:.0f} exceeds limit of {:.0f}'.format(
+                                    *reason
+                                ),
+                            }
+                        }
 
     stats.update(query_settings)
 
     if settings.RECORD_QUERIES:
         # send to redis
-        state.record_query({
-            'request': body,
-            'sql': sql,
-            'timing': timer,
-            'stats': stats,
-            'status': status,
-        })
+        state.record_query(
+            {
+                'request': body,
+                'sql': sql,
+                'timing': timer,
+                'stats': stats,
+                'status': status,
+            }
+        )
 
         # send to datadog
         tags = [
             'status:{}'.format(status),
             'referrer:{}'.format(stats.get('referrer', 'none')),
-            'final:{}'.format(stats.get('final', False))
+            'final:{}'.format(stats.get('final', False)),
         ]
-        mark_tags = [
-            'final:{}'.format(stats.get('final', False))
-        ]
+        mark_tags = ['final:{}'.format(stats.get('final', False))]
         timer.send_metrics_to(metrics, tags=tags, mark_tags=mark_tags)
 
     result['timing'] = timer
@@ -467,7 +496,9 @@ def scrub_ch_data(data, meta):
                 d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
         elif DATE_TYPE_RE.match(col['type']):
             for d in data:
-                dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
+                dt = datetime(*(d[col['name']].timetuple()[:6])).replace(
+                    tzinfo=tz.tzutc()
+                )
                 d[col['name']] = dt.isoformat()
 
     return (data, meta)
@@ -477,10 +508,10 @@ def validate_request(schema):
     """
     Decorator to validate that a request body matches the given schema.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-
             def default_encode(value):
                 if callable(value):
                     return value()
@@ -495,17 +526,21 @@ def validate_request(schema):
                     if kwargs.get('timer'):
                         kwargs['timer'].mark('validate_schema')
                 except (ValueError, jsonschema.ValidationError) as e:
-                    result = {'error': {
-                        'type': 'schema',
-                        'message': str(e),
-                    }, 'schema': schema}
+                    result = {
+                        'error': {'type': 'schema', 'message': str(e)},
+                        'schema': schema,
+                    }
                     return (
-                        json.dumps(result, sort_keys=True, indent=4, default=default_encode),
+                        json.dumps(
+                            result, sort_keys=True, indent=4, default=default_encode
+                        ),
                         400,
-                        {'Content-Type': 'application/json'}
+                        {'Content-Type': 'application/json'},
                     )
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -523,13 +558,17 @@ class Timer(object):
             start = self.marks[0][1]
             end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
             diff_ms = lambda start, end: int((end - start) * 1000)
-            durations = [(name, diff_ms(self.marks[i][1], ts)) for i, (name, ts) in enumerate(self.marks[1:])]
+            durations = [
+                (name, diff_ms(self.marks[i][1], ts))
+                for i, (name, ts) in enumerate(self.marks[1:])
+            ]
             self.final = {
                 'timestamp': int(start),
                 'duration_ms': diff_ms(start, end),
                 'marks_ms': {
-                    key: sum(d[1] for d in group) for key, group in groupby(sorted(durations), key=lambda x: x[0])
-                }
+                    key: sum(d[1] for d in group)
+                    for key, group in groupby(sorted(durations), key=lambda x: x[0])
+                },
             }
         return self.final
 
@@ -550,7 +589,9 @@ def time_request(name):
         def wrapper(*args, **kwargs):
             kwargs['timer'] = Timer(name)
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -592,7 +633,9 @@ def create_metrics(host, port, prefix, tags=None):
     from datadog import DogStatsd
 
     bits = prefix.split('.', 2)
-    assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
+    assert (
+        len(bits) >= 2 and bits[0] == 'snuba'
+    ), "prefix must be like `snuba.<category>`"
 
     return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)
 

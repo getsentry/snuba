@@ -2,11 +2,14 @@ from base import BaseTest
 
 from snuba.clickhouse import ColumnSet
 
+
 class TestWriter(BaseTest):
     def test(self):
         self.write_raw_events(self.event)
 
-        res = self.clickhouse.execute("SELECT count() FROM %s" % self.dataset.SCHEMA.QUERY_TABLE)
+        res = self.clickhouse.execute(
+            "SELECT count() FROM %s" % self.dataset.SCHEMA.QUERY_TABLE
+        )
 
         assert res[0][0] == 1
 

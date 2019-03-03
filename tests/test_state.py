@@ -14,6 +14,7 @@ class TestState(BaseTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
         from snuba.api import application
+
         assert application.testing == True
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
@@ -83,16 +84,15 @@ class TestState(BaseTest):
         assert state.get_config('noexist', 4) == 4
         all_configs = state.get_all_configs()
         assert all(all_configs[k] == v for k, v in [('foo', 1), ('bar', 2), ('baz', 3)])
-        assert state.get_configs([
-            ('foo', 100),
-            ('bar', 200),
-            ('noexist', 300),
-            ('noexist-2', None)
-        ]) == [1, 2, 300, None]
+        assert state.get_configs(
+            [('foo', 100), ('bar', 200), ('noexist', 300), ('noexist-2', None)]
+        ) == [1, 2, 300, None]
 
         state.set_configs({'bar': 'quux'})
         all_configs = state.get_all_configs()
-        assert all(all_configs[k] == v for k, v in [('foo', 1), ('bar', 'quux'), ('baz', 3)])
+        assert all(
+            all_configs[k] == v for k, v in [('foo', 1), ('bar', 'quux'), ('baz', 3)]
+        )
 
     def test_dedupe(self):
         try:
@@ -101,14 +101,21 @@ class TestState(BaseTest):
             uniq_name = uuid.uuid4().hex[:8]
 
             def do_request(result_container):
-                result = json.loads(self.app.post('/query', data=json.dumps({
-                    'project': 1,
-                    'granularity': 3600,
-                    'aggregations': [
-                        ['count()', '', uniq_name],
-                        ['sleep(0.01)', '', 'sleep'],
-                    ],
-                })).data)
+                result = json.loads(
+                    self.app.post(
+                        '/query',
+                        data=json.dumps(
+                            {
+                                'project': 1,
+                                'granularity': 3600,
+                                'aggregations': [
+                                    ['count()', '', uniq_name],
+                                    ['sleep(0.01)', '', 'sleep'],
+                                ],
+                            }
+                        ),
+                    ).data
+                )
                 result_container.append(result)
 
             # t0 and t1 are exact duplicate queries submitted concurrently.  One of
@@ -150,7 +157,6 @@ class TestState(BaseTest):
             state.delete_config('use_cache')
 
     def test_memoize(self):
-
         @state.memoize(0.1)
         def rand():
             return random.random()

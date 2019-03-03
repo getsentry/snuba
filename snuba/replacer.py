@@ -8,6 +8,7 @@ from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
 from .consumer import InvalidMessageType, InvalidMessageVersion
+
 # TODO decouple these flags between processor and replacer
 from .processor import NEEDS_FINAL, EXCLUDE_GROUPS
 from .redis import redis_client
@@ -66,22 +67,29 @@ def get_projects_query_flags(project_ids):
     now = time.time()
     p = redis_client.pipeline()
 
-    needs_final_keys = [get_project_needs_final_key(project_id) for project_id in project_ids]
+    needs_final_keys = [
+        get_project_needs_final_key(project_id) for project_id in project_ids
+    ]
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
-    exclude_groups_keys = [get_project_exclude_groups_key(project_id) for project_id in project_ids]
+    exclude_groups_keys = [
+        get_project_exclude_groups_key(project_id) for project_id in project_ids
+    ]
     for exclude_groups_key in exclude_groups_keys:
-        p.zremrangebyscore(exclude_groups_key, float('-inf'), now - settings.REPLACER_KEY_TTL)
-        p.zrevrangebyscore(exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL)
+        p.zremrangebyscore(
+            exclude_groups_key, float('-inf'), now - settings.REPLACER_KEY_TTL
+        )
+        p.zrevrangebyscore(
+            exclude_groups_key, float('inf'), now - settings.REPLACER_KEY_TTL
+        )
 
     results = p.execute()
 
-    needs_final = any(results[:len(project_ids)])
-    exclude_groups = sorted({
-        int(group_id) for group_id
-        in sum(results[(len(project_ids) + 1)::2], [])
-    })
+    needs_final = any(results[: len(project_ids)])
+    exclude_groups = sorted(
+        {int(group_id) for group_id in sum(results[(len(project_ids) + 1) :: 2], [])}
+    )
 
     return (needs_final, exclude_groups)
 
@@ -95,6 +103,7 @@ class ReplacerWorker(AbstractBatchWorker):
     values for some columns. These are inserted into Clickhouse and will replace
     the existing rows with the same primary key upon the next OPTIMIZE.
     """
+
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -109,9 +118,19 @@ class ReplacerWorker(AbstractBatchWorker):
 
             # TODO, to make this properly generic, the processor
             # should probabluy deal with all this.
-            if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
+            if type_ in (
+                'start_delete_groups',
+                'start_merge',
+                'start_unmerge',
+                'start_delete_tag',
+            ):
                 return None
-            elif type_ in ('end_merge', 'end_delete_tag' ,'end_unmerge', 'end_delete_groups'):
+            elif type_ in (
+                'end_merge',
+                'end_delete_tag',
+                'end_unmerge',
+                'end_delete_groups',
+            ):
                 return self.dataset.PROCESSOR.process_replacement(type_, event)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -119,10 +138,17 @@ class ReplacerWorker(AbstractBatchWorker):
             raise InvalidMessageVersion("Unknown message format: " + str(message))
 
     def flush_batch(self, batch):
-        for count_query_template, insert_query_template, query_args, query_time_flags in batch:
+        for (
+            count_query_template,
+            insert_query_template,
+            query_args,
+            query_time_flags,
+        ) in batch:
             # TODO processor should probably insert table name
             query_args.update({'table_name': self.dataset.SCHEMA.QUERY_TABLE})
-            count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
+            count = self.clickhouse.execute_robust(count_query_template % query_args)[
+                0
+            ][0]
             if count == 0:
                 continue
 
@@ -135,7 +161,9 @@ class ReplacerWorker(AbstractBatchWorker):
                 set_project_exclude_groups(project_id, group_ids)
 
             t = time.time()
-            logger.debug("Executing replace query: %s" % (insert_query_template % query_args))
+            logger.debug(
+                "Executing replace query: %s" % (insert_query_template % query_args)
+            )
             self.clickhouse.execute_robust(insert_query_template % query_args)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
