@@ -395,7 +395,7 @@ class TableSchema(object):
         self.PARTITION_BY = None
         self.VERSION_COLUMN = None
         self.SHARDING_KEY = None
-        self.RETENTION_DAYS = None
+        self.RETENTION_DAYS = None # TODO this currently does nothing
 
         self.ALL_COLUMNS = ColumnSet([])
 
@@ -680,3 +680,52 @@ class TestEventsTableSchema(DevEventsTableSchema):
 
     def migrate(self, clickhouse):
         pass
+
+
+class SpansTableSchema(TableSchema):
+    def __init__(self, *args, **kwargs):
+        super(SpansTableSchema, self).__init__(*args, **kwargs)
+
+        self.CLICKHOUSE_CLUSTER = None
+        self.DATABASE = 'default'
+        self.LOCAL_TABLE = 'spans_local'
+        self.DIST_TABLE = 'spans_dist'
+        self.QUERY_TABLE = self.DIST_TABLE
+        self.CAN_DROP = False
+
+        self.SAMPLE_EXPR = 'cityHash64(toString(user_id))'
+        self.ORDER_BY = '(project_id, toStartOfDay(timestamp), transaction_id)'
+        self.PARTITION_BY = '(toMonday(timestamp))'
+        self.VERSION_COLUMN = None
+        self.SHARDING_KEY = 'cityHash64(toString(user_id))'
+        self.RETENTION_DAYS = 90
+
+        self.ALL_COLUMNS = [
+            ('project_id', UInt(64)),
+            ('span_id', String()),
+            ('user_id', String()),
+            ('timestamp', DateTime()),
+            ('duration', UInt(32)),
+            ('transaction_id', String()),
+            ('operation', String()),
+        ]
+
+    def get_local_engine(self):
+        # TODO this should be a ReplicatedMergeTree in the prod dataset
+        return """
+            MergeTree()
+            PARTITION BY %(partition_by)s
+            ORDER BY %(order_by)s
+            SAMPLE BY %(sample_expr)s ;""" % {
+            'order_by': self.ORDER_BY,
+            'partition_by': self.PARTITION_BY,
+            'sample_expr': self.SAMPLE_EXPR,
+        }
+
+class DevSpansTableSchema(SpansTableSchema):
+    def __init__(self, *args, **kwargs):
+        super(SpansTableSchema, self).__init__(*args, **kwargs)
+
+        self.LOCAL_TABLE = 'dev_spans'
+        self.QUERY_TABLE = self.LOCAL_TABLE
+        self.CAN_DROP = True

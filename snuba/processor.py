@@ -634,3 +634,20 @@ class EventsProcessor(Processor):
         query_time_flags = (NEEDS_FINAL, message['project_id'])
 
         return (count_query_template, insert_query_template, query_args, query_time_flags)
+
+class SpansProcessor(Processor):
+    """
+    A processor for session tracking spans.
+    """
+    def __init__(self, SCHEMA):
+        super(SpansProcessor, self).__init__(SCHEMA)
+
+    def process_insert(self, message):
+        # simply make sure all the keys we want exist
+        if not all(col.flattened in message for col in self.SCHEMA.ALL_COLUMNS):
+            return None
+        return row_from_processed_event(self.SCHEMA, message)
+
+    def process_replacement(self, type_, message):
+        # Currently don't support replacing spans
+        raise NotImplementedError

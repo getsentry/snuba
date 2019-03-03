@@ -206,3 +206,11 @@ class DevEventsDataSet(EventsDataSet):
         self.SCHEMA = clickhouse.DevEventsTableSchema()
         self.PROCESSOR = processor.EventsProcessor(self.SCHEMA)
         self.PROD = False
+
+class DevSpansDataSet(DataSet):
+    def __init__(self, *args, **kwargs):
+        super(DevSpansDataSet, self).__init__(*args, **kwargs)
+
+        self.SCHEMA = clickhouse.DevSpansTableSchema()
+        self.PROCESSOR = processor.SpansProcessor(self.SCHEMA)
+        self.PROD = False
