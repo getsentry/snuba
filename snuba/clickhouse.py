@@ -16,6 +16,7 @@ SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
 ESCAPE_COL_RE = re.compile(r"([`\\])")
 
+CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def escape_col(col):
     if not col:

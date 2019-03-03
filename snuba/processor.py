@@ -8,7 +8,7 @@ import six
 import _strptime  # fixes _strptime deferred import issue
 
 from . import settings
-from .clickhouse import escape_col
+from .clickhouse import escape_col, CLICKHOUSE_DATETIME_FORMAT
 from .util import force_bytes, escape_string
 from .writer import row_from_processed_event
 
@@ -18,6 +18,8 @@ logger = logging.getLogger('snuba.processor')
 
 HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 ** 32 - 1
+EXCLUDE_GROUPS = object()
+NEEDS_FINAL = object()
 
 
 class EventTooOld(Exception):
@@ -101,14 +103,6 @@ def _ensure_valid_date(dt):
     return dt
 
 
-class InvalidMessageType(Exception):
-    pass
-
-
-class InvalidMessageVersion(Exception):
-    pass
-
-
 class Processor(object):
     """
     The Processor is responsible for converting an incoming message body from the
@@ -148,7 +142,11 @@ class EventsProcessor(Processor):
 
     def process_insert(self, message):
         processed = {'deleted': 0}
-        self.extract_required(processed, message)
+        try:
+            self.extract_required(processed, message)
+        except EventTooOld:
+            logger.warn('Event discarded as too old: %s', message, exc_info=True)
+            return None
 
         data = message.get('data', {})
         # HACK: https://sentry.io/sentry/snuba/issues/802102397/
@@ -156,6 +154,8 @@ class EventsProcessor(Processor):
             logger.error('No data for event: %s', message, exc_info=True)
             return None
         self.extract_common(processed, message, data)
+
+        self.extract_metadata(processed, message, data)
 
         sdk = data.get('sdk', None) or {}
         self.extract_sdk(processed, sdk)
@@ -182,7 +182,7 @@ class EventsProcessor(Processor):
         stacks = exception.get('values', None) or []
         self.extract_stacktraces(processed, stacks)
 
-        return row_from_processed_event(self.SCHEMA, data)
+        return row_from_processed_event(self.SCHEMA, processed)
 
     def process_replacement(self, type_, message):
         if type_ == 'end_delete_groups':
@@ -221,6 +221,11 @@ class EventsProcessor(Processor):
 
         output['timestamp'] = timestamp
         output['retention_days'] = retention_days
+
+    def extract_metadata(self, output, message, data):
+        # TODO for col in self.dataset.SCHEMA.METADATA_COLUMNS:
+        output['offset'] = message.get('offset', None)
+        output['partition'] = message.get('partition', None)
 
     def extract_common(self, output, message, data):
         # Properties we get from the top level of the message payload

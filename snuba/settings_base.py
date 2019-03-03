@@ -73,7 +73,7 @@ KAFKA_TOPICS = {
     },
 }
 
-# TODO These all need to go as they have bee incorporated into datasets
+# TODO These all need to go as they have been incorporated into datasets
 # project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
 DEFAULT_SAMPLE_EXPR = 'cityHash64(toString(event_id))'
 DEFAULT_ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % DEFAULT_SAMPLE_EXPR

@@ -11,7 +11,6 @@ from snuba import settings
 from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
-from snuba.consumer import validate_message
 from snuba.writer import row_from_processed_event, write_rows
 
 
@@ -174,5 +173,5 @@ class BaseTest(object):
         if not isinstance(events, (list, tuple)):
             events = [events]
 
-        rows = [row_from_processed_event(self.dataset, event) for event in events]
+        rows = [row_from_processed_event(self.dataset.SCHEMA, event) for event in events]
         write_rows(self.clickhouse, self.dataset, rows, types_check=True)

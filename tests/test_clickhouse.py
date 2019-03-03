@@ -4,7 +4,6 @@ from clickhouse_driver import Client, errors
 from mock import patch, call, Mock
 
 from snuba.clickhouse import (
-    ALL_COLUMNS,
     Array, ColumnSet, Nested, Nullable, String, UInt,
     escape_col,
     ClickhousePool
@@ -26,6 +25,7 @@ class TestClickhouse(BaseTest):
         assert escape_col("production`; --") == "`production\`; --`"
 
     def test_flattened(self):
+        ALL_COLUMNS = self.dataset.SCHEMA.ALL_COLUMNS
         assert ALL_COLUMNS['group_id'].type == UInt(64)
         assert ALL_COLUMNS['group_id'].name == 'group_id'
         assert ALL_COLUMNS['group_id'].base_name is None
