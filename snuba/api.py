@@ -367,11 +367,11 @@ if application.debug or application.testing:
 
         _ensured[dataset] = True
 
+    @application.route('/tests/<string:dataset>/insert', methods=['POST'])
     @application.route('/tests/insert', methods=['POST'])
-    def write():
+    def write(dataset='events'):
         from snuba.writer import write_rows
-        # TODO we need to make this work for multiple datasets
-        dataset = settings.get_dataset('events')
+        dataset = settings.get_dataset(dataset)
         ensure_table_exists(dataset)
 
         body = json.loads(request.data)
@@ -380,9 +380,9 @@ if application.debug or application.testing:
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
-    def eventstream():
-        # TODO we need to make this work for multiple datasets
-        dataset = settings.get_dataset('events')
+    @application.route('/tests/<string:dataset>/eventstream', methods=['POST'])
+    def eventstream(dataset='events'):
+        dataset = settings.get_dataset(dataset)
         ensure_table_exists(dataset)
 
         record = json.loads(request.data)
@@ -422,9 +422,9 @@ if application.debug or application.testing:
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/drop', methods=['POST'])
-    def drop():
-        # TODO we need to make this work for multiple datasets
-        dataset = settings.get_dataset('events')
+    @application.route('/tests/<string:dataset>/drop', methods=['POST'])
+    def drop(dataset='events'):
+        dataset = settings.get_dataset(dataset)
         ensure_table_exists(dataset, force=True, drop=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 

@@ -107,7 +107,7 @@ class BaseTest(object):
 
         self.database = 'default'
 
-        # These tests are currently coupled pretty hard to the events dataset,
+        # TODO These tests are currently coupled pretty hard to the events dataset,
         # but eventually the base test should support multiple datasets.
         self.dataset = settings.get_dataset('events')
         self.clickhouse = ClickhousePool()

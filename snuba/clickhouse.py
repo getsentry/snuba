@@ -693,14 +693,14 @@ class SpansTableSchema(TableSchema):
         self.QUERY_TABLE = self.DIST_TABLE
         self.CAN_DROP = False
 
-        self.SAMPLE_EXPR = 'cityHash64(toString(user_id))'
+        #self.SAMPLE_EXPR = 'cityHash64(toString(user_id))'
         self.ORDER_BY = '(project_id, toStartOfDay(timestamp), transaction_id)'
         self.PARTITION_BY = '(toMonday(timestamp))'
         self.VERSION_COLUMN = None
         self.SHARDING_KEY = 'cityHash64(toString(user_id))'
         self.RETENTION_DAYS = 90
 
-        self.ALL_COLUMNS = [
+        self.ALL_COLUMNS = ColumnSet([
             ('project_id', UInt(64)),
             ('span_id', String()),
             ('user_id', String()),
@@ -708,23 +708,21 @@ class SpansTableSchema(TableSchema):
             ('duration', UInt(32)),
             ('transaction_id', String()),
             ('operation', String()),
-        ]
+        ])
 
     def get_local_engine(self):
         # TODO this should be a ReplicatedMergeTree in the prod dataset
         return """
             MergeTree()
             PARTITION BY %(partition_by)s
-            ORDER BY %(order_by)s
-            SAMPLE BY %(sample_expr)s ;""" % {
+            ORDER BY %(order_by)s;""" % {
             'order_by': self.ORDER_BY,
             'partition_by': self.PARTITION_BY,
-            'sample_expr': self.SAMPLE_EXPR,
         }
 
 class DevSpansTableSchema(SpansTableSchema):
     def __init__(self, *args, **kwargs):
-        super(SpansTableSchema, self).__init__(*args, **kwargs)
+        super(DevSpansTableSchema, self).__init__(*args, **kwargs)
 
         self.LOCAL_TABLE = 'dev_spans'
         self.QUERY_TABLE = self.LOCAL_TABLE

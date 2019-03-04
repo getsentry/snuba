@@ -12,7 +12,7 @@ PORT = 1218
 DEFAULT_DATASET_TYPE = 'events'
 DATASETS = {
     'events': 'snuba.datasets.DevEventsDataSet',
-    # 'spans': 'snuba.datasets.DevSpansDataSet',
+    'spans': 'snuba.datasets.DevSpansDataSet',
 }
 def get_dataset(name):
     assert name in DATASETS

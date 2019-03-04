@@ -646,6 +646,8 @@ class SpansProcessor(Processor):
         # simply make sure all the keys we want exist
         if not all(col.flattened in message for col in self.SCHEMA.ALL_COLUMNS):
             return None
+
+        message['timestamp'] = _ensure_valid_date(datetime.strptime(message['timestamp'], settings.PAYLOAD_DATETIME_FORMAT))
         return row_from_processed_event(self.SCHEMA, message)
 
     def process_replacement(self, type_, message):
