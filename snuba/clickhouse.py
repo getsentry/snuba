@@ -708,6 +708,7 @@ class SpansTableSchema(TableSchema):
             ('duration', UInt(32)),
             ('transaction_id', String()),
             ('operation', String()),
+            ('deleted', UInt(8)), # TODO add as version in ReplacingMergeTree?
         ])
 
     def get_local_engine(self):

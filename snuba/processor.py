@@ -643,7 +643,8 @@ class SpansProcessor(Processor):
         super(SpansProcessor, self).__init__(SCHEMA)
 
     def process_insert(self, message):
-        # simply make sure all the keys we want exist
+        message['deleted'] = 0
+
         if not all(col.flattened in message for col in self.SCHEMA.ALL_COLUMNS):
             return None
 

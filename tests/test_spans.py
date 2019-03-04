@@ -16,7 +16,7 @@ class TestSpans(object):
         self.database = 'default'
 
         self.app = application.test_client()
-        self.dataset = settings.get_dataset('events')
+        self.dataset = settings.get_dataset('spans')
         self.clickhouse = ClickhousePool()
 
         self.clickhouse.execute(self.dataset.SCHEMA.get_local_table_drop())
@@ -28,8 +28,9 @@ class TestSpans(object):
         redis_client.flushdb()
 
     def test_insert(self):
+        project_id = 123
         events = [{
-            'project_id': 123,
+            'project_id': project_id,
             'span_id': 'abc123',
             'user_id': 'me',
             'timestamp': self.base_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
@@ -40,6 +41,17 @@ class TestSpans(object):
 
         response = self.app.post('/tests/spans/insert', data=json.dumps(events))
         assert response.status_code == 200
+
+        query = {
+            'project': project_id,
+            'groupby': 'project_id',
+            'aggregations': [
+                ['count()', '', 'count']
+            ],
+            'dataset': 'spans',
+        }
+        result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
+        assert result['data'] == [{'count': 1, 'project_id': project_id}]
 
     def test_eventstream(self):
         message = (2, 'insert', {

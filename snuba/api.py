@@ -175,6 +175,9 @@ def parse_and_run_query(validated_body, timer):
         from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body.get('conditions', [])
+    # TODO These conditions should possibly be provided by the dataset
+    # as currently this means all schemas need project_id, timestamp,
+    # and deleted columns
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
