@@ -694,21 +694,23 @@ class SpansTableSchema(TableSchema):
         self.CAN_DROP = False
 
         #self.SAMPLE_EXPR = 'cityHash64(toString(user_id))'
-        self.ORDER_BY = '(project_id, toStartOfDay(timestamp), transaction_id)'
-        self.PARTITION_BY = '(toMonday(timestamp))'
+        self.ORDER_BY = '(toStartOfDay(start_time))'
+        self.PARTITION_BY = '(toMonday(start_time))'
         self.VERSION_COLUMN = None
-        self.SHARDING_KEY = 'cityHash64(toString(user_id))'
+        self.SHARDING_KEY = 'cityHash64(toString(span_id))'
         self.RETENTION_DAYS = 90
 
         self.ALL_COLUMNS = ColumnSet([
-            ('project_id', UInt(64)),
             ('span_id', String()),
-            ('user_id', String()),
-            ('timestamp', DateTime()),
-            ('duration', UInt(32)),
-            ('transaction_id', String()),
+            ('trace_id', Nullable(String())),
+            ('start_time', DateTime()),
+            ('finish_time', DateTime()),
             ('operation', String()),
-            ('deleted', UInt(8)), # TODO add as version in ReplacingMergeTree?
+            ('tags', Nested([
+                ('key', String()),
+                ('value', String()),
+            ])),
+            ('deleted', UInt(8))  # TODO add as version in ReplacingMergeTree?
         ])
 
     def get_local_engine(self):

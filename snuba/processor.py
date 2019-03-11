@@ -645,10 +645,24 @@ class SpansProcessor(Processor):
     def process_insert(self, message):
         message['deleted'] = 0
 
-        if not all(col.flattened in message for col in self.SCHEMA.ALL_COLUMNS):
-            return None
+        message['start_time'] = _ensure_valid_date(datetime.utcfromtimestamp(message['start_time']))
+        message['finish_time'] = _ensure_valid_date(datetime.utcfromtimestamp(message['finish_time']))
 
-        message['timestamp'] = _ensure_valid_date(datetime.strptime(message['timestamp'], settings.PAYLOAD_DATETIME_FORMAT))
+        tags = _as_dict_safe(message.get('tags', None))
+
+        tag_keys = []
+        tag_values = []
+        for tag_key, tag_value in sorted(tags.items()):
+            tag_keys.append(_unicodify(tag_key))
+            tag_values.append(_unicodify(tag_value))
+
+        message['tags.key'] = tag_keys
+        message['tags.value'] = tag_values
+
+        message.pop('tags', None)
+        message.pop('logs', None)  # we do not supports logs yet
+        message.pop('references', None)  # we do not supports references yet
+
         return row_from_processed_event(self.SCHEMA, message)
 
     def process_replacement(self, type_, message):
