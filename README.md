@@ -39,12 +39,12 @@ Snuba assumes:
 
 ## API
 
-Snuba exposes an HTTP API with the following endpoints.
+Snuba exposes an HTTP API with the following endpoints by default on port `1218`.
 
-- [/](/): Shows this page.
-- [/dashboard](/dashboard): Query dashboard
-- [/query](/query): Endpoint for querying clickhouse.
-- [/config](/config): Console for runtime config options
+- [/](http://127.0.0.1:1218/): Shows this page.
+- [/dashboard](http://127.0.0.1:1218/dashboard): Query dashboard
+- [/query](http://127.0.0.1:1218/query): Endpoint for querying clickhouse.
+- [/config](http://127.0.0.1:1218/config): Console for runtime config options
 
 ## Settings
 
@@ -64,8 +64,8 @@ Settings are found in `settings.py`
 
 ## Querying
 
-Try out queries on the [query console](/query). Queries are submitted as a JSON
-body to the [/query](/query) endpoint.
+Try out queries on the [query console](http://127.0.0.1:1218/query). Queries are submitted as a JSON
+body to the [/query](http://127.0.0.1:1218/query) endpoint.
 
 ### The Query Payload
 
