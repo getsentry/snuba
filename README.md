@@ -39,7 +39,7 @@ Snuba assumes:
 
 ## API
 
-Snuba exposes an HTTP API with the following endpoints.
+Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 
 - [/](/): Shows this page.
 - [/dashboard](/dashboard): Query dashboard
