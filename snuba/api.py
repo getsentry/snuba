@@ -236,23 +236,25 @@ def parse_and_run_query(validated_body, timer):
         where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
 
     prewhere_conditions = []
-    if settings.PREWHERE_KEYS:
-        # Add any condition to PREWHERE if:
-        # - It is a single top-level condition (not OR-nested), and
-        # - Any of its referenced columns are in PREWHERE_KEYS
-        prewhere_candidates = [
-            (util.columns_in_expr(cond[0]), cond)
-            for cond in where_conditions if util.is_condition(cond) and
-            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
-        ]
-        # Use the condition that has the highest priority (based on the
-        # position of its columns in the PREWHERE_KEYS list)
-        prewhere_candidates = sorted([
-            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
-            for cols, cond in prewhere_candidates
-        ])
-        if prewhere_candidates:
-            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+    # Add any condition to PREWHERE if:
+    # - It is a single top-level condition (not OR-nested), and
+    # - None of its columns are in NOT_PREWHERE_KEYS
+    # - None of its columns are being arrayjoined
+    prewhere_candidates = [
+        (util.columns_in_expr(cond[0]), cond)
+        for cond in where_conditions
+        if util.is_condition(cond) and
+        all(col not in settings.NOT_PREWHERE_KEYS and col != body.get('arrayjoin')
+            for col in util.columns_in_expr(cond[0]))
+    ]
+    # Use the condition that has the best priority (based on the position
+    # of its columns in the PREWHERE_KEYS list)
+    priority = lambda col: settings.PREWHERE_KEYS.index(col) if col in settings.PREWHERE_KEYS else float('inf')
+    prewhere_candidates = sorted([
+        (min(priority(col) for col in cols), cond) for cols, cond in prewhere_candidates
+    ])
+    if prewhere_candidates:
+        prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
 
     prewhere_clause = ''
     if prewhere_conditions:

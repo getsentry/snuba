@@ -93,8 +93,13 @@ DEFAULT_RETENTION_DAYS = 90
 
 RETENTION_OVERRIDES = {}
 
-# the list of keys that will upgrade from a WHERE condition to a PREWHERE
-PREWHERE_KEYS = ['project_id']
+# Any condition has the potential to be made into a PREWHERE clause
+# but if you add the column name to PREWHERE_KEYS it will be preferred.
+PREWHERE_KEYS = []
+# These are columns that we do not want to turn into PREWHERE clauses
+# because they are too high-cardinality, not selective enough, or they
+# have already been used by indexes to hone in on a range of blocks.
+NOT_PREWHERE_KEYS = ['project_id', 'timestamp', 'deleted', 'tags_key', 'tags_value']
 MAX_PREWHERE_CONDITIONS = 1
 
 STATS_IN_RESPONSE = False

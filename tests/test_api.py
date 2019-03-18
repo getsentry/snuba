@@ -380,26 +380,47 @@ class TestApi(BaseTest):
         assert "PREWHERE positionCaseInsensitive(message, 'abc') != 0" in result['sql']
 
         # Choose the highest priority one
-        settings.PREWHERE_KEYS = ['project_id', 'message']
+        settings.PREWHERE_KEYS = ['platform', 'message']
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
-            'conditions': [[['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]],
+            'conditions': [
+                ['platform', '=', 'a'],
+                [['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]
+            ],
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1)" in result['sql']
+        assert "PREWHERE platform = 'a'" in result['sql']
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
-            'conditions': [[['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]],
+            'conditions': [
+                ['platform', '=', 'a'],
+                [['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]
+            ],
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1) AND positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+        assert "PREWHERE platform = 'a' AND positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+
+        # Still put 2 columns in prewhere, but only one has specified priority.
+        settings.MAX_PREWHERE_CONDITIONS = 2
+        settings.PREWHERE_KEYS = ['message']
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['event_id'],
+            'conditions': [
+                ['platform', '=', 'a'],
+                [['positionCaseInsensitive', ['message', "'abc'"]], '!=', 0]
+            ],
+            'limit': 1,
+            'debug': True
+        })).data)
+        assert "PREWHERE positionCaseInsensitive(message, 'abc') != 0 AND platform = 'a'" in result['sql']
 
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
