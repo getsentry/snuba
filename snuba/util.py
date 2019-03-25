@@ -398,12 +398,13 @@ def raw_query(body, sql, client, timer, stats=None):
     project_ids = to_list(body['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache = state.get_configs([
+    grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
         ('global_per_second_limit', 1000),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
         ('use_cache', 0),
+        ('uncompressed_cache_max_cols', 5),
     ])
 
     # Specific projects can have their rate limits overridden
@@ -418,6 +419,11 @@ def raw_query(body, sql, client, timer, stats=None):
         for k, v in six.iteritems(all_confs)
         if k.startswith('query_settings/')
     }
+
+    # Experiment, if we are going to grab more than X columns worth of data,
+    # don't use uncompressed_cache.
+    if len(all_referenced_columns(body)) > uc_max:
+        query_settings['use_uncompressed_cache'] = 0
 
     timer.mark('get_configs')
 
