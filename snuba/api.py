@@ -7,6 +7,7 @@ from flask import Flask, render_template, request
 from markdown import markdown
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
+from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 
 from snuba import schemas, settings, state, util
@@ -50,7 +51,7 @@ application.debug = settings.DEBUG
 
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration()],
+    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
     release=os.getenv('SNUBA_RELEASE')
 )
 
