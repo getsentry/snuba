@@ -27,10 +27,11 @@ def split_query(query_func):
         from_date = util.parse_datetime(body['from_date'], date_align)
         limit = body.get('limit', 0)
         remaining_offset = body.get('offset', 0)
+        orderby = util.to_list(body.get('orderby'))
 
         if (
             use_split and limit and not body.get('groupby')
-            and body.get('orderby') == '-timestamp'
+            and orderby[:1] == ['-timestamp']
         ):
             overall_result = None
             split_end = to_date
