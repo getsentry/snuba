@@ -3,6 +3,11 @@ import math
 
 from snuba import state, util
 
+# Every time we find zero results for a given step, expand the search window by
+# this factor. Based on the assumption that the initial window is 2 hours, the
+# worst case (there are 0 results in the database) would have us making 4
+# queries before hitting the 90d limit (2+20+200+2000 hours == 92 days).
+STEP_GROWTH = 10
 
 def split_query(query_func):
     """
@@ -66,20 +71,22 @@ def split_query(query_func):
 
                 if total_results < limit:
                     if len(result['data']) == 0:
-                        # If we got nothing from the last query, jump straight to the max time range
-                        split_end = split_start
-                        split_start = from_date
+                        # If we got nothing from the last query, expand the range by a static factor
+                        split_step = split_step * STEP_GROWTH
                     else:
-                        # Estimate how big the time range should be for the next query based on
-                        # how many results we got for our last query and its time range, and how
-                        # many we have left to fetch
+                        # If we got some results but not all of them, estimate how big the time
+                        # range should be for the next query based on how many results we got for
+                        # our last query and its time range, and how many we have left to fetch.
                         remaining = limit - total_results
                         split_step = split_step * math.ceil(remaining / float(len(result['data'])))
-                        split_end = split_start
-                        try:
-                            split_start = max(split_end - timedelta(seconds=split_step), from_date)
-                        except OverflowError:
-                            split_start = from_date
+
+                    # Set the start and end of the next query based on the new range.
+                    split_end = split_start
+                    try:
+                        split_start = max(split_end - timedelta(seconds=split_step), from_date)
+                    except OverflowError:
+                        split_start = from_date
+
             return overall_result, status
         else:
             return query_func(*args, **kwargs)
