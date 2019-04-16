@@ -174,6 +174,14 @@ class TestUtil(BaseTest):
         conditions = [['exception_frames.filename', 'NOT LIKE', '%foo%']]
         assert conditions_expr(conditions, {}) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), exception_frames.filename)'
 
+        # Test that a duplicate IN condition is deduplicated even if
+        # the lists are in different orders.[
+        conditions = tuplify([
+            ['platform', 'IN', ['a', 'b', 'c']],
+            ['platform', 'IN', ['c', 'b', 'a']]
+        ])
+        assert conditions_expr(conditions, {}) == "platform IN ('a', 'b', 'c')"
+
     def test_duplicate_expression_alias(self):
         body = {
             'aggregations': [

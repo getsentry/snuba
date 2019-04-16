@@ -233,7 +233,7 @@ def parse_and_run_query(validated_body, timer):
 
     where_clause = ''
     if where_conditions:
-        where_conditions = list(set(util.tuplify(where_conditions)))
+        where_conditions = util.tuplify(where_conditions)
         where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
 
     prewhere_conditions = []

@@ -1,6 +1,7 @@
 from flask import request
 
 from clickhouse_driver.errors import Error as ClickHouseError
+from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
@@ -313,8 +314,9 @@ def conditions_expr(conditions, body, depth=0):
         return ''
 
     if depth == 0:
-        sub = (conditions_expr(cond, body, depth + 1) for cond in conditions)
-        return u' AND '.join(s for s in sub if s)
+        # dedupe conditions at top level, but keep them in order
+        sub = OrderedDict((conditions_expr(cond, body, depth + 1), None) for cond in conditions)
+        return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
         lhs, op, lit = conditions
 
@@ -324,6 +326,10 @@ def conditions_expr(conditions, body, depth=0):
             isinstance(lit, str)
         ):
             lit = parse_datetime(lit)
+
+        # facilitate deduping IN conditions by sorting them.
+        if op in ('IN', 'NOT IN') and isinstance(lit, tuple):
+            lit = tuple(sorted(lit))
 
         # If the LHS is a simple column name that refers to an array column
         # (and we are not arrayJoining on that column, which would make it
