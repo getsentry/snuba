@@ -51,6 +51,9 @@ class TestUtil(BaseTest):
         assert column_expr('time', body.copy()) ==\
             "(toDate(timestamp) AS time)"
 
+        assert column_expr('rtime', body.copy()) ==\
+            "(toDate(received) AS rtime)"
+
         assert column_expr('col', body.copy(), aggregate='sum') ==\
             "(sum(col) AS col)"
 

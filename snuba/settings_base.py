@@ -1,15 +1,4 @@
 import os
-from collections import defaultdict
-
-
-class dynamicdict(defaultdict):
-    def __missing__(self, key):
-        if self.default_factory:
-            self.__setitem__(key, self.default_factory(key))
-            return self[key]
-        else:
-            return super(dynamicdict, self).__missing__(key)
-
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
@@ -45,16 +34,13 @@ CONFIG_MEMOIZE_TIMEOUT = 10
 SENTRY_DSN = None
 
 # Snuba Options
-TIME_GROUPS = dynamicdict(
-    lambda sec: 'toDateTime(intDiv(toUInt32(timestamp), {0}) * {0})'.format(sec),
-    {
-        3600: 'toStartOfHour(timestamp)',
-        60: 'toStartOfMinute(timestamp)',
-        86400: 'toDate(timestamp)',
-    }
-)
 
-TIME_GROUP_COLUMN = 'time'
+# Convenience columns that evaluate to a bucketed time, the
+# bucketing depends on the granularity parameter.
+TIME_GROUP_COLUMNS = {
+    'time': 'timestamp',
+    'rtime': 'received'
+}
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9093']

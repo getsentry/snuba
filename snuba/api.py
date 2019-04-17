@@ -329,7 +329,7 @@ def sdk_distribution(validated_body, timer):
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    validated_body['groupby'].extend(['sdk_name', 'time'])
+    validated_body['groupby'].extend(['sdk_name', 'rtime'])
     result, status = parse_and_run_query(validated_body, timer)
     return (
         json.dumps(
