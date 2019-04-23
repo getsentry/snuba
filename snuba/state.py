@@ -70,16 +70,25 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     pipe = rds.pipeline(transaction=False)
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
-    pipe.zcount(bucket, now - rate_lookback_s, now)  # get rate
-    pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
+    if per_second_limit is None:
+        pipe.ping() # no-op if we don't need per-second
+    else:
+        pipe.zcount(bucket, now - rate_lookback_s, now)  # get historical
+    if concurrent_limit is None:
+        pipe.ping()  # no-op if we don't need concurrent
+    else:
+        pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
+
     try:
-        _, _, rate, concurrent = pipe.execute()
+        _, _, historical, concurrent = pipe.execute()
+        historical = int(historical)
+        concurrent = int(concurrent)
     except Exception as ex:
         logger.exception(ex)
         yield (True, 0, 0)  # fail open if redis is having issues
         return
 
-    per_second = rate / float(rate_lookback_s)
+    per_second = historical / float(rate_lookback_s)
     allowed = (per_second_limit is None or per_second <= per_second_limit) and\
         (concurrent_limit is None or concurrent <= concurrent_limit)
     try:

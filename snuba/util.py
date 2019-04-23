@@ -1,7 +1,7 @@
 from flask import request
 
 from clickhouse_driver.errors import Error as ClickHouseError
-from collections import OrderedDict
+from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
@@ -414,7 +414,7 @@ def raw_query(body, sql, client, timer, stats=None):
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
-        ('global_per_second_limit', 1000),
+        ('global_per_second_limit', None),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
@@ -531,17 +531,18 @@ def raw_query(body, sql, client, timer, stats=None):
 
                     else:
                         status = 429
+                        Reason = namedtuple('reason', 'scope name val limit')
                         reasons = [
-                            ('global', 'concurrent', g_concurr, gcl),
-                            ('global', 'per-second', g_rate, grl),
-                            ('project', 'concurrent', p_concurr, pcl),
-                            ('project', 'per-second', p_rate, prl)
+                            Reason('global', 'concurrent', g_concurr, gcl),
+                            Reason('global', 'per-second', g_rate, grl),
+                            Reason('project', 'concurrent', p_concurr, pcl),
+                            Reason('project', 'per-second', p_rate, prl)
                         ]
-                        reason = next((r for r in reasons if r[2] > r[3]), None)
+                        reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
                         result = {'error': {
                             'type': 'ratelimit',
                             'message': 'rate limit exceeded',
-                            'detail': reason and '{} {} of {:.0f} exceeds limit of {:.0f}'.format(*reason)
+                            'detail': reason and '{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}'.format(r=reason)
                         }}
 
     stats.update(query_settings)
