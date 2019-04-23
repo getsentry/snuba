@@ -71,11 +71,11 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
     if per_second_limit is None:
-        pipe.ping() # no-op if we don't need per-second
+        pipe.echo(0) # no-op if we don't need per-second
     else:
         pipe.zcount(bucket, now - rate_lookback_s, now)  # get historical
     if concurrent_limit is None:
-        pipe.ping()  # no-op if we don't need concurrent
+        pipe.echo(0)  # no-op if we don't need concurrent
     else:
         pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
 

@@ -41,7 +41,7 @@
             let path = values.map(function (v, i) { return "L" + x(i) + "," + y(v); }).join()
             let strokepath = "M" + path.substring(1);
             let fillpath = "M0," + range[0] + path + "L" + this.state.width + "," + range[0] + "L0," + range[0]
-            let lastval = values.slice(-1)[0];
+            let lastval = values.slice(-1)[0] || 0;
             return (
               <svg className="sparkline" width={this.state.width} height={this.state.height} overflow="visible">
                 <rect width={this.state.width} height={this.state.height} fill={'#EEE'}/>
