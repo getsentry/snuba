@@ -75,9 +75,9 @@ RUN set -ex; \
     tar xf pypy2-v6.0.0-linux64.tar.bz2; \
     rm -rf pypy2-v6.0.0-linux64.tar.bz2; \
     mv pypy2-v6.0.0-linux64 /pypy; \
-    wget http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.0.0_1.0.1t-1+deb7u4_amd64.deb; \
-    DEBIAN_FRONTEND=noninteractive dpkg -i libssl1.0.0_1.0.1t-1+deb7u4_amd64.deb; \
-    rm -rf libssl1.0.0_1.0.1t-1+deb7u4_amd64.deb; \
+    wget http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
+    DEBIAN_FRONTEND=noninteractive dpkg -i libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
+    rm -rf libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
     wget https://bootstrap.pypa.io/get-pip.py; \
     /pypy/bin/pypy get-pip.py; \
     rm -rf get-pip.py; \
