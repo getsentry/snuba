@@ -37,6 +37,7 @@ def split_query(query_func):
         if (
             use_split and limit and not body.get('groupby')
             and orderby[:1] == ['-timestamp']
+            and remaining_offset < 1000
         ):
             overall_result = None
             split_end = to_date
