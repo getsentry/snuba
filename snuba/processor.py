@@ -176,6 +176,3 @@ class Processor(object):
         if Processor._collapse_uint32(seconds) is None:
             return None
         return dt
-
-
-

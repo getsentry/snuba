@@ -1,4 +1,4 @@
-from base import BaseTest
+from tests.base import BaseTest
 from functools import partial
 from mock import patch
 import random

@@ -1,4 +1,4 @@
-from base import BaseTest
+from tests.base import BaseTest
 
 from clickhouse_driver import Client, errors
 from mock import patch, call, Mock

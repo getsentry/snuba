@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from base import BaseTest, FakeKafkaMessage
+from tests.base import BaseTest, FakeKafkaMessage
 
 from snuba import replacer
 from snuba.clickhouse import CLICKHOUSE_DATETIME_FORMAT

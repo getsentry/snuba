@@ -8,7 +8,7 @@ import time
 import six
 from six.moves import range
 
-from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
+from tests.base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
 
 from snuba.consumer import ConsumerWorker
 from snuba.processor import InvalidMessage, Processor

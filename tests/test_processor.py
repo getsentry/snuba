@@ -4,7 +4,7 @@ import six
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
-from base import BaseTest
+from tests.base import BaseTest
 
 from snuba import settings
 

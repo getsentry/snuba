@@ -204,35 +204,39 @@ class ColumnType(object):
     def flatten(self, name):
         return [FlattenedColumn(None, name, self)]
 
-
-class Nullable(ColumnType):
-    def __init__(self, inner_type):
+class Wrapper(ColumnType):
+    """
+    Abstract class for all column types which wrap a single other
+    type.
+    """
+    def __init__(self, inner_type, wrap_name):
         self.inner_type = inner_type
+        self.wrap_name = wrap_name
 
     def __repr__(self):
-        return u'Nullable({})'.format(repr(self.inner_type))
+        return u'{}({})'.format(self.wrap_name, repr(self.inner_type))
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ \
             and self.inner_type == other.inner_type
 
     def for_schema(self):
-        return u'Nullable({})'.format(self.inner_type.for_schema())
+        return u'{}({})'.format(self.wrap_name, self.inner_type.for_schema())
 
 
-class Array(ColumnType):
+class Nullable(Wrapper):
     def __init__(self, inner_type):
-        self.inner_type = inner_type
+        super(Nullable, self).__init__(inner_type, 'Nullable')
 
-    def __repr__(self):
-        return u'Array({})'.format(repr(self.inner_type))
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+class Array(Wrapper):
+    def __init__(self, inner_type):
+        super(Array, self).__init__(inner_type, 'Array')
 
-    def for_schema(self):
-        return u'Array({})'.format(self.inner_type.for_schema())
+
+class LowCardinality(Wrapper):
+    def __init__(self, inner_type):
+        super(LowCardinality, self).__init__(inner_type, 'LowCardinality')
 
 
 class Nested(ColumnType):
@@ -405,20 +409,21 @@ class TableSchema(object):
             PARTITION BY %(partition_by)s
             ORDER BY %(order_by)s
             SAMPLE BY %(sample_expr)s;""" % {
-            'name': self.LOCAL_TABLE,
-            'order_by': self.ORDER_BY,
-            'partition_by': self.PARTITION_BY,
-            'version_column': self.VERSION_COLUMN,
-            'sample_expr': self.SAMPLE_EXPR,
-        }
+                'name': self.LOCAL_TABLE,
+                'order_by': self.ORDER_BY,
+                'partition_by': self.PARTITION_BY,
+                'version_column': self.VERSION_COLUMN,
+                'sample_expr': self.SAMPLE_EXPR,
+            }
 
     def get_distributed_engine(self):
-        return """Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
-            'cluster': self.CLICKHOUSE_CLUSTER,
-            'database': self.DATABASE,
-            'local_table': self.LOCAL_TABLE,
-            'sharding_key': self.SHARDING_KEY,
-        }
+        return """
+            Distributed(%(cluster)s, %(database)s, %(local_table)s, %(sharding_key)s);""" % {
+                'cluster': self.CLICKHOUSE_CLUSTER,
+                'database': self.DATABASE,
+                'local_table': self.LOCAL_TABLE,
+                'sharding_key': self.SHARDING_KEY,
+            }
 
     def get_table_definition(self, name, engine):
         return """

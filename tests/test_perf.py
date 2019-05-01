@@ -1,4 +1,4 @@
-from base import BaseTest
+from tests.base import BaseTest
 
 from snuba import perf
 

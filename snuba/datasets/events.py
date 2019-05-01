@@ -406,6 +406,8 @@ class EventsProcessor(Processor):
         if timestamp is None:
             timestamp = datetime.utcnow()
 
+        # TODO retention overrides should not be in global settings
+        # and we should use self.RETENTION_DAYS or delete it
         retention_days = settings.RETENTION_OVERRIDES.get(project_id)
         if retention_days is None:
             retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)

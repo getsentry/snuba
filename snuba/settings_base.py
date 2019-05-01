@@ -12,6 +12,7 @@ DEFAULT_DATASET_TYPE = 'events'
 DATASETS = {
     'events': 'snuba.datasets.events.DevEventsDataSet',
     # 'spans': 'snuba.datasets.spans.DevSpansDataSet',
+    'outcomes': 'snuba.datasets.outcomes.DevOutcomesDataSet',
 }
 def get_dataset(name):
     assert name in DATASETS

@@ -14,7 +14,7 @@ import uuid
 
 from snuba import settings, state
 
-from base import BaseTest
+from tests.base import BaseTest
 
 
 class TestApi(BaseTest):

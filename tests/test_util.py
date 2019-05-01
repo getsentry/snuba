@@ -3,7 +3,7 @@ import pytest
 import simplejson as json
 import time
 
-from base import BaseTest
+from tests.base import BaseTest
 
 from snuba.util import (
     all_referenced_columns,
