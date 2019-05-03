@@ -52,7 +52,7 @@ class TestOutcomes(BaseTest):
 
         consumer.consumer.items = [self._wrap(msg, i) for i, msg in enumerate([
             {"timestamp": "2019-04-29T22:46:21.463938Z", "org_id": 1, "project_id": 2, "key_id": 3, "outcome": 'accepted', "reason": None},
-            {"timestamp": "2019-04-29T22:46:21.500000Z", "org_id": 1, "project_id": 2, "key_id": 3, "outcome": 3, "reason": 'too_large'},
+            {"timestamp": "2019-04-29T22:46:21.500000Z", "org_id": 1, "project_id": 2, "key_id": "3", "outcome": 3, "reason": 'too_large'},
         ])]
 
         #run_once because run() won't return

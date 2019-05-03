@@ -81,7 +81,12 @@ class OutcomesProcessor(Processor):
         'properties': {
             'org_id': {'type': 'number'},
             'project_id': {'type': 'number'},
-            'key_id': {'type': ['number', 'null']},
+            'key_id': {
+                'anyOf': [
+                    {'type': ['number', 'null']},
+                    {'type': 'string', 'pattern': '\d+'},
+                ]
+            },
             'timestamp': {
                 'type': 'string',
                 'format': 'date-time',
@@ -133,6 +138,11 @@ class OutcomesProcessor(Processor):
                 'rate_limited': 2,
                 'invalid': 3,
             }.get(message['outcome'], 0)
+
+        # hack for messages where key_id comes as a numeric string
+        if 'key_id' in message and isinstance(message['key_id'], six.string_types):
+            message['key_id'] = int(message['key_id'])
+
         return row_from_processed_event(self.SCHEMA, message)
 
 
