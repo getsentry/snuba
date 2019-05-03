@@ -333,7 +333,7 @@ column.
 
     # Find the top 5 most often used tags
     "aggregations": [
-        ["topK(5)", "tags_key", "top_tag_keys"],
+        ["top5", "tags_key", "top_tag_keys"],
     ],
 <!-- -->
 
