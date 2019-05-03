@@ -116,8 +116,7 @@ class OutcomesProcessor(Processor):
         try:
             schemas.validate(message, self.KAFKA_MESSAGE_SCHEMA, False)
         except (ValueError, jsonschema.ValidationError) as e:
-            # TODO separate message type, version etc? or just coalesce all these exception types
-            raise InvalidMessage("Invalid message: {}".format(e))
+            raise InvalidMessage(u"Invalid message: {}".format(e))
         return (self.INSERT, message)
 
     def process_insert(self, message):

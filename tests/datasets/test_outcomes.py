@@ -1,11 +1,13 @@
 from functools import partial
 import json
+import pytest
 
 from snuba import settings, state
 from snuba.consumer import ConsumerWorker
 
 from tests.base import BaseTest, FakeBatchingKafkaConsumer
 from snuba.perf import FakeKafkaMessage
+from snuba.processor import InvalidMessage
 
 class TestOutcomes(BaseTest):
     @classmethod
@@ -70,3 +72,26 @@ class TestOutcomes(BaseTest):
         assert len(result['data']) == 2
         assert set([d['outcome'] for d in result['data']]) == {0, 3}
         assert set([d['reason'] for d in result['data']]) == {None, 'too_large'}
+
+    def test_invalid(self):
+        topic = self.dataset.PROCESSOR.MESSAGE_TOPIC
+        worker = ConsumerWorker(self.clickhouse, self.dataset, None, topic)
+        for message in [
+            # empty
+            {},
+            # no outcome
+            {"timestamp": "2019-04-29T22:46:21.500000Z", "org_id": 1, "project_id": 2, "key_id": 3, "reason": u"\u2605" },
+            # bad timestamp
+            {"timestamp": "not a timestamp", "org_id": 1, "project_id": 2, "key_id": 3, "outcome": 0},
+            # invalid project id (str)
+            {"timestamp": "2019-04-29T22:46:21.0Z", "org_id": "asdf", "project_id": 2, "outcome": 0},
+            # invalid event id (int)
+            {"timestamp": "2019-04-29T22:46:21.0Z", "org_id": 1, "project_id": 2, "outcome": 0, "event_id": 1},
+        ]:
+            with pytest.raises(InvalidMessage):
+                worker.process_message(self._wrap(message, 0))
+
+            # sanity check, this is valid and should not raise
+            worker.process_message(self._wrap(
+                {"timestamp": "2019-04-29T22:46:21.500000Z", "org_id": 1, "project_id": 2, "outcome": 1, "reason": u"\u2605" }
+            , 0))
