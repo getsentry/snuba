@@ -15,7 +15,7 @@ import numbers
 import re
 import simplejson as json
 import six
-import _strptime  # fixes _strptime deferred import issue
+import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
