@@ -219,6 +219,17 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 
+        assert complex_column_expr(tuplify(['or', ['a', 'b']]), body.copy()) == 'or(a, b)'
+        assert complex_column_expr(tuplify(['and', ['a', 'b']]), body.copy()) == 'and(a, b)'
+        assert complex_column_expr(tuplify(['or', [['or', ['a', 'b']], 'c']]), body.copy()) == 'or((or(a, b)), c)'
+        assert complex_column_expr(tuplify(['and', [['and', ['a', 'b']], 'c']]), body.copy()) == 'and((and(a, b)), c)'
+        # (A OR B) AND C
+        assert complex_column_expr(tuplify(['and', [['or', ['a', 'b']], 'c']]), body.copy()) == 'and((or(a, b)), c)'
+        # (A AND B) OR C
+        assert complex_column_expr(tuplify(['or', [['and', ['a', 'b']], 'c']]), body.copy()) == 'or((and(a, b)), c)'
+        # A OR B OR C OR D
+        assert complex_column_expr(tuplify(['or', [['or', [['or', ['c', 'd']], 'b']], 'a']]), body.copy()) == 'or((or((or(c, d)), b)), a)'
+
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
         message_expr = '(coalesce(search_message, message) AS message)'
         assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy())\
