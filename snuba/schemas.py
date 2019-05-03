@@ -12,12 +12,10 @@ SDK_STATS_SCHEMA = {
     'properties': {
         'from_date': {
             'type': 'string',
-            'format': 'date-time',
             'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=1)).isoformat()
         },
         'to_date': {
             'type': 'string',
-            'format': 'date-time',
             'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
         },
         'granularity': {
@@ -69,12 +67,10 @@ QUERY_SCHEMA = {
         },
         'from_date': {
             'type': 'string',
-            'format': 'date-time',
             'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=5)).isoformat()
         },
         'to_date': {
             'type': 'string',
-            'format': 'date-time',
             'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
         },
         'granularity': {
