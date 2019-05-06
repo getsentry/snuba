@@ -420,7 +420,7 @@ class TableSchema(object):
             'sharding_key': self.SHARDING_KEY,
         }
 
-    def get_table_definition(self, name, engine):
+    def _get_table_definition(self, name, engine):
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
             'columns': self.ALL_COLUMNS.for_schema(),
@@ -429,7 +429,7 @@ class TableSchema(object):
         }
 
     def get_local_table_definition(self):
-        return self.get_table_definition(
+        return self._get_table_definition(
             self.LOCAL_TABLE,
             self.get_local_engine()
         )
@@ -438,7 +438,7 @@ class TableSchema(object):
     def get_dist_table_definition(self):
         assert self.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
 
-        return self.get_table_definition(
+        return self._get_table_definition(
             self.DIST_TABLE,
             self.get_distributed_engine()
         )
