@@ -210,10 +210,11 @@ class TestUtil(BaseTest):
         first_seen = [['multiply(toUInt64(min(timestamp)), 1000)', '', 'first_seen']]
         assert_aggregation(first_seen, '(multiply(toUInt64(min(timestamp)), 1000) AS first_seen)')
         priority = [
+            ['count()', '', 'times_seen'],
             last_seen[0],
-            ['add(multiply(toUInt64(log(times_seen), 600), last_seen))', '', 'priority']
+            ['toUInt64(plus(multiply(log(times_seen), 600), last_seen))', '', 'priority']
         ]
-        assert_aggregation(priority, '(add(multiply(toUInt64(log(times_seen), 600), last_seen)) AS priority)', 1)
+        assert_aggregation(priority, '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)', 2)
 
     def test_complex_conditions_expr(self):
         body = {}
@@ -247,9 +248,6 @@ class TestUtil(BaseTest):
         # Or nested functions
         with pytest.raises(AssertionError):
             assert complex_column_expr(tuplify([r"safe", ['dang`erous', ['message']]]), body.copy())
-
-    def test_nested_aggrations_legacy_format(self):
-        assert column_expr()
 
     def test_referenced_columns(self):
         # a = 1 AND b = 1
