@@ -175,7 +175,11 @@ def column_expr(column_name, body, alias=None, aggregate=None):
 
 
 def complex_column_expr(expr, body, depth=0):
-    name, args, alias = is_function(expr, depth)
+    function_tuple = is_function(expr, depth)
+    if function_tuple is None:
+        raise ValueError('complex_column_expr was given an expr %s that is not a function at depth %d.' % (expr, depth))
+
+    name, args, alias = function_tuple
     out = []
     i = 0
     while i < len(args):
