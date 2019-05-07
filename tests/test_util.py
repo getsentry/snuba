@@ -199,22 +199,13 @@ class TestUtil(BaseTest):
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
 
     def test_nested_aggregate_legacy_format(self):
-        def assert_aggregation(body, expected, index=0):
-            col, alias, agg = '', body[index][2], body[index][0]
-            body = {'aggregations': body}
-            assert column_expr(col, body, alias, agg) == expected
-
-        last_seen = [['multiply(toUInt64(max(timestamp)), 1000)', '', 'last_seen']]
-        assert_aggregation(last_seen, '(multiply(toUInt64(max(timestamp)), 1000) AS last_seen)')
-
-        first_seen = [['multiply(toUInt64(min(timestamp)), 1000)', '', 'first_seen']]
-        assert_aggregation(first_seen, '(multiply(toUInt64(min(timestamp)), 1000) AS first_seen)')
         priority = [
             ['count()', '', 'times_seen'],
-            last_seen[0],
+            ['multiply(toUInt64(max(timestamp)), 1000)', '', 'last_seen'],
             ['toUInt64(plus(multiply(log(times_seen), 600), last_seen))', '', 'priority']
         ]
-        assert_aggregation(priority, '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)', 2)
+        alias, agg = priority[2][2], priority[2][0]
+        assert column_expr('', {'aggregations': priority}, alias, agg) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
 
     def test_complex_conditions_expr(self):
         body = {}
