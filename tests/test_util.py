@@ -164,7 +164,7 @@ class TestUtil(BaseTest):
             ],
         ])
         assert conditions_expr(conditions, {}) == \
-                """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+            """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
 
         # Test scalar condition on array column is expanded as an iterator.
         conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
@@ -197,6 +197,23 @@ class TestUtil(BaseTest):
             for (agg, col, alias) in body['aggregations']
         ]
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
+
+    def test_nested_aggregate_legacy_format(self):
+        def assert_aggregation(body, expected, index=0):
+            col, alias, agg = '', body[index][2], body[index][0]
+            body = {'aggregations': body}
+            assert column_expr(col, body, alias, agg) == expected
+
+        last_seen = [['multiply(toUInt64(max(timestamp)), 1000)', '', 'last_seen']]
+        assert_aggregation(last_seen, '(multiply(toUInt64(max(timestamp)), 1000) AS last_seen)')
+
+        first_seen = [['multiply(toUInt64(min(timestamp)), 1000)', '', 'first_seen']]
+        assert_aggregation(first_seen, '(multiply(toUInt64(min(timestamp)), 1000) AS first_seen)')
+        priority = [
+            last_seen[0],
+            ['add(multiply(toUInt64(log(times_seen), 600), last_seen))', '', 'priority']
+        ]
+        assert_aggregation(priority, '(add(multiply(toUInt64(log(times_seen), 600), last_seen)) AS priority)', 1)
 
     def test_complex_conditions_expr(self):
         body = {}
@@ -232,8 +249,7 @@ class TestUtil(BaseTest):
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
         message_expr = '(coalesce(search_message, message) AS message)'
         assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy())\
-                == "positionCaseInsensitive({message_expr}, 'lol \\'single\\' quotes')".format(**locals())
-
+            == "positionCaseInsensitive({message_expr}, 'lol \\'single\\' quotes')".format(**locals())
 
         # dangerous characters are allowed but escaped in literals and column names
         assert complex_column_expr(tuplify(['safe', ['fo`o', "'ba'r'"]]), body.copy()) == r"safe(`fo\`o`, 'ba\'r')"
@@ -245,6 +261,9 @@ class TestUtil(BaseTest):
         # Or nested functions
         with pytest.raises(AssertionError):
             assert complex_column_expr(tuplify([r"safe", ['dang`erous', ['message']]]), body.copy())
+
+    def test_nested_aggrations_legacy_format(self):
+        assert column_expr()
 
     def test_referenced_columns(self):
         # a = 1 AND b = 1
@@ -300,7 +319,7 @@ class TestUtil(BaseTest):
             'selected_columns': [
                 'issue',
                 'time',
-                ['foo', ['c', ['bar', ['d']]]] # foo(c, bar(d))
+                ['foo', ['c', ['bar', ['d']]]]  # foo(c, bar(d))
             ],
             'aggregations': [
                 ['uniq', 'tags_value', 'values_seen']
