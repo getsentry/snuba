@@ -200,9 +200,10 @@ class TestUtil(BaseTest):
 
     def test_nested_aggregate_legacy_format(self):
         priority = ['toUInt64(plus(multiply(log(times_seen), 600), last_seen))', '', 'priority']
+        assert column_expr('', {'aggregations': [priority]}, priority[2], priority[0]) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
 
-        alias, agg = priority[2], priority[0]
-        assert column_expr('', {'aggregations': [priority]}, alias, agg) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
+        top_k = ['topK(3)', 'logger', 'top_3']
+        assert column_expr(top_k[1], {'aggregations': [top_k]}, top_k[2], top_k[0]) == '(topK(3)(logger) AS top_3)'
 
     def test_complex_conditions_expr(self):
         body = {}
