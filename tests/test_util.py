@@ -235,6 +235,23 @@ class TestUtil(BaseTest):
             ]]
         ]]), body.copy()) == 'or(a = 1, and(b = 1, c = 2))'
 
+        assert complex_column_expr(tuplify(['or', [
+            ['and', [
+                ['a', '=', 1],
+                ['or', [
+                    ['b', '=', 2],
+                    ['c', '=', 3]
+                ]],
+            ]],
+            ['and', [
+                ['or', [
+                    ['d', '=', 4],
+                    ['e', '=', 5]
+                ]],
+                ['f', '=', 6]
+            ]]
+        ]]), body.copy()) == 'or(and(a = 1, or(b = 2, c = 3)), and(or(d = 4, e = 5), f = 6))'
+
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 

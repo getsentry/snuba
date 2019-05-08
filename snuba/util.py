@@ -197,21 +197,14 @@ def complex_column_expr(expr, body, depth=0):
             i += 2
         else:
             nxt = args[i]
-            # TODO(LB): Added this because is_condition throws an error if a literal is passed,
-            # should it be a safe in that case?
             if is_condition(nxt):
                 out.append(conditions_expr([nxt], body, depth=0))
+            elif is_function(nxt, depth + 1): # Embedded function
+                out.append(complex_column_expr(nxt, body, depth + 1))
+            elif isinstance(nxt, six.string_types):
+                out.append(column_expr(nxt, body))
             else:
-                if is_iterable_expr(nxt):
-                    next_2 = nxt[0:2]
-                    if is_function(next_2, depth + 1):
-                        out.append(complex_column_expr(next_2, body, depth + 1))
-                        i += 2
-                        continue
-                if isinstance(nxt, six.string_types):
-                    out.append(column_expr(nxt, body))
-                else:
-                    out.append(escape_literal(nxt))
+                out.append(escape_literal(nxt))
             i += 1
 
     ret = function_expr(name, ', '.join(out))
