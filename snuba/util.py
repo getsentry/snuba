@@ -199,7 +199,7 @@ def complex_column_expr(expr, body, depth=0):
             nxt = args[i]
             # TODO(LB): Added this because is_condition throws an error if a literal is passed,
             # should it be a safe in that case?
-            if is_iterable_expr(nxt) and is_condition(nxt):
+            if is_condition(nxt):
                 out.append(conditions_expr([nxt], body, depth=0))
             else:
                 if is_iterable_expr(nxt):
@@ -314,6 +314,7 @@ def is_condition(cond_or_list):
     return (
         # A condition is:
         # a 3-tuple
+        is_iterable_expr(cond_or_list) and
         len(cond_or_list) == 3 and
         # where the middle element is an operator
         cond_or_list[1] in schemas.CONDITION_OPERATORS and
