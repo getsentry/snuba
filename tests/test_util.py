@@ -219,6 +219,22 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['top3', ['project_id']]), body.copy()) == 'topK(3)(project_id)'
         assert complex_column_expr(tuplify(['top10', ['project_id'], 'baz']), body.copy()) == '(topK(10)(project_id) AS baz)'
 
+        assert complex_column_expr(tuplify(['or', [['a', '=', 1], ['b', '=', 1]]]), body.copy()) == 'or(a = 1, b = 1)'
+        assert complex_column_expr(tuplify(['and', [['a', '=', 1], ['b', '=', 1]]]), body.copy()) == 'and(a = 1, b = 1)'
+
+        assert complex_column_expr(tuplify(['or', [
+            [['notEmpty', ['tags[sentry:user]']], '=', 1],
+            [['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]
+        ]]), body.copy()) == 'or(notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1, notEmpty(arrayElement(exception_stacks.type, 1)) = 1)'
+
+        assert complex_column_expr(tuplify(['or', [
+            ['a', '=', 1],
+            ['and', [
+                ['b', '=', 1],
+                ['c', '=', 2]
+            ]]
+        ]]), body.copy()) == 'or(a = 1, and(b = 1, c = 2))'
+
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
 

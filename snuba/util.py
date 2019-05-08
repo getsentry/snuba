@@ -60,6 +60,7 @@ def parse_datetime(value, alignment=1):
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
+
 def time_expr(alias, granularity):
     column = settings.TIME_GROUP_COLUMNS[alias]
     template = {
@@ -69,6 +70,7 @@ def time_expr(alias, granularity):
     }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
 
     return template.format(column=column, granularity=granularity)
+
 
 def function_expr(fn, args_expr=''):
     """
@@ -99,7 +101,8 @@ def function_expr(fn, args_expr=''):
         return 'ifNull({}, \'\')'.format(args_expr)
 
     # default: just return fn(args_expr)
-    return  u'{}({})'.format(fn, args_expr)
+    return u'{}({})'.format(fn, args_expr)
+
 
 def is_function(column_expr, depth=0):
     """
@@ -133,6 +136,7 @@ def is_function(column_expr, depth=0):
             return tuple(column_expr)
     else:
         return None
+
 
 def column_expr(column_name, body, alias=None, aggregate=None):
     """
@@ -183,17 +187,27 @@ def complex_column_expr(expr, body, depth=0):
     out = []
     i = 0
     while i < len(args):
-        next_2 = args[i:i+2]
-        if is_function(next_2, depth+1):
-            out.append(complex_column_expr(next_2, body, depth+1))
+        next_2 = args[i:i + 2]
+        if is_function(next_2, depth + 1):
+            out.append(complex_column_expr(next_2, body, depth + 1))
             i += 2
         else:
             nxt = args[i]
-            assert not isinstance(nxt, (list, tuple)), "nested functions do not support array arguments"
-            if isinstance(nxt, six.string_types):
-                out.append(column_expr(nxt, body))
+            # TODO(LB): Added this because is_condition throws an error if a literal is passed,
+            # should it be a safe in that case?
+            if isinstance(nxt, (list, tuple)) and is_condition(nxt):
+                out.append(conditions_expr([nxt], body, depth=0))
             else:
-                 out.append(escape_literal(nxt))
+                if isinstance(nxt, (list, tuple)):
+                    next_2 = nxt[0:2]
+                    if is_function(next_2, depth + 1):
+                        out.append(complex_column_expr(next_2, body, depth + 1))
+                        i += 2
+                        continue
+                if isinstance(nxt, six.string_types):
+                    out.append(column_expr(nxt, body))
+                else:
+                    out.append(escape_literal(nxt))
             i += 1
 
     ret = function_expr(name, ', '.join(out))
@@ -394,7 +408,7 @@ def conditions_expr(conditions, body, depth=0):
             type(ALL_COLUMNS[lhs].type) == clickhouse.Array and
             ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
-            ):
+        ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,
