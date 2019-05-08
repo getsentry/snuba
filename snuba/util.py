@@ -178,6 +178,10 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     return alias_expr(expr, alias, body)
 
 
+def is_iterable_expr(expr):
+    return isinstance(expr, (list, tuple))
+
+
 def complex_column_expr(expr, body, depth=0):
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
@@ -195,10 +199,10 @@ def complex_column_expr(expr, body, depth=0):
             nxt = args[i]
             # TODO(LB): Added this because is_condition throws an error if a literal is passed,
             # should it be a safe in that case?
-            if isinstance(nxt, (list, tuple)) and is_condition(nxt):
+            if is_iterable_expr(nxt) and is_condition(nxt):
                 out.append(conditions_expr([nxt], body, depth=0))
             else:
-                if isinstance(nxt, (list, tuple)):
+                if is_iterable_expr(nxt):
                     next_2 = nxt[0:2]
                     if is_function(next_2, depth + 1):
                         out.append(complex_column_expr(next_2, body, depth + 1))
@@ -352,15 +356,15 @@ def columns_in_expr(expr):
     # string literals, not column names.
     if isinstance(expr, six.string_types):
         cols.append(expr.lstrip('-'))
-    elif (isinstance(expr, (list, tuple)) and len(expr) >= 2
-          and isinstance(expr[1], (list, tuple))):
+    elif (is_iterable_expr(expr) and len(expr) >= 2
+          and is_iterable_expr(expr[1])):
         for func_arg in expr[1]:
             cols.extend(columns_in_expr(func_arg))
     return cols
 
 
 def tuplify(nested):
-    if isinstance(nested, (list, tuple)):
+    if is_iterable_expr(nested):
         return tuple(tuplify(child) for child in nested)
     return nested
 
@@ -407,7 +411,7 @@ def conditions_expr(conditions, body, depth=0):
             lhs in ALL_COLUMNS and
             type(ALL_COLUMNS[lhs].type) == clickhouse.Array and
             ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
-            not isinstance(lit, (list, tuple))
+            not is_iterable_expr(lit)
         ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
@@ -448,7 +452,7 @@ def escape_literal(value):
         return "toDateTime('{}')".format(value.isoformat())
     elif isinstance(value, date):
         return "toDate('{}')".format(value.isoformat())
-    elif isinstance(value, (list, tuple)):
+    elif is_iterable_expr(value):
         return u"({})".format(', '.join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
         return str(value)
