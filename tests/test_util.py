@@ -57,6 +57,9 @@ class TestUtil(BaseTest):
         assert column_expr('col', body.copy(), aggregate='sum') ==\
             "(sum(col) AS col)"
 
+        assert column_expr(None, body.copy(), alias='sum', aggregate='sum') ==\
+            "sum"  # This should probably be an error as its an aggregate with no column
+
         assert column_expr('col', body.copy(), alias='summation', aggregate='sum') ==\
             "(sum(col) AS summation)"
 
@@ -164,7 +167,7 @@ class TestUtil(BaseTest):
             ],
         ])
         assert conditions_expr(conditions, {}) == \
-            """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
+                """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
 
         # Test scalar condition on array column is expanded as an iterator.
         conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
@@ -185,7 +188,7 @@ class TestUtil(BaseTest):
     def test_duplicate_expression_alias(self):
         body = {
             'aggregations': [
-                ['top3', 'logger', 'dupe_alias'],
+                ['topK(3)', 'logger', 'dupe_alias'],
                 ['uniq', 'environment', 'dupe_alias'],
             ]
         }
@@ -198,13 +201,6 @@ class TestUtil(BaseTest):
         ]
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
 
-    def test_nested_aggregate_legacy_format(self):
-        priority = ['toUInt64(plus(multiply(log(times_seen), 600), last_seen))', '', 'priority']
-        assert column_expr('', {'aggregations': [priority]}, priority[2], priority[0]) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
-
-        top_k = ['topK(3)', 'logger', 'top_3']
-        assert column_expr(top_k[1], {'aggregations': [top_k]}, top_k[2], top_k[0]) == '(topK(3)(logger) AS top_3)'
-
     def test_complex_conditions_expr(self):
         body = {}
 
@@ -216,8 +212,9 @@ class TestUtil(BaseTest):
         assert complex_column_expr(tuplify(['foo', ['b', 'c'], 'd']), body.copy()) == '(foo(b, c) AS d)'
         assert complex_column_expr(tuplify(['foo', ['b', 'c', ['d']]]), body.copy()) == 'foo(b, c(d))'
 
-        assert complex_column_expr(tuplify(['top3', ['project_id']]), body.copy()) == 'topK(3)(project_id)'
-        assert complex_column_expr(tuplify(['top10', ['project_id'], 'baz']), body.copy()) == '(topK(10)(project_id) AS baz)'
+        # we may move these to special Snuba function calls in the future
+        assert complex_column_expr(tuplify(['topK', [3], ['project_id']]), body.copy()) == 'topK(3)(project_id)'
+        assert complex_column_expr(tuplify(['topK', [3], ['project_id'], 'baz']), body.copy()) == '(topK(3)(project_id) AS baz)'
 
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id']]), body.copy()) == 'ifNull(project_id, \'\')'
         assert complex_column_expr(tuplify(['emptyIfNull', ['project_id'], 'foo']), body.copy()) == '(ifNull(project_id, \'\') AS foo)'
@@ -225,7 +222,8 @@ class TestUtil(BaseTest):
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
         message_expr = '(coalesce(search_message, message) AS message)'
         assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy())\
-            == "positionCaseInsensitive({message_expr}, 'lol \\'single\\' quotes')".format(**locals())
+                == "positionCaseInsensitive({message_expr}, 'lol \\'single\\' quotes')".format(**locals())
+
 
         # dangerous characters are allowed but escaped in literals and column names
         assert complex_column_expr(tuplify(['safe', ['fo`o', "'ba'r'"]]), body.copy()) == r"safe(`fo\`o`, 'ba\'r')"
@@ -292,7 +290,7 @@ class TestUtil(BaseTest):
             'selected_columns': [
                 'issue',
                 'time',
-                ['foo', ['c', ['bar', ['d']]]]  # foo(c, bar(d))
+                ['foo', ['c', ['bar', ['d']]]] # foo(c, bar(d))
             ],
             'aggregations': [
                 ['uniq', 'tags_value', 'values_seen']
