@@ -135,24 +135,11 @@ def complex_column_expr(expr, body, depth=0):
             assert SAFE_FUNCTION_RE.match(ret)
             expr = expr[1:]
         else:
-            ret = ''
-
-    # emptyIfNull(col) is a simple pseudo function supported by Snuba that expands
-    # to the actual clickhouse function ifNull(col, '') Until we figure out the best
-    # way to disambiguate column names from string literals in complex functions.
-    if ret == 'emptyIfNull' and len(expr) >= 1 and isinstance(expr[0], tuple):
-        ret = 'ifNull'
-        expr = (expr[0] + ("''",),) + expr[1:]
-
-    first = True
-    for subexpr in expr:
-        if isinstance(subexpr, tuple):
-            ret += '(' + complex_column_expr(subexpr, body, depth + 1) + ')'
-        else:
-            if not first:
-                ret += ', '
-            if isinstance(subexpr, six.string_types):
-                ret += column_expr(subexpr, body)
+            nxt = args[i]
+            if is_function(nxt, depth + 1):  # Embedded function
+                out.append(complex_column_expr(nxt, body, depth + 1))
+            elif isinstance(nxt, six.string_types):
+                out.append(column_expr(nxt, body))
             else:
                 ret += escape_literal(subexpr)
         first = False

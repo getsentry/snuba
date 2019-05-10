@@ -230,6 +230,9 @@ class TestUtil(BaseTest):
         # A OR B OR C OR D
         assert complex_column_expr(tuplify(['or', [['or', [['or', ['c', 'd']], 'b']], 'a']]), body.copy()) == 'or((or((or(c, d)), b)), a)'
 
+        assert complex_column_expr(tuplify(['if', [['in', ['release', 'tuple', ["'foo'"], ], ], 'release', "'other'"], 'release', ]), body.copy()) == "(if(in(release, tuple('foo')), release, 'other') AS release)"
+        assert complex_column_expr(tuplify(['if', ['in', ['release', 'tuple', ["'foo'"]], 'release', "'other'", ], 'release']), body.copy()) == "(if(in(release, tuple('foo')), release, 'other') AS release)"
+
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
         message_expr = '(coalesce(search_message, message) AS message)'
         assert complex_column_expr(tuplify(['positionCaseInsensitive', ['message', "'lol 'single' quotes'"]]), body.copy())\
