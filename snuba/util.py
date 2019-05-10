@@ -191,7 +191,7 @@ def complex_column_expr(expr, body, depth=0):
             nxt = args[i]
             if is_function(nxt, depth + 1):  # Embedded function
                 out.append(complex_column_expr(nxt, body, depth + 1))
-            if isinstance(nxt, six.string_types):
+            elif isinstance(nxt, six.string_types):
                 out.append(column_expr(nxt, body))
             else:
                 out.append(escape_literal(nxt))
