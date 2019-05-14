@@ -61,6 +61,30 @@ Settings are found in `settings.py`
     export CLICKHOUSE_SERVER=127.0.0.1:9000
 
     make test
+    
+## Testing Against Sentry
+
+```
+workon snuba
+git checkout your-snuba-branch
+snuba api
+```
+And then in another terminal 
+```
+workon sentry
+git checkout master
+git pull
+sentry devservices up --exclude=snuba
+```
+This will get the most recent version of Sentry on master, and bring up all snuba's dependencies. 
+
+You will want to run the following Sentry tests:
+```
+USE_SNUBA=1 make test-acceptance
+USE_SNUBA=1 make test-snuba
+make test-python
+```
+Note that python tests do not currently pass with the `USE_SNUBA` flag, but should be fixed in the future. For now, simply run it without `USE_SNUBA` flag (which determines the version of TagStore). Note also that we check for the existance of `USE_SNUBA` rather than take into account the value. `USE_SNUBA=0` does not currently work as intended.
 
 ## Querying
 
