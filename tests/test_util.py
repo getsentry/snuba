@@ -84,6 +84,7 @@ class TestUtil(BaseTest):
         group_id_body = body.copy()
         assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
+        # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where a number was expected.
         assert column_expr('tags[environment]', body.copy(), alias='unique_envs', aggregate='uniq') == "(ifNull(uniq(environment), 0) AS unique_envs)"
 
     def test_alias_in_alias(self):
