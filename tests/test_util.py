@@ -84,6 +84,8 @@ class TestUtil(BaseTest):
         group_id_body = body.copy()
         assert column_expr('issue', group_id_body) == '(group_id AS issue)'
 
+        assert column_expr('tags[environment]', body.copy(), alias='unique_envs', aggregate='uniq') == "(ifNull(uniq(environment), 0) AS unique_envs)"
+
     def test_alias_in_alias(self):
         body = {
             'groupby': ['tags_key', 'tags_value']
