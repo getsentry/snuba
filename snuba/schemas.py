@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from snuba import settings
+from snuba.datasets import factory
 import jsonschema
 import copy
 import six
@@ -37,6 +39,9 @@ SDK_STATS_SCHEMA = {
 QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
+        'dataset': {
+            'enum': list(factory.DATASETS_MAPPING.keys()),
+        },
         # A condition is a 3-tuple of (column, operator, literal)
         # `conditions` is an array of conditions, or an array of arrays of conditions.
         # Conditions at the the top level are ANDed together.

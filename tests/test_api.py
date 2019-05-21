@@ -12,7 +12,8 @@ import six
 import time
 import uuid
 
-from snuba import processor, settings, state
+from snuba import processor, settings, state, datasets
+from snuba.datasets.factory import get_dataset
 
 from base import BaseTest
 
@@ -802,8 +803,9 @@ class TestApi(BaseTest):
         assert result['data'] == []
 
         assert self.app.post('/tests/drop').status_code == 200
-
-        assert settings.CLICKHOUSE_TABLE not in self.clickhouse.execute("SHOW TABLES")
+        dataset = get_dataset('events')
+        table = dataset.SCHEMA.get_table_name()
+        assert table not in self.clickhouse.execute("SHOW TABLES")
 
     @pytest.mark.xfail
     def test_row_stats(self):

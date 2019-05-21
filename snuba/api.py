@@ -14,7 +14,8 @@ from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-
+from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
+from snuba.datasets.schema import local_dataset_mode
 
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
@@ -40,7 +41,14 @@ else:
 
 def check_clickhouse():
     try:
-        return any(settings.CLICKHOUSE_TABLE == r[0] for r in clickhouse_ro.execute('show tables'))
+        clickhouse_tables = clickhouse_ro.execute('show tables')
+        for name in get_enabled_dataset_names():
+            dataset = get_dataset(name)
+            table_name = dataset.SCHEMA.get_table_name()
+            if (table_name,) not in clickhouse_tables:
+                return False
+        return True
+
     except Exception:
         return False
 
@@ -133,8 +141,6 @@ def health():
 @util.time_request('query')
 @util.validate_request(schemas.QUERY_SCHEMA)
 def query(validated_body=None, timer=None):
-    ensure_table_exists()
-
     if request.method == 'GET':
         query_template = schemas.generate(schemas.QUERY_SCHEMA)
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
@@ -154,10 +160,15 @@ def query(validated_body=None, timer=None):
 @split_query
 def parse_and_run_query(validated_body, timer):
     body = deepcopy(validated_body)
+
+    name = body.get('dataset', settings.DEFAULT_DATASET_NAME)
+    dataset = get_dataset(name)
+    ensure_table_exists(dataset)
+    table = dataset.SCHEMA.get_table_name()
+
     turbo = body.get('turbo', False)
-    max_days, table, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
+    max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
         ('max_days', None),
-        ('clickhouse_table', settings.CLICKHOUSE_TABLE),
         ('date_align_seconds', 1),
         ('sample', 1),
         # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
@@ -176,8 +187,9 @@ def parse_and_run_query(validated_body, timer):
     where_conditions.extend([
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
-        ('deleted', '=', 0),
     ])
+    where_conditions.extend(dataset.default_conditions(body))
+
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
@@ -344,37 +356,37 @@ def sdk_distribution(validated_body, timer):
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
-    assert settings.CLICKHOUSE_TABLE in ('dev', 'test')
 
-    _ensured = False
+    _ensured = {}
 
-    def ensure_table_exists(force=False):
-        global _ensured
-
-        if not force and _ensured:
+    def ensure_table_exists(dataset, force=False):
+        if not force and _ensured.get(dataset, False):
             return
 
+        assert local_dataset_mode(), "Cannot create table in distributed mode"
         from snuba.clickhouse import get_table_definition, get_test_engine
-
+        # We cannot build distributed tables this way. So this only works in local
+        # mode.
         clickhouse_rw.execute(
             get_table_definition(
-                name=settings.CLICKHOUSE_TABLE,
+                name=dataset.SCHEMA.get_local_table_name(),
                 engine=get_test_engine(),
             )
         )
 
-        if settings.CLICKHOUSE_TABLE == 'dev':
-            from snuba import migrate
-            migrate.run(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+        from snuba import migrate
+        migrate.run(clickhouse_rw, dataset.SCHEMA.get_table_name())
 
-        _ensured = True
+        _ensured[dataset] = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_message
         from snuba.writer import row_from_processed_event, write_rows
 
-        ensure_table_exists()
+        # TODO we need to make this work for multiple datasets
+        dataset = get_dataset('events')
+        ensure_table_exists(dataset)
         body = json.loads(request.data)
 
         rows = []
@@ -385,14 +397,18 @@ if application.debug or application.testing:
 
         write_rows(
             clickhouse_rw,
-            table=settings.CLICKHOUSE_TABLE,
+            table=dataset.SCHEMA.get_local_table_name(),
             rows=rows
         )
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
     def eventstream():
-        ensure_table_exists()
+        # TODO we need to make this work for multiple datasets
+        dataset = get_dataset('events')
+        ensure_table_exists(dataset)
+        table = dataset.SCHEMA.get_local_table_name()
+
         record = json.loads(request.data)
 
         version = record[0]
@@ -417,10 +433,10 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, table, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, settings.CLICKHOUSE_TABLE)
+            worker = ReplacerWorker(clickhouse_rw, table)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -431,13 +447,16 @@ if application.debug or application.testing:
 
     @application.route('/tests/drop', methods=['POST'])
     def drop():
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % settings.CLICKHOUSE_TABLE)
-        ensure_table_exists(force=True)
+        dataset = get_dataset('events')
+        table = dataset.SCHEMA.get_local_table_name()
+
+        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
+        ensure_table_exists(dataset, force=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/error')
     def error():
         1 / 0
 else:
-    def ensure_table_exists():
+    def ensure_table_exists(dataset, force=False):
         pass
