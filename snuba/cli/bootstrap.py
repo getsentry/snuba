@@ -1,6 +1,7 @@
 import click
 
 from snuba import settings
+from snuba.datasets.factory import get_dataset, DATASETS_MAPPING
 
 
 @click.command()
@@ -61,9 +62,17 @@ def bootstrap(bootstrap_server, kafka, force):
 
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
-    ClickhousePool().execute(
-        get_table_definition(
-            settings.DEFAULT_LOCAL_TABLE,
-            get_test_engine(),
+
+    # Migrate from the old table to the new one if needed
+    from snuba import migrate
+    migrate.rename_dev_table(ClickhousePool())
+
+    # For now just create the table for every dataset.
+    for name in DATASETS_MAPPING.keys():
+        dataset = get_dataset(name)
+        ClickhousePool().execute(
+            get_table_definition(
+                dataset.SCHEMA.get_table_name(),
+                get_test_engine(),
+            )
         )
-    )
