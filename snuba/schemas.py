@@ -236,7 +236,7 @@ QUERY_SCHEMA = {
                 {
                     'anyOf': [
                         {'type': 'null'},
-                        {'pattern': '^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
+                        {'pattern': r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
                     ]
                 },
             ],
@@ -247,7 +247,7 @@ QUERY_SCHEMA = {
                 # Special computed column created from `issues` definition
                 {'enum': ['issue', '-issue']},
                 {'pattern': '^-?[a-zA-Z0-9_.]+$', },
-                {'pattern': '^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
+                {'pattern': r'^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
             ],
         },
         'column_list': {
@@ -294,7 +294,7 @@ QUERY_SCHEMA = {
 
 
 def validate(value, schema, set_defaults=True):
-    orig = jsonschema.Draft4Validator.VALIDATORS['properties']
+    orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
         for property, subschema in six.iteritems(properties):
@@ -310,7 +310,7 @@ def validate(value, schema, set_defaults=True):
     validator_cls = jsonschema.validators.extend(
         jsonschema.Draft4Validator,
         {'properties': validate_and_default}
-    ) if set_defaults else jsonschema.Draft4Validator
+    ) if set_defaults else jsonschema.Draft6Validator
 
     validator_cls(
         schema,
