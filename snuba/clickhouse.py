@@ -403,7 +403,6 @@ PROMOTED_CONTEXT_TAG_COLUMNS = ColumnSet([
     # promoted tags
     ('app_device', Nullable(String())),
     ('device', Nullable(String())),
-    ('device_family', Nullable(String())),
     ('runtime', Nullable(String())),
     ('runtime_name', Nullable(String())),
     ('browser', Nullable(String())),

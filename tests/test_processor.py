@@ -344,7 +344,6 @@ class TestProcessor(BaseTest):
             'device_battery_level': 30.0,
             'device_brand': u'the_device_brand',
             'device_charging': True,
-            'device_family': u'the_device_family',
             'device_locale': u'the_device_locale',
             'device_model_id': u'the_device_model_id',
             'device_name': u'the_device_name',
@@ -363,7 +362,9 @@ class TestProcessor(BaseTest):
         assert contexts == {
             'app': {},
             'browser': {},
-            'device': {},
+            'device': {
+                'family': u'the_device_family',
+            },
             'extra': {
                 'dict': {'key': 'value'},
                 'float': 1.3,
