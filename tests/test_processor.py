@@ -362,9 +362,7 @@ class TestProcessor(BaseTest):
         assert contexts == {
             'app': {},
             'browser': {},
-            'device': {
-                'family': u'the_device_family',
-            },
+            'device': {},
             'extra': {
                 'dict': {'key': 'value'},
                 'float': 1.3,
