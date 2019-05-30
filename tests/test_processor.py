@@ -362,7 +362,9 @@ class TestProcessor(BaseTest):
         assert contexts == {
             'app': {},
             'browser': {},
-            'device': {},
+            'device': {
+                'family': u'the_device_family',
+            },
             'extra': {
                 'dict': {'key': 'value'},
                 'float': 1.3,
@@ -381,8 +383,8 @@ class TestProcessor(BaseTest):
         processor.extract_extra_contexts(extra_output, contexts)
 
         assert extra_output == {
-            'contexts.key': ['extra.int', 'extra.float', 'extra.str'],
-            'contexts.value': [u'0', u'1.3', u'string'],
+            'contexts.key': ['extra.int', 'extra.float', 'extra.str', 'device.family'],
+            'contexts.value': [u'0', u'1.3', u'string', u'the_device_family'],
         }
 
     def test_extract_user(self):
