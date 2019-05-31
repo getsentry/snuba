@@ -1,0 +1,5 @@
+backcall==0.1.0
+ipython==6.4.0
+ipdb==0.11
+jedi==0.12.0
+parso==0.2.1
