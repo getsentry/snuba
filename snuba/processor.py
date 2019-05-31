@@ -230,6 +230,7 @@ def extract_promoted_contexts(output, contexts, tags):
     device_ctx = contexts.get('device', None) or {}
     output['device'] = _unicodify(tags.get('device', None))
     device_ctx.pop('model', None)  # tag=device
+    device_ctx.pop('family', None)  # tag=device.family
     output['device_name'] = _unicodify(device_ctx.pop('name', None))
     output['device_brand'] = _unicodify(device_ctx.pop('brand', None))
     output['device_locale'] = _unicodify(device_ctx.pop('locale', None))
