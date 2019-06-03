@@ -1,6 +1,8 @@
 import cProfile
 import logging
+import os
 import six
+import tempfile
 import time
 from itertools import chain
 
@@ -90,12 +92,24 @@ def run(events_file, clickhouse, table_name, repeat=1,
 
     time_start = time.time()
     if profile_process:
-        cProfile.runctx('process()', globals(), locals(), sort='cumulative')
+        filename = tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(events_file) + '.process.',
+            suffix='.pstats',
+            delete=False,
+        ).name
+        cProfile.runctx('process()', globals(), locals(), filename=filename)
+        logger.info('Profile Data: %s', filename)
     else:
         process()
     time_write = time.time()
     if profile_write:
-        cProfile.runctx('write()', globals(), locals(), sort='cumulative')
+        filename = tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(events_file) + '.write.',
+            suffix='.pstats',
+            delete=False,
+        ).name
+        cProfile.runctx('write()', globals(), locals(), filename=filename)
+        logger.info('Profile Data: %s', filename)
     else:
         write()
     time_finish = time.time()
