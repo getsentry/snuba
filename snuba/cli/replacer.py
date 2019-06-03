@@ -69,7 +69,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
 
     replacer = BatchingKafkaConsumer(
         replacements_topic,
-        worker=ReplacerWorker(clickhouse, dataset.SCHEMA.get_table_name(), metrics=metrics),
+        worker=ReplacerWorker(clickhouse, dataset.get_schema().get_table_name(), metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

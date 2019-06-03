@@ -13,7 +13,9 @@ class TableSchema(object):
 
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, local_table_name, dist_table_name):
+    def __init__(self, all_columns, local_table_name, dist_table_name):
+        self.__all_columns = all_columns
+
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
@@ -34,3 +36,49 @@ class TableSchema(object):
         """
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
         return self.__make_test_table(table_name)
+
+    def _get_table_definition(self, name, engine):
+        return """
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self.__all_columns.for_schema(),
+            'engine': engine,
+            'name': name,
+        }
+
+    def get_local_table_definition(self):
+        return self._get_table_definition(
+            self.get_local_table_name(),
+            self._get_local_engine()
+        )
+
+    def _get_local_engine(self):
+        pass
+
+    def get_all_columns(self):
+        return self.__all_columns
+
+
+class ReplacingMergeTreeSchema(TableSchema):
+
+    def __init__(self, all_columns, local_table_name, dist_table_name,
+            order_by, partition_by, version_column, sample_expr):
+        super(ReplacingMergeTreeSchema, self).__init__(
+            all_columns=all_columns,
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name)
+        self.__order_by = order_by
+        self.__partition_by = partition_by
+        self.__version_column = version_column
+        self.__sample_expr = sample_expr
+
+    def _get_local_engine(self):
+        return """
+            ReplacingMergeTree(%(version_column)s)
+            PARTITION BY %(partition_by)s
+            ORDER BY %(order_by)s
+            SAMPLE BY %(sample_expr)s ;""" % {
+            'order_by': self.__order_by,
+            'partition_by': self.__partition_by,
+            'version_column': self.__version_column,
+            'sample_expr': self.__sample_expr,
+        }

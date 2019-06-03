@@ -7,7 +7,7 @@ import six
 import _strptime  # fixes _strptime deferred import issue
 
 from snuba import settings
-from snuba.clickhouse import PROMOTED_TAG_COLUMNS
+from snuba.clickhouse import get_promoted_tag_columns
 from snuba.util import force_bytes
 
 
@@ -196,7 +196,7 @@ def extract_sdk(output, sdk):
 
 def extract_promoted_tags(output, tags):
     output.update({col.name: _unicodify(tags.get(col.name, None))
-        for col in PROMOTED_TAG_COLUMNS
+        for col in get_promoted_tag_columns()
     })
 
 

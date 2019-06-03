@@ -19,7 +19,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse import escape_col, ALL_COLUMNS, PROMOTED_COLS, TAG_COLUMN_MAP, COLUMN_TAG_MAP
+from snuba.clickhouse import escape_col, get_all_columns, get_promoted_cols, get_tag_column_map, get_column_tag_map
 
 
 logger = logging.getLogger('snuba.util')
@@ -47,7 +47,7 @@ def to_list(value):
 
 
 def string_col(col):
-    col_type = ALL_COLUMNS.get(col, None)
+    col_type = get_all_columns().get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
@@ -235,9 +235,9 @@ def tag_expr(column_name):
     col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
 
     # For promoted tags, return the column name.
-    if col in PROMOTED_COLS:
-        actual_tag = TAG_COLUMN_MAP[col].get(tag, tag)
-        if actual_tag in PROMOTED_COLS[col]:
+    if col in get_promoted_cols():
+        actual_tag = get_tag_column_map()[col].get(tag, tag)
+        if actual_tag in get_promoted_cols()[col]:
             return string_col(actual_tag)
 
     # For the rest, return an expression that looks it up in the nested tags.
@@ -261,8 +261,8 @@ def tags_expr(column_name, body):
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)
     else:
-        promoted = PROMOTED_COLS[col]
-        col_map = COLUMN_TAG_MAP[col]
+        promoted = get_promoted_cols()[col]
+        col_map = get_column_tag_map()[col]
         key_list = u'arrayConcat([{}], {}.key)'.format(
             u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
             col
@@ -391,9 +391,9 @@ def conditions_expr(conditions, body, depth=0):
         # where all elements match (eg. all NOT LIKE 'foo').
         if (
             isinstance(lhs, six.string_types) and
-            lhs in ALL_COLUMNS and
-            type(ALL_COLUMNS[lhs].type) == clickhouse.Array and
-            ALL_COLUMNS[lhs].base_name != body.get('arrayjoin') and
+            lhs in get_all_columns() and
+            type(get_all_columns()[lhs].type) == clickhouse.Array and
+            get_all_columns()[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'

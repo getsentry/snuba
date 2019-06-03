@@ -65,7 +65,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     dataset = get_dataset(dataset)
-    table = dataset.SCHEMA.get_table_name()
+    table = dataset.get_schema().get_table_name()
 
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),

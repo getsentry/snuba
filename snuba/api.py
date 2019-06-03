@@ -44,7 +44,7 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.SCHEMA.get_table_name()
+            table_name = dataset.get_schema().get_table_name()
             if (table_name,) not in clickhouse_tables:
                 return False
         return True
@@ -164,7 +164,7 @@ def parse_and_run_query(validated_body, timer):
     name = body.get('dataset', settings.DEFAULT_DATASET_NAME)
     dataset = get_dataset(name)
     ensure_table_exists(dataset)
-    table = dataset.SCHEMA.get_table_name()
+    table = dataset.get_schema().get_table_name()
 
     turbo = body.get('turbo', False)
     max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
@@ -364,18 +364,14 @@ if application.debug or application.testing:
             return
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
-        from snuba.clickhouse import get_table_definition, get_test_engine
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         clickhouse_rw.execute(
-            get_table_definition(
-                name=dataset.SCHEMA.get_local_table_name(),
-                engine=get_test_engine(),
-            )
+            dataset.get_schema().get_local_table_definition()
         )
 
         from snuba import migrate
-        migrate.run(clickhouse_rw, dataset.SCHEMA.get_table_name())
+        migrate.run(clickhouse_rw, dataset.get_schema().get_table_name())
 
         _ensured[dataset] = True
 
@@ -397,7 +393,7 @@ if application.debug or application.testing:
 
         write_rows(
             clickhouse_rw,
-            table=dataset.SCHEMA.get_local_table_name(),
+            table=dataset.get_schema().get_table_name(),
             rows=rows
         )
         return ('ok', 200, {'Content-Type': 'text/plain'})
@@ -407,7 +403,7 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-        table = dataset.SCHEMA.get_local_table_name()
+        table = dataset.get_schema().get_table_name()
 
         record = json.loads(request.data)
 
@@ -448,7 +444,7 @@ if application.debug or application.testing:
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         dataset = get_dataset('events')
-        table = dataset.SCHEMA.get_local_table_name()
+        table = dataset.get_schema().get_table_name()
 
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)

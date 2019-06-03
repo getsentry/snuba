@@ -46,7 +46,7 @@ def bootstrap(bootstrap_server, kafka, force):
             except Exception as e:
                 print("Failed to create topic %s: %s" % (topic, e))
 
-    from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+    from snuba.clickhouse import ClickhousePool
 
     attempts = 0
     while True:
@@ -66,9 +66,4 @@ def bootstrap(bootstrap_server, kafka, force):
     # For now just create the table for every dataset.
     for name in DATASETS_MAPPING.keys():
         dataset = get_dataset(name)
-        ClickhousePool().execute(
-            get_table_definition(
-                dataset.SCHEMA.get_table_name(),
-                get_test_engine(),
-            )
-        )
+        ClickhousePool().execute(dataset.get_schema().get_local_table_definition())
