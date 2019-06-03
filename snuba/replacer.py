@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, TAG_COLUMN_MAP, escape_col
+from snuba.clickhouse import get_all_columns, get_required_columns, get_promoted_tags, get_tag_column_map, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -19,8 +19,8 @@ logger = logging.getLogger('snuba.replacer')
 
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-REQUIRED_COLUMN_NAMES = [col.escaped for col in REQUIRED_COLUMNS]
-ALL_COLUMN_NAMES = [col.escaped for col in ALL_COLUMNS]
+REQUIRED_COLUMN_NAMES = [col.escaped for col in get_required_columns()]
+ALL_COLUMN_NAMES = [col.escaped for col in get_all_columns()]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -288,8 +288,8 @@ def process_delete_tag(message):
 
     assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = TAG_COLUMN_MAP['tags'].get(tag, tag)
-    is_promoted = tag in PROMOTED_TAGS['tags']
+    tag_column_name = get_tag_column_map()['tags'].get(tag, tag)
+    is_promoted = tag in get_promoted_tags()['tags']
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -309,7 +309,7 @@ def process_delete_tag(message):
     """ + where
 
     select_columns = []
-    for col in ALL_COLUMNS:
+    for col in get_all_columns():
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
         elif col.flattened == 'tags.key':

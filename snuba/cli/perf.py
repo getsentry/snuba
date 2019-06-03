@@ -46,9 +46,8 @@ def perf(events_file, repeat, profile_process, profile_write, clickhouse_server,
         logger.error("The perf tool is only intended for local dataset environment.")
         sys.exit(1)
 
-    table_name = dataset.SCHEMA.get_table_name()
     clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
     run(
-        events_file, clickhouse, table_name,
+        events_file, clickhouse, dataset,
         repeat=repeat, profile_process=profile_process, profile_write=profile_write
     )

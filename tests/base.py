@@ -9,7 +9,7 @@ from confluent_kafka import TopicPartition
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
-from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
 from snuba.processor import process_message
@@ -111,16 +111,11 @@ class BaseTest(object):
         # These tests are currently coupled pretty hard to the events dataset,
         # but eventually the base test should support multiple datasets.
         dataset = get_dataset('events')
-        self.table = dataset.SCHEMA.get_table_name()
+        self.table = dataset.get_schema().get_table_name()
         self.clickhouse = ClickhousePool()
 
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(
-            get_table_definition(
-                name=self.table,
-                engine=get_test_engine(),
-            )
-        )
+        self.clickhouse.execute(dataset.get_schema().get_local_table_definition())
 
         redis_client.flushdb()
 
