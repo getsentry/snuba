@@ -65,7 +65,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     dataset = get_dataset(dataset)
-    table = dataset.get_schema().get_table_name()
 
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),
@@ -76,7 +75,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
         worker=ConsumerWorker(
-            clickhouse, table,
+            clickhouse, dataset,
             producer=producer, replacements_topic=replacements_topic, metrics=metrics
         ),
         max_batch_size=max_batch_size,

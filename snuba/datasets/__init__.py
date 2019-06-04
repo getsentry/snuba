@@ -20,3 +20,15 @@ class DataSet(object):
         queries on this dataset.
         """
         return []
+
+    def row_from_processed_message(self, message):
+        from snuba.clickhouse import Array
+        values = []
+        columns = self.get_schema().get_all_columns()
+        for col in columns:
+            value = message.get(col.flattened, None)
+            if value is None and isinstance(col.type, Array):
+                value = []
+            values.append(value)
+
+        return values

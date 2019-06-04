@@ -374,14 +374,14 @@ if application.debug or application.testing:
             dataset.get_schema().get_local_table_definition()
         )
 
-        migrate.run(clickhouse_rw, dataset.get_schema().get_local_table_name())
+        migrate.run(clickhouse_rw, dataset)
 
         _ensured[dataset] = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_message
-        from snuba.writer import row_from_processed_event, write_rows
+        from snuba.writer import write_rows
 
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
@@ -391,14 +391,18 @@ if application.debug or application.testing:
         rows = []
         for event in body:
             _, processed = process_message(event)
-            row = row_from_processed_event(processed)
+            row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
+<<<<<<< HEAD
         write_rows(
             clickhouse_rw,
             table=dataset.get_schema().get_local_table_name(),
             rows=rows
         )
+=======
+        write_rows(clickhouse_rw, dataset=dataset, rows=rows)
+>>>>>>> pass dataset to writer
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
@@ -406,7 +410,10 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
+<<<<<<< HEAD
         table = dataset.get_schema().get_local_table_name()
+=======
+>>>>>>> pass dataset to writer
 
         record = json.loads(request.data)
 
@@ -432,10 +439,10 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, table, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, table)
+            worker = ReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)
         if processed is not None:
