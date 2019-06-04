@@ -26,15 +26,16 @@ class TestClickhouse(BaseTest):
         assert escape_col("production`; --") == r"`production\`; --`"
 
     def test_flattened(self):
-        assert get_all_columns()['group_id'].type == UInt(64)
-        assert get_all_columns()['group_id'].name == 'group_id'
-        assert get_all_columns()['group_id'].base_name is None
-        assert get_all_columns()['group_id'].flattened == 'group_id'
+        columns = self.dataset.get_schema().get_all_columns()
+        assert columns['group_id'].type == UInt(64)
+        assert columns['group_id'].name == 'group_id'
+        assert columns['group_id'].base_name is None
+        assert columns['group_id'].flattened == 'group_id'
 
-        assert get_all_columns()['exception_frames.in_app'].type == Array(Nullable(UInt(8)))
-        assert get_all_columns()['exception_frames.in_app'].name == 'in_app'
-        assert get_all_columns()['exception_frames.in_app'].base_name == 'exception_frames'
-        assert get_all_columns()['exception_frames.in_app'].flattened == 'exception_frames.in_app'
+        assert columns['exception_frames.in_app'].type == Array(Nullable(UInt(8)))
+        assert columns['exception_frames.in_app'].name == 'in_app'
+        assert columns['exception_frames.in_app'].base_name == 'exception_frames'
+        assert columns['exception_frames.in_app'].flattened == 'exception_frames.in_app'
 
     def test_schema(self):
         cols = ColumnSet([

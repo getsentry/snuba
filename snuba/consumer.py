@@ -5,7 +5,7 @@ import six
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import processor
-from .writer import row_from_processed_event, write_rows
+from .writer import write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
@@ -16,9 +16,9 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
+    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+        self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
@@ -36,7 +36,7 @@ class ConsumerWorker(AbstractBatchWorker):
             processed_message['offset'] = message.offset()
             processed_message['partition'] = message.partition()
 
-            result = row_from_processed_event(processed_message)
+            result = self.__dataset.row_from_processed_message(processed_message)
         elif action_type == processor.REPLACE:
             result = processed_message
         else:
@@ -64,7 +64,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if inserts:
             write_rows(
                 self.clickhouse,
-                self.dist_table_name,
+                self.__dataset,
                 inserts
             )
 

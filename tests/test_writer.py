@@ -1,8 +1,7 @@
 from base import BaseTest
 
-from snuba.clickhouse import ColumnSet, get_all_columns, get_metadata_columns
+from snuba.clickhouse import ColumnSet, get_metadata_columns
 from snuba.processor import process_message
-from snuba.writer import row_from_processed_event
 
 
 class TestWriter(BaseTest):
@@ -15,7 +14,7 @@ class TestWriter(BaseTest):
 
     def test_columns_match_schema(self):
         _, processed = process_message(self.event)
-        row = row_from_processed_event(processed)
+        row = self.dataset.row_from_processed_message(processed)
 
         # verify that the 'count of columns from event' + 'count of columns from metadata'
         # equals the 'count of columns' in the processed row tuple
@@ -28,13 +27,8 @@ class TestWriter(BaseTest):
 
         _, processed = process_message(self.event)
 
-        assert 'sdk_name' in processed
-        sdk_name = processed['sdk_name']
+        processed['unknown_field'] = "unknown_value"
+        row = self.dataset.row_from_processed_message(processed)
 
-        columns_copy = ColumnSet([col for col in get_all_columns().columns if not col.name == 'sdk_name'])
-        assert len(columns_copy) == (len(get_all_columns()) - 1)
-
-        row = row_from_processed_event(processed, columns_copy)
-
-        assert len(row) == len(columns_copy)
-        assert sdk_name not in row
+        assert len(row) == len(self.dataset.get_schema().get_all_columns())
+        assert "sdk_name" not in row
