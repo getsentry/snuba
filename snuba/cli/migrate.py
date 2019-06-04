@@ -26,5 +26,4 @@ def migrate(log_level):
         port=port,
     )
 
-    table = dataset.get_schema().get_local_table_name()
-    run(clickhouse, table)
+    run(clickhouse, dataset)
