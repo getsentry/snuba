@@ -200,13 +200,13 @@ def parse_and_run_query(validated_body, timer):
     having_conditions = body.get('having', [])
 
     aggregate_exprs = [
-        util.column_expr(col, body, alias, agg)
+        util.column_expr(dataset, col, body, alias, agg)
         for (agg, col, alias) in body['aggregations']
     ]
     groupby = util.to_list(body['groupby'])
-    group_exprs = [util.column_expr(gb, body) for gb in groupby]
+    group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(util.tuplify(colname), body)
+    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body)
                      for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
@@ -246,7 +246,7 @@ def parse_and_run_query(validated_body, timer):
     where_clause = ''
     if where_conditions:
         where_conditions = util.tuplify(where_conditions)
-        where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
+        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -269,14 +269,14 @@ def parse_and_run_query(validated_body, timer):
 
     prewhere_clause = ''
     if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(prewhere_conditions, body))
+        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
 
     having_clause = ''
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.conditions_expr(having_conditions, body))
+        having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
 
-    group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
+    group_clause = ', '.join(util.column_expr(dataset, gb, body) for gb in groupby)
     if group_clause:
         if body.get('totals', False):
             group_clause = 'GROUP BY ({}) WITH TOTALS'.format(group_clause)
@@ -285,7 +285,7 @@ def parse_and_run_query(validated_body, timer):
 
     order_clause = ''
     if body.get('orderby'):
-        orderby = [util.column_expr(util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
+        orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
         orderby = [u'{} {}'.format(
             ob.lstrip('-'),
             'DESC' if ob.startswith('-') else 'ASC'

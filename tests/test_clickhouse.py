@@ -4,7 +4,6 @@ from clickhouse_driver import Client, errors
 from mock import patch, call, Mock
 
 from snuba.clickhouse import (
-    get_all_columns,
     Array, ColumnSet, Nested, Nullable, String, UInt,
     escape_col,
     ClickhousePool

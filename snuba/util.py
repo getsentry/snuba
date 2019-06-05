@@ -19,7 +19,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse import escape_col, get_all_columns, get_promoted_cols, get_tag_column_map, get_column_tag_map
+from snuba.clickhouse import escape_col, get_promoted_cols, get_tag_column_map, get_column_tag_map
 
 
 logger = logging.getLogger('snuba.util')
@@ -46,8 +46,8 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def string_col(col):
-    col_type = get_all_columns().get(col, None)
+def string_col(dataset, col):
+    col_type = dataset.get_schema().get_all_columns().get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
@@ -134,7 +134,7 @@ def is_function(column_expr, depth=0):
     else:
         return None
 
-def column_expr(column_name, body, alias=None, aggregate=None):
+def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
     a 2-tuple of:
@@ -147,15 +147,15 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     column_name = column_name or ''
 
     if is_function(column_name, 0):
-        return complex_column_expr(column_name, body)
+        return complex_column_expr(dataset, column_name, body)
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     elif column_name in settings.TIME_GROUP_COLUMNS:
         expr = time_expr(column_name, body['granularity'])
     elif NESTED_COL_EXPR_RE.match(column_name):
-        expr = tag_expr(column_name)
+        expr = tag_expr(dataset, column_name)
     elif column_name in ['tags_key', 'tags_value']:
-        expr = tags_expr(column_name, body)
+        expr = tags_expr(dataset, column_name, body)
     elif column_name == 'issue':
         expr = 'group_id'
     elif column_name == 'message':
@@ -174,7 +174,7 @@ def column_expr(column_name, body, alias=None, aggregate=None):
     return alias_expr(expr, alias, body)
 
 
-def complex_column_expr(expr, body, depth=0):
+def complex_column_expr(dataset, expr, body, depth=0):
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
         raise ValueError('complex_column_expr was given an expr %s that is not a function at depth %d.' % (expr, depth))
@@ -185,14 +185,14 @@ def complex_column_expr(expr, body, depth=0):
     while i < len(args):
         next_2 = args[i:i+2]
         if is_function(next_2, depth+1):
-            out.append(complex_column_expr(next_2, body, depth+1))
+            out.append(complex_column_expr(dataset, next_2, body, depth+1))
             i += 2
         else:
             nxt = args[i]
             if is_function(nxt, depth + 1):  # Embedded function
-                out.append(complex_column_expr(nxt, body, depth + 1))
+                out.append(complex_column_expr(dataset, nxt, body, depth + 1))
             elif isinstance(nxt, six.string_types):
-                out.append(column_expr(nxt, body))
+                out.append(column_expr(dataset, nxt, body))
             else:
                 out.append(escape_literal(nxt))
             i += 1
@@ -225,7 +225,7 @@ def alias_expr(expr, alias, body):
         return u'({} AS {})'.format(expr, alias)
 
 
-def tag_expr(column_name):
+def tag_expr(dataset, column_name):
     """
     Return an expression for the value of a single named tag.
 
@@ -238,7 +238,7 @@ def tag_expr(column_name):
     if col in get_promoted_cols():
         actual_tag = get_tag_column_map()[col].get(tag, tag)
         if actual_tag in get_promoted_cols()[col]:
-            return string_col(actual_tag)
+            return string_col(dataset, actual_tag)
 
     # For the rest, return an expression that looks it up in the nested tags.
     return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
@@ -247,7 +247,7 @@ def tag_expr(column_name):
     })
 
 
-def tags_expr(column_name, body):
+def tags_expr(dataset, column_name, body):
     """
     Return an expression that array-joins on tags to produce an output with one
     row per tag.
@@ -268,7 +268,7 @@ def tags_expr(column_name, body):
             col
         )
         val_list = u'arrayConcat([{}], {}.value)'.format(
-            ', '.join(string_col(p) for p in promoted),
+            ', '.join(string_col(dataset, p) for p in promoted),
             col
         )
 
@@ -352,7 +352,7 @@ def tuplify(nested):
     return nested
 
 
-def conditions_expr(conditions, body, depth=0):
+def conditions_expr(dataset, conditions, body, depth=0):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
     query.  The expression is constructed by ANDing groups of OR expressions.
@@ -364,7 +364,7 @@ def conditions_expr(conditions, body, depth=0):
 
     if depth == 0:
         # dedupe conditions at top level, but keep them in order
-        sub = OrderedDict((conditions_expr(cond, body, depth + 1), None) for cond in conditions)
+        sub = OrderedDict((conditions_expr(dataset, cond, body, depth + 1), None) for cond in conditions)
         return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
         lhs, op, lit = conditions
@@ -389,11 +389,12 @@ def conditions_expr(conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
+        columns = dataset.get_schema().get_all_columns()
         if (
             isinstance(lhs, six.string_types) and
-            lhs in get_all_columns() and
-            type(get_all_columns()[lhs].type) == clickhouse.Array and
-            get_all_columns()[lhs].base_name != body.get('arrayjoin') and
+            lhs in columns and
+            type(columns[lhs].type) == clickhouse.Array and
+            columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
@@ -401,17 +402,17 @@ def conditions_expr(conditions, body, depth=0):
                 any_or_all,
                 op,
                 escape_literal(lit),
-                column_expr(lhs, body)
+                column_expr(dataset, lhs, body)
             )
         else:
             return u'{} {} {}'.format(
-                column_expr(lhs, body),
+                column_expr(dataset, lhs, body),
                 op,
                 escape_literal(lit)
             )
 
     elif depth == 1:
-        sub = (conditions_expr(cond, body, depth + 1) for cond in conditions)
+        sub = (conditions_expr(dataset, cond, body, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = u' OR '.join(sub)
         return u'({})'.format(res) if len(sub) > 1 else res
