@@ -356,25 +356,38 @@ def sdk_distribution(validated_body, timer):
 if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
+<<<<<<< HEAD
 
     _ensured = {}
 
+=======
+
+    _ensured = {}
+
+>>>>>>> 91b46a123287dfbae35276d5f80f6a939205fd27
     def ensure_table_exists(dataset, force=False):
         if not force and _ensured.get(dataset, False):
             return
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
+<<<<<<< HEAD
 
         from snuba import migrate
         migrate.rename_dev_table(clickhouse_rw)
 
         from snuba.clickhouse import get_table_definition, get_test_engine
+=======
+>>>>>>> 91b46a123287dfbae35276d5f80f6a939205fd27
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         clickhouse_rw.execute(
             dataset.get_schema().get_local_table_definition()
         )
 
+<<<<<<< HEAD
+=======
+        from snuba import migrate
+>>>>>>> 91b46a123287dfbae35276d5f80f6a939205fd27
         migrate.run(clickhouse_rw, dataset.get_schema().get_table_name())
 
         _ensured[dataset] = True
