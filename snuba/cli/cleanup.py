@@ -4,6 +4,7 @@ import sys
 import click
 
 from snuba import settings
+from snuba.datasets.factory import get_dataset
 
 
 @click.command()
@@ -13,12 +14,15 @@ from snuba import settings
               help="If true, only print which partitions would be dropped.")
 @click.option('--database', default='default',
               help='Name of the database to target.')
-@click.option('--table', default=settings.DEFAULT_LOCAL_TABLE,
-              help='Name of the table to target.')
+@click.option('--dataset', default='events', type=click.Choice(['events']),
+              help='The dataset to target')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def cleanup(clickhouse_server, dry_run, database, table, log_level):
+def cleanup(clickhouse_server, dry_run, database, dataset, log_level):
     from snuba.cleanup import run_cleanup, logger
     from snuba.clickhouse import ClickhousePool
+
+    dataset = get_dataset(dataset)
+    table = dataset.SCHEMA.get_local_table_name()
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 

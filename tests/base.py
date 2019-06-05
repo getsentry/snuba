@@ -8,6 +8,7 @@ from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 
 from snuba import settings
+from snuba.datasets.factory import get_dataset
 from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
@@ -98,7 +99,6 @@ class FakeWorker(AbstractBatchWorker):
 class BaseTest(object):
     def setup_method(self, test_method):
         assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
-
         from fixtures import raw_event
 
         timestamp = datetime.utcnow()
@@ -107,8 +107,11 @@ class BaseTest(object):
         self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
-        self.table = settings.CLICKHOUSE_TABLE
 
+        # These tests are currently coupled pretty hard to the events dataset,
+        # but eventually the base test should support multiple datasets.
+        dataset = get_dataset('events')
+        self.table = dataset.SCHEMA.get_table_name()
         self.clickhouse = ClickhousePool()
 
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)

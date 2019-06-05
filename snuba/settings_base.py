@@ -1,4 +1,5 @@
 import os
+import six
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
@@ -7,10 +8,13 @@ DEBUG = True
 
 PORT = 1218
 
+DEFAULT_DATASET_NAME = 'events'
+DISABLED_DATASETS = {}
+DATASET_MODE = 'local'
+
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
 CLICKHOUSE_CLUSTER = None
-CLICKHOUSE_TABLE = 'dev'
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
@@ -73,10 +77,7 @@ DEFAULT_ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % DEFAULT_SAMPLE_
 DEFAULT_PARTITION_BY = '(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))'
 DEFAULT_VERSION_COLUMN = 'deleted'
 DEFAULT_SHARDING_KEY = 'cityHash64(toString(event_id))'
-DEFAULT_LOCAL_TABLE = 'sentry_local'
-DEFAULT_DIST_TABLE = 'sentry_dist'
 DEFAULT_RETENTION_DAYS = 90
-
 RETENTION_OVERRIDES = {}
 
 # the list of keys that will upgrade from a WHERE condition to a PREWHERE

@@ -51,8 +51,8 @@ Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 Settings are found in `settings.py`
 
 - `CLICKHOUSE_SERVER` : The endpoint for the clickhouse service.
-- `CLICKHOUSE_TABLE` : The clickhouse table name.
 - `REDIS_HOST` : The host redis is running on.
+- `DATASET_MODE` : If "local" runs Clickhouse local tables instead of distributed ones.
 
 ## Tests
 
@@ -61,7 +61,7 @@ Settings are found in `settings.py`
     export CLICKHOUSE_SERVER=127.0.0.1:9000
 
     make test
-    
+
 ## Testing Against Sentry
 
 ```
@@ -69,14 +69,14 @@ workon snuba
 git checkout your-snuba-branch
 snuba api
 ```
-And then in another terminal 
+And then in another terminal
 ```
 workon sentry
 git checkout master
 git pull
 sentry devservices up --exclude=snuba
 ```
-This will get the most recent version of Sentry on master, and bring up all snuba's dependencies. 
+This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 
 You will want to run the following Sentry tests:
 ```

@@ -5,9 +5,7 @@ import time
 from six.moves import queue, range
 
 from clickhouse_driver import Client, errors
-
 from snuba import settings
-
 
 logger = logging.getLogger('snuba.clickhouse')
 
@@ -325,6 +323,7 @@ class ColumnSet(object):
     * `for_schema()` can be used to generate valid ClickHouse column names
       and types for a table schema.
     """
+
     def __init__(self, columns):
         self.columns = Column.to_columns(columns)
 
@@ -600,20 +599,21 @@ def get_distributed_engine(cluster, database, local_table,
     }
 
 
-def get_local_table_definition():
+def get_local_table_definition(dataset):
+    table = dataset.SCHEMA.get_local_table_name()
     return get_table_definition(
-        settings.DEFAULT_LOCAL_TABLE, get_replicated_engine(name=settings.DEFAULT_LOCAL_TABLE)
+        table, get_replicated_engine(name=table)
     )
 
 
-def get_dist_table_definition():
+def get_dist_table_definition(dataset):
     assert settings.CLICKHOUSE_CLUSTER, "CLICKHOUSE_CLUSTER is not set."
 
     return get_table_definition(
-        settings.DEFAULT_DIST_TABLE,
+        dataset.SCHEMA.get_table_name(),
         get_distributed_engine(
             cluster=settings.CLICKHOUSE_CLUSTER,
             database='default',
-            local_table=settings.DEFAULT_LOCAL_TABLE,
+            local_table=dataset.SCHEMA.get_local_table_name(),
         )
     )

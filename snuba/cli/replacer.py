@@ -3,7 +3,8 @@ import signal
 
 import click
 
-from snuba import settings
+from snuba import settings, datasets
+from snuba.datasets.factory import get_dataset
 
 
 @click.command()
@@ -15,8 +16,8 @@ from snuba import settings
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')
-@click.option('--distributed-table-name', default=settings.DEFAULT_DIST_TABLE,
-              help='Clickhouse table name for the "meta" Distributed table.')
+@click.option('--dataset', default='events', type=click.Choice(['events']),
+              help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
               help='Max number of messages to batch in memory before writing to Kafka.')
 @click.option('--max-batch-time-ms', default=settings.DEFAULT_MAX_BATCH_TIME_MS,
@@ -30,7 +31,7 @@ from snuba import settings
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, distributed_table_name,
+def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
              queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
@@ -41,6 +42,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     from snuba.replacer import ReplacerWorker
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
+    dataset = get_dataset(dataset)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
@@ -67,7 +69,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
 
     replacer = BatchingKafkaConsumer(
         replacements_topic,
-        worker=ReplacerWorker(clickhouse, distributed_table_name, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, dataset.SCHEMA.get_table_name(), metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
