@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import get_required_columns, get_promoted_tags, get_tag_column_map, escape_col
+from snuba.clickhouse import get_promoted_tags, get_tag_column_map, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -18,8 +18,6 @@ logger = logging.getLogger('snuba.replacer')
 
 
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-REQUIRED_COLUMN_NAMES = [col.escaped for col in get_required_columns()]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -95,6 +93,7 @@ class ReplacerWorker(AbstractBatchWorker):
         self.dist_table_name = dataset.get_schema().get_table_name()
         self.metrics = metrics
         self.__all_column_names = [col.escaped for col in dataset.get_schema().get_all_columns()]
+        self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
     def process_message(self, message):
         message = json.loads(message.value())
@@ -106,7 +105,7 @@ class ReplacerWorker(AbstractBatchWorker):
             if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
                 return None
             elif type_ == 'end_delete_groups':
-                processed = process_delete_groups(event)
+                processed = process_delete_groups(event, self.__required_columns)
             elif type_ == 'end_merge':
                 processed = process_merge(event, self.__all_column_names)
             elif type_ == 'end_unmerge':
@@ -149,14 +148,14 @@ class ReplacerWorker(AbstractBatchWorker):
         pass
 
 
-def process_delete_groups(message):
+def process_delete_groups(message, required_columns):
     group_ids = message['group_ids']
     if not group_ids:
         return None
 
     assert all(isinstance(gid, six.integer_types) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'deleted' else '1', required_columns)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -177,7 +176,7 @@ def process_delete_groups(message):
     """ + where
 
     query_args = {
-        'required_columns': ', '.join(REQUIRED_COLUMN_NAMES),
+        'required_columns': ', '.join(required_columns),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),

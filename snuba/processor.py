@@ -7,7 +7,6 @@ import six
 import _strptime  # fixes _strptime deferred import issue
 
 from snuba import settings
-from snuba.clickhouse import get_promoted_tag_columns
 from snuba.util import force_bytes
 
 
@@ -194,9 +193,9 @@ def extract_sdk(output, sdk):
     output['sdk_integrations'] = sdk_integrations
 
 
-def extract_promoted_tags(output, tags):
+def extract_promoted_tags(dataset, output, tags):
     output.update({col.name: _unicodify(tags.get(col.name, None))
-        for col in get_promoted_tag_columns()
+        for col in dataset.get_promoted_tag_columns()
     })
 
 
@@ -363,7 +362,7 @@ class InvalidMessageVersion(Exception):
     pass
 
 
-def process_message(message):
+def process_message(dataset, message):
     """\
     Process a raw message into a tuple of (action_type, processed_message):
     * action_type: one of the sentinel values INSERT or REPLACE
@@ -377,7 +376,7 @@ def process_message(message):
         # deprecated unwrapped event message == insert
         action_type = INSERT
         try:
-            processed = process_insert(message)
+            processed = process_insert(dataset, message)
         except EventTooOld:
             return None
     elif isinstance(message, (list, tuple)) and len(message) >= 2:
@@ -392,7 +391,7 @@ def process_message(message):
             if type_ == 'insert':
                 action_type = INSERT
                 try:
-                    processed = process_insert(event)
+                    processed = process_insert(dataset, event)
                 except EventTooOld:
                     return None
             else:
@@ -427,7 +426,7 @@ def process_message(message):
     return (action_type, processed)
 
 
-def process_insert(message):
+def process_insert(dataset, message):
     processed = {'deleted': 0}
     extract_required(processed, message)
 
@@ -442,7 +441,7 @@ def process_insert(message):
     extract_sdk(processed, sdk)
 
     tags = _as_dict_safe(data.get('tags', None))
-    extract_promoted_tags(processed, tags)
+    extract_promoted_tags(dataset, processed, tags)
 
     contexts = data.get('contexts', None) or {}
     extract_promoted_contexts(processed, contexts, tags)

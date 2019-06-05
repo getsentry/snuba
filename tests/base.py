@@ -160,7 +160,7 @@ class BaseTest(object):
         for event in events:
             if 'primary_hash' not in event:
                 event = self.wrap_raw_event(event)
-            _, processed = process_message(event)
+            _, processed = process_message(self.dataset, event)
             out.append(processed)
 
         return self.write_processed_events(out)

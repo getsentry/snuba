@@ -379,51 +379,29 @@ class ColumnSet(object):
 # We need them right now because there is plenty of code that depends on the DDL of the
 # default dataset but that does not have access to the dataset object.
 
-def get_metadata_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_metadata_columns()
-
-
-def get_promoted_tag_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_promoted_tag_columns()
-
-
-def get_promoted_context_tag_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_promoted_context_tag_columns()
-
-
-def get_promoted_context_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_promoted_context_columns()
-
-
-def get_required_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_required_columns()
-
-
 def get_promoted_cols():
     # The set of columns, and associated keys that have been promoted
     # to the top level table namespace.
-
+    from snuba.datasets.factory import get_dataset
+    dataset = get_dataset("events")
+    promoted_tag_columns = dataset.get_promoted_tag_columns()
+    promoted_context_tag_columns = dataset.get_promoted_context_tag_columns()
+    promoted_context_columns = dataset.get_promoted_context_columns()
     return {
-        'tags': frozenset(col.flattened for col in (get_promoted_tag_columns() + get_promoted_context_tag_columns())),
-        'contexts': frozenset(col.flattened for col in get_promoted_context_columns()),
+        'tags': frozenset(col.flattened for col in (promoted_tag_columns + promoted_context_tag_columns)),
+        'contexts': frozenset(col.flattened for col in promoted_context_columns),
     }
 
 
 def get_column_tag_map():
     # For every applicable promoted column,  a map of translations from the column
     # name  we save in the database to the tag we receive in the query.
+    from snuba.datasets.factory import get_dataset
+    dataset = get_dataset("events")
+    promoted_context_tag_columns = dataset.get_promoted_context_tag_columns()
+
     return {
-        'tags': {col.flattened: col.flattened.replace('_', '.') for col in get_promoted_context_tag_columns()},
+        'tags': {col.flattened: col.flattened.replace('_', '.') for col in promoted_context_tag_columns},
         'contexts': {},
     }
 
