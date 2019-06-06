@@ -368,14 +368,13 @@ if application.debug or application.testing:
         from snuba import migrate
         migrate.rename_dev_table(clickhouse_rw)
 
-        from snuba.clickhouse import get_table_definition, get_test_engine
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         clickhouse_rw.execute(
             dataset.get_schema().get_local_table_definition()
         )
 
-        migrate.run(clickhouse_rw, dataset.get_schema().get_table_name())
+        migrate.run(clickhouse_rw, dataset.get_schema().get_local_table_name())
 
         _ensured[dataset] = True
 

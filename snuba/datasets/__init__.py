@@ -8,8 +8,8 @@ class DataSet(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self):
-        self._schema = None
+    def __init__(self, schema):
+        self._schema = schema
 
     def get_schema(self):
         return self._schema
