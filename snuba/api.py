@@ -396,7 +396,7 @@ if application.debug or application.testing:
 
         write_rows(
             clickhouse_rw,
-            table=dataset.get_schema().get_table_name(),
+            table=dataset.get_schema().get_local_table_name(),
             rows=rows
         )
         return ('ok', 200, {'Content-Type': 'text/plain'})
@@ -406,7 +406,7 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-        table = dataset.get_schema().get_table_name()
+        table = dataset.get_schema().get_local_table_name()
 
         record = json.loads(request.data)
 
@@ -447,7 +447,7 @@ if application.debug or application.testing:
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         dataset = get_dataset('events')
-        table = dataset.get_schema().get_table_name()
+        table = dataset.get_schema().get_local_table_name()
 
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
