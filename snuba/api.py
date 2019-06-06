@@ -411,9 +411,13 @@ if application.debug or application.testing:
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
 <<<<<<< HEAD
+<<<<<<< HEAD
         table = dataset.get_schema().get_local_table_name()
 =======
 >>>>>>> pass dataset to writer
+=======
+        table = dataset.get_schema().get_local_table_name()
+>>>>>>> Fix some table names
 
         record = json.loads(request.data)
 
