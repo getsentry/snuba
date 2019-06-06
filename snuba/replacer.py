@@ -92,7 +92,7 @@ class ReplacerWorker(AbstractBatchWorker):
         self.dataset = dataset
         self.dist_table_name = dataset.get_schema().get_table_name()
         self.metrics = metrics
-        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_all_columns()]
+        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
     def process_message(self, message):
