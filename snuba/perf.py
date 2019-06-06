@@ -62,7 +62,7 @@ def run(events_file, clickhouse, dataset, repeat=1,
     from snuba.consumer import ConsumerWorker
 
     clickhouse.execute(dataset.get_schema().get_local_table_definition())
-    table_name = dataset.get_schema().get_local_table_definition()
+    table_name = dataset.get_schema().get_local_table_name()
     consumer = ConsumerWorker(
         clickhouse=clickhouse,
         dist_table_name=table_name,
