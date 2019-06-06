@@ -19,7 +19,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse import escape_col, get_promoted_cols, get_tag_column_map, get_column_tag_map
+from snuba.clickhouse import escape_col
 
 
 logger = logging.getLogger('snuba.util')
@@ -235,9 +235,9 @@ def tag_expr(dataset, column_name):
     col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
 
     # For promoted tags, return the column name.
-    if col in get_promoted_cols():
-        actual_tag = get_tag_column_map()[col].get(tag, tag)
-        if actual_tag in get_promoted_cols()[col]:
+    if col in dataset.get_promoted_cols():
+        actual_tag = dataset.get_tag_column_map()[col].get(tag, tag)
+        if actual_tag in dataset.get_promoted_cols()[col]:
             return string_col(dataset, actual_tag)
 
     # For the rest, return an expression that looks it up in the nested tags.
@@ -261,8 +261,8 @@ def tags_expr(dataset, column_name, body):
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)
     else:
-        promoted = get_promoted_cols()[col]
-        col_map = get_column_tag_map()[col]
+        promoted = dataset.get_promoted_cols()[col]
+        col_map = dataset.get_column_tag_map()[col]
         key_list = u'arrayConcat([{}], {}.key)'.format(
             u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
             col
