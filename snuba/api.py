@@ -442,7 +442,7 @@ if application.debug or application.testing:
     @application.route('/tests/drop', methods=['POST'])
     def drop():
         dataset = get_dataset('events')
-        table = dataset.get_schema().get_table_name()
+        table = dataset.get_schema().get_local_table_name()
 
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
