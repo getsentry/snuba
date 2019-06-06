@@ -10,13 +10,13 @@ class EventsDataSet(DataSet):
     """
 
     def __init__(self):
-        self.__metadata_columns = ColumnSet([
+        metadata_columns = ColumnSet([
             # optional stream related data
             ('offset', Nullable(UInt(64))),
             ('partition', Nullable(UInt(16))),
         ])
 
-        self.__promoted_tag_columns = ColumnSet([
+        promoted_tag_columns = ColumnSet([
             # These are the classic tags, they are saved in Snuba exactly as they
             # appear in the event body.
             ('level', Nullable(String())),
@@ -31,7 +31,7 @@ class EventsDataSet(DataSet):
             ('url', Nullable(String())),
         ])
 
-        self.__promoted_context_tag_columns = ColumnSet([
+        promoted_context_tag_columns = ColumnSet([
             # These are promoted tags that come in in `tags`, but are more closely
             # related to contexts.  To avoid naming confusion with Clickhouse nested
             # columns, they are stored in the database with s/./_/
@@ -48,7 +48,7 @@ class EventsDataSet(DataSet):
             ('os_rooted', Nullable(UInt(8))),
         ])
 
-        self.__promoted_context_columns = ColumnSet([
+        promoted_context_columns = ColumnSet([
             ('os_build', Nullable(String())),
             ('os_kernel_version', Nullable(String())),
             ('device_name', Nullable(String())),
@@ -64,7 +64,7 @@ class EventsDataSet(DataSet):
             ('device_charging', Nullable(UInt(8))),
         ])
 
-        self.__required_columns = ColumnSet([
+        required_columns = ColumnSet([
             ('event_id', FixedString(32)),
             ('project_id', UInt(64)),
             ('group_id', UInt(64)),
@@ -73,7 +73,7 @@ class EventsDataSet(DataSet):
             ('retention_days', UInt(16)),
         ])
 
-        all_columns = self.__required_columns + [
+        all_columns = required_columns + [
             # required for non-deleted
             ('platform', Nullable(String())),
             ('message', Nullable(String())),
@@ -99,10 +99,10 @@ class EventsDataSet(DataSet):
             ('sdk_version', Nullable(String())),
             ('type', Nullable(String())),
             ('version', Nullable(String())),
-        ] + self.__metadata_columns \
-            + self.__promoted_context_columns \
-            + self.__promoted_tag_columns \
-            + self.__promoted_context_tag_columns \
+        ] + metadata_columns \
+            + promoted_context_columns \
+            + promoted_tag_columns \
+            + promoted_context_tag_columns \
             + [
                 # other tags
                 ('tags', Nested([
@@ -116,7 +116,6 @@ class EventsDataSet(DataSet):
                     ('value', String()),
                 ])),
 
-                # self.__promoted_context_tag_columns
                 # http interface
                 ('http_method', Nullable(String())),
                 ('http_referer', Nullable(String())),
@@ -153,14 +152,24 @@ class EventsDataSet(DataSet):
         ]
 
         sample_expr = 'cityHash64(toString(event_id))'
-        self._schema = ReplacingMergeTreeSchema(
-            all_columns=all_columns,
+        schema = ReplacingMergeTreeSchema(
+            columns=all_columns,
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
             sample_expr=sample_expr)
+
+        super(EventsDataSet, self).__init__(
+            schema
+        )
+
+        self.__metadata_columns = metadata_columns
+        self.__promoted_tag_columns = promoted_tag_columns
+        self.__promoted_context_tag_columns = promoted_context_tag_columns
+        self.__promoted_context_columns = promoted_context_columns
+        self.__required_columns = required_columns
 
     def default_conditions(self, body):
         return [
@@ -169,7 +178,7 @@ class EventsDataSet(DataSet):
 
     # These method should be removed once we will have dataset specific query processing in
     # the dataset class instead of util.py and when the dataset specific logic for processing
-    # Kafka messages will be in the daatset as well.
+    # Kafka messages will be in the dataset as well.
     def get_metadata_columns(self):
         return self.__metadata_columns
 

@@ -364,13 +364,16 @@ if application.debug or application.testing:
             return
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
+
+        from snuba import migrate
+        migrate.rename_dev_table(clickhouse_rw)
+
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         clickhouse_rw.execute(
             dataset.get_schema().get_local_table_definition()
         )
 
-        from snuba import migrate
         migrate.run(clickhouse_rw, dataset)
 
         _ensured[dataset] = True

@@ -94,7 +94,7 @@ class ReplacerWorker(AbstractBatchWorker):
         self.dataset = dataset
         self.dist_table_name = dataset.get_schema().get_table_name()
         self.metrics = metrics
-        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_all_columns()]
+        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
 
     def process_message(self, message):
         message = json.loads(message.value())
@@ -113,7 +113,7 @@ class ReplacerWorker(AbstractBatchWorker):
                 processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
                 processed = process_delete_tag(event,
-                    self.dataset.get_schema().get_all_columns(), self.__all_column_names)
+                    self.dataset.get_schema().get_columns(), self.__all_column_names)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
