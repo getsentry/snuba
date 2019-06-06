@@ -47,7 +47,7 @@ def to_list(value):
 
 
 def string_col(dataset, col):
-    col_type = dataset.get_schema().get_all_columns().get(col, None)
+    col_type = dataset.get_schema().get_columns().get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
@@ -389,7 +389,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_schema().get_all_columns()
+        columns = dataset.get_schema().get_columns()
         if (
             isinstance(lhs, six.string_types) and
             lhs in columns and
