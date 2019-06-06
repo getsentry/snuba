@@ -112,7 +112,7 @@ class ReplacerWorker(AbstractBatchWorker):
                 processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
                 processed = process_delete_tag(event,
-                    self.dataset.get_schema().get_all_columns(), self.__all_column_names)
+                    self.dataset.get_schema().get_columns(), self.__all_column_names)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:

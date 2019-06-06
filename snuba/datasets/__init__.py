@@ -8,8 +8,8 @@ class DataSet(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self):
-        self._schema = None
+    def __init__(self, schema):
+        self._schema = schema
 
     def get_schema(self):
         return self._schema
@@ -24,7 +24,7 @@ class DataSet(object):
     def row_from_processed_message(self, message):
         from snuba.clickhouse import Array
         values = []
-        columns = self.get_schema().get_all_columns()
+        columns = self.get_schema().get_columns()
         for col in columns:
             value = message.get(col.flattened, None)
             if value is None and isinstance(col.type, Array):

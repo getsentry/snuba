@@ -13,8 +13,8 @@ class TableSchema(object):
 
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, all_columns, local_table_name, dist_table_name):
-        self.__all_columns = all_columns
+    def __init__(self, local_table_name, dist_table_name, columns):
+        self.__columns = columns
 
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
@@ -40,7 +40,7 @@ class TableSchema(object):
     def _get_table_definition(self, name, engine):
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.__all_columns.for_schema(),
+            'columns': self.__columns.for_schema(),
             'engine': engine,
             'name': name,
         }
@@ -52,18 +52,18 @@ class TableSchema(object):
         )
 
     def _get_local_engine(self):
-        pass
+        raise NotImplementedError
 
-    def get_all_columns(self):
-        return self.__all_columns
+    def get_columns(self):
+        return self.__columns
 
 
 class ReplacingMergeTreeSchema(TableSchema):
 
-    def __init__(self, all_columns, local_table_name, dist_table_name,
+    def __init__(self, local_table_name, dist_table_name, columns,
             order_by, partition_by, version_column, sample_expr):
         super(ReplacingMergeTreeSchema, self).__init__(
-            all_columns=all_columns,
+            columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name)
         self.__order_by = order_by

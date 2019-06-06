@@ -374,7 +374,7 @@ class ColumnSet(object):
         return ', '.join(column.for_schema() for column in self.columns)
 
 
-# These functions are temporary and are used to help the migraiton of the DDL to
+# These functions are temporary and are used to help the migration of the DDL to
 # the dataset abstractions. Please do not introduce dependencies on them.
 # We need them right now because there is plenty of code that depends on the DDL of the
 # default dataset but that does not have access to the dataset object.

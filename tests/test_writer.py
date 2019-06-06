@@ -30,5 +30,5 @@ class TestWriter(BaseTest):
         processed['unknown_field'] = "unknown_value"
         row = self.dataset.row_from_processed_message(processed)
 
-        assert len(row) == len(self.dataset.get_schema().get_all_columns())
+        assert len(row) == len(self.dataset.get_schema().get_columns())
         assert "sdk_name" not in row

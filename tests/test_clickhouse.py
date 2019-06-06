@@ -25,7 +25,7 @@ class TestClickhouse(BaseTest):
         assert escape_col("production`; --") == r"`production\`; --`"
 
     def test_flattened(self):
-        columns = self.dataset.get_schema().get_all_columns()
+        columns = self.dataset.get_schema().get_columns()
         assert columns['group_id'].type == UInt(64)
         assert columns['group_id'].name == 'group_id'
         assert columns['group_id'].base_name is None
