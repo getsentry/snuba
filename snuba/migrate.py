@@ -73,7 +73,7 @@ def run(conn, clickhouse_table):
 def rename_dev_table(conn):
     # Migrate from the old events table to the new one if needed
     from snuba.datasets.factory import get_dataset
-    local_table = get_dataset('events').SCHEMA.get_local_table_name()
+    local_table = get_dataset('events').get_schema().get_local_table_name()
     clickhouse_tables = conn.execute('show tables')
     if not (local_table,) in clickhouse_tables and ("dev",) in clickhouse_tables:
         conn.execute("RENAME TABLE dev TO %s" % local_table)

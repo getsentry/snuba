@@ -10,8 +10,6 @@ class EventsDataSet(DataSet):
     """
 
     def __init__(self):
-        super
-
         metadata_columns = ColumnSet([
             # optional stream related data
             ('offset', Nullable(UInt(64))),
