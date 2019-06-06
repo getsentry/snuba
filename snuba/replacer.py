@@ -111,8 +111,7 @@ class ReplacerWorker(AbstractBatchWorker):
             elif type_ == 'end_unmerge':
                 processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event,
-                    self.dataset.get_schema().get_columns(), self.__all_column_names)
+                processed = process_delete_tag(event, self.dataset.get_schema().get_columns())
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -282,7 +281,7 @@ def process_unmerge(message, all_column_names):
     return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message, all_columns, all_column_names):
+def process_delete_tag(message, all_columns):
     tag = message['tag']
     if not tag:
         return None
@@ -324,6 +323,7 @@ def process_delete_tag(message, all_columns, all_column_names):
         else:
             select_columns.append(col.escaped)
 
+    all_column_names = [col.escaped for col in all_columns]
     query_args = {
         'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
