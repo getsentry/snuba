@@ -54,7 +54,7 @@ def run(conn, dataset):
     local_schema = get_schema()
 
     # Warn user about any *other* schema diffs
-    columns = dataset.get_schema().get_all_columns()
+    columns = dataset.get_schema().get_columns()
     for column_name, column_type in local_schema.items():
         if column_name not in columns:
             logger.warn("Column '%s' exists in local ClickHouse but not in schema!", column_name)
