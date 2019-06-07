@@ -394,15 +394,7 @@ if application.debug or application.testing:
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
-<<<<<<< HEAD
-        write_rows(
-            clickhouse_rw,
-            table=dataset.get_schema().get_local_table_name(),
-            rows=rows
-        )
-=======
         write_rows(clickhouse_rw, dataset=dataset, rows=rows)
->>>>>>> pass dataset to writer
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
@@ -410,15 +402,6 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-<<<<<<< HEAD
-<<<<<<< HEAD
-        table = dataset.get_schema().get_local_table_name()
-=======
->>>>>>> pass dataset to writer
-=======
-        table = dataset.get_schema().get_local_table_name()
->>>>>>> Fix some table names
-
         record = json.loads(request.data)
 
         version = record[0]
