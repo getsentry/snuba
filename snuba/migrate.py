@@ -8,7 +8,7 @@ logger = logging.getLogger('snuba.migrate')
 
 
 def run(conn, dataset):
-    clickhouse_table = dataset.get_schema().get_table_name()
+    clickhouse_table = dataset.get_schema().get_local_table_name()
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr

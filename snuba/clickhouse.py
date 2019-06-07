@@ -392,6 +392,10 @@ def get_promoted_cols():
         'contexts': frozenset(col.flattened for col in promoted_context_columns),
     }
 
+def get_metadata_columns():
+    from snuba.datasets.factory import get_dataset
+    dataset = get_dataset("events")
+    return dataset.get_metadata_columns()
 
 def get_column_tag_map():
     # For every applicable promoted column,  a map of translations from the column
@@ -405,6 +409,10 @@ def get_column_tag_map():
         'contexts': {},
     }
 
+def get_required_columns():
+    from snuba.datasets.factory import get_dataset
+    dataset = get_dataset("events")
+    return dataset.get_required_columns()
 
 def get_tag_column_map():
     # And a reverse map from the tags the client expects to the database columns
