@@ -402,7 +402,6 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-
         record = json.loads(request.data)
 
         version = record[0]
