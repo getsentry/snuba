@@ -19,7 +19,7 @@ class TestReplacer(BaseTest):
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
-        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.table)
+        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         self.project_id = 1
 
@@ -167,7 +167,7 @@ class TestReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.table)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -192,7 +192,7 @@ class TestReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.table)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -219,7 +219,7 @@ class TestReplacer(BaseTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.table)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -259,7 +259,7 @@ class TestReplacer(BaseTest):
         assert _issue_count(total=True) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.table)
+        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         class FakeMessage(object):
             def value(self):

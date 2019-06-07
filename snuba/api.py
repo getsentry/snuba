@@ -200,13 +200,13 @@ def parse_and_run_query(validated_body, timer):
     having_conditions = body.get('having', [])
 
     aggregate_exprs = [
-        util.column_expr(col, body, alias, agg)
+        util.column_expr(dataset, col, body, alias, agg)
         for (agg, col, alias) in body['aggregations']
     ]
     groupby = util.to_list(body['groupby'])
-    group_exprs = [util.column_expr(gb, body) for gb in groupby]
+    group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
 
-    selected_cols = [util.column_expr(util.tuplify(colname), body)
+    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body)
                      for colname in body.get('selected_columns', [])]
 
     select_exprs = group_exprs + aggregate_exprs + selected_cols
@@ -246,7 +246,7 @@ def parse_and_run_query(validated_body, timer):
     where_clause = ''
     if where_conditions:
         where_conditions = util.tuplify(where_conditions)
-        where_clause = u'WHERE {}'.format(util.conditions_expr(where_conditions, body))
+        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -269,14 +269,14 @@ def parse_and_run_query(validated_body, timer):
 
     prewhere_clause = ''
     if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(prewhere_conditions, body))
+        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
 
     having_clause = ''
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.conditions_expr(having_conditions, body))
+        having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
 
-    group_clause = ', '.join(util.column_expr(gb, body) for gb in groupby)
+    group_clause = ', '.join(util.column_expr(dataset, gb, body) for gb in groupby)
     if group_clause:
         if body.get('totals', False):
             group_clause = 'GROUP BY ({}) WITH TOTALS'.format(group_clause)
@@ -285,7 +285,7 @@ def parse_and_run_query(validated_body, timer):
 
     order_clause = ''
     if body.get('orderby'):
-        orderby = [util.column_expr(util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
+        orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
         orderby = [u'{} {}'.format(
             ob.lstrip('-'),
             'DESC' if ob.startswith('-') else 'ASC'
@@ -374,14 +374,14 @@ if application.debug or application.testing:
             dataset.get_schema().get_local_table_definition()
         )
 
-        migrate.run(clickhouse_rw, dataset.get_schema().get_local_table_name())
+        migrate.run(clickhouse_rw, dataset)
 
         _ensured[dataset] = True
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
         from snuba.processor import process_message
-        from snuba.writer import row_from_processed_event, write_rows
+        from snuba.writer import write_rows
 
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
@@ -391,14 +391,10 @@ if application.debug or application.testing:
         rows = []
         for event in body:
             _, processed = process_message(event)
-            row = row_from_processed_event(processed)
+            row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
-        write_rows(
-            clickhouse_rw,
-            table=dataset.get_schema().get_local_table_name(),
-            rows=rows
-        )
+        write_rows(clickhouse_rw, dataset=dataset, rows=rows)
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
@@ -406,7 +402,6 @@ if application.debug or application.testing:
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-        table = dataset.get_schema().get_local_table_name()
 
         record = json.loads(request.data)
 
@@ -432,10 +427,10 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, table, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, table)
+            worker = ReplacerWorker(clickhouse_rw, dataset)
 
         processed = worker.process_message(message)
         if processed is not None:

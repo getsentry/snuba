@@ -403,12 +403,6 @@ def get_promoted_context_columns():
     return dataset.get_promoted_context_columns()
 
 
-def get_all_columns():
-    from snuba.datasets.factory import get_dataset
-    dataset = get_dataset("events")
-    return dataset.get_schema().get_columns()
-
-
 def get_required_columns():
     from snuba.datasets.factory import get_dataset
     dataset = get_dataset("events")
@@ -433,6 +427,11 @@ def get_column_tag_map():
         'contexts': {},
     }
 
+def get_tag_column_map():
+    # And a reverse map from the tags the client expects to the database columns
+    return {
+        col: dict(map(reversed, trans.items())) for col, trans in get_column_tag_map().items()
+    }
 
 def get_tag_column_map():
     # And a reverse map from the tags the client expects to the database columns

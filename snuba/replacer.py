@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import get_all_columns, get_required_columns, get_promoted_tags, get_tag_column_map, escape_col
+from snuba.clickhouse import get_required_columns, get_promoted_tags, get_tag_column_map, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -20,7 +20,6 @@ logger = logging.getLogger('snuba.replacer')
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 REQUIRED_COLUMN_NAMES = [col.escaped for col in get_required_columns()]
-ALL_COLUMN_NAMES = [col.escaped for col in get_all_columns()]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -90,10 +89,11 @@ def get_projects_query_flags(project_ids):
 
 
 class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, metrics=None):
+    def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+        self.dataset = dataset
         self.metrics = metrics
+        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
 
     def process_message(self, message):
         message = json.loads(message.value())
@@ -107,11 +107,11 @@ class ReplacerWorker(AbstractBatchWorker):
             elif type_ == 'end_delete_groups':
                 processed = process_delete_groups(event)
             elif type_ == 'end_merge':
-                processed = process_merge(event)
+                processed = process_merge(event, self.__all_column_names)
             elif type_ == 'end_unmerge':
-                processed = process_unmerge(event)
+                processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event)
+                processed = process_delete_tag(event, self.dataset.get_schema().get_columns())
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -121,7 +121,7 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dist_table_name})
+            query_args.update({'dist_table_name': self.dataset.get_schema().get_table_name()})
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:
                 continue
@@ -190,7 +190,7 @@ def process_delete_groups(message):
 SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
 
 
-def process_merge(message):
+def process_merge(message, all_column_names):
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     txn = message.get('transaction_id')
@@ -206,7 +206,7 @@ def process_merge(message):
 
     assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -227,7 +227,7 @@ def process_merge(message):
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
@@ -239,14 +239,14 @@ def process_merge(message):
     return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_unmerge(message):
+def process_unmerge(message, all_column_names):
     hashes = message['hashes']
     if not hashes:
         return None
 
     assert all(isinstance(h, six.string_types) for h in hashes)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -268,7 +268,7 @@ def process_unmerge(message):
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'previous_group_id': message['previous_group_id'],
         'project_id': message['project_id'],
@@ -281,7 +281,7 @@ def process_unmerge(message):
     return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message):
+def process_delete_tag(message, all_columns):
     tag = message['tag']
     if not tag:
         return None
@@ -309,7 +309,7 @@ def process_delete_tag(message):
     """ + where
 
     select_columns = []
-    for col in get_all_columns():
+    for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
         elif col.flattened == 'tags.key':
@@ -323,8 +323,9 @@ def process_delete_tag(message):
         else:
             select_columns.append(col.escaped)
 
+    all_column_names = [col.escaped for col in all_columns]
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'tag_str': escape_string(tag),
