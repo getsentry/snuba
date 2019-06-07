@@ -92,7 +92,6 @@ class ReplacerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
-        self.dist_table_name = dataset.get_schema().get_table_name()
         self.metrics = metrics
         self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
 
@@ -122,7 +121,7 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dist_table_name})
+            query_args.update({'dist_table_name': self.dataset.get_schema().get_table_name()})
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:
                 continue

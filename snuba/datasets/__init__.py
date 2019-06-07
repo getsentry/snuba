@@ -1,3 +1,5 @@
+from snuba.clickhouse import Array
+
 class DataSet(object):
     """
     A DataSet defines the complete set of data sources, schemas, and
@@ -22,7 +24,6 @@ class DataSet(object):
         return []
 
     def row_from_processed_message(self, message):
-        from snuba.clickhouse import Array
         values = []
         columns = self.get_schema().get_columns()
         for col in columns:
