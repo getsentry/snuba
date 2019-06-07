@@ -13,7 +13,7 @@ from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
 from snuba.processor import process_message
-from snuba.writer import row_from_processed_event, write_rows
+from snuba.writer import write_rows
 
 
 class FakeKafkaProducer(object):
@@ -110,12 +110,12 @@ class BaseTest(object):
 
         # These tests are currently coupled pretty hard to the events dataset,
         # but eventually the base test should support multiple datasets.
-        dataset = get_dataset('events')
-        self.table = dataset.get_schema().get_table_name()
+        self.dataset = get_dataset('events')
+        self.table = self.dataset.get_schema().get_table_name()
         self.clickhouse = ClickhousePool()
 
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(dataset.get_schema().get_local_table_definition())
+        self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
 
         redis_client.flushdb()
 
@@ -171,7 +171,7 @@ class BaseTest(object):
 
         rows = []
         for event in events:
-            rows.append(row_from_processed_event(event))
+            rows.append(self.dataset.row_from_processed_message(event))
 
         return self.write_rows(rows)
 
@@ -181,7 +181,7 @@ class BaseTest(object):
 
         write_rows(
             self.clickhouse,
-            table=self.table,
+            dataset=self.dataset,
             rows=rows,
             types_check=True
         )

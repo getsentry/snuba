@@ -100,7 +100,7 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
+        test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), 'topic')
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -109,7 +109,7 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.table, FakeKafkaProducer(), 'topic')
+        test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), 'topic')
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -127,7 +127,7 @@ class TestConsumer(BaseTest):
     def test_produce_replacement_messages(self):
         topic = 'topic'
         producer = FakeKafkaProducer()
-        test_worker = ConsumerWorker(self.clickhouse, self.table, producer, topic)
+        test_worker = ConsumerWorker(self.clickhouse, self.dataset, producer, topic)
 
         test_worker.flush_batch([
             (processor.REPLACE, ('1', {'project_id': 1})),
