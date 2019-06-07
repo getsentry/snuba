@@ -179,6 +179,7 @@ class EventsDataSet(DataSet):
     # These method should be removed once we will have dataset specific query processing in
     # the dataset class instead of util.py and when the dataset specific logic for processing
     # Kafka messages will be in the dataset as well.
+
     def get_metadata_columns(self):
         return self.__metadata_columns
 

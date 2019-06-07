@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import get_promoted_tags, get_tag_column_map, escape_col
+from snuba.clickhouse import escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -111,7 +111,7 @@ class ReplacerWorker(AbstractBatchWorker):
             elif type_ == 'end_unmerge':
                 processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event, self.dataset.get_schema().get_columns())
+                processed = process_delete_tag(event, self.dataset)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -281,15 +281,15 @@ def process_unmerge(message, all_column_names):
     return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message, all_columns):
+def process_delete_tag(message, dataset):
     tag = message['tag']
     if not tag:
         return None
 
     assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = get_tag_column_map()['tags'].get(tag, tag)
-    is_promoted = tag in get_promoted_tags()['tags']
+    tag_column_name = dataset.get_tag_column_map()['tags'].get(tag, tag)
+    is_promoted = tag in dataset.get_promoted_tags()['tags']
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -309,6 +309,7 @@ def process_delete_tag(message, all_columns):
     """ + where
 
     select_columns = []
+    all_columns = dataset.get_schema().get_columns()
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
