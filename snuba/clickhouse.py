@@ -427,11 +427,6 @@ def get_column_tag_map():
         'contexts': {},
     }
 
-def get_tag_column_map():
-    # And a reverse map from the tags the client expects to the database columns
-    return {
-        col: dict(map(reversed, trans.items())) for col, trans in get_column_tag_map().items()
-    }
 
 def get_tag_column_map():
     # And a reverse map from the tags the client expects to the database columns
