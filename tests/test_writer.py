@@ -1,6 +1,6 @@
 from base import BaseTest
 
-from snuba.clickhouse import ColumnSet, ALL_COLUMNS, METADATA_COLUMNS
+from snuba.clickhouse import ColumnSet, get_all_columns, get_metadata_columns
 from snuba.processor import process_message
 from snuba.writer import row_from_processed_event
 
@@ -20,7 +20,7 @@ class TestWriter(BaseTest):
         # verify that the 'count of columns from event' + 'count of columns from metadata'
         # equals the 'count of columns' in the processed row tuple
         # note that the content is verified in processor tests
-        assert (len(processed) + len(METADATA_COLUMNS)) == len(row)
+        assert (len(processed) + len(get_metadata_columns())) == len(row)
 
     def test_unknown_columns(self):
         """Fields in a processed events are ignored if they don't have
@@ -31,8 +31,8 @@ class TestWriter(BaseTest):
         assert 'sdk_name' in processed
         sdk_name = processed['sdk_name']
 
-        columns_copy = ColumnSet([col for col in ALL_COLUMNS.columns if not col.name == 'sdk_name'])
-        assert len(columns_copy) == (len(ALL_COLUMNS) - 1)
+        columns_copy = ColumnSet([col for col in get_all_columns().columns if not col.name == 'sdk_name'])
+        assert len(columns_copy) == (len(get_all_columns()) - 1)
 
         row = row_from_processed_event(processed, columns_copy)
 

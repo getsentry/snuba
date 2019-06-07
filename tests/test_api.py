@@ -804,7 +804,7 @@ class TestApi(BaseTest):
 
         assert self.app.post('/tests/drop').status_code == 200
         dataset = get_dataset('events')
-        table = dataset.SCHEMA.get_table_name()
+        table = dataset.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
 
     @pytest.mark.xfail

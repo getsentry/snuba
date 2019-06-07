@@ -25,7 +25,7 @@ def optimize(clickhouse_server, database, dataset, timeout, log_level):
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     dataset = get_dataset(dataset)
-    table = dataset.SCHEMA.get_local_table_name()
+    table = dataset.get_schema().get_local_table_name()
 
     if not clickhouse_server:
         logger.error("Must provide at least one Clickhouse server.")

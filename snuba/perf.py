@@ -57,18 +57,12 @@ def get_messages(events_file):
     return messages
 
 
-def run(events_file, clickhouse, table_name, repeat=1,
+def run(events_file, clickhouse, dataset, repeat=1,
         profile_process=False, profile_write=False):
-    from snuba.clickhouse import get_table_definition, get_test_engine
     from snuba.consumer import ConsumerWorker
 
-    clickhouse.execute(
-        get_table_definition(
-            name=table_name,
-            engine=get_test_engine(),
-        )
-    )
-
+    clickhouse.execute(dataset.get_schema().get_local_table_definition())
+    table_name = dataset.get_schema().get_local_table_name()
     consumer = ConsumerWorker(
         clickhouse=clickhouse,
         dist_table_name=table_name,
