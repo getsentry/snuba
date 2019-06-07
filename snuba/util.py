@@ -389,11 +389,12 @@ def conditions_expr(conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
+        all_columns = get_all_columns()
         if (
             isinstance(lhs, six.string_types) and
-            lhs in get_all_columns() and
-            type(get_all_columns()[lhs].type) == clickhouse.Array and
-            get_all_columns()[lhs].base_name != body.get('arrayjoin') and
+            lhs in all_columns and
+            type(all_columns[lhs].type) == clickhouse.Array and
+            all_columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
             ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
