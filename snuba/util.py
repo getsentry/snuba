@@ -235,9 +235,9 @@ def tag_expr(dataset, column_name):
     col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
 
     # For promoted tags, return the column name.
-    if col in dataset.get_promoted_cols():
+    if col in dataset.get_promoted_columns():
         actual_tag = dataset.get_tag_column_map()[col].get(tag, tag)
-        if actual_tag in dataset.get_promoted_cols()[col]:
+        if actual_tag in dataset.get_promoted_columns()[col]:
             return string_col(dataset, actual_tag)
 
     # For the rest, return an expression that looks it up in the nested tags.
@@ -261,7 +261,7 @@ def tags_expr(dataset, column_name, body):
         key_list = '{}.key'.format(col)
         val_list = '{}.value'.format(col)
     else:
-        promoted = dataset.get_promoted_cols()[col]
+        promoted = dataset.get_promoted_columns()[col]
         col_map = dataset.get_column_tag_map()[col]
         key_list = u'arrayConcat([{}], {}.key)'.format(
             u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),

@@ -39,21 +39,21 @@ class DataSet(object):
     # Kafka messages will be in the dataset as well.
 
     def get_metadata_columns(self):
-        pass
+        raise NotImplementedError
 
     def get_promoted_tag_columns(self):
-        pass
+        raise NotImplementedError
 
     def get_promoted_context_tag_columns(self):
-        pass
+        raise NotImplementedError
 
     def get_promoted_context_columns(self):
-        pass
+        raise NotImplementedError
 
     def get_required_columns(self):
-        pass
+        raise NotImplementedError
 
-    def get_promoted_cols(self):
+    def get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
         return {
@@ -81,6 +81,6 @@ class DataSet(object):
         # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
         # and they can/will use a promoted column.
         return {
-            col: [self.get_column_tag_map()[col].get(x, x) for x in self.get_promoted_cols()[col]]
-            for col in self.get_promoted_cols()
+            col: [self.get_column_tag_map()[col].get(x, x) for x in self.get_promoted_columns()[col]]
+            for col in self.get_promoted_columns()
         }
