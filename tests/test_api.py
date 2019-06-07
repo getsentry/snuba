@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import calendar
+from collections import defaultdict
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from dateutil.tz import tz
@@ -625,6 +626,52 @@ class TestApi(BaseTest):
         })).data)
 
         assert 'os.rooted' in result['data'][0]['top']
+
+    def test_non_tag(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': ['tags_key', 'tags_value'],
+            'orderby': '-count',
+            'aggregations': [
+                ['count()', '', 'count'],
+                ['min', 'timestamp', 'first_seen'],
+                ['max', 'timestamp', 'last_seen'],
+            ],
+            'conditions': [
+                ['tags_value', 'IS NOT NULL', None],
+                # TODO(lb): not sure what to do here, but what if there's a name conflict
+                # with user generated tags?
+                ['tags_key', 'IN', ['os.name', 'foo', 'project_id', 'platform']],
+            ],
+        })).data)
+
+        result_map = defaultdict(list)
+        for datumn in result['data']:
+            result_map[datumn['tags_key']].append(datumn)
+
+        # Result contains both promoted and regular tags
+        assert set(result_map.keys()) == set([
+            'os.name',
+            'foo',
+            'project_id',
+            'platform',
+        ])
+
+        # Reguar (nested) tag
+        assert result_map['foo'][0]['count'] == 180
+        assert result_map['foo'][0]['tags_value'] == 'baz'
+
+        assert result_map['os.name'][0]['count'] == 180
+        assert result_map['os.name'][0]['tags_value'][0] == 'w'
+
+        assert result_map['project_id'][0]['count'] == 180
+        assert result_map['project_id'][0]['tags_value'][0] == '1'
+
+        assert set(p['tags_value'] for p in result_map['platform']) == set(['a', 'b', 'c', 'd', 'e', 'f'])
+        for platform in result_map['platform']:
+            assert platform['count'] == 30
+
 
     def test_unicode_condition(self):
         result = json.loads(self.app.post('/query', data=json.dumps({

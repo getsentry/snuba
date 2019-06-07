@@ -246,6 +246,15 @@ def tag_expr(dataset, column_name):
         'tag': escape_literal(tag)
     })
 
+def _check_non_tag_key_columns(body):
+    non_tag_keys = set()
+    for condition in body['conditions']:
+        if condition[0] == 'tags_key' and condition[1] == 'IN':
+            for tag_key in condition[2]:
+                if tag_key not in COLUMN_TAG_MAP and tag_key in ALL_COLUMNS:
+                    non_tag_keys.add(tag_key)
+    return non_tag_keys
+
 
 def tags_expr(dataset, column_name, body):
     """
@@ -276,9 +285,22 @@ def tags_expr(dataset, column_name, body):
     if len(cols_used) == 2:
         # If we use both tags_key and tags_value in this query, arrayjoin
         # on (key, value) tag tuples.
-        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
+        tag_key_value_expr = [u'arrayMap((x,y) -> [x,y], {}, {})'.format(
             key_list,
             val_list
+        )]
+
+        non_tag_keys = _check_non_tag_key_columns(body)
+        if non_tag_keys:
+            for key in non_tag_keys:
+                tag_key_value_expr.append((u'arrayMap((x) -> [\'{}\',toString(x)], [{}])').format(
+                    key,
+                    key,
+                ))
+
+
+        expr = u'arrayJoin(arrayConcat({}))'.format(
+            ', '.join(tag_key_value_expr)
         )
 
         # put the all_tags expression in the alias cache so we can use the alias
