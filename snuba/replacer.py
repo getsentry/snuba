@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import get_required_columns, get_promoted_tags, get_tag_column_map, escape_col
+from snuba.clickhouse import escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -18,8 +18,6 @@ logger = logging.getLogger('snuba.replacer')
 
 
 CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-REQUIRED_COLUMN_NAMES = [col.escaped for col in get_required_columns()]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -92,8 +90,10 @@ class ReplacerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
+        self.dist_table_name = dataset.get_schema().get_table_name()
         self.metrics = metrics
         self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
+        self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
     def process_message(self, message):
         message = json.loads(message.value())
@@ -105,13 +105,13 @@ class ReplacerWorker(AbstractBatchWorker):
             if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
                 return None
             elif type_ == 'end_delete_groups':
-                processed = process_delete_groups(event)
+                processed = process_delete_groups(event, self.__required_columns)
             elif type_ == 'end_merge':
                 processed = process_merge(event, self.__all_column_names)
             elif type_ == 'end_unmerge':
                 processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event, self.dataset.get_schema().get_columns())
+                processed = process_delete_tag(event, self.dataset)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -147,14 +147,14 @@ class ReplacerWorker(AbstractBatchWorker):
         pass
 
 
-def process_delete_groups(message):
+def process_delete_groups(message, required_columns):
     group_ids = message['group_ids']
     if not group_ids:
         return None
 
     assert all(isinstance(gid, six.integer_types) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'deleted' else '1', required_columns)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -175,7 +175,7 @@ def process_delete_groups(message):
     """ + where
 
     query_args = {
-        'required_columns': ', '.join(REQUIRED_COLUMN_NAMES),
+        'required_columns': ', '.join(required_columns),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),
@@ -281,15 +281,15 @@ def process_unmerge(message, all_column_names):
     return (count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message, all_columns):
+def process_delete_tag(message, dataset):
     tag = message['tag']
     if not tag:
         return None
 
     assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = get_tag_column_map()['tags'].get(tag, tag)
-    is_promoted = tag in get_promoted_tags()['tags']
+    tag_column_name = dataset.get_tag_column_map()['tags'].get(tag, tag)
+    is_promoted = tag in dataset.get_promoted_tags()['tags']
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -309,6 +309,7 @@ def process_delete_tag(message, all_columns):
     """ + where
 
     select_columns = []
+    all_columns = dataset.get_schema().get_columns()
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')

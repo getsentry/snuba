@@ -26,7 +26,7 @@ class ConsumerWorker(AbstractBatchWorker):
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = processor.process_message(value)
+        processed = processor.process_message(self.__dataset, value)
         if processed is None:
             return None
 

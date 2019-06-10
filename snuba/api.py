@@ -390,7 +390,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            _, processed = process_message(event)
+            _, processed = process_message(dataset, event)
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
