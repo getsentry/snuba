@@ -36,6 +36,9 @@ QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 ESCAPE_STRING_RE = re.compile(r"(['\\])")
 SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
 TOPK_FUNCTION_RE = re.compile(r'^top([1-9]\d*)$')
+NON_TAG_KEY_PREFIX = 'col:'
+NON_TAG_KEY_RE = re.compile(r'^%s(?P<tag_key>.+)' % NON_TAG_KEY_PREFIX)
+
 
 
 class InvalidConditionException(Exception):
@@ -249,12 +252,12 @@ def tag_expr(dataset, column_name):
 def _check_non_tag_key_columns(dataset, body):
     non_tag_keys = set()
     all_columns = dataset.get_schema().get_columns()
-    column_tag_map = get_column_tag_map()
     for condition in body['conditions']:
         if condition[0] == 'tags_key' and condition[1] == 'IN':
             for tag_key in condition[2]:
-                if tag_key not in column_tag_map and tag_key in all_columns:
-                    non_tag_keys.add(tag_key)
+                match = NON_TAG_KEY_RE.match(tag_key)
+                if match and match.group('tag_key') in all_columns:
+                    non_tag_keys.add(match.group('tag_key'))
     return non_tag_keys
 
 
@@ -296,10 +299,9 @@ def tags_expr(dataset, column_name, body):
         if non_tag_keys:
             for key in non_tag_keys:
                 tag_key_value_expr.append((u'arrayMap((x) -> [\'{}\',toString(x)], [{}])').format(
-                    key,
+                    u'{}{}'.format(NON_TAG_KEY_PREFIX, key),
                     key,
                 ))
-
 
         expr = u'arrayJoin(arrayConcat({}))'.format(
             ', '.join(tag_key_value_expr)

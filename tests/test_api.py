@@ -87,6 +87,7 @@ class TestApi(BaseTest):
                                 'foo': 'baz',
                                 'foo.bar': 'qux',
                                 'os_name': 'linux',
+                                'platform': 'hello',
                             },
                             'exception': {
                                 'values': [
@@ -640,9 +641,7 @@ class TestApi(BaseTest):
             ],
             'conditions': [
                 ['tags_value', 'IS NOT NULL', None],
-                # TODO(lb): not sure what to do here, but what if there's a name conflict
-                # with user generated tags?
-                ['tags_key', 'IN', ['os.name', 'foo', 'project_id', 'platform']],
+                ['tags_key', 'IN', ['os.name', 'foo', 'col:project_id', 'col:platform', 'platform']],
             ],
         })).data)
 
@@ -654,7 +653,8 @@ class TestApi(BaseTest):
         assert set(result_map.keys()) == set([
             'os.name',
             'foo',
-            'project_id',
+            'col:project_id',
+            'col:platform',
             'platform',
         ])
 
@@ -665,11 +665,15 @@ class TestApi(BaseTest):
         assert result_map['os.name'][0]['count'] == 180
         assert result_map['os.name'][0]['tags_value'][0] == 'w'
 
-        assert result_map['project_id'][0]['count'] == 180
-        assert result_map['project_id'][0]['tags_value'][0] == '1'
+        # user tag platform conflicting with platform column
+        assert result_map['platform'][0]['count'] == 180
+        assert result_map['platform'][0]['tags_value'] == 'hello'
 
-        assert set(p['tags_value'] for p in result_map['platform']) == set(['a', 'b', 'c', 'd', 'e', 'f'])
-        for platform in result_map['platform']:
+        assert result_map['col:project_id'][0]['count'] == 180
+        assert result_map['col:project_id'][0]['tags_value'][0] == '1'
+
+        assert set(p['tags_value'] for p in result_map['col:platform']) == set(['a', 'b', 'c', 'd', 'e', 'f'])
+        for platform in result_map['col:platform']:
             assert platform['count'] == 30
 
 
