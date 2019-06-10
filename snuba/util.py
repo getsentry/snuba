@@ -252,7 +252,7 @@ def tag_expr(dataset, column_name):
 def _check_non_tag_key_columns(dataset, body):
     non_tag_keys = set()
     all_columns = dataset.get_schema().get_columns()
-    for condition in body['conditions']:
+    for condition in body.get('conditions', []):
         if condition[0] == 'tags_key' and condition[1] == 'IN':
             for tag_key in condition[2]:
                 match = NON_TAG_KEY_RE.match(tag_key)

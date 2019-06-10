@@ -597,6 +597,7 @@ class TestApi(BaseTest):
             # User (nested) tags
             'foo',
             'foo.bar',
+            'platform',
             # Note this is a nested (user-provided) os_name tag and is
             # unrelated to the fact that we happen to store the
             # `os.name` tag as an `os_name` column.
