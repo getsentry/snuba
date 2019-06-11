@@ -16,17 +16,16 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
+    def __init__(self, clickhouse, dataset, producer, metrics=None):
         self.clickhouse = clickhouse
         self.__dataset = dataset
         self.producer = producer
-        self.replacements_topic = replacements_topic
         self.metrics = metrics
 
     def process_message(self, message):
         value = json.loads(message.value())
 
-        processed = processor.process_message(self.__dataset, value)
+        processed = self.__dataset.get_processor().process_message(value)
         if processed is None:
             return None
 
@@ -74,7 +73,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
-                    self.replacements_topic,
+                    self.__dataset.get_forward_topic(),
                     key=six.text_type(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,

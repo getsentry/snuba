@@ -390,7 +390,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            _, processed = process_message(dataset, event)
+            _, processed = dataset.get_processor().process_message(event)
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
@@ -426,7 +426,7 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None)
         else:
             from snuba.replacer import ReplacerWorker
             worker = ReplacerWorker(clickhouse_rw, dataset)

@@ -13,7 +13,7 @@ class TestWriter(BaseTest):
         assert res[0][0] == 1
 
     def test_columns_match_schema(self):
-        _, processed = process_message(self.dataset, self.event)
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
         row = self.dataset.row_from_processed_message(processed)
 
         # verify that the 'count of columns from event' + 'count of columns from metadata'
@@ -25,7 +25,7 @@ class TestWriter(BaseTest):
         """Fields in a processed events are ignored if they don't have
         a corresponding Clickhouse column declared."""
 
-        _, processed = process_message(self.dataset, self.event)
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
 
         processed['unknown_field'] = "unknown_value"
         row = self.dataset.row_from_processed_message(processed)

@@ -12,43 +12,43 @@ from snuba.processor import InvalidMessageType, InvalidMessageVersion, process_m
 
 class TestProcessor(BaseTest):
     def test_simple(self):
-        _, processed = process_message(self.dataset, self.event)
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
     def test_simple_version_0(self):
-        _, processed = process_message(self.dataset, (0, 'insert', self.event))
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), (0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
     def test_simple_version_1(self):
-        assert process_message(self.dataset, (0, 'insert', self.event)) == process_message(self.dataset, (1, 'insert', self.event, {}))
+        assert process_message(self.dataset.get_promoted_tag_columns(), (0, 'insert', self.event)) == process_message(self.dataset.get_promoted_tag_columns(), (1, 'insert', self.event, {}))
 
     def test_invalid_type_version_0(self):
         with pytest.raises(InvalidMessageType):
-            process_message(self.dataset, (0, 'invalid', self.event))
+            process_message(self.dataset.get_promoted_tag_columns(), (0, 'invalid', self.event))
 
     def test_invalid_version(self):
         with pytest.raises(InvalidMessageVersion):
-            process_message(self.dataset, (2 ** 32 - 1, 'insert', self.event))
+            process_message(self.dataset.get_promoted_tag_columns(), (2 ** 32 - 1, 'insert', self.event))
 
     def test_invalid_format(self):
         with pytest.raises(InvalidMessageVersion):
-            process_message(self.dataset, (-1, 'insert', self.event))
+            process_message(self.dataset.get_promoted_tag_columns(), (-1, 'insert', self.event))
 
     def test_unexpected_obj(self):
         self.event['message'] = {'what': 'why is this in the message'}
 
-        _, processed = process_message(self.dataset, self.event)
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
 
-        _, processed = process_message(self.dataset, self.event)
+        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
 
         assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
@@ -142,64 +142,64 @@ class TestProcessor(BaseTest):
         assert output['message'] == 'the short message'
 
     def test_v1_delete_groups_skipped(self):
-        assert processor.process_message(self.dataset, (1, 'delete_groups', {})) is None
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'delete_groups', {})) is None
 
     def test_v1_merge_skipped(self):
-        assert processor.process_message(self.dataset, (1, 'merge', {})) is None
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'merge', {})) is None
 
     def test_v1_unmerge_skipped(self):
-        assert processor.process_message(self.dataset, (1, 'unmerge', {})) is None
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'unmerge', {})) is None
 
     def test_v2_invalid_type(self):
         with pytest.raises(processor.InvalidMessageType):
-            assert processor.process_message(self.dataset, (2, '__invalid__', {})) == 1
+            assert processor.process_message(self.dataset.get_promoted_tag_columns(), (2, '__invalid__', {})) == 1
 
     def test_v2_start_delete_groups(self):
         project_id = 1
         message = (2, 'start_delete_groups', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_delete_groups(self):
         project_id = 1
         message = (2, 'end_delete_groups', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_merge(self):
         project_id = 1
         message = (2, 'start_merge', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_merge(self):
         project_id = 1
         message = (2, 'end_merge', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_unmerge(self):
         project_id = 1
         message = (2, 'start_unmerge', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_unmerge(self):
         project_id = 1
         message = (2, 'end_unmerge', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_delete_tag(self):
         project_id = 1
         message = (2, 'start_delete_tag', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_delete_tag(self):
         project_id = 1
         message = (2, 'end_delete_tag', {'project_id': project_id})
-        assert processor.process_message(self.dataset, message) == \
+        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_extract_sdk(self):
@@ -236,7 +236,7 @@ class TestProcessor(BaseTest):
         tags = orig_tags.copy()
         output = {}
 
-        processor.extract_promoted_tags(self.dataset, output, tags)
+        processor.extract_promoted_tags(self.dataset.get_promoted_tag_columns(), output, tags)
 
         assert output == {
             'sentry:dist': 'the_dist',
@@ -268,7 +268,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_promoted_tags(self.dataset, output, tags)
+        processor.extract_promoted_tags(self.dataset.get_promoted_tag_columns(), output, tags)
 
         assert output['environment'] == u''
 
@@ -579,4 +579,4 @@ class TestProcessor(BaseTest):
         event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         event['data']['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
 
-        processor.process_insert(self.dataset, event)
+        processor.process_insert(self.dataset.get_promoted_tag_columns(), event)

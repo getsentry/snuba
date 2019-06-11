@@ -52,23 +52,6 @@ DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 20000
 DISCARD_OLD_EVENTS = True
-KAFKA_TOPICS = {
-    'raw-events': {
-        'topic': 'events',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'replacements': {
-        'topic': 'event-replacements',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'commit-log': {
-        'topic': 'snuba-commit-log',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-}
 
 DEFAULT_RETENTION_DAYS = 90
 RETENTION_OVERRIDES = {}

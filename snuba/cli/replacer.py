@@ -8,10 +8,6 @@ from snuba.datasets.factory import get_dataset
 
 
 @click.command()
-@click.option('--replacements-topic', default='event-replacements',
-              help='Topic to consume replacement messages from.')
-@click.option('--consumer-group', default='snuba-replacers',
-              help='Consumer group use for consuming the replacements topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
@@ -31,7 +27,7 @@ from snuba.datasets.factory import get_dataset
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, dataset,
+def replacer(bootstrap_server, clickhouse_server, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
              queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
@@ -46,7 +42,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.replacer', tags=["group:%s" % consumer_group]
+        dogstatsd_host, dogstatsd_port, 'snuba.replacer',
+        tags=["group:%s" % dataset.get_forward_consumer_group()]
     )
 
     client_settings = {
@@ -68,13 +65,13 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     )
 
     replacer = BatchingKafkaConsumer(
-        replacements_topic,
+        dataset.get_forward_topic(),
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
-        group_id=consumer_group,
+        group_id=dataset.get_forward_consumer_group(),
         producer=None,
         commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,

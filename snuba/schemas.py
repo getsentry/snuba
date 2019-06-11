@@ -40,7 +40,7 @@ QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
         'dataset': {
-            'enum': list(factory.DATASETS_MAPPING.keys()),
+            'enum': list(factory.DATASET_NAMES),
         },
         # A condition is a 3-tuple of (column, operator, literal)
         # `conditions` is an array of conditions, or an array of arrays of conditions.

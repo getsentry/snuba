@@ -1,5 +1,6 @@
 from snuba.clickhouse import Array
 
+
 class DataSet(object):
     """
     A DataSet defines the complete set of data sources, schemas, and
@@ -10,11 +11,21 @@ class DataSet(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema):
+    def __init__(self, schema, processor, message_topic, message_consumer_group,
+            forward_topic, forward_consumer_group, commit_log_topic):
         self._schema = schema
+        self.__processor = processor
+        self.__message_topic = message_topic
+        self.__message_consumer_group = message_consumer_group
+        self.__forward_topic = forward_topic
+        self.__forward_consumer_group = forward_consumer_group
+        self.__commit_log_topic = commit_log_topic
 
     def get_schema(self):
         return self._schema
+
+    def get_processor(self):
+        return self.__processor
 
     def default_conditions(self, body):
         """
@@ -33,6 +44,21 @@ class DataSet(object):
             values.append(value)
 
         return values
+
+    def get_message_topic(self):
+        return self.__message_topic
+
+    def get_message_consumer_group(self):
+        return self.__message_consumer_group
+
+    def get_forward_topic(self):
+        return self.__forward_topic
+
+    def get_forward_consumer_group(self):
+        return self.__forward_consumer_group
+
+    def get_commit_log_topic(self):
+        return self.__commit_log_topic
 
     # These method should be removed once we will have dataset specific query processing in
     # the dataset class instead of util.py and when the dataset specific logic for processing
