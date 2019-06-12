@@ -45,7 +45,7 @@ def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_b
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-        tags=["group:%s" % dataset.get_message_consumer_group()]
+        tags=["group:%s" % dataset.get_consumer_group()]
     )
 
     clickhouse = ClickhousePool(
@@ -65,7 +65,7 @@ def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_b
     })
 
     consumer = BatchingKafkaConsumer(
-        dataset.get_message_topic(),
+        dataset.get_topic(),
         worker=ConsumerWorker(
             clickhouse,
             dataset,
@@ -76,7 +76,7 @@ def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_b
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
-        group_id=dataset.get_message_consumer_group(),
+        group_id=dataset.get_consumer_group(),
         producer=producer,
         commit_log_topic=dataset.get_commit_log_topic(),
         auto_offset_reset=auto_offset_reset,

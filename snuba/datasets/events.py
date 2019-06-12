@@ -165,10 +165,10 @@ class EventsDataSet(DataSet):
         super(EventsDataSet, self).__init__(
             schema=schema,
             processor=EventsProcessor(promoted_tag_columns),
-            message_topic="events",
-            message_consumer_group="snuba-consumers",
-            forward_topic="event-replacements",
-            forward_consumer_group="snuba-replacers",
+            topic="events",
+            consumer_group="snuba-consumers",
+            replacement_topic="event-replacements",
+            replacement_consumer_group="snuba-replacers",
             commit_log_topic="snuba-commit-log"
         )
 
@@ -207,6 +207,6 @@ class EventsProcessor(MessageProcessor):
     def __init__(self, promoted_tag_columns):
         self.__promoted_tag_columns = promoted_tag_columns
 
-    def process_message(self, message):
+    def process_message(self, value):
         return process_message(self.__promoted_tag_columns,
-            message)
+            value)

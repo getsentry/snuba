@@ -43,7 +43,7 @@ def replacer(bootstrap_server, clickhouse_server, dataset,
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',
-        tags=["group:%s" % dataset.get_forward_consumer_group()]
+        tags=["group:%s" % dataset.get_replacement_consumer_group()]
     )
 
     client_settings = {
@@ -65,13 +65,13 @@ def replacer(bootstrap_server, clickhouse_server, dataset,
     )
 
     replacer = BatchingKafkaConsumer(
-        dataset.get_forward_topic(),
+        dataset.get_replacement_topic(),
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
-        group_id=dataset.get_forward_consumer_group(),
+        group_id=dataset.get_replacement_consumer_group(),
         producer=None,
         commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,

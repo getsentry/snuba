@@ -24,10 +24,10 @@ REPLACE = object()
 class MessageProcessor(object):
     """
     The Processor is responsible for converting an incoming message body from the
-    event stream into a row or statement to be inserted or executed agsinst clickhouse.
+    event stream into a row or statement to be inserted or executed against clickhouse.
     """
 
-    def process_message(self, message):
+    def process_message(self, value):
         raise NotImplementedError
 
 

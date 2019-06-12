@@ -73,7 +73,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
-                    self.__dataset.get_forward_topic(),
+                    self.__dataset.get_replacement_topic(),
                     key=six.text_type(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
