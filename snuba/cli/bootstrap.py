@@ -37,7 +37,20 @@ def bootstrap(bootstrap_server, kafka, force):
                     raise
                 time.sleep(1)
 
-        topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
+        topics = []
+        for name in DATASET_NAMES:
+            dataset = get_dataset(name)
+            partitions = dataset.get_default_partitions()
+            replication = dataset.get_default_replication_factor()
+            topics.extend([
+                (dataset.get_topic(), partitions, replication),
+                (dataset.get_replacement_topic(), partitions, replication),
+                (dataset.get_commit_log_topic(), partitions, replication),
+            ])
+
+        topics = [NewTopic(t[0], num_partitions=t[1], replication_factor=t[2])
+            for t in topics
+            if t[0] is not None]
 
         for topic, future in client.create_topics(topics).items():
             try:

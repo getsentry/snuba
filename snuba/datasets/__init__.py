@@ -60,6 +60,12 @@ class DataSet(object):
     def get_commit_log_topic(self):
         return self.__commit_log_topic
 
+    def get_default_replication_factor(self):
+        return 1
+
+    def get_default_partitions(self):
+        return 1
+
     # These method should be removed once we will have dataset specific query processing in
     # the dataset class instead of util.py and when the dataset specific logic for processing
     # Kafka messages will be in the dataset as well.
