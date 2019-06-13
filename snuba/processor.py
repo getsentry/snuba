@@ -21,6 +21,16 @@ INSERT = object()
 REPLACE = object()
 
 
+class MessageProcessor(object):
+    """
+    The Processor is responsible for converting an incoming message body from the
+    event stream into a row or statement to be inserted or executed against clickhouse.
+    """
+
+    def process_message(self, value):
+        raise NotImplementedError
+
+
 class EventTooOld(Exception):
     pass
 
@@ -193,9 +203,9 @@ def extract_sdk(output, sdk):
     output['sdk_integrations'] = sdk_integrations
 
 
-def extract_promoted_tags(dataset, output, tags):
+def extract_promoted_tags(promoted_tag_columns, output, tags):
     output.update({col.name: _unicodify(tags.get(col.name, None))
-        for col in dataset.get_promoted_tag_columns()
+        for col in promoted_tag_columns
     })
 
 
@@ -362,7 +372,7 @@ class InvalidMessageVersion(Exception):
     pass
 
 
-def process_message(dataset, message):
+def process_message(promoted_tag_columns, message):
     """\
     Process a raw message into a tuple of (action_type, processed_message):
     * action_type: one of the sentinel values INSERT or REPLACE
@@ -376,7 +386,7 @@ def process_message(dataset, message):
         # deprecated unwrapped event message == insert
         action_type = INSERT
         try:
-            processed = process_insert(dataset, message)
+            processed = process_insert(promoted_tag_columns, message)
         except EventTooOld:
             return None
     elif isinstance(message, (list, tuple)) and len(message) >= 2:
@@ -391,7 +401,7 @@ def process_message(dataset, message):
             if type_ == 'insert':
                 action_type = INSERT
                 try:
-                    processed = process_insert(dataset, event)
+                    processed = process_insert(promoted_tag_columns, event)
                 except EventTooOld:
                     return None
             else:
@@ -426,7 +436,7 @@ def process_message(dataset, message):
     return (action_type, processed)
 
 
-def process_insert(dataset, message):
+def process_insert(promoted_tag_columns, message):
     processed = {'deleted': 0}
     extract_required(processed, message)
 
@@ -441,7 +451,7 @@ def process_insert(dataset, message):
     extract_sdk(processed, sdk)
 
     tags = _as_dict_safe(data.get('tags', None))
-    extract_promoted_tags(dataset, processed, tags)
+    extract_promoted_tags(promoted_tag_columns, processed, tags)
 
     contexts = data.get('contexts', None) or {}
     extract_promoted_contexts(processed, contexts, tags)

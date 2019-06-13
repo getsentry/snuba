@@ -1,6 +1,7 @@
 from snuba.clickhouse import Array, ColumnSet, DateTime, FixedString, Float, Nested, Nullable, UInt, String
 from snuba.datasets import DataSet
 from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.processor import MessageProcessor, process_message
 
 
 class EventsDataSet(DataSet):
@@ -162,7 +163,11 @@ class EventsDataSet(DataSet):
             sample_expr=sample_expr)
 
         super(EventsDataSet, self).__init__(
-            schema
+            schema=schema,
+            processor=EventsProcessor(promoted_tag_columns),
+            default_topic="events",
+            default_replacement_topic="event-replacements",
+            default_commit_log_topic="snuba-commit-log"
         )
 
         self.__metadata_columns = metadata_columns
@@ -194,3 +199,12 @@ class EventsDataSet(DataSet):
 
     def get_required_columns(self):
         return self.__required_columns
+
+
+class EventsProcessor(MessageProcessor):
+    def __init__(self, promoted_tag_columns):
+        self.__promoted_tag_columns = promoted_tag_columns
+
+    def process_message(self, value):
+        return process_message(self.__promoted_tag_columns,
+            value)

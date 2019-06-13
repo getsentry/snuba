@@ -8,7 +8,7 @@ from snuba.datasets.factory import get_dataset
 
 
 @click.command()
-@click.option('--replacements-topic', default='event-replacements',
+@click.option('--replacements-topic', default=None,
               help='Topic to consume replacement messages from.')
 @click.option('--consumer-group', default='snuba-replacers',
               help='Consumer group use for consuming the replacements topic.')
@@ -45,8 +45,12 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     dataset = get_dataset(dataset)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
+
+    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
+
     metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.replacer', tags=["group:%s" % consumer_group]
+        dogstatsd_host, dogstatsd_port, 'snuba.replacer',
+        tags=["group:%s" % consumer_group]
     )
 
     client_settings = {

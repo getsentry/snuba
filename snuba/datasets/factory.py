@@ -1,10 +1,9 @@
 from snuba import settings
-from snuba.datasets.events import EventsDataSet
 
 DATASETS_IMPL = {}
 
-DATASETS_MAPPING = {
-    'events': EventsDataSet,
+DATASET_NAMES = {
+    'events',
 }
 
 
@@ -14,9 +13,14 @@ def get_dataset(name):
 
     assert name not in settings.DISABLED_DATASETS, "Dataset %s not available in this environment" % name
 
-    dataset = DATASETS_IMPL[name] = DATASETS_MAPPING[name]()
+    from snuba.datasets.events import EventsDataSet
+    dataset_mappings = {
+        'events': EventsDataSet,
+    }
+
+    dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
     return dataset
 
 
 def get_enabled_dataset_names():
-    return [name for name in DATASETS_MAPPING.keys() if name not in settings.DISABLED_DATASETS]
+    return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]

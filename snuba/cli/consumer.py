@@ -9,11 +9,11 @@ from snuba.datasets.factory import get_dataset
 
 
 @click.command()
-@click.option('--raw-events-topic', default='events',
+@click.option('--raw-events-topic', default=None,
               help='Topic to consume raw events from.')
-@click.option('--replacements-topic', default='event-replacements',
+@click.option('--replacements-topic', default=None,
               help='Topic to produce replacement messages info.')
-@click.option('--commit-log-topic', default='snuba-commit-log',
+@click.option('--commit-log-topic', default=None,
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
@@ -50,8 +50,15 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
+    dataset = get_dataset(dataset)
+
+    raw_events_topic = raw_events_topic or dataset.get_default_topic()
+    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
+    commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+
     metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.consumer', tags=["group:%s" % consumer_group]
+        dogstatsd_host, dogstatsd_port, 'snuba.consumer',
+        tags=["group:%s" % consumer_group]
     )
 
     clickhouse = ClickhousePool(
@@ -64,8 +71,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         metrics=metrics
     )
 
-    dataset = get_dataset(dataset)
-
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),
         'partitioner': 'consistent',
@@ -75,8 +80,11 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
         worker=ConsumerWorker(
-            clickhouse, dataset,
-            producer=producer, replacements_topic=replacements_topic, metrics=metrics
+            clickhouse,
+            dataset,
+            producer=producer,
+            replacements_topic=replacements_topic,
+            metrics=metrics
         ),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
