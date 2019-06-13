@@ -10,8 +10,8 @@ from snuba.datasets.factory import get_dataset
 @click.command()
 @click.option('--replacements-topic', default=None,
               help='Topic to consume replacement messages from.')
-@click.option('--consumer-group', default='snuba-consumers',
-              help='Consumer group use for consuming the raw replacements topic.')
+@click.option('--consumer-group', default='snuba-replacers',
+              help='Consumer group use for consuming the replacements topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
