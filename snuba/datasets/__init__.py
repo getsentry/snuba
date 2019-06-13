@@ -11,15 +11,13 @@ class DataSet(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema, processor, topic, consumer_group,
-            replacement_topic, replacement_consumer_group, commit_log_topic):
+    def __init__(self, schema, processor, default_topic,
+            default_replacement_topic, default_commit_log_topic):
         self._schema = schema
         self.__processor = processor
-        self.__topic = topic
-        self.__consumer_group = consumer_group
-        self.__replacement_topic = replacement_topic
-        self.__replacement_consumer_group = replacement_consumer_group
-        self.__commit_log_topic = commit_log_topic
+        self.__default_topic = default_topic
+        self.__default_replacement_topic = default_replacement_topic
+        self.__default_commit_log_topic = default_commit_log_topic
 
     def get_schema(self):
         return self._schema
@@ -45,20 +43,14 @@ class DataSet(object):
 
         return values
 
-    def get_topic(self):
-        return self.__topic
+    def get_default_topic(self):
+        return self.__default_topic
 
-    def get_consumer_group(self):
-        return self.__consumer_group
+    def get_default_replacement_topic(self):
+        return self.__default_replacement_topic
 
-    def get_replacement_topic(self):
-        return self.__replacement_topic
-
-    def get_replacement_consumer_group(self):
-        return self.__replacement_consumer_group
-
-    def get_commit_log_topic(self):
-        return self.__commit_log_topic
+    def get_default_commit_log_topic(self):
+        return self.__default_commit_log_topic
 
     def get_default_replication_factor(self):
         return 1

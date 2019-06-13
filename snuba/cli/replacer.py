@@ -8,6 +8,10 @@ from snuba.datasets.factory import get_dataset
 
 
 @click.command()
+@click.option('--replacements-topic', default=None,
+              help='Topic to produce replacement messages info.')
+@click.option('--consumer-group', default='snuba-consumers',
+              help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
@@ -27,7 +31,7 @@ from snuba.datasets.factory import get_dataset
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def replacer(bootstrap_server, clickhouse_server, dataset,
+def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
              queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
@@ -41,9 +45,12 @@ def replacer(bootstrap_server, clickhouse_server, dataset,
     dataset = get_dataset(dataset)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
+
+    replacements_topic = replacements_topic if replacements_topic else dataset.get_default_replacement_topic()
+
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',
-        tags=["group:%s" % dataset.get_replacement_consumer_group()]
+        tags=["group:%s" % consumer_group]
     )
 
     client_settings = {
@@ -65,13 +72,13 @@ def replacer(bootstrap_server, clickhouse_server, dataset,
     )
 
     replacer = BatchingKafkaConsumer(
-        dataset.get_replacement_topic(),
+        replacements_topic,
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
-        group_id=dataset.get_replacement_consumer_group(),
+        group_id=consumer_group,
         producer=None,
         commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,

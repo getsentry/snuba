@@ -66,6 +66,7 @@ def run(events_file, clickhouse, dataset, repeat=1,
         clickhouse=clickhouse,
         dataset=dataset,
         producer=None,
+        replacements_topic=None,
     )
 
     messages = get_messages(events_file)

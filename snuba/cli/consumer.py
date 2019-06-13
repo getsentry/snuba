@@ -9,6 +9,14 @@ from snuba.datasets.factory import get_dataset
 
 
 @click.command()
+@click.option('--raw-events-topic', default=None,
+              help='Topic to consume raw events from.')
+@click.option('--replacements-topic', default=None,
+              help='Topic to produce replacement messages info.')
+@click.option('--commit-log-topic', default=None,
+              help='Topic for committed offsets to be written to, triggering post-processing task(s)')
+@click.option('--consumer-group', default='snuba-consumers',
+              help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
@@ -28,7 +36,8 @@ from snuba.datasets.factory import get_dataset
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_batch_time_ms,
+def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+             bootstrap_server, clickhouse_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
 
@@ -43,9 +52,13 @@ def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_b
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset = get_dataset(dataset)
 
+    raw_events_topic = raw_events_topic if raw_events_topic else dataset.get_default_topic()
+    replacements_topic = replacements_topic if replacements_topic else dataset.get_default_replacement_topic()
+    commit_log_topic = commit_log_topic if commit_log_topic else dataset.get_default_commit_log_topic()
+
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-        tags=["group:%s" % dataset.get_consumer_group()]
+        tags=["group:%s" % consumer_group]
     )
 
     clickhouse = ClickhousePool(
@@ -65,20 +78,21 @@ def consumer(bootstrap_server, clickhouse_server, dataset, max_batch_size, max_b
     })
 
     consumer = BatchingKafkaConsumer(
-        dataset.get_topic(),
+        raw_events_topic,
         worker=ConsumerWorker(
             clickhouse,
             dataset,
             producer=producer,
+            replacements_topic=replacements_topic,
             metrics=metrics
         ),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=bootstrap_server,
-        group_id=dataset.get_consumer_group(),
+        group_id=consumer_group,
         producer=producer,
-        commit_log_topic=dataset.get_commit_log_topic(),
+        commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
     )
 

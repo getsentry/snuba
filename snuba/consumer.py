@@ -16,10 +16,11 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dataset, producer, metrics=None):
+    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
         self.clickhouse = clickhouse
         self.__dataset = dataset
         self.producer = producer
+        self.replacements_topic = replacements_topic
         self.metrics = metrics
 
     def process_message(self, message):
@@ -73,7 +74,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
-                    self.__dataset.get_replacement_topic(),
+                    self.replacements_topic,
                     key=six.text_type(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
