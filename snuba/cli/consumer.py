@@ -52,9 +52,9 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset = get_dataset(dataset)
 
-    raw_events_topic = raw_events_topic if raw_events_topic else dataset.get_default_topic()
-    replacements_topic = replacements_topic if replacements_topic else dataset.get_default_replacement_topic()
-    commit_log_topic = commit_log_topic if commit_log_topic else dataset.get_default_commit_log_topic()
+    raw_events_topic = raw_events_topic or dataset.get_default_topic()
+    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
+    commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.consumer',

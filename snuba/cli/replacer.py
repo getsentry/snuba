@@ -46,7 +46,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
-    replacements_topic = replacements_topic if replacements_topic else dataset.get_default_replacement_topic()
+    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',
