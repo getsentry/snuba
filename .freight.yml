@@ -12,3 +12,29 @@ deploy:
       percent: 1.0
       chef_roles:
         - snuba-consumer
+
+# sentry:
+#   organization: sentry
+#   project: snuba
+#   repository: getsentry/snuba
+
+kubernetes:
+  credentials:
+    kind: gcloud
+    project: internal-sentry
+    cluster: primary
+    zone: us-central1-b
+
+steps:
+- kind: Shell
+  command: "bash -c 'curl -sSf https://deploy.getsentry.net/bootstrap | bash -s - -i {ssh_key} start:service=snuba,repo_name=github-getsentry-snuba,registry=cloudbuilder,sha={sha},prev_sha={prev_sha},env={environment},chef_roles=snuba'"
+- kind: KubernetesDeployment
+  selector:
+    label_selector: service=snuba
+  containers:
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: api
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: replacer
