@@ -1,7 +1,20 @@
-from snuba.clickhouse import Array, ColumnSet, DateTime, FixedString, Float, Nested, Nullable, UInt, String
+from snuba.clickhouse import (
+    Array,
+    ColumnSet,
+    DateTime,
+    escape_col,
+    FixedString,
+    Float,
+    Nested,
+    Nullable,
+    String,
+    UInt,
+)
 from snuba.datasets import DataSet
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.processor import MessageProcessor, process_message
+from snuba.settings import TIME_GROUP_COLUMNS
+from snuba.util import NESTED_COL_EXPR_RE, tag_expr, tags_expr, time_expr
 
 
 class EventsDataSet(DataSet):
@@ -199,6 +212,23 @@ class EventsDataSet(DataSet):
 
     def get_required_columns(self):
         return self.__required_columns
+
+    def column_expr(self, column_name, body):
+        if column_name in TIME_GROUP_COLUMNS:
+            return time_expr(column_name, body['granularity'])
+        elif NESTED_COL_EXPR_RE.match(column_name):
+            return  tag_expr(self, column_name)
+        elif column_name in ['tags_key', 'tags_value']:
+            return  tags_expr(self, column_name, body)
+        elif column_name == 'issue':
+            return  'group_id'
+        elif column_name == 'message':
+            # Because of the rename from message->search_message without backfill,
+            # records will have one or the other of these fields.
+            # TODO this can be removed once all data has search_message filled in.
+            return  'coalesce(search_message, message)'
+        else:
+            return  escape_col(column_name)
 
 
 class EventsProcessor(MessageProcessor):

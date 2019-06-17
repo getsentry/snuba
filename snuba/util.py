@@ -150,21 +150,8 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
         return complex_column_expr(dataset, column_name, body)
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
-    elif column_name in settings.TIME_GROUP_COLUMNS:
-        expr = time_expr(column_name, body['granularity'])
-    elif NESTED_COL_EXPR_RE.match(column_name):
-        expr = tag_expr(dataset, column_name)
-    elif column_name in ['tags_key', 'tags_value']:
-        expr = tags_expr(dataset, column_name, body)
-    elif column_name == 'issue':
-        expr = 'group_id'
-    elif column_name == 'message':
-        # Because of the rename from message->search_message without backfill,
-        # records will have one or the other of these fields.
-        # TODO this can be removed once all data has search_message filled in.
-        expr = 'coalesce(search_message, message)'
     else:
-        expr = escape_col(column_name)
+        expr = dataset.column_expr(column_name, body)
 
     if aggregate:
         expr = function_expr(aggregate, expr)
