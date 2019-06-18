@@ -77,6 +77,9 @@ class DataSet(object):
     def get_required_columns(self):
         raise NotImplementedError
 
+    def column_expr(self):
+        raise NotImplementedError
+
     def get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
