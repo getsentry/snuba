@@ -25,9 +25,6 @@ from snuba.clickhouse import escape_col
 logger = logging.getLogger('snuba.util')
 
 
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
-
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
 DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
@@ -212,74 +209,6 @@ def alias_expr(expr, alias, body):
     else:
         alias_cache.append(alias)
         return u'({} AS {})'.format(expr, alias)
-
-
-def tag_expr(dataset, column_name):
-    """
-    Return an expression for the value of a single named tag.
-
-    For tags/contexts, we expand the expression depending on whether the tag is
-    "promoted" to a top level column, or whether we have to look in the tags map.
-    """
-    col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
-
-    # For promoted tags, return the column name.
-    if col in dataset.get_promoted_columns():
-        actual_tag = dataset.get_tag_column_map()[col].get(tag, tag)
-        if actual_tag in dataset.get_promoted_columns()[col]:
-            return string_col(dataset, actual_tag)
-
-    # For the rest, return an expression that looks it up in the nested tags.
-    return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
-        'col': col,
-        'tag': escape_literal(tag)
-    })
-
-
-def tags_expr(dataset, column_name, body):
-    """
-    Return an expression that array-joins on tags to produce an output with one
-    row per tag.
-    """
-    assert column_name in ['tags_key', 'tags_value']
-    col, k_or_v = column_name.split('_', 1)
-    nested_tags_only = state.get_config('nested_tags_only', 1)
-
-    # Generate parallel lists of keys and values to arrayJoin on
-    if nested_tags_only:
-        key_list = '{}.key'.format(col)
-        val_list = '{}.value'.format(col)
-    else:
-        promoted = dataset.get_promoted_columns()[col]
-        col_map = dataset.get_column_tag_map()[col]
-        key_list = u'arrayConcat([{}], {}.key)'.format(
-            u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-            col
-        )
-        val_list = u'arrayConcat([{}], {}.value)'.format(
-            ', '.join(string_col(dataset, p) for p in promoted),
-            col
-        )
-
-    cols_used = all_referenced_columns(body) & set(['tags_key', 'tags_value'])
-    if len(cols_used) == 2:
-        # If we use both tags_key and tags_value in this query, arrayjoin
-        # on (key, value) tag tuples.
-        expr = (u'arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))').format(
-            key_list,
-            val_list
-        )
-
-        # put the all_tags expression in the alias cache so we can use the alias
-        # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
-        # expanding the whole tags expression again.
-        expr = alias_expr(expr, 'all_tags', body)
-        return u'({})[{}]'.format(expr, 1 if k_or_v == 'key' else 2)
-    else:
-        # If we are only ever going to use one of tags_key or tags_value, don't
-        # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
-        # to re-use as we won't need it.
-        return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
 
 def is_condition(cond_or_list):
