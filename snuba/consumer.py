@@ -24,6 +24,9 @@ class ConsumerWorker(AbstractBatchWorker):
         self.metrics = metrics
 
     def process_message(self, message):
+        # TODO: consider moving this inside the processor so we can do a quick
+        # processing of messages we want to filter out without fully parsing the
+        # json.
         value = json.loads(message.value())
 
         processed = self.__dataset.get_processor().process_message(value)
