@@ -38,3 +38,11 @@ steps:
     name: consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: replacer
+- kind: KubernetesCronJob
+  selector:
+    label_selector: service=snuba
+  containers:
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cleanup
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: optimize
