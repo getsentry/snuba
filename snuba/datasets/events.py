@@ -21,7 +21,7 @@ from snuba.util import (
     all_referenced_columns,
     escape_literal,
     string_col,
-    time_expr
+    time_expr,
 )
 
 

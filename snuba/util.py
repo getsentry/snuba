@@ -148,7 +148,7 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     elif column_name in settings.TIME_GROUP_COLUMNS:
-            expr = time_expr(column_name, body['granularity'])
+        expr = time_expr(column_name, body['granularity'])
     else:
         expr = dataset.column_expr(column_name, body)
 
