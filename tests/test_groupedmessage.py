@@ -48,28 +48,18 @@ class TestGroupedMessageProcessor(BaseTest):
 
     PROCESSED = {
         'commit_id': 2380866,
-        'deleted': 0,
         'id': 74,
         'logger': '',
         'level': 40,
         'message': '<module> ZeroDivisionError integer division or modulo by zero client3.py __main__ in <module>',
         'view': '__main__ in <module>',
         'status': 0,
-        'times_seen': 2,
         'last_seen': datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
         'first_seen': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'data': 'eJyT7tuwzAM3PkV2pzJiO34VRSdmvxAgA5dCtViDAGyJEi0AffrSxrZOlSTjrzj3Z1MrOBekCWHBcQaPj4xhXe72WyDv6YU0ouynnDGpMxzrEJSSzCrC+p7Vz8sgNhAvhdOZ/pKOKHd0PC5C9yqtjuPddcPQ9n0w8hPiLRHsWvZGsWD/91xIya2IFxz7vJWfTUlHHnwSCEBUkbTZrxCCcOf2baY/XTU1VJm9cjHL4JriHPYvOnliyP0Jt2q4SpLkz7v6owW9E9rEOvl0PawczxcvkLIWppxg==',
-        'score': 1560926969,
         'project_id': 2,
-        'time_spent_total': 0,
-        'time_spent_count': 0,
-        'resolved_at': None,
         'active_at': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'is_public': 0,
         'platform': 'python',
-        'num_comments': 0,
         'first_release_id': None,
-        'short_id': 20,
     }
 
     def test_messages(self):

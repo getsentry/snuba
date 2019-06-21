@@ -46,9 +46,9 @@ class CdcProcessor(MessageProcessor):
             elif operation == 'delete':
                 message = self._process_delete(xid)
             else:
-                raise
+                raise ValueError("Invalid value for operation in replication log: %s" % value['kind'])
         else:
-            raise
+            raise ValueError("Invalid value for event in replication log: %s" % value['event'])
 
         if message is None:
             return None

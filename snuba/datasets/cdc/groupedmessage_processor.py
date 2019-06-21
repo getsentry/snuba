@@ -19,22 +19,23 @@ class GroupedMessageProcessor(CdcProcessor):
 
     def __build_record(self, xid, columnnames, columnvalues):
         raw_data = dict(zip(columnnames, columnvalues))
-        string_cols = [
-            'logger', 'message', 'view', 'data', 'platform'
-        ]
-        for c in string_cols:
-            raw_data[c] = _unicodify(raw_data[c])
+        output = {
+            'commit_id': xid,
+            'id': raw_data['id'],
+            'logger': _unicodify(raw_data['logger']),
+            'level': raw_data['level'],
+            'message': _unicodify(raw_data['message']),
+            'view': _unicodify(raw_data['view']),
+            'status': raw_data['status'],
+            'last_seen': self.__prepare_date(raw_data['last_seen']),
+            'first_seen': self.__prepare_date(raw_data['first_seen']),
+            'project_id': raw_data['project_id'] or 0,
+            'active_at': self.__prepare_date(raw_data['active_at']),
+            'platform': _unicodify(raw_data['platform']),
+            'first_release_id': raw_data['first_release_id'],
+        }
 
-        raw_data['last_seen'] = self.__prepare_date(raw_data['last_seen'])
-        raw_data['first_seen'] = self.__prepare_date(raw_data['first_seen'])
-        raw_data['resolved_at'] = self.__prepare_date(raw_data['resolved_at']) if raw_data['resolved_at'] else None
-        raw_data['active_at'] = self.__prepare_date(raw_data['active_at'])
-        raw_data['is_public'] = 1 if raw_data['is_public'] else 0
-        raw_data['project_id'] = raw_data['project_id'] or 0
-
-        raw_data['commit_id'] = xid
-        raw_data['deleted'] = 1 if raw_data['status'] == self.DELETED_STATUS else 0
-        return raw_data
+        return output
 
     def _process_insert(self, xid, columnnames, columnvalues):
         return self.__build_record(xid, columnnames, columnvalues)

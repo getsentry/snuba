@@ -13,8 +13,10 @@ class GroupedMessageDataSet(DataSet):
     def __init__(self):
         columns = ColumnSet([
             # columns to maintain the dataset
+            # for now this is actually the 32 bit commit_id, but we are trying to
+            # get the 64 bit one from postgres, thus we will create the column as
+            # 64 bit.
             ('commit_id', UInt(64)),
-            ('deleted', UInt(8)),
             # PG columns
             ('id', UInt(64)),
             ('logger', String()),
@@ -22,29 +24,29 @@ class GroupedMessageDataSet(DataSet):
             ('message', String()),
             ('view', Nullable(String())),
             ('status', UInt(32)),
-            ('times_seen', UInt(64)),
+            #('times_seen', UInt(64)),
             ('last_seen', DateTime()),
             ('first_seen', DateTime()),
-            ('data', Nullable(String())),
-            ('score', UInt(32)),
+            #('data', Nullable(String())),
+            #('score', UInt(32)),
             ('project_id', UInt(64)),
-            ('time_spent_total', UInt(32)),
-            ('time_spent_count', UInt(32)),
-            ('resolved_at', Nullable(DateTime())),
+            #('time_spent_total', UInt(32)),
+            #('time_spent_count', UInt(32)),
+            #('resolved_at', Nullable(DateTime())),
             ('active_at', Nullable(DateTime())),
-            ('is_public', Nullable(UInt(8))),
+            #('is_public', Nullable(UInt(8))),
             ('platform', Nullable(String())),
-            ('num_comments', Nullable(UInt(32))),
+            #('num_comments', Nullable(UInt(32))),
             ('first_release_id', Nullable(UInt(64))),
-            ('short_id', Nullable(UInt(64))),
+            #('short_id', Nullable(UInt(64))),
         ])
 
         schema = ReplacingMergeTreeSchema(
             columns=columns,
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
-            order_by='(project_id, toStartOfDay(first_seen), id)',
-            partition_by='toMonday(last_seen)',
+            order_by='(project_id, id)',
+            partition_by=None,
             version_column='commit_id',
             sample_expr='id',
         )
