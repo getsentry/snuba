@@ -44,7 +44,7 @@ class CdcProcessor(MessageProcessor):
                 message = self._process_update(
                     xid, value['oldkeys'], value['columnnames'], value['columnvalues'])
             elif operation == 'delete':
-                message = self._process_delete(xid)
+                message = self._process_delete(xid, value['oldkeys'])
             else:
                 raise ValueError("Invalid value for operation in replication log: %s" % value['kind'])
         else:

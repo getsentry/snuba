@@ -41,4 +41,12 @@ class GroupedMessageProcessor(CdcProcessor):
         return self.__build_record(xid, columnnames, columnvalues)
 
     def _process_update(self, xid, key, columnnames, columnvalues):
+        new_id = columnvalues[columnnames.index('id')]
+        key_names = key['keynames']
+        key_values = key['keyvalues']
+        old_id = key_values[key_names.index('id')]
+        # We cannot support a change in the identity of the record
+        # clickhouse will use the identity column to find rows to merge.
+        # if we change it, merging won't work.
+        assert old_id == new_id, 'Changing Primary Key is not supported.'
         return self.__build_record(xid, columnnames, columnvalues)
