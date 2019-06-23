@@ -179,6 +179,12 @@ class TestReplacer(BaseTest):
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
 
+            def partition(self):
+                return 1
+
+            def offset(self):
+                return 42
+
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])
 
@@ -204,6 +210,12 @@ class TestReplacer(BaseTest):
                     'previous_group_ids': [1],
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
+
+            def partition(self):
+                return 1
+
+            def offset(self):
+                return 42
 
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])
@@ -232,6 +244,12 @@ class TestReplacer(BaseTest):
                     'hashes': ['a' * 32],
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
+
+            def partition(self):
+                return 1
+
+            def offset(self):
+                return 42
 
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])
@@ -268,6 +286,12 @@ class TestReplacer(BaseTest):
                     'tag': 'browser.name',
                     'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 }))
+
+            def partition(self):
+                return 1
+
+            def offset(self):
+                return 42
 
         processed = test_worker.process_message(FakeMessage())
         test_worker.flush_batch([processed])

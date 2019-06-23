@@ -11,16 +11,14 @@ class GroupedMessageProcessor(CdcProcessor):
             pg_table='sentry_groupedmessage',
         )
 
-    DELETED_STATUS = 3
-
     def __prepare_date(self, dt):
         return datetime.strptime(
             "%s00" % dt, '%Y-%m-%d %H:%M:%S%z')
 
-    def __build_record(self, xid, columnnames, columnvalues):
+    def __build_record(self, offset, columnnames, columnvalues):
         raw_data = dict(zip(columnnames, columnvalues))
         output = {
-            'commit_id': xid,
+            'offset': offset,
             'id': raw_data['id'],
             'logger': _unicodify(raw_data['logger']),
             'level': raw_data['level'],
@@ -37,10 +35,10 @@ class GroupedMessageProcessor(CdcProcessor):
 
         return output
 
-    def _process_insert(self, xid, columnnames, columnvalues):
-        return self.__build_record(xid, columnnames, columnvalues)
+    def _process_insert(self, offset, columnnames, columnvalues):
+        return self.__build_record(offset, columnnames, columnvalues)
 
-    def _process_update(self, xid, key, columnnames, columnvalues):
+    def _process_update(self, offset, key, columnnames, columnvalues):
         new_id = columnvalues[columnnames.index('id')]
         key_names = key['keynames']
         key_values = key['keyvalues']
@@ -49,4 +47,4 @@ class GroupedMessageProcessor(CdcProcessor):
         # clickhouse will use the identity column to find rows to merge.
         # if we change it, merging won't work.
         assert old_id == new_id, 'Changing Primary Key is not supported.'
-        return self.__build_record(xid, columnnames, columnvalues)
+        return self.__build_record(offset, columnnames, columnvalues)

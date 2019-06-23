@@ -122,6 +122,12 @@ class TestConsumer(BaseTest):
             def value(self):
                 return json.dumps((0, 'insert', event))
 
+            def partition(self):
+                return 1
+
+            def offset(self):
+                return 42
+
         assert test_worker.process_message(FakeMessage()) is None
 
     def test_produce_replacement_messages(self):

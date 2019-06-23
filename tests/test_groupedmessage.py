@@ -3,6 +3,7 @@ import simplejson as json
 from datetime import datetime
 
 from base import BaseTest
+from snuba.consumer import KAFKA_MESSAGE_OFFSET_KEY, KAFKA_PARTITION_KEY
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
 
 
@@ -47,7 +48,7 @@ class TestGroupedMessageProcessor(BaseTest):
     )
 
     PROCESSED = {
-        'commit_id': 2380866,
+        'offset': 42,
         'id': 74,
         'logger': '',
         'level': 40,
@@ -65,18 +66,23 @@ class TestGroupedMessageProcessor(BaseTest):
     def test_messages(self):
         processor = GroupedMessageProcessor()
 
+        metadata = {
+            KAFKA_MESSAGE_OFFSET_KEY: 42,
+            KAFKA_PARTITION_KEY: 1,
+        }
+
         begin_msg = json.loads(self.BEGIN_MSG)
-        ret = processor.process_message(begin_msg)
+        ret = processor.process_message(begin_msg, metadata)
         assert ret is None
 
         commit_msg = json.loads(self.COMMIT_MSG)
-        ret = processor.process_message(commit_msg)
+        ret = processor.process_message(commit_msg, metadata)
         assert ret is None
 
         insert_msg = json.loads(self.INSERT_MSG)
-        ret = processor.process_message(insert_msg)
+        ret = processor.process_message(insert_msg, metadata)
         assert ret[1] == self.PROCESSED
 
         update_msg = json.loads(self.UPDATE_MSG)
-        ret = processor.process_message(update_msg)
+        ret = processor.process_message(update_msg, metadata)
         assert ret[1] == self.PROCESSED
