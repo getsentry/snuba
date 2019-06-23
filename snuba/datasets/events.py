@@ -202,7 +202,17 @@ class EventsDataSet(DataSet):
         self.__required_columns = required_columns
 
     def default_conditions(self, body):
+        date_align = state.get_configs([
+            ('date_align_seconds', 1),
+        ])[0]
+
+        to_date = util.parse_datetime(body['to_date'], date_align)
+        from_date = util.parse_datetime(body['from_date'], date_align)
+        assert from_date <= to_date
+
         return [
+            ('timestamp', '>=', from_date),
+            ('timestamp', '<', to_date),
             ('deleted', '=', 0),
         ]
 

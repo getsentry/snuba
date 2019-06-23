@@ -184,10 +184,6 @@ def parse_and_run_query(validated_body, timer):
         from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body.get('conditions', [])
-    where_conditions.extend([
-        ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
-    ])
     where_conditions.extend(dataset.default_conditions(body))
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
@@ -380,7 +376,6 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import process_message
         from snuba.writer import write_rows
 
         # TODO we need to make this work for multiple datasets
@@ -390,7 +385,8 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            _, processed = dataset.get_processor().process_message(event)
+            _, processed = dataset.get_processor().process_message(
+                event, {})
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 
