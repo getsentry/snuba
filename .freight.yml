@@ -1,18 +1,3 @@
-deploy:
-  services:
-    - name: snuba-api
-      healthcheck: sleep 30 && curl -I '127.0.0.1:11218/health?thorough=true'
-      chef_roles:
-        - snuba-api
-    - name: snuba-consumer
-      percent: 1.0
-      chef_roles:
-        - snuba-consumer
-    - name: snuba-replacer
-      percent: 1.0
-      chef_roles:
-        - snuba-consumer
-
 # sentry:
 #   organization: sentry
 #   project: snuba
@@ -26,8 +11,6 @@ kubernetes:
     zone: us-central1-b
 
 steps:
-- kind: Shell
-  command: "bash -c 'curl -sSf https://deploy.getsentry.net/bootstrap | bash -s - -i {ssh_key} start:service=snuba,repo_name=github-getsentry-snuba,registry=cloudbuilder,sha={sha},prev_sha={prev_sha},env={environment},chef_roles=snuba'"
 - kind: KubernetesDeployment
   selector:
     label_selector: service=snuba
