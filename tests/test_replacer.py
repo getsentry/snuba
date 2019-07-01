@@ -4,13 +4,13 @@ from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from base import BaseTest, FakeKafkaMessage
+from base import BaseEventsTest, FakeKafkaMessage
 
 from snuba import replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
-class TestReplacer(BaseTest):
+class TestReplacer(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestReplacer, self).setup_method(test_method)
 

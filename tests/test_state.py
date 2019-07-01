@@ -1,4 +1,4 @@
-from base import BaseTest
+from base import BaseEventsTest
 from functools import partial
 from mock import patch
 import random
@@ -10,7 +10,7 @@ import uuid
 from snuba import state
 
 
-class TestState(BaseTest):
+class TestState(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
         from snuba.api import application

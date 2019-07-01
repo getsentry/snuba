@@ -99,6 +99,11 @@ class FakeWorker(AbstractBatchWorker):
 class BaseTest(object):
     def setup_method(self, test_method):
         assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
+
+
+class BaseEventsTest(BaseTest):
+    def setup_method(self, test_method):
+        super(BaseEventsTest, self).setup_method(test_method)
         from fixtures import raw_event
 
         timestamp = datetime.utcnow()

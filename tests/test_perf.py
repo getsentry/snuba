@@ -1,10 +1,10 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from snuba.datasets.factory import get_dataset
 from snuba import perf
 
 
-class TestPerf(BaseTest):
+class TestPerf(BaseEventsTest):
     def test(self):
         assert self.clickhouse.execute("SELECT COUNT() FROM %s" % self.table)[0][0] == 0
 

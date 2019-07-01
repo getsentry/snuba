@@ -1,10 +1,10 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from snuba.clickhouse import ColumnSet
 from snuba.processor import process_message
 
 
-class TestWriter(BaseTest):
+class TestWriter(BaseEventsTest):
     def test(self):
         self.write_raw_events(self.event)
 

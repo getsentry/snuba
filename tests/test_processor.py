@@ -4,13 +4,13 @@ import six
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
-from base import BaseTest
+from base import BaseEventsTest
 
 from snuba import processor, settings
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, process_message
 
 
-class TestProcessor(BaseTest):
+class TestProcessor(BaseEventsTest):
     def test_simple(self):
         _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
 
