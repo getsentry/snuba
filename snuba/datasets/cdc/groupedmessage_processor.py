@@ -1,4 +1,3 @@
-
 from dateutil.parser import parse as dateutil_parse
 from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 
@@ -15,6 +14,7 @@ class GroupedMessageProcessor(CdcProcessor):
         output = {
             'offset': offset,
             'id': raw_data['id'],
+            'record_deleted': 0,
             'status': raw_data['status'],
             'last_seen': dateutil_parse(raw_data['last_seen']),
             'first_seen': dateutil_parse(raw_data['first_seen']),
@@ -26,6 +26,21 @@ class GroupedMessageProcessor(CdcProcessor):
 
     def _process_insert(self, offset, columnnames, columnvalues):
         return self.__build_record(offset, columnnames, columnvalues)
+
+    def _process_delete(self, offset, key):
+        key_names = key['keynames']
+        key_values = key['keyvalues']
+        id = key_values[key_names.index('id')]
+        return {
+            'offset': offset,
+            'id': id,
+            'record_deleted': 1,
+            'status': None,
+            'last_seen': None,
+            'first_seen': None,
+            'active_at': None,
+            'first_release_id': None,
+        }
 
     def _process_update(self, offset, key, columnnames, columnvalues):
         new_id = columnvalues[columnnames.index('id')]

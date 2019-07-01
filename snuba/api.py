@@ -12,6 +12,7 @@ import simplejson as json
 
 from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
+from snuba.consumer import KafkaMessageMetadata
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
@@ -386,7 +387,9 @@ if application.debug or application.testing:
         rows = []
         for event in body:
             _, processed = dataset.get_processor().process_message(
-                event, {})
+                event,
+                KafkaMessageMetadata(message_offset=None, partition=None),
+            )
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 

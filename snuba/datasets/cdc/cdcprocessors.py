@@ -1,6 +1,7 @@
 from snuba import processor
-from snuba.consumer import KAFKA_MESSAGE_OFFSET_KEY
 from snuba.processor import MessageProcessor
+
+KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
 
 
 class CdcProcessor(MessageProcessor):
@@ -25,10 +26,11 @@ class CdcProcessor(MessageProcessor):
 
     def process_message(self, value, metadata):
         assert isinstance(value, dict)
-        assert isinstance(metadata, dict)
 
-        offset = metadata[KAFKA_MESSAGE_OFFSET_KEY]
+        partition = metadata.partition
+        assert partition == KAFKA_ONLY_PARTITION, 'CDC can only work with single partition topics for consistency'
 
+        offset = metadata.message_offset
         event = value['event']
         if event == 'begin':
             message = self._process_begin(offset)

@@ -3,7 +3,7 @@ import simplejson as json
 from datetime import datetime
 
 from base import BaseTest
-from snuba.consumer import KAFKA_MESSAGE_OFFSET_KEY, KAFKA_PARTITION_KEY
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
 
 
@@ -29,6 +29,12 @@ class TestGroupedMessageProcessor(BaseTest):
         '"oldkeys":{"keynames":["id"],"keytypes":["bigint"],"keyvalues":[74]}}'
     )
 
+    DELETE_MSG = (
+        '{"event":"change","xid":2380866,"kind":"delete","schema":"public",'
+        '"table": "sentry_groupedmessage",'
+        '"oldkeys":{"keynames":["id"],"keytypes":["bigint"],"keyvalues":[74]}}'
+    )
+
     INSERT_MSG = (
         '{"event":"change","xid":2380866,"kind":"insert","schema":"public",'
         '"table":"sentry_groupedmessage","columnnames":["id","logger","level","message",'
@@ -50,6 +56,7 @@ class TestGroupedMessageProcessor(BaseTest):
     PROCESSED = {
         'offset': 42,
         'id': 74,
+        'record_deleted': 0,
         'status': 0,
         'last_seen': datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
         'first_seen': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
@@ -57,13 +64,24 @@ class TestGroupedMessageProcessor(BaseTest):
         'first_release_id': None,
     }
 
+    DELETED = {
+        'offset': 42,
+        'id': 74,
+        'record_deleted': 1,
+        'status': None,
+        'last_seen': None,
+        'first_seen': None,
+        'active_at': None,
+        'first_release_id': None,
+    }
+
     def test_messages(self):
         processor = GroupedMessageProcessor()
 
-        metadata = {
-            KAFKA_MESSAGE_OFFSET_KEY: 42,
-            KAFKA_PARTITION_KEY: 1,
-        }
+        metadata = KafkaMessageMetadata(
+            message_offset=42,
+            partition=0,
+        )
 
         begin_msg = json.loads(self.BEGIN_MSG)
         ret = processor.process_message(begin_msg, metadata)
@@ -80,3 +98,7 @@ class TestGroupedMessageProcessor(BaseTest):
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
         assert ret[1] == self.PROCESSED
+
+        delete_msg = json.loads(self.DELETE_MSG)
+        ret = processor.process_message(delete_msg, metadata)
+        assert ret[1] == self.DELETED
