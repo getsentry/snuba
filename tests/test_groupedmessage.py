@@ -50,16 +50,10 @@ class TestGroupedMessageProcessor(BaseTest):
     PROCESSED = {
         'offset': 42,
         'id': 74,
-        'logger': '',
-        'level': 40,
-        'message': '<module> ZeroDivisionError integer division or modulo by zero client3.py __main__ in <module>',
-        'view': '__main__ in <module>',
         'status': 0,
         'last_seen': datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
         'first_seen': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'project_id': 2,
         'active_at': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'platform': 'python',
         'first_release_id': None,
     }
 

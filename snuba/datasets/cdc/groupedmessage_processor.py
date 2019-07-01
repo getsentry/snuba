@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from snuba.processor import _unicodify
 from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 
 
@@ -20,16 +19,10 @@ class GroupedMessageProcessor(CdcProcessor):
         output = {
             'offset': offset,
             'id': raw_data['id'],
-            'logger': _unicodify(raw_data['logger']),
-            'level': raw_data['level'],
-            'message': _unicodify(raw_data['message']),
-            'view': _unicodify(raw_data['view']),
             'status': raw_data['status'],
             'last_seen': self.__prepare_date(raw_data['last_seen']),
             'first_seen': self.__prepare_date(raw_data['first_seen']),
-            'project_id': raw_data['project_id'] or 0,
             'active_at': self.__prepare_date(raw_data['active_at']),
-            'platform': _unicodify(raw_data['platform']),
             'first_release_id': raw_data['first_release_id'],
         }
 
