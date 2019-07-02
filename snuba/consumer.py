@@ -13,7 +13,7 @@ logger = logging.getLogger('snuba.consumer')
 
 KafkaMessageMetadata = collections.namedtuple(
     'KafkaMessageMetadata',
-    'message_offset partition'
+    'offset partition'
 )
 
 
@@ -34,7 +34,7 @@ class ConsumerWorker(AbstractBatchWorker):
         # processing of messages we want to filter out without fully parsing the
         # json.
         value = json.loads(message.value())
-        metadata = KafkaMessageMetadata(message_offset=message.offset(), partition=message.partition())
+        metadata = KafkaMessageMetadata(offset=message.offset(), partition=message.partition())
         processed = self.__dataset.get_processor().process_message(value, metadata)
         if processed is None:
             return None

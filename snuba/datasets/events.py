@@ -324,5 +324,5 @@ class EventsProcessor(MessageProcessor):
     def __init__(self, promoted_tag_columns):
         self.__promoted_tag_columns = promoted_tag_columns
 
-    def process_message(self, value, metadata):
+    def process_message(self, value, metadata=None):
         return process_message(self.__promoted_tag_columns, value)

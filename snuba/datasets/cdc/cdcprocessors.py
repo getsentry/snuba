@@ -30,7 +30,7 @@ class CdcProcessor(MessageProcessor):
         partition = metadata.partition
         assert partition == KAFKA_ONLY_PARTITION, 'CDC can only work with single partition topics for consistency'
 
-        offset = metadata.message_offset
+        offset = metadata.offset
         event = value['event']
         if event == 'begin':
             message = self._process_begin(offset)

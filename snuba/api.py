@@ -386,10 +386,7 @@ if application.debug or application.testing:
 
         rows = []
         for event in body:
-            _, processed = dataset.get_processor().process_message(
-                event,
-                KafkaMessageMetadata(message_offset=None, partition=None),
-            )
+            _, processed = dataset.get_processor().process_message(event)
             row = dataset.row_from_processed_message(processed)
             rows.append(row)
 

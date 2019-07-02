@@ -79,7 +79,7 @@ class TestGroupedMessageProcessor(BaseTest):
         processor = GroupedMessageProcessor()
 
         metadata = KafkaMessageMetadata(
-            message_offset=42,
+            offset=42,
             partition=0,
         )
 

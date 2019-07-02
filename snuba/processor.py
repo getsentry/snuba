@@ -27,7 +27,7 @@ class MessageProcessor(object):
     event stream into a row or statement to be inserted or executed against clickhouse.
     """
 
-    def process_message(self, value, metadata):
+    def process_message(self, value, metadata=None):
         raise NotImplementedError
 
 
