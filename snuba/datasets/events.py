@@ -1,5 +1,5 @@
 import re
-from snuba import state
+from snuba import state, util
 from snuba.clickhouse import (
     Array,
     ColumnSet,
@@ -26,7 +26,7 @@ from snuba.util import (
 
 
 # A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
+NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
 class EventsDataSet(DataSet):
@@ -239,17 +239,16 @@ class EventsDataSet(DataSet):
         if NESTED_COL_EXPR_RE.match(column_name):
             return self._tag_expr(column_name)
         elif column_name in ['tags_key', 'tags_value']:
-            return  self._tags_expr(column_name, body)
+            return self._tags_expr(column_name, body)
         elif column_name == 'issue':
-            return  'group_id'
+            return 'group_id'
         elif column_name == 'message':
             # Because of the rename from message->search_message without backfill,
             # records will have one or the other of these fields.
             # TODO this can be removed once all data has search_message filled in.
-            return  'coalesce(search_message, message)'
+            return 'coalesce(search_message, message)'
         else:
-            return  escape_col(column_name)
-
+            return escape_col(column_name)
 
     def _tag_expr(self, column_name):
         """
@@ -271,7 +270,6 @@ class EventsDataSet(DataSet):
             'col': col,
             'tag': escape_literal(tag)
         })
-
 
     def _tags_expr(self, column_name, body):
         """
@@ -317,7 +315,6 @@ class EventsDataSet(DataSet):
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
-
 
 
 class EventsProcessor(MessageProcessor):
