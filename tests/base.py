@@ -97,24 +97,26 @@ class FakeWorker(AbstractBatchWorker):
 
 
 class BaseTest(object):
-    def setup_method(self, test_method, dataset_name='events'):
+    def setup_method(self, test_method, dataset_name=None):
         assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
 
         self.database = 'default'
+        self.dataset_name = dataset_name
 
-        self.dataset = get_dataset(dataset_name)
-        self.table = self.dataset.get_schema().get_table_name()
-        self.clickhouse = ClickhousePool()
+        if self.dataset_name:
+            self.dataset = get_dataset(self.dataset_name)
+            self.table = self.dataset.get_schema().get_table_name()
+            self.clickhouse = ClickhousePool()
 
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-        self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
+            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+            self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
 
-        redis_client.flushdb()
+            redis_client.flushdb()
 
     def teardown_method(self, test_method):
-        self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-
-        redis_client.flushdb()
+        if self.dataset_name:
+            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+            redis_client.flushdb()
 
 
 class BaseEventsTest(BaseTest):
