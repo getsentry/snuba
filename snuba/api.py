@@ -12,7 +12,6 @@ import simplejson as json
 
 from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
-from snuba.consumer import KafkaMessageMetadata
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
@@ -185,6 +184,10 @@ def parse_and_run_query(validated_body, timer):
         from_date = to_date - timedelta(days=max_days)
 
     where_conditions = body.get('conditions', [])
+    where_conditions.extend([
+        ('timestamp', '>=', from_date),
+        ('timestamp', '<', to_date),
+    ])
     where_conditions.extend(dataset.default_conditions(body))
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
