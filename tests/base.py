@@ -97,25 +97,12 @@ class FakeWorker(AbstractBatchWorker):
 
 
 class BaseTest(object):
-    def setup_method(self, test_method):
+    def setup_method(self, test_method, dataset_name='events'):
         assert settings.TESTING, "settings.TESTING is False, try `SNUBA_SETTINGS=test` or `make test`"
-
-
-class BaseEventsTest(BaseTest):
-    def setup_method(self, test_method):
-        super(BaseEventsTest, self).setup_method(test_method)
-        from fixtures import raw_event
-
-        timestamp = datetime.utcnow()
-        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
-        self.event = self.wrap_raw_event(raw_event)
 
         self.database = 'default'
 
-        # These tests are currently coupled pretty hard to the events dataset,
-        # but eventually the base test should support multiple datasets.
-        self.dataset = get_dataset('events')
+        self.dataset = get_dataset(dataset_name)
         self.table = self.dataset.get_schema().get_table_name()
         self.clickhouse = ClickhousePool()
 
@@ -128,6 +115,17 @@ class BaseEventsTest(BaseTest):
         self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
 
         redis_client.flushdb()
+
+
+class BaseEventsTest(BaseTest):
+    def setup_method(self, test_method):
+        super(BaseEventsTest, self).setup_method(test_method, 'events')
+        from fixtures import raw_event
+
+        timestamp = datetime.utcnow()
+        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
+        self.event = self.wrap_raw_event(raw_event)
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
