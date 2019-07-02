@@ -1,5 +1,5 @@
 import re
-from snuba import state, util
+from snuba import state
 from snuba.clickhouse import (
     Array,
     ColumnSet,
@@ -15,13 +15,11 @@ from snuba.clickhouse import (
 from snuba.datasets import DataSet
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.processor import MessageProcessor, process_message
-from snuba.settings import TIME_GROUP_COLUMNS
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
     escape_literal,
     string_col,
-    time_expr,
 )
 
 
