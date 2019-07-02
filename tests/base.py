@@ -16,6 +16,31 @@ from snuba.processor import process_message
 from snuba.writer import write_rows
 
 
+def wrap_raw_event(event):
+    "Wrap a raw event like the Sentry codebase does before sending to Kafka."
+
+    unique = "%s:%s" % (str(event['project']), event['id'])
+    primary_hash = md5(unique.encode('utf-8')).hexdigest()
+
+    return {
+        'event_id': event['id'],
+        'group_id': int(primary_hash[:16], 16),
+        'primary_hash': primary_hash,
+        'project_id': event['project'],
+        'message': event['message'],
+        'platform': event['platform'],
+        'datetime': event['datetime'],
+        'data': event
+    }
+
+def get_event():
+    from fixtures import raw_event
+    timestamp = datetime.utcnow()
+    raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
+    return wrap_raw_event(raw_event)
+
+
 class FakeKafkaProducer(object):
     def __init__(self):
         self.messages = []
@@ -122,12 +147,7 @@ class BaseTest(object):
 class BaseEventsTest(BaseTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
-        from fixtures import raw_event
-
-        timestamp = datetime.utcnow()
-        raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
-        self.event = self.wrap_raw_event(raw_event)
+        self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
         event = {
@@ -140,23 +160,6 @@ class BaseEventsTest(BaseTest):
         event['retention_days'] = retention_days
         return event
 
-    def wrap_raw_event(self, event):
-        "Wrap a raw event like the Sentry codebase does before sending to Kafka."
-
-        unique = "%s:%s" % (str(event['project']), event['id'])
-        primary_hash = md5(unique.encode('utf-8')).hexdigest()
-
-        return {
-            'event_id': event['id'],
-            'group_id': int(primary_hash[:16], 16),
-            'primary_hash': primary_hash,
-            'project_id': event['project'],
-            'message': event['message'],
-            'platform': event['platform'],
-            'datetime': event['datetime'],
-            'data': event
-        }
-
     def write_raw_events(self, events):
         if not isinstance(events, (list, tuple)):
             events = [events]
@@ -164,7 +167,7 @@ class BaseEventsTest(BaseTest):
         out = []
         for event in events:
             if 'primary_hash' not in event:
-                event = self.wrap_raw_event(event)
+                event = wrap_raw_event(event)
             _, processed = process_message(self.dataset.get_promoted_tag_columns(), event)
             out.append(processed)
 
