@@ -15,18 +15,16 @@ from snuba.clickhouse import (
 from snuba.datasets import DataSet
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.processor import MessageProcessor, process_message
-from snuba.settings import TIME_GROUP_COLUMNS
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
     escape_literal,
     string_col,
-    time_expr,
 )
 
 
 # A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile('^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
+NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
 class EventsDataSet(DataSet):
@@ -229,17 +227,16 @@ class EventsDataSet(DataSet):
         if NESTED_COL_EXPR_RE.match(column_name):
             return self._tag_expr(column_name)
         elif column_name in ['tags_key', 'tags_value']:
-            return  self._tags_expr(column_name, body)
+            return self._tags_expr(column_name, body)
         elif column_name == 'issue':
-            return  'group_id'
+            return 'group_id'
         elif column_name == 'message':
             # Because of the rename from message->search_message without backfill,
             # records will have one or the other of these fields.
             # TODO this can be removed once all data has search_message filled in.
-            return  'coalesce(search_message, message)'
+            return 'coalesce(search_message, message)'
         else:
-            return  escape_col(column_name)
-
+            return escape_col(column_name)
 
     def _tag_expr(self, column_name):
         """
@@ -261,7 +258,6 @@ class EventsDataSet(DataSet):
             'col': col,
             'tag': escape_literal(tag)
         })
-
 
     def _tags_expr(self, column_name, body):
         """
@@ -309,11 +305,9 @@ class EventsDataSet(DataSet):
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
 
-
 class EventsProcessor(MessageProcessor):
     def __init__(self, promoted_tag_columns):
         self.__promoted_tag_columns = promoted_tag_columns
 
-    def process_message(self, value):
-        return process_message(self.__promoted_tag_columns,
-            value)
+    def process_message(self, value, metadata=None):
+        return process_message(self.__promoted_tag_columns, value)

@@ -21,7 +21,7 @@ from snuba.datasets.factory import get_dataset
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')
-@click.option('--dataset', default='events', type=click.Choice(['events']),
+@click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
               help='Max number of messages to batch in memory before writing to Kafka.')

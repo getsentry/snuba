@@ -380,7 +380,6 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import process_message
         from snuba.writer import write_rows
 
         # TODO we need to make this work for multiple datasets

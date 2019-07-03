@@ -1,3 +1,4 @@
+import collections
 import logging
 import simplejson as json
 import six
@@ -9,6 +10,11 @@ from .writer import write_rows
 
 
 logger = logging.getLogger('snuba.consumer')
+
+KafkaMessageMetadata = collections.namedtuple(
+    'KafkaMessageMetadata',
+    'offset partition'
+)
 
 
 class InvalidActionType(Exception):
@@ -24,9 +30,12 @@ class ConsumerWorker(AbstractBatchWorker):
         self.metrics = metrics
 
     def process_message(self, message):
+        # TODO: consider moving this inside the processor so we can do a quick
+        # processing of messages we want to filter out without fully parsing the
+        # json.
         value = json.loads(message.value())
-
-        processed = self.__dataset.get_processor().process_message(value)
+        metadata = KafkaMessageMetadata(offset=message.offset(), partition=message.partition())
+        processed = self.__dataset.get_processor().process_message(value, metadata)
         if processed is None:
             return None
 

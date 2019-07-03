@@ -72,13 +72,15 @@ class ReplacingMergeTreeSchema(TableSchema):
         self.__sample_expr = sample_expr
 
     def _get_local_engine(self):
+        partition_by_clause = "PARTITION BY %s" % \
+            self.__partition_by if self.__partition_by else ''
         return """
             ReplacingMergeTree(%(version_column)s)
-            PARTITION BY %(partition_by)s
+             %(partition_by_clause)s
             ORDER BY %(order_by)s
             SAMPLE BY %(sample_expr)s ;""" % {
             'order_by': self.__order_by,
-            'partition_by': self.__partition_by,
+            'partition_by_clause': partition_by_clause,
             'version_column': self.__version_column,
             'sample_expr': self.__sample_expr,
         }
