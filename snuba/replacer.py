@@ -9,7 +9,7 @@ from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
 from snuba.clickhouse import escape_col
-from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
+from snuba.datasets.events_processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
 

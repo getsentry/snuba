@@ -5,7 +5,6 @@ import six
 
 from batching_kafka_consumer import AbstractBatchWorker
 
-from . import processor
 from .writer import write_rows
 
 
@@ -33,9 +32,10 @@ class ConsumerWorker(AbstractBatchWorker):
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
+        processor = self.__dataset.get_processor()
         value = json.loads(message.value())
         metadata = KafkaMessageMetadata(offset=message.offset(), partition=message.partition())
-        processed = self.__dataset.get_processor().process_message(value, metadata)
+        processed = processor.process_message(value, metadata)
         if processed is None:
             return None
 
@@ -61,6 +61,7 @@ class ConsumerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
+        processor = self.__dataset.get_processor()
         inserts = []
         replacements = []
 

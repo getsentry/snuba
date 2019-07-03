@@ -1,4 +1,3 @@
-from snuba import processor
 from snuba.processor import MessageProcessor
 
 KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
@@ -58,4 +57,4 @@ class CdcProcessor(MessageProcessor):
         if message is None:
             return None
 
-        return (processor.INSERT, message)
+        return (self.INSERT, message)

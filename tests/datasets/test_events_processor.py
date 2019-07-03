@@ -4,55 +4,52 @@ import six
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
-from base import BaseTest, get_event
+from base import BaseEventsTest
 
-from snuba import processor, settings
-from snuba.processor import InvalidMessageType, InvalidMessageVersion, process_message
+from snuba import settings
+from snuba.datasets.events_processor import InvalidMessageType, InvalidMessageVersion
 
 
-class TestProcessor(BaseTest):
-    def setup_method(self, test_method):
-        super(TestProcessor, self).setup_method(test_method, 'events')
-        self.event = get_event()
-
+class TestEventsProcessor(BaseEventsTest):
     def test_simple(self):
-        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
+        _, processed = self.dataset.get_processor().process_message(self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
     def test_simple_version_0(self):
-        _, processed = process_message(self.dataset.get_promoted_tag_columns(), (0, 'insert', self.event))
+        _, processed = self.dataset.get_processor().process_message((0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
             assert processed[field] == self.event[field]
 
     def test_simple_version_1(self):
-        assert process_message(self.dataset.get_promoted_tag_columns(), (0, 'insert', self.event)) == process_message(self.dataset.get_promoted_tag_columns(), (1, 'insert', self.event, {}))
+        processor = self.dataset.get_processor()
+        assert processor.process_message((0, 'insert', self.event)) == processor.process_message((1, 'insert', self.event, {}))
 
     def test_invalid_type_version_0(self):
         with pytest.raises(InvalidMessageType):
-            process_message(self.dataset.get_promoted_tag_columns(), (0, 'invalid', self.event))
+            self.dataset.get_processor().process_message((0, 'invalid', self.event))
 
     def test_invalid_version(self):
         with pytest.raises(InvalidMessageVersion):
-            process_message(self.dataset.get_promoted_tag_columns(), (2 ** 32 - 1, 'insert', self.event))
+            self.dataset.get_processor().process_message((2 ** 32 - 1, 'insert', self.event))
 
     def test_invalid_format(self):
         with pytest.raises(InvalidMessageVersion):
-            process_message(self.dataset.get_promoted_tag_columns(), (-1, 'insert', self.event))
+            self.dataset.get_processor().process_message((-1, 'insert', self.event))
 
     def test_unexpected_obj(self):
         self.event['message'] = {'what': 'why is this in the message'}
 
-        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
+        _, processed = self.dataset.get_processor().process_message(self.event)
 
         assert processed['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
 
-        _, processed = process_message(self.dataset.get_promoted_tag_columns(), self.event)
+        _, processed = self.dataset.get_processor().process_message(self.event)
 
         assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
@@ -66,7 +63,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_required(output, event)
+        self.dataset.get_processor()._extract_required(output, event)
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
@@ -97,7 +94,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_common(output, event, data)
+        self.dataset.get_processor()._extract_common(output, event, data)
         assert output == {
             'message': u'the message',
             'platform': u'the_platform',
@@ -125,7 +122,7 @@ class TestProcessor(BaseTest):
             'received': int(calendar.timegm(now.timetuple())),
         }
         output = {}
-        processor.extract_common(output, event, data)
+        self.dataset.get_processor()._extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
 
         # with optional short message
@@ -141,69 +138,77 @@ class TestProcessor(BaseTest):
             'message': 'the short message',
         }
         output = {}
-        processor.extract_common(output, event, data)
+        self.dataset.get_processor()._extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
         assert output['message'] == 'the short message'
 
     def test_v1_delete_groups_skipped(self):
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'delete_groups', {})) is None
+        assert self.dataset.get_processor().process_message((1, 'delete_groups', {})) is None
 
     def test_v1_merge_skipped(self):
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'merge', {})) is None
+        assert self.dataset.get_processor().process_message((1, 'merge', {})) is None
 
     def test_v1_unmerge_skipped(self):
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), (1, 'unmerge', {})) is None
+        assert self.dataset.get_processor().process_message((1, 'unmerge', {})) is None
 
     def test_v2_invalid_type(self):
-        with pytest.raises(processor.InvalidMessageType):
-            assert processor.process_message(self.dataset.get_promoted_tag_columns(), (2, '__invalid__', {})) == 1
+        with pytest.raises(InvalidMessageType):
+            assert self.dataset.get_processor().process_message((2, '__invalid__', {})) == 1
 
     def test_v2_start_delete_groups(self):
         project_id = 1
         message = (2, 'start_delete_groups', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_delete_groups(self):
         project_id = 1
         message = (2, 'end_delete_groups', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message( message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_merge(self):
         project_id = 1
         message = (2, 'start_merge', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_merge(self):
         project_id = 1
         message = (2, 'end_merge', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_unmerge(self):
         project_id = 1
         message = (2, 'start_unmerge', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_unmerge(self):
         project_id = 1
         message = (2, 'end_unmerge', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_start_delete_tag(self):
         project_id = 1
         message = (2, 'start_delete_tag', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_v2_end_delete_tag(self):
         project_id = 1
         message = (2, 'end_delete_tag', {'project_id': project_id})
-        assert processor.process_message(self.dataset.get_promoted_tag_columns(), message) == \
+        processor = self.dataset.get_processor()
+        assert processor.process_message(message) == \
             (processor.REPLACE, (six.text_type(project_id), message))
 
     def test_extract_sdk(self):
@@ -214,7 +219,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_sdk(output, sdk)
+        self.dataset.get_processor()._extract_sdk(output, sdk)
 
         assert output == {
             'sdk_name': u'sentry-java',
@@ -240,7 +245,7 @@ class TestProcessor(BaseTest):
         tags = orig_tags.copy()
         output = {}
 
-        processor.extract_promoted_tags(self.dataset.get_promoted_tag_columns(), output, tags)
+        self.dataset.get_processor()._extract_promoted_tags(output, tags)
 
         assert output == {
             'sentry:dist': 'the_dist',
@@ -257,7 +262,7 @@ class TestProcessor(BaseTest):
         assert tags == orig_tags
 
         extra_output = {}
-        processor.extract_extra_tags(extra_output, tags)
+        self.dataset.get_processor()._extract_extra_tags(extra_output, tags)
 
         valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
         assert extra_output == {
@@ -272,7 +277,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_promoted_tags(self.dataset.get_promoted_tag_columns(), output, tags)
+        self.dataset.get_processor()._extract_promoted_tags(output, tags)
 
         assert output['environment'] == u''
 
@@ -337,7 +342,7 @@ class TestProcessor(BaseTest):
         tags = orig_tags.copy()
         output = {}
 
-        processor.extract_promoted_contexts(output, contexts, tags)
+        self.dataset.get_processor()._extract_promoted_contexts(output, contexts, tags)
 
         assert output == {
             'app_device': u'the_app_device_uuid',
@@ -383,7 +388,7 @@ class TestProcessor(BaseTest):
         assert tags == orig_tags
 
         extra_output = {}
-        processor.extract_extra_contexts(extra_output, contexts)
+        self.dataset.get_processor()._extract_extra_contexts(extra_output, contexts)
 
         assert extra_output == {
             'contexts.key': ['extra.int', 'extra.float', 'extra.str'],
@@ -399,7 +404,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_user(output, user)
+        self.dataset.get_processor()._extract_user(output, user)
 
         assert output == {'email': u'user_email',
                           'ip_address': u'user_ip_address',
@@ -414,7 +419,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_geo(output, geo)
+        self.dataset.get_processor()._extract_geo(output, geo)
 
         assert output == {
             'geo_country_code': 'US',
@@ -432,7 +437,7 @@ class TestProcessor(BaseTest):
         }
         output = {}
 
-        processor.extract_http(output, http)
+        self.dataset.get_processor()._extract_http(output, http)
 
         assert output == {'http_method': u'GET', 'http_referer': u'https://sentry.io'}
 
@@ -503,7 +508,7 @@ class TestProcessor(BaseTest):
              'value': '/ by zero'}]
         output = {}
 
-        processor.extract_stacktraces(output, stacks)
+        self.dataset.get_processor()._extract_stacktraces(output, stacks)
 
         assert output == {
             'exception_frames.abs_path': [u'Thread.java',
@@ -583,4 +588,4 @@ class TestProcessor(BaseTest):
         event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         event['data']['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
 
-        processor.process_insert(self.dataset.get_promoted_tag_columns(), event)
+        self.dataset.get_processor()._process_insert(event)
