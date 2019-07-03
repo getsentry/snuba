@@ -1,11 +1,11 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from datetime import datetime, timedelta
 
 from snuba import optimize
 
 
-class TestOptimize(BaseTest):
+class TestOptimize(BaseEventsTest):
     def test(self):
         # no data, 0 partitions to optimize
         parts = optimize.get_partitions_to_optimize(self.clickhouse, self.database, self.table)

@@ -15,10 +15,10 @@ import uuid
 from snuba import processor, settings, state, datasets
 from snuba.datasets.factory import get_dataset
 
-from base import BaseTest
+from base import BaseEventsTest
 
 
-class TestApi(BaseTest):
+class TestApi(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestApi, self).setup_method(test_method)
         from snuba.api import application

@@ -6,13 +6,24 @@ import time
 from datadog import statsd
 from six.moves import range
 
-from base import BaseTest, FakeBatchingKafkaConsumer, FakeWorker, FakeKafkaMessage, FakeKafkaProducer
+from base import (
+    BaseTest,
+    FakeBatchingKafkaConsumer,
+    FakeKafkaMessage,
+    FakeKafkaProducer,
+    FakeWorker,
+    get_event
+)
 
 from snuba import processor
 from snuba.consumer import ConsumerWorker
 
 
 class TestConsumer(BaseTest):
+    def setup_method(self, test_method):
+        super(TestConsumer, self).setup_method(test_method, 'events')
+        self.event = get_event()
+
     def test_batch_size(self):
         consumer = FakeBatchingKafkaConsumer(
             'topic',

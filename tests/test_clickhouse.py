@@ -1,4 +1,4 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from clickhouse_driver import Client, errors
 from mock import patch, call, Mock
@@ -10,7 +10,7 @@ from snuba.clickhouse import (
 )
 
 
-class TestClickhouse(BaseTest):
+class TestClickhouse(BaseEventsTest):
     def test_escape_col(self):
         assert escape_col(None) is None
         assert escape_col('') == ''

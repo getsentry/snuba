@@ -1,4 +1,4 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from snuba.util import (
     column_expr,
@@ -6,7 +6,7 @@ from snuba.util import (
 )
 
 
-class TestEventsDataSet(BaseTest):
+class TestEventsDataSet(BaseEventsTest):
 
     def test_column_expr(self):
         body = {

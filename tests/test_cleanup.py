@@ -1,11 +1,11 @@
-from base import BaseTest
+from base import BaseEventsTest
 
 from datetime import datetime, timedelta
 
 from snuba import cleanup
 
 
-class TestCleanup(BaseTest):
+class TestCleanup(BaseEventsTest):
     def test(self):
         def to_monday(d):
             return d - timedelta(days=d.weekday())
