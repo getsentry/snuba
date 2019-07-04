@@ -4,6 +4,7 @@ DATASETS_IMPL = {}
 
 DATASET_NAMES = {
     'events',
+    'groupedmessage',
 }
 
 
@@ -17,6 +18,7 @@ def get_dataset(name):
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataSet
     dataset_mappings = {
         'events': EventsDataSet,
+        'groupedmessage': GroupedMessageDataSet,
     }
 
     dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
