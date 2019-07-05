@@ -32,12 +32,12 @@ from snuba.datasets.schema import local_dataset_mode
               default=False, help='Whether or not to profile writing.')
 @click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
               help='Clickhouse server to write to.')
-@click.option('--clickhouse-native-port', default=settings.CLICKHOUSE_NATIVE_PORT, type=int,
+@click.option('--clickhouse-port', default=settings.CLICKHOUSE_PORT, type=int,
               help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events']),
               help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, profile_process, profile_write, clickhouse_host, clickhouse_native_port, dataset, log_level):
+def perf(events_file, repeat, profile_process, profile_write, clickhouse_host, clickhouse_port, dataset, log_level):
     from snuba.clickhouse import ClickhousePool
     from snuba.perf import run, logger
 
@@ -50,7 +50,7 @@ def perf(events_file, repeat, profile_process, profile_write, clickhouse_host, c
 
     clickhouse = ClickhousePool(
         host=clickhouse_host,
-        port=clickhouse_native_port,
+        port=clickhouse_port,
     )
 
     run(

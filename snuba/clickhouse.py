@@ -33,7 +33,7 @@ def escape_col(col):
 class ClickhousePool(object):
     def __init__(self,
                  host=settings.CLICKHOUSE_HOST,
-                 port=settings.CLICKHOUSE_NATIVE_PORT,
+                 port=settings.CLICKHOUSE_PORT,
                  connect_timeout=1,
                  send_receive_timeout=300,
                  max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,

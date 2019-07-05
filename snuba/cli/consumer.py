@@ -21,7 +21,7 @@ from snuba.datasets.factory import get_dataset
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
               help='Clickhouse server to write to.')
-@click.option('--clickhouse-native-port', default=settings.CLICKHOUSE_NATIVE_PORT, type=int,
+@click.option('--clickhouse-port', default=settings.CLICKHOUSE_PORT, type=int,
               help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
@@ -39,7 +39,7 @@ from snuba.datasets.factory import get_dataset
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
-             bootstrap_server, clickhouse_host, clickhouse_native_port, dataset, max_batch_size, max_batch_time_ms,
+             bootstrap_server, clickhouse_host, clickhouse_port, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
 
@@ -65,7 +65,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
 
     clickhouse = ClickhousePool(
         host=clickhouse_host,
-        port=clickhouse_native_port,
+        port=clickhouse_port,
         client_settings={
             'load_balancing': 'in_order',
             'insert_distributed_sync': True,

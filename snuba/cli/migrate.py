@@ -22,7 +22,7 @@ def migrate(log_level):
 
     clickhouse = Client(
         host=settings.CLICKHOUSE_HOST,
-        port=settings.CLICKHOUSE_NATIVE_PORT,
+        port=settings.CLICKHOUSE_PORT,
     )
 
     run(clickhouse, dataset)
