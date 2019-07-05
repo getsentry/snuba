@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from base import BaseEventsTest
 
 from snuba import settings
-from snuba.datasets.events_processor import InvalidMessageType, InvalidMessageVersion
+from snuba.processor import InvalidMessageType, InvalidMessageVersion
 
 
 class TestEventsProcessor(BaseEventsTest):

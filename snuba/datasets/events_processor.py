@@ -12,18 +12,12 @@ from snuba.processor import (
     _floatify,
     _hashify,
     _unicodify,
+    InvalidMessageType,
+    InvalidMessageVersion,
     MessageProcessor,
 )
 
 logger = logging.getLogger('snuba.processor')
-
-
-class InvalidMessageType(Exception):
-    pass
-
-
-class InvalidMessageVersion(Exception):
-    pass
 
 
 class EventsProcessor(MessageProcessor):

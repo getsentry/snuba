@@ -23,6 +23,14 @@ class MessageProcessor(object):
         raise NotImplementedError
 
 
+class InvalidMessageType(Exception):
+    pass
+
+
+class InvalidMessageVersion(Exception):
+    pass
+
+
 def _as_dict_safe(value):
     if value is None:
         return {}
