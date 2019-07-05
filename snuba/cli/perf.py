@@ -30,12 +30,14 @@ from snuba.datasets.schema import local_dataset_mode
               default=False, help='Whether or not to profile processing.')
 @click.option('--profile-write/--no-profile-write',
               default=False, help='Whether or not to profile writing.')
-@click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
-              help='Clickhouse server to run perf against.')
+@click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
+              help='Clickhouse server to write to.')
+@click.option('--clickhouse-native-port', default=settings.CLICKHOUSE_NATIVE_PORT, type=int,
+              help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events']),
               help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, profile_process, profile_write, clickhouse_server, dataset, log_level):
+def perf(events_file, repeat, profile_process, profile_write, clickhouse_host, clickhouse_native_port, dataset, log_level):
     from snuba.clickhouse import ClickhousePool
     from snuba.perf import run, logger
 
@@ -46,7 +48,11 @@ def perf(events_file, repeat, profile_process, profile_write, clickhouse_server,
         logger.error("The perf tool is only intended for local dataset environment.")
         sys.exit(1)
 
-    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
+    clickhouse = ClickhousePool(
+        host=clickhouse_host,
+        port=clickhouse_native_port,
+    )
+
     run(
         events_file, clickhouse, dataset,
         repeat=repeat, profile_process=profile_process, profile_write=profile_write
