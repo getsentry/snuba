@@ -44,7 +44,7 @@ class EventsProcessor(MessageProcessor):
             # deprecated unwrapped event message == insert
             action_type = self.INSERT
             try:
-                processed = self._process_insert(message)
+                processed = self.process_insert(message)
             except EventTooOld:
                 return None
         elif isinstance(message, (list, tuple)) and len(message) >= 2:
@@ -59,7 +59,7 @@ class EventsProcessor(MessageProcessor):
                 if type_ == 'insert':
                     action_type = self.INSERT
                     try:
-                        processed = self._process_insert(event)
+                        processed = self.process_insert(event)
                     except EventTooOld:
                         return None
                 else:
@@ -93,45 +93,45 @@ class EventsProcessor(MessageProcessor):
 
         return (action_type, processed)
 
-    def _process_insert(self, message):
+    def process_insert(self, message):
         processed = {'deleted': 0}
-        self._extract_required(processed, message)
+        self.extract_required(processed, message)
 
         data = message.get('data', {})
         # HACK: https://sentry.io/sentry/snuba/issues/802102397/
         if not data:
             logger.error('No data for event: %s', message, exc_info=True)
             return None
-        self._extract_common(processed, message, data)
+        self.extract_common(processed, message, data)
 
         sdk = data.get('sdk', None) or {}
-        self._extract_sdk(processed, sdk)
+        self.extract_sdk(processed, sdk)
 
         tags = _as_dict_safe(data.get('tags', None))
-        self._extract_promoted_tags(processed, tags)
+        self.extract_promoted_tags(processed, tags)
 
         contexts = data.get('contexts', None) or {}
-        self._extract_promoted_contexts(processed, contexts, tags)
+        self.extract_promoted_contexts(processed, contexts, tags)
 
         user = data.get('user', data.get('sentry.interfaces.User', None)) or {}
-        self._extract_user(processed, user)
+        self.extract_user(processed, user)
 
         geo = user.get('geo', None) or {}
-        self._extract_geo(processed, geo)
+        self.extract_geo(processed, geo)
 
         http = data.get('request', data.get('sentry.interfaces.Http', None)) or {}
-        self._extract_http(processed, http)
+        self.extract_http(processed, http)
 
-        self._extract_extra_contexts(processed, contexts)
-        self._extract_extra_tags(processed, tags)
+        self.extract_extra_contexts(processed, contexts)
+        self.extract_extra_tags(processed, tags)
 
         exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
         stacks = exception.get('values', None) or []
-        self._extract_stacktraces(processed, stacks)
+        self.extract_stacktraces(processed, stacks)
 
         return processed
 
-    def _extract_required(self, output, message):
+    def extract_required(self, output, message):
         output['event_id'] = message['event_id']
         project_id = message['project_id']
         output['project_id'] = project_id
@@ -155,7 +155,7 @@ class EventsProcessor(MessageProcessor):
         output['timestamp'] = timestamp
         output['retention_days'] = retention_days
 
-    def _extract_common(self, output, message, data):
+    def extract_common(self, output, message, data):
         # Properties we get from the top level of the message payload
         output['platform'] = _unicodify(message['platform'])
         output['primary_hash'] = _hashify(message['primary_hash'])
@@ -208,7 +208,7 @@ class EventsProcessor(MessageProcessor):
         output['modules.name'] = module_names
         output['modules.version'] = module_versions
 
-    def _extract_sdk(self, output, sdk):
+    def extract_sdk(self, output, sdk):
         output['sdk_name'] = _unicodify(sdk.get('name', None))
         output['sdk_version'] = _unicodify(sdk.get('version', None))
 
@@ -219,12 +219,12 @@ class EventsProcessor(MessageProcessor):
                 sdk_integrations.append(i)
         output['sdk_integrations'] = sdk_integrations
 
-    def _extract_promoted_tags(self, output, tags):
+    def extract_promoted_tags(self, output, tags):
         output.update({col.name: _unicodify(tags.get(col.name, None))
             for col in self.__promoted_tag_columns
         })
 
-    def _extract_promoted_contexts(self, output, contexts, tags):
+    def extract_promoted_contexts(self, output, contexts, tags):
         app_ctx = contexts.get('app', None) or {}
         output['app_device'] = _unicodify(tags.get('app.device', None))
         app_ctx.pop('device_app_hash', None)  # tag=app.device
@@ -268,7 +268,7 @@ class EventsProcessor(MessageProcessor):
         output['device_online'] = _boolify(device_ctx.pop('online', None))
         output['device_charging'] = _boolify(device_ctx.pop('charging', None))
 
-    def _extract_extra_contexts(self, output, contexts):
+    def extract_extra_contexts(self, output, contexts):
         context_keys = []
         context_values = []
         valid_types = (int, float) + six.string_types
@@ -285,7 +285,7 @@ class EventsProcessor(MessageProcessor):
         output['contexts.key'] = context_keys
         output['contexts.value'] = context_values
 
-    def _extract_extra_tags(self, output, tags):
+    def extract_extra_tags(self, output, tags):
         tag_keys = []
         tag_values = []
         for tag_key, tag_value in sorted(tags.items()):
@@ -297,23 +297,23 @@ class EventsProcessor(MessageProcessor):
         output['tags.key'] = tag_keys
         output['tags.value'] = tag_values
 
-    def _extract_user(self, output, user):
+    def extract_user(self, output, user):
         output['user_id'] = _unicodify(user.get('id', None))
         output['username'] = _unicodify(user.get('username', None))
         output['email'] = _unicodify(user.get('email', None))
         output['ip_address'] = _unicodify(user.get('ip_address', None))
 
-    def _extract_geo(self, output, geo):
+    def extract_geo(self, output, geo):
         output['geo_country_code'] = _unicodify(geo.get('country_code', None))
         output['geo_region'] = _unicodify(geo.get('region', None))
         output['geo_city'] = _unicodify(geo.get('city', None))
 
-    def _extract_http(self, output, http):
+    def extract_http(self, output, http):
         output['http_method'] = _unicodify(http.get('method', None))
         http_headers = _as_dict_safe(http.get('headers', None))
         output['http_referer'] = _unicodify(http_headers.get('Referer', None))
 
-    def _extract_stacktraces(self, output, stacks):
+    def extract_stacktraces(self, output, stacks):
         stack_types = []
         stack_values = []
         stack_mechanism_types = []

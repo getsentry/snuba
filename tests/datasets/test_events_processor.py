@@ -63,7 +63,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_required(output, event)
+        self.dataset.get_processor().extract_required(output, event)
         assert output == {
             'event_id': '11111111111111111111111111111111',
             'project_id': 100,
@@ -94,7 +94,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_common(output, event, data)
+        self.dataset.get_processor().extract_common(output, event, data)
         assert output == {
             'message': u'the message',
             'platform': u'the_platform',
@@ -122,7 +122,7 @@ class TestEventsProcessor(BaseEventsTest):
             'received': int(calendar.timegm(now.timetuple())),
         }
         output = {}
-        self.dataset.get_processor()._extract_common(output, event, data)
+        self.dataset.get_processor().extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
 
         # with optional short message
@@ -138,7 +138,7 @@ class TestEventsProcessor(BaseEventsTest):
             'message': 'the short message',
         }
         output = {}
-        self.dataset.get_processor()._extract_common(output, event, data)
+        self.dataset.get_processor().extract_common(output, event, data)
         assert output['search_message'] == 'the search message'
         assert output['message'] == 'the short message'
 
@@ -219,7 +219,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_sdk(output, sdk)
+        self.dataset.get_processor().extract_sdk(output, sdk)
 
         assert output == {
             'sdk_name': u'sentry-java',
@@ -245,7 +245,7 @@ class TestEventsProcessor(BaseEventsTest):
         tags = orig_tags.copy()
         output = {}
 
-        self.dataset.get_processor()._extract_promoted_tags(output, tags)
+        self.dataset.get_processor().extract_promoted_tags(output, tags)
 
         assert output == {
             'sentry:dist': 'the_dist',
@@ -262,7 +262,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        self.dataset.get_processor()._extract_extra_tags(extra_output, tags)
+        self.dataset.get_processor().extract_extra_tags(extra_output, tags)
 
         valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
         assert extra_output == {
@@ -277,7 +277,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_promoted_tags(output, tags)
+        self.dataset.get_processor().extract_promoted_tags(output, tags)
 
         assert output['environment'] == u''
 
@@ -342,7 +342,7 @@ class TestEventsProcessor(BaseEventsTest):
         tags = orig_tags.copy()
         output = {}
 
-        self.dataset.get_processor()._extract_promoted_contexts(output, contexts, tags)
+        self.dataset.get_processor().extract_promoted_contexts(output, contexts, tags)
 
         assert output == {
             'app_device': u'the_app_device_uuid',
@@ -388,7 +388,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        self.dataset.get_processor()._extract_extra_contexts(extra_output, contexts)
+        self.dataset.get_processor().extract_extra_contexts(extra_output, contexts)
 
         assert extra_output == {
             'contexts.key': ['extra.int', 'extra.float', 'extra.str'],
@@ -404,7 +404,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_user(output, user)
+        self.dataset.get_processor().extract_user(output, user)
 
         assert output == {'email': u'user_email',
                           'ip_address': u'user_ip_address',
@@ -419,7 +419,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_geo(output, geo)
+        self.dataset.get_processor().extract_geo(output, geo)
 
         assert output == {
             'geo_country_code': 'US',
@@ -437,7 +437,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor()._extract_http(output, http)
+        self.dataset.get_processor().extract_http(output, http)
 
         assert output == {'http_method': u'GET', 'http_referer': u'https://sentry.io'}
 
@@ -508,7 +508,7 @@ class TestEventsProcessor(BaseEventsTest):
              'value': '/ by zero'}]
         output = {}
 
-        self.dataset.get_processor()._extract_stacktraces(output, stacks)
+        self.dataset.get_processor().extract_stacktraces(output, stacks)
 
         assert output == {
             'exception_frames.abs_path': [u'Thread.java',
@@ -588,4 +588,4 @@ class TestEventsProcessor(BaseEventsTest):
         event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         event['data']['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
 
-        self.dataset.get_processor()._process_insert(event)
+        self.dataset.get_processor().process_insert(event)
