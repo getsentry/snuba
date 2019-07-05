@@ -1,5 +1,4 @@
 import logging
-import sys
 
 import click
 
@@ -28,11 +27,6 @@ def cleanup(clickhouse_host, clickhouse_port, dry_run, database, dataset, log_le
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
-    if not clickhouse_server:
-        logger.error("Must provide at least one Clickhouse server.")
-        sys.exit(1)
-
-    for server in clickhouse_server:
-        clickhouse = ClickhousePool(clickhouse_host, clickhouse_port)
-        num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)
-        logger.info("Dropped %s partitions on %s" % (num_dropped, server))
+    clickhouse = ClickhousePool(clickhouse_host, clickhouse_port)
+    num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)
+    logger.info("Dropped %s partitions on %s" % (num_dropped, clickhouse_host))

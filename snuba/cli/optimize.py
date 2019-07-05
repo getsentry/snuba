@@ -1,5 +1,4 @@
 import logging
-import sys
 
 import click
 
@@ -29,12 +28,7 @@ def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_l
     dataset = get_dataset(dataset)
     table = dataset.get_schema().get_local_table_name()
 
-    if not clickhouse_server:
-        logger.error("Must provide at least one Clickhouse server.")
-        sys.exit(1)
-
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    for server in clickhouse_server:
-        clickhouse = ClickhousePool(clickhouse_host, clickhouse_port, send_receive_timeout=timeout)
-        num_dropped = run_optimize(clickhouse, database, table, before=today)
-        logger.info("Optimized %s partitions on %s" % (num_dropped, server))
+    clickhouse = ClickhousePool(clickhouse_host, clickhouse_port, send_receive_timeout=timeout)
+    num_dropped = run_optimize(clickhouse, database, table, before=today)
+    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
