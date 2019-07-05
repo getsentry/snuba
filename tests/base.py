@@ -191,5 +191,4 @@ class BaseEventsTest(BaseTest):
             self.clickhouse,
             dataset=self.dataset,
             rows=rows,
-            types_check=True
         )
