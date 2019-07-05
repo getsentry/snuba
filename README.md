@@ -57,9 +57,6 @@ Settings are found in `settings.py`
 ## Tests
 
     pip install -e .
-
-    export CLICKHOUSE_HOST=127.0.0.1:9000
-
     make test
 
 ## Testing Against Sentry
