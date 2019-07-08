@@ -22,12 +22,7 @@ def devserver(bootstrap, workers):
             sys.exit(returncode)
 
     daemons = [
-        ('api', [
-            'uwsgi', '--master', '--manage-script-name',
-            '--wsgi-file', 'snuba/api.py',
-            '--http', '0.0.0.0:1218',
-            '--http-keepalive', '--need-app', '--die-on-term',
-        ]),
+        ('api', ['snuba', 'api']),
     ]
 
     if not workers:
