@@ -328,9 +328,9 @@ def parse_and_run_query(validated_body, timer):
         validated_body, sql, clickhouse_ro, timer, stats
     )
 
+
 # Special internal endpoints that compute global aggregate data that we want to
 # use internally.
-
 
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
