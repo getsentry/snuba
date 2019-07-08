@@ -42,9 +42,6 @@ class ConsumerWorker(AbstractBatchWorker):
         action_type, processed_message = processed
 
         if action_type == processor.INSERT:
-            processed_message['offset'] = message.offset()
-            processed_message['partition'] = message.partition()
-
             result = self.__dataset.row_from_processed_message(processed_message)
         elif action_type == processor.REPLACE:
             result = processed_message
