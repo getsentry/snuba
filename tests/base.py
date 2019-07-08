@@ -12,7 +12,6 @@ from snuba.datasets.factory import get_dataset
 from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
-from snuba.processor import process_message
 from snuba.writer import write_rows
 
 
@@ -168,7 +167,7 @@ class BaseEventsTest(BaseTest):
         for event in events:
             if 'primary_hash' not in event:
                 event = wrap_raw_event(event)
-            _, processed = process_message(self.dataset.get_promoted_tag_columns(), event)
+            _, processed = self.dataset.get_processor().process_message(event)
             out.append(processed)
 
         return self.write_processed_events(out)

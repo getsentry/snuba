@@ -13,8 +13,8 @@ from snuba.clickhouse import (
     UInt,
 )
 from snuba.datasets import DataSet
+from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
-from snuba.processor import MessageProcessor, process_message
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -303,11 +303,3 @@ class EventsDataSet(DataSet):
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
-
-
-class EventsProcessor(MessageProcessor):
-    def __init__(self, promoted_tag_columns):
-        self.__promoted_tag_columns = promoted_tag_columns
-
-    def process_message(self, value, metadata=None):
-        return process_message(self.__promoted_tag_columns, value)
