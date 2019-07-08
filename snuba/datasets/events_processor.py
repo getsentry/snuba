@@ -38,7 +38,7 @@ class EventsProcessor(MessageProcessor):
             # deprecated unwrapped event message == insert
             action_type = self.INSERT
             try:
-                processed = self.process_insert(message)
+                processed = self.process_insert(message, metadata)
             except EventTooOld:
                 return None
         elif isinstance(message, (list, tuple)) and len(message) >= 2:
@@ -53,7 +53,7 @@ class EventsProcessor(MessageProcessor):
                 if type_ == 'insert':
                     action_type = self.INSERT
                     try:
-                        processed = self.process_insert(event)
+                        processed = self.process_insert(event, metadata)
                     except EventTooOld:
                         return None
                 else:
@@ -87,7 +87,7 @@ class EventsProcessor(MessageProcessor):
 
         return (action_type, processed)
 
-    def process_insert(self, message):
+    def process_insert(self, message, metadata=None):
         processed = {'deleted': 0}
         self.extract_required(processed, message)
 
@@ -122,6 +122,10 @@ class EventsProcessor(MessageProcessor):
         exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
         stacks = exception.get('values', None) or []
         self.extract_stacktraces(processed, stacks)
+
+        if metadata is not None:
+            processed['offset'] = metadata.offset
+            processed['partition'] = metadata.partition
 
         return processed
 
