@@ -222,7 +222,7 @@ class EventsDataSet(DataSet):
     def get_metadata_columns(self):
         return self.__metadata_columns
 
-    def _get_promoted_tag_columns(self):
+    def get_promoted_tag_columns(self):
         return self.__promoted_tag_columns
 
     def _get_promoted_context_tag_columns(self):
@@ -238,7 +238,7 @@ class EventsDataSet(DataSet):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
         return {
-            'tags': frozenset(col.flattened for col in (self._get_promoted_tag_columns() + self._get_promoted_context_tag_columns())),
+            'tags': frozenset(col.flattened for col in (self.get_promoted_tag_columns() + self._get_promoted_context_tag_columns())),
             'contexts': frozenset(col.flattened for col in self._get_promoted_context_columns()),
         }
 
@@ -252,7 +252,7 @@ class EventsDataSet(DataSet):
             'contexts': {},
         }
 
-    def _get_tag_column_map(self):
+    def get_tag_column_map(self):
         # And a reverse map from the tags the client expects to the database columns
         return {
             col: dict(map(reversed, trans.items())) for col, trans in self._get_column_tag_map().items()
@@ -277,7 +277,7 @@ class EventsDataSet(DataSet):
 
         # For promoted tags, return the column name.
         if col in self._get_promoted_columns():
-            actual_tag = self._get_tag_column_map()[col].get(tag, tag)
+            actual_tag = self.get_tag_column_map()[col].get(tag, tag)
             if actual_tag in self._get_promoted_columns()[col]:
                 return string_col(self, actual_tag)
 

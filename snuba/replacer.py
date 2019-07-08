@@ -288,7 +288,7 @@ def process_delete_tag(message, dataset):
 
     assert isinstance(tag, six.string_types)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = dataset._get_tag_column_map()['tags'].get(tag, tag)
+    tag_column_name = dataset.get_tag_column_map()['tags'].get(tag, tag)
     is_promoted = tag in dataset.get_promoted_tags()['tags']
 
     where = """\
