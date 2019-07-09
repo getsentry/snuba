@@ -8,7 +8,7 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import escape_col
+from snuba.clickhouse import DATETIME_FORMAT, escape_col
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_string
@@ -16,8 +16,6 @@ from snuba.util import escape_string
 
 logger = logging.getLogger('snuba.replacer')
 
-
-CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -179,7 +177,7 @@ def process_delete_groups(message, required_columns):
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
@@ -231,7 +229,7 @@ def process_merge(message, all_column_names):
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
@@ -273,7 +271,7 @@ def process_unmerge(message, all_column_names):
         'previous_group_id': message['previous_group_id'],
         'project_id': message['project_id'],
         'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
@@ -331,7 +329,7 @@ def process_delete_tag(message, dataset):
         'project_id': message['project_id'],
         'tag_str': escape_string(tag),
         'tag_column': escape_col(tag_column_name),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     count_query_template = """\
