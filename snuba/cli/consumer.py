@@ -50,7 +50,8 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
-    dataset = get_dataset(dataset)
+    dataset_name = dataset
+    dataset = get_dataset(dataset_name)
 
     raw_events_topic = raw_events_topic or dataset.get_default_topic()
     replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
@@ -58,7 +59,10 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-        tags=["group:%s" % consumer_group]
+        tags=[
+            "group:%s" % consumer_group,
+            "dataset:%s" % dataset_name,
+        ]
     )
 
     clickhouse = ClickhousePool(
