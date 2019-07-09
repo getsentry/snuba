@@ -72,7 +72,8 @@ class TestEventsDataSet(BaseEventsTest):
         assert column_expr(self.dataset, tuplify(['concat', ['a', '\':\'', 'b']]), body.copy()) == 'concat(a, \':\', b)'
 
         group_id_body = body.copy()
-        assert column_expr(self.dataset, 'issue', group_id_body) == '(group_id AS issue)'
+        assert column_expr(self.dataset, 'issue', group_id_body) == '(nullIf(group_id, 0) AS issue)'
+        assert column_expr(self.dataset, 'group_id', group_id_body) == '(nullIf(group_id, 0) AS group_id)'
 
         # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where a number was expected.
         assert column_expr(self.dataset, 'tags[environment]', body.copy(), alias='unique_envs', aggregate='uniq') == "(ifNull(uniq(environment), 0) AS unique_envs)"

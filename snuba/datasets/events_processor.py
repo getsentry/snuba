@@ -133,7 +133,7 @@ class EventsProcessor(MessageProcessor):
         output['event_id'] = message['event_id']
         project_id = message['project_id']
         output['project_id'] = project_id
-        output['group_id'] = message['group_id']
+        output['group_id'] = message['group_id'] or 0
 
         # This is not ideal but it should never happen anyways
         timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))

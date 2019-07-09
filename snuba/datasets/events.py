@@ -228,8 +228,8 @@ class EventsDataSet(DataSet):
             return self._tag_expr(column_name)
         elif column_name in ['tags_key', 'tags_value']:
             return self._tags_expr(column_name, body)
-        elif column_name == 'issue':
-            return 'group_id'
+        elif column_name == 'issue' or column_name == 'group_id':
+            return 'nullIf(group_id, 0)'
         elif column_name == 'message':
             # Because of the rename from message->search_message without backfill,
             # records will have one or the other of these fields.

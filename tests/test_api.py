@@ -2,7 +2,6 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-from dateutil.tz import tz
 from functools import partial
 import pytest
 import pytz
@@ -12,7 +11,7 @@ import six
 import time
 import uuid
 
-from snuba import processor, settings, state, datasets
+from snuba import processor, settings, state
 from snuba.datasets.factory import get_dataset
 
 from base import BaseEventsTest
@@ -258,7 +257,7 @@ class TestApi(BaseEventsTest):
             'groupby': 'issue',
             'conditions': [[], ['issue', 'IN', self.group_ids[:5]]]
         })).data)
-        assert set([d['issue'] for d in result['data']]) == set([self.group_ids[0], self.group_ids[4]])
+        assert set([d['issue'] for d in result['data']]) == set([self.group_ids[4]])
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -340,6 +339,34 @@ class TestApi(BaseEventsTest):
         })).data)
         assert len(result['data']) == 0
 
+        # Test null group_id
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': ['group_id'],
+            'groupby': ['group_id'],
+            'aggregations': [['count()', '', 'count']],
+            'debug': True,
+            'conditions': [
+                ['group_id', 'IS NULL', None],
+            ],
+        })).data)
+        assert len(result['data']) == 1
+        res = result['data'][0]
+        assert res['group_id'] is None
+        assert res['count'] > 0
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'dataset': 'events',
+            'project': [1, 2, 3],
+            'selected_columns': [["isNull", ["group_id"], "null_group_id"]],
+            'groupby': ['group_id'],
+            'debug': True,
+            'conditions': [
+                ['group_id', 'IS NULL', None],
+            ],
+        })).data)
+        assert result['data'][0]['null_group_id'] == 1
+
     def test_escaping(self):
         # Escape single quotes so we don't get Bobby Tables'd
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -409,7 +436,6 @@ class TestApi(BaseEventsTest):
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
         assert sorted(result['data'][0]['aggregate']) == [
-            self.group_ids[0],
             self.group_ids[3],
             self.group_ids[6],
             self.group_ids[9],
@@ -421,7 +447,7 @@ class TestApi(BaseEventsTest):
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
-        assert result['data'][0]['aggregate'] == 4
+        assert result['data'][0]['aggregate'] == 3
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
@@ -430,7 +456,7 @@ class TestApi(BaseEventsTest):
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
         assert len(result['data']) == 3  # time buckets
-        assert all(d['aggregate'] == 4 for d in result['data'])
+        assert all(d['aggregate'] == 3 for d in result['data'])
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
@@ -836,7 +862,7 @@ class TestApi(BaseEventsTest):
 
     def test_split_query(self):
         state.set_config('use_split', 1)
-        state.set_config('split_step', 3600) # first batch will be 1 hour
+        state.set_config('split_step', 3600)  # first batch will be 1 hour
         try:
 
             # Test getting the last 150 events, should happen in 2 batches
@@ -937,7 +963,7 @@ class TestApi(BaseEventsTest):
     def test_message_is_search_message(self):
         # all messages contain 'message'
         response = json.loads(self.app.post('/query', data=json.dumps({
-            'project': [1,2,3],
+            'project': [1, 2, 3],
             'conditions': [['message', 'LIKE', '%message%']],
             'groupby': 'project_id',
             'debug': True,
@@ -946,7 +972,7 @@ class TestApi(BaseEventsTest):
 
         # only project 3 has a search_message with 'long search' in it
         response = json.loads(self.app.post('/query', data=json.dumps({
-            'project': [1,2,3],
+            'project': [1, 2, 3],
             'conditions': [['message', 'LIKE', '%long search%']],
             'groupby': 'project_id',
             'debug': True,
