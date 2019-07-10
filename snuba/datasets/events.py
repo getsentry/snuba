@@ -204,25 +204,6 @@ class EventsDataSet(DataSet):
             ('deleted', '=', 0),
         ]
 
-    # These method should be removed once we will have dataset specific query processing in
-    # the dataset class instead of util.py and when the dataset specific logic for processing
-    # Kafka messages will be in the dataset as well.
-
-    def get_metadata_columns(self):
-        return self.__metadata_columns
-
-    def get_promoted_tag_columns(self):
-        return self.__promoted_tag_columns
-
-    def get_promoted_context_tag_columns(self):
-        return self.__promoted_context_tag_columns
-
-    def get_promoted_context_columns(self):
-        return self.__promoted_context_columns
-
-    def get_required_columns(self):
-        return self.__required_columns
-
     def column_expr(self, column_name, body):
         if NESTED_COL_EXPR_RE.match(column_name):
             return self._tag_expr(column_name)
@@ -238,6 +219,53 @@ class EventsDataSet(DataSet):
         else:
             return escape_col(column_name)
 
+    def get_metadata_columns(self):
+        return self.__metadata_columns
+
+    def get_promoted_tag_columns(self):
+        return self.__promoted_tag_columns
+
+    def _get_promoted_context_tag_columns(self):
+        return self.__promoted_context_tag_columns
+
+    def _get_promoted_context_columns(self):
+        return self.__promoted_context_columns
+
+    def get_required_columns(self):
+        return self.__required_columns
+
+    def _get_promoted_columns(self):
+        # The set of columns, and associated keys that have been promoted
+        # to the top level table namespace.
+        return {
+            'tags': frozenset(col.flattened for col in (self.get_promoted_tag_columns() + self._get_promoted_context_tag_columns())),
+            'contexts': frozenset(col.flattened for col in self._get_promoted_context_columns()),
+        }
+
+    def _get_column_tag_map(self):
+        # For every applicable promoted column,  a map of translations from the column
+        # name  we save in the database to the tag we receive in the query.
+        promoted_context_tag_columns = self._get_promoted_context_tag_columns()
+
+        return {
+            'tags': {col.flattened: col.flattened.replace('_', '.') for col in promoted_context_tag_columns},
+            'contexts': {},
+        }
+
+    def get_tag_column_map(self):
+        # And a reverse map from the tags the client expects to the database columns
+        return {
+            col: dict(map(reversed, trans.items())) for col, trans in self._get_column_tag_map().items()
+        }
+
+    def get_promoted_tags(self):
+        # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
+        # and they can/will use a promoted column.
+        return {
+            col: [self._get_column_tag_map()[col].get(x, x) for x in self._get_promoted_columns()[col]]
+            for col in self._get_promoted_columns()
+        }
+
     def _tag_expr(self, column_name):
         """
         Return an expression for the value of a single named tag.
@@ -248,9 +276,9 @@ class EventsDataSet(DataSet):
         col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
 
         # For promoted tags, return the column name.
-        if col in self.get_promoted_columns():
+        if col in self._get_promoted_columns():
             actual_tag = self.get_tag_column_map()[col].get(tag, tag)
-            if actual_tag in self.get_promoted_columns()[col]:
+            if actual_tag in self._get_promoted_columns()[col]:
                 return string_col(self, actual_tag)
 
         # For the rest, return an expression that looks it up in the nested tags.
@@ -273,8 +301,8 @@ class EventsDataSet(DataSet):
             key_list = '{}.key'.format(col)
             val_list = '{}.value'.format(col)
         else:
-            promoted = self.get_promoted_columns()[col]
-            col_map = self.get_column_tag_map()[col]
+            promoted = self._get_promoted_columns()[col]
+            col_map = self._get_column_tag_map()[col]
             key_list = u'arrayConcat([{}], {}.key)'.format(
                 u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
                 col
