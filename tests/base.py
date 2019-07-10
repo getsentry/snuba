@@ -32,7 +32,6 @@ def wrap_raw_event(event):
         'data': event
     }
 
-
 def get_event():
     from fixtures import raw_event
     timestamp = datetime.utcnow()

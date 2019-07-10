@@ -26,7 +26,7 @@ class NativeDriverBatchWriter(BatchWriter):
 
     def write(self, schema, rows):
         columns = schema.get_columns()
-        self.__connection.execute_robust("""INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
+        self.__connection.execute_robust("INSERT INTO %(table)s (%(colnames)s) VALUES" % {
             'colnames': ", ".join(col.escaped for col in columns),
             'table': schema.get_table_name(),
         }, [self.__row_to_column_list(columns, row) for row in rows], types_check=False)
