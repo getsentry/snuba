@@ -4,7 +4,7 @@ import signal
 import click
 from confluent_kafka import Producer
 
-from snuba import settings, datasets
+from snuba import settings
 from snuba.datasets.factory import get_dataset
 
 
@@ -17,21 +17,21 @@ from snuba.datasets.factory import get_dataset
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
-@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
+@click.option('--bootstrap-server', default=[], multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
-@click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
+@click.option('--max-batch-size', default=None,
               help='Max number of messages to batch in memory before writing to Kafka.')
-@click.option('--max-batch-time-ms', default=settings.DEFAULT_MAX_BATCH_TIME_MS,
+@click.option('--max-batch-time-ms', default=None,
               help='Max length of time to buffer messages in memory before writing to Kafka.')
 @click.option('--auto-offset-reset', default='error', type=click.Choice(['error', 'earliest', 'latest']),
               help='Kafka consumer auto offset reset.')
-@click.option('--queued-max-messages-kbytes', default=settings.DEFAULT_QUEUED_MAX_MESSAGE_KBYTES, type=int,
+@click.option('--queued-max-messages-kbytes', default=None, type=int,
               help='Maximum number of kilobytes per topic+partition in the local consumer queue.')
-@click.option('--queued-min-messages', default=settings.DEFAULT_QUEUED_MIN_MESSAGES, type=int,
+@click.option('--queued-min-messages', default=None, type=int,
               help='Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
@@ -53,14 +53,32 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    raw_events_topic = raw_events_topic or dataset.get_default_topic()
-    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
-    commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+    dataset_config = settings.load_dataset_settings(
+        dataset=dataset_name,
+        override={
+            'consumer': {
+                'kafka_cluster': {
+                    'brokers': bootstrap_server,
+                    'max_batch_size': max_batch_size,
+                    'max_batch_time_ms': max_batch_time_ms,
+                    'queued_max_message_kbytes': queued_max_messages_kbytes,
+                    'queued_min_messages': queued_min_messages,
+                },
+                'message_topic': {
+                    'name': raw_events_topic,
+                    'consumer_group': consumer_group,
+                },
+                'commit_log_topic': commit_log_topic,
+                'replacement_topic': replacements_topic,
+            }
+        }
+    )
 
+    consumer_config = dataset_config.consumer
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.consumer',
         tags=[
-            "group:%s" % consumer_group,
+            "group:%s" % consumer_config.message_topic.consumer_group,
             "dataset:%s" % dataset_name,
         ]
     )
@@ -76,13 +94,13 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     producer = Producer({
-        'bootstrap.servers': ','.join(bootstrap_server),
+        'bootstrap.servers': ','.join(consumer_config.kafka_cluster.brokers),
         'partitioner': 'consistent',
         'message.max.bytes': 50000000,  # 50MB, default is 1MB
     })
 
     consumer = BatchingKafkaConsumer(
-        raw_events_topic,
+        consumer_config.message_topic.name,
         worker=ConsumerWorker(
             clickhouse,
             dataset,
@@ -90,11 +108,11 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
             replacements_topic=replacements_topic,
             metrics=metrics
         ),
-        max_batch_size=max_batch_size,
-        max_batch_time=max_batch_time_ms,
+        max_batch_size=consumer_config.kafka_cluster.max_batch_size,
+        max_batch_time=consumer_config.kafka_cluster.max_batch_time_ms,
         metrics=metrics,
-        bootstrap_servers=bootstrap_server,
-        group_id=consumer_group,
+        bootstrap_servers=consumer_config.kafka_cluster.brokers,
+        group_id=consumer_config.message_topic.consumer_group,
         producer=producer,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,

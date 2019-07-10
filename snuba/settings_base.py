@@ -9,8 +9,50 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = 'events'
-DISABLED_DATASETS = {}
 DATASET_MODE = 'local'
+
+DISABLED_DATASETS = {}
+
+KAFKA_CLUSTERS = {
+    "default": {
+        "brokers": ['localhost:9093'],
+        "max_batch_size": 50000,
+        "max_batch_time_ms": 2 * 1000,
+        "queued_max_message_kbytes": 50000,
+        "queued_min_messages": 20000,
+    }
+}
+
+DATASETS = {
+    "events": {
+        "consumer": {
+            "kafka_cluster": {
+                "base": KAFKA_CLUSTERS["default"],
+                "override": None,
+            },
+            "message_topic": {
+                "name": "events",
+                "consumer_group": "snuba_consumers",
+            },
+            "commit_log_topic": "snuba_commit_log",
+            "replacement_topic": "event-replacements",
+        }
+    },
+    "groupedmessage": {
+        "consumer": {
+            "kafka_cluste": {
+                "base": KAFKA_CLUSTERS["default"],
+                "override": None,
+            },
+            "message_topic": {
+                "name": "cdc",
+                "consumer_group": "snuba_consumers",
+            },
+            "commit_log_topic": None,
+            "replacement_topic": None,
+        }
+    },
+}
 
 # Clickhouse Options
 CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
@@ -47,11 +89,6 @@ TIME_GROUP_COLUMNS = {
 }
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ['localhost:9093']
-DEFAULT_MAX_BATCH_SIZE = 50000
-DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
-DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
-DEFAULT_QUEUED_MIN_MESSAGES = 20000
 DISCARD_OLD_EVENTS = True
 
 DEFAULT_RETENTION_DAYS = 90

@@ -43,15 +43,6 @@ class DataSet(object):
 
         return values
 
-    def get_default_topic(self):
-        return self.__default_topic
-
-    def get_default_replacement_topic(self):
-        return self.__default_replacement_topic
-
-    def get_default_commit_log_topic(self):
-        return self.__default_commit_log_topic
-
     def get_default_replication_factor(self):
         return 1
 

@@ -15,7 +15,7 @@ from base import (
     get_event
 )
 
-from snuba import processor
+from snuba import settings
 from snuba.consumer import ConsumerWorker
 
 
@@ -25,6 +25,7 @@ class TestConsumer(BaseTest):
         self.event = get_event()
 
     def test_batch_size(self):
+        print(settings.DATASETS)
         consumer = FakeBatchingKafkaConsumer(
             'topic',
             worker=FakeWorker(),
@@ -111,7 +112,13 @@ class TestConsumer(BaseTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), self.dataset.get_default_replacement_topic())
+        dataset_config = settings.load_dataset_settings('events')
+        test_worker = ConsumerWorker(
+            self.clickhouse,
+            self.dataset,
+            FakeKafkaProducer(),
+            dataset_config.consumer.replacement_topic,
+        )
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -120,7 +127,13 @@ class TestConsumer(BaseTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.clickhouse, self.dataset, FakeKafkaProducer(), self.dataset.get_default_replacement_topic())
+        dataset_config = settings.load_dataset_settings('events')
+        test_worker = ConsumerWorker(
+            self.clickhouse,
+            self.dataset,
+            FakeKafkaProducer(),
+            dataset_config.consumer.replacement_topic,
+        )
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -142,8 +155,14 @@ class TestConsumer(BaseTest):
         assert test_worker.process_message(FakeMessage()) is None
 
     def test_produce_replacement_messages(self):
+        dataset_config = settings.load_dataset_settings('events')
         producer = FakeKafkaProducer()
-        test_worker = ConsumerWorker(self.clickhouse, self.dataset, producer, self.dataset.get_default_replacement_topic())
+        test_worker = ConsumerWorker(
+            self.clickhouse,
+            self.dataset,
+            producer,
+            dataset_config.consumer.replacement_topic,
+        )
 
         test_worker.flush_batch([
             (self.dataset.get_processor().REPLACE, ('1', {'project_id': 1})),
