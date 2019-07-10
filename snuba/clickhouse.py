@@ -10,6 +10,8 @@ from snuba import settings
 logger = logging.getLogger('snuba.clickhouse')
 
 
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
 SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
 ESCAPE_COL_RE = re.compile(r"([`\\])")
