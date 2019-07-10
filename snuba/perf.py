@@ -60,10 +60,11 @@ def get_messages(events_file):
 def run(events_file, clickhouse, dataset, repeat=1,
         profile_process=False, profile_write=False):
     from snuba.consumer import ConsumerWorker
+    from snuba.writer import NativeDriverBatchWriter
 
     clickhouse.execute(dataset.get_schema().get_local_table_definition())
     consumer = ConsumerWorker(
-        clickhouse=clickhouse,
+        NativeDriverBatchWriter(clickhouse),
         dataset=dataset,
         producer=None,
         replacements_topic=None,
