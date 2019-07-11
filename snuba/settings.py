@@ -37,6 +37,7 @@ _load_settings()
 
 
 def load_dataset_settings(dataset, override={}):
+    print(override)
     global DATASETS
     global KAFKA_CLUSTERS
     raw_config = DATASETS[dataset]
@@ -49,7 +50,7 @@ def load_dataset_settings(dataset, override={}):
     kafka_cluster_config = KAFKA_CLUSTERS[kafka_cluster_name]
     kafka_cluster = deep_copy_and_merge(
         kafka_cluster_config,
-        consumer_config['kafka_cluster_override'],
+        consumer_config.get('kafka_cluster_override', {}),
     )
 
     return DatasetSettings(

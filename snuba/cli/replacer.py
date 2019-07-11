@@ -10,7 +10,7 @@ from snuba.datasets.factory import get_dataset
 @click.command()
 @click.option('--replacements-topic', default=None,
               help='Topic to consume replacement messages from.')
-@click.option('--consumer-group', default='snuba-replacers',
+@click.option('--consumer-group', default=None,
               help='Consumer group use for consuming the replacements topic.')
 @click.option('--bootstrap-server', default=[], multiple=True,
               help='Kafka bootstrap server to use.')
@@ -45,24 +45,27 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
     dataset_config = settings.load_dataset_settings(
-        datset=dataset_name,
-        override={
-            'consumer': {
-                'kafka_cluster': {
-                    'brokers': bootstrap_server,
-                    'max_batch_size': max_batch_size,
-                    'max_batch_time_ms': max_batch_time_ms,
-                    'queued_max_message_kbytes': queued_max_messages_kbytes,
-                    'queued_min_messages': queued_min_messages,
-                },
-                'message_topic': {
-                    'consumer_group': consumer_group,
-                },
-                'replacement_topic': replacements_topic,
-            }
-        }
+        dataset=dataset_name,
+        override=settings.deep_copy_and_merge(
+            default={},
+            override={
+                'consumer': {
+                    'kafka_cluster_override': {
+                        'brokers': bootstrap_server,
+                        'max_batch_size': max_batch_size,
+                        'max_batch_time_ms': max_batch_time_ms,
+                        'queued_max_message_kbytes': queued_max_messages_kbytes,
+                        'queued_min_messages': queued_min_messages,
+                    },
+                    'message_topic': {
+                        'consumer_group': consumer_group,
+                    },
+                    'replacement_topic': replacements_topic,
+                }
+            },
+            skip_null=True,
+        )
     )
-
     consumer_config = dataset_config.consumer
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
@@ -97,7 +100,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
         max_batch_time=consumer_config.kafka_cluster.max_batch_time_ms,
         metrics=metrics,
         bootstrap_servers=consumer_config.kafka_cluster.brokers,
-        group_id=consumer_config.messages_topic.consumer_group,
+        group_id=consumer_config.message_topic.consumer_group,
         producer=None,
         commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,

@@ -27,7 +27,6 @@ DATASETS = {
     "events": {
         "consumer": {
             "kafka_cluster_base": "default",
-            "kafka_cluster_override": {},
             "message_topic": {
                 "name": "events",
                 "consumer_group": "snuba_consumers",
@@ -39,7 +38,6 @@ DATASETS = {
     "groupedmessage": {
         "consumer": {
             "kafka_cluster_base": "default",
-            "kafka_cluster_override": {},
             "message_topic": {
                 "name": "cdc",
                 "consumer_group": "snuba_consumers",

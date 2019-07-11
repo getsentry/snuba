@@ -27,7 +27,7 @@ def bootstrap(bootstrap_server, kafka, force):
                 datset=name,
                 override={
                     'consumer': {
-                        'kafka_cluster': {
+                        'kafka_cluster_override': {
                             'brokers': bootstrap_server,
                         },
                     }

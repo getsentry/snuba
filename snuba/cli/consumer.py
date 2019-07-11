@@ -15,7 +15,7 @@ from snuba.datasets.factory import get_dataset
               help='Topic to produce replacement messages info.')
 @click.option('--commit-log-topic', default=None,
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
-@click.option('--consumer-group', default='snuba-consumers',
+@click.option('--consumer-group', default=None,
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=[], multiple=True,
               help='Kafka bootstrap server to use.')
@@ -55,23 +55,27 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
 
     dataset_config = settings.load_dataset_settings(
         dataset=dataset_name,
-        override={
-            'consumer': {
-                'kafka_cluster': {
-                    'brokers': bootstrap_server,
-                    'max_batch_size': max_batch_size,
-                    'max_batch_time_ms': max_batch_time_ms,
-                    'queued_max_message_kbytes': queued_max_messages_kbytes,
-                    'queued_min_messages': queued_min_messages,
-                },
-                'message_topic': {
-                    'name': raw_events_topic,
-                    'consumer_group': consumer_group,
-                },
-                'commit_log_topic': commit_log_topic,
-                'replacement_topic': replacements_topic,
-            }
-        }
+        override=settings.deep_copy_and_merge(
+            default={},
+            override={
+                'consumer': {
+                    'kafka_cluster_override': {
+                        'brokers': bootstrap_server,
+                        'max_batch_size': max_batch_size,
+                        'max_batch_time_ms': max_batch_time_ms,
+                        'queued_max_message_kbytes': queued_max_messages_kbytes,
+                        'queued_min_messages': queued_min_messages,
+                    },
+                    'message_topic': {
+                        'name': raw_events_topic,
+                        'consumer_group': consumer_group,
+                    },
+                    'commit_log_topic': commit_log_topic,
+                    'replacement_topic': replacements_topic,
+                }
+            },
+            skip_null=True,
+        )
     )
 
     consumer_config = dataset_config.consumer
@@ -105,7 +109,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
             clickhouse,
             dataset,
             producer=producer,
-            replacements_topic=replacements_topic,
+            replacements_topic=consumer_config.replacements_topic,
             metrics=metrics
         ),
         max_batch_size=consumer_config.kafka_cluster.max_batch_size,
@@ -114,7 +118,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         bootstrap_servers=consumer_config.kafka_cluster.brokers,
         group_id=consumer_config.message_topic.consumer_group,
         producer=producer,
-        commit_log_topic=commit_log_topic,
+        commit_log_topic=consumer_config.commit_log_topic,
         auto_offset_reset=auto_offset_reset,
     )
 
