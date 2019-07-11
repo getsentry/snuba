@@ -19,7 +19,7 @@ Access raw clickhouse client (similar to psql):
 
     docker exec -it sentry_clickhouse clickhouse-client
 
-Data is written into the table `dev`: `select count() from dev;`
+Data is written into the table `sentry_local`: `select count() from sentry_local;`
 
 ## Requirements (Only required if you are developing against Snuba)
 
@@ -33,6 +33,7 @@ Snuba assumes:
 
     mkvirtualenv snuba
     workon snuba
+    make install-python-dependencies
 
     # Run API server
     snuba api
