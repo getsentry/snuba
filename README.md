@@ -34,6 +34,7 @@ Snuba assumes:
     mkvirtualenv snuba
     workon snuba
     make install-python-dependencies
+    make install-librdkafka
 
     # Run API server
     snuba api
