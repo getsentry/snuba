@@ -380,20 +380,21 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.writer import write_rows
+        from snuba.processor import INSERT
+        from snuba.writer import NativeDriverBatchWriter
 
         # TODO we need to make this work for multiple datasets
         dataset = get_dataset('events')
         ensure_table_exists(dataset)
-        body = json.loads(request.data)
 
         rows = []
-        for event in body:
-            _, processed = dataset.get_processor().process_message(event)
-            row = dataset.row_from_processed_message(processed)
+        for message in json.loads(request.data):
+            action, row = dataset.get_processor().process_message(message)
+            assert action is INSERT
             rows.append(row)
 
-        write_rows(clickhouse_rw, dataset=dataset, rows=rows)
+        NativeDriverBatchWriter(clickhouse_rw).write(dataset.get_schema(), rows)
+
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/eventstream', methods=['POST'])
@@ -425,7 +426,9 @@ if application.debug or application.testing:
         type_ = record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(clickhouse_rw, dataset, producer=None, replacements_topic=None)
+            from snuba.writer import NativeDriverBatchWriter
+            writer = NativeDriverBatchWriter(clickhouse_rw)
+            worker = ConsumerWorker(writer, dataset, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
             worker = ReplacerWorker(clickhouse_rw, dataset)
