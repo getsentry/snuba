@@ -28,7 +28,6 @@ DATASETS = {
         "consumer": {
             "kafka_cluster": {
                 "base": KAFKA_CLUSTERS["default"],
-                "override": None,
             },
             "message_topic": {
                 "name": "events",
@@ -42,7 +41,6 @@ DATASETS = {
         "consumer": {
             "kafka_cluste": {
                 "base": KAFKA_CLUSTERS["default"],
-                "override": None,
             },
             "message_topic": {
                 "name": "cdc",
