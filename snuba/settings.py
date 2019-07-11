@@ -3,6 +3,7 @@ from snuba.settings_types import (
     KafkaTopicSettings,
     DatasetConsumerSettings,
     DatasetSettings,
+    deep_copy_and_merge,
 )
 
 
@@ -37,19 +38,19 @@ _load_settings()
 
 def load_dataset_settings(dataset, override={}):
     global DATASETS
-    raw_config = DATASETS[dataset]['consumer']
-    override = override.get('consumer', {})
+    global KAFKA_CLUSTERS
+    raw_config = DATASETS[dataset]
+    raw_config = deep_copy_and_merge(raw_config, override)
 
-    kafka_cluster = {
-        **raw_config['kafka_cluster']['base'],
-        **raw_config['kafka_cluster'].get('override', {}),
-        **override.get('kafka_cluster', {})
-    }
+    consumer_config = raw_config['consumer']
 
-    message_topic = {
-        **raw_config['message_topic'],
-        **override.get('message_topic', {}),
-    }
+    # per dataset override
+    kafka_cluster_name = consumer_config['kafka_cluster_base']
+    kafka_cluster_config = KAFKA_CLUSTERS[kafka_cluster_name]
+    kafka_cluster = deep_copy_and_merge(
+        kafka_cluster_config,
+        consumer_config['kafka_cluster_override'],
+    )
 
     return DatasetSettings(
         consumer=DatasetConsumerSettings(
@@ -61,14 +62,10 @@ def load_dataset_settings(dataset, override={}):
                 queued_min_messages=kafka_cluster['queued_min_messages'],
             ),
             message_topic=KafkaTopicSettings(
-                name=message_topic['name'],
-                consumer_group=message_topic['consumer_group'],
+                name=consumer_config['message_topic']['name'],
+                consumer_group=consumer_config['message_topic']['consumer_group'],
             ),
-            commit_log_topic=override['commit_log_topic']
-            if 'commit_log_topic' in override
-            else raw_config['commit_log_topic'],
-            replacement_topic=override['replacement_topic']
-            if 'replacement_topic' in override
-            else raw_config['replacement_topic'],
+            commit_log_topic=consumer_config['commit_log_topic'],
+            replacement_topic=consumer_config['replacement_topic'],
         )
     )
