@@ -380,7 +380,7 @@ if application.debug or application.testing:
 
     @application.route('/tests/insert', methods=['POST'])
     def write():
-        from snuba.processor import INSERT
+        from snuba.processor import MessageProcessor
         from snuba.writer import NativeDriverBatchWriter
 
         # TODO we need to make this work for multiple datasets
@@ -390,7 +390,7 @@ if application.debug or application.testing:
         rows = []
         for message in json.loads(request.data):
             action, row = dataset.get_processor().process_message(message)
-            assert action is INSERT
+            assert action is MessageProcessor.INSERT
             rows.append(row)
 
         NativeDriverBatchWriter(clickhouse_rw).write(dataset.get_schema(), rows)
