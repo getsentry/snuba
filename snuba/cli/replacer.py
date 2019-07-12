@@ -12,7 +12,7 @@ from snuba.datasets.factory import get_dataset
               help='Topic to consume replacement messages from.')
 @click.option('--consumer-group', default=None,
               help='Consumer group use for consuming the replacements topic.')
-@click.option('--bootstrap-server', default=[], multiple=True,
+@click.option('--bootstrap-server', default=None, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')

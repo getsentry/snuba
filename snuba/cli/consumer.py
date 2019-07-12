@@ -17,7 +17,7 @@ from snuba.datasets.factory import get_dataset
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 @click.option('--consumer-group', default=None,
               help='Consumer group use for consuming the raw events topic.')
-@click.option('--bootstrap-server', default=[], multiple=True,
+@click.option('--bootstrap-server', default=None, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
               help='Clickhouse server to write to.')
@@ -109,7 +109,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
             clickhouse,
             dataset,
             producer=producer,
-            replacements_topic=consumer_config.replacements_topic,
+            replacements_topic=consumer_config.replacement_topic,
             metrics=metrics
         ),
         max_batch_size=consumer_config.kafka_cluster.max_batch_size,

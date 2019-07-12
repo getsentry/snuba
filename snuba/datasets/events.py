@@ -188,9 +188,6 @@ class EventsDataSet(DataSet):
         super(EventsDataSet, self).__init__(
             schema=schema,
             processor=EventsProcessor(promoted_tag_columns),
-            default_topic="events",
-            default_replacement_topic="event-replacements",
-            default_commit_log_topic="snuba-commit-log"
         )
 
         self.__metadata_columns = metadata_columns

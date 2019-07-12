@@ -42,7 +42,4 @@ class GroupedMessageDataSet(DataSet):
         super(GroupedMessageDataSet, self).__init__(
             schema=schema,
             processor=GroupedMessageProcessor(),
-            default_topic="cdc",
-            default_replacement_topic=None,
-            default_commit_log_topic=None,
         )

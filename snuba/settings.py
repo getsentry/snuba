@@ -37,7 +37,6 @@ _load_settings()
 
 
 def load_dataset_settings(dataset, override={}):
-    print(override)
     global DATASETS
     global KAFKA_CLUSTERS
     raw_config = DATASETS[dataset]
