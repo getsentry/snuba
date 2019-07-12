@@ -24,9 +24,9 @@ class TestSettings(BaseTest):
                 ),
                 message_topic=KafkaTopicSettings(
                     name='events',
-                    consumer_group='snuba_consumers',
+                    consumer_group='snuba-consumers',
                 ),
-                commit_log_topic='snuba_commit_log',
+                commit_log_topic='snuba-commit-log',
                 replacement_topic='event-replacements',
             )
         )
@@ -40,7 +40,7 @@ class TestSettings(BaseTest):
         }
         DATASETS['events']['consumer']['message_topic'] = {
             'name': 'events2',
-            'consumer_group': 'snuba_consumers2',
+            'consumer_group': 'snuba-consumers2',
         }
 
         events_config = load_dataset_settings('events')
@@ -55,9 +55,9 @@ class TestSettings(BaseTest):
                 ),
                 message_topic=KafkaTopicSettings(
                     name='events2',
-                    consumer_group='snuba_consumers2',
+                    consumer_group='snuba-consumers2',
                 ),
-                commit_log_topic='snuba_commit_log',
+                commit_log_topic='snuba-commit-log',
                 replacement_topic='event-replacements',
             )
         )
@@ -81,9 +81,9 @@ class TestSettings(BaseTest):
                     },
                     'message_topic': {
                         'name': 'events3',
-                        'consumer_group': 'snuba_consumers3',
+                        'consumer_group': 'snuba-consumers3',
                     },
-                    'commit_log_topic': 'snuba_commit_log2',
+                    'commit_log_topic': 'snuba-commit-log2',
                     'replacement_topic': 'event-replacements2',
                 }
             },
@@ -99,9 +99,9 @@ class TestSettings(BaseTest):
                 ),
                 message_topic=KafkaTopicSettings(
                     name='events3',
-                    consumer_group='snuba_consumers3',
+                    consumer_group='snuba-consumers3',
                 ),
-                commit_log_topic='snuba_commit_log2',
+                commit_log_topic='snuba-commit-log2',
                 replacement_topic='event-replacements2',
             )
         )
