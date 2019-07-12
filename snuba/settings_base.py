@@ -29,9 +29,9 @@ DATASETS = {
             "kafka_cluster_base": "default",
             "message_topic": {
                 "name": "events",
-                "consumer_group": "snuba_consumers",
+                "consumer_group": "snuba-consumers",
             },
-            "commit_log_topic": "snuba_commit_log",
+            "commit_log_topic": "snuba-commit-log",
             "replacement_topic": "event-replacements",
         }
     },
@@ -40,7 +40,7 @@ DATASETS = {
             "kafka_cluster_base": "default",
             "message_topic": {
                 "name": "cdc",
-                "consumer_group": "snuba_consumers",
+                "consumer_group": "snuba-consumers",
             },
             "commit_log_topic": None,
             "replacement_topic": None,
