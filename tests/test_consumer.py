@@ -17,6 +17,7 @@ from base import (
 
 from snuba import settings
 from snuba.consumer import ConsumerWorker
+from snuba.writer import NativeDriverBatchWriter
 
 
 class TestConsumer(BaseTest):
@@ -114,7 +115,7 @@ class TestConsumer(BaseTest):
 
         dataset_config = settings.load_dataset_settings('events')
         test_worker = ConsumerWorker(
-            self.clickhouse,
+            NativeDriverBatchWriter(self.clickhouse),
             self.dataset,
             FakeKafkaProducer(),
             dataset_config.consumer.replacement_topic,
@@ -129,12 +130,11 @@ class TestConsumer(BaseTest):
     def test_skip_too_old(self):
         dataset_config = settings.load_dataset_settings('events')
         test_worker = ConsumerWorker(
-            self.clickhouse,
+            NativeDriverBatchWriter(self.clickhouse),
             self.dataset,
             FakeKafkaProducer(),
             dataset_config.consumer.replacement_topic,
         )
-
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
         old_timestamp_str = old_timestamp.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
@@ -158,7 +158,7 @@ class TestConsumer(BaseTest):
         dataset_config = settings.load_dataset_settings('events')
         producer = FakeKafkaProducer()
         test_worker = ConsumerWorker(
-            self.clickhouse,
+            NativeDriverBatchWriter(self.clickhouse),
             self.dataset,
             producer,
             dataset_config.consumer.replacement_topic,

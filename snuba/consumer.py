@@ -5,8 +5,6 @@ import six
 
 from batching_kafka_consumer import AbstractBatchWorker
 
-from .writer import write_rows
-
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -21,8 +19,8 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dataset, producer, replacements_topic, metrics=None):
-        self.clickhouse = clickhouse
+    def __init__(self, writer, dataset, producer, replacements_topic, metrics=None):
+        self.__writer = writer
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
@@ -39,16 +37,11 @@ class ConsumerWorker(AbstractBatchWorker):
         if processed is None:
             return None
 
-        action_type, processed_message = processed
-
-        if action_type == processor.INSERT:
-            result = self.__dataset.row_from_processed_message(processed_message)
-        elif action_type == processor.REPLACE:
-            result = processed_message
-        else:
+        action_type = processed[0]
+        if action_type not in set([processor.INSERT, processor.REPLACE]):
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
-        return (action_type, result)
+        return processed
 
     def delivery_callback(self, error, message):
         if error is not None:
@@ -69,11 +62,7 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            write_rows(
-                self.clickhouse,
-                self.__dataset,
-                inserts
-            )
+            self.__writer.write(self.__dataset.get_schema(), inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))

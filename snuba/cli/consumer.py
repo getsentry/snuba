@@ -46,6 +46,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     from snuba.clickhouse import ClickhousePool
     from batching_kafka_consumer import BatchingKafkaConsumer
     from snuba.consumer import ConsumerWorker
+    from snuba.writer import NativeDriverBatchWriter
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
@@ -106,7 +107,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     consumer = BatchingKafkaConsumer(
         consumer_config.message_topic.name,
         worker=ConsumerWorker(
-            clickhouse,
+            NativeDriverBatchWriter(clickhouse),
             dataset,
             producer=producer,
             replacements_topic=consumer_config.replacement_topic,
