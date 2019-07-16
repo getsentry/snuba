@@ -35,6 +35,7 @@ RUN set -ex; \
         libpcre3-dev \
         gnupg \
         make \
+        multiarch-support \
         wget \
     '; \
     apt-get update; \
