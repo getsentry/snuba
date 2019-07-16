@@ -64,9 +64,9 @@ class TestSettings(BaseTest):
 
         assert expected == events_config
 
-    def test_load_external_verride(self):
+    def test_load_external_override(self):
         DATASETS['events']['consumer']['kafka_cluster_override'] = {
-            "queued_max_message_kbytes": 50000,  # ensure 0 works
+            "queued_max_message_kbytes": 50000,
             "queued_min_messages": 20000,
         }
 

@@ -6,6 +6,7 @@ from confluent_kafka import Producer
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
+from snuba.settings_types import recursively_remove_none
 
 
 @click.command()
@@ -56,9 +57,8 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
 
     dataset_config = settings.load_dataset_settings(
         dataset=dataset_name,
-        override=settings.deep_copy_and_merge(
-            default={},
-            override={
+        override=recursively_remove_none(
+            config={
                 'consumer': {
                     'kafka_cluster_override': {
                         'brokers': bootstrap_server,
@@ -75,7 +75,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
                     'replacement_topic': replacements_topic,
                 }
             },
-            skip_null=True,
         )
     )
 

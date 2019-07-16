@@ -5,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
+from snuba.settings_types import recursively_remove_none
 
 
 @click.command()
@@ -46,9 +47,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     dataset = get_dataset(dataset_name)
     dataset_config = settings.load_dataset_settings(
         dataset=dataset_name,
-        override=settings.deep_copy_and_merge(
-            default={},
-            override={
+        override=recursively_remove_none(
+            config={
                 'consumer': {
                     'kafka_cluster_override': {
                         'brokers': bootstrap_server,
@@ -63,7 +63,6 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
                     'replacement_topic': replacements_topic,
                 }
             },
-            skip_null=True,
         )
     )
     consumer_config = dataset_config.consumer

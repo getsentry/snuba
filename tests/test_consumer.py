@@ -26,7 +26,6 @@ class TestConsumer(BaseTest):
         self.event = get_event()
 
     def test_batch_size(self):
-        print(settings.DATASETS)
         consumer = FakeBatchingKafkaConsumer(
             'topic',
             worker=FakeWorker(),

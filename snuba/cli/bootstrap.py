@@ -24,7 +24,7 @@ def bootstrap(bootstrap_server, kafka, force):
             attempts = 0
 
             dataset_config = settings.load_dataset_settings(
-                datset=name,
+                dataset=name,
                 override={
                     'consumer': {
                         'kafka_cluster_override': {
@@ -55,10 +55,11 @@ def bootstrap(bootstrap_server, kafka, force):
             dataset = get_dataset(name)
             partitions = dataset.get_default_partitions()
             replication = dataset.get_default_replication_factor()
+            consumer_config = dataset_config.consumer
             topics.extend([
-                (dataset.get_default_topic(), partitions, replication),
-                (dataset.get_default_replacement_topic(), partitions, replication),
-                (dataset.get_default_commit_log_topic(), partitions, replication),
+                (consumer_config.message_topic.name, partitions, replication),
+                (consumer_config.replacement_topic, partitions, replication),
+                (consumer_config.commit_log_topic, partitions, replication),
             ])
 
             topics = [NewTopic(t[0], num_partitions=t[1], replication_factor=t[2])

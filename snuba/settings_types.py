@@ -24,7 +24,7 @@ DatasetSettings = collections.namedtuple(
 
 def deep_copy_and_merge(default, override, skip_null=False):
     """
-    Rewturn a deep copy of 'default' dictionary after merging 'override'
+    Return a deep copy of 'default' dictionary after merging 'override'
     into it.
     This is meant to define overrides in settings.py file
     """
@@ -42,3 +42,11 @@ def deep_copy_and_merge(default, override, skip_null=False):
         return base
 
     return deep_merge(base, override, skip_null)
+
+
+def recursively_remove_none(config):
+    return deep_copy_and_merge(
+        default={},
+        override=config,
+        skip_null=True,
+    )
