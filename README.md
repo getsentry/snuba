@@ -25,7 +25,7 @@ Data is written into the table `sentry_local`: `select count() from sentry_local
 
 Snuba assumes:
 
-1. A Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `localhost:9000`).
+1. A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`).
 2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
    `6379`
 
@@ -52,16 +52,13 @@ Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 
 Settings are found in `settings.py`
 
-- `CLICKHOUSE_SERVER` : The endpoint for the clickhouse service.
+- `CLICKHOUSE_HOST` : The hostname for the clickhouse service.
 - `REDIS_HOST` : The host redis is running on.
 - `DATASET_MODE` : If "local" runs Clickhouse local tables instead of distributed ones.
 
 ## Tests
 
     pip install -e .
-
-    export CLICKHOUSE_SERVER=127.0.0.1:9000
-
     make test
 
 ## Testing Against Sentry

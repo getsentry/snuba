@@ -19,8 +19,10 @@ from snuba.datasets.factory import get_dataset
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
-@click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
+@click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
               help='Clickhouse server to write to.')
+@click.option('--clickhouse-port', default=settings.CLICKHOUSE_PORT, type=int,
+              help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
@@ -37,7 +39,7 @@ from snuba.datasets.factory import get_dataset
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
-             bootstrap_server, clickhouse_server, dataset, max_batch_size, max_batch_time_ms,
+             bootstrap_server, clickhouse_host, clickhouse_port, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
 
@@ -67,8 +69,8 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     clickhouse = ClickhousePool(
-        host=clickhouse_server.split(':')[0],
-        port=int(clickhouse_server.split(':')[1]),
+        host=clickhouse_host,
+        port=clickhouse_port,
         client_settings={
             'load_balancing': 'in_order',
             'insert_distributed_sync': True,
