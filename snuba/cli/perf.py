@@ -33,7 +33,7 @@ from snuba.datasets.schema import local_dataset_mode
 @click.option('--dataset', default='events', type=click.Choice(['events']),
               help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, profile_process, profile_write, clickhouse_host, clickhouse_port, dataset, log_level):
+def perf(events_file, repeat, profile_process, profile_write, dataset, log_level):
     from snuba.perf import run, logger
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
