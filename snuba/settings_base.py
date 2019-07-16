@@ -48,10 +48,7 @@ TIME_GROUP_COLUMNS = {
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9093']
-DEFAULT_DATASET_BROKERS = {
-    'events': ['localhost:9093'],
-    'groupedmessage': ['localhost:9093'],
-}
+DEFAULT_DATASET_BROKERS = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
