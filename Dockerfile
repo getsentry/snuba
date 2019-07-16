@@ -111,8 +111,6 @@ RUN set -ex; \
     rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
-# XXX: Why is this defined here?
-ENV CLICKHOUSE_HOST clickhouse-server
 ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
