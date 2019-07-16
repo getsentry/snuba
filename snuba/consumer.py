@@ -19,12 +19,15 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, writer, dataset, producer, replacements_topic, metrics=None):
-        self.__writer = writer
+    def __init__(self, dataset, producer, replacements_topic, metrics=None):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
+        self.__writer = dataset.get_writer({
+            'load_balancing': 'in_order',
+            'insert_distributed_sync': True,
+        })
 
     def process_message(self, message):
         # TODO: consider moving this inside the processor so we can do a quick
@@ -62,7 +65,7 @@ class ConsumerWorker(AbstractBatchWorker):
                 replacements.append(data)
 
         if inserts:
-            self.__writer.write(self.__dataset.get_schema(), inserts)
+            self.__writer.write(inserts)
 
             if self.metrics:
                 self.metrics.timing('inserts', len(inserts))

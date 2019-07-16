@@ -57,14 +57,14 @@ def get_messages(events_file):
     return messages
 
 
-def run(events_file, clickhouse, dataset, repeat=1,
+def run(events_file, dataset, repeat=1,
         profile_process=False, profile_write=False):
     from snuba.consumer import ConsumerWorker
-    from snuba.writer import NativeDriverBatchWriter
+    from snuba.clickhouse import ClickhousePool
 
-    clickhouse.execute(dataset.get_schema().get_local_table_definition())
+    ClickhousePool().execute(dataset.get_schema().get_local_table_definition())
+
     consumer = ConsumerWorker(
-        NativeDriverBatchWriter(clickhouse),
         dataset=dataset,
         producer=None,
         replacements_topic=None,

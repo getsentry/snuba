@@ -12,7 +12,6 @@ from snuba.datasets.factory import get_dataset
 from snuba.clickhouse import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
-from snuba.writer import NativeDriverBatchWriter
 
 
 def wrap_raw_event(event):
@@ -186,7 +185,4 @@ class BaseEventsTest(BaseTest):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        NativeDriverBatchWriter(self.clickhouse).write(
-            self.dataset.get_schema(),
-            rows,
-        )
+        self.dataset.get_writer().write(rows)

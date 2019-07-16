@@ -22,6 +22,19 @@ class DataSet(object):
     def get_processor(self):
         return self.__processor
 
+    def get_writer(self, options=None):
+        from snuba.clickhouse import ClickhousePool
+        from snuba.writer import NativeDriverBatchWriter
+
+        pool_opts = {}
+        if options is not None:
+            pool_opts['client_settings'] = pool_opts
+
+        return NativeDriverBatchWriter(
+            self._schema,
+            ClickhousePool(**pool_opts),
+        )
+
     def default_conditions(self, body):
         """
         Return a list of the default conditions that should be applied to all
