@@ -14,8 +14,10 @@ from snuba.datasets.factory import get_dataset
               help='Consumer group use for consuming the replacements topic.')
 @click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
               help='Kafka bootstrap server to use.')
-@click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
+@click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
               help='Clickhouse server to write to.')
+@click.option('--clickhouse-port', default=settings.CLICKHOUSE_PORT, type=int,
+              help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events']),
               help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
@@ -31,7 +33,7 @@ from snuba.datasets.factory import get_dataset
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_server, dataset,
+def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_host, clickhouse_port, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
              queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
@@ -66,8 +68,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_se
     }
 
     clickhouse = ClickhousePool(
-        host=clickhouse_server.split(':')[0],
-        port=int(clickhouse_server.split(':')[1]),
+        host=clickhouse_host,
+        port=clickhouse_port,
         client_settings=client_settings,
     )
 

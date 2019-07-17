@@ -20,10 +20,9 @@ def migrate(log_level):
         logger.error("The migration tool can only work on local dataset mode.")
         sys.exit(1)
 
-    host, port = settings.CLICKHOUSE_SERVER.split(':')
     clickhouse = Client(
-        host=host,
-        port=port,
+        host=settings.CLICKHOUSE_HOST,
+        port=settings.CLICKHOUSE_PORT,
     )
 
     run(clickhouse, dataset)

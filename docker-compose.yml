@@ -15,7 +15,7 @@ services:
       - "1"
       - "--http-keepalive"
     environment: &snuba_env
-      CLICKHOUSE_SERVER: 'clickhouse:9000'
+      CLICKHOUSE_HOST: 'clickhouse'
       REDIS_HOST: 'redis'
       # Uncomment this to run sentry's snuba testsuite
       #SNUBA_SETTINGS: test

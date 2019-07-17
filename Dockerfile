@@ -38,7 +38,7 @@ RUN set -ex; \
         wget \
     '; \
     apt-get update; \
-    apt-get install -y --no-install-recommends libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
+    apt-get install -y --no-install-recommends multiarch-support libtinfo5 libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
     rm -rf /var/lib/apt/lists/*; \
     \
     wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)"; \
@@ -111,7 +111,6 @@ RUN set -ex; \
     rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
-ENV CLICKHOUSE_SERVER clickhouse-server:9000
 ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
