@@ -378,12 +378,10 @@ if application.debug or application.testing:
 
         _ensured[dataset] = True
 
-    @application.route('/tests/insert', methods=['POST'])
-    def write():
+    def write(dataset_name):
         from snuba.processor import MessageProcessor
 
-        # TODO we need to make this work for multiple datasets
-        dataset = get_dataset('events')
+        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
@@ -396,10 +394,16 @@ if application.debug or application.testing:
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
-    @application.route('/tests/eventstream', methods=['POST'])
-    def eventstream():
-        # TODO we need to make this work for multiple datasets
-        dataset = get_dataset('events')
+    @application.route('/tests/insert', methods=['POST'])
+    def write_events():
+        return write('events')
+
+    @application.route('/tests/<dataset_name>/insert', methods=['POST'])
+    def write_generic(dataset_name):
+        return write(dataset_name)
+
+    def eventstream(dataset_name):
+        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
         record = json.loads(request.data)
 
@@ -437,14 +441,30 @@ if application.debug or application.testing:
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
-    @application.route('/tests/drop', methods=['POST'])
-    def drop():
-        dataset = get_dataset('events')
+    @application.route('/tests/eventstream', methods=['POST'])
+    def eventstream_events():
+        return eventstream('events')
+
+    @application.route('/tests/<dataset_name>/eventstream', methods=['POST'])
+    def eventstream_generic(dataset_name):
+        return eventstream(dataset_name)
+
+    def drop(dataset_name):
+        dataset = get_dataset(dataset_name)
         table = dataset.get_schema().get_local_table_name()
 
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
         return ('ok', 200, {'Content-Type': 'text/plain'})
+
+    @application.route('/tests/drop', methods=['POST'])
+    def drop_events():
+        return drop('events')
+
+    @application.route('/tests/<dataset_name>/drop', methods=['POST'])
+    def drop_generic(dataset_name):
+        return drop(dataset_name)
+
 
     @application.route('/tests/error')
     def error():
