@@ -57,10 +57,10 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     dataset = get_dataset(dataset_name)
 
     if not bootstrap_server:
-        if dataset_name in settings.DEFAULT_DATASET_BROKERS:
-            bootstrap_server = settings.DEFAULT_DATASET_BROKERS[dataset_name]
-        else:
-            bootstrap_server = settings.DEFAULT_BROKERS
+        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
+            dataset_name,
+            settings.DEFAULT_BROKERS,
+        )
 
     raw_events_topic = raw_events_topic or dataset.get_default_topic()
     replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
