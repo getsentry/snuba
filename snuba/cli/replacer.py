@@ -84,6 +84,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
         producer=None,
         commit_log_topic=None,
         auto_offset_reset=auto_offset_reset,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
     )
 
     def handler(signum, frame):
