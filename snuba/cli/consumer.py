@@ -108,6 +108,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
     )
 
     def handler(signum, frame):
