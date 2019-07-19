@@ -43,7 +43,8 @@ class NativeDriverBatchWriter(BatchWriter):
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self, host, port, options=None):
+    def __init__(self, schema, host, port, options=None):
+        self.__schema = schema
         self.__base_url = 'http://{host}:{port}/'.format(host=host, port=port)
         self.__options = options if options is not None else {}
 
@@ -56,9 +57,9 @@ class HTTPBatchWriter(BatchWriter):
     def __encode(self, row):
         return json.dumps(row, default=self.__default).encode('utf-8')
 
-    def write(self, schema, rows):
+    def write(self, rows):
         parameters = self.__options.copy()
-        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=schema.get_table_name())
+        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__schema.get_table_name())
         requests.post(
             urljoin(self.__base_url, '?' + urlencode(parameters)),
             data=imap(self.__encode, rows),
