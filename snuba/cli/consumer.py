@@ -17,7 +17,7 @@ from snuba.datasets.factory import get_dataset
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
-@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
+@click.option('--bootstrap-server', default=None, multiple=True,
               help='Kafka bootstrap server to use.')
 @click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
@@ -49,6 +49,12 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
+
+    if not bootstrap_server:
+        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
+            dataset_name,
+            settings.DEFAULT_BROKERS,
+        )
 
     raw_events_topic = raw_events_topic or dataset.get_default_topic()
     replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
@@ -84,6 +90,8 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         producer=producer,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
+        queued_max_messages_kbytes=queued_max_messages_kbytes,
+        queued_min_messages=queued_min_messages,
     )
 
     def handler(signum, frame):
