@@ -19,10 +19,6 @@ from snuba.datasets.factory import get_dataset
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=None, multiple=True,
               help='Kafka bootstrap server to use.')
-@click.option('--clickhouse-host', default=settings.CLICKHOUSE_HOST,
-              help='Clickhouse server to write to.')
-@click.option('--clickhouse-port', default=settings.CLICKHOUSE_PORT, type=int,
-              help='Clickhouse native port to write to.')
 @click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
               help='The dataset to target')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
@@ -39,16 +35,14 @@ from snuba.datasets.factory import get_dataset
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
-             bootstrap_server, clickhouse_host, clickhouse_port, dataset, max_batch_size, max_batch_time_ms,
+             bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
 
     import sentry_sdk
     from snuba import util
-    from snuba.clickhouse import ClickhousePool
     from batching_kafka_consumer import BatchingKafkaConsumer
     from snuba.consumer import ConsumerWorker
-    from snuba.writer import NativeDriverBatchWriter
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
@@ -74,16 +68,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         ]
     )
 
-    clickhouse = ClickhousePool(
-        host=clickhouse_host,
-        port=clickhouse_port,
-        client_settings={
-            'load_balancing': 'in_order',
-            'insert_distributed_sync': True,
-        },
-        metrics=metrics
-    )
-
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),
         'partitioner': 'consistent',
@@ -93,7 +77,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     consumer = BatchingKafkaConsumer(
         raw_events_topic,
         worker=ConsumerWorker(
-            NativeDriverBatchWriter(clickhouse),
             dataset,
             producer=producer,
             replacements_topic=replacements_topic,
