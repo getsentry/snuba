@@ -28,7 +28,7 @@ class DataSet(object):
 
         pool_opts = {}
         if options is not None:
-            pool_opts['client_settings'] = pool_opts
+            pool_opts['client_settings'] = options
 
         return NativeDriverBatchWriter(
             self._schema,
