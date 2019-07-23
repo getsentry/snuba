@@ -1,6 +1,12 @@
+import json
 import logging
+from datetime import datetime
 
-from snuba.clickhouse import Array
+import requests
+from six.moves import map as imap
+from six.moves.urllib.parse import urlencode, urljoin
+
+from snuba.clickhouse import DATETIME_FORMAT, Array
 
 
 logger = logging.getLogger('snuba.writer')
@@ -34,3 +40,27 @@ class NativeDriverBatchWriter(BatchWriter):
             'colnames': ", ".join(col.escaped for col in columns),
             'table': self.__schema.get_table_name(),
         }, [self.__row_to_column_list(columns, row) for row in rows], types_check=False)
+
+
+class HTTPBatchWriter(BatchWriter):
+    def __init__(self, schema, host, port, options=None):
+        self.__schema = schema
+        self.__base_url = 'http://{host}:{port}/'.format(host=host, port=port)
+        self.__options = options if options is not None else {}
+
+    def __default(self, value):
+        if isinstance(value, datetime):
+            return value.strftime(DATETIME_FORMAT)
+        else:
+            raise TypeError
+
+    def __encode(self, row):
+        return json.dumps(row, default=self.__default).encode('utf-8')
+
+    def write(self, rows):
+        parameters = self.__options.copy()
+        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__schema.get_table_name())
+        requests.post(
+            urljoin(self.__base_url, '?' + urlencode(parameters)),
+            data=imap(self.__encode, rows),
+        ).raise_for_status()

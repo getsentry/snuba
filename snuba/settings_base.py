@@ -17,6 +17,7 @@ DATASET_MODE = 'local'
 [default_clickhouse_host, default_clickhouse_port] = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000').split(':', 1)
 CLICKHOUSE_HOST = os.environ.get('CLICKHOUSE_HOST', default_clickhouse_host)
 CLICKHOUSE_PORT = int(os.environ.get('CLICKHOUSE_PORT', default_clickhouse_port))
+CLICKHOUSE_HTTP_PORT = int(os.environ.get('CLICKHOUSE_HTTP_PORT', 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
