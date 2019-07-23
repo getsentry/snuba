@@ -26,7 +26,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.metrics = metrics
         self.__writer = dataset.get_writer({
             'load_balancing': 'in_order',
-            'insert_distributed_sync': True,
+            'insert_distributed_sync': 1,
         })
 
     def process_message(self, message):
