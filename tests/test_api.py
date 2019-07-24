@@ -800,7 +800,7 @@ class TestApi(BaseEventsTest):
                 'received': time.mktime(self.base_time.timetuple()),
             }
         })
-        response = self.app.post('/tests/eventstream', data=json.dumps(event))
+        response = self.app.post('/tests/events/eventstream', data=json.dumps(event))
         assert response.status_code == 200
 
         query = {
@@ -822,13 +822,13 @@ class TestApi(BaseEventsTest):
             'group_ids': [group_id],
             'datetime': (self.base_time + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         })
-        response = self.app.post('/tests/eventstream', data=json.dumps(event))
+        response = self.app.post('/tests/events/eventstream', data=json.dumps(event))
         assert response.status_code == 200
 
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result['data'] == []
 
-        assert self.app.post('/tests/drop').status_code == 200
+        assert self.app.post('/tests/events/drop').status_code == 200
         dataset = get_dataset('events')
         table = dataset.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
