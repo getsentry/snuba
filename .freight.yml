@@ -13,7 +13,7 @@ kubernetes:
 steps:
 - kind: KubernetesDeployment
   selector:
-    label_selector: service=snuba
+    label_selector: service=snuba,environment={environment}
   containers:
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: api
@@ -23,7 +23,7 @@ steps:
     name: replacer
 - kind: KubernetesCronJob
   selector:
-    label_selector: service=snuba
+    label_selector: service=snuba,environment={environment}
   containers:
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: cleanup
