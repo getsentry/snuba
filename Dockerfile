@@ -1,4 +1,4 @@
-FROM python:2-slim
+FROM python:3.6-slim
 
 RUN groupadd -r snuba && useradd -r -g snuba snuba
 
