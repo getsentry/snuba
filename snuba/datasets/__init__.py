@@ -23,14 +23,16 @@ class DataSet(object):
         return self.__processor
 
     def get_writer(self, options=None):
-        from snuba import settings
-        from snuba.writer import HTTPBatchWriter
+        from snuba.clickhouse import ClickhousePool
+        from snuba.writer import NativeDriverBatchWriter
 
-        return HTTPBatchWriter(
+        pool_opts = {}
+        if options is not None:
+            pool_opts['client_settings'] = options
+
+        return NativeDriverBatchWriter(
             self._schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            options,
+            ClickhousePool(**pool_opts),
         )
 
     def default_conditions(self, body):
