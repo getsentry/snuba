@@ -25,11 +25,7 @@ if [ "$1" = 'api' ]; then
 fi
 
 if snuba "$1" --help > /dev/null 2>&1; then
-  if [ "$1" = 'consumer' ] || [ "$1" = 'replacer' ]; then
-    set -- /pypy/bin/snuba "$@"
-  else
-    set -- snuba "$@"
-  fi
+  set -- snuba "$@"
 fi
 
 exec gosu snuba "$@"

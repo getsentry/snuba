@@ -90,7 +90,7 @@ def _unicodify(s):
     if isinstance(s, dict) or isinstance(s, list):
         return json.dumps(s)
 
-    return six.text_type(s)
+    return six.text_type(s).encode('utf8', errors='backslashreplace').decode('utf8')
 
 
 def _hashify(h):
