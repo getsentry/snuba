@@ -65,23 +65,6 @@ RUN set -ex; \
     PREFIX=/usr make install; \
     rm -r /usr/src/librdkafka; \
     \
-# Install PyPy at /pypy, for running the consumer code. Note that PyPy is built
-# against libssl1.0.0, so this is required for using the SSL module, which is
-# required to bootstrap pip. Since this is a short term stopgap it seemed better
-# than building PyPy ourselves.
-    cd ; \
-    wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-linux64.tar.bz2; \
-    [ "$(sha256sum pypy2-v6.0.0-linux64.tar.bz2)" = '6cbf942ba7c90f504d8d6a2e45d4244e3bf146c8722d64e9410b85eac6b5af67  pypy2-v6.0.0-linux64.tar.bz2' ]; \
-    tar xf pypy2-v6.0.0-linux64.tar.bz2; \
-    rm -rf pypy2-v6.0.0-linux64.tar.bz2; \
-    mv pypy2-v6.0.0-linux64 /pypy; \
-    wget http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    DEBIAN_FRONTEND=noninteractive dpkg -i libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    rm -rf libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    wget https://bootstrap.pypa.io/get-pip.py; \
-    /pypy/bin/pypy get-pip.py; \
-    rm -rf get-pip.py; \
-    \
     apt-get purge -y --auto-remove $buildDeps
 
 COPY snuba ./snuba/
@@ -105,8 +88,6 @@ RUN set -ex; \
     \
     make install-python-dependencies; \
     snuba --help; \
-    PATH=/pypy/bin:$PATH make install-python-dependencies; \
-    /pypy/bin/snuba --help; \
     \
     rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
