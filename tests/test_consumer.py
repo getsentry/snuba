@@ -4,7 +4,6 @@ from mock import patch
 import simplejson as json
 import time
 from datadog import statsd
-from six.moves import range
 
 from base import (
     BaseTest,

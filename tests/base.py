@@ -2,7 +2,6 @@ import calendar
 from hashlib import md5
 from datetime import datetime, timedelta
 import uuid
-import six
 
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
@@ -89,7 +88,7 @@ class FakeKafkaConsumer(object):
         return [
             TopicPartition(topic, partition, offset)
             for (topic, partition), offset in
-            six.iteritems(self.positions)
+            self.positions.items()
         ]
 
     def close(self, *args, **kwargs):

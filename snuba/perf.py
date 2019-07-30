@@ -1,7 +1,6 @@
 import cProfile
 import logging
 import os
-import six
 import tempfile
 import time
 from itertools import chain
@@ -20,8 +19,8 @@ class FakeKafkaMessage(object):
         self._value = value
         self._key = key
         self._headers = {
-            six.text_type(k): six.text_type(v) if v else None
-            for k, v in six.iteritems(headers)
+            str(k): str(v) if v else None
+            for k, v in headers.items()
         } if headers else None
         self._headers = headers
         self._error = error
@@ -115,7 +114,7 @@ def run(events_file, dataset, repeat=1,
     time_total = (time_finish - time_start) * 1000
     num_events = len(processed)
 
-    logger.info("Number of events: %s" % six.text_type(num_events).rjust(10, ' '))
+    logger.info("Number of events: %s" % str(num_events).rjust(10, ' '))
     logger.info("Total:            %sms" % format_time(time_total))
     logger.info("Total process:    %sms" % format_time(time_to_process))
     logger.info("Total write:      %sms" % format_time(time_to_write))

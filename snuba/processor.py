@@ -2,7 +2,6 @@ from datetime import datetime
 import re
 from hashlib import md5
 import simplejson as json
-import six
 
 from snuba.util import force_bytes
 
@@ -90,7 +89,7 @@ def _unicodify(s):
     if isinstance(s, dict) or isinstance(s, list):
         return json.dumps(s)
 
-    return six.text_type(s).encode('utf8', errors='backslashreplace').decode('utf8')
+    return str(s).encode('utf8', errors='backslashreplace').decode('utf8')
 
 
 def _hashify(h):

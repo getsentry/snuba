@@ -84,7 +84,6 @@ setup(
         'simplegeneric==0.8.1',
         'simplejson==3.15.0',
         'singledispatch==3.4.0.3',
-        'six==1.11.0',
         'traceback2==1.4.0',
         'traitlets==4.3.2',
         'unittest2==1.1.0',

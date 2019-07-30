@@ -1,8 +1,7 @@
 import logging
+import queue
 import re
 import time
-
-from six.moves import queue, range
 
 from clickhouse_driver import Client, errors
 from snuba import settings

@@ -3,8 +3,7 @@ import logging
 from datetime import datetime
 
 import requests
-from six.moves import map as imap
-from six.moves.urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode, urljoin
 
 from snuba.clickhouse import DATETIME_FORMAT, Array
 
@@ -62,5 +61,5 @@ class HTTPBatchWriter(BatchWriter):
         parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__schema.get_table_name())
         requests.post(
             urljoin(self.__base_url, '?' + urlencode(parameters)),
-            data=imap(self.__encode, rows),
+            data=map(self.__encode, rows),
         ).raise_for_status()

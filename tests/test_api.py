@@ -7,7 +7,6 @@ import pytest
 import pytz
 from sentry_sdk import Hub, Client
 import simplejson as json
-import six
 import time
 import uuid
 
@@ -76,7 +75,7 @@ class TestApi(BaseEventsTest):
                             'tags': {
                                 # Sentry
                                 'environment': self.environments[(tock * p) % len(self.environments)],
-                                'sentry:release': six.text_type(tick),
+                                'sentry:release': str(tick),
                                 'sentry:dist': 'dist1',
                                 'os.name': 'windows',
                                 'os.rooted': 1,
