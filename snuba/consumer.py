@@ -1,7 +1,6 @@
 import collections
 import logging
 import simplejson as json
-import six
 
 from batching_kafka_consumer import AbstractBatchWorker
 
@@ -74,7 +73,7 @@ class ConsumerWorker(AbstractBatchWorker):
             for key, replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic,
-                    key=six.text_type(key).encode('utf-8'),
+                    key=str(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
                 )

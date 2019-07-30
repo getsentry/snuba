@@ -3,7 +3,6 @@ from snuba import settings
 from snuba.datasets import factory
 import jsonschema
 import copy
-import six
 
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
@@ -302,7 +301,7 @@ def validate(value, schema, set_defaults=True):
     orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
-        for property, subschema in six.iteritems(properties):
+        for property, subschema in properties.items():
             if 'default' in subschema:
                 if callable(subschema['default']):
                     instance.setdefault(property, subschema['default']())
@@ -334,7 +333,7 @@ def generate(schema):
         default = schema['default']
         return default() if callable(default) else default
     elif typ == 'object':
-        return {prop: generate(subschema) for prop, subschema in six.iteritems(schema.get('properties', {}))}
+        return {prop: generate(subschema) for prop, subschema in schema.get('properties', {}).items()}
     elif typ == 'array':
         return []
     elif typ == 'string':

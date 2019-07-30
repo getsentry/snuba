@@ -1,5 +1,4 @@
 import logging
-import six
 import time
 from collections import deque
 from datetime import datetime
@@ -150,7 +149,7 @@ def process_delete_groups(message, required_columns):
     if not group_ids:
         return None
 
-    assert all(isinstance(gid, six.integer_types) for gid in group_ids)
+    assert all(isinstance(gid, int) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'deleted' else '1', required_columns)
 
@@ -202,7 +201,7 @@ def process_merge(message, all_column_names):
     if not previous_group_ids:
         return None
 
-    assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
+    assert all(isinstance(gid, int) for gid in previous_group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
@@ -242,7 +241,7 @@ def process_unmerge(message, all_column_names):
     if not hashes:
         return None
 
-    assert all(isinstance(h, six.string_types) for h in hashes)
+    assert all(isinstance(h, str) for h in hashes)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
@@ -284,7 +283,7 @@ def process_delete_tag(message, dataset):
     if not tag:
         return None
 
-    assert isinstance(tag, six.string_types)
+    assert isinstance(tag, str)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
     tag_column_name = dataset.get_tag_column_map()['tags'].get(tag, tag)
     is_promoted = tag in dataset.get_promoted_tags()['tags']

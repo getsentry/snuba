@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 import logging
-import six
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
@@ -75,7 +74,7 @@ class EventsProcessor(MessageProcessor):
                                     'end_unmerge', 'end_delete_tag'):
                             # pass raw events along to republish
                             action_type = self.REPLACE
-                            processed = (six.text_type(event['project_id']), message)
+                            processed = (str(event['project_id']), message)
                         else:
                             raise InvalidMessageType("Invalid message type: {}".format(type_))
 
@@ -269,7 +268,7 @@ class EventsProcessor(MessageProcessor):
     def extract_extra_contexts(self, output, contexts):
         context_keys = []
         context_values = []
-        valid_types = (int, float) + six.string_types
+        valid_types = (int, float, str)
         for ctx_name, ctx_obj in contexts.items():
             if isinstance(ctx_obj, dict):
                 ctx_obj.pop('type', None)  # ignore type alias

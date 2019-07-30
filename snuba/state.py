@@ -6,7 +6,6 @@ import logging
 import random
 import re
 import simplejson as json
-import six
 import time
 import uuid
 
@@ -200,7 +199,7 @@ def abtest(value):
     1000:1/2000:1 => returns 1000 or 2000 with equal weight
     1000:2/2000:1 => returns 1000 twice as often as 2000
     """
-    if isinstance(value, six.string_types) and ABTEST_RE.match(value):
+    if isinstance(value, str) and ABTEST_RE.match(value):
         values = ABTEST_RE.findall(value)
         total_weight = sum(int(weight or 1) for (_, weight) in values)
         r = random.randint(1, total_weight)
@@ -236,7 +235,7 @@ def set_config(key, value, user=None):
 
 
 def set_configs(values, user=None):
-    for k, v in six.iteritems(values):
+    for k, v in values.items():
         set_config(k, v, user=user)
 
 
@@ -250,14 +249,14 @@ def get_configs(key_defaults):
 
 
 def get_all_configs():
-    return {k: abtest(v) for k, v in six.iteritems(get_raw_configs())}
+    return {k: abtest(v) for k, v in get_raw_configs().items()}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
 def get_raw_configs():
     try:
         all_configs = rds.hgetall(config_hash)
-        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
+        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in all_configs.items() if v is not None}
     except Exception as ex:
         logger.exception(ex)
         return {}

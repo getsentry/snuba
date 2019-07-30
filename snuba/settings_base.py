@@ -1,5 +1,4 @@
 import os
-import six
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 

@@ -14,7 +14,6 @@ import logging
 import numbers
 import re
 import simplejson as json
-import six
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
@@ -120,7 +119,7 @@ def is_function(column_expr, depth=0):
     """
     if (isinstance(column_expr, (tuple, list))
             and len(column_expr) >= 2
-            and isinstance(column_expr[0], six.string_types)
+            and isinstance(column_expr[0], str)
             and isinstance(column_expr[1], (tuple, list))
             and (depth > 0 or len(column_expr) <= 3)):
         assert SAFE_FUNCTION_RE.match(column_expr[0])
@@ -145,7 +144,7 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
 
     if is_function(column_name, 0):
         return complex_column_expr(dataset, column_name, body)
-    elif isinstance(column_name, six.string_types) and QUOTED_LITERAL_RE.match(column_name):
+    elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     elif column_name in settings.TIME_GROUP_COLUMNS:
         expr = time_expr(column_name, body['granularity'])
@@ -177,7 +176,7 @@ def complex_column_expr(dataset, expr, body, depth=0):
             nxt = args[i]
             if is_function(nxt, depth + 1):  # Embedded function
                 out.append(complex_column_expr(dataset, nxt, body, depth + 1))
-            elif isinstance(nxt, six.string_types):
+            elif isinstance(nxt, str):
                 out.append(column_expr(dataset, nxt, body))
             else:
                 out.append(escape_literal(nxt))
@@ -219,7 +218,7 @@ def is_condition(cond_or_list):
         # where the middle element is an operator
         cond_or_list[1] in schemas.CONDITION_OPERATORS and
         # and the first element looks like a column name or expression
-        isinstance(cond_or_list[0], (six.string_types, tuple, list))
+        isinstance(cond_or_list[0], (str, tuple, list))
     )
 
 
@@ -255,7 +254,7 @@ def columns_in_expr(expr):
     cols = []
     # TODO possibly exclude quoted args to functions as those are
     # string literals, not column names.
-    if isinstance(expr, six.string_types):
+    if isinstance(expr, str):
         cols.append(expr.lstrip('-'))
     elif (isinstance(expr, (list, tuple)) and len(expr) >= 2
           and isinstance(expr[1], (list, tuple))):
@@ -309,7 +308,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         # where all elements match (eg. all NOT LIKE 'foo').
         columns = dataset.get_schema().get_columns()
         if (
-            isinstance(lhs, six.string_types) and
+            isinstance(lhs, str) and
             lhs in columns and
             type(columns[lhs].type) == clickhouse.Array and
             columns[lhs].base_name != body.get('arrayjoin') and
@@ -347,7 +346,7 @@ def escape_literal(value):
     """
     Escape a literal value for use in a SQL clause.
     """
-    if isinstance(value, six.string_types):
+    if isinstance(value, str):
         return escape_string(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
@@ -390,7 +389,7 @@ def raw_query(body, sql, client, timer, stats=None):
     all_confs = state.get_all_configs()
     query_settings = {
         k.split('/', 1)[1]: v
-        for k, v in six.iteritems(all_confs)
+        for k, v in all_confs.items()
         if k.startswith('query_settings/')
     }
 
@@ -474,7 +473,7 @@ def raw_query(body, sql, client, timer, stats=None):
                                 timer.mark('cache_set')
 
                         except BaseException as ex:
-                            error = six.text_type(ex)
+                            error = str(ex)
                             status = 500
                             logger.exception("Error running query: %s\n%s", sql, error)
                             if isinstance(ex, ClickHouseError):
@@ -623,7 +622,7 @@ class Timer(object):
         name = self.marks[0][0]
         final = self.finish()
         metrics.timing(name, final['duration_ms'], tags=tags)
-        for mark, duration in six.iteritems(final['marks_ms']):
+        for mark, duration in final['marks_ms'].items():
             metrics.timing('{}.{}'.format(name, mark), duration, tags=mark_tags)
 
 
