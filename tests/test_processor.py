@@ -1,5 +1,3 @@
-import pytest
-
 from snuba.processor import _unicodify
 
 

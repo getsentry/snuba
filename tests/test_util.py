@@ -1,6 +1,5 @@
 from datetime import date, datetime
 import pytest
-import simplejson as json
 import time
 
 from base import BaseTest

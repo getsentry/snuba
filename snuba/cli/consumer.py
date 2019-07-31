@@ -4,7 +4,7 @@ import signal
 import click
 from confluent_kafka import Producer
 
-from snuba import settings, datasets
+from snuba import settings
 from snuba.datasets.factory import get_dataset
 
 
