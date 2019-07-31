@@ -10,7 +10,7 @@ import simplejson as json
 import time
 import uuid
 
-from snuba import processor, settings, state
+from snuba import settings, state
 from snuba.datasets.factory import get_dataset
 
 from base import BaseEventsTest

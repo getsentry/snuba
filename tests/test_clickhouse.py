@@ -1,7 +1,7 @@
 from base import BaseEventsTest
 
-from clickhouse_driver import Client, errors
-from mock import patch, call, Mock
+from clickhouse_driver import errors
+from mock import patch, call
 
 from snuba.clickhouse import (
     Array, ColumnSet, Nested, Nullable, String, UInt,

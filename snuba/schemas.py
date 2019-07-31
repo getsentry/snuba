@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from snuba import settings
 from snuba.datasets import factory
 import jsonschema
 import copy

@@ -14,7 +14,6 @@ from base import (
     get_event
 )
 
-from snuba import processor
 from snuba.consumer import ConsumerWorker
 
 

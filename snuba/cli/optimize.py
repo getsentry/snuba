@@ -2,7 +2,7 @@ import logging
 
 import click
 
-from snuba import settings, datasets
+from snuba import settings
 from snuba.datasets.factory import get_dataset
 
 
