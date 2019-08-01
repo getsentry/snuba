@@ -79,35 +79,6 @@ QUERY_SCHEMA = {
             'type': 'number',
             'default': 3600,
         },
-        'use_group_id_column': {
-            # TODO this flag is deprecated and is ignored by the code.
-            # Remove it when clients are no longer sending it.
-            'type': ['boolean', 'number'],
-            'default': True
-        },
-        'issues': {
-            'type': 'array',
-            'items': {
-                'type': 'array',
-                'minItems': 3,
-                'maxItems': 3,
-                'items': [
-                    {'type': 'number'},
-                    {'type': 'number'},
-                    {
-                        'type': 'array',
-                        'items': {
-                            'anyOf': [
-                                {'$ref': '#/definitions/fingerprint_hash'},
-                                {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
-                            ],
-                        },
-                        'minItems': 1,
-                    },
-                ],
-            },
-            'default': [],
-        },
         'project': {
             'anyOf': [
                 {'type': 'number'},
@@ -226,29 +197,9 @@ QUERY_SCHEMA = {
     'additionalProperties': False,
 
     'definitions': {
-        'fingerprint_hash': {
-            'type': 'string',
-            'minLength': 32,
-            'maxLength': 32,
-            'pattern': '^[0-9a-f]{32}$',
-        },
-        'fingerprint_hash_with_tombstone': {
-            'type': 'array',
-            'items': [
-                {'$ref': '#/definitions/fingerprint_hash'},
-                {
-                    'anyOf': [
-                        {'type': 'null'},
-                        {'pattern': r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
-                    ]
-                },
-            ],
-        },
         'column_name': {
             'type': 'string',
             'anyOf': [
-                # Special computed column created from `issues` definition
-                {'enum': ['issue', '-issue']},
                 {'pattern': '^-?[a-zA-Z0-9_.]+$', },
                 {'pattern': r'^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
             ],

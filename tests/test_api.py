@@ -174,7 +174,6 @@ class TestApi(BaseEventsTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [],
             'groupby': 'issue',
         })).data)
         assert 'error' not in result
@@ -442,7 +441,6 @@ class TestApi(BaseEventsTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -450,7 +448,6 @@ class TestApi(BaseEventsTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -564,12 +561,10 @@ class TestApi(BaseEventsTest):
     def test_column_expansion(self):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
-        issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
         response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
-            'issues': issues,
             'conditions': [
                 ['issue', '=', 0],
                 ['issue', '=', 1],
@@ -669,7 +664,6 @@ class TestApi(BaseEventsTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [(i, 1, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
