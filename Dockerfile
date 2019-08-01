@@ -92,9 +92,10 @@ RUN set -ex; \
     rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
-ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
-ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
+ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
+    FLASK_DEBUG=0 \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 1218
 
