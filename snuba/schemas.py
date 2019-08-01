@@ -197,24 +197,6 @@ QUERY_SCHEMA = {
     'additionalProperties': False,
 
     'definitions': {
-        'fingerprint_hash': {
-            'type': 'string',
-            'minLength': 32,
-            'maxLength': 32,
-            'pattern': '^[0-9a-f]{32}$',
-        },
-        'fingerprint_hash_with_tombstone': {
-            'type': 'array',
-            'items': [
-                {'$ref': '#/definitions/fingerprint_hash'},
-                {
-                    'anyOf': [
-                        {'type': 'null'},
-                        {'pattern': r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
-                    ]
-                },
-            ],
-        },
         'column_name': {
             'type': 'string',
             'anyOf': [
