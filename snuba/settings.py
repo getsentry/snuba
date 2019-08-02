@@ -5,23 +5,27 @@ def _load_settings(obj=locals()):
     main Snuba directory, or they can provide a full absolute path such as
     `/foo/bar/my_settings.py`."""
 
+    import importlib
+    import importlib.util
     import os
-    import imp
-
-    path = os.path.dirname(__file__)
 
     settings = os.environ.get('SNUBA_SETTINGS', 'base')
     if not settings.startswith('/') and not settings.startswith('settings_'):
-        settings = 'settings_%s' % settings
-    if not settings.endswith('.py'):
+        settings = '.settings_%s' % settings
+    elif not settings.endswith('.py'):
         settings += '.py'
 
-    settings = os.path.join(path, settings)
-    settings = imp.load_source('snuba.settings', settings)
+    if settings.startswith('/'):
+        # Code below is adapted from https://stackoverflow.com/a/41595552/90297S
+        settings_spec = importlib.util.spec_from_file_location('snuba.settings.custom', settings)
+        settings_module = importlib.util.module_from_spec(settings_spec)
+        settings_spec.loader.exec_module(settings_module)
+    else:
+        settings_module = importlib.import_module(settings, 'snuba')
 
-    for attr in dir(settings):
+    for attr in dir(settings_module):
         if attr.isupper():
-            obj[attr] = getattr(settings, attr)
+            obj[attr] = getattr(settings_module, attr)
 
 
 _load_settings()
