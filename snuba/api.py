@@ -263,7 +263,7 @@ def parse_and_run_query(validated_body, timer):
         prewhere_candidates = sorted([
             (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
             for cols, cond in prewhere_candidates
-        ])
+        ], key=lambda column_and_cond: column_and_cond[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
 
