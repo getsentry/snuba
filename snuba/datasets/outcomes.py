@@ -21,8 +21,8 @@ class OutcomesProcessor(MessageProcessor):
         assert isinstance(value, dict)
         v_uuid = value.get('event_id')
         message = {
-            'org_id': value['org_id'],
-            'project_id': value['project_id'],
+            'org_id': value.get('org_id', 0),
+            'project_id': value.get('project_id', 0),
             'key_id': value.get('key_id'),
             'timestamp': _ensure_valid_date(
                 datetime.strptime(value['timestamp'], settings.PAYLOAD_DATETIME_FORMAT),
