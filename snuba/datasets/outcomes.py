@@ -19,16 +19,17 @@ from snuba import settings
 class OutcomesProcessor(MessageProcessor):
     def process_message(self, value, metadata):
         assert isinstance(value, dict)
+        v_uuid = value.get('event_id')
         message = {
             'org_id': value['org_id'],
             'project_id': value['project_id'],
-            'key_id': value['key_id'],
+            'key_id': value.get('key_id'),
             'timestamp': _ensure_valid_date(
                 datetime.strptime(value['timestamp'], settings.PAYLOAD_DATETIME_FORMAT),
             ),
             'outcome': value['outcome'],
-            'reason': _unicodify(value['reason']),
-            'event_id': str(uuid.UUID(value['event_id'])),
+            'reason': _unicodify(value.get('reason')),
+            'event_id': str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
         return (self.INSERT, message)
