@@ -14,11 +14,11 @@ def get_dataset(name):
 
     assert name not in settings.DISABLED_DATASETS, "Dataset %s not available in this environment" % name
 
-    from snuba.datasets.events import EventsDataSet
-    from snuba.datasets.cdc.groupedmessage import GroupedMessageDataSet
+    from snuba.datasets.events import EventsDataset
+    from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     dataset_mappings = {
-        'events': EventsDataSet,
-        'groupedmessage': GroupedMessageDataSet,
+        'events': EventsDataset,
+        'groupedmessage': GroupedMessageDataset,
     }
 
     dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
