@@ -66,10 +66,13 @@ class MergeTreeSchema(TableSchema):
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name)
-        self._order_by = order_by
-        self._partition_by = partition_by
-        self._sample_expr = sample_expr
+        self.__order_by = order_by
+        self.__partition_by = partition_by
+        self.__sample_expr = sample_expr
         self.__settings = settings
+
+    def _get_engine_type(self):
+        return "MergeTree()"
 
     def _get_local_engine(self):
         partition_by_clause = "PARTITION BY %s" % \
@@ -86,11 +89,12 @@ class MergeTreeSchema(TableSchema):
             settings_clause = ''
 
         return """
-            MergeTree()
+            %(engine_type)s
              %(partition_by_clause)s
-            ORDER BY %(order_by)s
+             ORDER BY %(order_by)s
              %(sample_clause)s
              %(settings_clause)s;""" % {
+            'engine_type': self._get_engine_type(),
             'order_by': self._order_by,
             'partition_by_clause': partition_by_clause,
             'sample_clause': sample_clause,
@@ -101,7 +105,8 @@ class MergeTreeSchema(TableSchema):
 class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, version_column, sample_expr):
+            order_by, partition_by, version_column,
+            sample_expr=None, settings=None):
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -109,19 +114,8 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             order_by=order_by,
             partition_by=partition_by,
             sample_expr=sample_expr,
-            settings=None)
+            settings=settings)
         self.__version_column = version_column
 
-    def _get_local_engine(self):
-        partition_by_clause = "PARTITION BY %s" % \
-            self._partition_by if self._partition_by else ''
-        return """
-            ReplacingMergeTree(%(version_column)s)
-             %(partition_by_clause)s
-            ORDER BY %(order_by)s
-            SAMPLE BY %(sample_expr)s ;""" % {
-            'order_by': self._order_by,
-            'partition_by_clause': partition_by_clause,
-            'version_column': self.__version_column,
-            'sample_expr': self._sample_expr,
-        }
+    def _get_engine_type(self):
+        return "ReplacingMergeTree(%s)" % self.__version_column
