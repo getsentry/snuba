@@ -11,7 +11,7 @@ from snuba.clickhouse import (
     UUID,
 )
 from snuba.datasets import Dataset
-from snuba.processor import _ensure_valid_date, MessageProcessor
+from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
 from snuba.datasets.schema import MergeTreeSchema
 from snuba import settings
 
@@ -27,7 +27,7 @@ class OutcomesProcessor(MessageProcessor):
                 datetime.strptime(value['timestamp'], settings.PAYLOAD_DATETIME_FORMAT),
             ),
             'outcome': value['outcome'],
-            'reason': value['reason'],
+            'reason': _unicodify(value['reason']),
             'event_id': str(uuid.UUID(value['event_id'])),
         }
 
@@ -35,6 +35,10 @@ class OutcomesProcessor(MessageProcessor):
 
 
 class OutcomesDataset(Dataset):
+    """
+    Tracks event ingesiton outcomes in Sentry.
+    """
+
     def __init__(self):
         columns = ColumnSet([
             ('org_id', UInt(64)),
@@ -48,8 +52,9 @@ class OutcomesDataset(Dataset):
 
         schema = MergeTreeSchema(
             columns=columns,
-            local_table_name='raw_local',
-            dist_table_name='raw_dist',
+            # TODO: change to outcomes.raw_local when we add multi DB support
+            local_table_name='outcomes_raw_local',
+            dist_table_name='outcomes_raw_dist',
             order_by='(org_id, project_id, timestamp)',
             partition_by='(toMonday(timestamp))',
             settings={

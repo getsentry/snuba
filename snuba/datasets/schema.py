@@ -76,15 +76,14 @@ class MergeTreeSchema(TableSchema):
 
     def _get_local_engine(self):
         partition_by_clause = "PARTITION BY %s" % \
-            self._partition_by if self._partition_by else ''
+            self.__partition_by if self.__partition_by else ''
 
         sample_clause = "SAMPLE BY %s" % \
-            self._sample_expr if self._sample_expr else ''
+            self.__sample_expr if self.__sample_expr else ''
 
         if self.__settings:
             settings_list = ["%s=%s" % (k, v) for k, v in self.__settings.items()]
-            settings_string = ", ".join(settings_list)
-            settings_clause = "SETTINGS %s" % settings_string
+            settings_clause = "SETTINGS %s" % ", ".join(settings_list)
         else:
             settings_clause = ''
 
@@ -95,7 +94,7 @@ class MergeTreeSchema(TableSchema):
              %(sample_clause)s
              %(settings_clause)s;""" % {
             'engine_type': self._get_engine_type(),
-            'order_by': self._order_by,
+            'order_by': self.__order_by,
             'partition_by_clause': partition_by_clause,
             'sample_clause': sample_clause,
             'settings_clause': settings_clause,
