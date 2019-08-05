@@ -62,3 +62,10 @@ class Dataset(object):
 
         """
         return column_name
+
+    def get_bulk_loader(self, source, dest_table):
+        """
+        Returns the instance of the bulk loader to populate the dataset from an
+        external source when present.
+        """
+        raise NotImplementedError
