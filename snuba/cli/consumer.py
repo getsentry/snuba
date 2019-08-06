@@ -98,5 +98,6 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         consumer.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
 
     consumer.run()
