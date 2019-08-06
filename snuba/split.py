@@ -152,7 +152,7 @@ def split_query(query_func):
             if is_timestamp_ordered:
                 timestamps = [event['timestamp'] for event in result['data']]
                 from_date = util.parse_datetime(min(timestamps))
-                to_date = util.parse_datetime(max(timestamps))
+                to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
                 body['from_date'] = from_date.isoformat()
                 body['to_date'] = to_date.isoformat()
 
