@@ -21,6 +21,8 @@ steps:
     name: consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: replacer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: outcomes-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba

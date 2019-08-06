@@ -19,7 +19,7 @@ from snuba.datasets.factory import get_dataset
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=None, multiple=True,
               help='Kafka bootstrap server to use.')
-@click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage']),
+@click.option('--dataset', default='events', type=click.Choice(['events', 'groupedmessage', 'outcomes']),
               help='The dataset to target')
 @click.option('--max-batch-size', default=settings.DEFAULT_MAX_BATCH_SIZE,
               help='Max number of messages to batch in memory before writing to Kafka.')

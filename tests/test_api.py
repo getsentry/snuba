@@ -977,6 +977,19 @@ class TestApi(BaseApiTest):
         })).data)
         assert sorted(r['project_id'] for r in response['data']) == [3]
 
+    def test_gracefully_handle_multiple_conditions_on_same_column(self):
+        response = self.app.post('/query', data=json.dumps({
+            'project': [2],
+            'selected_columns': ['timestamp'],
+            'conditions': [
+                ['issue', 'IN', [2, 1]],
+                [['isNull', ['issue']], '=', 1]
+            ],
+            'debug': True,
+        }))
+
+        assert response.status_code == 200
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
