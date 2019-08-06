@@ -13,10 +13,8 @@ STEP_GROWTH = 10
 def split_query(query_func):
     def wrapper(*args, **kwargs):
         body = args[0]
-        use_split, date_align, split_step = state.get_configs([
+        use_split = state.get_configs([
             ('use_split', 0),
-            ('date_align_seconds', 1),
-            ('split_step', 3600),  # default 1 hour
         ])
         limit = body.get('limit', 0)
         remaining_offset = body.get('offset', 0)
@@ -57,8 +55,7 @@ def split_query(query_func):
         """
         body = args[0]
 
-        use_split, date_align, split_step = state.get_configs([
-            ('use_split', 0),
+        date_align, split_step = state.get_configs([
             ('date_align_seconds', 1),
             ('split_step', 3600),  # default 1 hour
         ])
@@ -127,13 +124,6 @@ def split_query(query_func):
             - Second query selects all fields for only those events.
             - If the orderby term is based on timestamp also update the date range
         """
-
-        use_split, date_align, split_step = state.get_configs([
-            ('use_split', 0),
-            ('date_align_seconds', 1),
-            ('split_step', 3600),  # default 1 hour
-        ])
-
         body = args[0]
         orderby = util.to_list(body.get('orderby'))
         is_timestamp_ordered = orderby and orderby[0] in ('timestamp', '-timestamp')
