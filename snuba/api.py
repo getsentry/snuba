@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 from markdown import markdown
+from uuid import uuid1
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
@@ -263,7 +264,7 @@ def parse_and_run_query(validated_body, timer):
         prewhere_candidates = sorted([
             (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
             for cols, cond in prewhere_candidates
-        ])
+        ], key=lambda priority_and_col: priority_and_col[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
 
@@ -447,6 +448,20 @@ if application.debug or application.testing:
     @application.route('/tests/error')
     def error():
         1 / 0
+
+    @application.route('/subscriptions', methods=['POST'])
+    def create_subscription():
+        return json.dumps({'subscription_id': uuid1().hex}), 202, {'Content-Type': 'application/json'}
+
+
+    @application.route('/subscriptions/<uuid>/renew', methods=['POST'])
+    def renew_subscription(uuid):
+        return 'ok', 202, {'Content-Type': 'text/plain'}
+
+
+    @application.route('/subscriptions/<uuid>', methods=['DELETE'])
+    def delete_subscription(uuid):
+        return 'ok', 202, {'Content-Type': 'text/plain'}
 else:
     def ensure_table_exists(dataset, force=False):
         pass

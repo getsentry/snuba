@@ -218,6 +218,21 @@ class Nullable(ColumnType):
         return u'Nullable({})'.format(self.inner_type.for_schema())
 
 
+class LowCardinality(ColumnType):
+    def __init__(self, inner_type):
+        self.inner_type = inner_type
+
+    def __repr__(self):
+        return u'LowCardinality({})'.format(repr(self.inner_type))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.inner_type == other.inner_type
+
+    def for_schema(self):
+        return u'LowCardinality({})'.format(self.inner_type.for_schema())
+
+
 class Array(ColumnType):
     def __init__(self, inner_type):
         self.inner_type = inner_type
@@ -257,6 +272,10 @@ class Nested(ColumnType):
 
 
 class String(ColumnType):
+    pass
+
+
+class UUID(ColumnType):
     pass
 
 

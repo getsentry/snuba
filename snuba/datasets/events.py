@@ -12,7 +12,7 @@ from snuba.clickhouse import (
     String,
     UInt,
 )
-from snuba.datasets import DataSet
+from snuba.datasets import Dataset
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.util import (
@@ -27,7 +27,7 @@ from snuba.util import (
 NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
-class EventsDataSet(DataSet):
+class EventsDataset(Dataset):
     """
     Represents the collection of classic sentry "error" type events
     and the particular quirks of storing and querying them.
@@ -185,7 +185,7 @@ class EventsDataSet(DataSet):
             version_column='deleted',
             sample_expr=sample_expr)
 
-        super(EventsDataSet, self).__init__(
+        super(EventsDataset, self).__init__(
             schema=schema,
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",

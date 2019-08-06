@@ -3,6 +3,7 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
+from mock import patch
 import pytest
 import pytz
 from sentry_sdk import Hub, Client
@@ -13,17 +14,21 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import get_dataset
 
-from base import BaseEventsTest
+from base import BaseEventsTest, BaseTest
 
 
-class TestApi(BaseEventsTest):
+class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method):
-        super(TestApi, self).setup_method(test_method)
+        super(BaseApiTest, self).setup_method(test_method)
         from snuba.api import application
         assert application.testing is True
         application.config['PROPAGATE_EXCEPTIONS'] = False
-
         self.app = application.test_client()
+
+
+class TestApi(BaseApiTest):
+    def setup_method(self, test_method):
+        super(TestApi, self).setup_method(test_method)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -1012,3 +1017,41 @@ class TestApi(BaseEventsTest):
             'debug': True,
         })).data)
         assert sorted(r['project_id'] for r in response['data']) == [3]
+
+    def test_gracefully_handle_multiple_conditions_on_same_column(self):
+        response = self.app.post('/query', data=json.dumps({
+            'project': [2],
+            'selected_columns': ['timestamp'],
+            'conditions': [
+                ['issue', 'IN', [2, 1]],
+                [['isNull', ['issue']], '=', 1]
+            ],
+            'debug': True,
+        }))
+
+        assert response.status_code == 200
+
+
+class TestCreateSubscriptionApi(BaseApiTest):
+    def test(self):
+        expected_uuid = uuid.uuid1()
+
+        with patch('snuba.api.uuid1') as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post('/subscriptions')
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {'subscription_id': expected_uuid.hex}
+
+
+class TestRenewSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.post('/subscriptions/{}/renew'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202
+
+
+class TestDeleteSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.delete('/subscriptions/{}'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202
