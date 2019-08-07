@@ -8,9 +8,7 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = 'events'
-DISABLED_DATASETS = {
-    #    'transactions',
-}
+DISABLED_DATASETS = {}
 DATASET_MODE = 'local'
 
 # Clickhouse Options
