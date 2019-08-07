@@ -1,7 +1,8 @@
 FROM python:3.7-slim
-
+RUN date
 RUN groupadd -r snuba && useradd -r -g snuba snuba
 
+RUN date
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
@@ -19,6 +20,8 @@ RUN set -ex; \
         libpcre3 \
     ; \
     rm -rf /var/lib/apt/lists/*
+
+RUN date
 
 # grab gosu for easy step-down from root
 ENV GOSU_VERSION=1.11
@@ -68,6 +71,8 @@ RUN set -ex; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
+RUN date
+
 COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
@@ -91,12 +96,16 @@ RUN set -ex; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
+RUN date
+
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     FLASK_DEBUG=0 \
     PYTHONUNBUFFERED=1
 
 EXPOSE 1218
+
+RUN date
 
 COPY docker_entrypoint.sh ./
 ENTRYPOINT [ "./docker_entrypoint.sh" ]
