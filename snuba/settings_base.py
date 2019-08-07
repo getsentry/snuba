@@ -52,7 +52,7 @@ TIME_GROUP_COLUMNS = {
 }
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ['localhost:9093']
+DEFAULT_BROKERS = ['localhost:9092']
 DEFAULT_DATASET_BROKERS = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
@@ -65,7 +65,7 @@ DEFAULT_RETENTION_DAYS = 90
 RETENTION_OVERRIDES = {}
 
 # the list of keys that will upgrade from a WHERE condition to a PREWHERE
-PREWHERE_KEYS = ['project_id']
+PREWHERE_KEYS = ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
 MAX_PREWHERE_CONDITIONS = 1
 
 STATS_IN_RESPONSE = False

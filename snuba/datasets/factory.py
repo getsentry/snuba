@@ -6,6 +6,7 @@ DATASET_NAMES = {
     'events',
     'groupedmessage',
     'transactions',
+    'outcomes',
 }
 
 
@@ -15,13 +16,15 @@ def get_dataset(name):
 
     assert name not in settings.DISABLED_DATASETS, "Dataset %s not available in this environment" % name
 
-    from snuba.datasets.events import EventsDataSet
-    from snuba.datasets.cdc.groupedmessage import GroupedMessageDataSet
-    from snuba.datasets.transactions import TransactionsDataSet
+    from snuba.datasets.events import EventsDataset
+    from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
+    from snuba.datasets.transactions import TransactionsDataset
+    from snuba.datasets.outcomes import OutcomesDataset
     dataset_mappings = {
-        'events': EventsDataSet,
-        'groupedmessage': GroupedMessageDataSet,
-        'transactions': TransactionsDataSet,
+        'events': EventsDataset,
+        'groupedmessage': GroupedMessageDataset,
+        'transactions': TransactionsDataset,
+        'outcomes': OutcomesDataset,
     }
 
     dataset = DATASETS_IMPL[name] = dataset_mappings[name]()

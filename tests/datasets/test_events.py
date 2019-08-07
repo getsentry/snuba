@@ -6,7 +6,7 @@ from snuba.util import (
 )
 
 
-class TestEventsDataSet(BaseEventsTest):
+class TestEventsDataset(BaseEventsTest):
 
     def test_column_expr(self):
         body = {

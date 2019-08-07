@@ -1,6 +1,6 @@
-class DataSet(object):
+class Dataset(object):
     """
-    A DataSet defines the complete set of data sources, schemas, and
+    A Dataset defines the complete set of data sources, schemas, and
     transformations that are required to:
         - Consume, transform, and insert data payloads from Kafka into Clickhouse.
         - Define how Snuba API queries are transformed into SQL.

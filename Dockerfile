@@ -5,7 +5,8 @@ RUN groupadd -r snuba && useradd -r -g snuba snuba
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
-ENV PIP_DISABLE_PIP_VERSION_CHECK=on \
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
     PYTHONDONTWRITEBYTECODE=1
 
 # these are required all the way through, and removing them will cause bad things
@@ -89,12 +90,12 @@ RUN set -ex; \
     make install-python-dependencies; \
     snuba --help; \
     \
-    rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
-ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
-ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
+ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
+    FLASK_DEBUG=0 \
+    PYTHONUNBUFFERED=1
 
 EXPOSE 1218
 

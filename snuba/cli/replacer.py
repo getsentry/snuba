@@ -92,5 +92,6 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
         replacer.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
 
     replacer.run()

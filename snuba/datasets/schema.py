@@ -58,18 +58,21 @@ class TableSchema(object):
         return self.__columns
 
 
-class ReplacingMergeTreeSchema(TableSchema):
+class MergeTreeSchema(TableSchema):
 
     def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, version_column, sample_expr):
-        super(ReplacingMergeTreeSchema, self).__init__(
+            order_by, partition_by, sample_expr=None, settings=None):
+        super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name)
         self.__order_by = order_by
         self.__partition_by = partition_by
-        self.__version_column = version_column
         self.__sample_expr = sample_expr
+        self.__settings = settings
+
+    def _get_engine_type(self):
+        return "MergeTree()"
 
     def _get_local_engine(self):
         partition_by_clause = ("PARTITION BY %s" %
@@ -78,13 +81,40 @@ class ReplacingMergeTreeSchema(TableSchema):
         sample_clause = ("SAMPLE BY %s" %
             self.__sample_expr) if self.__sample_expr else ''
 
+        if self.__settings:
+            settings_list = ["%s=%s" % (k, v) for k, v in self.__settings.items()]
+            settings_clause = "SETTINGS %s" % ", ".join(settings_list)
+        else:
+            settings_clause = ''
+
         return """
-            ReplacingMergeTree(%(version_column)s)
-             %(partition_by_clause)s
-            ORDER BY %(order_by)s
-             %(sample_expr)s ;""" % {
+            %(engine_type)s
+            %(partition_by_clause)s
+            ORDER BY % (order_by)s
+            %(sample_clause)s
+            %(settings_clause)s;""" % {
+            'engine_type': self._get_engine_type(),
             'order_by': self.__order_by,
             'partition_by_clause': partition_by_clause,
-            'version_column': self.__version_column,
             'sample_expr': sample_clause,
+            'settings_clause': settings_clause,
         }
+
+
+class ReplacingMergeTreeSchema(MergeTreeSchema):
+
+    def __init__(self, local_table_name, dist_table_name, columns,
+            order_by, partition_by, version_column,
+            sample_expr=None, settings=None):
+        super(ReplacingMergeTreeSchema, self).__init__(
+            columns=columns,
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name,
+            order_by=order_by,
+            partition_by=partition_by,
+            sample_expr=sample_expr,
+            settings=settings)
+        self.__version_column = version_column
+
+    def _get_engine_type(self):
+        return "ReplacingMergeTree(%s)" % self.__version_column

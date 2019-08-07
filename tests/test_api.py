@@ -3,6 +3,7 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
+from mock import patch
 import pytest
 import pytz
 from sentry_sdk import Hub, Client
@@ -13,17 +14,21 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import get_dataset
 
-from base import BaseEventsTest
+from base import BaseEventsTest, BaseTest
 
 
-class TestApi(BaseEventsTest):
+class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method):
-        super(TestApi, self).setup_method(test_method)
+        super(BaseApiTest, self).setup_method(test_method)
         from snuba.api import application
         assert application.testing is True
         application.config['PROPAGATE_EXCEPTIONS'] = False
-
         self.app = application.test_client()
+
+
+class TestApi(BaseApiTest):
+    def setup_method(self, test_method):
+        super(TestApi, self).setup_method(test_method)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -174,7 +179,6 @@ class TestApi(BaseEventsTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [],
             'groupby': 'issue',
         })).data)
         assert 'error' not in result
@@ -442,7 +446,6 @@ class TestApi(BaseEventsTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -450,7 +453,6 @@ class TestApi(BaseEventsTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
@@ -564,12 +566,10 @@ class TestApi(BaseEventsTest):
     def test_column_expansion(self):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
-        issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
         response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
-            'issues': issues,
             'conditions': [
                 ['issue', '=', 0],
                 ['issue', '=', 1],
@@ -669,7 +669,6 @@ class TestApi(BaseEventsTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [(i, 1, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
@@ -977,3 +976,41 @@ class TestApi(BaseEventsTest):
             'debug': True,
         })).data)
         assert sorted(r['project_id'] for r in response['data']) == [3]
+
+    def test_gracefully_handle_multiple_conditions_on_same_column(self):
+        response = self.app.post('/query', data=json.dumps({
+            'project': [2],
+            'selected_columns': ['timestamp'],
+            'conditions': [
+                ['issue', 'IN', [2, 1]],
+                [['isNull', ['issue']], '=', 1]
+            ],
+            'debug': True,
+        }))
+
+        assert response.status_code == 200
+
+
+class TestCreateSubscriptionApi(BaseApiTest):
+    def test(self):
+        expected_uuid = uuid.uuid1()
+
+        with patch('snuba.api.uuid1') as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post('/subscriptions')
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {'subscription_id': expected_uuid.hex}
+
+
+class TestRenewSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.post('/subscriptions/{}/renew'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202
+
+
+class TestDeleteSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.delete('/subscriptions/{}'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202

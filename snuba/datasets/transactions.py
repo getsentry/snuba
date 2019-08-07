@@ -13,12 +13,12 @@ from snuba.clickhouse import (
     UUID,
     WithDefault,
 )
-from snuba.datasets import DataSet
+from snuba.datasets import Dataset
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 
 
-class TransactionsDataSet(DataSet):
+class TransactionsDataSet(Dataset):
     def __init__(self):
         columns = ColumnSet([
             ('project_id', UInt(64)),

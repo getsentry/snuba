@@ -1,10 +1,10 @@
 from snuba.clickhouse import ColumnSet, DateTime, Nullable, UInt
-from snuba.datasets import DataSet
+from snuba.datasets import Dataset
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 
 
-class GroupedMessageDataSet(DataSet):
+class GroupedMessageDataset(Dataset):
     """
     This is a clone of the bare minimum fields we need from postgres groupedmessage table
     to replace such a table in event search.
@@ -39,7 +39,7 @@ class GroupedMessageDataSet(DataSet):
             sample_expr='id',
         )
 
-        super(GroupedMessageDataSet, self).__init__(
+        super(GroupedMessageDataset, self).__init__(
             schema=schema,
             processor=GroupedMessageProcessor(),
             default_topic="cdc",
