@@ -68,8 +68,7 @@ RUN set -ex; \
     \
     apt-get purge -y --auto-remove $buildDeps
 
-COPY snuba ./snuba/
-COPY setup.py Makefile README.md MANIFEST.in ./
+COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
 
