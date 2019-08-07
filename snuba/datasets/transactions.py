@@ -43,10 +43,8 @@ class TransactionsDataset(Dataset):
             ('environment', Nullable(String())),
             ('release', Nullable(String())),
             ('dist', Nullable(String())),
-            ('ip_tup', Tuple([
-                ('v4', Nullable(IPv4())),
-                ('v6', Nullable(IPv6())),
-            ])),
+            ('v4', Nullable(IPv4())),
+            ('v6', Nullable(IPv6())),
             ('user', WithDefault(
                 String(),
                 "''",
@@ -72,7 +70,7 @@ class TransactionsDataset(Dataset):
             columns=columns,
             local_table_name='transactions_local',
             dist_table_name='transactions_dist',
-            order_by='(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, span_id)',
+            order_by='(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, event_id)',
             partition_by='(retention_days, toMonday(start_ts))',
             version_column='deleted',
             sample_expr=None,

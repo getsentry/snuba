@@ -279,23 +279,6 @@ class Array(ColumnType):
         return u'Array({})'.format(self.inner_type.for_schema())
 
 
-class Tuple(ColumnType):
-    def __init__(self, columns):
-        self.columns = Column.to_columns(columns)
-
-    def __repr__(self):
-        return u'Tuple({})'.format(repr(self.columns))
-
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.columns == other.columns
-
-    def for_schema(self):
-        return u'Tuple({})'.format(u", ".join(
-            column.for_schema() for column in self.columns
-        ))
-
-
 class Nested(ColumnType):
     def __init__(self, nested_columns):
         self.nested_columns = Column.to_columns(nested_columns)
