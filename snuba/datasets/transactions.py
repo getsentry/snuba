@@ -18,7 +18,7 @@ from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 
 
-class TransactionsDataSet(Dataset):
+class TransactionsDataset(Dataset):
     def __init__(self):
         columns = ColumnSet([
             ('project_id', UInt(64)),
@@ -78,7 +78,7 @@ class TransactionsDataSet(Dataset):
             sample_expr=None,
         )
 
-        super(TransactionsDataSet, self).__init__(
+        super(TransactionsDataset, self).__init__(
             schema=schema,
             processor=TransactionsMessageProcessor(),
             default_topic="transactions",

@@ -90,13 +90,13 @@ class MergeTreeSchema(TableSchema):
         return """
             %(engine_type)s
             %(partition_by_clause)s
-            ORDER BY % (order_by)s
+            ORDER BY %(order_by)s
             %(sample_clause)s
             %(settings_clause)s;""" % {
             'engine_type': self._get_engine_type(),
             'order_by': self.__order_by,
             'partition_by_clause': partition_by_clause,
-            'sample_expr': sample_clause,
+            'sample_clause': sample_clause,
             'settings_clause': settings_clause,
         }
 

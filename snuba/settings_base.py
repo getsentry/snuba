@@ -9,7 +9,7 @@ PORT = 1218
 
 DEFAULT_DATASET_NAME = 'events'
 DISABLED_DATASETS = {
-    'transactions',
+    #    'transactions',
 }
 DATASET_MODE = 'local'
 
