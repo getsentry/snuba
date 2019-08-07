@@ -43,8 +43,8 @@ class TransactionsDataset(Dataset):
             ('environment', Nullable(String())),
             ('release', Nullable(String())),
             ('dist', Nullable(String())),
-            ('v4', Nullable(IPv4())),
-            ('v6', Nullable(IPv6())),
+            ('ip_address_v4', Nullable(IPv4())),
+            ('ip_address_v6', Nullable(IPv6())),
             ('user', WithDefault(
                 String(),
                 "''",
