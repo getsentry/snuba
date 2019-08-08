@@ -52,7 +52,7 @@ TIME_GROUP_COLUMNS = {
 }
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ['localhost:9093']
+DEFAULT_BROKERS = ['localhost:9092']
 DEFAULT_DATASET_BROKERS = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
