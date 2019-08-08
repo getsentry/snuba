@@ -21,25 +21,23 @@ def split_query(query_func):
         orderby = util.to_list(body.get('orderby'))
 
         total_col_count = len(util.all_referenced_columns(body))
-        min_col_query = dict(body, **{'selected_columns': ['project_id', 'event_id', 'timestamp']})
-        min_col_count = len(util.all_referenced_columns(min_col_query))
 
-        if (
-            use_split and limit
-            and body.get('selected_columns')
-            and not body.get('groupby')
-            and not body.get('aggregations')
-            and total_col_count > min_col_count
-        ):
-            return col_split(*args, **kwargs)
-        if (
-            use_split and limit and not body.get('groupby')
-            and orderby[:1] == ['-timestamp']
-            and remaining_offset < 1000
-        ):
-            return time_split(*args, **kwargs)
-        else:
-            return query_func(*args, **kwargs)
+        common_conditions = use_split and limit and not body.get('groupby')
+
+        if common_conditions:
+            min_col_count = len(util.all_referenced_columns(
+                {**body, 'selected_columns': ['project_id', 'event_id', 'timestamp']}))
+
+            if (
+                body.get('selected_columns')
+                and not body.get('aggregations')
+                and total_col_count > min_col_count
+            ):
+                return col_split(*args, **kwargs)
+            elif orderby[:1] == ['-timestamp'] and remaining_offset < 1000:
+                return time_split(*args, **kwargs)
+
+        return query_func(*args, **kwargs)
 
     def time_split(*args, **kwargs):
         """
