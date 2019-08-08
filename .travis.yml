@@ -5,7 +5,7 @@ services:
 dist: xenial
 
 before_install:
-  - docker run -d --net host --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:19.4
+  - docker run -d --net host --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server:19.4
   - make travis-start-redis-cluster
   - docker build -t getsentry/snuba .
   - docker ps -a
