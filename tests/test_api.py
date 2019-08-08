@@ -13,6 +13,7 @@ import uuid
 
 from snuba import settings, state
 from snuba.datasets.factory import get_dataset
+from snuba.redis import redis_client
 
 from base import BaseEventsTest, BaseTest
 
@@ -103,6 +104,16 @@ class TestApi(BaseApiTest):
                         }
                     }))
         self.write_processed_events(events)
+
+    def redis_db_size(self):
+        # dbsize could be an integer for a single node cluster or a dictionary
+        # with one key value pair per node for a multi node cluster
+        dbsize = redis_client.dbsize()
+        if type(dbsize) is dict:
+            return sum(dbsize.values())
+        else:
+            return dbsize
+
 
     def test_count(self):
         """
@@ -826,10 +837,14 @@ class TestApi(BaseApiTest):
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result['data'] == []
 
+        # make sure redis has _something_ before we go about dropping all the keys in it
+        assert self.redis_db_size() > 0
+
         assert self.app.post('/tests/events/drop').status_code == 200
         dataset = get_dataset('events')
         table = dataset.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
+        assert self.redis_db_size() == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):
