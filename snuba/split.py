@@ -138,7 +138,7 @@ def split_query(query_func):
 
         if result['data']:
             project_ids = list(set([event['project_id'] for event in result['data']]))
-            conditions.append(('project_id', 'IN', project_ids))
+            body['project_id'] = project_ids
 
             event_ids = list(set([event['event_id'] for event in result['data']]))
             conditions.append(('event_id', 'IN', event_ids))
