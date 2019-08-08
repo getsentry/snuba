@@ -132,7 +132,7 @@ def split_query(query_func):
 
         minimal_query = {**body, **{'selected_columns': min_cols}}
 
-        result, status = query_func(*((minimal_query, ) + args[1:]), **kwargs)
+        result, status = query_func(minimal_query, *args[1:], **kwargs)
 
         # If something failed, just return
         if status != 200:
