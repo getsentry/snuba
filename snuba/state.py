@@ -285,16 +285,15 @@ def record_query(data):
             .ltrim(queries_list, 0, max_redis_queries - 1)\
             .execute()
 
-        if settings.RECORD_QUERIES:
-            if kfk is None:
-                kfk = Producer({
-                    'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
-                })
+        if kfk is None:
+            kfk = Producer({
+                'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
+            })
 
-            kfk.produce(
-                settings.QUERIES_TOPIC,
-                data.encode('utf-8'),
-            )
+        kfk.produce(
+            settings.QUERIES_TOPIC,
+            data.encode('utf-8'),
+        )
     except Exception as ex:
         logger.exception(ex)
         pass
