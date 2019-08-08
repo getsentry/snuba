@@ -51,8 +51,8 @@ class NativeDriverReader(Reader):
         """
         data, meta = result
 
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in result[0]]
-        meta = [{"name": m[0], "type": m[1]} for m in result[1]]
+        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
+        meta = [{"name": m[0], "type": m[1]} for m in meta]
 
         for col in meta:
             # Convert naive datetime strings back to TZ aware ones, and stringify
