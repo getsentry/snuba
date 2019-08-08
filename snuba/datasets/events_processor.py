@@ -19,6 +19,67 @@ from snuba.processor import (
 logger = logging.getLogger('snuba.processor')
 
 
+def extract_base(output, message):
+    output['event_id'] = message['event_id']
+    project_id = message['project_id']
+    output['project_id'] = project_id
+
+    # This is not ideal but it should never happen anyways
+    timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))
+    if timestamp is None:
+        timestamp = datetime.utcnow()
+
+    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
+    if retention_days is None:
+        retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+
+    # TODO: We may need to allow for older events in the future when post
+    # processing triggers are based off of Snuba. Or this branch could be put
+    # behind a "backfill-only" optional switch.
+    if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
+        raise EventTooOld
+
+    output['retention_days'] = retention_days
+
+
+def extract_user(output, user):
+    output['user_id'] = _unicodify(user.get('id', None))
+    output['username'] = _unicodify(user.get('username', None))
+    output['email'] = _unicodify(user.get('email', None))
+    output['ip_address'] = _unicodify(user.get('ip_address', None))
+
+
+def extract_extra_tags(output, tags):
+    tag_keys = []
+    tag_values = []
+    for tag_key, tag_value in sorted(tags.items()):
+        value = _unicodify(tag_value)
+        if value:
+            tag_keys.append(_unicodify(tag_key))
+            tag_values.append(value)
+
+    output['tags.key'] = tag_keys
+    output['tags.value'] = tag_values
+
+
+def extract_extra_contexts(output, contexts):
+    context_keys = []
+    context_values = []
+    valid_types = (int, float, str)
+    for ctx_name, ctx_obj in contexts.items():
+        if isinstance(ctx_obj, dict):
+            ctx_obj.pop('type', None)  # ignore type alias
+            for inner_ctx_name, ctx_value in ctx_obj.items():
+                if isinstance(ctx_value, valid_types):
+                    value = _unicodify(ctx_value)
+                    if value:
+                        context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
+                        context_values.append(_unicodify(ctx_value))
+
+    output['contexts.key'] = context_keys
+    output['contexts.value'] = context_values
+
+
 class EventsProcessor(MessageProcessor):
     def __init__(self, promoted_tag_columns):
         self.__promoted_tag_columns = promoted_tag_columns
@@ -88,6 +149,7 @@ class EventsProcessor(MessageProcessor):
 
     def process_insert(self, message, metadata=None):
         processed = {'deleted': 0}
+        extract_base(processed, message)
         self.extract_required(processed, message)
 
         data = message.get('data', {})
@@ -107,7 +169,7 @@ class EventsProcessor(MessageProcessor):
         self.extract_promoted_contexts(processed, contexts, tags)
 
         user = data.get('user', data.get('sentry.interfaces.User', None)) or {}
-        self.extract_user(processed, user)
+        extract_user(processed, user)
 
         geo = user.get('geo', None) or {}
         self.extract_geo(processed, geo)
@@ -116,7 +178,7 @@ class EventsProcessor(MessageProcessor):
         self.extract_http(processed, http)
 
         self.extract_extra_contexts(processed, contexts)
-        self.extract_extra_tags(processed, tags)
+        extract_extra_tags(processed, tags)
 
         exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
         stacks = exception.get('values', None) or []
@@ -129,9 +191,6 @@ class EventsProcessor(MessageProcessor):
         return processed
 
     def extract_required(self, output, message):
-        output['event_id'] = message['event_id']
-        project_id = message['project_id']
-        output['project_id'] = project_id
         output['group_id'] = message['group_id'] or 0
 
         # This is not ideal but it should never happen anyways
@@ -139,18 +198,7 @@ class EventsProcessor(MessageProcessor):
         if timestamp is None:
             timestamp = datetime.utcnow()
 
-        retention_days = settings.RETENTION_OVERRIDES.get(project_id)
-        if retention_days is None:
-            retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
-
-        # TODO: We may need to allow for older events in the future when post
-        # processing triggers are based off of Snuba. Or this branch could be put
-        # behind a "backfill-only" optional switch.
-        if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
-            raise EventTooOld
-
         output['timestamp'] = timestamp
-        output['retention_days'] = retention_days
 
     def extract_common(self, output, message, data):
         # Properties we get from the top level of the message payload
@@ -264,41 +312,6 @@ class EventsProcessor(MessageProcessor):
         output['device_simulator'] = _boolify(device_ctx.pop('simulator', None))
         output['device_online'] = _boolify(device_ctx.pop('online', None))
         output['device_charging'] = _boolify(device_ctx.pop('charging', None))
-
-    def extract_extra_contexts(self, output, contexts):
-        context_keys = []
-        context_values = []
-        valid_types = (int, float, str)
-        for ctx_name, ctx_obj in contexts.items():
-            if isinstance(ctx_obj, dict):
-                ctx_obj.pop('type', None)  # ignore type alias
-                for inner_ctx_name, ctx_value in ctx_obj.items():
-                    if isinstance(ctx_value, valid_types):
-                        value = _unicodify(ctx_value)
-                        if value:
-                            context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
-                            context_values.append(_unicodify(ctx_value))
-
-        output['contexts.key'] = context_keys
-        output['contexts.value'] = context_values
-
-    def extract_extra_tags(self, output, tags):
-        tag_keys = []
-        tag_values = []
-        for tag_key, tag_value in sorted(tags.items()):
-            value = _unicodify(tag_value)
-            if value:
-                tag_keys.append(_unicodify(tag_key))
-                tag_values.append(value)
-
-        output['tags.key'] = tag_keys
-        output['tags.value'] = tag_values
-
-    def extract_user(self, output, user):
-        output['user_id'] = _unicodify(user.get('id', None))
-        output['username'] = _unicodify(user.get('username', None))
-        output['email'] = _unicodify(user.get('email', None))
-        output['ip_address'] = _unicodify(user.get('ip_address', None))
 
     def extract_geo(self, output, geo):
         output['geo_country_code'] = _unicodify(geo.get('country_code', None))

@@ -8,7 +8,6 @@ from snuba.clickhouse import (
     Nested,
     Nullable,
     String,
-    Tuple,
     UInt,
     UUID,
     WithDefault,
@@ -79,7 +78,7 @@ class TransactionsDataset(Dataset):
         super(TransactionsDataset, self).__init__(
             schema=schema,
             processor=TransactionsMessageProcessor(),
-            default_topic="transactions",
+            default_topic="events",
             default_replacement_topic=None,
             default_commit_log_topic=None,
         )
