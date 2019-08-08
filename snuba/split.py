@@ -123,12 +123,8 @@ def split_query(query_func):
             - If the orderby term is based on timestamp also update the date range
         """
         body = args[0]
-        orderby = util.to_list(body.get('orderby'))
-        is_timestamp_ordered = orderby and orderby[0] in ('timestamp', '-timestamp')
 
-        min_cols = ['project_id', 'event_id']
-        if is_timestamp_ordered:
-            min_cols.append('timestamp')
+        min_cols = ['project_id', 'event_id', 'timestamp']
 
         minimal_query = {**body, **{'selected_columns': min_cols}}
 
@@ -146,12 +142,11 @@ def split_query(query_func):
         event_ids = list(set([event['event_id'] for event in result['data']]))
         conditions.append(('event_id', 'IN', event_ids))
 
-        if is_timestamp_ordered:
-            timestamps = [event['timestamp'] for event in result['data']]
-            from_date = util.parse_datetime(min(timestamps))
-            to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-            body['from_date'] = from_date.isoformat()
-            body['to_date'] = to_date.isoformat()
+        timestamps = [event['timestamp'] for event in result['data']]
+        from_date = util.parse_datetime(min(timestamps))
+        to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+        body['from_date'] = from_date.isoformat()
+        body['to_date'] = to_date.isoformat()
 
         second_query = {**body, 'conditions': conditions}
 
