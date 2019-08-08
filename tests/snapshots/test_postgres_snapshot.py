@@ -50,7 +50,7 @@ class TestPostgresSnapshot:
 """
         )
 
-        snapshot = PostgresSnapshot.load(snapshot_base, "snuba")
+        snapshot = PostgresSnapshot.load("snuba", snapshot_base)
         descriptor = snapshot.get_descriptor()
         assert descriptor.id == "50a86ad6-b4b7-11e9-a46f-acde48001122"
         assert descriptor.xmax == 3372754
@@ -66,5 +66,5 @@ class TestPostgresSnapshot:
 
         with snapshot.get_table_file("sentry_groupedmessage") as table:
             content = table.readlines()
-            assert content[0] == "id, status\n"
-            assert content[1] == "0, 1\n"
+            assert content[0] == b"id, status\n"
+            assert content[1] == b"0, 1\n"
