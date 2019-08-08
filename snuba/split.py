@@ -145,6 +145,8 @@ def split_query(query_func):
 
             timestamps = [event['timestamp'] for event in result['data']]
             from_date = util.parse_datetime(min(timestamps))
+            # We add 1 second since this gets translated to ('timestamp', '<', to_date)
+            # and events are stored with a granularity of 1 second.
             to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
             body['from_date'] = from_date.isoformat()
             body['to_date'] = to_date.isoformat()
