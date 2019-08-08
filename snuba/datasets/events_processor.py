@@ -177,7 +177,7 @@ class EventsProcessor(MessageProcessor):
         http = data.get('request', data.get('sentry.interfaces.Http', None)) or {}
         self.extract_http(processed, http)
 
-        self.extract_extra_contexts(processed, contexts)
+        extract_extra_contexts(processed, contexts)
         extract_extra_tags(processed, tags)
 
         exception = data.get('exception', data.get('sentry.interfaces.Exception', None)) or {}
