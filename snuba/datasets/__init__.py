@@ -33,7 +33,7 @@ class Dataset(object):
             options,
         )
 
-    def default_conditions(self, body):
+    def default_conditions(self):
         """
         Return a list of the default conditions that should be applied to all
         queries on this dataset.
