@@ -35,10 +35,6 @@ class BulkLoadSource(ABC):
     this actually comes from.
     """
 
-    @classmethod
-    def load(cls, path: str, product: str) -> BulkLoadSource:
-        raise NotImplementedError
-
     @abstractmethod
     def get_descriptor(self) -> SnapshotDescriptor:
         raise NotImplementedError

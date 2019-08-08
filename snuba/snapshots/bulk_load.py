@@ -30,7 +30,7 @@ class SingleTableBulkLoader(BulkLoader):
     ):
         self.__source = source
         self.__dest_table = dest_table
-        self.__dataset_table = dataset_table
+        self.__source_table = source_table
 
     def load(self) -> None:
         logger = logging.getLogger('snuba.bulk-loader')
@@ -49,12 +49,7 @@ class SingleTableBulkLoader(BulkLoader):
         descriptor = self.__source.get_descriptor()
         logger.info("Loading snapshot %s", descriptor.id)
 
-        table_names = {table_config.table for table_config in descriptor.tables}
-        if self.__dataset_table not in table_names:
-            raise ValueError(
-                "The snapshot does not contain the requested table %s" % self.__dataset_table,
-            )
-
-        with self.__source.get_table_file(self.__dataset_table) as table:
+        with self.__source.get_table_file(self.__source_table) as table:
             logger.info("Loading table from file %s", table.name)
             # TODO: Do something with the table file
+            raise NotImplementedError

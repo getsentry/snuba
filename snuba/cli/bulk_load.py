@@ -27,8 +27,8 @@ def bulk_load(dataset, dest_table, source, log_level):
 
     # TODO: Have a more abstract way to load sources if/when we support more than one.
     snapshot_source = PostgresSnapshot.load(
-        path=source,
         product=settings.SNAPSHOT_LOAD_PRODUCT,
+        path=source,
     )
 
     loader = dataset.get_bulk_loader(snapshot_source, dest_table)
