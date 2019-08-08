@@ -19,6 +19,7 @@ import time
 
 from snuba import clickhouse, schemas, settings, state
 from snuba.clickhouse import escape_col
+from snuba.reader import NativeDriverReader
 
 
 logger = logging.getLogger('snuba.util')
@@ -26,8 +27,6 @@ logger = logging.getLogger('snuba.util')
 
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
-DATE_TYPE_RE = re.compile(r'(Nullable\()?Date\b')
-DATETIME_TYPE_RE = re.compile(r'(Nullable\()?DateTime\b')
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 ESCAPE_STRING_RE = re.compile(r"(['\\])")
 SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
@@ -444,28 +443,21 @@ def raw_query(body, sql, client, timer, stats=None):
                             query_settings['max_threads'] = 1
 
                         try:
-                            data, meta = client.execute(
+                            result = NativeDriverReader(client).execute(
                                 sql,
-                                with_column_types=True,
-                                settings=query_settings,
+                                query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
-                                query_id=query_id
+                                query_id=query_id,
+                                with_totals=body.get('totals', False),
                             )
-                            data, meta = scrub_ch_data(data, meta)
                             status = 200
-                            if body.get('totals', False):
-                                assert len(data) > 0
-                                data, totals = data[:-1], data[-1]
-                                result = {'data': data, 'meta': meta, 'totals': totals}
-                            else:
-                                result = {'data': data, 'meta': meta}
 
                             logger.debug(sql)
                             timer.mark('execute')
                             stats.update({
-                                'result_rows': len(data),
-                                'result_cols': len(meta),
+                                'result_rows': len(result['data']),
+                                'result_cols': len(result['meta']),
                             })
 
                             if use_cache:
@@ -534,25 +526,6 @@ def raw_query(body, sql, client, timer, stats=None):
         result['sql'] = sql
 
     return (result, status)
-
-
-def scrub_ch_data(data, meta):
-    # for now, convert back to a dict-y format to emulate the json
-    data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-    meta = [{'name': m[0], 'type': m[1]} for m in meta]
-
-    for col in meta:
-        # Convert naive datetime strings back to TZ aware ones, and stringify
-        # TODO maybe this should be in the json serializer
-        if DATETIME_TYPE_RE.match(col['type']):
-            for d in data:
-                d[col['name']] = d[col['name']].replace(tzinfo=tz.tzutc()).isoformat()
-        elif DATE_TYPE_RE.match(col['type']):
-            for d in data:
-                dt = datetime(*(d[col['name']].timetuple()[:6])).replace(tzinfo=tz.tzutc())
-                d[col['name']] = dt.isoformat()
-
-    return (data, meta)
 
 
 def validate_request(schema):
