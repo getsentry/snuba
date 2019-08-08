@@ -3,12 +3,12 @@ import logging
 import click
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 
 
 @click.command()
-@click.option('--dataset', type=click.Choice(['events', 'groupedmessage', 'outcomes']),
+@click.option('--dataset', type=click.Choice(DATASET_NAMES),
               help='The dataset to bulk load')
 @click.option('--source',
               help='Source of the dump. Depending on the dataset it may have different meaning.')
