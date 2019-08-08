@@ -11,7 +11,7 @@ def _load_settings(obj=locals()):
 
     settings = os.environ.get('SNUBA_SETTINGS', 'base')
 
-    if settings.starstwith('/'):
+    if settings.startswith('/'):
         if not settings.endswith('.py'):
             settings += '.py'
 
