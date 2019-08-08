@@ -20,7 +20,7 @@ def _load_settings(obj=locals()):
         settings_module = importlib.util.module_from_spec(settings_spec)
         settings_spec.loader.exec_module(settings_module)
     else:
-        module_format = '.%s' if settings.startswith('settings_') else '.settings_'
+        module_format = '.%s' if settings.startswith('settings_') else '.settings_%s'
         settings_module = importlib.import_module(module_format % settings, 'snuba')
 
     for attr in dir(settings_module):
