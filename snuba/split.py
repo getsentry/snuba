@@ -136,17 +136,18 @@ def split_query(query_func):
 
         conditions = body.get('conditions', [])
 
-        project_ids = list(set([event['project_id'] for event in result['data']]))
-        conditions.append(('project_id', 'IN', project_ids))
+        if result['data']:
+            project_ids = list(set([event['project_id'] for event in result['data']]))
+            conditions.append(('project_id', 'IN', project_ids))
 
-        event_ids = list(set([event['event_id'] for event in result['data']]))
-        conditions.append(('event_id', 'IN', event_ids))
+            event_ids = list(set([event['event_id'] for event in result['data']]))
+            conditions.append(('event_id', 'IN', event_ids))
 
-        timestamps = [event['timestamp'] for event in result['data']]
-        from_date = util.parse_datetime(min(timestamps))
-        to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-        body['from_date'] = from_date.isoformat()
-        body['to_date'] = to_date.isoformat()
+            timestamps = [event['timestamp'] for event in result['data']]
+            from_date = util.parse_datetime(min(timestamps))
+            to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+            body['from_date'] = from_date.isoformat()
+            body['to_date'] = to_date.isoformat()
 
         second_query = {**body, 'conditions': conditions}
 

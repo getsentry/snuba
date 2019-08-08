@@ -987,6 +987,25 @@ class TestApi(BaseApiTest):
             })).data)
             assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, range(0, 5)))
 
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': (self.base_time - timedelta(days=100)).isoformat(),
+                'to_date': (self.base_time - timedelta(days=99)).isoformat(),
+                'orderby': 'timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            assert len(result['data']) == 0
+
         finally:
             state.set_config('use_split', 0)
 
