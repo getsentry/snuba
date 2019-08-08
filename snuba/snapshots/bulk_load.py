@@ -33,7 +33,7 @@ class SingleTableBulkLoader(BulkLoader):
         self.__dataset_table = dataset_table
 
     def load(self) -> None:
-        logger = logging.getLogger('bulk-loader')
+        logger = logging.getLogger('snuba.bulk-loader')
 
         clickhouse_ro = ClickhousePool(client_settings={
             'readonly': True,

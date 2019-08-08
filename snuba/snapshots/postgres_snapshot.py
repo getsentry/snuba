@@ -27,7 +27,7 @@ class PostgresSnapshotDescriptor(SnapshotDescriptor):
     tables: Sequence[TableConfig]
 
 
-logger = logging.getLogger('postgres-snapshot')
+logger = logging.getLogger('snuba.postgres-snapshot')
 
 
 class PostgresSnapshot(BulkLoadSource):

@@ -21,7 +21,7 @@ def bulk_load(dataset, dest_table, source, log_level):
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
-    logger = logging.getLogger('load-snapshot')
+    logger = logging.getLogger('snuba.load-snapshot')
     logger.info("Start bulk load process for dataset %s, from source %s", dataset, source)
     dataset = get_dataset(dataset)
 
