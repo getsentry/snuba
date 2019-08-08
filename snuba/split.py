@@ -130,7 +130,7 @@ def split_query(query_func):
         if is_timestamp_ordered:
             min_cols.append('timestamp')
 
-        minimal_query = dict(body, **{'selected_columns': min_cols})
+        minimal_query = {**body, **{'selected_columns': min_cols}}
 
         result, status = query_func(*((minimal_query, ) + args[1:]), **kwargs)
 
@@ -154,8 +154,8 @@ def split_query(query_func):
                 body['from_date'] = from_date.isoformat()
                 body['to_date'] = to_date.isoformat()
 
-        second_query = dict(body, **{'conditions': conditions})
+        second_query = {**body, 'conditions': conditions}
 
-        return query_func(*((second_query, ) + args[1:]), **kwargs)
+        return query_func(second_query, *args[1:], **kwargs)
 
     return wrapper
