@@ -189,7 +189,7 @@ def parse_and_run_query(validated_body, timer):
         ('timestamp', '>=', from_date),
         ('timestamp', '<', to_date),
     ])
-    where_conditions.extend(dataset.default_conditions(body))
+    where_conditions.extend(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
