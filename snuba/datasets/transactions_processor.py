@@ -35,13 +35,11 @@ class TransactionsMessageProcessor(MessageProcessor):
         if type_ != 'insert':
             return None
 
-        message = event
-
-        data = message.get("data", {})
+        data = event.get("data", {})
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-        extract_base(processed, message)
+        extract_base(processed, event)
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
@@ -49,24 +47,21 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
         processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
-
         processed["transaction_name"] = _unicodify(data["transaction"])
 
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
             data["start_timestamp"],
         )
-
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
             data["timestamp"],
         )
 
-        processed['platform'] = _unicodify(message['platform'])
+        processed['platform'] = _unicodify(event['platform'])
 
         promoted_tag_columns = [
             "environment",
             "sentry:release",
         ]
-
         tags = _as_dict_safe(data.get('tags', None))
         extract_extra_tags(processed, tags)
 
@@ -75,7 +70,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         }
         processed["release"] = promoted_tag.get(
             "sentry:release",
-            message.get("release"),
+            event.get("release"),
         )
         processed["environment"] = promoted_tag.get("environment")
 
