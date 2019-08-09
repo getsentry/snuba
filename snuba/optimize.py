@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Sequence
 import logging
 
 from snuba import util
@@ -13,7 +14,7 @@ def run_optimize(clickhouse, database, table, before=None):
     return len(parts)
 
 
-def get_partitions_to_optimize(clickhouse, database, table, before=None):
+def get_partitions_to_optimize(clickhouse, database, table, before=None) -> Sequence[util.Part]:
     engine = clickhouse.execute("""
         SELECT engine
         FROM system.tables
