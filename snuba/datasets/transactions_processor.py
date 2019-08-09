@@ -64,15 +64,20 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         promoted_tag_columns = [
             "environment",
-            "release",
+            "sentry:release",
         ]
 
         tags = _as_dict_safe(data.get('tags', None))
         extract_extra_tags(processed, tags)
 
-        processed.update({col: _unicodify(tags.get(col, None))
+        promoted_tag = {col: _unicodify(tags.get(col, None))
             for col in promoted_tag_columns
-        })
+        }
+        processed["release"] = promoted_tag.get(
+            "sentry:release",
+            message.get("release"),
+        )
+        processed["environment"] = promoted_tag.get("environment")
 
         contexts = _as_dict_safe(data.get('contexts', None))
         extract_extra_contexts(processed, contexts)

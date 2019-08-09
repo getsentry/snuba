@@ -3,7 +3,9 @@ from base import BaseTest
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
-import datetime
+from datetime import datetime
+
+import uuid
 
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.consumer import KafkaMessageMetadata
@@ -30,6 +32,7 @@ class TransactionEvent:
 
     def serialize(self) -> Mapping[str, Any]:
         return (2, 'insert', {
+            'datetime': '2019-08-08T22:29:53.917000Z',
             'organization_id': 1,
             'platform': self.platform,
             'project_id': 1,
@@ -41,6 +44,7 @@ class TransactionEvent:
                 'environment': self.environment,
                 'project_id': 1,
                 'release': self.release,
+                'dist': self.dist,
                 'grouping_config': {
                     'enhancements': 'eJybzDhxY05qemJypZWRgaGlroGxrqHRBABbEwcC',
                     'id': 'legacy:2019-03-12',
@@ -85,24 +89,18 @@ class TransactionEvent:
                 'datetime': '2019-08-08T22:29:53.917000Z',
                 'timestamp': self.timestamp,
                 'start_timestamp': self.start_timestamp,
-                'contexts': [
-                    {
-                        'trace': {
-                            'sampled': True,
-                            'trace_id': self.trace_id,
-                            'op': self.op,
-                            'type': 'trace',
-                            'span_id': self.span_id,
-                        }
+                'contexts': {
+                    'trace': {
+                        'sampled': True,
+                        'trace_id': self.trace_id,
+                        'op': self.op,
+                        'type': 'trace',
+                        'span_id': self.span_id,
                     }
-                ],
+                },
                 'tags': [
-                    ['level', 'error'],
-                    ['transaction', self.transaction_name],
                     ['sentry:release', self.release],
-                    ['sentry:user', self.user_id],
                     ['environment', self.environment],
-                    ['trace', self.trace_id],
                 ],
                 'user': {
                     'username': self.user_name,
@@ -113,6 +111,52 @@ class TransactionEvent:
                 'transaction': self.transaction_name,
             }
         })
+
+    def build_result(self, meta: KafkaMessageMetadata) -> Mapping[str, Any]:
+        start_timestamp = datetime.fromtimestamp(self.start_timestamp)
+        finish_timestamp = datetime.fromtimestamp(self.timestamp)
+
+        ret = {
+            'deleted': 0,
+            'project_id': 1,
+            'event_id': str(uuid.UUID(self.event_id)),
+            'trace_id': str(uuid.UUID(self.trace_id)),
+            'span_id': int(self.span_id, 16),
+            'transaction_name': self.transaction_name,
+            'transaction_op': self.op,
+            'start_ts': start_timestamp,
+            'start_ms': int(start_timestamp.microsecond / 1000),
+            'finish_ts': finish_timestamp,
+            'finish_ms': int(finish_timestamp.microsecond / 1000),
+            'platform': self.platform,
+            'environment': self.environment,
+            'release': self.release,
+            'dist': self.dist,
+            'user_id': self.user_id,
+            'user_name': self.user_name,
+            'user_email': self.user_email,
+            'tags.key': ['environment', 'sentry:release'],
+            'tags.value': [
+                self.environment,
+                self.release,
+            ],
+            'contexts.key': [
+                'trace.sampled', 'trace.trace_id',
+                'trace.op', 'trace.span_id',
+            ],
+            'contexts.value': [
+                'True', self.trace_id, self.op, self.span_id
+            ],
+            'offset': meta.offset,
+            'partition': meta.partition,
+            'retention_days': 90,
+        }
+
+        if self.ipv4:
+            ret['ip_address_v4'] = self.ipv4
+        else:
+            ret['ip_address_v6'] = self.ipv6
+        return ret
 
 
 class TestTransactionsProcessor(BaseTest):
@@ -145,47 +189,4 @@ class TestTransactionsProcessor(BaseTest):
         ret = processor.process_message(message.serialize(), meta)
 
         assert ret[0] == TransactionsMessageProcessor.INSERT
-        assert ret[1] == {
-            'deleted': 0,
-            'event_id': 'e5e062bf-2e1d-4afd-96fd-2f90b6770431',
-            'trace_id': '7400045b-25c4-43b8-8591-4600aa83ad04',
-            'span_id': 9818240959241804171,
-            'transaction_name': '/organizations/:orgId/issues/',
-            'transaciton_op': 'navigation',
-            'start_ts': datetime.fromtimestamp(1565303393),
-            'start_ms': 917,
-            'finish_ts': datetime.fromtimestamp(1565303392),
-            'finish_ms': 918,
-            'platform': 'python',
-            'environment': 'prod',
-            'release': '34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
-            'dist': None,
-            'ip_address_v4': '127.0.0.1',
-            'ip_address_v6': None,
-            'user': None,
-            'user_id': 'myself',
-            'user_name': 'me',
-            'user_email': 'me@myself.com',
-            'tags': [
-                ['level', 'error'],
-                ['transaction', '/organizations/:orgId/issues/'],
-                ['sentry:release', '34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a'],
-                ['sentry:user', 'myself'],
-            ],
-            'contexts': [
-                {
-                    'trace': {
-                        'sampled': True,
-                        'start_timestamp': 1565303393.917,
-                        'transaction': '/organizations/:orgId/issues/',
-                        'timestamp': 1565303392.918,
-                        'trace_id': '7400045b25c443b885914600aa83ad04',
-                        'op': 'navigation',
-                        'span_id': '8841662216cc598b',
-                    }
-                }
-            ],
-            'offset': 1,
-            'partition': 2,
-            'retention_days': 1
-        }
+        assert ret[1] == message.build_result(meta)
