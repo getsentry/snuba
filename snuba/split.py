@@ -8,6 +8,7 @@ from snuba import state, util
 # worst case (there are 0 results in the database) would have us making 4
 # queries before hitting the 90d limit (2+20+200+2000 hours == 92 days).
 STEP_GROWTH = 10
+MIN_COLS = ['project_id', 'event_id', 'timestamp']
 
 
 def split_query(query_func):
@@ -20,13 +21,13 @@ def split_query(query_func):
         remaining_offset = body.get('offset', 0)
         orderby = util.to_list(body.get('orderby'))
 
-        total_col_count = len(util.all_referenced_columns(body))
-
         common_conditions = use_split and limit and not body.get('groupby')
 
         if common_conditions:
+            total_col_count = len(util.all_referenced_columns(body))
+
             min_col_count = len(util.all_referenced_columns(
-                {**body, 'selected_columns': ['project_id', 'event_id', 'timestamp']}))
+                {**body, 'selected_columns': MIN_COLS}))
 
             if (
                 body.get('selected_columns')
@@ -124,9 +125,7 @@ def split_query(query_func):
         """
         body = args[0]
 
-        min_cols = ['project_id', 'event_id', 'timestamp']
-
-        minimal_query = {**body, **{'selected_columns': min_cols}}
+        minimal_query = {**body, 'selected_columns': MIN_COLS}
 
         result, status = query_func(minimal_query, *args[1:], **kwargs)
 
@@ -151,8 +150,6 @@ def split_query(query_func):
             body['from_date'] = from_date.isoformat()
             body['to_date'] = to_date.isoformat()
 
-        second_query = {**body, 'conditions': conditions}
-
-        return query_func(second_query, *args[1:], **kwargs)
+        return query_func({**body, 'conditions': conditions}, *args[1:], **kwargs)
 
     return wrapper
