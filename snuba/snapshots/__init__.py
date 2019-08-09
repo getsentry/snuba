@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 from contextlib import contextmanager
-from typing import NewType, Generator, IO, Optional, Sequence
+from typing import Any, Mapping, NewType, Generator, IO, Optional, Sequence
 from dataclasses import dataclass
 
 SnapshotId = NewType("SnapshotId", str)
@@ -25,6 +26,27 @@ class SnapshotDescriptor:
     """
     id: SnapshotId
     tables: Sequence[TableConfig]
+
+    def get_table(self, table_name: str):
+        for t in self.tables:
+            if t.table == table_name:
+                return t
+        return None
+
+
+class Table(Iterator):
+
+    @abstractmethod
+    def get_name(self) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __iter__(self) -> Table:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __next__(self) -> Mapping[str, Any]:
+        raise NotImplementedError
 
 
 class BulkLoadSource(ABC):

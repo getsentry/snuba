@@ -24,13 +24,15 @@ class SingleTableBulkLoader(BulkLoader):
     """
 
     def __init__(self,
+        writer,
         source: BulkLoadSource,
         dest_table: str,
-        dataset_table: str,
+        source_table: str,
     ):
         self.__source = source
         self.__dest_table = dest_table
         self.__source_table = source_table
+        self.__writer = writer
 
     def load(self) -> None:
         logger = logging.getLogger('snuba.bulk-loader')
@@ -50,6 +52,8 @@ class SingleTableBulkLoader(BulkLoader):
         logger.info("Loading snapshot %s", descriptor.id)
 
         with self.__source.get_table_file(self.__source_table) as table:
-            logger.info("Loading table from file %s", table.name)
-            # TODO: Do something with the table file
-            raise NotImplementedError
+            logger.info("Loading table from file %s", table.get_name())
+            for row in table:
+                from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageRow
+                clickhouse_row = GroupedMessageRow.from_bulk(row).to_clickhouse()
+                self.__writer.write([clickhouse_row])

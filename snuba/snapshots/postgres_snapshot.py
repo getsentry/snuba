@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import jsonschema  # type: ignore
 import json
 import logging
@@ -7,10 +8,10 @@ import os.path
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import NewType, Generator, IO, Sequence
+from typing import Any, Mapping, NewType, Generator, IO, Sequence
 
 from snuba.snapshots import SnapshotDescriptor, TableConfig
-from snuba.snapshots import BulkLoadSource
+from snuba.snapshots import BulkLoadSource, Table
 
 Xid = NewType("Xid", int)
 
@@ -72,6 +73,22 @@ class PostgresSnapshotDescriptor(SnapshotDescriptor):
 logger = logging.getLogger('snuba.postgres-snapshot')
 
 
+class PostgresCSVTableDump(Table):
+
+    def __init__(self, csv_reader, table_name: str) -> None:
+        self.__csv_reader = csv_reader
+        self.__table_name = table_name
+
+    def get_name(self) -> str:
+        return self.__table_name
+
+    def __iter__(self) -> Table:
+        return self
+
+    def __next__(self) -> Mapping[str, Any]:
+        return next(self.__csv_reader)
+
+
 class PostgresSnapshot(BulkLoadSource):
     """
     TODO: Make this a library to be reused outside of Snuba when after this
@@ -124,8 +141,27 @@ class PostgresSnapshot(BulkLoadSource):
     def get_table_file(self, table: str) -> Generator[IO[bytes], None, None]:
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
-            with open(table_path, "rb") as table_file:
-                yield table_file
+            with open(table_path, "r") as table_file:
+                csv_file = csv.DictReader(table_file)
+                columns = csv_file.fieldnames
+
+                expected_columns = self.__descriptor.get_table(table).columns
+                if expected_columns:
+                    expected_set = set(expected_columns)
+                    existing_set = set(columns)
+
+                    if not expected_set <= existing_set:
+                        raise ValueError(
+                            "The table file is missing columns %r " % expected_set - existing_set)
+
+                    if len(existing_set) != len(expected_set):
+                        logger.warning(
+                            "The table file contains more columns than expected %r",
+                            existing_set - expected_set,
+                        )
+
+                yield PostgresCSVTableDump(csv_file, table_file.name)
+
         except FileNotFoundError:
             raise ValueError(
                 "The snapshot does not contain the requested table %s" % table,

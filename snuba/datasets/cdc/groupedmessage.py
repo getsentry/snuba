@@ -52,6 +52,7 @@ class GroupedMessageDataset(Dataset):
 
     def get_bulk_loader(self, source, dest_table):
         return SingleTableBulkLoader(
+            writer=self.get_writer(),
             source=source,
             source_table=self.POSTGRES_TABLE,
             dest_table=dest_table,
