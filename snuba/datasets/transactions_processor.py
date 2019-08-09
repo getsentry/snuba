@@ -26,7 +26,6 @@ class TransactionsMessageProcessor(MessageProcessor):
     def process_message(self, message, metadata=None):
         action_type = self.INSERT
         processed = {'deleted': 0}
-
         if not isinstance(message, (list, tuple)) and len(message) >= 2:
             return None
         version = message[0]
@@ -42,7 +41,6 @@ class TransactionsMessageProcessor(MessageProcessor):
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-
         extract_base(processed, message)
 
         transaction_ctx = data["contexts"]["trace"]
@@ -50,11 +48,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["event_id"] = str(uuid.UUID(processed["event_id"]))
         processed["trace_id"] = str(uuid.UUID(trace_id))
         processed["span_id"] = int(transaction_ctx["span_id"], 16)
+        processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
 
         processed["transaction_name"] = _unicodify(data["transaction"])
-
-        # TODO: what goes here ?
-        processed["transaction_op"] = ""
 
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
             data["start_timestamp"],
