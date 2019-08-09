@@ -2,6 +2,7 @@ from snuba.clickhouse import ColumnSet, DateTime, Nullable, UInt
 from snuba.datasets import Dataset
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.snapshots.bulk_load import SingleTableBulkLoader
 
 
 class GroupedMessageDataset(Dataset):
@@ -9,6 +10,8 @@ class GroupedMessageDataset(Dataset):
     This is a clone of the bare minimum fields we need from postgres groupedmessage table
     to replace such a table in event search.
     """
+
+    POSTGRES_TABLE = 'sentry_groupedmessage'
 
     def __init__(self):
         columns = ColumnSet([
@@ -41,8 +44,15 @@ class GroupedMessageDataset(Dataset):
 
         super(GroupedMessageDataset, self).__init__(
             schema=schema,
-            processor=GroupedMessageProcessor(),
+            processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
             default_topic="cdc",
             default_replacement_topic=None,
             default_commit_log_topic=None,
+        )
+
+    def get_bulk_loader(self, source, dest_table):
+        return SingleTableBulkLoader(
+            source=source,
+            source_table=self.POSTGRES_TABLE,
+            dest_table=dest_table,
         )

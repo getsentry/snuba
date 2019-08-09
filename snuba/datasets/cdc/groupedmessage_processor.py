@@ -4,9 +4,9 @@ from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 
 class GroupedMessageProcessor(CdcProcessor):
 
-    def __init__(self):
+    def __init__(self, postgres_table):
         super(GroupedMessageProcessor, self).__init__(
-            pg_table='sentry_groupedmessage',
+            pg_table=postgres_table,
         )
 
     def __build_record(self, offset, columnnames, columnvalues):
