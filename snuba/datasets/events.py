@@ -199,7 +199,7 @@ class EventsDataset(Dataset):
         self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
 
-    def default_conditions(self, body):
+    def default_conditions(self):
         return [
             ('deleted', '=', 0),
         ]

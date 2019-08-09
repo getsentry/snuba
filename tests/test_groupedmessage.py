@@ -76,7 +76,7 @@ class TestGroupedMessageProcessor(BaseTest):
     }
 
     def test_messages(self):
-        processor = GroupedMessageProcessor()
+        processor = GroupedMessageProcessor('sentry_groupedmessage')
 
         metadata = KafkaMessageMetadata(
             offset=42,
