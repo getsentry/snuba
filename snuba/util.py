@@ -9,6 +9,7 @@ from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
+from typing import NamedTuple
 import jsonschema
 import logging
 import numbers
@@ -636,7 +637,12 @@ def time_request(name):
     return decorator
 
 
-def decode_part_str(part_str):
+class Part(NamedTuple):
+    date: datetime
+    retention_days: int
+
+
+def decode_part_str(part_str: str) -> Part:
     match = PART_RE.match(part_str)
     if not match:
         raise ValueError("Unknown part name/format: " + str(part_str))
@@ -644,7 +650,7 @@ def decode_part_str(part_str):
     date_str, retention_days = match.groups()
     date = datetime.strptime(date_str, '%Y-%m-%d')
 
-    return (date, int(retention_days))
+    return Part(date, int(retention_days))
 
 
 def force_bytes(s):
