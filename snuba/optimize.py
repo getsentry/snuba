@@ -69,7 +69,7 @@ def get_partitions_to_optimize(clickhouse, database, table, before=None):
     parts = [util.decode_part_str(part) for part, count in active_parts]
 
     if before:
-        parts = filter(lambda p: (p[0] + timedelta(days=6 - p[0].weekday())) < before, parts)
+        parts = [p for p in parts if (p[0] + timedelta(days=6 - p[0].weekday())) < before]
 
     return parts
 
