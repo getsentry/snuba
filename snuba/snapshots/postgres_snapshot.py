@@ -126,7 +126,10 @@ class PostgresSnapshot(BulkLoadSource):
             yield r
 
     @contextmanager
-    def get_table_file(self, table: str) -> Generator[Iterable[Mapping[str, Any]], None, None]:
+    def get_table_file(
+        self,
+        table: str,
+    ) -> Generator[Iterable[Mapping[str, Any]], None, None]:
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
             with open(table_path, "r") as table_file:
@@ -140,15 +143,16 @@ class PostgresSnapshot(BulkLoadSource):
 
                     if not expected_set <= existing_set:
                         raise ValueError(
-                            "The table file is missing columns %r " % expected_set - existing_set)
+                            "The table file is missing columns %r " % (expected_set - existing_set))
 
                     if len(existing_set) != len(expected_set):
                         logger.warning(
                             "The table file contains more columns than expected %r",
                             existing_set - expected_set,
                         )
+                else:
+                    logger.info("Won't pre-validate snapshot columns. There is nothing in the descriptor")
 
-                # yield PostgresCSVTableDump(csv_file, table_file.name)
                 yield self.__table_iterable(csv_file)
 
         except FileNotFoundError:

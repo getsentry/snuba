@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 
 from contextlib import contextmanager
-from typing import Any, Mapping, NewType, Generator, IO, Optional, Sequence
+from typing import Any, Mapping, NewType, Generator, IO, Iterable, Optional, Sequence
 from dataclasses import dataclass
 
 SnapshotId = NewType("SnapshotId", str)
@@ -48,5 +48,5 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_table_file(self, table: str) -> Generator[IO[bytes], None, None]:
+    def get_table_file(self, table: str) -> Generator[Iterable[Mapping[str, Any]], None, None]:
         raise NotImplementedError

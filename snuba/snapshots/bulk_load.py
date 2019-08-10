@@ -5,7 +5,7 @@ import logging
 
 from snuba.clickhouse import ClickhousePool
 from snuba.snapshots import BulkLoadSource
-from snuba.writer import BatchWriter, BufferedBatchWriter
+from snuba.writer import BatchWriter, BufferedWriterWrapper
 from snuba import settings
 
 
@@ -18,7 +18,7 @@ class BulkLoader(ABC):
     the bulk load operation.
     """
     @abstractmethod
-    def load(self) -> None:
+    def load(self, writer: BatchWriter) -> None:
         raise NotImplementedError
 
 
@@ -56,8 +56,11 @@ class SingleTableBulkLoader(BulkLoader):
         logger.info("Loading snapshot %s", descriptor.id)
 
         with self.__source.get_table_file(self.__source_table) as table:
-            logger.info("Loading table from file %s", self.__source_table)
-            with BufferedBatchWriter(writer, settings.BULK_CLICKHOUSE_BUFFER) as buffer_writer:
+            logger.info("Loading table %s from file", self.__source_table)
+            row_count = 0
+            with BufferedWriterWrapper(writer, settings.BULK_CLICKHOUSE_BUFFER) as buffer_writer:
                 for row in table:
                     clickhouse_data = self.__row_processor(row)
                     buffer_writer.write(clickhouse_data)
+                    row_count += 1
+            logger.info("Load complete %d records loaded", row_count)

@@ -1,4 +1,4 @@
-from abc import abstractclassmethod
+from abc import ABC, abstractclassmethod
 from typing import Any, Mapping, Type
 
 from snuba.processor import MessageProcessor
@@ -6,7 +6,14 @@ from snuba.processor import MessageProcessor
 KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
 
 
-class CDCMessageRow:
+class CDCMessageRow(ABC):
+    """
+    Takes care of the data transformation from WAL to clickhouse and from
+    bulk load to clickhouse. The goal is to keep all these transformation
+    function in the same place because they ultimately have to be consistent
+    with the Clickhouse schema.
+    """
+
     @abstractclassmethod
     def from_wal(cls, offset, columnnames, columnvalues):
         raise NotImplementedError
