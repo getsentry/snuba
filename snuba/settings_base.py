@@ -43,6 +43,7 @@ SENTRY_DSN = None
 # Snuba Options
 
 SNAPSHOT_LOAD_PRODUCT = 'snuba'
+BULK_CLICKHOUSE_BUFFER = 1000
 
 # Convenience columns that evaluate to a bucketed time, the
 # bucketing depends on the granularity parameter.

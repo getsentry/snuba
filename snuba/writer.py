@@ -42,10 +42,11 @@ class NativeDriverBatchWriter(BatchWriter):
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self, schema, host, port, options=None):
+    def __init__(self, schema, host, port, options=None, table_name=None):
         self.__schema = schema
         self.__base_url = 'http://{host}:{port}/'.format(host=host, port=port)
         self.__options = options if options is not None else {}
+        self.__table_name = table_name or schema.get_table_name()
 
     def __default(self, value):
         if isinstance(value, datetime):
@@ -58,8 +59,32 @@ class HTTPBatchWriter(BatchWriter):
 
     def write(self, rows):
         parameters = self.__options.copy()
-        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__schema.get_table_name())
+        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__table_name)
         requests.post(
             urljoin(self.__base_url, '?' + urlencode(parameters)),
             data=map(self.__encode, rows),
         ).raise_for_status()
+
+
+class BufferedBatchWriter:
+    def __init__(self, writer: BatchWriter, buffer_size: int):
+        self.__writer = writer
+        self.__buffer_size = buffer_size
+        self.__buffer = []
+
+    def __flush(self) -> None:
+        logger.debug("Flushing buffer with %d elements", len(self.__buffer))
+        self.__writer.write(self.__buffer)
+        self.__buffer = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.__buffer:
+            self.__flush()
+
+    def write(self, row):
+        self.__buffer.append(row)
+        if len(self.__buffer) >= self.__buffer_size:
+            self.__flush()

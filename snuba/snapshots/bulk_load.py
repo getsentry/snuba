@@ -1,8 +1,12 @@
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Mapping
+
 import logging
 
 from snuba.clickhouse import ClickhousePool
 from snuba.snapshots import BulkLoadSource
+from snuba.writer import BatchWriter, BufferedBatchWriter
+from snuba import settings
 
 
 class BulkLoader(ABC):
@@ -24,17 +28,17 @@ class SingleTableBulkLoader(BulkLoader):
     """
 
     def __init__(self,
-        writer,
-        source: BulkLoadSource,
-        dest_table: str,
-        source_table: str,
-    ):
+                source: BulkLoadSource,
+                dest_table: str,
+                source_table: str,
+                row_processor: Callable[[Mapping[str, Any]], Mapping[str, Any]],
+            ):
         self.__source = source
         self.__dest_table = dest_table
         self.__source_table = source_table
-        self.__writer = writer
+        self.__row_processor = row_processor
 
-    def load(self) -> None:
+    def load(self, writer: BatchWriter) -> None:
         logger = logging.getLogger('snuba.bulk-loader')
 
         clickhouse_ro = ClickhousePool(client_settings={
@@ -53,7 +57,7 @@ class SingleTableBulkLoader(BulkLoader):
 
         with self.__source.get_table_file(self.__source_table) as table:
             logger.info("Loading table from file %s", table.get_name())
-            for row in table:
-                from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageRow
-                clickhouse_row = GroupedMessageRow.from_bulk(row).to_clickhouse()
-                self.__writer.write([clickhouse_row])
+            with BufferedBatchWriter(writer, settings.BULK_CLICKHOUSE_BUFFER) as buffer_writer:
+                for row in table:
+                    clickhouse_data = self.__row_processor(row)
+                    buffer_writer.write(clickhouse_data)

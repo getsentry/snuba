@@ -32,5 +32,6 @@ def bulk_load(dataset, dest_table, source, log_level):
     )
 
     loader = dataset.get_bulk_loader(snapshot_source, dest_table)
-
-    loader.load()
+    # TODO: see whether we need to pass options to the writer
+    writer = dataset.get_writer({}, dest_table)
+    loader.load(writer)
