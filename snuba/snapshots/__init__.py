@@ -34,21 +34,6 @@ class SnapshotDescriptor:
         return None
 
 
-class Table(Iterator):
-
-    @abstractmethod
-    def get_name(self) -> str:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __iter__(self) -> Table:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __next__(self) -> Mapping[str, Any]:
-        raise NotImplementedError
-
-
 class BulkLoadSource(ABC):
     """
     Represent a source we can bulk load Snuba datasets from.

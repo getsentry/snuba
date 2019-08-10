@@ -56,7 +56,7 @@ class SingleTableBulkLoader(BulkLoader):
         logger.info("Loading snapshot %s", descriptor.id)
 
         with self.__source.get_table_file(self.__source_table) as table:
-            logger.info("Loading table from file %s", table.get_name())
+            logger.info("Loading table from file %s", self.__source_table)
             with BufferedBatchWriter(writer, settings.BULK_CLICKHOUSE_BUFFER) as buffer_writer:
                 for row in table:
                     clickhouse_data = self.__row_processor(row)
