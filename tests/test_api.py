@@ -102,7 +102,7 @@ class TestApi(BaseApiTest):
                             }
                         }
                     }))
-        self.write_processed_events(events)
+        self.write_processed_records(events)
 
     def test_count(self):
         """
@@ -709,7 +709,7 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
 
-        self.write_processed_events([{
+        self.write_processed_records([{
             'event_id': '9' * 32,
             'project_id': 1,
             'group_id': 1,
