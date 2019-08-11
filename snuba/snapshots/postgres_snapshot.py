@@ -8,7 +8,7 @@ import os.path
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Mapping, NewType, Generator, IO, Iterable, Sequence
+from typing import Any, Mapping, NewType, Generator, Iterable, Sequence
 
 from snuba.snapshots import SnapshotDescriptor, TableConfig
 from snuba.snapshots import BulkLoadSource
@@ -140,14 +140,18 @@ class PostgresSnapshot(BulkLoadSource):
                 if expected_columns:
                     expected_set = set(expected_columns)
                     existing_set = set(columns)
-
                     if not expected_set <= existing_set:
                         raise ValueError(
-                            "The table file is missing columns %r " % (expected_set - existing_set))
+                            "The table %s is missing columns %r " % (
+                                table,
+                                expected_set - existing_set,
+                            )
+                        )
 
                     if len(existing_set) != len(expected_set):
                         logger.warning(
-                            "The table file contains more columns than expected %r",
+                            "The table %s contains more columns than expected %r",
+                            table,
                             existing_set - expected_set,
                         )
                 else:

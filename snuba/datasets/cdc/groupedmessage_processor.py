@@ -11,11 +11,11 @@ class GroupedMessageRow(CDCMessageRow):
     offset: int
     id: int
     record_deleted: bool
-    status: Optional[int]
-    last_seen: Optional[datetime]
-    first_seen: Optional[datetime]
-    active_at: Optional[datetime]
-    first_release_id: Optional[int]
+    status: Optional[int] = None
+    last_seen: Optional[datetime] = None
+    first_seen: Optional[datetime] = None
+    active_at: Optional[datetime] = None
+    first_release_id: Optional[int] = None
 
     @classmethod
     def from_wal(cls, offset, columnnames, columnvalues):
