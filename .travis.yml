@@ -1,20 +1,14 @@
-sudo: required
 services:
   - docker
+  - redis-server
+
 dist: xenial
-language: python
-python:
-  - "3.7"
-cache:
-  pip: true
+
 before_install:
-  - docker run -d --name clickhouse-server -p 9000:9000 -p 9009:9009 -p 8123:8123 --ulimit nofile=262144:262144 yandex/clickhouse-server:19.4
-  - sudo add-apt-repository ppa:chris-lea/redis-server -y
-  - sudo apt-get update
-  - sudo apt-get install redis
-  - redis-server --version
-  - redis-cli --version
+  - docker run -d --net host --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server:19.4
   - make travis-start-redis-cluster
-  - make install-python-dependencies
+  - docker build -t getsentry/snuba .
+  - docker ps -a
+
 script:
-  - make travis-test
+  - docker run --net host -e SNUBA_SETTINGS=travis --entrypoint python getsentry/snuba -m pytest -vv
