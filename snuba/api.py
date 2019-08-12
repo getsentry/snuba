@@ -245,11 +245,6 @@ def parse_and_run_query(validated_body, timer):
         joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
     join_clause = ' '.join(joins)
 
-    where_clause = ''
-    if where_conditions:
-        where_conditions = util.tuplify(where_conditions)
-        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
-
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
         # Add any condition to PREWHERE if:
@@ -268,6 +263,12 @@ def parse_and_run_query(validated_body, timer):
         ], key=lambda priority_and_col: priority_and_col[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+            where_conditions = list(filter(lambda cond: cond not in prewhere_conditions, where_conditions))
+
+    where_clause = ''
+    if where_conditions:
+        where_conditions = util.tuplify(where_conditions)
+        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
 
     prewhere_clause = ''
     if prewhere_conditions:
