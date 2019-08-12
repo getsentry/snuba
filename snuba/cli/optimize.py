@@ -3,7 +3,7 @@ import logging
 import click
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 
 
 @click.command()
@@ -13,7 +13,7 @@ from snuba.datasets.factory import get_dataset
               help='Clickhouse native port to write to.')
 @click.option('--database', default='default',
               help='Name of the database to target.')
-@click.option('--dataset', default='events', type=click.Choice(['events']),
+@click.option('--dataset', default='events', type=click.Choice(DATASET_NAMES),
               help='The dataset to target')
 @click.option('--timeout', default=10000, type=int,
               help='Clickhouse connection send/receive timeout, must be long enough for OPTIMIZE to complete.')

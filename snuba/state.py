@@ -267,10 +267,7 @@ def delete_config(key, user=None):
 
 
 def get_config_changes():
-    return map(
-        json.loads,
-        rds.lrange(config_changes_list, 0, -1),
-    )
+    return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
 # Query Recording
