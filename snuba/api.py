@@ -17,6 +17,7 @@ from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
+from snuba.redis import redis_client
 
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
@@ -443,6 +444,7 @@ if application.debug or application.testing:
 
         clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
+        redis_client.flushdb()
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/error')
