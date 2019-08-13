@@ -76,8 +76,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         tags = _as_dict_safe(data.get('tags', None))
         extract_extra_tags(processed, tags)
 
-        promoted_tag = {col: _unicodify(tags.get(col, None))
+        promoted_tag = {col: _unicodify(tags[col])
             for col in self.PROMOTED_TAGS
+            if col in tags
         }
         processed["release"] = promoted_tag.get(
             "sentry:release",
@@ -90,8 +91,9 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed["dist"] = _unicodify(
             promoted_tag.get("sentry:dist",
-            data.get("dist", None)),
+            data.get("dist", "BA")),
         )
+
         user_data = {}
         extract_user(user_data, data.get("user", {}))
         processed["user"] = promoted_tag.get("sentry:user", "")
