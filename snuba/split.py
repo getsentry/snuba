@@ -121,7 +121,7 @@ def split_query(query_func):
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
             - Second query selects all fields for only those events.
-            - If the orderby term is based on timestamp also update the date range
+            - Shrink the date range.
         """
         body = args[0]
 
@@ -149,6 +149,8 @@ def split_query(query_func):
             to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
             body['from_date'] = from_date.isoformat()
             body['to_date'] = to_date.isoformat()
+            body['offset'] = 0
+            body['limit'] = len(event_ids)
 
         return query_func({**body, 'conditions': conditions}, *args[1:], **kwargs)
 
