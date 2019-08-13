@@ -449,9 +449,11 @@ if application.debug or application.testing:
     def create_subscription():
         return json.dumps({'subscription_id': uuid1().hex}), 202, {'Content-Type': 'application/json'}
 
+
     @application.route('/subscriptions/<uuid>/renew', methods=['POST'])
     def renew_subscription(uuid):
         return 'ok', 202, {'Content-Type': 'text/plain'}
+
 
     @application.route('/subscriptions/<uuid>', methods=['DELETE'])
     def delete_subscription(uuid):
