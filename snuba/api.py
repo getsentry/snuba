@@ -177,7 +177,7 @@ def parse_and_run_query(validated_body, timer):
         ('force_final', 0 if turbo else None),
         ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
     ])
-    stats = {}
+
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
     assert from_date <= to_date
@@ -317,14 +317,14 @@ def parse_and_run_query(validated_body, timer):
 
     timer.mark('prepare_query')
 
-    stats.update({
+    stats = {
         'clickhouse_table': table,
         'final': used_final,
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
         'sample': sample,
-    })
+    }
 
     return util.raw_query(
         validated_body, sql, clickhouse_ro, timer, stats
