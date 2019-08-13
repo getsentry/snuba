@@ -100,6 +100,7 @@ class TransactionEvent:
                 },
                 'tags': [
                     ['sentry:release', self.release],
+                    ['sentry:user', self.user_id],
                     ['environment', self.environment],
                 ],
                 'user': {
@@ -132,13 +133,15 @@ class TransactionEvent:
             'environment': self.environment,
             'release': self.release,
             'dist': self.dist,
+            'user': self.user_id,
             'user_id': self.user_id,
             'user_name': self.user_name,
             'user_email': self.user_email,
-            'tags.key': ['environment', 'sentry:release'],
+            'tags.key': ['environment', 'sentry:release', 'sentry:user'],
             'tags.value': [
                 self.environment,
                 self.release,
+                self.user_id,
             ],
             'contexts.key': [
                 'trace.sampled', 'trace.trace_id',

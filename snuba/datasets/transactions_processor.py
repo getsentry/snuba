@@ -10,14 +10,22 @@ from snuba.processor import (
     _unicodify
 )
 from snuba.datasets.events_processor import (
+    enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
-    extract_user
+    extract_user,
 )
 
 
 class TransactionsMessageProcessor(MessageProcessor):
+    PROMOTED_TAGS = [
+        "environment",
+        "sentry:release",
+        "sentry:user",
+        "sentry:dist",
+    ]
+
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
         milliseconds = int(timestamp.microsecond / 1000)
@@ -39,7 +47,14 @@ class TransactionsMessageProcessor(MessageProcessor):
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-        extract_base(processed, event)
+        base = extract_base(event)
+        enforce_retention(
+            event,
+            datetime.fromtimestamp(data['timestamp']),
+            base['retention_days'],
+            base['project_id'],
+        )
+        processed.update(base)
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
@@ -58,15 +73,11 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         processed['platform'] = _unicodify(event['platform'])
 
-        promoted_tag_columns = [
-            "environment",
-            "sentry:release",
-        ]
         tags = _as_dict_safe(data.get('tags', None))
         extract_extra_tags(processed, tags)
 
         promoted_tag = {col: _unicodify(tags.get(col, None))
-            for col in promoted_tag_columns
+            for col in self.PROMOTED_TAGS
         }
         processed["release"] = promoted_tag.get(
             "sentry:release",
@@ -77,9 +88,13 @@ class TransactionsMessageProcessor(MessageProcessor):
         contexts = _as_dict_safe(data.get('contexts', None))
         extract_extra_contexts(processed, contexts)
 
-        processed["dist"] = _unicodify(data.get("dist", None))
+        processed["dist"] = _unicodify(
+            promoted_tag.get("sentry:dist",
+            data.get("dist", None)),
+        )
         user_data = {}
         extract_user(user_data, data.get("user", {}))
+        processed["user"] = promoted_tag.get("sentry:user", "")
         processed["user_name"] = user_data.get("username")
         processed["user_id"] = user_data.get("user_id")
         processed["user_email"] = user_data.get("email")

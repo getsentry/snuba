@@ -19,27 +19,18 @@ from snuba.processor import (
 logger = logging.getLogger('snuba.processor')
 
 
-def extract_base(output, message):
+def extract_base(message):
+    output = {}
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
-
-    # This is not ideal but it should never happen anyways
-    timestamp = _ensure_valid_date(datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT))
-    if timestamp is None:
-        timestamp = datetime.utcnow()
 
     retention_days = settings.RETENTION_OVERRIDES.get(project_id)
     if retention_days is None:
         retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
 
-    # TODO: We may need to allow for older events in the future when post
-    # processing triggers are based off of Snuba. Or this branch could be put
-    # behind a "backfill-only" optional switch.
-    if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
-        raise EventTooOld
-
     output['retention_days'] = retention_days
+    return output
 
 
 def extract_user(output, user):
@@ -78,6 +69,18 @@ def extract_extra_contexts(output, contexts):
 
     output['contexts.key'] = context_keys
     output['contexts.value'] = context_values
+
+
+def enforce_retention(message, timestamp, retention_days, project_id):
+    # This is not ideal but it should never happen anyways
+    timestamp = _ensure_valid_date(timestamp)
+    if timestamp is None:
+        timestamp = datetime.utcnow()
+    # TODO: We may need to allow for older events in the future when post
+    # processing triggers are based off of Snuba. Or this branch could be put
+    # behind a "backfill-only" optional switch.
+    if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
+        raise EventTooOld
 
 
 class EventsProcessor(MessageProcessor):
@@ -149,7 +152,15 @@ class EventsProcessor(MessageProcessor):
 
     def process_insert(self, message, metadata=None):
         processed = {'deleted': 0}
-        extract_base(processed, message)
+        base = extract_base(message)
+        enforce_retention(
+            message,
+            datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT),
+            base['retention_days'],
+            base['project_id'],
+        )
+        processed.update(base)
+
         self.extract_required(processed, message)
 
         data = message.get('data', {})

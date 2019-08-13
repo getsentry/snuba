@@ -66,9 +66,8 @@ class TestEventsProcessor(BaseEventsTest):
             'group_id': 10,
             'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
-        output = {}
 
-        extract_base(output, event)
+        output = extract_base(event)
         self.dataset.get_processor().extract_required(output, event)
         assert output == {
             'event_id': '11111111111111111111111111111111',

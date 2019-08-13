@@ -69,7 +69,7 @@ class TransactionsDataset(Dataset):
             columns=columns,
             local_table_name='transactions_local',
             dist_table_name='transactions_dist',
-            order_by='(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, event_id)',
+            order_by='(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, trace_id, span_id)',
             partition_by='(retention_days, toMonday(start_ts))',
             version_column='deleted',
             sample_expr=None,
