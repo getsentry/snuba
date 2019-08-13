@@ -15,7 +15,7 @@ from snuba import settings, state
 from snuba.datasets.factory import get_dataset
 from snuba.redis import redis_client
 
-from base import BaseEventsTest, BaseTest
+from base import BaseEventsTest
 
 
 class BaseApiTest(BaseEventsTest):
@@ -1020,6 +1020,29 @@ class TestApi(BaseApiTest):
                 'limit': 5,
             })).data)
             assert len(result['data']) == 0
+
+            # Test offset
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'offset': 170,
+                'limit': 170,
+            })).data)
+
+            assert len(result['data']) == 10
+            assert [e['tags[sentry:release]'] for e in result['data']] == list(map(str, reversed(range(0, 10))))
 
         finally:
             state.set_config('use_split', 0)
