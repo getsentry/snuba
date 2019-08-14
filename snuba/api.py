@@ -20,6 +20,8 @@ from snuba.split import split_query
 from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
 from snuba.redis import redis_client
+from snuba.util import Timer
+
 
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
@@ -169,7 +171,7 @@ def health():
 
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
-def unqualified_query_view(*, timer):
+def unqualified_query_view(*, timer: Timer):
     if request.method == 'GET':
         raise NotImplementedError  # redirect to the default dataset URL
     elif request.method == 'POST':
@@ -182,7 +184,7 @@ def unqualified_query_view(*, timer):
 
 @application.route('/<dataset_name>/query', methods=['GET', 'POST'])
 @util.time_request('query')
-def dataset_query_view(*, dataset_name, timer):
+def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)  # TODO: error handling
     if request.method == 'GET':
         return render_template(
