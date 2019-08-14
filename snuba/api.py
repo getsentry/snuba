@@ -169,17 +169,44 @@ def health():
 
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
-@util.validate_request(schemas.QUERY_SCHEMA)
-def query(validated_body=None, timer=None):
+def unqualified_query_view(*, timer):
     if request.method == 'GET':
-        query_template = schemas.generate(schemas.QUERY_SCHEMA)
-        template_str = json.dumps(query_template, sort_keys=True, indent=4)
-        return render_template('query.html', query_template=template_str)
+        raise NotImplementedError  # redirect to the default dataset URL
+    elif request.method == 'POST':
+        body = json.loads(request.data)  # TODO: error handling
+        dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))  # TODO: error handling
+        return dataset_query(dataset, body, timer)
+    else:
+        assert False, 'unexpected fallthrough'
 
-    dataset = get_dataset(validated_body.pop('dataset', settings.DEFAULT_DATASET_NAME))
+
+@application.route('/<dataset_name>/query', methods=['GET', 'POST'])
+@util.time_request('query')
+def dataset_query_view(*, dataset_name, timer):
+    dataset = get_dataset(dataset_name)  # TODO: error handling
+    if request.method == 'GET':
+        return render_template(
+            'query.html',
+            query_template=json.dumps(
+                schemas.generate(dataset.get_query_schema()),
+                sort_keys=True,
+                indent=4,
+            ),
+        )
+    elif request.method == 'POST':
+        body = json.loads(request.data)  # TODO: error handling
+        return dataset_query(dataset, body, timer)
+    else:
+        assert False, 'unexpected fallthrough'
+
+
+def dataset_query(dataset, body, timer):
+    assert request.method == 'POST'
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, validated_body, timer)
+    schemas.validate(body, dataset.get_query_schema())  # TODO: error handling
+
+    result, status = parse_and_run_query(dataset, body, timer)
     return (
         json.dumps(
             result,

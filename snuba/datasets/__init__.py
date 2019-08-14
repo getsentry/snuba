@@ -1,6 +1,7 @@
 from typing import Mapping
 
 from snuba.clickhouse import escape_col
+from snuba.schemas import QUERY_SCHEMA
 
 
 class Dataset(object):
@@ -73,6 +74,9 @@ class Dataset(object):
         external source when present.
         """
         raise NotImplementedError
+
+    def get_query_schema(self):
+        return QUERY_SCHEMA
 
 
 class TimeSeriesDataset(Dataset):
