@@ -31,8 +31,8 @@ def get_dataset(name):
 
     try:
         dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
-    except KeyError:
-        raise InvalidDatasetError(f"dataset {name!r} does not exist")
+    except KeyError as error:
+        raise InvalidDatasetError(f"dataset {name!r} does not exist") from error
 
     return dataset
 
