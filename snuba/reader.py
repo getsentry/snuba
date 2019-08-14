@@ -4,7 +4,7 @@ import itertools
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
 
 from dateutil.tz import tz
 
@@ -13,13 +13,10 @@ if TYPE_CHECKING:
     from mypy_extensions import TypedDict
 
     Column = TypedDict("Column", {"name": str, "type": str})
+    Row = MutableMapping[str, Any]
     Result = TypedDict(
         "Result",
-        {
-            "meta": Sequence[Column],
-            "data": Sequence[Mapping[str, Any]],
-            "totals": Mapping[str, Any],
-        },
+        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
         total=False,
     )
 
@@ -46,15 +43,23 @@ def transform_date_columns(result: Result) -> Result:
     Convert timezone-naive date and datetime values into timezone aware
     datetimes.
     """
+
+    def iterate_rows():
+        if "totals" in result:
+            return itertools.chain(result["data"], [result["totals"]])
+        else:
+            return iter(result["data"])
+
     for col in result["meta"]:
         if DATETIME_TYPE_RE.match(col["type"]):
-            for row in itertools.chain(result["data"], result.get("totals", [])):
+            for row in iterate_rows():
                 row[col["name"]] = row[col["name"]].replace(tzinfo=tz.tzutc())
         elif DATE_TYPE_RE.match(col["type"]):
-            for row in itertools.chain(result["data"], result.get("totals", [])):
+            for row in iterate_rows():
                 row[col["name"]] = datetime(
                     *(row[col["name"]].timetuple()[:6])
                 ).replace(tzinfo=tz.tzutc())
+
     return result
 
 
