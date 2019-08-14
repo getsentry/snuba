@@ -16,11 +16,7 @@ if TYPE_CHECKING:
     Row = MutableMapping[str, Any]
     Result = TypedDict(
         "Result",
-        {
-            "meta": Sequence[Column],
-            "data": Sequence[Row],
-            "totals": Row,
-        },
+        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
         total=False,
     )
 
@@ -49,8 +45,8 @@ def transform_date_columns(result: Result) -> Result:
     """
 
     def iterate_rows():
-        if 'totals' in result:
-            return itertools.chain(result['data'], [result['totals']])
+        if "totals" in result:
+            return itertools.chain(result["data"], [result["totals"]])
         else:
             return iter(result["data"])
 
