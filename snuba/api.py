@@ -168,16 +168,12 @@ def parse_and_run_query(validated_body, timer):
     ensure_table_exists(dataset)
     table = dataset.get_schema().get_table_name()
 
-    turbo = body.get('turbo', False)
-    max_days, date_align, config_sample, force_final, max_group_ids_exclude = state.get_configs([
+    max_days, date_align, config_sample = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
         ('sample', 1),
-        # 1: always use FINAL, 0: never use final, undefined/None: use project setting.
-        ('force_final', 0 if turbo else None),
-        ('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE),
     ])
-    stats = {}
+
     to_date = util.parse_datetime(body['to_date'], date_align)
     from_date = util.parse_datetime(body['from_date'], date_align)
     assert from_date <= to_date
@@ -216,24 +212,22 @@ def parse_and_run_query(validated_body, timer):
 
     from_clause = u'FROM {}'.format(table)
 
-    # For now, we only need FINAL if:
-    #    1. The project has been marked as needing FINAL (in redis) because of recent
-    #       replacements (and it affects too many groups for us just to exclude
-    #       those groups from the query)
-    #    OR
-    #    2. the force_final setting = 1
-    needs_final, exclude_group_ids = get_projects_query_flags(project_ids)
-    if len(exclude_group_ids) > max_group_ids_exclude:
-        # Cap the number of groups to exclude by query and flip to using FINAL if necessary
-        needs_final = True
-        exclude_group_ids = []
+    turbo = body.get('turbo', False)
+    if not turbo:
+        final, exclude_group_ids = get_projects_query_flags(project_ids)
+        if not final and exclude_group_ids:
+            # If the number of groups to exclude exceeds our limit, the query
+            # should just use final instead of the exclusion set.
+            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
+            if len(exclude_group_ids) > max_group_ids_exclude:
+                final = True
+            else:
+                where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
+    else:
+        final = False
 
-    used_final = False
-    if force_final == 1 or (force_final is None and needs_final):
+    if final:
         from_clause = u'{} FINAL'.format(from_clause)
-        used_final = True
-    elif exclude_group_ids:
-        where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
 
     sample = body.get('sample', settings.TURBO_SAMPLE_RATE if turbo else config_sample)
     if sample != 1:
@@ -318,14 +312,14 @@ def parse_and_run_query(validated_body, timer):
 
     timer.mark('prepare_query')
 
-    stats.update({
+    stats = {
         'clickhouse_table': table,
-        'final': used_final,
+        'final': final,
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
         'sample': sample,
-    })
+    }
 
     return util.raw_query(
         validated_body, sql, clickhouse_ro, timer, stats
