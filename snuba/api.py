@@ -3,7 +3,7 @@ import os
 
 from copy import deepcopy
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
@@ -173,7 +173,7 @@ def health():
 @util.time_request('query')
 def unqualified_query_view(*, timer: Timer):
     if request.method == 'GET':
-        raise NotImplementedError  # redirect to the default dataset URL
+        return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif request.method == 'POST':
         body = json.loads(request.data)  # TODO: error handling
         dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))  # TODO: error handling
