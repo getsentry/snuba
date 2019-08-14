@@ -307,7 +307,7 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
         order_clause,
         limitby_clause,
         limit_clause,
-        'FORMAT JSON'
+        'FORMAT JSON',  # not used by native client
     ] if c])
 
 

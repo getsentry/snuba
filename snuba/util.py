@@ -455,7 +455,7 @@ def raw_query(body, sql, client, timer, stats=None):
                             result = HTTPReader(
                                 settings.CLICKHOUSE_HOST,
                                 settings.CLICKHOUSE_HTTP_PORT,
-                                {'output_format_json_quote_64bit_integers': '0'},  # this is bad, but it makes the tests pass
+                                {'output_format_json_quote_64bit_integers': '0'},
                             ).execute(
                                 sql,
                                 query_settings,
