@@ -17,7 +17,7 @@ from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
+from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
 from snuba.redis import redis_client
 from snuba.util import Timer
@@ -94,6 +94,11 @@ def handle_bad_request(exception: BadRequest):
             raise TypeError()
 
     return json.dumps(data, sort_keys=True, indent=4, default=default_encode), 400, {'Content-Type': 'application/json'}
+
+
+@application.errorhandler(InvalidDatasetError)
+def handle_invalid_dataset(exception: InvalidDatasetError):
+    return str(exception), 404, {'Content-Type': 'text/plain'}
 
 
 @application.route('/')
@@ -176,7 +181,7 @@ def unqualified_query_view(*, timer: Timer):
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif request.method == 'POST':
         body = json.loads(request.data)  # TODO: error handling
-        dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))  # TODO: error handling
+        dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))
         return dataset_query(dataset, body, timer)
     else:
         assert False, 'unexpected fallthrough'
@@ -185,7 +190,7 @@ def unqualified_query_view(*, timer: Timer):
 @application.route('/<dataset_name>/query', methods=['GET', 'POST'])
 @util.time_request('query')
 def dataset_query_view(*, dataset_name: str, timer: Timer):
-    dataset = get_dataset(dataset_name)  # TODO: error handling
+    dataset = get_dataset(dataset_name)
     if request.method == 'GET':
         return render_template(
             'query.html',
