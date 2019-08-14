@@ -47,15 +47,23 @@ def transform_date_columns(result: Result) -> Result:
     Convert timezone-naive date and datetime values into timezone aware
     datetimes.
     """
+
+    def iterate_rows():
+        if 'totals' in result:
+            return itertools.chain(result['data'], [result['totals']])
+        else:
+            return iter(result["data"])
+
     for col in result["meta"]:
         if DATETIME_TYPE_RE.match(col["type"]):
-            for row in itertools.chain(result["data"], [result.get("totals", {})]):
+            for row in iterate_rows():
                 row[col["name"]] = row[col["name"]].replace(tzinfo=tz.tzutc())
         elif DATE_TYPE_RE.match(col["type"]):
-            for row in itertools.chain(result["data"], [result.get("totals", {})]):
+            for row in iterate_rows():
                 row[col["name"]] = datetime(
                     *(row[col["name"]].timetuple()[:6])
                 ).replace(tzinfo=tz.tzutc())
+
     return result
 
 
