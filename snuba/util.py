@@ -56,15 +56,6 @@ def parse_datetime(value, alignment=1):
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
-def time_expr(alias, granularity):
-    column = settings.TIME_GROUP_COLUMNS[alias]
-    template = {
-        3600: 'toStartOfHour({column})',
-        60: 'toStartOfMinute({column})',
-        86400: 'toDate({column})',
-    }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
-
-    return template.format(column=column, granularity=granularity)
 
 def function_expr(fn, args_expr=''):
     """
@@ -146,8 +137,6 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
         return complex_column_expr(dataset, column_name, body)
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
-    elif column_name in settings.TIME_GROUP_COLUMNS:
-        expr = time_expr(column_name, body['granularity'])
     else:
         expr = dataset.column_expr(column_name, body)
 

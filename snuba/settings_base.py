@@ -44,13 +44,6 @@ SENTRY_DSN = None
 
 SNAPSHOT_LOAD_PRODUCT = 'snuba'
 
-# Convenience columns that evaluate to a bucketed time, the
-# bucketing depends on the granularity parameter.
-TIME_GROUP_COLUMNS = {
-    'time': 'timestamp',
-    'rtime': 'received'
-}
-
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9092']
 DEFAULT_DATASET_BROKERS = {}
