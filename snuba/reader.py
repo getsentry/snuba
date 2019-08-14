@@ -75,7 +75,8 @@ class HTTPReader(Reader):
     def __init__(
         self, host: str, port: int, settings: Optional[Mapping[str, str]] = None
     ):
-        assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        if settings is not None:
+            assert "query_id" not in settings, "query_id cannot be passed as a setting"
         self.__base_url = f"http://{host}:{port}/"
         self.__default_settings = settings if settings is not None else {}
 
@@ -105,4 +106,7 @@ class HTTPReader(Reader):
         if response.status_code != 200:
             raise Exception(response.content)
 
-        return response.json()
+        data = response.json()
+        del data['statistics']
+        del data['rows']
+        return data
