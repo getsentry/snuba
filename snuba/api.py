@@ -148,7 +148,10 @@ def query(validated_body=None, timer=None):
         template_str = json.dumps(query_template, sort_keys=True, indent=4)
         return render_template('query.html', query_template=template_str)
 
-    result, status = parse_and_run_query(validated_body, timer)
+    dataset = get_dataset(validated_body.pop('dataset', settings.DEFAULT_DATASET_NAME))
+    ensure_table_exists(dataset)
+
+    result, status = parse_and_run_query(dataset, validated_body, timer)
     return (
         json.dumps(
             result,
@@ -160,12 +163,9 @@ def query(validated_body=None, timer=None):
 
 
 @split_query
-def parse_and_run_query(validated_body, timer):
+def parse_and_run_query(dataset, validated_body, timer):
     body = deepcopy(validated_body)
 
-    name = body.get('dataset', settings.DEFAULT_DATASET_NAME)
-    dataset = get_dataset(name)
-    ensure_table_exists(dataset)
     table = dataset.get_schema().get_table_name()
 
     max_days, date_align, config_sample = state.get_configs([
@@ -339,7 +339,11 @@ def sdk_distribution(validated_body, timer):
         ['count()', None, 'count'],
     ]
     validated_body['groupby'].extend(['sdk_name', 'rtime'])
-    result, status = parse_and_run_query(validated_body, timer)
+
+    dataset = get_dataset('events')
+    ensure_table_exists(dataset)
+
+    result, status = parse_and_run_query(dataset, validated_body, timer)
     return (
         json.dumps(
             result,
