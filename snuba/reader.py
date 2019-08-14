@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequen
 from urllib.parse import urlencode, urljoin
 
 import requests
+from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
 
 
@@ -57,13 +58,17 @@ def transform_date_columns(result: Result) -> Result:
     for col in result["meta"]:
         if DATETIME_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
-                row[col["name"]] = (
-                    row[col["name"]].replace(tzinfo=tz.tzutc()).isoformat()
-                )
+                value = row[col["name"]]
+                if isinstance(value, str):
+                    value = dateutil_parse(value)
+                row[col["name"]] = value.replace(tzinfo=tz.tzutc()).isoformat()
         elif DATE_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
+                value = row[col["name"]]
+                if isinstance(value, str):
+                    value = dateutil_parse(value)
                 row[col["name"]] = (
-                    datetime(*(row[col["name"]].timetuple()[:6]))
+                    datetime(*(value.timetuple()[:6]))
                     .replace(tzinfo=tz.tzutc())
                     .isoformat()
                 )
@@ -106,7 +111,8 @@ class HTTPReader(Reader):
         if response.status_code != 200:
             raise Exception(response.content)
 
-        data = response.json()
-        del data['statistics']
-        del data['rows']
-        return data
+        result = response.json()
+        del result["statistics"]
+        del result["rows"]
+
+        return transform_date_columns(result)
