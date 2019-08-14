@@ -138,10 +138,12 @@ def split_query(query_func):
             conditions.append(('event_id', 'IN', event_ids))
 
             timestamps = [event['timestamp'] for event in result['data']]
-            body['from_date'] = min(timestamps).isoformat()
+            from_date = util.parse_datetime(min(timestamps))
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
-            body['to_date'] = (max(timestamps) + timedelta(seconds=1)).isoformat()
+            to_date = util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+            body['from_date'] = from_date.isoformat()
+            body['to_date'] = to_date.isoformat()
             body['offset'] = 0
             body['limit'] = len(event_ids)
 

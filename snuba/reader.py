@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import itertools
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence
 
 from dateutil.tz import tz
 
@@ -13,10 +12,13 @@ if TYPE_CHECKING:
     from mypy_extensions import TypedDict
 
     Column = TypedDict("Column", {"name": str, "type": str})
-    Row = MutableMapping[str, Any]
     Result = TypedDict(
         "Result",
-        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
+        {
+            "meta": Sequence[Column],
+            "data": Sequence[Mapping[str, Any]],
+            "totals": Mapping[str, Any],
+        },
         total=False,
     )
 
@@ -34,36 +36,11 @@ class Reader(ABC):
         raise NotImplementedError
 
 
-DATE_TYPE_RE = re.compile(r"(Nullable\()?Date\b")
-DATETIME_TYPE_RE = re.compile(r"(Nullable\()?DateTime\b")
-
-
-def transform_date_columns(result: Result) -> Result:
-    """
-    Convert timezone-naive date and datetime values into timezone aware
-    datetimes.
-    """
-
-    def iterate_rows():
-        if "totals" in result:
-            return itertools.chain(result["data"], [result["totals"]])
-        else:
-            return iter(result["data"])
-
-    for col in result["meta"]:
-        if DATETIME_TYPE_RE.match(col["type"]):
-            for row in iterate_rows():
-                row[col["name"]] = row[col["name"]].replace(tzinfo=tz.tzutc())
-        elif DATE_TYPE_RE.match(col["type"]):
-            for row in iterate_rows():
-                row[col["name"]] = datetime(
-                    *(row[col["name"]].timetuple()[:6])
-                ).replace(tzinfo=tz.tzutc())
-
-    return result
-
-
 class NativeDriverReader(Reader):
+
+    DATE_TYPE_RE = re.compile(r"(Nullable\()?Date\b")
+    DATETIME_TYPE_RE = re.compile(r"(Nullable\()?DateTime\b")
+
     def __init__(self, client):
         self.__client = client
 
@@ -77,14 +54,27 @@ class NativeDriverReader(Reader):
         data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
         meta = [{"name": m[0], "type": m[1]} for m in meta]
 
+        for col in meta:
+            # Convert naive datetime strings back to TZ aware ones, and stringify
+            # TODO maybe this should be in the json serializer
+            if self.DATETIME_TYPE_RE.match(col["type"]):
+                for d in data:
+                    d[col["name"]] = (
+                        d[col["name"]].replace(tzinfo=tz.tzutc()).isoformat()
+                    )
+            elif self.DATE_TYPE_RE.match(col["type"]):
+                for d in data:
+                    dt = datetime(*(d[col["name"]].timetuple()[:6])).replace(
+                        tzinfo=tz.tzutc()
+                    )
+                    d[col["name"]] = dt.isoformat()
+
         if with_totals:
             assert len(data) > 0
             totals = data.pop(-1)
-            result = {"data": data, "meta": meta, "totals": totals}
+            return {"data": data, "meta": meta, "totals": totals}
         else:
-            result = {"data": data, "meta": meta}
-
-        return transform_date_columns(result)
+            return {"data": data, "meta": meta}
 
     def execute(
         self,
