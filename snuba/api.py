@@ -3,7 +3,7 @@ import os
 
 from copy import deepcopy
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
@@ -17,9 +17,11 @@ from snuba import schemas, settings, state, util
 from snuba.clickhouse import ClickhousePool
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-from snuba.datasets.factory import get_dataset, get_enabled_dataset_names
+from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
 from snuba.redis import redis_client
+from snuba.util import Timer
+
 
 logger = logging.getLogger('snuba.api')
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper()), format='%(asctime)s %(message)s')
@@ -92,6 +94,12 @@ def handle_bad_request(exception: BadRequest):
             raise TypeError()
 
     return json.dumps(data, sort_keys=True, indent=4, default=default_encode), 400, {'Content-Type': 'application/json'}
+
+
+@application.errorhandler(InvalidDatasetError)
+def handle_invalid_dataset(exception: InvalidDatasetError):
+    data = {'error': {'type': 'dataset', 'message': str(exception)}}
+    return json.dumps(data, sort_keys=True, indent=4), 404, {'Content-Type': 'application/json'}
 
 
 @application.route('/')
@@ -167,19 +175,62 @@ def health():
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
+def parse_request_body(request):
+    try:
+        return json.loads(request.data)
+    except json.errors.JSONDecodeError as error:
+        raise BadRequest(str(error)) from error
+
+
+def validate_request_content(body, schema, timer):
+    try:
+        schemas.validate(body, schema)
+    except jsonschema.ValidationError as error:
+        raise BadRequest(str(error)) from error
+
+    timer.mark('validate_schema')
+
+
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
-@util.validate_request(schemas.QUERY_SCHEMA)
-def query(validated_body=None, timer=None):
+def unqualified_query_view(*, timer: Timer):
     if request.method == 'GET':
-        query_template = schemas.generate(schemas.QUERY_SCHEMA)
-        template_str = json.dumps(query_template, sort_keys=True, indent=4)
-        return render_template('query.html', query_template=template_str)
+        return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
+    elif request.method == 'POST':
+        body = parse_request_body(request)
+        dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))
+        return dataset_query(dataset, body, timer)
+    else:
+        assert False, 'unexpected fallthrough'
 
-    dataset = get_dataset(validated_body.pop('dataset', settings.DEFAULT_DATASET_NAME))
+
+@application.route('/<dataset_name>/query', methods=['GET', 'POST'])
+@util.time_request('query')
+def dataset_query_view(*, dataset_name: str, timer: Timer):
+    dataset = get_dataset(dataset_name)
+    if request.method == 'GET':
+        return render_template(
+            'query.html',
+            query_template=json.dumps(
+                schemas.generate(dataset.get_query_schema()),
+                sort_keys=True,
+                indent=4,
+            ),
+        )
+    elif request.method == 'POST':
+        body = parse_request_body(request)
+        return dataset_query(dataset, body, timer)
+    else:
+        assert False, 'unexpected fallthrough'
+
+
+def dataset_query(dataset, body, timer):
+    assert request.method == 'POST'
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, validated_body, timer)
+    validate_request_content(body, dataset.get_query_schema(), timer)
+
+    result, status = parse_and_run_query(dataset, body, timer)
     return (
         json.dumps(
             result,
@@ -359,19 +410,21 @@ def parse_and_run_query(dataset, validated_body, timer):
 
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
-@util.validate_request(schemas.SDK_STATS_SCHEMA)
-def sdk_distribution(validated_body, timer):
-    validated_body['project'] = []
-    validated_body['aggregations'] = [
+def sdk_distribution(*, timer: Timer):
+    body = parse_request_body(request)
+    validate_request_content(body, schemas.SDK_STATS_SCHEMA, timer)
+
+    body['project'] = []
+    body['aggregations'] = [
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    validated_body['groupby'].extend(['sdk_name', 'rtime'])
+    body['groupby'].extend(['sdk_name', 'rtime'])
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, validated_body, timer)
+    result, status = parse_and_run_query(dataset, body, timer)
     return (
         json.dumps(
             result,
