@@ -17,6 +17,7 @@ import re
 import simplejson as json
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
+from werkzeug.exceptions import BadRequest
 
 from snuba import clickhouse, schemas, settings, state
 from snuba.clickhouse import escape_col
@@ -526,29 +527,21 @@ def validate_request(schema):
         @wraps(func)
         def wrapper(*args, **kwargs):
 
-            def default_encode(value):
-                if callable(value):
-                    return value()
-                else:
-                    raise TypeError()
-
             if request.method == 'POST':
                 try:
                     body = json.loads(request.data)
+                except json.errors.JSONDecodeError as error:
+                    raise BadRequest(str(error)) from error
+
+                try:
                     schemas.validate(body, schema)
-                    kwargs['validated_body'] = body
-                    if kwargs.get('timer'):
-                        kwargs['timer'].mark('validate_schema')
-                except (ValueError, jsonschema.ValidationError) as e:
-                    result = {'error': {
-                        'type': 'schema',
-                        'message': str(e),
-                    }, 'schema': schema}
-                    return (
-                        json.dumps(result, sort_keys=True, indent=4, default=default_encode),
-                        400,
-                        {'Content-Type': 'application/json'}
-                    )
+                except jsonschema.ValidationError as error:
+                    raise BadRequest(str(error)) from error
+
+                kwargs['validated_body'] = body
+                if kwargs.get('timer'):
+                    kwargs['timer'].mark('validate_schema')
+
             return func(*args, **kwargs)
         return wrapper
     return decorator
