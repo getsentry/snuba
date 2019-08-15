@@ -71,9 +71,9 @@ sentry_sdk.init(
 @application.errorhandler(BadRequest)
 def handle_bad_request(exception: BadRequest):
     cause = getattr(exception, '__cause__', None)
-    if cause is not None and isinstance(cause, json.errors.JSONDecodeError):
+    if isinstance(cause, json.errors.JSONDecodeError):
         data = {'error': {'type': 'json', 'message': str(cause)}}
-    elif cause is not None and isinstance(cause, jsonschema.ValidationError):
+    elif isinstance(cause, jsonschema.ValidationError):
         data = {'error': {
             'type': 'schema',
             'message': cause.message,
