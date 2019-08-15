@@ -174,13 +174,29 @@ def health():
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
+def parse_request_body(request):
+    try:
+        return json.loads(request.data)
+    except json.errors.JSONDecodeError as error:
+        raise BadRequest(str(error)) from error
+
+
+def validate_request_content(body, schema, timer):
+    try:
+        schemas.validate(body, schema)
+    except jsonschema.ValidationError as error:
+        raise BadRequest(str(error)) from error
+
+    timer.mark('validate_schema')
+
+
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
 def unqualified_query_view(*, timer: Timer):
     if request.method == 'GET':
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
     elif request.method == 'POST':
-        body = json.loads(request.data)  # TODO: error handling
+        body = parse_request_body(request)
         dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))
         return dataset_query(dataset, body, timer)
     else:
@@ -201,7 +217,7 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
             ),
         )
     elif request.method == 'POST':
-        body = json.loads(request.data)  # TODO: error handling
+        body = parse_request_body(request)
         return dataset_query(dataset, body, timer)
     else:
         assert False, 'unexpected fallthrough'
@@ -211,7 +227,7 @@ def dataset_query(dataset, body, timer):
     assert request.method == 'POST'
     ensure_table_exists(dataset)
 
-    schemas.validate(body, dataset.get_query_schema())  # TODO: error handling
+    validate_request_content(body, dataset.get_query_schema(), timer)
 
     result, status = parse_and_run_query(dataset, body, timer)
     return (
@@ -393,19 +409,21 @@ def parse_and_run_query(dataset, validated_body, timer):
 
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
-@util.validate_request(schemas.SDK_STATS_SCHEMA)
-def sdk_distribution(validated_body, timer):
-    validated_body['project'] = []
-    validated_body['aggregations'] = [
+def sdk_distribution(*, timer: Timer):
+    body = parse_request_body(request)
+    validate_request_content(body, schemas.SDK_STATS_SCHEMA, timer)
+
+    body['project'] = []
+    body['aggregations'] = [
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    validated_body['groupby'].extend(['sdk_name', 'rtime'])
+    body['groupby'].extend(['sdk_name', 'rtime'])
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, validated_body, timer)
+    result, status = parse_and_run_query(dataset, body, timer)
     return (
         json.dumps(
             result,
