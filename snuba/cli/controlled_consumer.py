@@ -6,6 +6,11 @@ import click
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.consumer_initializer import initialize_consumer
+from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
+from snuba.stateful_consumer.bootstrap_state import BootstrapState
+from snuba.stateful_consumer.consuming_state import ConsumingState
+from snuba.stateful_consumer.paused_state import PausedState
+from snuba.stateful_consumer.catching_up_state import CatchingUpState
 
 
 @click.command()
@@ -34,7 +39,7 @@ from snuba.consumer_initializer import initialize_consumer
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+def controlled_consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
@@ -63,10 +68,20 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         dogstatsd_port=dogstatsd_port
     )
 
+    context = ConsumerContext(
+        states={
+            StateType.BOOTSTRAP: BootstrapState(),
+            StateType.CONSUMING: ConsumingState(consumer),
+            StateType.SNAPSHOT_PAUSED: PausedState(),
+            StateType.CATCHING_UP: CatchingUpState(),
+        },
+        start_state=StateType.BOOTSTRAP,
+    )
+
     def handler(signum, frame):
-        consumer.signal_shutdown()
+        context.set_shutdown()
 
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    consumer.run()
+    context.run(input=None)
