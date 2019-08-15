@@ -162,131 +162,48 @@ def query(validated_body=None, timer=None):
     )
 
 
-@split_query
-def parse_and_run_query(dataset, validated_body, timer):
-    body = deepcopy(validated_body)
-
-    table = dataset.get_schema().get_table_name()
-
-    max_days, date_align, config_sample = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-        ('sample', 1),
-    ])
-
-    to_date = util.parse_datetime(body['to_date'], date_align)
-    from_date = util.parse_datetime(body['from_date'], date_align)
-    assert from_date <= to_date
-
-    if max_days is not None and (to_date - from_date).days > max_days:
-        from_date = to_date - timedelta(days=max_days)
-
-    where_conditions = body.get('conditions', [])
-    where_conditions.extend([
-        ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
-    ])
-    where_conditions.extend(dataset.default_conditions())
-
-    # NOTE: we rely entirely on the schema to make sure that regular snuba
-    # queries are required to send a project_id filter. Some other special
-    # internal query types do not require a project_id filter.
-    project_ids = util.to_list(body['project'])
-    if project_ids:
-        where_conditions.append(('project_id', 'IN', project_ids))
-
-    having_conditions = body.get('having', [])
-
-    aggregate_exprs = [
-        util.column_expr(dataset, col, body, alias, agg)
-        for (agg, col, alias) in body['aggregations']
-    ]
+def format_query(dataset, body, table, prewhere_conditions, final) -> str:
+    """Generate a SQL string from the parameters."""
+    aggregate_exprs = [util.column_expr(dataset, col, body, alias, agg) for (agg, col, alias) in body['aggregations']]
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
-
-    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body)
-                     for colname in body.get('selected_columns', [])]
-
-    select_exprs = group_exprs + aggregate_exprs + selected_cols
-    select_clause = u'SELECT {}'.format(', '.join(select_exprs))
+    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body) for colname in body.get('selected_columns', [])]
+    select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
     from_clause = u'FROM {}'.format(table)
-
-    turbo = body.get('turbo', False)
-    if not turbo:
-        final, exclude_group_ids = get_projects_query_flags(project_ids)
-        if not final and exclude_group_ids:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
-            if len(exclude_group_ids) > max_group_ids_exclude:
-                final = True
-            else:
-                where_conditions.append(('group_id', 'NOT IN', exclude_group_ids))
-    else:
-        final = False
-
     if final:
         from_clause = u'{} FINAL'.format(from_clause)
+    if 'sample' in body:
+        from_clause = u'{} SAMPLE {}'.format(from_clause, body['sample'])
 
-    sample = body.get('sample', settings.TURBO_SAMPLE_RATE if turbo else config_sample)
-    if sample != 1:
-        from_clause = u'{} SAMPLE {}'.format(from_clause, sample)
-
-    joins = []
-
+    join_clause = ''
     if 'arrayjoin' in body:
-        joins.append(u'ARRAY JOIN {}'.format(body['arrayjoin']))
-    join_clause = ' '.join(joins)
-
-    prewhere_conditions = []
-    if settings.PREWHERE_KEYS:
-        # Add any condition to PREWHERE if:
-        # - It is a single top-level condition (not OR-nested), and
-        # - Any of its referenced columns are in PREWHERE_KEYS
-        prewhere_candidates = [
-            (util.columns_in_expr(cond[0]), cond)
-            for cond in where_conditions if util.is_condition(cond) and
-            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
-        ]
-        # Use the condition that has the highest priority (based on the
-        # position of its columns in the PREWHERE_KEYS list)
-        prewhere_candidates = sorted([
-            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
-            for cols, cond in prewhere_candidates
-        ], key=lambda priority_and_col: priority_and_col[0])
-        if prewhere_candidates:
-            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            where_conditions = list(filter(lambda cond: cond not in prewhere_conditions, where_conditions))
+        join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin'])
 
     where_clause = ''
-    if where_conditions:
-        where_conditions = util.tuplify(where_conditions)
-        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, where_conditions, body))
+    if body['conditions']:
+        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, body['conditions'], body))
 
     prewhere_clause = ''
     if prewhere_conditions:
         prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
 
+    group_clause = ''
+    if groupby:
+        group_clause = 'GROUP BY ({})'.format(', '.join(util.column_expr(dataset, gb, body) for gb in groupby))
+        if body.get('totals', False):
+            group_clause = '{} WITH TOTALS'.format(group_clause)
+
     having_clause = ''
+    having_conditions = body.get('having', [])
     if having_conditions:
         assert groupby, 'found HAVING clause with no GROUP BY'
         having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
 
-    group_clause = ', '.join(util.column_expr(dataset, gb, body) for gb in groupby)
-    if group_clause:
-        if body.get('totals', False):
-            group_clause = 'GROUP BY ({}) WITH TOTALS'.format(group_clause)
-        else:
-            group_clause = 'GROUP BY ({})'.format(group_clause)
-
     order_clause = ''
     if body.get('orderby'):
         orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
-        orderby = [u'{} {}'.format(
-            ob.lstrip('-'),
-            'DESC' if ob.startswith('-') else 'ASC'
-        ) for ob in orderby]
+        orderby = [u'{} {}'.format(ob.lstrip('-'), 'DESC' if ob.startswith('-') else 'ASC') for ob in orderby]
         order_clause = u'ORDER BY {}'.format(', '.join(orderby))
 
     limitby_clause = ''
@@ -297,7 +214,7 @@ def parse_and_run_query(dataset, validated_body, timer):
     if 'limit' in body:
         limit_clause = 'LIMIT {}, {}'.format(body.get('offset', 0), body['limit'])
 
-    sql = ' '.join([c for c in [
+    return ' '.join([c for c in [
         select_clause,
         from_clause,
         join_clause,
@@ -310,6 +227,84 @@ def parse_and_run_query(dataset, validated_body, timer):
         limit_clause
     ] if c])
 
+
+@split_query
+def parse_and_run_query(dataset, validated_body, timer):
+    body = deepcopy(validated_body)
+
+    max_days, date_align, config_sample = state.get_configs([
+        ('max_days', None),
+        ('date_align_seconds', 1),
+        ('sample', None),
+    ])
+
+    to_date = util.parse_datetime(body['to_date'], date_align)
+    from_date = util.parse_datetime(body['from_date'], date_align)
+    assert from_date <= to_date
+
+    if max_days is not None and (to_date - from_date).days > max_days:
+        from_date = to_date - timedelta(days=max_days)
+
+    # XXX: This should already be enforced by the schema at this point.
+    body.setdefault('conditions', [])
+
+    body['conditions'].extend([
+        ('timestamp', '>=', from_date),
+        ('timestamp', '<', to_date),
+    ])
+
+    body['conditions'].extend(dataset.default_conditions())
+
+    # NOTE: we rely entirely on the schema to make sure that regular snuba
+    # queries are required to send a project_id filter. Some other special
+    # internal query types do not require a project_id filter.
+    project_ids = util.to_list(body['project'])
+    if project_ids:
+        body['conditions'].append(('project_id', 'IN', project_ids))
+
+    turbo = body.get('turbo', False)
+    if not turbo:
+        final, exclude_group_ids = get_projects_query_flags(project_ids)
+        if not final and exclude_group_ids:
+            # If the number of groups to exclude exceeds our limit, the query
+            # should just use final instead of the exclusion set.
+            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
+            if len(exclude_group_ids) > max_group_ids_exclude:
+                final = True
+            else:
+                body['conditions'].append(('group_id', 'NOT IN', exclude_group_ids))
+    else:
+        final = False
+        if 'sample' not in body:
+            body['sample'] = settings.TURBO_SAMPLE_RATE
+
+    if 'sample' not in body and config_sample is not None:
+        body['sample'] = config_sample
+
+    prewhere_conditions = []
+    if settings.PREWHERE_KEYS:
+        # Add any condition to PREWHERE if:
+        # - It is a single top-level condition (not OR-nested), and
+        # - Any of its referenced columns are in PREWHERE_KEYS
+        prewhere_candidates = [
+            (util.columns_in_expr(cond[0]), cond)
+            for cond in body['conditions'] if util.is_condition(cond) and
+            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
+        ]
+        # Use the condition that has the highest priority (based on the
+        # position of its columns in the PREWHERE_KEYS list)
+        prewhere_candidates = sorted([
+            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
+            for cols, cond in prewhere_candidates
+        ], key=lambda priority_and_col: priority_and_col[0])
+        if prewhere_candidates:
+            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+            body['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, body['conditions']))
+
+    table = dataset.get_schema().get_table_name()
+
+    sql = format_query(dataset, body, table, prewhere_conditions, final)
+
     timer.mark('prepare_query')
 
     stats = {
@@ -318,7 +313,7 @@ def parse_and_run_query(dataset, validated_body, timer):
         'referrer': request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'sample': sample,
+        'sample': body.get('sample'),
     }
 
     return util.raw_query(
