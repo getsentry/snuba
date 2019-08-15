@@ -98,7 +98,8 @@ def handle_bad_request(exception: BadRequest):
 
 @application.errorhandler(InvalidDatasetError)
 def handle_invalid_dataset(exception: InvalidDatasetError):
-    return str(exception), 404, {'Content-Type': 'text/plain'}
+    data = {'error': {'type': 'dataset', 'message': str(exception)}}
+    return json.dumps(data, sort_keys=True, indent=4), 404, {'Content-Type': 'application/json'}
 
 
 @application.route('/')
