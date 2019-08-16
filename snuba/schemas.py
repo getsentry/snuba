@@ -160,7 +160,13 @@ GENERIC_QUERY_SCHEMA = {
         'column_name': {
             'type': 'string',
             'anyOf': [
-                {'pattern': r'^-?[a-zA-Z0-9_.]+(\[[a-zA-Z0-9_.:-]+\])?$', },
+                # This supports ClickHouse identifiers (with the addition of
+                # the dot operator for referencing Nested columns, either in
+                # aggregate or after an ARRAY JOIN), as well as an optional
+                # subscript component at the end of the identifier (surrounded
+                # by square brackets, e.g. `tags[key]`) that can be used for
+                # treating Nested columns as mapping types in some contexts.
+                {'pattern': r'^-?[a-zA-Z0-9_.]+(\[[a-zA-Z0-9_.:-]+\])?$'},
             ],
         },
         'column_list': {
