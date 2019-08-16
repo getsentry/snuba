@@ -82,6 +82,13 @@ GENERIC_QUERY_SCHEMA = {
             },
             'default': [],
         },
+        'arrayjoin': {
+            '$ref': '#/definitions/column_name',
+        },
+        'sample': {
+            'type': 'number',
+            'min': 0,
+        },
         'conditions': {
             'type': 'array',
             'items': {
@@ -94,13 +101,6 @@ GENERIC_QUERY_SCHEMA = {
                 ],
             },
             'default': [],
-        },
-        'arrayjoin': {
-            '$ref': '#/definitions/column_name',
-        },
-        'sample': {
-            'type': 'number',
-            'min': 0,
         },
         'groupby': {
             'anyOf': [
