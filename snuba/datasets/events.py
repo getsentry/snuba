@@ -14,7 +14,7 @@ from snuba.clickhouse import (
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
-from snuba.schemas import QUERY_SCHEMA
+from snuba.schemas import EVENTS_QUERY_SCHEMA
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -337,4 +337,4 @@ class EventsDataset(TimeSeriesDataset):
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
     def get_query_schema(self):
-        return QUERY_SCHEMA
+        return EVENTS_QUERY_SCHEMA
