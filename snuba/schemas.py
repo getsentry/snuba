@@ -26,25 +26,6 @@ def get_time_series_query_schema_properties(default_granularity: int, default_wi
     }
 
 
-SDK_STATS_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'groupby': {
-            'type': 'array',
-            'items': {
-                # at the moment the only additional thing you can group by is project_id
-                'enum': ['project_id']
-            },
-            'default': [],
-        },
-        **get_time_series_query_schema_properties(
-            default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
-            default_window=timedelta(days=1),
-        ),
-    },
-    'additionalProperties': False,
-}
-
 GENERIC_QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -217,43 +198,51 @@ GENERIC_QUERY_SCHEMA = {
     }
 }
 
-EVENTS_QUERY_SCHEMA = {
-    **copy.deepcopy(GENERIC_QUERY_SCHEMA),
-    # Need to select down to the project level for customer isolation and performance
-    'required': ['project'],
+SDK_STATS_QUERY_OPTIONS_SCHEMA = {
+    'type': 'object',
+    'properties': get_time_series_query_schema_properties(
+            default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
+            default_window=timedelta(days=1),
+    ),
+    'additionalProperties': False,
 }
 
-EVENTS_QUERY_SCHEMA['properties'].update({
-    **get_time_series_query_schema_properties(
-        default_granularity=3600,
-        default_window=timedelta(days=5),
-    ),
-    'project': {
-        'anyOf': [
-            {'type': 'number'},
-            {
-                'type': 'array',
-                'items': {'type': 'number'},
-                'minItems': 1,
-            },
-        ]
+EVENTS_QUERY_OPTIONS_SCHEMA = {
+    'properties': {
+        **get_time_series_query_schema_properties(
+            default_granularity=3600,
+            default_window=timedelta(days=5),
+        ),
+        'project': {
+            'anyOf': [
+                {'type': 'number'},
+                {
+                    'type': 'array',
+                    'items': {'type': 'number'},
+                    'minItems': 1,
+                },
+            ]
+        },
+        # Never add FINAL to queries, enable sampling
+        'turbo': {
+            'type': 'boolean',
+            'default': False,
+        },
+        # Force queries to hit the first shard replica, ensuring the query
+        # sees data that was written before the query. This burdens the
+        # first replica, so should only be used when absolutely necessary.
+        'consistent': {
+            'type': 'boolean',
+            'default': False,
+        },
+        'debug': {
+            'type': 'boolean',
+        },
     },
-    # Never add FINAL to queries, enable sampling
-    'turbo': {
-        'type': 'boolean',
-        'default': False,
-    },
-    # Force queries to hit the first shard replica, ensuring the query
-    # sees data that was written before the query. This burdens the
-    # first replica, so should only be used when absolutely necessary.
-    'consistent': {
-        'type': 'boolean',
-        'default': False,
-    },
-    'debug': {
-        'type': 'boolean',
-    }
-})
+    # Need to select down to the project level for customer isolation and performance
+    'required': ['project'],
+    'additionalProperties': False,
+}
 
 
 def validate(value, schema, set_defaults=True):
