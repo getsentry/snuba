@@ -233,6 +233,7 @@ def dataset_query(dataset, body, timer):
     return (
         json.dumps(
             result,
+            for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
         status,
         {'Content-Type': 'application/json'}
