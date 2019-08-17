@@ -93,7 +93,7 @@ def handle_bad_request(exception: BadRequest):
         else:
             raise TypeError()
 
-    return json.dumps(data, sort_keys=True, indent=4, default=default_encode), 400, {'Content-Type': 'application/json'}
+    return json.dumps(data, indent=4, default=default_encode), 400, {'Content-Type': 'application/json'}
 
 
 @application.errorhandler(InvalidDatasetError)
@@ -213,7 +213,6 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
             'query.html',
             query_template=json.dumps(
                 schemas.generate(dataset.get_query_schema()),
-                sort_keys=True,
                 indent=4,
             ),
         )
@@ -234,7 +233,6 @@ def dataset_query(dataset, body, timer):
     return (
         json.dumps(
             result,
-            for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
         status,
         {'Content-Type': 'application/json'}
