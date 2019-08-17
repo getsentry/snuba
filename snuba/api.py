@@ -183,17 +183,17 @@ def parse_request_body(request):
 
 
 def validate_request_content(body, options_schema, timer):
+    schema = schemas.get_composite_schema([
+        GENERIC_QUERY_SCHEMA,
+        options_schema,
+    ])
+
+    try:
+        schemas.validate(body, schema)
+    except jsonschema.ValidationError as error:
+        raise BadRequest(str(error)) from error
+
     query = {key: body.pop(key) for key in GENERIC_QUERY_SCHEMA['properties'].keys() if key in body}
-
-    try:
-        schemas.validate(query, GENERIC_QUERY_SCHEMA)
-    except jsonschema.ValidationError as error:
-        raise BadRequest(str(error)) from error
-
-    try:
-        schemas.validate(body, options_schema)
-    except jsonschema.ValidationError as error:
-        raise BadRequest(str(error)) from error
 
     timer.mark('validate_schema')
 
@@ -218,11 +218,13 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
     if request.method == 'GET':
-        raise NotImplementedError  # TODO: Fix
         return render_template(
             'query.html',
             query_template=json.dumps(
-                schemas.generate(dataset.get_query_schema()),
+                schemas.generate(schemas.get_composite_schema([
+                    GENERIC_QUERY_SCHEMA,
+                    dataset.get_query_options_schema(),
+                ])),
                 indent=4,
             ),
         )

@@ -208,6 +208,7 @@ SDK_STATS_QUERY_OPTIONS_SCHEMA = {
 }
 
 EVENTS_QUERY_OPTIONS_SCHEMA = {
+    'type': 'object',
     'properties': {
         **get_time_series_query_schema_properties(
             default_granularity=3600,
@@ -243,6 +244,37 @@ EVENTS_QUERY_OPTIONS_SCHEMA = {
     'required': ['project'],
     'additionalProperties': False,
 }
+
+
+def get_composite_schema(schemas):
+    """
+    Merge two object schemas together, returning a new schema that contains
+    properties, definitions, and required fields from both.
+    """
+    result = {
+        'type': 'object',
+        'properties': {},
+        'definitions': {},
+        'required': set(),
+        'additionalProperties': False,
+    }
+
+    for schema in schemas:
+        assert schema['type'] == 'object'
+
+        assert not set(result['properties'].keys()) & set(schema['properties'].keys()), 'property name conflict'
+        result['properties'].update(schema['properties'])
+
+        assert not set(result['definitions'].keys()) & set(schema.get('definitions', {}).keys()), 'definition name conflict'
+        result['definitions'].update(schema.get('definitions', {}))
+
+        result['required'].update(schema.get('required', []))
+
+        assert schema['additionalProperties'] is False, 'schema must not allow additional properties'
+
+    result['required'] = list(result['required'])
+
+    return result
 
 
 def validate(value, schema, set_defaults=True):
