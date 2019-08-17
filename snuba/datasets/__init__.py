@@ -74,7 +74,7 @@ class Dataset(object):
         """
         raise NotImplementedError
 
-    def get_query_options_schema(self):
+    def get_query_extensions_schema(self):
         raise NotImplementedError('dataset does not support queries')
 
 

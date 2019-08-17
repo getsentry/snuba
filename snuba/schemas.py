@@ -7,7 +7,7 @@ CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
 
 
-def get_time_series_query_schema_properties(default_granularity: int, default_window: timedelta):
+def get_time_series_query_extension_schema_properties(default_granularity: int, default_window: timedelta):
     return {
         'from_date': {
             'type': 'string',
@@ -198,19 +198,19 @@ GENERIC_QUERY_SCHEMA = {
     }
 }
 
-SDK_STATS_QUERY_OPTIONS_SCHEMA = {
+SDK_STATS_QUERY_EXTENSIONS_SCHEMA = {
     'type': 'object',
-    'properties': get_time_series_query_schema_properties(
+    'properties': get_time_series_query_extension_schema_properties(
             default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
             default_window=timedelta(days=1),
     ),
     'additionalProperties': False,
 }
 
-EVENTS_QUERY_OPTIONS_SCHEMA = {
+EVENTS_QUERY_EXTENSIONS_SCHEMA = {
     'type': 'object',
     'properties': {
-        **get_time_series_query_schema_properties(
+        **get_time_series_query_extension_schema_properties(
             default_granularity=3600,
             default_window=timedelta(days=5),
         ),

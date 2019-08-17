@@ -182,10 +182,10 @@ def parse_request_body(request):
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(body, options_schema, timer):
+def validate_request_content(body, extensions_schema, timer):
     schema = schemas.get_composite_schema([
         GENERIC_QUERY_SCHEMA,
-        options_schema,
+        extensions_schema,
     ])
 
     try:
@@ -223,7 +223,7 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
             query_template=json.dumps(
                 schemas.generate(schemas.get_composite_schema([
                     GENERIC_QUERY_SCHEMA,
-                    dataset.get_query_options_schema(),
+                    dataset.get_query_extensions_schema(),
                 ])),
                 indent=4,
             ),
@@ -239,9 +239,9 @@ def dataset_query(dataset, body, timer):
     assert request.method == 'POST'
     ensure_table_exists(dataset)
 
-    query, options = validate_request_content(body, dataset.get_query_options_schema(), timer)
+    query, extensions = validate_request_content(body, dataset.get_query_extensions_schema(), timer)
 
-    result, status = parse_and_run_query(dataset, query, options, timer)
+    result, status = parse_and_run_query(dataset, query, extensions, timer)
     return (
         json.dumps(
             result,
@@ -319,8 +319,10 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 
 
 @split_query
-def parse_and_run_query(dataset, query, options, timer):
-    body = {**query, **options}
+def parse_and_run_query(dataset, query, extensions, timer):
+    body = {**query, **extensions}
+
+    table = dataset.get_schema().get_table_name()
 
     max_days, date_align, config_sample = state.get_configs([
         ('max_days', None),
@@ -417,7 +419,7 @@ def parse_and_run_query(dataset, query, options, timer):
 def sdk_distribution(*, timer: Timer):
     body = parse_request_body(request)
 
-    query, options = validate_request_content(body, schemas.SDK_STATS_QUERY_OPTIONS_SCHEMA, timer)
+    query, extensions = validate_request_content(body, schemas.SDK_STATS_QUERY_EXTENSIONS_SCHEMA, timer)
     assert query['groupby'] == ['project_id']  # XXX: I hate this
 
     query['aggregations'] = [
@@ -426,7 +428,7 @@ def sdk_distribution(*, timer: Timer):
     ]
     query['groupby'].extend(['sdk_name', 'rtime'])
 
-    options['project'] = []
+    extensions['project'] = []
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)

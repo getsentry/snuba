@@ -14,7 +14,7 @@ MIN_COLS = ['project_id', 'event_id', 'timestamp']
 
 def split_query(query_func):
 
-    def wrapper(dataset, query, options, *args, **kwargs):
+    def wrapper(dataset, query, extensions, *args, **kwargs):
         use_split = state.get_configs([
             ('use_split', 0),
         ])
@@ -33,13 +33,13 @@ def split_query(query_func):
                 and not query.get('aggregations')
                 and total_col_count > min_col_count
             ):
-                return col_split(dataset, query, options, *args, **kwargs)
+                return col_split(dataset, query, extensions, *args, **kwargs)
             elif orderby[:1] == ['-timestamp'] and remaining_offset < 1000:
-                return time_split(dataset, query, options, *args, **kwargs)
+                return time_split(dataset, query, extensions, *args, **kwargs)
 
-        return query_func(dataset, query, options, *args, **kwargs)
+        return query_func(dataset, query, extensions, *args, **kwargs)
 
-    def time_split(dataset, query, options, *args, **kwargs):
+    def time_split(dataset, query, extensions, *args, **kwargs):
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -59,8 +59,8 @@ def split_query(query_func):
         limit = query.get('limit', 0)
         remaining_offset = query.get('offset', 0)
 
-        to_date = util.parse_datetime(options['to_date'], date_align)
-        from_date = util.parse_datetime(options['from_date'], date_align)
+        to_date = util.parse_datetime(extensions['to_date'], date_align)
+        from_date = util.parse_datetime(extensions['from_date'], date_align)
 
         overall_result = None
         split_end = to_date
@@ -68,8 +68,8 @@ def split_query(query_func):
         total_results = 0
         status = 0
         while split_start < split_end and total_results < limit:
-            options['from_date'] = split_start.isoformat()
-            options['to_date'] = split_end.isoformat()
+            extensions['from_date'] = split_start.isoformat()
+            extensions['to_date'] = split_end.isoformat()
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
             query['offset'] = 0
@@ -79,7 +79,7 @@ def split_query(query_func):
             # query evaluation, so we need to copy the body to ensure that they
             # have not been modified in between this call and the next loop
             # iteration, if needed.
-            result, status = query_func(dataset, copy.deepcopy(query), copy.deepcopy(options), *args, **kwargs)
+            result, status = query_func(dataset, copy.deepcopy(query), copy.deepcopy(extensions), *args, **kwargs)
 
             # If something failed, discard all progress and just return that
             if status != 200:
@@ -118,7 +118,7 @@ def split_query(query_func):
 
         return overall_result, status
 
-    def col_split(dataset, query, options, *args, **kwargs):
+    def col_split(dataset, query, extensions, *args, **kwargs):
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
@@ -130,7 +130,7 @@ def split_query(query_func):
         # has not been modified by the time we're ready to run the full query.
         minimal_query = copy.deepcopy(query)
         minimal_query.update({'selected_columns': MIN_COLS})
-        result, status = query_func(dataset, minimal_query, copy.deepcopy(options), *args, **kwargs)
+        result, status = query_func(dataset, minimal_query, copy.deepcopy(extensions), *args, **kwargs)
         del minimal_query
 
         # If something failed, just return
@@ -144,12 +144,12 @@ def split_query(query_func):
             query['limit'] = len(event_ids)
 
             timestamps = [event['timestamp'] for event in result['data']]
-            options['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
+            extensions['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
-            options['to_date'] = (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat()
-            options['project'] = list(set([event['project_id'] for event in result['data']]))
+            extensions['to_date'] = (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat()
+            extensions['project'] = list(set([event['project_id'] for event in result['data']]))
 
-        return query_func(dataset, query, options, *args, **kwargs)
+        return query_func(dataset, query, extensions, *args, **kwargs)
 
     return wrapper
