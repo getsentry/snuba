@@ -4,7 +4,6 @@ from snuba.clickhouse import (
     Array,
     ColumnSet,
     DateTime,
-    escape_col,
     FixedString,
     Float,
     Nested,
@@ -12,9 +11,10 @@ from snuba.clickhouse import (
     String,
     UInt,
 )
-from snuba.datasets import Dataset
+from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.schemas import EVENTS_QUERY_SCHEMA
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -27,7 +27,7 @@ from snuba.util import (
 NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
-class EventsDataset(Dataset):
+class EventsDataset(TimeSeriesDataset):
     """
     Represents the collection of classic sentry "error" type events
     and the particular quirks of storing and querying them.
@@ -190,7 +190,11 @@ class EventsDataset(Dataset):
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
             default_replacement_topic="event-replacements",
-            default_commit_log_topic="snuba-commit-log"
+            default_commit_log_topic="snuba-commit-log",
+            time_group_columns={
+                'time': 'timestamp',
+                'rtime': 'received'
+            },
         )
 
         self.__metadata_columns = metadata_columns
@@ -217,7 +221,7 @@ class EventsDataset(Dataset):
             # TODO this can be removed once all data has search_message filled in.
             return 'coalesce(search_message, message)'
         else:
-            return escape_col(column_name)
+            return super().column_expr(column_name, body)
 
     def get_metadata_columns(self):
         return self.__metadata_columns
@@ -331,3 +335,6 @@ class EventsDataset(Dataset):
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
+
+    def get_query_schema(self):
+        return EVENTS_QUERY_SCHEMA
