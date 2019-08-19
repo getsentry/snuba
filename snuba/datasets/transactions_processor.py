@@ -19,22 +19,24 @@ from snuba.datasets.events_processor import (
 
 
 class TransactionsMessageProcessor(MessageProcessor):
-    PROMOTED_TAGS = [
+    PROMOTED_TAGS = {
         "environment",
         "sentry:release",
         "sentry:user",
         "sentry:dist",
-    ]
+    }
 
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        if timestamp is None:
+            timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
     def process_message(self, message, metadata=None):
         action_type = self.INSERT
         processed = {'deleted': 0}
-        if not isinstance(message, (list, tuple)) and len(message) >= 2:
+        if not isinstance(message, (list, tuple)) or len(message) >= 2:
             return None
         version = message[0]
         if version not in (0, 1, 2):
@@ -43,7 +45,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         if type_ != 'insert':
             return None
 
-        data = event.get("data", {})
+        data = event["data"]
         event_type = data.get("type")
         if event_type != "transaction":
             return None
@@ -76,31 +78,31 @@ class TransactionsMessageProcessor(MessageProcessor):
         tags = _as_dict_safe(data.get('tags', None))
         extract_extra_tags(processed, tags)
 
-        promoted_tag = {col: _unicodify(tags[col])
+        promoted_tags = {col: tags[col]
             for col in self.PROMOTED_TAGS
             if col in tags
         }
-        processed["release"] = promoted_tag.get(
+        processed["release"] = promoted_tags.get(
             "sentry:release",
             event.get("release"),
         )
-        processed["environment"] = promoted_tag.get("environment")
+        processed["environment"] = promoted_tags.get("environment")
 
         contexts = _as_dict_safe(data.get('contexts', None))
         extract_extra_contexts(processed, contexts)
 
         processed["dist"] = _unicodify(
-            promoted_tag.get("sentry:dist",
-            data.get("dist", "BA")),
+            promoted_tags.get("sentry:dist",
+            data.get("dist")),
         )
 
         user_data = {}
         extract_user(user_data, data.get("user", {}))
-        processed["user"] = promoted_tag.get("sentry:user", "")
-        processed["user_name"] = user_data.get("username")
-        processed["user_id"] = user_data.get("user_id")
-        processed["user_email"] = user_data.get("email")
-        ip_address = user_data.get("ip_address")
+        processed["user"] = promoted_tags.get("sentry:user", "")
+        processed["user_name"] = user_data["username"]
+        processed["user_id"] = user_data["user_id"]
+        processed["user_email"] = user_data["email"]
+        ip_address = user_data["ip_address"]
         if ip_address:
             ip_address = ipaddress.ip_address(ip_address)
             if ip_address.version == 4:
@@ -109,7 +111,7 @@ class TransactionsMessageProcessor(MessageProcessor):
                 processed["ip_address_v6"] = str(ip_address)
 
         if metadata is not None:
-            processed['offset'] = metadata.offset
             processed['partition'] = metadata.partition
+            processed['offset'] = metadata.offset
 
-        return(action_type, processed)
+        return (action_type, processed)

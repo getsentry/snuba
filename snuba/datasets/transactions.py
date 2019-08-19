@@ -59,8 +59,8 @@ class TransactionsDataset(Dataset):
                 ('key', String()),
                 ('value', String()),
             ])),
-            ('offset', UInt(64)),
             ('partition', UInt(16)),
+            ('offset', UInt(64)),
             ('retention_days', UInt(16)),
             ('deleted', UInt(8)),
         ])
