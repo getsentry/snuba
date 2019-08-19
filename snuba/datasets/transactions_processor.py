@@ -36,7 +36,7 @@ class TransactionsMessageProcessor(MessageProcessor):
     def process_message(self, message, metadata=None):
         action_type = self.INSERT
         processed = {'deleted': 0}
-        if not isinstance(message, (list, tuple)) or len(message) >= 2:
+        if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
         version = message[0]
         if version not in (0, 1, 2):
@@ -49,14 +49,11 @@ class TransactionsMessageProcessor(MessageProcessor):
         event_type = data.get("type")
         if event_type != "transaction":
             return None
-        base = extract_base(event)
-        enforce_retention(
+        extract_base(processed, event)
+        processed["retention_days"] = enforce_retention(
             event,
             datetime.fromtimestamp(data['timestamp']),
-            base['retention_days'],
-            base['project_id'],
         )
-        processed.update(base)
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]

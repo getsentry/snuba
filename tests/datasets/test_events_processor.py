@@ -8,6 +8,7 @@ from base import BaseEventsTest
 from snuba import settings
 from snuba.processor import InvalidMessageType, InvalidMessageVersion
 from snuba.datasets.events_processor import (
+    enforce_retention,
     extract_base,
     extract_extra_contexts,
     extract_extra_tags,
@@ -66,8 +67,12 @@ class TestEventsProcessor(BaseEventsTest):
             'group_id': 10,
             'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
-
-        output = extract_base(event)
+        output = {}
+        extract_base(output, event)
+        output["retention_days"] = enforce_retention(
+            event,
+            datetime.strptime(event['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        )
         self.dataset.get_processor().extract_required(output, event)
         assert output == {
             'event_id': '11111111111111111111111111111111',

@@ -19,17 +19,10 @@ from snuba.processor import (
 logger = logging.getLogger('snuba.processor')
 
 
-def extract_base(message):
-    output = {}
+def extract_base(output, message):
     output['event_id'] = message['event_id']
     project_id = message['project_id']
     output['project_id'] = project_id
-
-    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
-    if retention_days is None:
-        retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
-
-    output['retention_days'] = retention_days
     return output
 
 
@@ -71,7 +64,12 @@ def extract_extra_contexts(output, contexts):
     output['contexts.value'] = context_values
 
 
-def enforce_retention(message, timestamp, retention_days, project_id):
+def enforce_retention(message, timestamp):
+    project_id = message['project_id']
+    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
+    if retention_days is None:
+        retention_days = int(message.get('retention_days') or settings.DEFAULT_RETENTION_DAYS)
+
     # This is not ideal but it should never happen anyways
     timestamp = _ensure_valid_date(timestamp)
     if timestamp is None:
@@ -81,6 +79,7 @@ def enforce_retention(message, timestamp, retention_days, project_id):
     # behind a "backfill-only" optional switch.
     if settings.DISCARD_OLD_EVENTS and timestamp < (datetime.utcnow() - timedelta(days=retention_days)):
         raise EventTooOld
+    return retention_days
 
 
 class EventsProcessor(MessageProcessor):
@@ -152,14 +151,11 @@ class EventsProcessor(MessageProcessor):
 
     def process_insert(self, message, metadata=None):
         processed = {'deleted': 0}
-        base = extract_base(message)
-        enforce_retention(
+        extract_base(processed, message)
+        processed["retention_days"] = enforce_retention(
             message,
             datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT),
-            base['retention_days'],
-            base['project_id'],
         )
-        processed.update(base)
 
         self.extract_required(processed, message)
 
