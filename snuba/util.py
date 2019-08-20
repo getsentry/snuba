@@ -1,5 +1,3 @@
-from flask import request
-
 from clickhouse_driver.errors import Error as ClickHouseError
 from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
@@ -10,11 +8,9 @@ from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
 from typing import NamedTuple
-import jsonschema
 import logging
 import numbers
 import re
-import simplejson as json
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
@@ -516,42 +512,6 @@ def raw_query(body, sql, client, timer, stats=None):
         result['sql'] = sql
 
     return (result, status)
-
-
-def validate_request(schema):
-    """
-    Decorator to validate that a request body matches the given schema.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-
-            def default_encode(value):
-                if callable(value):
-                    return value()
-                else:
-                    raise TypeError()
-
-            if request.method == 'POST':
-                try:
-                    body = json.loads(request.data)
-                    schemas.validate(body, schema)
-                    kwargs['validated_body'] = body
-                    if kwargs.get('timer'):
-                        kwargs['timer'].mark('validate_schema')
-                except (ValueError, jsonschema.ValidationError) as e:
-                    result = {'error': {
-                        'type': 'schema',
-                        'message': str(e),
-                    }, 'schema': schema}
-                    return (
-                        json.dumps(result, sort_keys=True, indent=4, default=default_encode),
-                        400,
-                        {'Content-Type': 'application/json'}
-                    )
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
 
 
 class Timer(object):
