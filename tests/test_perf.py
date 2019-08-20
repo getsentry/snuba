@@ -6,9 +6,11 @@ from snuba import perf
 
 class TestPerf(BaseEventsTest):
     def test(self):
-        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % self.table)[0][0] == 0
-
         dataset = get_dataset('events')
+        table = dataset.get_write_schema().get_local_table_name()
+
+        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 0
+
         perf.run('tests/perf-event.json', dataset)
 
-        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % self.table)[0][0] == 1
+        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 1

@@ -127,23 +127,26 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.table = self.dataset.get_write_schema().get_table_name()
             self.clickhouse = ClickhousePool()
 
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-            self.clickhouse.execute(self.dataset.get_write_schema().get_local_table_definition())
+            for schema in self.dataset.get_schemas():
+                self.clickhouse.execute("DROP TABLE IF EXISTS %s" % schema.get_table_name())
+                self.clickhouse.execute(schema.get_local_table_definition())
 
             redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+            for schema in self.dataset.get_schemas():
+                self.clickhouse.execute("DROP TABLE IF EXISTS %s" % schema.get_table_name())
+
             redis_client.flushdb()
 
 
 class BaseEventsTest(BaseTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
+        self.table = self.dataset.get_write_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
