@@ -84,4 +84,5 @@ class GroupedMessageProcessor(CdcProcessor):
             offset=offset,
             id=id,
             record_deleted=True,
+            record_content=None
         ).to_clickhouse()
