@@ -5,12 +5,8 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import initialize_consumer
+from snuba.consumer_initializer import initialize_batching_consumer
 from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
-from snuba.stateful_consumer.bootstrap_state import BootstrapState
-from snuba.stateful_consumer.consuming_state import ConsumingState
-from snuba.stateful_consumer.paused_state import PausedState
-from snuba.stateful_consumer.catching_up_state import CatchingUpState
 
 
 @click.command()
@@ -39,10 +35,19 @@ from snuba.stateful_consumer.catching_up_state import CatchingUpState
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def controlled_consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
+    """
+    Dataset consumer that is able to handle a consistent snapshot produced externally for the
+    dataset it consumes.
+
+    It is based on a stateful consumer that listens alternatively (depending on the state)
+    on the main topic that produces data for the dataset or to the control topic that sends messages
+    to coordinate the snapshot taking and that will be able to pause the main consumer and to
+    provide transactions coordinates to restart consuming after the snapshot.
+    """
 
     import sentry_sdk
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
@@ -51,7 +56,7 @@ def controlled_consumer(raw_events_topic, replacements_topic, commit_log_topic, 
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    consumer = initialize_consumer(
+    consumer = initialize_batching_consumer(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
@@ -69,13 +74,7 @@ def controlled_consumer(raw_events_topic, replacements_topic, commit_log_topic, 
     )
 
     context = ConsumerContext(
-        states={
-            StateType.BOOTSTRAP: BootstrapState(),
-            StateType.CONSUMING: ConsumingState(consumer),
-            StateType.SNAPSHOT_PAUSED: PausedState(),
-            StateType.CATCHING_UP: CatchingUpState(),
-        },
-        start_state=StateType.BOOTSTRAP,
+        main_consumer=consumer
     )
 
     def handler(signum, frame):

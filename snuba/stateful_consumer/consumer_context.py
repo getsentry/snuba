@@ -1,77 +1,34 @@
-from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Any, Mapping
+from batching_kafka_consumer import BatchingKafkaConsumer
 
-import logging
-
-
-logger = logging.getLogger('snuba.state-machine')
-
-
-class StateType(Enum):
-    BOOTSTRAP = 0
-    CONSUMING = 1
-    SNAPSHOT_PAUSED = 2
-    CATCHING_UP = 3
-    FINISHED = 4
+from snuba.stateful_consumer import StateType
+from snuba.stateful_consumer.state_context import StateContext
+from snuba.stateful_consumer.bootstrap_state import BootstrapState
+from snuba.stateful_consumer.consuming_state import ConsumingState
+from snuba.stateful_consumer.paused_state import PausedState
+from snuba.stateful_consumer.catching_up_state import CatchingUpState
 
 
-class State(ABC):
+class ConsumerContext(StateContext[StateType]):
     """
-    Encapsulates the logic of one state the consumer can be into
-    during its work.
-    There should be an implementation for every value in StateType.
-    The state specific logic stays in the handle_impl method.
-    That method returns the state to transition to at the end of the
-    operation together with any context information the next state
-    needs.
-    """
-
-    def __init__(self):
-        self._shutdown = False
-
-    def set_shutdown(self) -> None:
-        self._shutdown = True
-
-    def is_shutdown(self) -> bool:
-        return self._shutdown
-
-    def handle(self, input: Any) -> (StateType, Any):
-        if self.is_shutdown():
-            return (StateType.FINISHED, None)
-        next_state, input = self._handle_impl(input)
-        if self.is_shutdown():
-            return (StateType.FINISHED, None)
-        return (next_state, input)
-
-    @abstractmethod
-    def _handle_impl(self, input: Any) -> (StateType, Any):
-        raise NotImplementedError
-
-
-class ConsumerContext:
-    """
-    State pattern implementation used to change the logic
-    of the consumer depending on which phase it is serving.
-    This class coordinates the state changes.
+    Context class for the stateful consumer. The states defined here
+    regulate when the consumer is consuming from the main topic and when
+    it is consuming from the control topic.
     """
 
     def __init__(
         self,
-        states: Mapping[StateType, State],
-        start_state: StateType,
+        main_consumer: BatchingKafkaConsumer,
     ) -> None:
-        self.__states = states
-        self.__current_state = start_state
-
-    def run(self, input: Any) -> None:
-        logger.debug("Starting state machine")
-        while self.__current_state != StateType.FINISHED:
-            next_state, input = self.__states[self.__current_state].handle(input)
-            logger.debug("Transitioning to state %r", next_state)
-            self.__current_state = next_state
-        logger.debug("Finishing state machine processing")
-
-    def set_shutdown(self) -> None:
-        logger.debug("Shutting down state machine")
-        self.__states[self.__current_state].set_shutdown()
+        states = {
+            StateType.BOOTSTRAP: BootstrapState(),
+            StateType.CONSUMING: ConsumingState(main_consumer),
+            StateType.SNAPSHOT_PAUSED: PausedState(),
+            StateType.CATCHING_UP: CatchingUpState(),
+        }
+        start_state = StateType.BOOTSTRAP
+        terminal_state = StateType.FINISHED
+        super(ConsumerContext, self).__init__(
+            states=states,
+            start_state=start_state,
+            terminal_state=terminal_state
+        )

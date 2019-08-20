@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import initialize_consumer
+from snuba.consumer_initializer import initialize_batching_consumer
 
 
 @click.command()
@@ -46,7 +46,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    consumer = initialize_consumer(
+    consumer = initialize_batching_consumer(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
