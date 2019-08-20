@@ -1,3 +1,8 @@
+from typing import Mapping
+
+from snuba.clickhouse import escape_col
+
+
 class Dataset(object):
     """
     A Dataset defines the complete set of data sources, schemas, and
@@ -8,7 +13,7 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema, processor, default_topic,
+    def __init__(self, schema, *, processor, default_topic,
             default_replacement_topic, default_commit_log_topic):
         self._schema = schema
         self.__processor = processor
@@ -60,9 +65,8 @@ class Dataset(object):
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
-
         """
-        return column_name
+        return escape_col(column_name)
 
     def get_bulk_loader(self, source, dest_table):
         """
@@ -70,3 +74,29 @@ class Dataset(object):
         external source when present.
         """
         raise NotImplementedError
+
+    def get_query_schema(self):
+        raise NotImplementedError('dataset does not support queries')
+
+
+class TimeSeriesDataset(Dataset):
+    def __init__(self, *args, time_group_columns: Mapping[str, str], **kwargs):
+        super().__init__(*args, **kwargs)
+        # Convenience columns that evaluate to a bucketed time. The bucketing
+        # depends on the granularity parameter.
+        self.__time_group_columns = time_group_columns
+
+    def __time_expr(self, column_name: str, granularity: int) -> str:
+        real_column = self.__time_group_columns[column_name]
+        template = {
+            3600: 'toStartOfHour({column})',
+            60: 'toStartOfMinute({column})',
+            86400: 'toDate({column})',
+        }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
+        return template.format(column=real_column, granularity=granularity)
+
+    def column_expr(self, column_name, body):
+        if column_name in self.__time_group_columns:
+            return self.__time_expr(column_name, body['granularity'])
+        else:
+            return super().column_expr(column_name, body)

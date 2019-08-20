@@ -13,8 +13,9 @@ import uuid
 
 from snuba import settings, state
 from snuba.datasets.factory import get_dataset
+from snuba.redis import redis_client
 
-from base import BaseEventsTest, BaseTest
+from base import BaseEventsTest
 
 
 class BaseApiTest(BaseEventsTest):
@@ -103,6 +104,16 @@ class TestApi(BaseApiTest):
                         }
                     }))
         self.write_processed_records(events)
+
+    def redis_db_size(self):
+        # dbsize could be an integer for a single node cluster or a dictionary
+        # with one key value pair per node for a multi node cluster
+        dbsize = redis_client.dbsize()
+        if type(dbsize) is dict:
+            return sum(dbsize.values())
+        else:
+            return dbsize
+
 
     def test_count(self):
         """
@@ -408,7 +419,7 @@ class TestApi(BaseApiTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0" in result['sql']
 
         # Choose the highest priority one
         settings.PREWHERE_KEYS = ['project_id', 'message']
@@ -430,7 +441,24 @@ class TestApi(BaseApiTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1) AND positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+        assert "PREWHERE project_id IN (1) AND positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0" in result['sql']
+
+    def test_prewhere_conditions_dont_show_up_in_where_conditions(self):
+        settings.MAX_PREWHERE_CONDITIONS = 1
+        settings.PREWHERE_KEYS = ['project_id']
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['event_id'],
+            'conditions': [
+                ['environment', '=', 'prod']
+            ],
+            'limit': 1,
+            'debug': True
+        })).data)
+
+        # make sure the conditions is in PREWHERE and nowhere else
+        assert "PREWHERE project_id IN (1)" in result['sql']
+        assert result['sql'].count('project_id IN (1)') == 1
 
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -826,10 +854,14 @@ class TestApi(BaseApiTest):
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result['data'] == []
 
+        # make sure redis has _something_ before we go about dropping all the keys in it
+        assert self.redis_db_size() > 0
+
         assert self.app.post('/tests/events/drop').status_code == 200
         dataset = get_dataset('events')
         table = dataset.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
+        assert self.redis_db_size() == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):
@@ -945,6 +977,89 @@ class TestApi(BaseApiTest):
                 'offset': 55,
             })).data)
             assert result['data'] == []
+
+            # Test splitting query by columns - non timestamp sort
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=59)).isoformat(),
+                'orderby': 'tags[sentry:release]',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            # Alphabetical sort
+            assert [d['tags[sentry:release]'] for d in result['data']] == ['0', '1', '10', '11', '12']
+
+            # Test splitting query by columns - timestamp sort
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=59)).isoformat(),
+                'orderby': 'timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, range(0, 5)))
+
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': (self.base_time - timedelta(days=100)).isoformat(),
+                'to_date': (self.base_time - timedelta(days=99)).isoformat(),
+                'orderby': 'timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            assert len(result['data']) == 0
+
+            # Test offset
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'offset': 170,
+                'limit': 170,
+            })).data)
+
+            assert len(result['data']) == 10
+            assert [e['tags[sentry:release]'] for e in result['data']] == list(map(str, reversed(range(0, 10))))
 
         finally:
             state.set_config('use_split', 0)
