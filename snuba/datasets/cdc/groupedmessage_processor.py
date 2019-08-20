@@ -7,15 +7,20 @@ from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CDCMessageRow
 
 
 @dataclass(frozen=True)
+class GroupMessageRecord:
+    status: int
+    last_seen: datetime
+    first_seen: datetime
+    active_at: Optional[datetime] = None
+    first_release_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class GroupedMessageRow(CDCMessageRow):
     offset: Optional[int]
     id: int
     record_deleted: bool
-    status: Optional[int] = None
-    last_seen: Optional[datetime] = None
-    first_seen: Optional[datetime] = None
-    active_at: Optional[datetime] = None
-    first_release_id: Optional[int] = None
+    record_content: Optional[GroupMessageRecord]
 
     @classmethod
     def from_wal(cls, offset, columnnames, columnvalues):
@@ -24,11 +29,13 @@ class GroupedMessageRow(CDCMessageRow):
             offset=offset,
             id=raw_data['id'],
             record_deleted=False,
-            status=raw_data['status'],
-            last_seen=dateutil_parse(raw_data['last_seen']),
-            first_seen=dateutil_parse(raw_data['first_seen']),
-            active_at=dateutil_parse(raw_data['active_at']),
-            first_release_id=raw_data['first_release_id'],
+            record_content=GroupMessageRecord(
+                status=raw_data['status'],
+                last_seen=dateutil_parse(raw_data['last_seen']),
+                first_seen=dateutil_parse(raw_data['first_seen']),
+                active_at=dateutil_parse(raw_data['active_at']),
+                first_release_id=raw_data['first_release_id'],
+            )
         )
 
     @classmethod
@@ -37,23 +44,27 @@ class GroupedMessageRow(CDCMessageRow):
             offset=None,
             id=int(row['id']),
             record_deleted=False,
-            status=int(row['status']),
-            last_seen=dateutil_parse(row['last_seen']),
-            first_seen=dateutil_parse(row['first_seen']),
-            active_at=dateutil_parse(row['active_at']),
-            first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
+            record_content=GroupMessageRecord(
+                status=int(row['status']),
+                last_seen=dateutil_parse(row['last_seen']),
+                first_seen=dateutil_parse(row['first_seen']),
+                active_at=dateutil_parse(row['active_at']),
+                first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
+            )
         )
 
     def to_clickhouse(self) -> Mapping[str, Any]:
+        deleted = self.record_content is None
+        record = self.record_content
         return {
             'offset': self.offset if self.offset is not None else 0,
             'id': self.id,
             'record_deleted': 1 if self.record_deleted else 0,
-            'status': self.status,
-            'last_seen': self.last_seen,
-            'first_seen': self.first_seen,
-            'active_at': self.active_at,
-            'first_release_id': self.first_release_id,
+            'status': None if deleted else record.status,
+            'last_seen': None if deleted else record.last_seen,
+            'first_seen': None if deleted else record.first_seen,
+            'active_at': None if deleted else record.active_at,
+            'first_release_id': None if deleted else record.first_release_id,
         }
 
 
