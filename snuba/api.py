@@ -323,8 +323,8 @@ def parse_and_run_query(dataset, body, timer):
     body.setdefault('conditions', [])
 
     body['conditions'].extend([
-        ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
+        ('timestamp', '>=', from_date.isoformat()),
+        ('timestamp', '<', to_date.isoformat()),
     ])
 
     body['conditions'].extend(dataset.default_conditions())
