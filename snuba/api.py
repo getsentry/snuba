@@ -1,7 +1,6 @@
 import logging
 import os
 
-from copy import deepcopy
 from datetime import datetime, timedelta
 from flask import Flask, redirect, render_template, request
 from markdown import markdown
@@ -307,9 +306,7 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 
 
 @split_query
-def parse_and_run_query(dataset, validated_body, timer):
-    body = deepcopy(validated_body)
-
+def parse_and_run_query(dataset, body, timer):
     max_days, date_align, config_sample = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
@@ -394,9 +391,7 @@ def parse_and_run_query(dataset, validated_body, timer):
         'sample': body.get('sample'),
     }
 
-    return util.raw_query(
-        validated_body, sql, clickhouse_ro, timer, stats
-    )
+    return util.raw_query(body, sql, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
