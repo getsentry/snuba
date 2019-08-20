@@ -149,11 +149,11 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.table = self.dataset.get_schema().get_table_name()
+            self.table = self.dataset.get_write_schema().get_table_name()
             self.clickhouse = ClickhousePool()
 
             self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-            self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
+            self.clickhouse.execute(self.dataset.get_write_schema().get_local_table_definition())
 
             redis_client.flushdb()
 

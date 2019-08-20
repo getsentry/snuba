@@ -58,10 +58,14 @@ def get_messages(events_file):
 
 def run(events_file, dataset, repeat=1,
         profile_process=False, profile_write=False):
+    """
+    Measures the write performance of a dataset
+    """
+
     from snuba.consumer import ConsumerWorker
     from snuba.clickhouse.native import ClickhousePool
 
-    ClickhousePool().execute(dataset.get_schema().get_local_table_definition())
+    ClickhousePool().execute(dataset.get_write_schema().get_local_table_definition())
 
     consumer = ConsumerWorker(
         dataset=dataset,

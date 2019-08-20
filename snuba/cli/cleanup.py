@@ -23,7 +23,7 @@ def cleanup(clickhouse_host, clickhouse_port, dry_run, database, dataset, log_le
     from snuba.clickhouse.native import ClickhousePool
 
     dataset = get_dataset(dataset)
-    table = dataset.get_schema().get_local_table_name()
+    table = dataset.get_write_schema().get_local_table_name()
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
