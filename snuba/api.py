@@ -307,10 +307,9 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 
 @split_query
 def parse_and_run_query(dataset, body, timer):
-    max_days, date_align, config_sample = state.get_configs([
+    max_days, date_align = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
-        ('sample', None),
     ])
 
     to_date = util.parse_datetime(body['to_date'], date_align)
@@ -352,9 +351,6 @@ def parse_and_run_query(dataset, body, timer):
         final = False
         if 'sample' not in body:
             body['sample'] = settings.TURBO_SAMPLE_RATE
-
-    if 'sample' not in body and config_sample is not None:
-        body['sample'] = config_sample
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
