@@ -322,8 +322,6 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 def parse_and_run_query(dataset, query, extensions, timer):
     body = {**query, **extensions}
 
-    table = dataset.get_schema().get_table_name()
-
     max_days, date_align, config_sample = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
@@ -554,6 +552,7 @@ if application.debug or application.testing:
     @application.route('/tests/error')
     def error():
         1 / 0
+
 else:
     def ensure_table_exists(dataset, force=False):
         pass
