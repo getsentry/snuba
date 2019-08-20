@@ -13,16 +13,27 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema, *, processor, default_topic,
-            default_replacement_topic, default_commit_log_topic):
-        self._schema = schema
+    def __init__(self, write_schema, *, processor, default_topic,
+            default_replacement_topic, default_commit_log_topic, read_schema=None):
+        self.__write_schema = write_schema
+        self.__read_schema = read_schema  # optionally have a different read schema
         self.__processor = processor
         self.__default_topic = default_topic
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
-    def get_schema(self):
-        return self._schema
+    def get_read_schema(self):
+        if self.__read_schema is None:
+            return self.__write_schema
+
+        return self.__read_schema
+
+    def get_write_schema(self):
+        return self.__write_schema
+
+    def get_schemas(self):
+        schemas = [self.__read_schema, self.__write_schema]
+        return [schema for schema in schemas if schema]
 
     def get_processor(self):
         return self.__processor
@@ -32,7 +43,7 @@ class Dataset(object):
         from snuba.writer import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            self._schema,
+            self.__write_schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,

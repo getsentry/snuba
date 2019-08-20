@@ -45,13 +45,20 @@ else:
 
 
 def check_clickhouse():
+    """
+    Checks if all the tables in all the enabled datasets exist in ClickHouse
+    """
     try:
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_schema().get_table_name()
-            if (table_name,) not in clickhouse_tables:
-                return False
+            schemas = dataset.get_schemas()
+
+            for schema in schemas:
+                table_name = schema.get_table_name()
+                if (table_name,) not in clickhouse_tables:
+                    return False
+
         return True
 
     except Exception:
@@ -372,7 +379,7 @@ def parse_and_run_query(dataset, body, timer):
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
             body['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, body['conditions']))
 
-    table = dataset.get_schema().get_table_name()
+    table = dataset.get_read_schema().get_table_name()
 
     sql = format_query(dataset, body, table, prewhere_conditions, final)
 
@@ -452,9 +459,10 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        clickhouse_rw.execute(
-            dataset.get_schema().get_local_table_definition()
-        )
+        for schema in dataset.get_schemas():
+            clickhouse_rw.execute(
+                schema.get_local_table_definition()
+            )
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -520,9 +528,10 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        table = dataset.get_schema().get_local_table_name()
+        for schema in dataset.get_schemas():
+            table = schema.get_local_table_name()
+            clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
 
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
         return ('ok', 200, {'Content-Type': 'text/plain'})

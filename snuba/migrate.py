@@ -7,8 +7,8 @@ import logging
 logger = logging.getLogger('snuba.migrate')
 
 
-def run(conn, dataset):
-    clickhouse_table = dataset.get_schema().get_local_table_name()
+def _run_schema(conn, schema):
+    clickhouse_table = schema.get_local_table_name()
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr
@@ -54,7 +54,7 @@ def run(conn, dataset):
     local_schema = get_schema()
 
     # Warn user about any *other* schema diffs
-    columns = dataset.get_schema().get_columns()
+    columns = schema.get_columns()
     for column_name, column_type in local_schema.items():
         if column_name not in columns:
             logger.warn("Column '%s' exists in local ClickHouse but not in schema!", column_name)
@@ -70,10 +70,15 @@ def run(conn, dataset):
             )
 
 
+def run(conn, dataset):
+    for schema in dataset.get_schemas():
+        _run_schema(conn, schema)
+
+
 def rename_dev_table(conn):
     # Migrate from the old events table to the new one if needed
     from snuba.datasets.factory import get_dataset
-    local_table = get_dataset('events').get_schema().get_local_table_name()
+    local_table = get_dataset('events').get_write_schema().get_local_table_name()
     clickhouse_tables = conn.execute('show tables')
     if not (local_table,) in clickhouse_tables and ("dev",) in clickhouse_tables:
         conn.execute("RENAME TABLE dev TO %s" % local_table)

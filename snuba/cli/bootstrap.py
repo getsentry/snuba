@@ -80,7 +80,9 @@ def bootstrap(bootstrap_server, kafka, force):
     from snuba import migrate
     migrate.rename_dev_table(ClickhousePool())
 
-    # For now just create the table for every dataset.
+    # Create the tables for every dataset.
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
-        ClickhousePool().execute(dataset.get_schema().get_local_table_definition())
+
+        for schema in dataset.get_schemas():
+            ClickhousePool().execute(schema.get_local_table_definition())
