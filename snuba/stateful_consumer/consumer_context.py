@@ -1,11 +1,13 @@
 from batching_kafka_consumer import BatchingKafkaConsumer
 
-from snuba.stateful_consumer import StateType
+from snuba.stateful_consumer import StateType, StateOutput
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.bootstrap_state import BootstrapState
 from snuba.stateful_consumer.consuming_state import ConsumingState
 from snuba.stateful_consumer.paused_state import PausedState
 from snuba.stateful_consumer.catching_up_state import CatchingUpState
+
+from typing import Mapping
 
 
 class ConsumerContext(StateContext[StateType]):
@@ -32,3 +34,24 @@ class ConsumerContext(StateContext[StateType]):
             start_state=start_state,
             terminal_state=terminal_state
         )
+
+    def _get_state_transitions(self) -> Mapping[StateType, Mapping[StateOutput, StateType]]:
+        return {
+            StateType.BOOTSTRAP: {
+                StateOutput.NO_SNAPSHOT: StateType.CONSUMING,
+                StateOutput.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                StateOutput.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+            },
+            StateType.CONSUMING: {
+                StateOutput.FINISH: StateType.FINISHED,
+                StateOutput.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+            },
+            StateType.SNAPSHOT_PAUSED: {
+                StateOutput.FINISH: StateType.FINISHED,
+                StateOutput.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+            },
+            StateType.CATCHING_UP: {
+                StateOutput.FINISH: StateType.FINISHED,
+                StateOutput.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
+            },
+        }

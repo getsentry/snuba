@@ -1,29 +1,29 @@
 from typing import Any, Mapping, Set, Tuple
 
-from snuba.stateful_consumer import StateType
+from snuba.stateful_consumer import StateOutput, StateType
 from snuba.stateful_consumer.state_context import StateContext, State
 
 
-class State1(State[StateType]):
+class State1(State[StateOutput]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State1, self).__init__()
         self.__processed_state = processed_states
 
-    def handle(self, input: Any) -> Tuple[StateType, Any]:
+    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
         assert input == "start"
         self.__processed_state[StateType.BOOTSTRAP] = True
-        return (StateType.CONSUMING, "consume")
+        return (StateOutput.NO_SNAPSHOT, "consume")
 
 
-class State2(State[StateType]):
+class State2(State[StateOutput]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State2, self).__init__()
         self.__processed_state = processed_states
 
-    def handle(self, input: Any) -> Tuple[StateType, Any]:
+    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
         assert input == "consume"
         self.__processed_state[StateType.CONSUMING] = True
-        return (StateType.FINISHED, None)
+        return (StateOutput.FINISH, None)
 
 
 class TestContext(StateContext[StateType]):
@@ -36,6 +36,16 @@ class TestContext(StateContext[StateType]):
             start_state=StateType.BOOTSTRAP,
             terminal_state=StateType.FINISHED,
         )
+
+    def _get_state_transitions(self) -> Mapping[StateType, Mapping[StateOutput, StateType]]:
+        return {
+            StateType.BOOTSTRAP: {
+                StateOutput.NO_SNAPSHOT: StateType.CONSUMING
+            },
+            StateType.CONSUMING: {
+                StateOutput.FINISH: StateType.FINISHED
+            },
+        }
 
 
 class TestStateMachine:
