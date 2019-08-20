@@ -5,6 +5,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
+from snuba.writer import BufferedWriterWrapper
 
 
 @click.command()
@@ -33,5 +34,8 @@ def bulk_load(dataset, dest_table, source, log_level):
 
     loader = dataset.get_bulk_loader(snapshot_source, dest_table)
     # TODO: see whether we need to pass options to the writer
-    writer = dataset.get_writer({}, dest_table)
+    writer = BufferedWriterWrapper(
+        dataset.get_writer({}, dest_table),
+        settings.BULK_CLICKHOUSE_BUFFER,
+    )
     loader.load(writer)

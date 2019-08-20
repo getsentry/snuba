@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, NewType, Generator, Iterable, Sequence
 
 from snuba.snapshots import SnapshotDescriptor, TableConfig
-from snuba.snapshots import BulkLoadSource
+from snuba.snapshots import BulkLoadSource, TableRow
 
 Xid = NewType("Xid", int)
 
@@ -121,15 +121,11 @@ class PostgresSnapshot(BulkLoadSource):
     def get_descriptor(self) -> PostgresSnapshotDescriptor:
         return self.__descriptor
 
-    def __table_iterable(self, csv_table) -> Generator[Mapping[str, Any], None, None]:
-        for r in csv_table:
-            yield r
-
     @contextmanager
     def get_table_file(
         self,
         table: str,
-    ) -> Generator[Iterable[Mapping[str, Any]], None, None]:
+    ) -> Generator[Iterable[TableRow], None, None]:
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
             with open(table_path, "r") as table_file:
@@ -157,7 +153,7 @@ class PostgresSnapshot(BulkLoadSource):
                 else:
                     logger.info("Won't pre-validate snapshot columns. There is nothing in the descriptor")
 
-                yield self.__table_iterable(csv_file)
+                yield csv_file
 
         except FileNotFoundError:
             raise ValueError(

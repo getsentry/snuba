@@ -11,6 +11,8 @@ from snuba.clickhouse import DATETIME_FORMAT, Array
 
 logger = logging.getLogger('snuba.writer')
 
+TableRow = Mapping[str, Any]
+
 
 class BatchWriter(object):
     def __init__(self, schema):
@@ -34,7 +36,7 @@ class NativeDriverBatchWriter(BatchWriter):
             values.append(value)
         return values
 
-    def write(self, rows):
+    def write(self, rows: TableRow):
         columns = self.__schema.get_columns()
         self.__connection.execute_robust("INSERT INTO %(table)s (%(colnames)s) VALUES" % {
             'colnames': ", ".join(col.escaped for col in columns),
@@ -55,7 +57,7 @@ class HTTPBatchWriter(BatchWriter):
         else:
             raise TypeError
 
-    def __encode(self, row):
+    def __encode(self, row: TableRow):
         return json.dumps(row, default=self.__default).encode('utf-8')
 
     def write(self, rows):
@@ -80,7 +82,7 @@ class BufferedWriterWrapper:
     def __init__(self, writer: BatchWriter, buffer_size: int):
         self.__writer = writer
         self.__buffer_size = buffer_size
-        self.__buffer: List[Mapping[str, Any]] = []
+        self.__buffer: List[TableRow] = []
 
     def __flush(self) -> None:
         logger.debug("Flushing buffer with %d elements", len(self.__buffer))
@@ -94,7 +96,7 @@ class BufferedWriterWrapper:
         if self.__buffer:
             self.__flush()
 
-    def write(self, row: Mapping[str, Any]):
+    def write(self, row: TableRow):
         self.__buffer.append(row)
         if len(self.__buffer) >= self.__buffer_size:
             self.__flush()

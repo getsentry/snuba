@@ -5,7 +5,7 @@ import logging
 
 from snuba.clickhouse import ClickhousePool
 from snuba.snapshots import BulkLoadSource
-from snuba.writer import BatchWriter, BufferedWriterWrapper
+from snuba.writer import BufferedWriterWrapper
 from snuba import settings
 
 
@@ -18,7 +18,7 @@ class BulkLoader(ABC):
     the bulk load operation.
     """
     @abstractmethod
-    def load(self, writer: BatchWriter) -> None:
+    def load(self, writer: BufferedWriterWrapper) -> None:
         raise NotImplementedError
 
 
@@ -38,7 +38,7 @@ class SingleTableBulkLoader(BulkLoader):
         self.__source_table = source_table
         self.__row_processor = row_processor
 
-    def load(self, writer: BatchWriter) -> None:
+    def load(self, writer: BufferedWriterWrapper) -> None:
         logger = logging.getLogger('snuba.bulk-loader')
 
         clickhouse_ro = ClickhousePool(client_settings={
@@ -58,7 +58,7 @@ class SingleTableBulkLoader(BulkLoader):
         with self.__source.get_table_file(self.__source_table) as table:
             logger.info("Loading table %s from file", self.__source_table)
             row_count = 0
-            with BufferedWriterWrapper(writer, settings.BULK_CLICKHOUSE_BUFFER) as buffer_writer:
+            with writer as buffer_writer:
                 for row in table:
                     clickhouse_data = self.__row_processor(row)
                     buffer_writer.write(clickhouse_data)

@@ -8,7 +8,7 @@ from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CDCMessageRow
 
 @dataclass(frozen=True)
 class GroupedMessageRow(CDCMessageRow):
-    offset: int
+    offset: Optional[int]
     id: int
     record_deleted: bool
     status: Optional[int] = None
@@ -34,7 +34,7 @@ class GroupedMessageRow(CDCMessageRow):
     @classmethod
     def from_bulk(cls, row):
         return GroupedMessageRow(
-            offset=0,
+            offset=None,
             id=int(row['id']),
             record_deleted=False,
             status=int(row['status']),
@@ -46,7 +46,7 @@ class GroupedMessageRow(CDCMessageRow):
 
     def to_clickhouse(self) -> Mapping[str, Any]:
         return {
-            'offset': self.offset,
+            'offset': self.offset if self.offset is not None else 0,
             'id': self.id,
             'record_deleted': 1 if self.record_deleted else 0,
             'status': self.status,
