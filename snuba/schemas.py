@@ -249,13 +249,14 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
     }
 
 
-@dataclass
+@dataclass(frozen=True)
 class Request:
     query: Mapping[str, Any]
     extensions: Mapping[str, Mapping[str, Any]]
 
-    def __post_init__(self):
-        self.body = ChainMap(self.query, *self.extensions.values())
+    @property
+    def body(self):
+        return ChainMap(self.query, *self.extensions.values())
 
 
 class RequestSchema:
