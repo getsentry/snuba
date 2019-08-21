@@ -307,10 +307,9 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 
 @split_query
 def parse_and_run_query(dataset, body, timer):
-    max_days, date_align, config_sample = state.get_configs([
+    max_days, date_align = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
-        ('sample', None),
     ])
 
     to_date = util.parse_datetime(body['to_date'], date_align)
@@ -324,8 +323,8 @@ def parse_and_run_query(dataset, body, timer):
     body.setdefault('conditions', [])
 
     body['conditions'].extend([
-        ('timestamp', '>=', from_date),
-        ('timestamp', '<', to_date),
+        ('timestamp', '>=', from_date.isoformat()),
+        ('timestamp', '<', to_date.isoformat()),
     ])
 
     body['conditions'].extend(dataset.default_conditions())
@@ -347,14 +346,11 @@ def parse_and_run_query(dataset, body, timer):
             if len(exclude_group_ids) > max_group_ids_exclude:
                 final = True
             else:
-                body['conditions'].append(('group_id', 'NOT IN', exclude_group_ids))
+                body['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
     else:
         final = False
         if 'sample' not in body:
             body['sample'] = settings.TURBO_SAMPLE_RATE
-
-    if 'sample' not in body and config_sample is not None:
-        body['sample'] = config_sample
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:

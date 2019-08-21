@@ -218,19 +218,50 @@ class Nullable(ColumnType):
         return u'Nullable({})'.format(self.inner_type.for_schema())
 
 
-class LowCardinality(ColumnType):
-    def __init__(self, inner_type):
+class Materialized(ColumnType):
+    def __init__(self, inner_type, expression):
         self.inner_type = inner_type
+        self.expression = expression
 
     def __repr__(self):
-        return u'LowCardinality({})'.format(repr(self.inner_type))
+        return u'Materialized({}, {})'.format(
+            repr(self.inner_type),
+            self.expression,
+        )
 
     def __eq__(self, other):
         return self.__class__ == other.__class__ \
+            and self.expression == other.expression \
             and self.inner_type == other.inner_type
 
     def for_schema(self):
-        return u'LowCardinality({})'.format(self.inner_type.for_schema())
+        return u'{} MATERIALIZED {}'.format(
+            self.inner_type.for_schema(),
+            self.expression,
+        )
+
+
+class WithDefault(ColumnType):
+    def __init__(self, inner_type, default):
+        self.inner_type = inner_type
+        self.default = default
+
+    def __repr__(self):
+        return u'WithDefault({}, {})'.format(
+            repr(self.inner_type),
+            self.default,
+        )
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.default == other.default \
+            and self.inner_type == other.inner_type
+
+    def for_schema(self):
+        return u'{} DEFAULT {}'.format(
+            self.inner_type.for_schema(),
+            self.default,
+        )
 
 
 class Array(ColumnType):
@@ -271,11 +302,34 @@ class Nested(ColumnType):
         ]
 
 
+class LowCardinality(ColumnType):
+    def __init__(self, inner_type):
+        self.inner_type = inner_type
+
+    def __repr__(self):
+        return u'LowCardinality({})'.format(repr(self.inner_type))
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ \
+            and self.inner_type == other.inner_type
+
+    def for_schema(self):
+        return u'LowCardinality({})'.format(self.inner_type.for_schema())
+
+
 class String(ColumnType):
     pass
 
 
 class UUID(ColumnType):
+    pass
+
+
+class IPv4(ColumnType):
+    pass
+
+
+class IPv6(ColumnType):
     pass
 
 
