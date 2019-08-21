@@ -1,17 +1,18 @@
 from datetime import datetime, timedelta
-from snuba.datasets import factory
 import jsonschema
 import copy
 
+
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
-SDK_STATS_SCHEMA = {
-    'type': 'object',
-    'properties': {
+
+
+def get_time_series_query_schema_properties(default_granularity: int, default_window: timedelta):
+    return {
         'from_date': {
             'type': 'string',
             'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=1)).isoformat()
+            'default': lambda: (datetime.utcnow().replace(microsecond=0) - default_window).isoformat()
         },
         'to_date': {
             'type': 'string',
@@ -20,8 +21,14 @@ SDK_STATS_SCHEMA = {
         },
         'granularity': {
             'type': 'number',
-            'default': 86400,  # SDK stats query defaults to 1-day bucketing
+            'default': default_granularity,
         },
+    }
+
+
+SDK_STATS_SCHEMA = {
+    'type': 'object',
+    'properties': {
         'groupby': {
             'type': 'array',
             'items': {
@@ -30,76 +37,24 @@ SDK_STATS_SCHEMA = {
             },
             'default': [],
         },
+        **get_time_series_query_schema_properties(
+            default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
+            default_window=timedelta(days=1),
+        ),
     },
     'additionalProperties': False,
 }
 
-QUERY_SCHEMA = {
+GENERIC_QUERY_SCHEMA = {
     'type': 'object',
     'properties': {
-        'dataset': {
-            'enum': list(factory.DATASET_NAMES),
-        },
-        # A condition is a 3-tuple of (column, operator, literal)
-        # `conditions` is an array of conditions, or an array of arrays of conditions.
-        # Conditions at the the top level are ANDed together.
-        # Conditions at the second level are ORed together.
-        # eg: [(a, =, 1), (b, =, 2)] => "a = 1 AND b = 2"
-        # eg: [(a, =, 1), [(b, =, 2), (c, =, 3)]] => "a = 1 AND (b = 2 OR c = 3)"
-        'conditions': {
-            'type': 'array',
-            'items': {
-                'anyOf': [
-                    {'$ref': '#/definitions/condition'},
-                    {
-                        'type': 'array',
-                        'items': {'$ref': '#/definitions/condition'},
-                    },
-                ],
-            },
-            'default': [],
-        },
-        'having': {
-            'type': 'array',
-            # HAVING looks just like a condition
-            'items': {'$ref': '#/definitions/condition'},
-            'default': [],
-        },
-        'from_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=5)).isoformat()
-        },
-        'to_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
-        },
-        'granularity': {
-            'type': 'number',
-            'default': 3600,
-        },
-        'project': {
-            'anyOf': [
-                {'type': 'number'},
-                {
-                    'type': 'array',
-                    'items': {'type': 'number'},
-                    'minItems': 1,
-                },
-            ]
-        },
-        'groupby': {
+        'selected_columns': {
             'anyOf': [
                 {'$ref': '#/definitions/column_name'},
                 {'$ref': '#/definitions/column_list'},
-                {'type': 'array', 'maxItems': 0},
+                {'type': 'array', 'minItems': 0, 'maxItems': 0},
             ],
             'default': [],
-        },
-        'totals': {
-            'type': 'boolean',
-            'default': False
         },
         'aggregations': {
             'type': 'array',
@@ -130,6 +85,41 @@ QUERY_SCHEMA = {
         'arrayjoin': {
             '$ref': '#/definitions/column_name',
         },
+        'sample': {
+            'type': 'number',
+            'min': 0,
+        },
+        'conditions': {
+            'type': 'array',
+            'items': {
+                'anyOf': [
+                    {'$ref': '#/definitions/condition'},
+                    {
+                        'type': 'array',
+                        'items': {'$ref': '#/definitions/condition'},
+                    },
+                ],
+            },
+            'default': [],
+        },
+        'groupby': {
+            'anyOf': [
+                {'$ref': '#/definitions/column_name'},
+                {'$ref': '#/definitions/column_list'},
+                {'type': 'array', 'maxItems': 0},
+            ],
+            'default': [],
+        },
+        'totals': {
+            'type': 'boolean',
+            'default': False
+        },
+        'having': {
+            'type': 'array',
+            # HAVING looks just like a condition
+            'items': {'$ref': '#/definitions/condition'},
+            'default': [],
+        },
         'orderby': {
             'anyOf': [
                 {'$ref': '#/definitions/column_name'},
@@ -145,13 +135,6 @@ QUERY_SCHEMA = {
                 }
             ]
         },
-        'limitby': {
-            'type': 'array',
-            'items': [
-                {'type': 'number'},
-                {'$ref': '#/definitions/column_name'},
-            ]
-        },
         'limit': {
             'type': 'number',
             'default': 1000,
@@ -160,48 +143,30 @@ QUERY_SCHEMA = {
         'offset': {
             'type': 'number',
         },
-        'selected_columns': {
-            'anyOf': [
+        'limitby': {
+            'type': 'array',
+            'items': [
+                {'type': 'number'},
                 {'$ref': '#/definitions/column_name'},
-                {'$ref': '#/definitions/column_list'},
-                {'type': 'array', 'minItems': 0, 'maxItems': 0},
-            ],
-            'default': [],
+            ]
         },
-        'sample': {
-            'type': 'number',
-            'min': 0,
-        },
-        # Never add FINAL to queries, enable sampling
-        'turbo': {
-            'type': 'boolean',
-            'default': False,
-        },
-        # Force queries to hit the first shard replica, ensuring the query
-        # sees data that was written before the query. This burdens the
-        # first replica, so should only be used when absolutely necessary.
-        'consistent': {
-            'type': 'boolean',
-            'default': False,
-        },
-        'debug': {
-            'type': 'boolean',
-        }
     },
-    # Need to select down to the project level for customer isolation and performance
-    'required': ['project'],
     'dependencies': {
         'offset': ['limit'],
         'totals': ['groupby']
     },
     'additionalProperties': False,
-
     'definitions': {
         'column_name': {
             'type': 'string',
             'anyOf': [
-                {'pattern': '^-?[a-zA-Z0-9_.]+$', },
-                {'pattern': r'^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
+                # This supports ClickHouse identifiers (with the addition of
+                # the dot operator for referencing Nested columns, either in
+                # aggregate or after an ARRAY JOIN), as well as an optional
+                # subscript component at the end of the identifier (surrounded
+                # by square brackets, e.g. `tags[key]`) that can be used for
+                # treating Nested columns as mapping types in some contexts.
+                {'pattern': r'^-?[a-zA-Z0-9_.]+(\[[a-zA-Z0-9_.:-]+\])?$'},
             ],
         },
         'column_list': {
@@ -216,6 +181,12 @@ QUERY_SCHEMA = {
         },
         # TODO: can the complex nested expr actually be encoded here?
         'nested_expr': {'type': 'array'},
+        # A condition is a 3-tuple of (column, operator, literal)
+        # `conditions` is an array of conditions, or an array of arrays of conditions.
+        # Conditions at the the top level are ANDed together.
+        # Conditions at the second level are ORed together.
+        # eg: [(a, =, 1), (b, =, 2)] => "a = 1 AND b = 2"
+        # eg: [(a, =, 1), [(b, =, 2), (c, =, 3)]] => "a = 1 AND (b = 2 OR c = 3)"
         'condition': {
             'type': 'array',
             'items': [
@@ -242,9 +213,47 @@ QUERY_SCHEMA = {
             ],
             'minItems': 3,
             'maxItems': 3,
-        }
+        },
     }
 }
+
+EVENTS_QUERY_SCHEMA = {
+    **copy.deepcopy(GENERIC_QUERY_SCHEMA),
+    # Need to select down to the project level for customer isolation and performance
+    'required': ['project'],
+}
+
+EVENTS_QUERY_SCHEMA['properties'].update({
+    **get_time_series_query_schema_properties(
+        default_granularity=3600,
+        default_window=timedelta(days=5),
+    ),
+    'project': {
+        'anyOf': [
+            {'type': 'number'},
+            {
+                'type': 'array',
+                'items': {'type': 'number'},
+                'minItems': 1,
+            },
+        ]
+    },
+    # Never add FINAL to queries, enable sampling
+    'turbo': {
+        'type': 'boolean',
+        'default': False,
+    },
+    # Force queries to hit the first shard replica, ensuring the query
+    # sees data that was written before the query. This burdens the
+    # first replica, so should only be used when absolutely necessary.
+    'consistent': {
+        'type': 'boolean',
+        'default': False,
+    },
+    'debug': {
+        'type': 'boolean',
+    }
+})
 
 
 def validate(value, schema, set_defaults=True):

@@ -1,9 +1,10 @@
-from snuba.stateful_consumer.consumer_context import State, StateType
+from snuba.stateful_consumer import StateOutput
+from snuba.stateful_consumer.state_context import State
 
-from typing import Any
+from typing import Any, Tuple
 
 
-class CatchingUpState(State):
+class CatchingUpState(State[StateOutput]):
     """
     In this state the consumer consumes the main topic but
     it discards the transacitons that were present in the
@@ -12,7 +13,7 @@ class CatchingUpState(State):
     consumption.
     """
 
-    def _handle_impl(self, input: Any) -> (StateType, Any):
+    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
         # TODO: Actually consume cdc topic while discarding xids that were
         # already in the dump
-        return (StateType.CONSUMING, None)
+        return (StateOutput.SNAPSHOT_CATCHUP_COMPLETED, None)

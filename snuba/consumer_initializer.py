@@ -8,7 +8,7 @@ from snuba import settings
 from snuba import util
 
 
-def initialize_consumer(
+def initialize_batching_consumer(
     dataset: Dataset,
     dataset_name: str,
     raw_topic: str,

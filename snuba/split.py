@@ -1,3 +1,4 @@
+import copy
 from datetime import timedelta
 import math
 
@@ -12,7 +13,8 @@ MIN_COLS = ['project_id', 'event_id', 'timestamp']
 
 
 def split_query(query_func):
-    def wrapper(body, *args, **kwargs):
+
+    def wrapper(dataset, body, *args, **kwargs):
         use_split = state.get_configs([
             ('use_split', 0),
         ])
@@ -24,22 +26,20 @@ def split_query(query_func):
 
         if common_conditions:
             total_col_count = len(util.all_referenced_columns(body))
-
-            min_col_count = len(util.all_referenced_columns(
-                {**body, 'selected_columns': MIN_COLS}))
+            min_col_count = len(util.all_referenced_columns({**body, 'selected_columns': MIN_COLS}))
 
             if (
                 body.get('selected_columns')
                 and not body.get('aggregations')
                 and total_col_count > min_col_count
             ):
-                return col_split(body, *args, **kwargs)
+                return col_split(dataset, body, *args, **kwargs)
             elif orderby[:1] == ['-timestamp'] and remaining_offset < 1000:
-                return time_split(body, *args, **kwargs)
+                return time_split(dataset, body, *args, **kwargs)
 
-        return query_func(body, *args, **kwargs)
+        return query_func(dataset, body, *args, **kwargs)
 
-    def time_split(body, *args, **kwargs):
+    def time_split(dataset, body, *args, **kwargs):
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -74,7 +74,12 @@ def split_query(query_func):
             # and set offset=0 so we can then trim them ourselves.
             body['offset'] = 0
             body['limit'] = limit - total_results + remaining_offset
-            result, status = query_func(body, *args, **kwargs)
+
+            # The query function may mutate the request body during query
+            # evaluation, so we need to copy the body to ensure that the query
+            # has not been modified in between this call and the next loop
+            # iteration, if needed.
+            result, status = query_func(dataset, copy.deepcopy(body), *args, **kwargs)
 
             # If something failed, discard all progress and just return that
             if status != 200:
@@ -113,29 +118,31 @@ def split_query(query_func):
 
         return overall_result, status
 
-    def col_split(body, *args, **kwargs):
+    def col_split(dataset, body, *args, **kwargs):
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
-        minimal_query = {**body, 'selected_columns': MIN_COLS}
-
-        result, status = query_func(minimal_query, *args, **kwargs)
+        # The query function may mutate the request body during query
+        # evaluation, so we need to copy the body to ensure that the query has
+        # not been modified by the time we're ready to run the full query.
+        minimal_query = copy.deepcopy(body)
+        minimal_query.update({'selected_columns': MIN_COLS})
+        result, status = query_func(dataset, minimal_query, *args, **kwargs)
+        del minimal_query
 
         # If something failed, just return
         if status != 200:
             return result, status
-
-        conditions = body.get('conditions', [])
 
         if result['data']:
             project_ids = list(set([event['project_id'] for event in result['data']]))
             body['project_id'] = project_ids
 
             event_ids = list(set([event['event_id'] for event in result['data']]))
-            conditions.append(('event_id', 'IN', event_ids))
+            body['conditions'].append(('event_id', 'IN', event_ids))
 
             timestamps = [event['timestamp'] for event in result['data']]
             from_date = util.parse_datetime(min(timestamps))
@@ -147,6 +154,6 @@ def split_query(query_func):
             body['offset'] = 0
             body['limit'] = len(event_ids)
 
-        return query_func({**body, 'conditions': conditions}, *args, **kwargs)
+        return query_func(dataset, body, *args, **kwargs)
 
     return wrapper

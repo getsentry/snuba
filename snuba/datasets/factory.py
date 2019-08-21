@@ -5,26 +5,38 @@ DATASETS_IMPL = {}
 DATASET_NAMES = {
     'events',
     'groupedmessage',
+    'transactions',
     'outcomes',
 }
+
+
+class InvalidDatasetError(Exception):
+    """Exception raised on invalid dataset access."""
 
 
 def get_dataset(name):
     if name in DATASETS_IMPL:
         return DATASETS_IMPL[name]
 
-    assert name not in settings.DISABLED_DATASETS, "Dataset %s not available in this environment" % name
+    if name in settings.DISABLED_DATASETS:
+        raise InvalidDatasetError(f"dataset {name!r} is not available in this environment")
 
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
+    from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     dataset_mappings = {
         'events': EventsDataset,
         'groupedmessage': GroupedMessageDataset,
+        'transactions': TransactionsDataset,
         'outcomes': OutcomesDataset,
     }
 
-    dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
+    try:
+        dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
+    except KeyError as error:
+        raise InvalidDatasetError(f"dataset {name!r} does not exist") from error
+
     return dataset
 
 

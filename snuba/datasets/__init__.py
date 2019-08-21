@@ -74,6 +74,9 @@ class Dataset(object):
         """
         raise NotImplementedError
 
+    def get_query_schema(self):
+        raise NotImplementedError('dataset does not support queries')
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, *args, time_group_columns: Mapping[str, str], **kwargs):
