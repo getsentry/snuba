@@ -1,11 +1,15 @@
-from datetime import datetime, timedelta
-import jsonschema
 import copy
+import itertools
+from collections import ChainMap
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Mapping
+
+import jsonschema
 
 
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
-
 
 GENERIC_QUERY_SCHEMA = {
     'type': 'object',
@@ -243,12 +247,6 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
         },
         'additionalProperties': False,
     }
-
-
-import itertools
-from collections import ChainMap
-from typing import Any, Mapping
-from dataclasses import dataclass
 
 
 @dataclass
