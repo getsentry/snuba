@@ -14,6 +14,7 @@ from snuba.clickhouse import (
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.datasets.ddl import DDL
 from snuba.schemas import EVENTS_QUERY_SCHEMA
 from snuba.util import (
     alias_expr,
@@ -187,6 +188,7 @@ class EventsDataset(TimeSeriesDataset):
 
         super(EventsDataset, self).__init__(
             schema=schema,
+            ddl=DDL([schema]),
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
             default_replacement_topic="event-replacements",

@@ -83,4 +83,6 @@ def bootstrap(bootstrap_server, kafka, force):
     # For now just create the table for every dataset.
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
-        ClickhousePool().execute(dataset.get_schema().get_local_table_definition())
+
+        for statement in dataset.get_ddl().create_statements():
+            ClickhousePool().execute(statement)

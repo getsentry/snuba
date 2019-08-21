@@ -130,14 +130,19 @@ class BaseTest(object):
             self.table = self.dataset.get_schema().get_table_name()
             self.clickhouse = ClickhousePool()
 
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-            self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
+            for statement in self.dataset.get_ddl().drop_statements():
+                self.clickhouse.execute(statement)
+
+            for statement in self.dataset.get_ddl().create_statements():
+                self.clickhouse.execute(statement)
 
             redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+            for statement in self.dataset.get_ddl().drop_statements():
+                self.clickhouse.execute(statement)
+
             redis_client.flushdb()
 
 

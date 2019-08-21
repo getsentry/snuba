@@ -525,9 +525,9 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        table = dataset.get_schema().get_local_table_name()
 
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
+        for statement in dataset.get_ddl().drop_statements():
+            clickhouse_rw.execute(statement)
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
         return ('ok', 200, {'Content-Type': 'text/plain'})

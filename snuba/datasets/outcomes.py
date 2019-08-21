@@ -13,6 +13,7 @@ from snuba.clickhouse import (
 from snuba.datasets import Dataset
 from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
 from snuba.datasets.schema import MergeTreeSchema
+from snuba.datasets.ddl import DDL
 from snuba import settings
 
 
@@ -64,6 +65,7 @@ class OutcomesDataset(Dataset):
 
         super(OutcomesDataset, self).__init__(
             schema=schema,
+            ddl=DDL([schema]),
             processor=OutcomesProcessor(),
             default_topic="outcomes",
             default_replacement_topic=None,

@@ -51,6 +51,9 @@ class TableSchema(object):
             self._get_local_engine()
         )
 
+    def get_local_drop_table_statement(self):
+        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+
     def _get_local_engine(self):
         raise NotImplementedError
 

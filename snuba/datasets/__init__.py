@@ -13,9 +13,10 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema, *, processor, default_topic,
+    def __init__(self, schema, *, ddl, processor, default_topic,
             default_replacement_topic, default_commit_log_topic):
         self._schema = schema
+        self.__ddl = ddl
         self.__processor = processor
         self.__default_topic = default_topic
         self.__default_replacement_topic = default_replacement_topic
@@ -23,6 +24,9 @@ class Dataset(object):
 
     def get_schema(self):
         return self._schema
+
+    def get_ddl(self):
+        return self.__ddl
 
     def get_processor(self):
         return self.__processor

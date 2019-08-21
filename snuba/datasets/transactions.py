@@ -14,6 +14,7 @@ from snuba.clickhouse import (
 )
 from snuba.datasets import Dataset
 from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.datasets.ddl import DDL
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 
 
@@ -77,6 +78,7 @@ class TransactionsDataset(Dataset):
 
         super(TransactionsDataset, self).__init__(
             schema=schema,
+            ddl=DDL([schema]),
             processor=TransactionsMessageProcessor(),
             default_topic="events",
             default_replacement_topic=None,
