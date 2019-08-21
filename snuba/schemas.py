@@ -291,8 +291,7 @@ class RequestSchema:
         self.__composite_schema['required'] = set(self.__composite_schema['required'])
 
     def validate(self, value) -> Request:
-        # XXX: Mutates input value!
-        validate(value, self.__composite_schema)
+        value = validate_jsonschema(value, self.__composite_schema)
 
         query = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
 
@@ -333,7 +332,12 @@ SDK_STATS_SCHEMA = RequestSchema({
 })
 
 
-def validate(value, schema, set_defaults=True):
+def validate_jsonschema(value, schema, set_defaults=True):
+    """
+    Validates a value against the provided schema, returning the validated
+    value if the value conforms to the schema, otherwise raising a
+    ``jsonschema.ValidationError``.
+    """
     orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
@@ -347,6 +351,12 @@ def validate(value, schema, set_defaults=True):
         for error in orig(validator, properties, instance, schema):
             yield error
 
+    # Using schema defaults during validation will cause the input value to be
+    # mutated, so to be on the safe side we create a deep copy of that value to
+    # avoid unwanted side effects for the calling function.
+    if set_defaults:
+        value = copy.deepcopy(value)
+
     validator_cls = jsonschema.validators.extend(
         jsonschema.Draft4Validator,
         {'properties': validate_and_default}
@@ -357,6 +367,8 @@ def validate(value, schema, set_defaults=True):
         types={'array': (list, tuple)},
         format_checker=jsonschema.FormatChecker()
     ).validate(value, schema)
+
+    return value
 
 
 def generate(schema):
