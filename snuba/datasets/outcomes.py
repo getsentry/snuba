@@ -63,7 +63,8 @@ class OutcomesDataset(Dataset):
             })
 
         super(OutcomesDataset, self).__init__(
-            schema=schema,
+            write_schema=schema,
+            read_schema=schema,
             processor=OutcomesProcessor(),
             default_topic="outcomes",
             default_replacement_topic=None,
