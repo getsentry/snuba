@@ -77,6 +77,7 @@ class TransactionsDataset(Dataset):
 
         super(TransactionsDataset, self).__init__(
             write_schema=schema,
+            read_schema=schema,
             processor=TransactionsMessageProcessor(),
             default_topic="events",
         )

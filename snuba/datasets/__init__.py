@@ -13,30 +13,26 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, write_schema, *, processor,
+    def __init__(self, write_schema, read_schema, *, processor,
             default_topic: str,
             default_replacement_topic: Optional[str] = None,
-            default_commit_log_topic: Optional[str] = None,
-            read_schema = None):
+            default_commit_log_topic: Optional[str] = None):
         self.__write_schema = write_schema
-        self.__read_schema = read_schema  # optionally have a different read schema
+        self.__read_schema = read_schema
         self.__processor = processor
         self.__default_topic = default_topic
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
     def get_read_schema(self):
-        if self.__read_schema is None:
-            return self.__write_schema
-
         return self.__read_schema
 
     def get_write_schema(self):
         return self.__write_schema
 
     def get_schemas(self):
-        schemas = [self.__read_schema, self.__write_schema]
-        return [schema for schema in schemas if schema]
+        # deduplicate the schemas and return as a list
+        return list(set([self.__read_schema, self.__write_schema]))
 
     def get_processor(self):
         return self.__processor

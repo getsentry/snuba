@@ -45,6 +45,7 @@ class GroupedMessageDataset(CdcDataset):
 
         super(GroupedMessageDataset, self).__init__(
             write_schema=schema,
+            read_schema=schema,
             processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
             default_topic="cdc",
             default_replacement_topic=None,

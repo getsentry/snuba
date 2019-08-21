@@ -187,6 +187,7 @@ class EventsDataset(TimeSeriesDataset):
 
         super(EventsDataset, self).__init__(
             write_schema=schema,
+            read_schema=schema,
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
             default_replacement_topic="event-replacements",
