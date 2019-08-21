@@ -259,8 +259,11 @@ class Request:
         return ChainMap(self.query, *self.extensions.values())
 
 
+Schema = Mapping[str, Any]  # placeholder for JSON schema
+
+
 class RequestSchema:
-    def __init__(self, query_schema, extensions_schemas: Mapping[str, Any]):
+    def __init__(self, query_schema: Schema, extensions_schemas: Mapping[str, Schema]):
         self.__query_schema = query_schema
         self.__extension_schemas = extensions_schemas
 
