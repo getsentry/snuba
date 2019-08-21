@@ -2,7 +2,8 @@ import json
 import logging
 from datetime import datetime
 
-import requests
+from urllib3.connectionpool import HTTPConnectionPool
+from urllib3.exceptions import HTTPError
 from urllib.parse import urlencode, urljoin
 
 from snuba.clickhouse import DATETIME_FORMAT, Array
@@ -44,7 +45,7 @@ class NativeDriverBatchWriter(BatchWriter):
 class HTTPBatchWriter(BatchWriter):
     def __init__(self, schema, host, port, options=None):
         self.__schema = schema
-        self.__base_url = 'http://{host}:{port}/'.format(host=host, port=port)
+        self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
 
     def __default(self, value):
@@ -58,8 +59,16 @@ class HTTPBatchWriter(BatchWriter):
 
     def write(self, rows):
         parameters = self.__options.copy()
-        parameters['query'] = "INSERT INTO {table} FORMAT JSONEachRow".format(table=self.__schema.get_table_name())
-        requests.post(
-            urljoin(self.__base_url, '?' + urlencode(parameters)),
-            data=map(self.__encode, rows),
-        ).raise_for_status()
+        parameters['query'] = f"INSERT INTO {self.__schema.get_table_name()} FORMAT JSONEachRow"
+        resp = self.__pool.urlopen(
+            'POST',
+            '/?' + urlencode(parameters),
+            headers={
+                'Connection': 'keep-alive',
+                'Accept-Encoding': 'gzip,deflate',
+            },
+            body=map(self.__encode, rows),
+            chunked=True,
+        )
+        if resp.status//100 != 2:
+            raise HTTPError(f"{resp.status} Unexpected")
