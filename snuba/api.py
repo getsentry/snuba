@@ -346,7 +346,7 @@ def parse_and_run_query(dataset, body, timer):
             if len(exclude_group_ids) > max_group_ids_exclude:
                 final = True
             else:
-                body['conditions'].append(('group_id', 'NOT IN', exclude_group_ids))
+                body['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
     else:
         final = False
         if 'sample' not in body:
@@ -375,7 +375,7 @@ def parse_and_run_query(dataset, body, timer):
     table = dataset.get_schema().get_table_name()
 
     sql = format_query(dataset, body, table, prewhere_conditions, final)
-
+    print(sql)
     timer.mark('prepare_query')
 
     stats = {
