@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 from typing import Any, Mapping, Optional, Sequence, Type
 
 from snuba.processor import MessageProcessor
@@ -17,21 +17,23 @@ class CdcMessageRow(ABC):
     with the Clickhouse schema.
     """
 
-    @abstractclassmethod
-    def from_wal(cls,
+    @classmethod
+    def from_wal(
+        cls,
         offset: int,
-        columnnames: Sequence[Any],
+        columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> CdcMessageRow:
         raise NotImplementedError
 
-    @abstractclassmethod
-    def from_bulk(cls,
+    @classmethod
+    def from_bulk(
+        cls,
         row: Mapping[str, Any],
     ) -> CdcMessageRow:
         raise NotImplementedError
 
-    @abstractclassmethod
+    @abstractmethod
     def to_clickhouse(self) -> WriterTableRow:
         raise NotImplementedError
 

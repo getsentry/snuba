@@ -28,7 +28,7 @@ class GroupedMessageRow(CdcMessageRow):
     @classmethod
     def from_wal(cls,
         offset: int,
-        columnnames: Sequence[Any],
+        columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> GroupedMessageRow:
         raw_data = dict(zip(columnnames, columnvalues))
@@ -63,17 +63,16 @@ class GroupedMessageRow(CdcMessageRow):
         )
 
     def to_clickhouse(self) -> WriterTableRow:
-        deleted = self.record_content is None
         record = self.record_content
         return {
             'offset': self.offset if self.offset is not None else 0,
             'id': self.id,
             'record_deleted': 1 if self.record_deleted else 0,
-            'status': None if deleted else record.status,
-            'last_seen': None if deleted else record.last_seen,
-            'first_seen': None if deleted else record.first_seen,
-            'active_at': None if deleted else record.active_at,
-            'first_release_id': None if deleted else record.first_release_id,
+            'status': None if not record else record.status,
+            'last_seen': None if not record else record.last_seen,
+            'first_seen': None if not record else record.first_seen,
+            'active_at': None if not record else record.active_at,
+            'first_release_id': None if not record else record.first_release_id,
         }
 
 
