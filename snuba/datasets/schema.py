@@ -19,7 +19,7 @@ class Schema(object):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def __make_test_table(self, table_name):
+    def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
 
     def get_local_table_name(self):
@@ -27,7 +27,7 @@ class Schema(object):
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
-        return self.__make_test_table(self.__local_table_name)
+        return self._make_test_table(self.__local_table_name)
 
     def get_table_name(self):
         """
@@ -35,7 +35,7 @@ class Schema(object):
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
-        return self.__make_test_table(table_name)
+        return self._make_test_table(table_name)
 
     def get_local_table_definition(self):
         raise NotImplementedError
@@ -170,7 +170,7 @@ class MaterializedViewSchema(Schema):
         CREATE MATERIALIZED VIEW %(name)s TO %(dest_table_name)s (%(columns)s) AS %(query)s""" % {
             'name': name,
             'dest_table_name': dest_table_name,
-            'columns': self._columns,
+            'columns': self._columns.for_schema(),
             'query': self.__query,
         } % {
             'src_table_name': src_table_name,
