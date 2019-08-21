@@ -183,11 +183,13 @@ def parse_request_body(request):
 
 def validate_request_content(body, schema, timer):
     try:
-        schemas.validate(body, schema)
+        request = schema.validate(body)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error
 
     timer.mark('validate_schema')
+
+    return {**request.body}
 
 
 @application.route('/query', methods=['GET', 'POST'])
@@ -226,7 +228,7 @@ def dataset_query(dataset, body, timer):
     assert request.method == 'POST'
     ensure_table_exists(dataset)
 
-    validate_request_content(body, dataset.get_query_schema(), timer)
+    body = validate_request_content(body, dataset.get_query_schema(), timer)
 
     result, status = parse_and_run_query(dataset, body, timer)
     return (
@@ -396,8 +398,11 @@ def parse_and_run_query(dataset, body, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
-    body = parse_request_body(request)
-    validate_request_content(body, schemas.SDK_STATS_SCHEMA, timer)
+    body = validate_request_content(
+        parse_request_body(request),
+        schemas.SDK_STATS_SCHEMA,
+        timer,
+    )
 
     body['project'] = []
     body['aggregations'] = [
