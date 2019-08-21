@@ -8,7 +8,7 @@ from typing import Any, Mapping, NewType, Generator, IO, Iterable, Optional, Seq
 from dataclasses import dataclass
 
 SnapshotId = NewType("SnapshotId", str)
-TableRow = Mapping[str, Any]
+SnapshotTableRow = Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class SnapshotDescriptor:
         for t in self.tables:
             if t.table == table_name:
                 return t
-        raise ValueError("Table %s does not exists in the snapshot" % table_name)
+        raise ValueError(f"Table {table_name} does not exists in the snapshot")
 
 
 class BulkLoadSource(ABC):
@@ -49,5 +49,5 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_table_file(self, table: str) -> Generator[Iterable[TableRow], None, None]:
+    def get_table_file(self, table: str) -> Generator[Iterable[SnapshotTableRow], None, None]:
         raise NotImplementedError

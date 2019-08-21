@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 from abc import ABC, abstractclassmethod
-from typing import Any, Mapping, Type
+from typing import Any, Mapping, Optional, Sequence, Type
 
 from snuba.processor import MessageProcessor
+from snuba.writer import WriterTableRow
 
 KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
 
 
-class CDCMessageRow(ABC):
+class CdcMessageRow(ABC):
     """
     Takes care of the data transformation from WAL to clickhouse and from
     bulk load to clickhouse. The goal is to keep all these transformation
@@ -15,21 +18,27 @@ class CDCMessageRow(ABC):
     """
 
     @abstractclassmethod
-    def from_wal(cls, offset, columnnames, columnvalues):
+    def from_wal(cls,
+        offset: int,
+        columnnames: Sequence[Any],
+        columnvalues: Sequence[Any],
+    ) -> CdcMessageRow:
         raise NotImplementedError
 
     @abstractclassmethod
-    def from_bulk(cls, row):
+    def from_bulk(cls,
+        row: Mapping[str, Any],
+    ) -> CdcMessageRow:
         raise NotImplementedError
 
     @abstractclassmethod
-    def to_clickhouse(self) -> Mapping[str, Any]:
+    def to_clickhouse(self) -> WriterTableRow:
         raise NotImplementedError
 
 
 class CdcProcessor(MessageProcessor):
 
-    def __init__(self, pg_table: str, message_row_class: Type[CDCMessageRow]):
+    def __init__(self, pg_table: str, message_row_class: Type[CdcMessageRow]):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
 
@@ -39,14 +48,14 @@ class CdcProcessor(MessageProcessor):
     def _process_commit(self, offset):
         pass
 
-    def _process_insert(self, offset, columnnames, columnvalues):
+    def _process_insert(self, offset, columnnames, columnvalues) -> Optional[WriterTableRow]:
         return self._message_row_class.from_wal(
             offset,
             columnnames,
             columnvalues
         ).to_clickhouse()
 
-    def _process_update(self, offset, key, columnnames, columnvalues):
+    def _process_update(self, offset, key, columnnames, columnvalues) -> Optional[WriterTableRow]:
         old_key = dict(zip(key['keynames'], key['keyvalues']))
         new_key = {
             key: columnvalues[columnnames.index(key)]
@@ -63,7 +72,7 @@ class CdcProcessor(MessageProcessor):
             columnvalues
         ).to_clickhouse()
 
-    def _process_delete(self, offset, key):
+    def _process_delete(self, offset, key) -> Optional[WriterTableRow]:
         pass
 
     def process_message(self, value, metadata):

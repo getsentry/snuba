@@ -5,8 +5,8 @@ import logging
 
 from snuba.clickhouse import ClickhousePool
 from snuba.snapshots import BulkLoadSource
-from snuba.writer import BufferedWriterWrapper
-from snuba import settings
+from snuba.writer import BufferedWriterWrapper, WriterTableRow
+from snuba.snapshots import SnapshotTableRow
 
 
 class BulkLoader(ABC):
@@ -31,7 +31,7 @@ class SingleTableBulkLoader(BulkLoader):
                 source: BulkLoadSource,
                 dest_table: str,
                 source_table: str,
-                row_processor: Callable[[Mapping[str, Any]], Mapping[str, Any]],
+                row_processor: Callable[[SnapshotTableRow], WriterTableRow],
             ):
         self.__source = source
         self.__dest_table = dest_table

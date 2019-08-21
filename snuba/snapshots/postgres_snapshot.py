@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, NewType, Generator, Iterable, Sequence
 
 from snuba.snapshots import SnapshotDescriptor, TableConfig
-from snuba.snapshots import BulkLoadSource, TableRow
+from snuba.snapshots import BulkLoadSource, SnapshotTableRow
 
 Xid = NewType("Xid", int)
 
@@ -125,7 +125,7 @@ class PostgresSnapshot(BulkLoadSource):
     def get_table_file(
         self,
         table: str,
-    ) -> Generator[Iterable[TableRow], None, None]:
+    ) -> Generator[Iterable[SnapshotTableRow], None, None]:
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
             with open(table_path, "r") as table_file:

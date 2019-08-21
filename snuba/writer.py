@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Any, List, Mapping
+from typing import Any, Iterable, List, Mapping
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
@@ -12,7 +12,7 @@ from snuba.clickhouse import DATETIME_FORMAT, Array
 
 logger = logging.getLogger('snuba.writer')
 
-TableRow = Mapping[str, Any]
+WriterTableRow = Mapping[str, Any]
 
 
 class BatchWriter(object):
@@ -37,7 +37,7 @@ class NativeDriverBatchWriter(BatchWriter):
             values.append(value)
         return values
 
-    def write(self, rows: TableRow):
+    def write(self, rows: Iterable[WriterTableRow]):
         columns = self.__schema.get_columns()
         self.__connection.execute_robust("INSERT INTO %(table)s (%(colnames)s) VALUES" % {
             'colnames': ", ".join(col.escaped for col in columns),
@@ -58,12 +58,12 @@ class HTTPBatchWriter(BatchWriter):
         else:
             raise TypeError
 
-    def __encode(self, row: TableRow):
+    def __encode(self, row: WriterTableRow):
         return json.dumps(row, default=self.__default).encode('utf-8')
 
-    def write(self, rows):
+    def write(self, rows: Iterable[WriterTableRow]):
         parameters = self.__options.copy()
-        parameters['query'] = f"INSERT INTO {self.__schema.get_table_name()} FORMAT JSONEachRow"
+        parameters['query'] = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         resp = self.__pool.urlopen(
             'POST',
             '/?' + urlencode(parameters),
@@ -91,7 +91,7 @@ class BufferedWriterWrapper:
     def __init__(self, writer: BatchWriter, buffer_size: int):
         self.__writer = writer
         self.__buffer_size = buffer_size
-        self.__buffer: List[TableRow] = []
+        self.__buffer: List[WriterTableRow] = []
 
     def __flush(self) -> None:
         logger.debug("Flushing buffer with %d elements", len(self.__buffer))
@@ -105,7 +105,7 @@ class BufferedWriterWrapper:
         if self.__buffer:
             self.__flush()
 
-    def write(self, row: TableRow):
+    def write(self, row: WriterTableRow):
         self.__buffer.append(row)
         if len(self.__buffer) >= self.__buffer_size:
             self.__flush()

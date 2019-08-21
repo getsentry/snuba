@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from dataclasses import dataclass
 from dateutil.parser import parse as dateutil_parse
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CDCMessageRow
+from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CdcMessageRow
+from snuba.writer import WriterTableRow
 
 
 @dataclass(frozen=True)
@@ -16,14 +19,18 @@ class GroupMessageRecord:
 
 
 @dataclass(frozen=True)
-class GroupedMessageRow(CDCMessageRow):
+class GroupedMessageRow(CdcMessageRow):
     offset: Optional[int]
     id: int
     record_deleted: bool
     record_content: Optional[GroupMessageRecord]
 
     @classmethod
-    def from_wal(cls, offset, columnnames, columnvalues):
+    def from_wal(cls,
+        offset: int,
+        columnnames: Sequence[Any],
+        columnvalues: Sequence[Any],
+    ) -> GroupedMessageRow:
         raw_data = dict(zip(columnnames, columnvalues))
         return GroupedMessageRow(
             offset=offset,
@@ -39,7 +46,9 @@ class GroupedMessageRow(CDCMessageRow):
         )
 
     @classmethod
-    def from_bulk(cls, row):
+    def from_bulk(cls,
+        row: Mapping[str, Any],
+    ) -> GroupedMessageRow:
         return GroupedMessageRow(
             offset=None,
             id=int(row['id']),
@@ -53,7 +62,7 @@ class GroupedMessageRow(CDCMessageRow):
             )
         )
 
-    def to_clickhouse(self) -> Mapping[str, Any]:
+    def to_clickhouse(self) -> WriterTableRow:
         deleted = self.record_content is None
         record = self.record_content
         return {
@@ -76,7 +85,7 @@ class GroupedMessageProcessor(CdcProcessor):
             message_row_class=GroupedMessageRow,
         )
 
-    def _process_delete(self, offset, key):
+    def _process_delete(self, offset, key) -> Optional[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
         id = key_values[key_names.index('id')]
