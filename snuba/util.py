@@ -17,6 +17,7 @@ import time
 from snuba import clickhouse, schemas, settings, state
 from snuba.clickhouse import escape_col
 from snuba.reader import NativeDriverReader
+from snuba.schemas import Request
 
 
 logger = logging.getLogger('snuba.util')
@@ -348,12 +349,12 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(body, sql, client, timer, stats=None):
+def raw_query(request: Request, sql, client, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    project_ids = to_list(body['project'])
+    project_ids = to_list(request.extensions['project']['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
@@ -380,7 +381,7 @@ def raw_query(body, sql, client, timer, stats=None):
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(body)) > uc_max:
+    if len(all_referenced_columns(request.query)) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 
@@ -422,7 +423,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         # Force query to use the first shard replica, which
                         # should have synchronously received any cluster writes
                         # before this query is run.
-                        consistent = body.get('consistent', False)
+                        consistent = request.extensions['performance'].get('consistent', False)
                         stats['consistent'] = consistent
                         if consistent:
                             query_settings['load_balancing'] = 'in_order'
@@ -435,7 +436,7 @@ def raw_query(body, sql, client, timer, stats=None):
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
                                 query_id=query_id,
-                                with_totals=body.get('totals', False),
+                                with_totals=request.query.get('totals', False),
                             )
                             status = 200
 
@@ -487,7 +488,7 @@ def raw_query(body, sql, client, timer, stats=None):
     if settings.RECORD_QUERIES:
         # send to redis
         state.record_query({
-            'request': body,
+            'request': request.body,
             'sql': sql,
             'timing': timer,
             'stats': stats,
