@@ -42,20 +42,29 @@ class CdcProcessor(MessageProcessor):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
 
-    def _process_begin(self, offset):
+    def _process_begin(self, offset: int):
         pass
 
-    def _process_commit(self, offset):
+    def _process_commit(self, offset: int):
         pass
 
-    def _process_insert(self, offset, columnnames, columnvalues) -> Optional[WriterTableRow]:
+    def _process_insert(self,
+        offset: int,
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
+    ) -> Optional[WriterTableRow]:
         return self._message_row_class.from_wal(
             offset,
             columnnames,
             columnvalues
         ).to_clickhouse()
 
-    def _process_update(self, offset, key, columnnames, columnvalues) -> Optional[WriterTableRow]:
+    def _process_update(self,
+        offset: int,
+        key: Mapping[str, Any],
+        columnnames: Sequence[str],
+        columnvalues: Sequence[Any],
+    ) -> Optional[WriterTableRow]:
         old_key = dict(zip(key['keynames'], key['keyvalues']))
         new_key = {
             key: columnvalues[columnnames.index(key)]
@@ -72,7 +81,10 @@ class CdcProcessor(MessageProcessor):
             columnvalues
         ).to_clickhouse()
 
-    def _process_delete(self, offset, key) -> Optional[WriterTableRow]:
+    def _process_delete(self,
+        offset: int,
+        key: Mapping[str, Any],
+    ) -> Optional[WriterTableRow]:
         pass
 
     def process_message(self, value, metadata):

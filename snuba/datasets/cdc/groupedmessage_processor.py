@@ -85,7 +85,10 @@ class GroupedMessageProcessor(CdcProcessor):
             message_row_class=GroupedMessageRow,
         )
 
-    def _process_delete(self, offset, key) -> Optional[WriterTableRow]:
+    def _process_delete(self,
+        offset: int,
+        key: Mapping[str, Any],
+    ) -> Optional[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
         id = key_values[key_names.index('id')]
