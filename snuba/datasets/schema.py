@@ -5,16 +5,16 @@ def local_dataset_mode():
     return settings.DATASET_MODE == "local"
 
 
-class TableSchema(object):
+class Schema(object):
     """
     Represents the full set of columns in a clickhouse table, this only contains
-    basic metadata for now. The code to generate the schema comes in a followup PR.
+    basic metadata for now.
     """
 
     TEST_TABLE_PREFIX = "test_"
 
     def __init__(self, local_table_name, dist_table_name, columns):
-        self.__columns = columns
+        self._columns = columns
 
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
@@ -37,10 +37,18 @@ class TableSchema(object):
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
         return self.__make_test_table(table_name)
 
+    def get_local_table_definition(self):
+        raise NotImplementedError
+
+    def get_columns(self):
+        return self._columns
+
+
+class TableSchema(Schema):
     def _get_table_definition(self, name, engine):
         return """
-        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.__columns.for_schema(),
+            CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self._columns.for_schema(),
             'engine': engine,
             'name': name,
         }
@@ -53,9 +61,6 @@ class TableSchema(object):
 
     def _get_local_engine(self):
         raise NotImplementedError
-
-    def get_columns(self):
-        return self.__columns
 
 
 class MergeTreeSchema(TableSchema):
@@ -118,3 +123,62 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def _get_engine_type(self):
         return "ReplacingMergeTree(%s)" % self.__version_column
+
+
+class SummingMergeTreeSchema(MergeTreeSchema):
+
+    def _get_engine_type(self):
+        return "SummingMergeTree()"
+
+
+class MaterializedViewSchema(Schema):
+
+    def __init__(
+            self,
+            local_table_name,
+            dist_table_name,
+            columns,
+            query,
+            local_src_table_name,
+            dist_src_table_name,
+            local_dest_table_name,
+            dist_dest_table_name
+    ):
+        super(MaterializedViewSchema, self).__init__(
+            columns=columns,
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name,
+        )
+
+        # Make sure the caller has provided a src_table_name in the query
+        assert query % {'src_table_name': local_src_table_name} != query
+
+        self.__query = query
+        self.__local_src_table_name = local_src_table_name
+        self.__dist_src_table_name = dist_src_table_name
+        self.__local_dest_table_name = local_dest_table_name
+        self.__dist_dest_table_name = dist_dest_table_name
+
+    def __get_local_src_table_name(self):
+        return self._make_test_table(self.__local_src_table_name)
+
+    def __get_local_dest_table_name(self):
+        return self._make_test_table(self.__local_dest_table_name)
+
+    def __get_table_definition(self, name, src_table_name, dest_table_name):
+        return """
+        CREATE MATERIALIZED VIEW %(name)s TO %(dest_table_name)s (%(columns)s) AS %(query)s""" % {
+            'name': name,
+            'dest_table_name': dest_table_name,
+            'columns': self._columns,
+            'query': self.__query,
+        } % {
+            'src_table_name': src_table_name,
+        }
+
+    def get_local_table_definition(self):
+        return self.__get_table_definition(
+            self.get_local_table_name(),
+            self.__get_local_src_table_name(),
+            self.__get_local_dest_table_name()
+        )
