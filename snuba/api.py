@@ -375,7 +375,7 @@ def parse_and_run_query(dataset, body, timer):
     table = dataset.get_schema().get_table_name()
 
     sql = format_query(dataset, body, table, prewhere_conditions, final)
-    print(sql)
+
     timer.mark('prepare_query')
 
     stats = {
