@@ -7,6 +7,13 @@ from base import BaseEventsTest
 
 from snuba import settings
 from snuba.processor import InvalidMessageType, InvalidMessageVersion
+from snuba.datasets.events_processor import (
+    enforce_retention,
+    extract_base,
+    extract_extra_contexts,
+    extract_extra_tags,
+    extract_user
+)
 
 
 class TestEventsProcessor(BaseEventsTest):
@@ -61,7 +68,11 @@ class TestEventsProcessor(BaseEventsTest):
             'datetime': now.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         }
         output = {}
-
+        extract_base(output, event)
+        output["retention_days"] = enforce_retention(
+            event,
+            datetime.strptime(event['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
+        )
         self.dataset.get_processor().extract_required(output, event)
         assert output == {
             'event_id': '11111111111111111111111111111111',
@@ -165,7 +176,7 @@ class TestEventsProcessor(BaseEventsTest):
         project_id = 1
         message = (2, 'end_delete_groups', {'project_id': project_id})
         processor = self.dataset.get_processor()
-        assert processor.process_message( message) == \
+        assert processor.process_message(message) == \
             (processor.REPLACE, (str(project_id), message))
 
     def test_v2_start_merge(self):
@@ -261,7 +272,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        self.dataset.get_processor().extract_extra_tags(extra_output, tags)
+        extract_extra_tags(extra_output, tags)
 
         valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
         assert extra_output == {
@@ -387,7 +398,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        self.dataset.get_processor().extract_extra_contexts(extra_output, contexts)
+        extract_extra_contexts(extra_output, contexts)
 
         assert extra_output == {
             'contexts.key': ['extra.int', 'extra.float', 'extra.str'],
@@ -403,7 +414,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
         output = {}
 
-        self.dataset.get_processor().extract_user(output, user)
+        extract_user(output, user)
 
         assert output == {'email': u'user_email',
                           'ip_address': u'user_ip_address',
