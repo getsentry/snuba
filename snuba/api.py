@@ -354,7 +354,7 @@ def parse_and_run_query(dataset, request: Request, timer):
                 request.query['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
     else:
         final = False
-        if 'sample' not in body:
+        if 'sample' not in request.query:
             request.query['sample'] = settings.TURBO_SAMPLE_RATE
 
     prewhere_conditions = []
