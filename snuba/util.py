@@ -508,7 +508,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or body.get('debug', False):
+    if settings.STATS_IN_RESPONSE or request.extensions['performance'].get('debug', False):
         result['stats'] = stats
         result['sql'] = sql
 
