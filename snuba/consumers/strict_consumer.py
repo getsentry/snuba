@@ -102,6 +102,7 @@ class StrictConsumer:
             if error:
                 if error.code() == KafkaError._PARTITION_EOF:
                     logger.debug("End of topic reached")
+                    self.__consumer.close()
                     return
                 else:
                     raise Exception(message.error())
@@ -129,6 +130,8 @@ class StrictConsumer:
 
             watermarks[(message.partition(), message.topic())] = message.offset()
             message = self.__consumer.poll(timeout=1.0)
+
+        self.__consumer.close()
 
     def force_commit(self, partition: TopicPartition) -> None:
         self.__consumer.commit(partition)
