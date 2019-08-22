@@ -102,17 +102,17 @@ GENERIC_QUERY_SCHEMA = {
             ]
         },
         'limit': {
-            'type': 'number',
+            'type': 'integer',
             'default': 1000,
             'maximum': 10000,
         },
         'offset': {
-            'type': 'number',
+            'type': 'integer',
         },
         'limitby': {
             'type': 'array',
             'items': [
-                {'type': 'number'},
+                {'type': 'integer'},
                 {'$ref': '#/definitions/column_name'},
             ]
         },
@@ -211,10 +211,10 @@ PROJECT_EXTENSION_SCHEMA = {
     'properties': {
         'project': {
             'anyOf': [
-                {'type': 'number'},
+                {'type': 'integer'},
                 {
                     'type': 'array',
-                    'items': {'type': 'number'},
+                    'items': {'type': 'integer'},
                     'minItems': 1,
                 },
             ]
