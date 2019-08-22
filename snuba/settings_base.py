@@ -43,6 +43,7 @@ SENTRY_DSN = None
 # Snuba Options
 
 SNAPSHOT_LOAD_PRODUCT = 'snuba'
+BULK_CLICKHOUSE_BUFFER = 1000
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9092']
