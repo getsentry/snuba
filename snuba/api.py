@@ -401,23 +401,23 @@ def parse_and_run_query(dataset, request: Request, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
-    body = validate_request_content(
+    request = validate_request_content(
         parse_request_body(http_request),
         schemas.SDK_STATS_SCHEMA,
         timer,
     )
 
-    body['project'] = []
-    body['aggregations'] = [
+    request.query['aggregations'] = [
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    body['groupby'].extend(['sdk_name', 'rtime'])
+    request.query['groupby'].extend(['sdk_name', 'rtime'])
+    request.query.extensions['project']['project'] = []
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, body, timer)
+    result, status = parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
             result,
