@@ -1,12 +1,12 @@
+import logging
+
+from typing import Any, Sequence, Tuple
+from confluent_kafka import Consumer, Message, TopicPartition
+
 from snuba.stateful_consumer import StateOutput
 from snuba.stateful_consumer.state_context import State
-from snuba.consumers.simple_consumer import create_simple_consumer
+from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba import settings
-
-import simplejson as json
-import logging
-from typing import Any, Sequence, Tuple
-from confluent_kafka import TopicPartition
 
 logger = logging.getLogger('snuba.snapshot-load')
 
@@ -22,33 +22,55 @@ class BootstrapState(State[StateOutput]):
     """
 
     def __init__(self,
-        topics: str,
+        topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
     ):
-        self.__consumer = create_simple_consumer(
-            topics,
-            bootstrap_servers,
-            group_id,
-            auto_offset_reset="earliest"
+        super(BootstrapState, self).__init__()
+
+        def on_partitions_assigned(
+            consumer: Consumer,
+            partitions: Sequence[TopicPartition],
+        ):
+            pass
+
+        def on_partitions_revoked(
+            consumer: Consumer,
+            partitions: Sequence[TopicPartition],
+        ):
+            pass
+
+        self.__consumer = StrictConsumer(
+            topic=topic,
+            bootstrap_servers=bootstrap_servers,
+            group_id=group_id,
+            auto_offset_reset="earliest",
+            partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,
+            on_partitions_assigned=on_partitions_assigned,
+            on_partitions_revoked=on_partitions_revoked,
+            on_message=self.__handle_msg,
         )
 
+    def __handle_msg(self, message: Message) -> CommitDecision:
+        logger.info(
+            "MSG %r %r %r",
+            message,
+            message.value(),
+            message.error(),
+        )
+        # TODO: Actually do something with the messages and drive the
+        # state machine to the next state.
+        return CommitDecision.DO_NOT_COMMIT
+
     def handle(self, input: Any) -> Tuple[StateOutput, Any]:
-        expected_product = settings.SNAPSHOT_LOAD_PRODUCT
         output = StateOutput.NO_SNAPSHOT
-        current_snapshots = FoundSnapshots()
 
-        partitions = self.__consumer.assignment()
-        assert len(partitions) == 1, \
-            "CDC can support one partition only"
-        # TODO: properly manage assignment and revoke. This is not robust right
-        # now. It is not guaranteed that by the time we are here we will have a
-        # partition.
-        watermark = partitions[0].offset
+        logger.info("Runnign Consumer")
+        self.__consumer.run()
 
-        message = self.__consumer.consume(1)
-        while message:
-            value = json.loads(message.value())
-            message = self.__consumer.consume(1)
-
+        logger.info("Caught up on the control topic")
         return (output, None)
+
+    def set_shutdown(self) -> None:
+        super(BootstrapState, self).set_shutdown()
+        self.__consumer.shutdown()

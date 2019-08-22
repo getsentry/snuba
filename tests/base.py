@@ -30,6 +30,7 @@ def wrap_raw_event(event):
         'data': event
     }
 
+
 def get_event():
     from fixtures import raw_event
     timestamp = datetime.utcnow()
@@ -93,6 +94,9 @@ class FakeKafkaConsumer(object):
 
     def close(self, *args, **kwargs):
         self.close_calls += 1
+
+    def subscribe(self, *args, **kwargs):
+        pass
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):

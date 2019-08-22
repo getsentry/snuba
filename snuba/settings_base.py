@@ -43,6 +43,7 @@ SENTRY_DSN = None
 # Snuba Options
 
 SNAPSHOT_LOAD_PRODUCT = 'snuba'
+SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ['localhost:9092']

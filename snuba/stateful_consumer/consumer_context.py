@@ -7,7 +7,7 @@ from snuba.stateful_consumer.consuming_state import ConsumingState
 from snuba.stateful_consumer.paused_state import PausedState
 from snuba.stateful_consumer.catching_up_state import CatchingUpState
 
-from typing import Mapping
+from typing import Mapping, Sequence
 
 
 class ConsumerContext(StateContext[StateType]):
@@ -20,9 +20,16 @@ class ConsumerContext(StateContext[StateType]):
     def __init__(
         self,
         main_consumer: BatchingKafkaConsumer,
+        topic: str,
+        bootstrap_servers: Sequence[str],
+        group_id: str,
     ) -> None:
         states = {
-            StateType.BOOTSTRAP: BootstrapState(),
+            StateType.BOOTSTRAP: BootstrapState(
+                topic,
+                bootstrap_servers,
+                group_id,
+            ),
             StateType.CONSUMING: ConsumingState(main_consumer),
             StateType.SNAPSHOT_PAUSED: PausedState(),
             StateType.CATCHING_UP: CatchingUpState(),

@@ -74,7 +74,10 @@ def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, co
     )
 
     context = ConsumerContext(
-        main_consumer=consumer
+        main_consumer=consumer,
+        topic="cdc_control",
+        bootstrap_servers=bootstrap_server,
+        group_id=consumer_group,
     )
 
     def handler(signum, frame):
