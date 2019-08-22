@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Mapping
-from abc import ABC, abstractclassmethod
-
 import jsonschema
 
-from snuba.snapshots import SnapshotId
+from dataclasses import dataclass
+from typing import Any, Mapping, Sequence
+from abc import ABC
 
+from snuba.snapshots import SnapshotId
+from snuba.snapshots.postgres_snapshot import Xid
 
 CONTROL_MSG_SCHEMA = {
     'anyOf': [
@@ -19,11 +19,11 @@ CONTROL_MSG_SCHEMA = {
         "base": {
             "type": "object",
             "properties": {
-                "id": {
+                "snapshot-id": {
                     "type": "string"
                 }
             },
-            "required": ["event", "id"],
+            "required": ["event", "snapshot-id"],
         },
         "snapshot-init": {
             "allOf": [
@@ -33,7 +33,7 @@ CONTROL_MSG_SCHEMA = {
                         "event": {"const": "snapshot-init"},
                         "product": {"type": "string"},
                     },
-                    "required": ["event", "product"]
+                    "required": ["event", "product"],
                 }
             ]
         },
@@ -44,7 +44,7 @@ CONTROL_MSG_SCHEMA = {
                     "properties": {
                         "event": {"const": "snapshot-abort"},
                     },
-                    "required": ["event"]
+                    "required": ["event"],
                 }
             ]
         },
@@ -61,33 +61,27 @@ CONTROL_MSG_SCHEMA = {
                 {
                     "properties": {
                         "event": {"const": "snapshot-loaded"},
-                        "metadata": {
+                        "datasets": {
+                            "type": "object",
+                            "additionalProperties": {
+                                '$ref': '#/definitions/dataset',
+                            },
+                        },
+                        "transaction-info": {
                             "type": "object",
                             "properties": {
-                                "datasets": {
-                                    "type": "object",
-                                    "additionalProperties": {
-                                        "type": {'$ref': '#/definitions/dataset'},
-                                    },
+                                "xmin": {"type": "number"},
+                                "xmax": {"type": "number"},
+                                "xip-list": {
+                                    "type": "array",
+                                    "items": [
+                                        {"type": "number"}
+                                    ],
                                 },
-                                "transaction-info": {
-                                    "type": "object",
-                                    "properties": {
-                                        "xmin": {"type": "number"},
-                                        "xmax": {"type": "number"},
-                                        "xip-list": {
-                                            "type": "array",
-                                            "items": {
-                                                {"type": "number"}
-                                            }
-                                        },
-                                    }
-                                }
-                            },
-                            "required": ["datasets", "transaction-info"],
+                            }
                         }
                     },
-                    "required": ["event", "product", "metadata"]
+                    "required": ["event", "datasets", "transaction-info"],
                 }
             ]
         }
@@ -99,8 +93,8 @@ CONTROL_MSG_SCHEMA = {
 class ControlMessage(ABC):
     id: SnapshotId
 
-    @abstractclassmethod
-    def from_json(cls, json: str) -> ControlMessage:
+    @classmethod
+    def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         raise NotImplementedError
 
 
@@ -108,25 +102,66 @@ class ControlMessage(ABC):
 class SnapshotInit(ControlMessage):
     product: str
 
-    def
+    @classmethod
+    def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
+        assert json["event"] == "snapshot-init"
+        return SnapshotInit(
+            id=json["snapshot-id"],
+            product=json["product"],
+        )
+
+
+@dataclass(frozen=True)
+class SnapshotAbort(ControlMessage):
+
+    @classmethod
+    def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
+        assert json["event"] == "snapshot-abort"
+        return SnapshotAbort(
+            id=json["snapshot-id"],
+        )
+
+
+DatasetMetadata = Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class TransactionData:
+    """
+    Provides the metadata for the loaded snapshot.
+    """
+    xmin: Xid
+    xmax: Xid
+    xip_list: Sequence[Xid]
 
 
 @dataclass(frozen=True)
 class SnapshotLoaded(ControlMessage):
-    pass
+    datasets: Mapping[str, DatasetMetadata]
+    transaction_info: TransactionData
+
+    @classmethod
+    def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
+        assert json["event"] == "snapshot-loaded"
+        return SnapshotLoaded(
+            id=json["snapshot-id"],
+            datasets=json["datasets"],
+            transaction_info=TransactionData(
+                xmin=json["transaction-info"]["xmin"],
+                xmax=json["transaction-info"]["xmax"],
+                xip_list=json["transaction-info"]["xip-list"],
+            )
+        )
 
 
 def parse_control_message(message: Mapping[str, Any]) -> ControlMessage:
+    jsonschema.validate(message, CONTROL_MSG_SCHEMA)
     event_type = message["event"]
     if event_type == "snapshot-init":
-        return SnapshotInit(
-            id=message["snapshot-id"],
-            product=message["product"],
-        )
+        return SnapshotInit.from_json(message)
+    elif event_type == "snapshot-abort":
+        return SnapshotAbort.from_json(message)
     elif event_type == "snapshot-loaded":
-        return SnapshotLoaded(
-            id=message["snapshot-id"],
-            product=message["product"],
-        )
+        return SnapshotLoaded.from_json(message)
     else:
-        raise ValueError("Invalid control message")
+        raise ValueError(f"Invalid control message with event type: {event_type}")
