@@ -103,7 +103,7 @@ class TestApi(BaseApiTest):
                             }
                         }
                     }))
-        self.write_processed_events(events)
+        self.write_processed_records(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
@@ -505,6 +505,16 @@ class TestApi(BaseApiTest):
             assert len(data[idx]['top_platforms']) == 1
             assert data[idx]['top_platforms'][0] in self.platforms
 
+    def test_aggregate_with_multiple_arguments(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 3,
+            'groupby': 'project_id',
+            'aggregations': [['argMax', ['event_id', 'timestamp'], 'latest_event']],
+        })).data)
+        assert len(result['data']) == 1
+        assert 'latest_event' in result['data'][0]
+        assert 'project_id' in result['data'][0]
+
     def test_having_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
@@ -737,7 +747,7 @@ class TestApi(BaseApiTest):
         }
         result1 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
 
-        self.write_processed_events([{
+        self.write_processed_records([{
             'event_id': '9' * 32,
             'project_id': 1,
             'group_id': 1,
@@ -1081,7 +1091,7 @@ class TestApi(BaseApiTest):
             'groupby': 'project_id',
             'debug': True,
         })).data)
-        assert sorted(r['project_id'] for r in response['data']) == [1,2,3]
+        assert sorted(r['project_id'] for r in response['data']) == [1, 2, 3]
 
         # only project 3 has a search_message with 'long search' in it
         response = json.loads(self.app.post('/query', data=json.dumps({
