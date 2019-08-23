@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import itertools
+import json
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urlencode
 
-import requests
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
+from urllib3.connectionpool import HTTPConnectionPool
+from urllib3.exceptions import HTTPError
 
 
 if TYPE_CHECKING:
@@ -82,7 +84,7 @@ class HTTPReader(Reader):
     ):
         if settings is not None:
             assert "query_id" not in settings, "query_id cannot be passed as a setting"
-        self.__base_url = f"http://{host}:{port}/"
+        self.__pool = HTTPConnectionPool(host, port)
         self.__default_settings = settings if settings is not None else {}
 
     def execute(
@@ -99,19 +101,17 @@ class HTTPReader(Reader):
         if query_id is not None:
             settings["query_id"] = query_id
 
-        response = requests.post(
-            urljoin(
-                self.__base_url,
-                "?" + urlencode({**self.__default_settings, **settings}),
-            ),
-            data=query.encode("utf-8"),
+        response = self.__pool.urlopen(
+            "POST",
+            "/?" + urlencode({**self.__default_settings, **settings}),
+            body=query.encode("utf-8"),
         )
 
         # TODO: Distinguish between ClickHouse errors and other HTTP errors.
-        if response.status_code != 200:
-            raise Exception(response.content)
+        if response.status // 100 != 2:
+            raise HTTPError(f"{response.status} Unexpected")
 
-        result = response.json()
+        result = json.loads(response.data.decode("utf-8"))
         del result["statistics"]
         del result["rows"]
 
