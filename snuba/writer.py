@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import datetime
 from typing import Any, Iterable, List, Mapping
 
@@ -50,6 +51,23 @@ class NativeDriverBatchWriter(BatchWriter):
         )
 
 
+class ClickHouseError(Exception):
+    def __init__(self, code: int, message: str):
+        self.code = code
+        self.message = message
+
+    def __str__(self) -> str:
+        return f"[{self.code}] {self.message}"
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {self}>"
+
+
+CLICKHOUSE_ERROR_RE = re.compile(
+    r"^Code: (?P<code>\d+), e.displayText\(\) = DB::Exception: (?P<message>.+)$"
+)
+
+
 class HTTPBatchWriter(BatchWriter):
     def __init__(self, schema, host, port, options=None, table_name=None):
         self.__schema = schema
@@ -63,21 +81,33 @@ class HTTPBatchWriter(BatchWriter):
         else:
             raise TypeError
 
-    def __encode(self, row: WriterTableRow):
+    def __encode(self, row: WriterTableRow) -> bytes:
         return json.dumps(row, default=self.__default).encode("utf-8")
 
     def write(self, rows: Iterable[WriterTableRow]):
-        parameters = self.__options.copy()
-        parameters["query"] = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
-        resp = self.__pool.urlopen(
+        response = self.__pool.urlopen(
             "POST",
-            "/?" + urlencode(parameters),
+            "/?"
+            + urlencode(
+                {
+                    **self.__options,
+                    "query": f"INSERT INTO {self.__table_name} FORMAT JSONEachRow",
+                }
+            ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
             body=map(self.__encode, rows),
             chunked=True,
         )
-        if resp.status // 100 != 2:
-            raise HTTPError(f"{resp.status} Unexpected")
+
+        if response.status != 200:
+            # XXX: This should be switched to just parse the JSON body after
+            # https://github.com/yandex/ClickHouse/issues/6272 is available.
+            details = CLICKHOUSE_ERROR_RE.match(response.data.decode("utf8"))
+            if details is not None:
+                code, message = details.groups()
+                raise ClickHouseError(int(code), message)
+            else:
+                raise HTTPError(f"{response.status} Unexpected")
 
 
 class BufferedWriterWrapper:
