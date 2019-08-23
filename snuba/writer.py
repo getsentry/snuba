@@ -104,12 +104,15 @@ class HTTPBatchWriter(BatchWriter):
         if response.status != 200:
             # XXX: This should be switched to just parse the JSON body after
             # https://github.com/yandex/ClickHouse/issues/6272 is available.
-            details = CLICKHOUSE_ERROR_RE.match(response.data.decode("utf8"))
+            content = response.data.decode("utf8")
+            details = CLICKHOUSE_ERROR_RE.match(content)
             if details is not None:
                 code, type, message = details.groups()
                 raise ClickHouseError(int(code), type, message)
             else:
-                raise HTTPError(f"{response.status} Unexpected")
+                raise HTTPError(
+                    f"Received unexpected {response.status} response: {content}"
+                )
 
 
 class BufferedWriterWrapper:
