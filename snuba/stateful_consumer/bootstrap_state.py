@@ -1,45 +1,82 @@
 import logging
+import json
 
-from typing import Any, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
 from snuba.stateful_consumer import StateOutput
 from snuba.stateful_consumer.state_context import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
+from snuba.stateful_consumer.control_protocol import (
+    parse_control_message,
+    SnapshotInit,
+    SnapshotAbort,
+    SnapshotLoaded,
+    ControlMessage,
+)
 from snuba import settings
 
 logger = logging.getLogger('snuba.snapshot-load')
 
 
-class FoundSnapshots:
+class RecoveryState:
     def __init__(self):
-        self.__snapshots = {}
-        self.__current_open_snapshot = None
+        self.__active_snapshot_msg = None
+        self.__processed_snapshots = set()
+        self.__output = StateOutput.NO_SNAPSHOT
 
-    def open_snapshot(self, snapshot_id: str) -> None:
-        if snapshot_id in self.__snapshots:
-            logger.error(
-                "Found more than one snapshot init for snapshot %s. IGNORING!",
-                snapshot_id,
+    def get_output(self) -> StateOutput:
+        return self.__output
+
+    def get_active_snapshot_msg(self) -> Optional[ControlMessage]:
+        return self.__active_snapshot_msg
+
+    def process_init(self, msg: SnapshotInit) -> None:
+        if msg.product != settings.SNAPSHOT_LOAD_PRODUCT:
+            return
+        if self.__active_snapshot_msg:
+            if isinstance(self.__active_snapshot_msg, SnapshotInit):
+                logger.error(
+                    "Overlapping snapshots. Ignoring. Running %r. Init received %r.",
+                    msg.id,
+                    self.__active_snapshot_msg.id,
+                )
+                return
+
+        if msg.id in self.__processed_snapshots:
+            logger.warning(
+                "Duplicate Snapshot init: %r",
+                msg.id,
             )
+        self.__processed_snapshots.add(msg.id)
+        self.__active_snapshot_msg = msg
+        self.__output = StateOutput.SNAPSHOT_INIT_RECEIVED
 
-        if self.__current_open_snapshot:
-            logger.error(
-                "Overlapping snapshots found on the control topic. IGNORING!"
+    def process_abort(self, msg: SnapshotAbort) -> None:
+        if msg.id not in self.__processed_snapshots:
+            return
+        if self.__active_snapshot_msg.id != msg.id:
+            logger.warning(
+                "Aborting a snapshot that is not active. Active %r, Abort %r",
+                self.__active_snapshot_msg.id,
+                msg.id,
             )
             return
-        self.__snapshots[snapshot_id] = True
-        self.__current_open_snapshot = snapshot_id
+        self.__active_snapshot_msg = None
+        self.__output = StateOutput.NO_SNAPSHOT
 
-    def close_snapshot(self, snapshot_id: str) -> None:
-        self.__current_open_snapshot = None
-        self.__snapshots[snapshot_id] = False
-
-    def is_snapshot_managed(self, snapshot_id: str) -> bool:
-        return snapshot_id in self.__snapshots
-
-    def is_snapshot_active(self) -> bool:
-        return self.__current_open_snapshot is not None
+    def process_snapshot_loaded(self, msg: SnapshotLoaded) -> None:
+        if msg.id not in self.__processed_snapshots:
+            return
+        if self.__active_snapshot_msg.id != msg.id:
+            logger.warning(
+                "Loaded a snapshot that is not active. Active %r, Abort %r",
+                self.__active_snapshot_msg.id,
+                msg.id,
+            )
+            return
+        self.__active_snapshot_msg = msg
+        self.__output = StateOutput.SNAPSHOT_READY_RECEIVED
 
 
 class BootstrapState(State[StateOutput]):
@@ -82,60 +119,36 @@ class BootstrapState(State[StateOutput]):
             on_message=self.__handle_msg,
         )
 
+        self.__recovery_state = RecoveryState()
+
     def __handle_msg(self, message: Message) -> CommitDecision:
-        logger.info(
-            "MSG %r %r %r",
-            message,
-            message.value(),
-            message.error(),
-        )
-        # TODO: Actually do something with the messages and drive the
-        # state machine to the next state.
-        while message:
-            value = json.loads(message.value())
-            parsed_message = parse_control_message(value)
+        value = json.loads(message.value())
+        parsed_message = parse_control_message(value)
 
-            if isinstance(parsed_message, SnapshotInit):
-                if parsed_message.product != expected_product:
-                    if not current_snapshots.is_snapshot_active():
-                        watermark = message.offset()
-                else:
-                    current_snapshots.open_snapshot(parsed_message.id)
-                    output = StateOutput.SNAPSHOT_INIT_RECEIVED
-            elif isinstance(parsed_message, SnapshotAbort):
-                if not current_snapshots.is_snapshot_managed(parsed_message.id):
-                    if not current_snapshots.is_snapshot_active():
-                        watermark = message.offset()
-                else:
-                    current_snapshots.close_snapshot(parsed_message.id)
-                    if not current_snapshots.is_snapshot_active():
-                        watermark = message.offset()
-                        output = StateOutput.NO_SNAPSHOT
-            elif isinstance(parsed_message, SnapshotLoaded):
-                if not current_snapshots.is_snapshot_managed(parsed_message.id):
-                    if not current_snapshots.is_snapshot_active():
-                        watermark = message.offset()
-                else:
-                    current_snapshots.close_snapshot(parsed_message.id)
-                    if not current_snapshots.is_snapshot_active():
-                        output = StateOutput.SNAPSHOT_LOAD_PRODUCT
+        current_snap = self.__recovery_state.get_active_snapshot_msg()
+        if isinstance(parsed_message, SnapshotInit):
+            self.__recovery_state.process_init(parsed_message)
+        elif isinstance(parsed_message, SnapshotAbort):
+            self.__recovery_state.process_abort(parsed_message)
+        elif isinstance(parsed_message, SnapshotLoaded):
+            self.__recovery_state.process_snapshot_loaded(
+                parsed_message,
+            )
 
-            self.__consumer.commit(TopicPartition(
-                partitions[0].topic,
-                partitions[0].partition,
-                watermark,
-            ))
-
-        return CommitDecision.DO_NOT_COMMIT
+        new_snap = self.__recovery_state.get_active_snapshot_msg()
+        if new_snap is None:
+            return CommitDecision.COMMIT_THIS
+        elif current_snap is None or new_snap.id != current_snap:
+            return CommitDecision.COMMIT_PREV
+        else:
+            return CommitDecision.DO_NOT_COMMIT
 
     def handle(self, input: Any) -> Tuple[StateOutput, Any]:
-        output = StateOutput.NO_SNAPSHOT
-
         logger.info("Runnign Consumer")
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
-        return (output, None)
+        return (self.__recovery_state.get_output(), None)
 
     def set_shutdown(self) -> None:
         super(BootstrapState, self).set_shutdown()
