@@ -65,7 +65,8 @@ class ClickHouseError(Exception):
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
-    r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+)$"
+    r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+)$",
+    re.MULTILINE,
 )
 
 

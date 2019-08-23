@@ -11,3 +11,11 @@ class TestHTTPBatchWriter(BaseEventsTest):
             assert error.type == 'DB::Exception'
         else:
             assert False, "expected error"
+
+        try:
+            self.dataset.get_writer().write([{"timestamp": "invalid"}])
+        except ClickHouseError as error:
+            assert error.code == 41
+            assert error.type == 'DB::Exception'
+        else:
+            assert False, "expected error"
