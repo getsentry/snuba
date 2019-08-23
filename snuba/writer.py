@@ -52,19 +52,20 @@ class NativeDriverBatchWriter(BatchWriter):
 
 
 class ClickHouseError(Exception):
-    def __init__(self, code: int, message: str):
+    def __init__(self, code: int, type: str, message: str):
         self.code = code
+        self.type = type
         self.message = message
 
     def __str__(self) -> str:
-        return f"[{self.code}] {self.message}"
+        return f"[{self.code}] {self.type}: {self.message}"
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__}: {self}>"
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
-    r"^Code: (?P<code>\d+), e.displayText\(\) = DB::Exception: (?P<message>.+)$"
+    r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+)$"
 )
 
 
@@ -104,8 +105,8 @@ class HTTPBatchWriter(BatchWriter):
             # https://github.com/yandex/ClickHouse/issues/6272 is available.
             details = CLICKHOUSE_ERROR_RE.match(response.data.decode("utf8"))
             if details is not None:
-                code, message = details.groups()
-                raise ClickHouseError(int(code), message)
+                code, type, message = details.groups()
+                raise ClickHouseError(int(code), type, message)
             else:
                 raise HTTPError(f"{response.status} Unexpected")
 

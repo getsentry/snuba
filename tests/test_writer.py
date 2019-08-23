@@ -8,5 +8,6 @@ class TestHTTPBatchWriter(BaseEventsTest):
             self.dataset.get_writer(table_name="invalid").write([{"x": "y"}])
         except ClickHouseError as error:
             assert error.code == 60
+            assert error.type == 'DB::Exception'
         else:
             assert False, "expected error"
