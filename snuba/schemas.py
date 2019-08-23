@@ -53,8 +53,10 @@ GENERIC_QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'sample': {
-            'type': 'number',
-            'min': 0,
+            'anyOf': [
+                {'type': 'integer', 'minimum': 0},
+                {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+            ],
         },
         'conditions': {
             'type': 'array',
@@ -105,15 +107,17 @@ GENERIC_QUERY_SCHEMA = {
         'limit': {
             'type': 'integer',
             'default': 1000,
+            'minimum': 0,
             'maximum': 10000,
         },
         'offset': {
             'type': 'integer',
+            'minimum': 0,
         },
         'limitby': {
             'type': 'array',
             'items': [
-                {'type': 'integer'},
+                {'type': 'integer', 'minimum': 0},
                 {'$ref': '#/definitions/column_name'},
             ]
         },
@@ -212,10 +216,10 @@ PROJECT_EXTENSION_SCHEMA = {
     'properties': {
         'project': {
             'anyOf': [
-                {'type': 'integer'},
+                {'type': 'integer', 'minimum': 1},
                 {
                     'type': 'array',
-                    'items': {'type': 'integer'},
+                    'items': {'type': 'integer', 'minimum': 1},
                     'minItems': 1,
                 },
             ]
@@ -244,6 +248,7 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
             'granularity': {
                 'type': 'number',
                 'default': default_granularity,
+                'minimum': 1,
             },
         },
         'additionalProperties': False,
