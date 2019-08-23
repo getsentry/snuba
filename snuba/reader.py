@@ -104,6 +104,7 @@ class HTTPReader(Reader):
         response = self.__pool.urlopen(
             "POST",
             "/?" + urlencode({**self.__default_settings, **settings}),
+            headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
             body=query.encode("utf-8"),
         )
 
