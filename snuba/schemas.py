@@ -215,10 +215,10 @@ PROJECT_EXTENSION_SCHEMA = {
     'properties': {
         'project': {
             'anyOf': [
-                {'type': 'integer', 'minimum': 0},
+                {'type': 'integer', 'minimum': 1},
                 {
                     'type': 'array',
-                    'items': {'type': 'integer', 'minimum': 0},
+                    'items': {'type': 'integer', 'minimum': 1},
                     'minItems': 1,
                 },
             ]
@@ -247,7 +247,7 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
             'granularity': {
                 'type': 'number',
                 'default': default_granularity,
-                'minimum': 0,
+                'minimum': 1,
             },
         },
         'additionalProperties': False,
