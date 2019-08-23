@@ -8,7 +8,8 @@ from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 from urllib.parse import urlencode, urljoin
 
-from snuba.clickhouse import DATETIME_FORMAT, Array
+from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clickhouse.columns import Array
 
 
 logger = logging.getLogger("snuba.writer")

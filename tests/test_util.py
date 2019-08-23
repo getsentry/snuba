@@ -10,12 +10,14 @@ from snuba.util import (
     column_expr,
     complex_column_expr,
     conditions_expr,
+    escape_col,
     escape_literal,
     tuplify,
     Timer,
 )
 
-DATASETS = [get_dataset('events'),]
+DATASETS = [get_dataset('events'), ]
+
 
 class TestUtil(BaseTest):
     def test_escape(self):
@@ -25,6 +27,19 @@ class TestUtil(BaseTest):
         assert escape_literal(datetime(2001, 1, 1, 1, 1, 1)) == "toDateTime('2001-01-01T01:01:01')"
         assert escape_literal([1, 'a', date(2001, 1, 1)]) ==\
             "(1, 'a', toDate('2001-01-01'))"
+
+    def test_escape_col(self):
+        assert escape_col(None) is None
+        assert escape_col('') == ''
+        assert escape_col('foo') == 'foo'
+        assert escape_col('foo.bar') == 'foo.bar'
+        assert escape_col('foo:bar') == '`foo:bar`'
+
+        # Even though backtick characters in columns should be
+        # disallowed by the query schema, make sure we dont allow
+        # injection anyway.
+        assert escape_col("`") == r"`\``"
+        assert escape_col("production`; --") == r"`production\`; --`"
 
     @pytest.mark.parametrize('dataset', DATASETS)
     def test_conditions_expr(self, dataset):

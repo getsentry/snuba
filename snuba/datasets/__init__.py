@@ -1,6 +1,6 @@
 from typing import Mapping
 
-from snuba.clickhouse import escape_col
+from snuba.util import escape_col
 
 
 class Dataset(object):

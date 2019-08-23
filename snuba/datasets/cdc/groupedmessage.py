@@ -1,4 +1,4 @@
-from snuba.clickhouse import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.datasets import Dataset
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schema import ReplacingMergeTreeSchema
