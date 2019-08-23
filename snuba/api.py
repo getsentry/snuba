@@ -243,7 +243,10 @@ def dataset_query(dataset, body, timer):
 
 def format_query(dataset, body, table, prewhere_conditions, final) -> str:
     """Generate a SQL string from the parameters."""
-    aggregate_exprs = [util.column_expr(dataset, col, body, alias, agg) for (agg, col, alias) in body['aggregations']]
+    aggregate_exprs = [
+        util.column_expr(dataset, col, body, alias, agg)
+        for (agg, col, alias) in body['aggregations']
+    ]
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
     selected_cols = [util.column_expr(dataset, util.tuplify(colname), body) for colname in body.get('selected_columns', [])]

@@ -34,6 +34,7 @@ GENERIC_QUERY_SCHEMA = {
                     }, {
                         # Aggregate column
                         'anyOf': [
+                            {'$ref': '#/definitions/column_list'},
                             {'$ref': '#/definitions/column_name'},
                             {'enum': ['']},
                             {'type': 'null'},
