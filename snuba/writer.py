@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime
+from typing import Any, Iterable, List, Mapping
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
@@ -10,6 +11,8 @@ from snuba.clickhouse import DATETIME_FORMAT, Array
 
 
 logger = logging.getLogger('snuba.writer')
+
+WriterTableRow = Mapping[str, Any]
 
 
 class BatchWriter(object):
@@ -34,7 +37,7 @@ class NativeDriverBatchWriter(BatchWriter):
             values.append(value)
         return values
 
-    def write(self, rows):
+    def write(self, rows: Iterable[WriterTableRow]):
         columns = self.__schema.get_columns()
         self.__connection.execute_robust("INSERT INTO %(table)s (%(colnames)s) VALUES" % {
             'colnames': ", ".join(col.escaped for col in columns),
@@ -43,10 +46,11 @@ class NativeDriverBatchWriter(BatchWriter):
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self, schema, host, port, options=None):
+    def __init__(self, schema, host, port, options=None, table_name=None):
         self.__schema = schema
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
+        self.__table_name = table_name or schema.get_table_name()
 
     def __default(self, value):
         if isinstance(value, datetime):
@@ -54,12 +58,12 @@ class HTTPBatchWriter(BatchWriter):
         else:
             raise TypeError
 
-    def __encode(self, row):
+    def __encode(self, row: WriterTableRow):
         return json.dumps(row, default=self.__default).encode('utf-8')
 
-    def write(self, rows):
+    def write(self, rows: Iterable[WriterTableRow]):
         parameters = self.__options.copy()
-        parameters['query'] = f"INSERT INTO {self.__schema.get_table_name()} FORMAT JSONEachRow"
+        parameters['query'] = f"INSERT INTO {self.__table_name} FORMAT JSONEachRow"
         resp = self.__pool.urlopen(
             'POST',
             '/?' + urlencode(parameters),
@@ -70,5 +74,38 @@ class HTTPBatchWriter(BatchWriter):
             body=map(self.__encode, rows),
             chunked=True,
         )
-        if resp.status//100 != 2:
+        if resp.status // 100 != 2:
             raise HTTPError(f"{resp.status} Unexpected")
+
+
+class BufferedWriterWrapper:
+    """
+    This is a wrapper that adds a buffer around a BatchWriter.
+    When consuming data from Kafka, the buffering logic is performed by the
+    batching consumer.
+    This is for the use cases that are not Kafka related.
+
+    This is not thread safe. Don't try to do parallel flush hoping in the GIL.
+    """
+
+    def __init__(self, writer: BatchWriter, buffer_size: int):
+        self.__writer = writer
+        self.__buffer_size = buffer_size
+        self.__buffer: List[WriterTableRow] = []
+
+    def __flush(self) -> None:
+        logger.debug("Flushing buffer with %d elements", len(self.__buffer))
+        self.__writer.write(self.__buffer)
+        self.__buffer = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.__buffer:
+            self.__flush()
+
+    def write(self, row: WriterTableRow):
+        self.__buffer.append(row)
+        if len(self.__buffer) >= self.__buffer_size:
+            self.__flush()

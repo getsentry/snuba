@@ -27,7 +27,7 @@ class Dataset(object):
     def get_processor(self):
         return self.__processor
 
-    def get_writer(self, options=None):
+    def get_writer(self, options=None, table_name=None):
         from snuba import settings
         from snuba.writer import HTTPBatchWriter
 
@@ -36,6 +36,7 @@ class Dataset(object):
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,
+            table_name,
         )
 
     def default_conditions(self):
