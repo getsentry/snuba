@@ -29,7 +29,7 @@ class Dataset(object):
 
     def get_writer(self, options=None, table_name=None):
         from snuba import settings
-        from snuba.writer import HTTPBatchWriter
+        from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
             self._schema,

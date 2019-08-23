@@ -1,10 +1,14 @@
 import logging
 import queue
 import time
+from typing import Iterable, Mapping, Optional
 
 from clickhouse_driver import Client, errors
 
 from snuba import settings
+from snuba.clickhouse.columns import Array
+from snuba.reader import Reader, Result, transform_date_columns
+from snuba.writer import BatchWriter, WriterTableRow
 
 
 logger = logging.getLogger('snuba.clickhouse')
@@ -122,3 +126,75 @@ class ClickhousePool(object):
                     conn.disconnect()
         except queue.Empty:
             pass
+
+
+class NativeDriverReader(Reader):
+    def __init__(self, client):
+        self.__client = client
+
+    def __transform_result(self, result, with_totals: bool) -> Result:
+        """
+        Transform a native driver response into a response that is
+        structurally similar to a ClickHouse-flavored JSON response.
+        """
+        data, meta = result
+
+        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
+        meta = [{"name": m[0], "type": m[1]} for m in meta]
+
+        if with_totals:
+            assert len(data) > 0
+            totals = data.pop(-1)
+            result = {"data": data, "meta": meta, "totals": totals}
+        else:
+            result = {"data": data, "meta": meta}
+
+        return transform_date_columns(result)
+
+    def execute(
+        self,
+        query: str,
+        settings: Optional[Mapping[str, str]] = None,
+        query_id: Optional[str] = None,
+        with_totals: bool = False,
+    ) -> Result:
+        if settings is None:
+            settings = {}
+
+        kwargs = {}
+        if query_id is not None:
+            kwargs["query_id"] = query_id
+
+        return self.__transform_result(
+            self.__client.execute(
+                query, with_column_types=True, settings=settings, **kwargs
+            ),
+            with_totals=with_totals,
+        )
+
+
+class NativeDriverBatchWriter(BatchWriter):
+    def __init__(self, schema, connection):
+        self.__schema = schema
+        self.__connection = connection
+
+    def __row_to_column_list(self, columns, row):
+        values = []
+        for col in columns:
+            value = row.get(col.flattened, None)
+            if value is None and isinstance(col.type, Array):
+                value = []
+            values.append(value)
+        return values
+
+    def write(self, rows: Iterable[WriterTableRow]):
+        columns = self.__schema.get_columns()
+        self.__connection.execute_robust(
+            "INSERT INTO %(table)s (%(colnames)s) VALUES"
+            % {
+                "colnames": ", ".join(col.escaped for col in columns),
+                "table": self.__schema.get_table_name(),
+            },
+            [self.__row_to_column_list(columns, row) for row in rows],
+            types_check=False,
+        )

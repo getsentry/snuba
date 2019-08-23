@@ -19,6 +19,8 @@ if TYPE_CHECKING:
         {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
         total=False,
     )
+else:
+    Result = MutableMapping[str, Any]
 
 
 class Reader(ABC):
@@ -65,48 +67,3 @@ def transform_date_columns(result: Result) -> Result:
                 )
 
     return result
-
-
-class NativeDriverReader(Reader):
-    def __init__(self, client):
-        self.__client = client
-
-    def __transform_result(self, result, with_totals: bool) -> Result:
-        """
-        Transform a native driver response into a response that is
-        structurally similar to a ClickHouse-flavored JSON response.
-        """
-        data, meta = result
-
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-        meta = [{"name": m[0], "type": m[1]} for m in meta]
-
-        if with_totals:
-            assert len(data) > 0
-            totals = data.pop(-1)
-            result = {"data": data, "meta": meta, "totals": totals}
-        else:
-            result = {"data": data, "meta": meta}
-
-        return transform_date_columns(result)
-
-    def execute(
-        self,
-        query: str,
-        settings: Optional[Mapping[str, str]] = None,
-        query_id: Optional[str] = None,
-        with_totals: bool = False,
-    ) -> Result:
-        if settings is None:
-            settings = {}
-
-        kwargs = {}
-        if query_id is not None:
-            kwargs["query_id"] = query_id
-
-        return self.__transform_result(
-            self.__client.execute(
-                query, with_column_types=True, settings=settings, **kwargs
-            ),
-            with_totals=with_totals,
-        )

@@ -15,7 +15,6 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.reader import NativeDriverReader
 
 
 logger = logging.getLogger('snuba.util')
@@ -376,6 +375,8 @@ def raw_query(body, sql, client, timer, stats=None):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
+    from snuba.clickhouse.native import NativeDriverReader
+
     project_ids = to_list(body['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
