@@ -4,6 +4,7 @@ import signal
 import click
 
 from snuba import settings
+from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.consumer_initializer import initialize_batching_consumer
 from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
@@ -12,6 +13,8 @@ from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
 @click.command()
 @click.option('--raw-events-topic', default=None,
               help='Topic to consume raw events from.')
+@click.option('--control-topic', default=None,
+              help='Topic used to control the snapshot')
 @click.option('--replacements-topic', default=None,
               help='Topic to produce replacement messages info.')
 @click.option('--commit-log-topic', default=None,
@@ -35,7 +38,7 @@ from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commit_log_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port):
@@ -55,6 +58,7 @@ def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, co
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
+    assert isinstance(dataset, CdcDataset), "Only CDC dataset have a control topic thus are supported."
 
     consumer = initialize_batching_consumer(
         dataset=dataset,
@@ -75,7 +79,7 @@ def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, co
 
     context = ConsumerContext(
         main_consumer=consumer,
-        topic="cdc_control",
+        topic=control_topic or dataset.get_control_topic(),
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
     )

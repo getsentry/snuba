@@ -1,10 +1,11 @@
 import calendar
 from hashlib import md5
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 import uuid
 
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, KafkaError
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
@@ -189,3 +190,21 @@ class BaseEventsTest(BaseTest):
             rows = [rows]
 
         self.dataset.get_writer().write(rows)
+
+
+def message(offset, partition, value, eof=False) -> FakeKafkaMessage:
+    if eof:
+        error = MagicMock()
+        error.code.return_value = KafkaError._PARTITION_EOF
+    else:
+        error = None
+
+    return FakeKafkaMessage(
+        topic="topic",
+        partition=partition,
+        offset=offset,
+        value=value,
+        key=None,
+        headers=None,
+        error=error,
+    )
