@@ -63,6 +63,13 @@ class TestSnapshotWorker:
                 MessageProcessor.INSERT,
                 PROCESSED,
             )
+        ),
+        (
+            INSERT_MSG % {"xid": 210},
+            (
+                MessageProcessor.INSERT,
+                PROCESSED,
+            )
         )
     ]
 
