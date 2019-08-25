@@ -120,7 +120,7 @@ class StrictConsumer:
                         topic=message.topic(),
                         offset=prev_watermark,
                     )
-                    self.__consumer.commit(commit_pos)
+                    self.__consumer.commit(offsets=[commit_pos])
                 else:
                     logger.debug(
                         "No previous message to commit on partition %s on topic %s",
