@@ -1,5 +1,9 @@
+from functools import partial
+
 from batching_kafka_consumer import BatchingKafkaConsumer
 
+from snuba.consumer_initializer import initialize_batching_consumer
+from snuba.datasets import Dataset
 from snuba.stateful_consumer import StateType, StateOutput
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.bootstrap_state import BootstrapState
@@ -19,20 +23,49 @@ class ConsumerContext(StateContext[StateType]):
 
     def __init__(
         self,
-        main_consumer: BatchingKafkaConsumer,
-        topic: str,
+        dataset: Dataset,
+        dataset_name: str,
+        raw_topic: str,
+        replacements_topic: str,
+        max_batch_size: int,
+        max_batch_time_ms: int,
         bootstrap_servers: Sequence[str],
         group_id: str,
+        commit_log_topic: str,
+        auto_offset_reset: str,
+        queued_max_messages_kbytes: int,
+        queued_min_messages: int,
+        dogstatsd_host: str,
+        dogstatsd_port: int,
+        control_topic: str,
     ) -> None:
+        consumer_builder = partial(
+            initialize_batching_consumer,
+            dataset=dataset,
+            dataset_name=dataset_name,
+            raw_topic=raw_topic,
+            replacements_topic=replacements_topic,
+            max_batch_size=max_batch_size,
+            max_batch_time_ms=max_batch_time_ms,
+            bootstrap_server=bootstrap_servers,
+            group_id=group_id,
+            commit_log_topic=commit_log_topic,
+            auto_offset_reset=auto_offset_reset,
+            queued_max_messages_kbytes=queued_max_messages_kbytes,
+            queued_min_messages=queued_min_messages,
+            dogstatsd_host=dogstatsd_host,
+            dogstatsd_port=dogstatsd_port
+        )
+
         states = {
             StateType.BOOTSTRAP: BootstrapState(
-                topic,
+                control_topic,
                 bootstrap_servers,
                 group_id,
             ),
-            StateType.CONSUMING: ConsumingState(main_consumer),
+            StateType.CONSUMING: ConsumingState(consumer_builder),
             StateType.SNAPSHOT_PAUSED: PausedState(),
-            StateType.CATCHING_UP: CatchingUpState(),
+            StateType.CATCHING_UP: CatchingUpState(consumer_builder),
         }
         start_state = StateType.BOOTSTRAP
         terminal_state = StateType.FINISHED

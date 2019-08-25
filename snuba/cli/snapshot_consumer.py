@@ -60,28 +60,22 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
     dataset = get_dataset(dataset_name)
     assert isinstance(dataset, CdcDataset), "Only CDC dataset have a control topic thus are supported."
 
-    consumer = initialize_batching_consumer(
+    context = ConsumerContext(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        bootstrap_server=bootstrap_server,
+        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
-        dogstatsd_port=dogstatsd_port
-    )
-
-    context = ConsumerContext(
-        main_consumer=consumer,
-        topic=control_topic or dataset.get_control_topic(),
-        bootstrap_servers=bootstrap_server,
-        group_id=consumer_group,
+        dogstatsd_port=dogstatsd_port,
+        control_topic=control_topic or dataset.get_control_topic(),
     )
 
     def handler(signum, frame):

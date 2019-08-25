@@ -1,6 +1,6 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
+from batching_kafka_consumer import BatchingKafkaConsumer
 from confluent_kafka import Producer
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence, Callable
 
 from snuba.datasets import Dataset
 from snuba.consumer import ConsumerWorker
@@ -22,7 +22,8 @@ def initialize_batching_consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     dogstatsd_host: str,
-    dogstatsd_port: int
+    dogstatsd_port: int,
+    worker_builder: Callable[[Dataset, Producer, Optional[str], Optional[Any]], ConsumerWorker],
 ) -> BatchingKafkaConsumer:
     if not bootstrap_server:
         bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
@@ -48,14 +49,16 @@ def initialize_batching_consumer(
         ]
     )
 
+    worker = worker_builder(
+        dataset,
+        producer=producer,
+        replacements_topic=replacements_topic,
+        metrics=metrics
+    )
+
     return BatchingKafkaConsumer(
         raw_events_topic,
-        worker=ConsumerWorker(
-            dataset,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics
-        ),
+        worker=worker,
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

@@ -1,8 +1,11 @@
+from confluent_kafka import Producer, Consumer
+
+from snuba.consumer import ConsumerWorker
+from snuba.datasets import Dataset
 from snuba.stateful_consumer import StateOutput
 from snuba.stateful_consumer.state_context import State
 
-from batching_kafka_consumer import BatchingKafkaConsumer
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 
 class ConsumingState(State[StateOutput]):
@@ -14,9 +17,32 @@ class ConsumingState(State[StateOutput]):
     starts.
     """
 
-    def __init__(self, consumer: BatchingKafkaConsumer) -> None:
+    def __init__(
+        self,
+        consumer_builder: Callable[
+            [Callable[
+                [Dataset, Producer, Optional[str], Optional[Any]],
+                ConsumerWorker]
+            ],
+            Consumer],
+    ) -> None:
         super(ConsumingState, self).__init__()
-        self.__consumer = consumer
+
+        def build_worker(
+            dataset: Dataset,
+            producer: Producer,
+            replacements_topic: Optional[str],
+            metrics: Optional[Any],
+        ) -> ConsumerWorker:
+            return ConsumerWorker(
+                dataset,
+                producer=producer,
+                replacements_topic=replacements_topic,
+                metrics=metrics,
+            )
+        self.__consumer = consumer_builder(
+            worker_builder=build_worker,
+        )
 
     def set_shutdown(self) -> None:
         super().set_shutdown()

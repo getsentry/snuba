@@ -1,7 +1,16 @@
+import logging
+
+from confluent_kafka import Consumer, Producer
+
+from snuba.consumer import ConsumerWorker
+from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.datasets import Dataset
 from snuba.stateful_consumer import StateOutput
 from snuba.stateful_consumer.state_context import State
 
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple
+
+logger = logging.getLogger('snuba.snapshot-catchup')
 
 
 class CatchingUpState(State[StateOutput]):
@@ -13,7 +22,47 @@ class CatchingUpState(State[StateOutput]):
     consumption.
     """
 
+    def __init__(
+        self,
+        consumer_builder: Callable[
+            [Callable[
+                [Dataset, Producer, Optional[str], Optional[Any]],
+                ConsumerWorker]
+            ],
+            Consumer],
+    ) -> None:
+        super(CatchingUpState, self).__init__()
+        self.__consumer_builder = consumer_builder
+        self.__consumer = None
+
+    def set_shutdown(self) -> None:
+        super().set_shutdown()
+        if self.__consumer:
+            self.__consumer.signal_shutdown()
+
     def handle(self, input: Any) -> Tuple[StateOutput, Any]:
-        # TODO: Actually consume cdc topic while discarding xids that were
-        # already in the dump
-        return (StateOutput.SNAPSHOT_CATCHUP_COMPLETED, None)
+        assert isinstance(input, dict)
+        snapshot_id = input["snapshot_id"]
+        transaction_data = input["transaction_data"]
+
+        def build_worker(
+            dataset: Dataset,
+            producer: Producer,
+            replacements_topic: Optional[str],
+            metrics: Optional[Any],
+        ) -> ConsumerWorker:
+            return SnapshotAwareWorker(
+                dataset=dataset,
+                producer=producer,
+                snapshot_id=snapshot_id,
+                transaction_data=transaction_data,
+                replacements_topic=replacements_topic,
+                metrics=metrics,
+            )
+
+        self.__consumer = self.__consumer_builder(
+            worker_builder=build_worker,
+        )
+
+        self.__consumer.run()
+        return (StateOutput.FINISH, None)
