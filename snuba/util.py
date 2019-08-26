@@ -1,4 +1,4 @@
-from clickhouse_driver.errors import Error as ClickHouseError
+from clickhouse_driver.errors import Error as NativeDriverClickHouseError
 from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
@@ -15,7 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse.http import HTTPReader
+from snuba.clickhouse.http import HTTPReader, ClickHouseError as HTTPDriverClickHouseError
 
 
 logger = logging.getLogger('snuba.util')
@@ -481,7 +481,7 @@ def raw_query(body, sql, client, timer, stats=None):
                             error = str(ex)
                             status = 500
                             logger.exception("Error running query: %s\n%s", sql, error)
-                            if isinstance(ex, ClickHouseError):
+                            if isinstance(ex, (NativeDriverClickHouseError, HTTPDriverClickHouseError)):
                                 result = {'error': {
                                     'type': 'clickhouse',
                                     'code': ex.code,
