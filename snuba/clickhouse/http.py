@@ -31,6 +31,23 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
+def handle_clickhouse_response(response):
+    if response.status != 200:
+        # XXX: This should be switched to just parse the JSON body after
+        # https://github.com/yandex/ClickHouse/issues/6272 is available.
+        content = response.data.decode("utf8")
+        details = CLICKHOUSE_ERROR_RE.match(content)
+        if details is not None:
+            code, type, message = details.groups()
+            raise ClickHouseError(int(code), type, message)
+        else:
+            raise HTTPError(
+                f"Received unexpected {response.status} response: {content}"
+            )
+
+    return response
+
+
 class HTTPBatchWriter(BatchWriter):
     def __init__(self, schema, host, port, options=None, table_name=None):
         self.__schema = schema
@@ -62,18 +79,7 @@ class HTTPBatchWriter(BatchWriter):
             chunked=True,
         )
 
-        if response.status != 200:
-            # XXX: This should be switched to just parse the JSON body after
-            # https://github.com/yandex/ClickHouse/issues/6272 is available.
-            content = response.data.decode("utf8")
-            details = CLICKHOUSE_ERROR_RE.match(content)
-            if details is not None:
-                code, type, message = details.groups()
-                raise ClickHouseError(int(code), type, message)
-            else:
-                raise HTTPError(
-                    f"Received unexpected {response.status} response: {content}"
-                )
+        handle_clickhouse_response(response)
 
 
 class HTTPReader(Reader):
@@ -106,9 +112,7 @@ class HTTPReader(Reader):
             body=query.encode("utf-8"),
         )
 
-        # TODO: Distinguish between ClickHouse errors and other HTTP errors.
-        if response.status // 100 != 2:
-            raise HTTPError(f"{response.status} Unexpected")
+        handle_clickhouse_response(response)
 
         result = json.loads(response.data.decode("utf-8"))
         del result["statistics"]
