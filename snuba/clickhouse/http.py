@@ -31,7 +31,7 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
-def handle_clickhouse_response(response):
+def handle_clickhouse_response(response) -> None:
     if response.status != 200:
         # XXX: This should be switched to just parse the JSON body after
         # https://github.com/yandex/ClickHouse/issues/6272 is available.
@@ -44,8 +44,6 @@ def handle_clickhouse_response(response):
             raise HTTPError(
                 f"Received unexpected {response.status} response: {content}"
             )
-
-    return response
 
 
 class HTTPBatchWriter(BatchWriter):
