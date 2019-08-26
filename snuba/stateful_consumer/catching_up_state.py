@@ -16,4 +16,7 @@ class CatchingUpState(State[StateOutput, StateData]):
     def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
         # TODO: Actually consume cdc topic while discarding xids that were
         # already in the dump
-        return (StateOutput.SNAPSHOT_CATCHUP_COMPLETED, None)
+        return (
+            StateOutput.SNAPSHOT_CATCHUP_COMPLETED,
+            StateData.no_snapshot_state(),
+        )
