@@ -4,7 +4,7 @@ import json
 from typing import Any, Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
-from snuba.stateful_consumer import StateOutput
+from snuba.stateful_consumer import StateData, StateOutput
 from snuba.stateful_consumer.state_context import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
@@ -89,7 +89,7 @@ class RecoveryState:
         self.__output = StateOutput.SNAPSHOT_READY_RECEIVED
 
 
-class BootstrapState(State[StateOutput]):
+class BootstrapState(State[StateOutput, StateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or to recover a

@@ -146,7 +146,24 @@ class BaseTest(object):
             redis_client.flushdb()
 
 
-class BaseEventsTest(BaseTest):
+class BaseDatasetTest(BaseTest):
+    def write_processed_records(self, records):
+        if not isinstance(records, (list, tuple)):
+            records = [records]
+
+        rows = []
+        for event in records:
+            rows.append(event)
+
+        return self.write_rows(rows)
+
+    def write_rows(self, rows):
+        if not isinstance(rows, (list, tuple)):
+            rows = [rows]
+        self.dataset.get_writer().write(rows)
+
+
+class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
         self.event = get_event()
@@ -173,7 +190,7 @@ class BaseEventsTest(BaseTest):
             _, processed = self.dataset.get_processor().process_message(event)
             out.append(processed)
 
-        return self.write_processed_events(out)
+        return self.write_processed_records(out)
 
     def write_processed_events(self, events):
         if not isinstance(events, (list, tuple)):
