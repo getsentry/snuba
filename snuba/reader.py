@@ -5,7 +5,9 @@ import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
+from urllib.parse import urlencode, urljoin
 
+import requests
 from dateutil.tz import tz
 
 
@@ -67,3 +69,30 @@ def transform_date_columns(result: Result) -> Result:
                 )
 
     return result
+
+
+class HTTPReader(Reader):
+    def __init__(
+        self, host: str, port: int, options: Optional[Mapping[str, str]] = None
+    ):
+        self.__base_url = f"http://{host}:{port}/"
+        self.__options = options if options is not None else {}
+
+    def execute(
+        self,
+        query: str,
+        settings: Optional[Mapping[str, str]] = None,
+        query_id: Optional[str] = None,
+        with_totals: bool = False,
+    ) -> Result:
+        parameters = {**self.__options}
+        if settings is not None:
+            parameters.update(settings)
+        if query_id is not None:
+            parameters["query_id"] = query_id
+        response = requests.post(
+            urljoin(self.__base_url, "?" + urlencode(parameters)),
+            data=query.encode("utf-8"),
+        )
+        response.raise_for_status()
+        return response.json()

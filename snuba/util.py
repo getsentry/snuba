@@ -15,6 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
+from snuba.reader import HTTPReader
 
 
 logger = logging.getLogger('snuba.util')
@@ -375,8 +376,6 @@ def raw_query(body, sql, client, timer, stats=None):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    from snuba.clickhouse.native import NativeDriverReader
-
     project_ids = to_list(body['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
@@ -453,7 +452,11 @@ def raw_query(body, sql, client, timer, stats=None):
                             query_settings['max_threads'] = 1
 
                         try:
-                            result = NativeDriverReader(client).execute(
+                            result = HTTPReader(
+                                settings.CLICKHOUSE_HOST,
+                                settings.CLICKHOUSE_HTTP_PORT,
+                                {'output_format_json_quote_64bit_integers': '0'},  # this is bad, but it makes the tests pass
+                            ).execute(
                                 sql,
                                 query_settings,
                                 # All queries should already be deduplicated at this point
