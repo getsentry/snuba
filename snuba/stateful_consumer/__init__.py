@@ -1,3 +1,5 @@
+from future import __annotations__
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
@@ -29,3 +31,26 @@ class StateData:
     """
     snapshot_id: Optional[str]
     transaction_data: Optional[TransactionData]
+
+    @classmethod
+    def no_snapshot_state(cls) -> StateData:
+        """
+        Builds an empty StateData that represent a state where there is no
+        snapshot to care about.
+        """
+        return StateData(None)
+
+    @classmethod
+    def snapshot_ready_state(
+        cls,
+        snapshot_id: str,
+        transaction_data: TransactionData,
+    ) -> StateData:
+        """
+        Builds the StateData to share when we have a valid snapshot id to
+        work on.
+        """
+        return StateData(
+            snapshot_id=snapshot_id,
+            transaction_data=transaction_data,
+        )

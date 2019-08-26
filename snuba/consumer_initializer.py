@@ -11,6 +11,13 @@ from snuba.stateful_consumer.control_protocol import TransactionData
 
 
 class ConsumerBuiler:
+    """
+    Simplifies the initialization of a batching consumer by merging
+    parameters that generally come from the command line with defaults
+    that come from the dataset class and defaults that come from the
+    settings file.
+    """
+
     def __init__(
         self,
         dataset: Dataset,
@@ -80,6 +87,9 @@ class ConsumerBuiler:
         )
 
     def build_base_worker(self) -> Consumer:
+        """
+        Builds the consumer with a ConsumerWorker.
+        """
         return self.__build_consumer(
             ConsumerWorker(
                 self.dataset,
@@ -94,6 +104,9 @@ class ConsumerBuiler:
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
     ):
+        """
+        Builds the consumer with a ConsumerWorker able to handle snapshots.
+        """
         worker = SnapshotAwareWorker(
             dataset=self.dataset,
             producer=self.producer,

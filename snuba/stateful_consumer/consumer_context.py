@@ -9,7 +9,7 @@ from snuba.stateful_consumer.catching_up_state import CatchingUpState
 from typing import Mapping, Sequence
 
 
-class ConsumerContext(StateContext[StateType]):
+class ConsumerContext(StateContext[StateType, StateOutput, StateData]):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
