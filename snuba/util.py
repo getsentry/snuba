@@ -15,7 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.reader import HTTPReader
+from snuba.clickhouse.http import HTTPReader
 
 
 logger = logging.getLogger('snuba.util')

@@ -2,12 +2,13 @@ import json
 import re
 from datetime import datetime
 from urllib.parse import urlencode
-from typing import Iterable
+from typing import Iterable, Mapping, Optional
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.reader import Reader, Result, transform_date_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -73,3 +74,44 @@ class HTTPBatchWriter(BatchWriter):
                 raise HTTPError(
                     f"Received unexpected {response.status} response: {content}"
                 )
+
+
+class HTTPReader(Reader):
+    def __init__(
+        self, host: str, port: int, settings: Optional[Mapping[str, str]] = None
+    ):
+        if settings is not None:
+            assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        self.__pool = HTTPConnectionPool(host, port)
+        self.__default_settings = settings if settings is not None else {}
+
+    def execute(
+        self,
+        query: str,
+        settings: Optional[Mapping[str, str]] = None,
+        query_id: Optional[str] = None,
+        with_totals: bool = False,  # NOTE: unnecessary with FORMAT JSON
+    ) -> Result:
+        if settings is None:
+            settings = {}
+
+        assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        if query_id is not None:
+            settings["query_id"] = query_id
+
+        response = self.__pool.urlopen(
+            "POST",
+            "/?" + urlencode({**self.__default_settings, **settings}),
+            headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
+            body=query.encode("utf-8"),
+        )
+
+        # TODO: Distinguish between ClickHouse errors and other HTTP errors.
+        if response.status // 100 != 2:
+            raise HTTPError(f"{response.status} Unexpected")
+
+        result = json.loads(response.data.decode("utf-8"))
+        del result["statistics"]
+        del result["rows"]
+
+        return transform_date_columns(result)
