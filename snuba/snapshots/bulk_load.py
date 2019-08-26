@@ -3,7 +3,7 @@ from typing import Any, Callable, Mapping
 
 import logging
 
-from snuba.clickhouse import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool
 from snuba.snapshots import BulkLoadSource
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
 from snuba.snapshots import SnapshotTableRow
