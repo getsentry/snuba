@@ -24,4 +24,7 @@ class ConsumingState(State[StateOutput, StateData]):
 
     def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
         self.__consumer.run()
-        return (StateOutput.FINISH, None)
+        return (
+            StateOutput.FINISH,
+            StateData.no_snapshot_state(),
+        )

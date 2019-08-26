@@ -160,7 +160,10 @@ class BootstrapState(State[StateOutput, StateData]):
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
-        return (self.__recovery_state.get_output(), None)
+        return (
+            self.__recovery_state.get_output(),
+            StateData.no_snapshot_state(),
+        )
 
     def set_shutdown(self) -> None:
         super(BootstrapState, self).set_shutdown()

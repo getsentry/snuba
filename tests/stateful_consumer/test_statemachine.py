@@ -26,7 +26,7 @@ class State2(State[StateOutput, StateData]):
         return (StateOutput.FINISH, None)
 
 
-class TestContext(StateContext[StateType]):
+class TestContext(StateContext[StateType, StateOutput, StateData]):
     def __init__(self, processed_states: Set[StateType]):
         super(TestContext, self).__init__(
             states={
