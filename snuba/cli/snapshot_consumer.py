@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import initialize_batching_consumer
+from snuba.consumer_initializer import ConsumerBuiler
 from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
 
 
@@ -60,7 +60,7 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
     dataset = get_dataset(dataset_name)
     assert isinstance(dataset, CdcDataset), "Only CDC dataset have a control topic thus are supported."
 
-    context = ConsumerContext(
+    consumer = ConsumerBuiler(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
@@ -75,7 +75,13 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
+    ).build_base_worker()
+
+    context = ConsumerContext(
+        main_consumer=consumer,
         control_topic=control_topic or dataset.get_control_topic(),
+        bootstrap_servers=bootstrap_server,
+        group_id=consumer_group,
     )
 
     def handler(signum, frame):

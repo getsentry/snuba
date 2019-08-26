@@ -5,7 +5,7 @@ from confluent_kafka import Consumer, Producer
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets import Dataset
-from snuba.stateful_consumer import StateOutput
+from snuba.stateful_consumer import StateData, StateOutput
 from snuba.stateful_consumer.state_context import State
 
 from typing import Any, Callable, Optional, Tuple
@@ -13,7 +13,7 @@ from typing import Any, Callable, Optional, Tuple
 logger = logging.getLogger('snuba.snapshot-catchup')
 
 
-class CatchingUpState(State[StateOutput]):
+class CatchingUpState(State[StateOutput, StateData]):
     """
     In this state the consumer consumes the main topic but
     it discards the transacitons that were present in the
@@ -40,7 +40,7 @@ class CatchingUpState(State[StateOutput]):
         if self.__consumer:
             self.__consumer.signal_shutdown()
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
+    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
         assert isinstance(input, dict)
         snapshot_id = input["snapshot_id"]
         transaction_data = input["transaction_data"]

@@ -8,7 +8,7 @@ from snuba.stateful_consumer.state_context import State
 from typing import Any, Callable, Optional, Tuple
 
 
-class ConsumingState(State[StateOutput]):
+class ConsumingState(State[StateOutput, StateData]):
     """
     This is the normal operation state where the consumer
     reads from the main topic (cdc in this case) and sends
@@ -48,6 +48,6 @@ class ConsumingState(State[StateOutput]):
         super().set_shutdown()
         self.__consumer.signal_shutdown()
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
+    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
         self.__consumer.run()
         return (StateOutput.FINISH, None)

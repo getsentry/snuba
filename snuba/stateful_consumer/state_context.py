@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, TypeVar, Tuple
+from typing import Generic, Mapping, TypeVar, Tuple
 
 import logging
 
@@ -7,10 +7,11 @@ import logging
 logger = logging.getLogger('snuba.state-machine')
 
 TStateType = TypeVar('TStateType')
-TStateOutput = TypeVar('TStateOutput')
+TStateResult = TypeVar('TStateResult')
+TStateData = TypeVar('TStateData')
 
 
-class State(Generic[TStateOutput]):
+class State(Generic[TStateResult, TStateData]):
     """
     Encapsulates the state specific logic in the state pattern.
     Subclasses may implement their own handle method.
@@ -28,7 +29,7 @@ class State(Generic[TStateOutput]):
         self._shutdown = True
 
     @abstractmethod
-    def handle(self, input: Any) -> Tuple[TStateOutput, Any]:
+    def handle(self, state_data: TStateData) -> Tuple[TStateResult, TStateData]:
         """
         Implemented by each state. It runs its own state specific logic and
         returns a tuple that contains the next state type to go to and any context
@@ -55,12 +56,12 @@ class StateContext(Generic[TStateType], ABC):
         self.__terminal_state = terminal_state
         self.__shutdown = False
 
-    def run(self, input: Any) -> None:
+    def run(self, initial_data: TStateData) -> None:
         logger.debug("Starting state machine")
-        next_state_input = input
+        nest_state_data = initial_data
         while self.__current_state != self.__terminal_state:
-            state_output, next_state_input = self.__states[self.__current_state] \
-                .handle(next_state_input)
+            state_output, nest_state_data = self.__states[self.__current_state] \
+                .handle(nest_state_data)
             next_state = self.__resolve_next_state(
                 self.__current_state,
                 state_output,
@@ -79,7 +80,7 @@ class StateContext(Generic[TStateType], ABC):
     def __resolve_next_state(
         self,
         current_state: TStateType,
-        output: TStateOutput,
+        output: TStateResult,
     ) -> TStateType:
         state_map = self._get_state_transitions()
         if current_state not in state_map:
@@ -92,7 +93,7 @@ class StateContext(Generic[TStateType], ABC):
         return state_map[current_state][output]
 
     @abstractmethod
-    def _get_state_transitions(self) -> Mapping[TStateType, Mapping[TStateOutput, TStateType]]:
+    def _get_state_transitions(self) -> Mapping[TStateType, Mapping[TStateResult, TStateType]]:
         """
         Returns a map that represents the valid state transitions for the state machine.
         Every entry is represented by a current state and a map of output (from the current

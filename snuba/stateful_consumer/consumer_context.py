@@ -1,10 +1,8 @@
 from functools import partial
-
 from batching_kafka_consumer import BatchingKafkaConsumer
 
-from snuba.consumer_initializer import initialize_batching_consumer
 from snuba.datasets import Dataset
-from snuba.stateful_consumer import StateType, StateOutput
+from snuba.stateful_consumer import StateData, StateType, StateOutput
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.bootstrap_state import BootstrapState
 from snuba.stateful_consumer.consuming_state import ConsumingState

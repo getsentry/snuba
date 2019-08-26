@@ -2,14 +2,10 @@ import logging
 import signal
 
 import click
-from confluent_kafka import Producer
-from typing import Any, Optional
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import initialize_batching_consumer
-from snuba.consumer import ConsumerWorker
-from snuba.datasets import Dataset
+from snuba.consumer_initializer import ConsumerBuiler
 
 
 @click.command()
@@ -50,36 +46,22 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    def build_worker(
-        dataset: Dataset,
-        producer: Producer,
-        replacements_topic: Optional[str],
-        metrics: Optional[Any],
-    ) -> ConsumerWorker:
-        return ConsumerWorker(
-            dataset,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics,
-        )
-
-    consumer = initialize_batching_consumer(
+    consumer = ConsumerBuiler(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        bootstrap_server=bootstrap_server,
+        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
-        dogstatsd_port=dogstatsd_port,
-        worker_builder=build_worker,
-    )
+        dogstatsd_port=dogstatsd_port
+    ).build_base_worker()
 
     def handler(signum, frame):
         consumer.signal_shutdown()

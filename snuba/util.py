@@ -82,7 +82,8 @@ def function_expr(fn, args_expr=''):
         return 'ifNull({}, \'\')'.format(args_expr)
 
     # default: just return fn(args_expr)
-    return  u'{}({})'.format(fn, args_expr)
+    return u'{}({})'.format(fn, args_expr)
+
 
 def is_function(column_expr, depth=0):
     """
@@ -101,7 +102,7 @@ def is_function(column_expr, depth=0):
     Although at the top level, there is no outer function call, and the optional
     3rd argument is interpreted as an alias for the entire expression.
 
-        [func, [arg1] alias] => function(arg1) AS alias
+        [func, [arg1], alias] => function(arg1) AS alias
 
     """
     if (isinstance(column_expr, (tuple, list))
@@ -117,6 +118,7 @@ def is_function(column_expr, depth=0):
     else:
         return None
 
+
 def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
@@ -131,6 +133,8 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
 
     if is_function(column_name, 0):
         return complex_column_expr(dataset, column_name, body)
+    elif isinstance(column_name, (list, tuple)) and aggregate:
+        return complex_column_expr(dataset, [aggregate, column_name, alias], body)
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
@@ -153,9 +157,9 @@ def complex_column_expr(dataset, expr, body, depth=0):
     out = []
     i = 0
     while i < len(args):
-        next_2 = args[i:i+2]
-        if is_function(next_2, depth+1):
-            out.append(complex_column_expr(dataset, next_2, body, depth+1))
+        next_2 = args[i:i + 2]
+        if is_function(next_2, depth + 1):
+            out.append(complex_column_expr(dataset, next_2, body, depth + 1))
             i += 2
         else:
             nxt = args[i]
@@ -295,10 +299,10 @@ def conditions_expr(dataset, conditions, body, depth=0):
         if (
             isinstance(lhs, str) and
             lhs in columns and
-            type(columns[lhs].type) == clickhouse.Array and
+            isinstance(columns[lhs].type, clickhouse.Array) and
             columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
-            ):
+        ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,

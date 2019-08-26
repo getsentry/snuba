@@ -1,27 +1,27 @@
-from typing import Any, Mapping, Set, Tuple
+from typing import Mapping, Set, Tuple
 
-from snuba.stateful_consumer import StateOutput, StateType
+from snuba.stateful_consumer import StateData, StateOutput, StateType
 from snuba.stateful_consumer.state_context import StateContext, State
 
 
-class State1(State[StateOutput]):
+class State1(State[StateOutput, StateData]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State1, self).__init__()
         self.__processed_state = processed_states
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
-        assert input == "start"
+    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
+        assert state_data == "start"
         self.__processed_state[StateType.BOOTSTRAP] = True
         return (StateOutput.NO_SNAPSHOT, "consume")
 
 
-class State2(State[StateOutput]):
+class State2(State[StateOutput, StateData]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State2, self).__init__()
         self.__processed_state = processed_states
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
-        assert input == "consume"
+    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
+        assert state_data == "consume"
         self.__processed_state[StateType.CONSUMING] = True
         return (StateOutput.FINISH, None)
 
