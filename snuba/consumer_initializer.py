@@ -1,6 +1,6 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
+from batching_kafka_consumer import BatchingKafkaConsumer
 from confluent_kafka import Producer
-from typing import Any, Sequence
+from typing import Sequence
 
 from snuba.datasets import Dataset
 from snuba.consumer import ConsumerWorker
@@ -8,62 +8,76 @@ from snuba import settings
 from snuba import util
 
 
-def initialize_batching_consumer(
-    dataset: Dataset,
-    dataset_name: str,
-    raw_topic: str,
-    replacements_topic: str,
-    max_batch_size: int,
-    max_batch_time_ms: int,
-    bootstrap_server: Sequence[str],
-    group_id: str,
-    commit_log_topic: str,
-    auto_offset_reset: str,
-    queued_max_messages_kbytes: int,
-    queued_min_messages: int,
-    dogstatsd_host: str,
-    dogstatsd_port: int
-) -> BatchingKafkaConsumer:
-    if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset_name,
-            settings.DEFAULT_BROKERS,
+class ConsumerBuiler:
+    def __init__(
+        self,
+        dataset: Dataset,
+        dataset_name: str,
+        raw_topic: str,
+        replacements_topic: str,
+        max_batch_size: int,
+        max_batch_time_ms: int,
+        bootstrap_servers: Sequence[str],
+        group_id: str,
+        commit_log_topic: str,
+        auto_offset_reset: str,
+        queued_max_messages_kbytes: int,
+        queued_min_messages: int,
+        dogstatsd_host: str,
+        dogstatsd_port: int
+    ) -> None:
+        self.dataset = dataset
+        self.dataset_name = dataset_name
+        if not bootstrap_servers:
+            self.bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
+                dataset_name,
+                settings.DEFAULT_BROKERS,
+            )
+        else:
+            self.bootstrap_servers = bootstrap_servers
+
+        self.raw_topic = raw_topic or dataset.get_default_topic()
+        self.replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
+        self.commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+
+        self.producer = Producer({
+            'bootstrap.servers': ','.join(bootstrap_servers),
+            'partitioner': 'consistent',
+            'message.max.bytes': 50000000,  # 50MB, default is 1MB
+        })
+
+        self.metrics = util.create_metrics(
+            dogstatsd_host, dogstatsd_port, 'snuba.consumer',
+            tags=[
+                "group:%s" % group_id,
+                "dataset:%s" % dataset_name,
+            ]
         )
 
-    raw_events_topic = raw_topic or dataset.get_default_topic()
-    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
-    commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+        self.max_batch_size = max_batch_size
+        self.max_batch_time_ms = max_batch_time_ms
+        self.group_id = group_id
+        self.auto_offset_reset = auto_offset_reset
+        self.queued_max_messages_kbytes = queued_max_messages_kbytes
+        self.queued_min_messages = queued_min_messages
 
-    producer = Producer({
-        'bootstrap.servers': ','.join(bootstrap_server),
-        'partitioner': 'consistent',
-        'message.max.bytes': 50000000,  # 50MB, default is 1MB
-    })
-
-    metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-        tags=[
-            "group:%s" % group_id,
-            "dataset:%s" % dataset_name,
-        ]
-    )
-
-    return BatchingKafkaConsumer(
-        raw_events_topic,
-        worker=ConsumerWorker(
-            dataset,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics
-        ),
-        max_batch_size=max_batch_size,
-        max_batch_time=max_batch_time_ms,
-        metrics=metrics,
-        bootstrap_servers=bootstrap_server,
-        group_id=group_id,
-        producer=producer,
-        commit_log_topic=commit_log_topic,
-        auto_offset_reset=auto_offset_reset,
-        queued_max_messages_kbytes=queued_max_messages_kbytes,
-        queued_min_messages=queued_min_messages,
-    )
+    def build_base_worker(self):
+        return BatchingKafkaConsumer(
+            self.raw_topic,
+            worker=ConsumerWorker(
+                self.dataset,
+                producer=self.producer,
+                replacements_topic=self.replacements_topic,
+                metrics=self.metrics
+            ),
+            max_batch_size=self.max_batch_size,
+            max_batch_time=self.max_batch_time_ms,
+            metrics=self.metrics,
+            bootstrap_servers=self.bootstrap_servers,
+            group_id=self.group_id,
+            producer=self.producer,
+            commit_log_topic=self.commit_log_topic,
+            auto_offset_reset=self.auto_offset_reset,
+            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
+            queued_min_messages=self.queued_min_messages,
+        )
