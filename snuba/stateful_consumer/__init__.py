@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from snuba.stateful_consumer.control_protocol import TransactionData
+
 
 class StateType(Enum):
     BOOTSTRAP = 0
@@ -26,3 +28,4 @@ class StateData:
     state to the other.
     """
     snapshot_id: Optional[str]
+    transaction_data: Optional[TransactionData]

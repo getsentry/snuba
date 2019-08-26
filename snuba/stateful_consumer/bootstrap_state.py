@@ -160,13 +160,12 @@ class BootstrapState(State[StateOutput, StateData]):
         self.__consumer.run()
 
         msg = self.__recovery_state.get_active_snapshot_msg()
-        output = {
-            "snapshot_id": msg.id if msg else None,
-            "transaction_data": msg.transaction_info if isinstance(msg, SnapshotLoaded) else None,
-        }
-
+        state_data = StateData(
+            snapshot_id=msg.id if msg else None,
+            transaction_data=msg.transaction_info if isinstance(msg, SnapshotLoaded) else None,
+        )
         logger.info("Caught up on the control topic")
-        return (self.__recovery_state.get_output(), output)
+        return (self.__recovery_state.get_output(), state_data)
 
     def set_shutdown(self) -> None:
         super(BootstrapState, self).set_shutdown()

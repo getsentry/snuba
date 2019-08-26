@@ -60,7 +60,7 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
     dataset = get_dataset(dataset_name)
     assert isinstance(dataset, CdcDataset), "Only CDC dataset have a control topic thus are supported."
 
-    consumer = ConsumerBuiler(
+    consumer_builder = ConsumerBuiler(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
@@ -75,10 +75,10 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port,
-    ).build_base_worker()
+    )
 
     context = ConsumerContext(
-        main_consumer=consumer,
+        consumer_builder=consumer_builder,
         control_topic=control_topic or dataset.get_control_topic(),
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
@@ -90,4 +90,4 @@ def snapshot_consumer(raw_events_topic, control_topic, replacements_topic, commi
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
 
-    context.run(input=None)
+    context.run(initial_data=None)

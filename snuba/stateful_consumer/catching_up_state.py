@@ -1,14 +1,9 @@
 import logging
+from typing import Tuple
 
-from confluent_kafka import Consumer, Producer
-
-from snuba.consumer import ConsumerWorker
-from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets import Dataset
+from snuba.consumer_initializer import ConsumerBuiler
 from snuba.stateful_consumer import StateData, StateOutput
 from snuba.stateful_consumer.state_context import State
-
-from typing import Any, Callable, Optional, Tuple
 
 logger = logging.getLogger('snuba.snapshot-catchup')
 
@@ -24,12 +19,7 @@ class CatchingUpState(State[StateOutput, StateData]):
 
     def __init__(
         self,
-        consumer_builder: Callable[
-            [Callable[
-                [Dataset, Producer, Optional[str], Optional[Any]],
-                ConsumerWorker]
-            ],
-            Consumer],
+        consumer_builder: ConsumerBuiler
     ) -> None:
         super(CatchingUpState, self).__init__()
         self.__consumer_builder = consumer_builder
@@ -41,27 +31,12 @@ class CatchingUpState(State[StateOutput, StateData]):
             self.__consumer.signal_shutdown()
 
     def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
-        assert isinstance(input, dict)
-        snapshot_id = input["snapshot_id"]
-        transaction_data = input["transaction_data"]
+        assert state_data.snapshot_id is not None
+        assert state_data.transaction_data is not None
 
-        def build_worker(
-            dataset: Dataset,
-            producer: Producer,
-            replacements_topic: Optional[str],
-            metrics: Optional[Any],
-        ) -> ConsumerWorker:
-            return SnapshotAwareWorker(
-                dataset=dataset,
-                producer=producer,
-                snapshot_id=snapshot_id,
-                transaction_data=transaction_data,
-                replacements_topic=replacements_topic,
-                metrics=metrics,
-            )
-
-        self.__consumer = self.__consumer_builder(
-            worker_builder=build_worker,
+        self.__consumer = self.__consumer_builder.build_snapshot_aware_worker(
+            snapshot_id=state_data.snapshot_id,
+            transaction_data=state_data.transaction_data,
         )
 
         self.__consumer.run()

@@ -1,8 +1,5 @@
-from functools import partial
-from batching_kafka_consumer import BatchingKafkaConsumer
-
-from snuba.datasets import Dataset
-from snuba.stateful_consumer import StateData, StateType, StateOutput
+from snuba.consumer_initializer import ConsumerBuiler
+from snuba.stateful_consumer import StateType, StateOutput
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.bootstrap_state import BootstrapState
 from snuba.stateful_consumer.consuming_state import ConsumingState
@@ -21,40 +18,11 @@ class ConsumerContext(StateContext[StateType]):
 
     def __init__(
         self,
-        dataset: Dataset,
-        dataset_name: str,
-        raw_topic: str,
-        replacements_topic: str,
-        max_batch_size: int,
-        max_batch_time_ms: int,
-        bootstrap_servers: Sequence[str],
+        consumer_builder: ConsumerBuiler,
         group_id: str,
-        commit_log_topic: str,
-        auto_offset_reset: str,
-        queued_max_messages_kbytes: int,
-        queued_min_messages: int,
-        dogstatsd_host: str,
-        dogstatsd_port: int,
+        bootstrap_servers: Sequence[str],
         control_topic: str,
     ) -> None:
-        consumer_builder = partial(
-            initialize_batching_consumer,
-            dataset=dataset,
-            dataset_name=dataset_name,
-            raw_topic=raw_topic,
-            replacements_topic=replacements_topic,
-            max_batch_size=max_batch_size,
-            max_batch_time_ms=max_batch_time_ms,
-            bootstrap_server=bootstrap_servers,
-            group_id=group_id,
-            commit_log_topic=commit_log_topic,
-            auto_offset_reset=auto_offset_reset,
-            queued_max_messages_kbytes=queued_max_messages_kbytes,
-            queued_min_messages=queued_min_messages,
-            dogstatsd_host=dogstatsd_host,
-            dogstatsd_port=dogstatsd_port
-        )
-
         states = {
             StateType.BOOTSTRAP: BootstrapState(
                 control_topic,
