@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import itertools
-import json
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
-from urllib.parse import urlencode
 
 from dateutil.parser import parse as dateutil_parse
 from dateutil.tz import tz
-from urllib3.connectionpool import HTTPConnectionPool
-from urllib3.exceptions import HTTPError
 
 
 if TYPE_CHECKING:

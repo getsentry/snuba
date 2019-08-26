@@ -3,7 +3,6 @@ from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
-from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
@@ -14,7 +13,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
-from snuba import clickhouse, schemas, settings, state
+from snuba import schemas, settings, state
 from snuba.clickhouse.http import HTTPReader, ClickHouseError as HTTPDriverClickHouseError
 
 
