@@ -59,7 +59,7 @@ def bootstrap(bootstrap_server, kafka, force):
             except Exception as e:
                 print("Failed to create topic %s: %s" % (topic, e))
 
-    from snuba.clickhouse import ClickhousePool
+    from snuba.clickhouse.native import ClickhousePool
 
     attempts = 0
     while True:

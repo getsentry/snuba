@@ -3,27 +3,11 @@ from base import BaseEventsTest
 from clickhouse_driver import errors
 from mock import patch, call
 
-from snuba.clickhouse import (
-    Array, ColumnSet, Nested, Nullable, String, UInt,
-    escape_col,
-    ClickhousePool
-)
+from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
+from snuba.clickhouse.native import ClickhousePool
 
 
 class TestClickhouse(BaseEventsTest):
-    def test_escape_col(self):
-        assert escape_col(None) is None
-        assert escape_col('') == ''
-        assert escape_col('foo') == 'foo'
-        assert escape_col('foo.bar') == 'foo.bar'
-        assert escape_col('foo:bar') == '`foo:bar`'
-
-        # Even though backtick characters in columns should be
-        # disallowed by the query schema, make sure we dont allow
-        # injection anyway.
-        assert escape_col("`") == r"`\``"
-        assert escape_col("production`; --") == r"`production\`; --`"
-
     def test_flattened(self):
         columns = self.dataset.get_schema().get_columns()
         assert columns['group_id'].type == UInt(64)
@@ -48,7 +32,7 @@ class TestClickhouse(BaseEventsTest):
         assert cols['foo'].type == UInt(8)
         assert cols['bar.qux:mux'].type == Array(String())
 
-    @patch('snuba.clickhouse.Client')
+    @patch('snuba.clickhouse.native.Client')
     def test_reconnect(self, FakeClient):
         # If the connection NetworkErrors a first time, make sure we call it a second time.
         FakeClient.return_value.execute.side_effect = [errors.NetworkError, '{"data": "to my face"}']
