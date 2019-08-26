@@ -1,4 +1,4 @@
-from future import __annotations__
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
@@ -38,7 +38,7 @@ class StateData:
         Builds an empty StateData that represent a state where there is no
         snapshot to care about.
         """
-        return StateData(None)
+        return StateData(None, None)
 
     @classmethod
     def snapshot_ready_state(

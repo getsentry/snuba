@@ -163,7 +163,7 @@ class BootstrapState(State[StateOutput, StateData]):
         if isinstance(msg, SnapshotLoaded):
             state_data = StateData.snapshot_ready_state(
                 snapshot_id=msg.id,
-                transaciton_data=msg.transaction_info
+                transaction_data=msg.transaction_info,
             )
         else:
             state_data = StateData.no_snapshot_state()

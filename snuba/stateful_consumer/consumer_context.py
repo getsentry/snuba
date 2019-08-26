@@ -1,5 +1,5 @@
 from snuba.consumer_initializer import ConsumerBuiler
-from snuba.stateful_consumer import StateType, StateOutput
+from snuba.stateful_consumer import StateData, StateType, StateOutput
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.bootstrap_state import BootstrapState
 from snuba.stateful_consumer.consuming_state import ConsumingState
