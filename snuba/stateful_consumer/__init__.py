@@ -26,3 +26,11 @@ class StateData:
     state to the other.
     """
     snapshot_id: Optional[str]
+
+    @classmethod
+    def no_snapshot_state(cls):
+        """
+        Builds an empty StateData that represent a state where there is no
+        snapshot to care about.
+        """
+        return StateData(None)

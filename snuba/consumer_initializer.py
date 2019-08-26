@@ -9,6 +9,13 @@ from snuba import util
 
 
 class ConsumerBuiler:
+    """
+    Simplifies the initialization of a batching consumer by merging
+    parameters that generally come from the command line with defaults
+    that come from the dataset class and defaults that come from the
+    settings file.
+    """
+
     def __init__(
         self,
         dataset: Dataset,
@@ -62,6 +69,10 @@ class ConsumerBuiler:
         self.queued_min_messages = queued_min_messages
 
     def build_base_worker(self):
+        """
+        Builds the consumer with a ConsumerWorker.
+        """
+
         return BatchingKafkaConsumer(
             self.raw_topic,
             worker=ConsumerWorker(

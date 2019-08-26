@@ -16,4 +16,7 @@ class BootstrapState(State[StateOutput, StateData]):
 
     def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
         # TODO: Actually do the snapshot bootstrap
-        return (StateOutput.NO_SNAPSHOT, None)
+        return (
+            StateOutput.NO_SNAPSHOT,
+            StateData.no_snapshot_state(),
+        )

@@ -6,8 +6,17 @@ import logging
 
 logger = logging.getLogger('snuba.state-machine')
 
+"""Enum that identifies the state type within the state machine. """
 TStateType = TypeVar('TStateType')
+"""
+Enum that identifies the event a state raises upon termination.
+This is used by the context to resolve the next state.
+"""
 TStateResult = TypeVar('TStateResult')
+"""
+Any context data produced by a state during its work that has to be made
+available to the following states.
+"""
 TStateData = TypeVar('TStateData')
 
 
@@ -32,13 +41,14 @@ class State(Generic[TStateResult, TStateData]):
     def handle(self, state_data: TStateData) -> Tuple[TStateResult, TStateData]:
         """
         Implemented by each state. It runs its own state specific logic and
-        returns a tuple that contains the next state type to go to and any context
-        data that will be passed to that state.
+        returns a tuple that contains the state result, which identifies the
+        event this state wants to raise upon termination, and some context
+        information to make available to following states.
         """
         raise NotImplementedError
 
 
-class StateContext(Generic[TStateType], ABC):
+class StateContext(Generic[TStateType, TStateResult, TStateData], ABC):
     """
     State pattern implementation used to change the logic
     of the consumer depending on which phase it is serving.
@@ -47,7 +57,7 @@ class StateContext(Generic[TStateType], ABC):
 
     def __init__(
         self,
-        states: Mapping[TStateType, State],
+        states: Mapping[TStateType, State[TStateResult, TStateData]],
         start_state: TStateType,
         terminal_state: TStateType,
     ) -> None:
