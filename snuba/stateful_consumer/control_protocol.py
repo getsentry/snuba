@@ -9,6 +9,10 @@ from abc import ABC
 from snuba.snapshots import SnapshotId
 from snuba.snapshots.postgres_snapshot import Xid
 
+# TODO: Putting all messages in a single shema makes it hard to interpret errors
+# since the parser will always try all the options and it will rarely tell us which
+# is the actual error because it does not know which is the expected message.
+# We should try to split them into three schemas.
 CONTROL_MSG_SCHEMA = {
     'anyOf': [
         {"$ref": "#/definitions/snapshot-init"},
@@ -137,6 +141,7 @@ class TransactionData:
 
 @dataclass(frozen=True)
 class SnapshotLoaded(ControlMessage):
+    # TODO: I think we can get rid of datasets as a whole from this message.
     datasets: Mapping[str, DatasetMetadata]
     transaction_info: TransactionData
 
