@@ -1,49 +1,15 @@
-from datetime import datetime, timedelta
-import jsonschema
 import copy
+import itertools
+from collections import ChainMap
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any, Mapping
+
+import jsonschema
 
 
 CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
 POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
-
-
-def get_time_series_query_schema_properties(default_granularity: int, default_window: timedelta):
-    return {
-        'from_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - default_window).isoformat()
-        },
-        'to_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
-        },
-        'granularity': {
-            'type': 'number',
-            'default': default_granularity,
-        },
-    }
-
-
-SDK_STATS_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'groupby': {
-            'type': 'array',
-            'items': {
-                # at the moment the only additional thing you can group by is project_id
-                'enum': ['project_id']
-            },
-            'default': [],
-        },
-        **get_time_series_query_schema_properties(
-            default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
-            default_window=timedelta(days=1),
-        ),
-    },
-    'additionalProperties': False,
-}
 
 GENERIC_QUERY_SCHEMA = {
     'type': 'object',
@@ -68,6 +34,7 @@ GENERIC_QUERY_SCHEMA = {
                     }, {
                         # Aggregate column
                         'anyOf': [
+                            {'$ref': '#/definitions/column_list'},
                             {'$ref': '#/definitions/column_name'},
                             {'enum': ['']},
                             {'type': 'null'},
@@ -86,8 +53,10 @@ GENERIC_QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'sample': {
-            'type': 'number',
-            'min': 0,
+            'anyOf': [
+                {'type': 'integer', 'minimum': 0},
+                {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+            ],
         },
         'conditions': {
             'type': 'array',
@@ -136,17 +105,19 @@ GENERIC_QUERY_SCHEMA = {
             ]
         },
         'limit': {
-            'type': 'number',
+            'type': 'integer',
             'default': 1000,
+            'minimum': 0,
             'maximum': 10000,
         },
         'offset': {
-            'type': 'number',
+            'type': 'integer',
+            'minimum': 0,
         },
         'limitby': {
             'type': 'array',
             'items': [
-                {'type': 'number'},
+                {'type': 'integer', 'minimum': 0},
                 {'$ref': '#/definitions/column_name'},
             ]
         },
@@ -217,46 +188,162 @@ GENERIC_QUERY_SCHEMA = {
     }
 }
 
-EVENTS_QUERY_SCHEMA = {
-    **copy.deepcopy(GENERIC_QUERY_SCHEMA),
-    # Need to select down to the project level for customer isolation and performance
-    'required': ['project'],
+PERFORMANCE_EXTENSION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        # Never add FINAL to queries, enable sampling
+        'turbo': {
+            'type': 'boolean',
+            'default': False,
+        },
+        # Force queries to hit the first shard replica, ensuring the query
+        # sees data that was written before the query. This burdens the
+        # first replica, so should only be used when absolutely necessary.
+        'consistent': {
+            'type': 'boolean',
+            'default': False,
+        },
+        'debug': {
+            'type': 'boolean',
+            'default': False,
+        },
+    },
+    'additionalProperties': False,
 }
 
-EVENTS_QUERY_SCHEMA['properties'].update({
-    **get_time_series_query_schema_properties(
+PROJECT_EXTENSION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'project': {
+            'anyOf': [
+                {'type': 'integer', 'minimum': 1},
+                {
+                    'type': 'array',
+                    'items': {'type': 'integer', 'minimum': 1},
+                    'minItems': 1,
+                },
+            ]
+        },
+    },
+    # Need to select down to the project level for customer isolation and performance
+    'required': ['project'],
+    'additionalProperties': False,
+}
+
+
+def get_time_series_extension_properties(default_granularity: int, default_window: timedelta):
+    return {
+        'type': 'object',
+        'properties': {
+            'from_date': {
+                'type': 'string',
+                'format': 'date-time',
+                'default': lambda: (datetime.utcnow().replace(microsecond=0) - default_window).isoformat()
+            },
+            'to_date': {
+                'type': 'string',
+                'format': 'date-time',
+                'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
+            },
+            'granularity': {
+                'type': 'number',
+                'default': default_granularity,
+                'minimum': 1,
+            },
+        },
+        'additionalProperties': False,
+    }
+
+
+@dataclass(frozen=True)
+class Request:
+    query: Mapping[str, Any]
+    extensions: Mapping[str, Mapping[str, Any]]
+
+    @property
+    def body(self):
+        return ChainMap(self.query, *self.extensions.values())
+
+
+Schema = Mapping[str, Any]  # placeholder for JSON schema
+
+
+class RequestSchema:
+    def __init__(self, query_schema: Schema, extensions_schemas: Mapping[str, Schema]):
+        self.__query_schema = query_schema
+        self.__extension_schemas = extensions_schemas
+
+        self.__composite_schema = {
+            'type': 'object',
+            'properties': {},
+            'required': [],
+            'definitions': {},
+            'additionalProperties': False,
+        }
+
+        for schema in itertools.chain([self.__query_schema], self.__extension_schemas.values()):
+            assert schema['type'] == 'object', 'subschema must be object'
+            assert schema['additionalProperties'] is False, 'subschema must not allow additional properties'
+            self.__composite_schema['required'].extend(schema.get('required', []))
+
+            for property_name, property_schema in schema['properties'].items():
+                assert property_name not in self.__composite_schema['properties'], 'subschema cannot redefine property'
+                self.__composite_schema['properties'][property_name] = property_schema
+
+            for definition_name, definition_schema in schema.get('definitions', {}).items():
+                assert definition_name not in self.__composite_schema['definitions'], 'subschema cannot redefine definition'
+                self.__composite_schema['definitions'][definition_name] = definition_schema
+
+        self.__composite_schema['required'] = set(self.__composite_schema['required'])
+
+    def validate(self, value) -> Request:
+        value = validate_jsonschema(value, self.__composite_schema)
+
+        query = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
+
+        extensions = {}
+        for extension_name, extension_schema in self.__extension_schemas.items():
+            extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
+
+        return Request(query, extensions)
+
+
+EVENTS_QUERY_SCHEMA = RequestSchema(GENERIC_QUERY_SCHEMA, {
+    'performance': PERFORMANCE_EXTENSION_SCHEMA,
+    'project': PROJECT_EXTENSION_SCHEMA,
+    'timeseries': get_time_series_extension_properties(
         default_granularity=3600,
         default_window=timedelta(days=5),
     ),
-    'project': {
-        'anyOf': [
-            {'type': 'number'},
-            {
-                'type': 'array',
-                'items': {'type': 'number'},
-                'minItems': 1,
+})
+
+SDK_STATS_SCHEMA = RequestSchema({
+    'type': 'object',
+    'properties': {
+        'groupby': {
+            'type': 'array',
+            'items': {
+                # at the moment the only additional thing you can group by is project_id
+                'enum': ['project_id']
             },
-        ]
+            'default': [],
+        },
     },
-    # Never add FINAL to queries, enable sampling
-    'turbo': {
-        'type': 'boolean',
-        'default': False,
-    },
-    # Force queries to hit the first shard replica, ensuring the query
-    # sees data that was written before the query. This burdens the
-    # first replica, so should only be used when absolutely necessary.
-    'consistent': {
-        'type': 'boolean',
-        'default': False,
-    },
-    'debug': {
-        'type': 'boolean',
-    }
+    'additionalProperties': False,
+}, {
+    'timeseries': get_time_series_extension_properties(
+        default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
+        default_window=timedelta(days=1),
+    ),
 })
 
 
-def validate(value, schema, set_defaults=True):
+def validate_jsonschema(value, schema, set_defaults=True):
+    """
+    Validates a value against the provided schema, returning the validated
+    value if the value conforms to the schema, otherwise raising a
+    ``jsonschema.ValidationError``.
+    """
     orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
@@ -270,6 +357,12 @@ def validate(value, schema, set_defaults=True):
         for error in orig(validator, properties, instance, schema):
             yield error
 
+    # Using schema defaults during validation will cause the input value to be
+    # mutated, so to be on the safe side we create a deep copy of that value to
+    # avoid unwanted side effects for the calling function.
+    if set_defaults:
+        value = copy.deepcopy(value)
+
     validator_cls = jsonschema.validators.extend(
         jsonschema.Draft4Validator,
         {'properties': validate_and_default}
@@ -280,6 +373,8 @@ def validate(value, schema, set_defaults=True):
         types={'array': (list, tuple)},
         format_checker=jsonschema.FormatChecker()
     ).validate(value, schema)
+
+    return value
 
 
 def generate(schema):

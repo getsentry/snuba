@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import initialize_batching_consumer
+from snuba.consumer_initializer import ConsumerBuiler
 from snuba.stateful_consumer.consumer_context import ConsumerContext, StateType
 
 
@@ -56,14 +56,14 @@ def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, co
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    consumer = initialize_batching_consumer(
+    consumer = ConsumerBuiler(
         dataset=dataset,
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
         max_batch_time_ms=max_batch_time_ms,
-        bootstrap_server=bootstrap_server,
+        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
@@ -71,7 +71,7 @@ def snapshot_consumer(raw_events_topic, replacements_topic, commit_log_topic, co
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port
-    )
+    ).build_base_worker()
 
     context = ConsumerContext(
         main_consumer=consumer,
