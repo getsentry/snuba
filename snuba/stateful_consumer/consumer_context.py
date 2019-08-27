@@ -1,4 +1,5 @@
 from batching_kafka_consumer import BatchingKafkaConsumer
+from typing import Sequence
 
 from snuba.stateful_consumer import StateData, StateType, StateCompletionEvent
 from snuba.stateful_consumer.state_context import StateContext
@@ -6,11 +7,6 @@ from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
 from snuba.stateful_consumer.states.paused import PausedState
 from snuba.stateful_consumer.states.catching_up import CatchingUpState
-
-<< << << < HEAD
-from typing import Mapping, Sequence
-== == == =
->>>>>> > feat / statefulConsumer
 
 
 class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
