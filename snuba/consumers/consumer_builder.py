@@ -8,7 +8,7 @@ from snuba import settings
 from snuba import util
 
 
-class ConsumerBuiler:
+class ConsumerBuilder:
     """
     Simplifies the initialization of a batching consumer by merging
     parameters that generally come from the command line with defaults
