@@ -10,7 +10,7 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 
 
-class ConsumerBuiler:
+class ConsumerBuilder:
     """
     Simplifies the initialization of a batching consumer by merging
     parameters that generally come from the command line with defaults

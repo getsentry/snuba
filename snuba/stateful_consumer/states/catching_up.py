@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple
 
-from snuba.consumers.consumer_builder import ConsumerBuiler
+from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import StateData, StateCompletionEvent
 from snuba.stateful_consumer.state_context import State
 
@@ -19,7 +19,7 @@ class CatchingUpState(State[StateCompletionEvent, StateData]):
 
     def __init__(
         self,
-        consumer_builder: ConsumerBuiler
+        consumer_builder: ConsumerBuilder
     ) -> None:
         super(CatchingUpState, self).__init__()
         self.__consumer_builder = consumer_builder

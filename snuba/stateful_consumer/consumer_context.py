@@ -1,12 +1,8 @@
-<< << << < HEAD
-from snuba.consumer_initializer import ConsumerBuiler
-from snuba.stateful_consumer import StateData, StateType, StateOutput
-== == == =
 from batching_kafka_consumer import BatchingKafkaConsumer
 from typing import Sequence
 
+from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import StateData, StateType, StateCompletionEvent
->>>>>> > feat / performBootstrap
 from snuba.stateful_consumer.state_context import StateContext
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
@@ -23,13 +19,13 @@ class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
 
     def __init__(
         self,
-        consumer_builder: ConsumerBuiler,
+        consumer_builder: ConsumerBuilder,
         group_id: str,
         bootstrap_servers: Sequence[str],
         control_topic: str,
     ) -> None:
         bootstrap_state = BootstrapState(
-            topic,
+            control_topic,
             bootstrap_servers,
             group_id,
         )

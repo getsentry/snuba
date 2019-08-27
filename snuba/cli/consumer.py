@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.datasets.cdc import CdcDataset
-from snuba.consumers.consumer_builder import ConsumerBuiler
+from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer.consumer_context import ConsumerContext
 
 
@@ -51,7 +51,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    consumer_builder = ConsumerBuiler(
+    consumer_builder = ConsumerBuilder(
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
@@ -85,7 +85,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
 
         context.run()
     else:
-        consumer = consumer_builder.build_consumer()
+        consumer = consumer_builder.build_base_consumer()
 
         def handler(signum, frame):
             consumer.signal_shutdown()
