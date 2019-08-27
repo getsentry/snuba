@@ -1,11 +1,11 @@
 from typing import Tuple
 
-from snuba.consumer_initializer import ConsumerBuiler
-from snuba.stateful_consumer import StateData, StateOutput
+from snuba.consumers.consumer_builder import ConsumerBuiler
+from snuba.stateful_consumer import StateData, StateCompletionEvent
 from snuba.stateful_consumer.state_context import State
 
 
-class ConsumingState(State[StateOutput, StateData]):
+class ConsumingState(State[StateCompletionEvent, StateData]):
     """
     This is the normal operation state where the consumer
     reads from the main topic (cdc in this case) and sends
@@ -20,15 +20,14 @@ class ConsumingState(State[StateOutput, StateData]):
     ) -> None:
         super(ConsumingState, self).__init__()
 
-        self.__consumer = consumer_builder.build_base_worker()
+        self.__consumer = consumer_builder.build_base_consumer()
 
-    def set_shutdown(self) -> None:
-        super().set_shutdown()
+    def signal_shutdown(self) -> None:
         self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
+    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
         self.__consumer.run()
         return (
-            StateOutput.FINISH,
+            StateCompletionEvent.CONSUMPTION_COMPLETED,
             StateData.no_snapshot_state(),
         )

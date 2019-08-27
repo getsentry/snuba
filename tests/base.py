@@ -9,7 +9,7 @@ from confluent_kafka import TopicPartition, KafkaError
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
-from snuba.clickhouse import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
 

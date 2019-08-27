@@ -1,10 +1,10 @@
 import logging
 import json
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
-from snuba.stateful_consumer import StateData, StateOutput
+from snuba.stateful_consumer import StateCompletionEvent, StateData
 from snuba.stateful_consumer.state_context import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
@@ -30,10 +30,10 @@ class RecoveryState:
     def __init__(self):
         self.__active_snapshot_msg = None
         self.__processed_snapshots = set()
-        self.__output = StateOutput.NO_SNAPSHOT
+        self.__completion_event = StateCompletionEvent.NO_SNAPSHOT
 
-    def get_output(self) -> StateOutput:
-        return self.__output
+    def get_completion_event(self) -> StateCompletionEvent:
+        return self.__completion_event
 
     def get_active_snapshot_msg(self) -> Optional[ControlMessage]:
         return self.__active_snapshot_msg
@@ -58,7 +58,7 @@ class RecoveryState:
             )
         self.__processed_snapshots.add(msg.id)
         self.__active_snapshot_msg = msg
-        self.__output = StateOutput.SNAPSHOT_INIT_RECEIVED
+        self.__completion_event = StateCompletionEvent.SNAPSHOT_INIT_RECEIVED
 
     def process_abort(self, msg: SnapshotAbort) -> None:
         logger.debug("Processing abort message for %r", msg.id)
@@ -72,7 +72,7 @@ class RecoveryState:
             )
             return
         self.__active_snapshot_msg = None
-        self.__output = StateOutput.NO_SNAPSHOT
+        self.__completion_event = StateCompletionEvent.NO_SNAPSHOT
 
     def process_snapshot_loaded(self, msg: SnapshotLoaded) -> None:
         logger.debug("Processing ready message for %r", msg.id)
@@ -86,10 +86,10 @@ class RecoveryState:
             )
             return
         self.__active_snapshot_msg = msg
-        self.__output = StateOutput.SNAPSHOT_READY_RECEIVED
+        self.__completion_event = StateCompletionEvent.SNAPSHOT_READY_RECEIVED
 
 
-class BootstrapState(State[StateOutput, StateData]):
+class BootstrapState(State[StateCompletionEvent, StateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or to recover a
@@ -134,7 +134,7 @@ class BootstrapState(State[StateOutput, StateData]):
         value = json.loads(message.value())
         parsed_message = parse_control_message(value)
 
-        current_snap = self.__recovery_state.get_active_snapshot_msg()
+        current_snapshot = self.__recovery_state.get_active_snapshot_msg()
         if isinstance(parsed_message, SnapshotInit):
             self.__recovery_state.process_init(parsed_message)
         elif isinstance(parsed_message, SnapshotAbort):
@@ -148,14 +148,18 @@ class BootstrapState(State[StateOutput, StateData]):
         if new_snap is None:
             logger.debug("Committing offset %r ", message.offset())
             return CommitDecision.COMMIT_THIS
-        elif current_snap is None or new_snap.id != current_snap.id:
+        elif current_snapshot is None or new_snap.id != current_snapshot.id:
             logger.debug("Committing previous offset to %r ", message.offset())
             return CommitDecision.COMMIT_PREV
         else:
             logger.debug("Not committing")
             return CommitDecision.DO_NOT_COMMIT
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
+    def signal_shutdown(self) -> None:
+        super(BootstrapState, self).set_shutdown()
+        self.__consumer.shutdown()
+
+    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
         logger.info("Running Consumer")
         self.__consumer.run()
 
@@ -170,10 +174,6 @@ class BootstrapState(State[StateOutput, StateData]):
 
         logger.info("Caught up on the control topic")
         return (
-            self.__recovery_state.get_output(),
+            self.__recovery_state.get_completion_event(),
             state_data,
         )
-
-    def set_shutdown(self) -> None:
-        super(BootstrapState, self).set_shutdown()
-        self.__consumer.shutdown()

@@ -1,7 +1,7 @@
 import pytest
 
-from snuba.stateful_consumer import StateOutput
-from snuba.stateful_consumer.bootstrap_state import RecoveryState
+from snuba.stateful_consumer import StateCompletionEvent
+from snuba.stateful_consumer.states.bootstrap import RecoveryState
 from snuba.stateful_consumer.control_protocol import (
     SnapshotInit,
     SnapshotAbort,
@@ -14,7 +14,7 @@ class TestRecoveryState:
         (
             # Empty topic.
             [],
-            StateOutput.NO_SNAPSHOT,
+            StateCompletionEvent.NO_SNAPSHOT,
             None,
         ),
         (
@@ -22,7 +22,7 @@ class TestRecoveryState:
             [
                 SnapshotInit(id="123asd", product="snuba")
             ],
-            StateOutput.SNAPSHOT_INIT_RECEIVED,
+            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd"
         ),
         (
@@ -31,7 +31,7 @@ class TestRecoveryState:
                 SnapshotInit(id="123asd", product="snuba"),
                 SnapshotAbort(id="123asd"),
             ],
-            StateOutput.NO_SNAPSHOT,
+            StateCompletionEvent.NO_SNAPSHOT,
             None,
         ),
         (
@@ -44,7 +44,7 @@ class TestRecoveryState:
                     transaction_info=None,
                 ),
             ],
-            StateOutput.SNAPSHOT_READY_RECEIVED,
+            StateCompletionEvent.SNAPSHOT_READY_RECEIVED,
             "123asd"
         ),
         (
@@ -55,7 +55,7 @@ class TestRecoveryState:
                 SnapshotAbort(id="234asd"),
                 SnapshotInit(id="345asd", product="snuba"),
             ],
-            StateOutput.SNAPSHOT_INIT_RECEIVED,
+            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd"
         ),
         (
@@ -75,7 +75,7 @@ class TestRecoveryState:
                 ),
                 SnapshotInit(id="345asd", product="snuba"),
             ],
-            StateOutput.SNAPSHOT_INIT_RECEIVED,
+            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "345asd"
         )
     ]
@@ -93,7 +93,7 @@ class TestRecoveryState:
                     message,
                 )
 
-        assert recovery.get_output() == outcome
+        assert recovery.get_completion_event() == outcome
         if expected_id:
             assert recovery.get_active_snapshot_msg().id == expected_id
         else:

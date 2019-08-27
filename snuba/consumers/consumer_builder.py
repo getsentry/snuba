@@ -5,7 +5,7 @@ from typing import Sequence
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets import Dataset
+from snuba.datasets.factory import get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 
@@ -20,7 +20,6 @@ class ConsumerBuiler:
 
     def __init__(
         self,
-        dataset: Dataset,
         dataset_name: str,
         raw_topic: str,
         replacements_topic: str,
@@ -35,7 +34,7 @@ class ConsumerBuiler:
         dogstatsd_host: str,
         dogstatsd_port: int
     ) -> None:
-        self.dataset = dataset
+        self.dataset = get_dataset(dataset_name)
         self.dataset_name = dataset_name
         if not bootstrap_servers:
             self.bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
@@ -45,9 +44,9 @@ class ConsumerBuiler:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        self.raw_topic = raw_topic or dataset.get_default_topic()
-        self.replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
-        self.commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+        self.raw_topic = raw_topic or self.dataset.get_default_topic()
+        self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
+        self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
 
         self.producer = Producer({
             'bootstrap.servers': ','.join(bootstrap_servers),
@@ -86,7 +85,7 @@ class ConsumerBuiler:
             queued_min_messages=self.queued_min_messages,
         )
 
-    def build_base_worker(self) -> Consumer:
+    def build_base_consumer(self) -> BatchingKafkaConsumer:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -99,11 +98,11 @@ class ConsumerBuiler:
             )
         )
 
-    def build_snapshot_aware_worker(
+    def build_snapshot_aware_consumer(
         self,
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
-    ):
+    ) -> BatchingKafkaConsumer:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """

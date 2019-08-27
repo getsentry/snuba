@@ -7,10 +7,10 @@ import simplejson as json
 from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
-from snuba.clickhouse import DATETIME_FORMAT, escape_col
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
-from snuba.util import escape_string
+from snuba.util import escape_col, escape_string
 
 
 logger = logging.getLogger('snuba.replacer')
