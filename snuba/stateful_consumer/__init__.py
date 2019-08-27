@@ -11,8 +11,8 @@ class StateType(Enum):
     FINISHED = 4
 
 
-class StateOutput(Enum):
-    FINISH = 0
+class StateCompletionEvent(Enum):
+    CONSUMPTION_COMPLETED = 0
     SNAPSHOT_INIT_RECEIVED = 1
     SNAPSHOT_READY_RECEIVED = 2
     NO_SNAPSHOT = 3
