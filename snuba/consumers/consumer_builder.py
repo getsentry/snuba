@@ -2,7 +2,6 @@ from batching_kafka_consumer import BatchingKafkaConsumer
 from confluent_kafka import Producer
 from typing import Sequence
 
-from snuba.datasets import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.consumer import ConsumerWorker
 from snuba import settings

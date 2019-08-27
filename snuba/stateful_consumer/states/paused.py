@@ -18,6 +18,6 @@ class PausedState(State[StateCompletionEvent, StateData]):
     def handle(self, input: StateData) -> Tuple[StateCompletionEvent, StateData]:
         # TODO: Actually wait on the control topic for instructions
         return (
-            StateCompletionEvent.FINISH,
+            StateCompletionEvent.CONSUMPTION_COMPLETED,
             StateData.no_snapshot_state(),
         )

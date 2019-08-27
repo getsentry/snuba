@@ -5,34 +5,8 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import ConsumerBuiler
+from snuba.consumers.consumer_builder import ConsumerBuiler
 from snuba.stateful_consumer.consumer_context import ConsumerContext
-
-
-def run_base_consumer(consumer_builder: ConsumerBuiler):
-    consumer = consumer_builder.build_consumer()
-
-    def handler(signum, frame):
-        consumer.signal_shutdown()
-
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-
-    consumer.run()
-
-
-def run_stateful_consumer(consumer_builder: ConsumerBuiler):
-    context = ConsumerContext(
-        main_consumer=consumer_builder.build_consumer()
-    )
-
-    def handler(signum, frame):
-        context.set_shutdown()
-
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-
-    context.run()
 
 
 @click.command()
@@ -91,6 +65,24 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     if stateful_consumer:
-        run_stateful_consumer(consumer_builder)
+        context = ConsumerContext(
+            main_consumer=consumer_builder.build_consumer()
+        )
+
+        def handler(signum, frame):
+            context.set_shutdown()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        context.run()
     else:
-        run_base_consumer(consumer_builder)
+        consumer = consumer_builder.build_consumer()
+
+        def handler(signum, frame):
+            consumer.signal_shutdown()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        consumer.run()

@@ -19,27 +19,25 @@ class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
         self,
         main_consumer: BatchingKafkaConsumer,
     ) -> None:
-        definition = {
-            StateType.BOOTSTRAP: (BootstrapState(), {
-                StateCompletionEvent.NO_SNAPSHOT: StateType.CONSUMING,
-                StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
-                StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
-            }),
-            StateType.CONSUMING: (ConsumingState(main_consumer), {
-                StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
-            }),
-            StateType.SNAPSHOT_PAUSED: (PausedState(), {
-                StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
-            }),
-            StateType.CATCHING_UP: (CatchingUpState(), {
-                StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                StateCompletionEvent.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
-            }),
-        }
-        start_state = StateType.BOOTSTRAP
         super(ConsumerContext, self).__init__(
-            definition=definition,
-            start_state=start_state,
+            definition={
+                StateType.BOOTSTRAP: (BootstrapState(), {
+                    StateCompletionEvent.NO_SNAPSHOT: StateType.CONSUMING,
+                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                }),
+                StateType.CONSUMING: (ConsumingState(main_consumer), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                }),
+                StateType.SNAPSHOT_PAUSED: (PausedState(), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                }),
+                StateType.CATCHING_UP: (CatchingUpState(), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
+                }),
+            },
+            start_state=StateType.BOOTSTRAP,
         )
