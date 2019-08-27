@@ -2,9 +2,9 @@ from unittest.mock import patch
 
 from base import FakeKafkaConsumer, message
 
-from snuba.stateful_consumer import StateOutput
+from snuba.stateful_consumer import StateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
-from snuba.stateful_consumer.bootstrap_state import BootstrapState
+from snuba.stateful_consumer.states.bootstrap import BootstrapState
 
 
 class TestBootstrapState:
@@ -32,7 +32,7 @@ class TestBootstrapState:
         bootstrap = BootstrapState("cdc_control", "somewhere", "something")
 
         ret = bootstrap.handle(None)
-        assert ret[0] == StateOutput.NO_SNAPSHOT
+        assert ret[0] == StateCompletionEvent.NO_SNAPSHOT
         assert kafka_consumer.commit_calls == 0
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
@@ -52,7 +52,7 @@ class TestBootstrapState:
         bootstrap = BootstrapState("cdc_control", "somewhere", "something")
 
         ret = bootstrap.handle(None)
-        assert ret[0] == StateOutput.SNAPSHOT_INIT_RECEIVED
+        assert ret[0] == StateCompletionEvent.SNAPSHOT_INIT_RECEIVED
         assert kafka_consumer.commit_calls == 0
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
@@ -88,5 +88,5 @@ class TestBootstrapState:
         bootstrap = BootstrapState("cdc_control", "somewhere", "something")
 
         ret = bootstrap.handle(None)
-        assert ret[0] == StateOutput.SNAPSHOT_READY_RECEIVED
+        assert ret[0] == StateCompletionEvent.SNAPSHOT_READY_RECEIVED
         assert kafka_consumer.commit_calls == 2
