@@ -23,14 +23,14 @@ class CommitDecision(Enum):
 class StrictConsumer:
     """
     This is a simple Kafka consumer that consumes messages without batching
-    from the commit point to the end of the topic and then terminates.
+    from the current committed offset to the end of the topic and then terminates.
     It waits for a partition to be assigned before actually consuming. If no
     partition is assigned within a timeout it fails.
-    It also moves the responsibility of deciding what to commnit to the user
+    It also moves the responsibility of deciding what to commit to the user
     compared to the BatchingConsumer
 
     This is not supposed to be used for continuously consume a topic but to
-    catch up a topic from the beginning to the state it is at the time we start.
+    catch up on a topic from the beginning to the state it is at the time we start.
     An example is the control topic when taking snapshots.
     """
 

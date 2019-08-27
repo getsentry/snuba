@@ -66,7 +66,7 @@ class BootstrapState(State[StateCompletionEvent, StateData]):
         pass
 
     def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
-        logger.info("Runnign Consumer")
+        logger.info("Running Consumer")
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
