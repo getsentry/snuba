@@ -13,7 +13,7 @@ from werkzeug.exceptions import BadRequest
 import jsonschema
 
 from snuba import schemas, settings, state, util
-from snuba.clickhouse import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names

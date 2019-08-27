@@ -1,4 +1,4 @@
-from snuba.clickhouse import (
+from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     IPv4,

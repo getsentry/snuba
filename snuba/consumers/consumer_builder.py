@@ -2,7 +2,7 @@ from batching_kafka_consumer import BatchingKafkaConsumer
 from confluent_kafka import Producer
 from typing import Sequence
 
-from snuba.datasets import Dataset
+from snuba.datasets.factory import get_dataset
 from snuba.consumer import ConsumerWorker
 from snuba import settings
 from snuba import util
@@ -18,7 +18,6 @@ class ConsumerBuiler:
 
     def __init__(
         self,
-        dataset: Dataset,
         dataset_name: str,
         raw_topic: str,
         replacements_topic: str,
@@ -33,7 +32,7 @@ class ConsumerBuiler:
         dogstatsd_host: str,
         dogstatsd_port: int
     ) -> None:
-        self.dataset = dataset
+        self.dataset = get_dataset(dataset_name)
         self.dataset_name = dataset_name
         if not bootstrap_servers:
             self.bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
@@ -43,9 +42,9 @@ class ConsumerBuiler:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        self.raw_topic = raw_topic or dataset.get_default_topic()
-        self.replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
-        self.commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
+        self.raw_topic = raw_topic or self.dataset.get_default_topic()
+        self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
+        self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
 
         self.producer = Producer({
             'bootstrap.servers': ','.join(bootstrap_servers),
@@ -68,7 +67,7 @@ class ConsumerBuiler:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def build_base_worker(self):
+    def build_consumer(self) -> BatchingKafkaConsumer:
         """
         Builds the consumer with a ConsumerWorker.
         """

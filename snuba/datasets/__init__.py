@@ -1,6 +1,6 @@
 from typing import Mapping
 
-from snuba.clickhouse import escape_col
+from snuba.util import escape_col
 
 
 class Dataset(object):
@@ -29,7 +29,7 @@ class Dataset(object):
 
     def get_writer(self, options=None, table_name=None):
         from snuba import settings
-        from snuba.writer import HTTPBatchWriter
+        from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
             self._schema,

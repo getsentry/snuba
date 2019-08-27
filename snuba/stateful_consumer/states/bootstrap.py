@@ -3,15 +3,15 @@ import logging
 from typing import Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
-from snuba.stateful_consumer import StateData, StateOutput
-from snuba.stateful_consumer.state_context import State
-from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba import settings
+from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
+from snuba.stateful_consumer import StateData, StateCompletionEvent
+from snuba.stateful_consumer.state_context import State
 
 logger = logging.getLogger('snuba.snapshot-load')
 
 
-class BootstrapState(State[StateOutput, StateData]):
+class BootstrapState(State[StateCompletionEvent, StateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or
@@ -62,15 +62,16 @@ class BootstrapState(State[StateOutput, StateData]):
         # state machine to the next state.
         return CommitDecision.DO_NOT_COMMIT
 
-    def handle(self, state_data: StateData) -> Tuple[StateOutput, StateData]:
-        output = StateOutput.NO_SNAPSHOT
+    def signal_shutdown(self) -> None:
+        pass
 
+    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
         logger.info("Runnign Consumer")
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
         return (
-            output,
+            StateCompletionEvent.NO_SNAPSHOT,
             StateData.no_snapshot_state(),
         )
 

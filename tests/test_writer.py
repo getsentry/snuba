@@ -1,5 +1,5 @@
 from base import BaseEventsTest
-from snuba.writer import ClickHouseError, HTTPBatchWriter
+from snuba.clickhouse.http import ClickHouseError
 
 
 class TestHTTPBatchWriter(BaseEventsTest):
