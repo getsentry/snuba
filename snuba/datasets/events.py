@@ -1,6 +1,6 @@
 import re
 from snuba import state
-from snuba.clickhouse import (
+from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
     DateTime,

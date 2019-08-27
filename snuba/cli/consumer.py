@@ -5,7 +5,9 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.consumer_initializer import ConsumerBuiler
+from snuba.datasets.cdc import CdcDataset
+from snuba.consumers.consumer_builder import ConsumerBuiler
+from snuba.stateful_consumer.consumer_context import ConsumerContext
 
 
 @click.command()
@@ -15,6 +17,8 @@ from snuba.consumer_initializer import ConsumerBuiler
               help='Topic to produce replacement messages info.')
 @click.option('--commit-log-topic', default=None,
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
+@click.option('--control-topic', default=None,
+              help='Topic used to control the snapshot')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=None, multiple=True,
@@ -34,10 +38,11 @@ from snuba.consumer_initializer import ConsumerBuiler
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+@click.option('--stateful-consumer', default=False, type=bool, help='Runs a stateful consumer (that manages snapshots) instead of a basic one.')
+def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
-             dogstatsd_host, dogstatsd_port):
+             dogstatsd_host, dogstatsd_port, stateful_consumer):
 
     import sentry_sdk
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
@@ -46,8 +51,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    consumer = ConsumerBuiler(
-        dataset=dataset,
+    consumer_builder = ConsumerBuiler(
         dataset_name=dataset_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
@@ -61,12 +65,32 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         queued_min_messages=queued_min_messages,
         dogstatsd_host=dogstatsd_host,
         dogstatsd_port=dogstatsd_port
-    ).build_base_worker()
+    )
 
-    def handler(signum, frame):
-        consumer.signal_shutdown()
+    if stateful_consumer:
+        assert isinstance(dataset, CdcDataset), \
+            "Only CDC dataset have a control topic thus are supported."
+        context = ConsumerContext(
+            main_consumer=consumer_builder.build_consumer(),
+            topic=control_topic or dataset.get_control_topic(),
+            bootstrap_servers=bootstrap_server,
+            group_id=consumer_group,
+        )
 
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
+        def handler(signum, frame):
+            context.set_shutdown()
 
-    consumer.run()
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        context.run()
+    else:
+        consumer = consumer_builder.build_consumer()
+
+        def handler(signum, frame):
+            consumer.signal_shutdown()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        consumer.run()

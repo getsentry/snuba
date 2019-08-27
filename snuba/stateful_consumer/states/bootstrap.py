@@ -1,10 +1,10 @@
 import logging
 import json
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
-from snuba.stateful_consumer import StateData, StateOutput
+from snuba.stateful_consumer import StateCompletionEvent, StateData, StateOutput
 from snuba.stateful_consumer.state_context import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
@@ -89,7 +89,7 @@ class RecoveryState:
         self.__output = StateOutput.SNAPSHOT_READY_RECEIVED
 
 
-class BootstrapState(State[StateOutput, StateData]):
+class BootstrapState(State[StateCompletionEvent, StateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or to recover a
@@ -155,7 +155,11 @@ class BootstrapState(State[StateOutput, StateData]):
             logger.debug("Not committing")
             return CommitDecision.DO_NOT_COMMIT
 
-    def handle(self, input: Any) -> Tuple[StateOutput, Any]:
+    def signal_shutdown(self) -> None:
+        super(BootstrapState, self).set_shutdown()
+        self.__consumer.shutdown()
+
+    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
         logger.info("Running Consumer")
         self.__consumer.run()
 
@@ -164,7 +168,3 @@ class BootstrapState(State[StateOutput, StateData]):
             self.__recovery_state.get_output(),
             StateData.no_snapshot_state(),
         )
-
-    def set_shutdown(self) -> None:
-        super(BootstrapState, self).set_shutdown()
-        self.__consumer.shutdown()

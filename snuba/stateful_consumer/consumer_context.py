@@ -1,16 +1,15 @@
 from batching_kafka_consumer import BatchingKafkaConsumer
+from typing import Sequence
 
-from snuba.stateful_consumer import StateData, StateType, StateOutput
+from snuba.stateful_consumer import StateData, StateType, StateCompletionEvent
 from snuba.stateful_consumer.state_context import StateContext
-from snuba.stateful_consumer.bootstrap_state import BootstrapState
-from snuba.stateful_consumer.consuming_state import ConsumingState
-from snuba.stateful_consumer.paused_state import PausedState
-from snuba.stateful_consumer.catching_up_state import CatchingUpState
-
-from typing import Mapping, Sequence
+from snuba.stateful_consumer.states.bootstrap import BootstrapState
+from snuba.stateful_consumer.states.consuming import ConsumingState
+from snuba.stateful_consumer.states.paused import PausedState
+from snuba.stateful_consumer.states.catching_up import CatchingUpState
 
 
-class ConsumerContext(StateContext[StateType, StateOutput, StateData]):
+class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
@@ -24,41 +23,30 @@ class ConsumerContext(StateContext[StateType, StateOutput, StateData]):
         bootstrap_servers: Sequence[str],
         group_id: str,
     ) -> None:
-        states = {
-            StateType.BOOTSTRAP: BootstrapState(
-                topic,
-                bootstrap_servers,
-                group_id,
-            ),
-            StateType.CONSUMING: ConsumingState(main_consumer),
-            StateType.SNAPSHOT_PAUSED: PausedState(),
-            StateType.CATCHING_UP: CatchingUpState(),
-        }
-        start_state = StateType.BOOTSTRAP
-        terminal_state = StateType.FINISHED
-        super(ConsumerContext, self).__init__(
-            states=states,
-            start_state=start_state,
-            terminal_state=terminal_state
+        bootstrap_state = BootstrapState(
+            topic,
+            bootstrap_servers,
+            group_id,
         )
-
-    def _get_state_transitions(self) -> Mapping[StateType, Mapping[StateOutput, StateType]]:
-        return {
-            StateType.BOOTSTRAP: {
-                StateOutput.NO_SNAPSHOT: StateType.CONSUMING,
-                StateOutput.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
-                StateOutput.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+        super(ConsumerContext, self).__init__(
+            definition={
+                StateType.BOOTSTRAP: (bootstrap_state, {
+                    StateCompletionEvent.NO_SNAPSHOT: StateType.CONSUMING,
+                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                }),
+                StateType.CONSUMING: (ConsumingState(main_consumer), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                }),
+                StateType.SNAPSHOT_PAUSED: (PausedState(), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                }),
+                StateType.CATCHING_UP: (CatchingUpState(), {
+                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    StateCompletionEvent.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
+                }),
             },
-            StateType.CONSUMING: {
-                StateOutput.FINISH: StateType.FINISHED,
-                StateOutput.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
-            },
-            StateType.SNAPSHOT_PAUSED: {
-                StateOutput.FINISH: StateType.FINISHED,
-                StateOutput.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
-            },
-            StateType.CATCHING_UP: {
-                StateOutput.FINISH: StateType.FINISHED,
-                StateOutput.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
-            },
-        }
+            start_state=StateType.BOOTSTRAP,
+        )

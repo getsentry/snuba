@@ -20,7 +20,7 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_level):
     from datetime import datetime
-    from snuba.clickhouse import ClickhousePool
+    from snuba.clickhouse.native import ClickhousePool
     from snuba.optimize import run_optimize, logger
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')

@@ -3,7 +3,7 @@ import simplejson as json
 from datetime import datetime
 
 from base import BaseDatasetTest
-from snuba.clickhouse import ClickhousePool
+from snuba.clickhouse.native import ClickhousePool
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 
