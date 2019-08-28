@@ -3,13 +3,6 @@ from enum import Enum
 from typing import Optional
 
 
-class ConsumerStateType(Enum):
-    BOOTSTRAP = 0
-    CONSUMING = 1
-    SNAPSHOT_PAUSED = 2
-    CATCHING_UP = 3
-
-
 class ConsumerStateCompletionEvent(Enum):
     CONSUMPTION_COMPLETED = 0
     SNAPSHOT_INIT_RECEIVED = 1

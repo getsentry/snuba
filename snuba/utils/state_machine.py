@@ -1,13 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Generic, Mapping, TypeVar, Tuple, Union
+from typing import (
+    Generic,
+    Mapping,
+    Type,
+    TypeVar,
+    Tuple,
+    Union
+)
 
 import logging
 
 
 logger = logging.getLogger('snuba.state-machine')
-
-# Enum that identifies the state type within the state machine.
-TStateType = TypeVar('TStateType')
 
 
 # Enum that identifies the event a state raises upon termination.
@@ -46,18 +50,23 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
         raise NotImplementedError
 
 
-StateTransitions = Mapping[TStateCompletionEvent, Union[TStateType, None]]
+StateType = Type[State[TStateCompletionEvent, TStateData]]
 
-StateMachineDefinition = Mapping[
-    TStateType,
-    Tuple[
-        State[TStateCompletionEvent, TStateData],
-        StateTransitions,
+StateTransitions = Mapping[
+    TStateCompletionEvent,
+    Union[
+        StateType,
+        None,
     ]
 ]
 
+StateMachineDefinition = Mapping[
+    StateType,
+    StateTransitions,
+]
 
-class StateMachine(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
+
+class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
     """
     State pattern implementation used to change the logic
     of a component depending the state the component is into.
@@ -69,10 +78,10 @@ class StateMachine(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
     def __init__(
         self,
         definition: StateMachineDefinition,
-        start_state: TStateType,
+        start_state: StateType,
     ) -> None:
         self.__definition = definition
-        self.__current_state_type: Union[TStateType, None] = start_state
+        self.__current_state_type: Union[StateType, None] = start_state
         self.__has_shutdown = False
 
     def run(self) -> None:
@@ -89,14 +98,15 @@ class StateMachine(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
         state_data = None
 
         while self.__current_state_type is not None:
-            event, state_data = self.__get_current_state_object() \
-                .handle(state_data)
+            event, state_data = self._build_state(
+                self.__current_state_type,
+            ).handle(state_data)
 
             if self.__has_shutdown:
                 next_state_type = None
                 break
 
-            current_state_map = self.__definition[self.__current_state_type][1]
+            current_state_map = self.__definition[self.__current_state_type]
             if event not in current_state_map:
                 raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
 
@@ -114,8 +124,16 @@ class StateMachine(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
         transition.
         """
         logger.debug("Shutting down state machine")
-        self.__get_current_state_object().signal_shutdown()
+        if self.__current_state_type is not None:
+            self._build_state(
+                self.__current_state_type,
+            ).signal_shutdown()
         self.__has_shutdown = True
 
-    def __get_current_state_object(self) -> State:
-        return self.__definition[self.__current_state_type][0]
+    @abstractmethod
+    def _build_state(self, state_class: StateType):
+        """
+        Factory to provide implementations of the state given
+        the type (which is the state class name).
+        """
+        raise NotImplementedError

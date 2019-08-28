@@ -1,7 +1,7 @@
 from typing import Mapping, Set, Tuple
 
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent, ConsumerStateType
-from snuba.utils.state_machine import StateMachine, State
+from snuba.utils.state_machine import StateMachine, State, StateType
 
 
 class State1(State[ConsumerStateCompletionEvent, ConsumerStateData]):
@@ -33,17 +33,24 @@ class State2(State[ConsumerStateCompletionEvent, ConsumerStateData]):
 
 class TestContext(StateMachine[ConsumerStateType, ConsumerStateCompletionEvent, ConsumerStateData]):
     def __init__(self, processed_states: Set[ConsumerStateType]):
+        self.__processed_state = processed_states
         super(TestContext, self).__init__(
             definition={
-                ConsumerStateType.BOOTSTRAP: (State1(processed_states), {
-                    ConsumerStateCompletionEvent.NO_SNAPSHOT: ConsumerStateType.CONSUMING,
-                }),
-                ConsumerStateType.CONSUMING: (State2(processed_states), {
+                State1: {
+                    ConsumerStateCompletionEvent.NO_SNAPSHOT: State2,
+                },
+                State2: {
                     ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                }),
+                },
             },
-            start_state=ConsumerStateType.BOOTSTRAP,
+            start_state=State1,
         )
+
+    def _build_state(
+        self,
+        state_class: StateType,
+    ) -> State[ConsumerStateCompletionEvent, ConsumerStateData]:
+        return state_class(self.__processed_state)
 
 
 class TestStateMachine:
