@@ -5,13 +5,14 @@ from confluent_kafka import Consumer, Message, TopicPartition
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
-from snuba.stateful_consumer import StateData, StateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import State
+
 
 logger = logging.getLogger('snuba.snapshot-load')
 
 
-class BootstrapState(State[StateCompletionEvent, StateData]):
+class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or
@@ -65,14 +66,14 @@ class BootstrapState(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         logger.info("Running Consumer")
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
         return (
-            StateCompletionEvent.NO_SNAPSHOT,
-            StateData.no_snapshot_state(),
+            ConsumerStateCompletionEvent.NO_SNAPSHOT,
+            ConsumerStateData.no_snapshot_state(),
         )
 
     def set_shutdown(self) -> None:

@@ -1,11 +1,11 @@
-from snuba.stateful_consumer import StateData, StateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import State
 
 from batching_kafka_consumer import BatchingKafkaConsumer
 from typing import Tuple
 
 
-class ConsumingState(State[StateCompletionEvent, StateData]):
+class ConsumingState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     This is the normal operation state where the consumer
     reads from the main topic (cdc in this case) and sends
@@ -21,9 +21,9 @@ class ConsumingState(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         self.__consumer.run()
         return (
-            StateCompletionEvent.CONSUMPTION_COMPLETED,
-            StateData.no_snapshot_state(),
+            ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
+            ConsumerStateData.no_snapshot_state(),
         )

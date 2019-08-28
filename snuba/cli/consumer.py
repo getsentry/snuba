@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer.consumer_context import ConsumerContext
+from snuba.stateful_consumer.consumer_context import ConsumerStateMachine
 
 
 @click.command()
@@ -65,7 +65,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     if stateful_consumer:
-        context = ConsumerContext(
+        context = ConsumerStateMachine(
             main_consumer=consumer_builder.build_consumer(),
             topic="cdc_control",
             bootstrap_servers=bootstrap_server,
@@ -73,7 +73,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         )
 
         def handler(signum, frame):
-            context.set_shutdown()
+            context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
