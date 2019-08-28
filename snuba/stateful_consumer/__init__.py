@@ -3,14 +3,7 @@ from enum import Enum
 from typing import Optional
 
 
-class StateType(Enum):
-    BOOTSTRAP = 0
-    CONSUMING = 1
-    SNAPSHOT_PAUSED = 2
-    CATCHING_UP = 3
-
-
-class StateCompletionEvent(Enum):
+class ConsumerStateCompletionEvent(Enum):
     CONSUMPTION_COMPLETED = 0
     SNAPSHOT_INIT_RECEIVED = 1
     SNAPSHOT_READY_RECEIVED = 2
@@ -19,7 +12,7 @@ class StateCompletionEvent(Enum):
 
 
 @dataclass
-class StateData:
+class ConsumerStateData:
     """
     Represent the state information we pass from one
     state to the other.
@@ -29,7 +22,7 @@ class StateData:
     @classmethod
     def no_snapshot_state(cls):
         """
-        Builds an empty StateData that represent a state where there is no
+        Builds an empty ConsumerStateData that represent a state where there is no
         snapshot to care about.
         """
-        return StateData(None)
+        return ConsumerStateData(None)

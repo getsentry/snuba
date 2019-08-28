@@ -4,7 +4,7 @@ import json
 from typing import Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
-from snuba.stateful_consumer import StateCompletionEvent, StateData
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.stateful_consumer.state_context import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
@@ -30,9 +30,9 @@ class RecoveryState:
     def __init__(self):
         self.__active_snapshot_msg = None
         self.__processed_snapshots = set()
-        self.__completion_event = StateCompletionEvent.NO_SNAPSHOT
+        self.__completion_event = ConsumerStateCompletionEvent.NO_SNAPSHOT
 
-    def get_completion_event(self) -> StateCompletionEvent:
+    def get_completion_event(self) -> ConsumerStateCompletionEvent:
         return self.__completion_event
 
     def get_active_snapshot_msg(self) -> Optional[ControlMessage]:
@@ -58,7 +58,7 @@ class RecoveryState:
             )
         self.__processed_snapshots.add(msg.id)
         self.__active_snapshot_msg = msg
-        self.__completion_event = StateCompletionEvent.SNAPSHOT_INIT_RECEIVED
+        self.__completion_event = ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED
 
     def process_abort(self, msg: SnapshotAbort) -> None:
         logger.debug("Processing abort message for %r", msg.id)
@@ -72,7 +72,7 @@ class RecoveryState:
             )
             return
         self.__active_snapshot_msg = None
-        self.__completion_event = StateCompletionEvent.NO_SNAPSHOT
+        self.__completion_event = ConsumerStateCompletionEvent.NO_SNAPSHOT
 
     def process_snapshot_loaded(self, msg: SnapshotLoaded) -> None:
         logger.debug("Processing ready message for %r", msg.id)
@@ -86,10 +86,10 @@ class RecoveryState:
             )
             return
         self.__active_snapshot_msg = msg
-        self.__completion_event = StateCompletionEvent.SNAPSHOT_READY_RECEIVED
+        self.__completion_event = ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED
 
 
-class BootstrapState(State[StateCompletionEvent, StateData]):
+class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or to recover a
@@ -159,12 +159,12 @@ class BootstrapState(State[StateCompletionEvent, StateData]):
         super(BootstrapState, self).set_shutdown()
         self.__consumer.shutdown()
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         logger.info("Running Consumer")
         self.__consumer.run()
 
         logger.info("Caught up on the control topic")
         return (
             self.__recovery_state.get_completion_event(),
-            StateData.no_snapshot_state(),
+            ConsumerStateData.no_snapshot_state(),
         )

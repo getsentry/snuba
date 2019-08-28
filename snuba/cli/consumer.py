@@ -7,7 +7,7 @@ from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.datasets.cdc import CdcDataset
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer.consumer_context import ConsumerContext
+from snuba.stateful_consumer.consumer_context import ConsumerStateMachine
 
 
 @click.command()
@@ -70,7 +70,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
     if stateful_consumer:
         assert isinstance(dataset, CdcDataset), \
             "Only CDC dataset have a control topic thus are supported."
-        context = ConsumerContext(
+        context = ConsumerStateMachine(
             main_consumer=consumer_builder.build_consumer(),
             topic=control_topic or dataset.get_control_topic(),
             bootstrap_servers=bootstrap_server,
@@ -78,7 +78,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
         )
 
         def handler(signum, frame):
-            context.set_shutdown()
+            context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
