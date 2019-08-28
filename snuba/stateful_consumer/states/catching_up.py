@@ -2,13 +2,13 @@ import logging
 from typing import Tuple
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer import StateData, StateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import State
 
 logger = logging.getLogger('snuba.snapshot-catchup')
 
 
-class CatchingUpState(State[StateCompletionEvent, StateData]):
+class CatchingUpState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     In this state the consumer consumes the main topic but
     it discards the transacitons that were present in the
@@ -29,7 +29,7 @@ class CatchingUpState(State[StateCompletionEvent, StateData]):
         if self.__consumer:
             self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         assert state_data.snapshot_id is not None
         assert state_data.transaction_data is not None
 
@@ -40,6 +40,6 @@ class CatchingUpState(State[StateCompletionEvent, StateData]):
 
         self.__consumer.run()
         return (
-            StateCompletionEvent.CONSUMPTION_COMPLETED,
-            StateData.no_snapshot_state(),
+            ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
+            ConsumerStateData.no_snapshot_state(),
         )

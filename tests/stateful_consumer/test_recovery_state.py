@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.stateful_consumer import StateCompletionEvent
+from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.stateful_consumer.states.bootstrap import RecoveryState
 from snuba.stateful_consumer.control_protocol import (
     SnapshotInit,
@@ -14,7 +14,7 @@ class TestRecoveryState:
         (
             # Empty topic.
             [],
-            StateCompletionEvent.NO_SNAPSHOT,
+            ConsumerStateCompletionEvent.NO_SNAPSHOT,
             None,
         ),
         (
@@ -22,7 +22,7 @@ class TestRecoveryState:
             [
                 SnapshotInit(id="123asd", product="snuba")
             ],
-            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
+            ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd"
         ),
         (
@@ -31,7 +31,7 @@ class TestRecoveryState:
                 SnapshotInit(id="123asd", product="snuba"),
                 SnapshotAbort(id="123asd"),
             ],
-            StateCompletionEvent.NO_SNAPSHOT,
+            ConsumerStateCompletionEvent.NO_SNAPSHOT,
             None,
         ),
         (
@@ -44,7 +44,7 @@ class TestRecoveryState:
                     transaction_info=None,
                 ),
             ],
-            StateCompletionEvent.SNAPSHOT_READY_RECEIVED,
+            ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED,
             "123asd"
         ),
         (
@@ -55,7 +55,7 @@ class TestRecoveryState:
                 SnapshotAbort(id="234asd"),
                 SnapshotInit(id="345asd", product="snuba"),
             ],
-            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
+            ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd"
         ),
         (
@@ -75,7 +75,7 @@ class TestRecoveryState:
                 ),
                 SnapshotInit(id="345asd", product="snuba"),
             ],
-            StateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
+            ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "345asd"
         )
     ]
