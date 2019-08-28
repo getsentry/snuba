@@ -1,14 +1,14 @@
 from batching_kafka_consumer import BatchingKafkaConsumer
 
-from snuba.stateful_consumer import StateData, StateType, StateCompletionEvent
-from snuba.stateful_consumer.state_context import StateContext
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateType, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import StateContext
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
 from snuba.stateful_consumer.states.paused import PausedState
 from snuba.stateful_consumer.states.catching_up import CatchingUpState
 
 
-class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
+class ConsumerContext(StateContext[ConsumerStateType, ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
@@ -21,23 +21,23 @@ class ConsumerContext(StateContext[StateType, StateCompletionEvent, StateData]):
     ) -> None:
         super(ConsumerContext, self).__init__(
             definition={
-                StateType.BOOTSTRAP: (BootstrapState(), {
-                    StateCompletionEvent.NO_SNAPSHOT: StateType.CONSUMING,
-                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
-                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                ConsumerStateType.BOOTSTRAP: (BootstrapState(), {
+                    ConsumerStateCompletionEvent.NO_SNAPSHOT: ConsumerStateType.CONSUMING,
+                    ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED: ConsumerStateType.SNAPSHOT_PAUSED,
+                    ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED: ConsumerStateType.CATCHING_UP,
                 }),
-                StateType.CONSUMING: (ConsumingState(main_consumer), {
-                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                    StateCompletionEvent.SNAPSHOT_INIT_RECEIVED: StateType.SNAPSHOT_PAUSED,
+                ConsumerStateType.CONSUMING: (ConsumingState(main_consumer), {
+                    ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED: ConsumerStateType.SNAPSHOT_PAUSED,
                 }),
-                StateType.SNAPSHOT_PAUSED: (PausedState(), {
-                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                    StateCompletionEvent.SNAPSHOT_READY_RECEIVED: StateType.CATCHING_UP,
+                ConsumerStateType.SNAPSHOT_PAUSED: (PausedState(), {
+                    ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED: ConsumerStateType.CATCHING_UP,
                 }),
-                StateType.CATCHING_UP: (CatchingUpState(), {
-                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                    StateCompletionEvent.SNAPSHOT_CATCHUP_COMPLETED: StateType.CONSUMING,
+                ConsumerStateType.CATCHING_UP: (CatchingUpState(), {
+                    ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                    ConsumerStateCompletionEvent.SNAPSHOT_CATCHUP_COMPLETED: ConsumerStateType.CONSUMING,
                 }),
             },
-            start_state=StateType.BOOTSTRAP,
+            start_state=ConsumerStateType.BOOTSTRAP,
         )

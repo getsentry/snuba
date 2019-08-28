@@ -1,10 +1,10 @@
-from snuba.stateful_consumer import StateData, StateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import State
 
 from typing import Tuple
 
 
-class BootstrapState(State[StateCompletionEvent, StateData]):
+class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or
@@ -17,9 +17,9 @@ class BootstrapState(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         # TODO: Actually do the snapshot bootstrap
         return (
-            StateCompletionEvent.NO_SNAPSHOT,
-            StateData.no_snapshot_state(),
+            ConsumerStateCompletionEvent.NO_SNAPSHOT,
+            ConsumerStateData.no_snapshot_state(),
         )

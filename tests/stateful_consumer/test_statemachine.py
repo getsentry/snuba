@@ -1,10 +1,10 @@
 from typing import Mapping, Set, Tuple
 
-from snuba.stateful_consumer import StateData, StateCompletionEvent, StateType
-from snuba.stateful_consumer.state_context import StateContext, State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent, ConsumerStateType
+from snuba.utils.state_machine import StateContext, State
 
 
-class State1(State[StateCompletionEvent, StateData]):
+class State1(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State1, self).__init__()
         self.__processed_state = processed_states
@@ -12,13 +12,13 @@ class State1(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         assert state_data == "start"
-        self.__processed_state[StateType.BOOTSTRAP] = True
-        return (StateCompletionEvent.NO_SNAPSHOT, "consume")
+        self.__processed_state[ConsumerStateType.BOOTSTRAP] = True
+        return (ConsumerStateCompletionEvent.NO_SNAPSHOT, "consume")
 
 
-class State2(State[StateCompletionEvent, StateData]):
+class State2(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     def __init__(self, processed_states: Mapping[str, bool]) -> None:
         super(State2, self).__init__()
         self.__processed_state = processed_states
@@ -26,24 +26,24 @@ class State2(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         assert state_data == "consume"
-        self.__processed_state[StateType.CONSUMING] = True
-        return (StateCompletionEvent.CONSUMPTION_COMPLETED, None)
+        self.__processed_state[ConsumerStateType.CONSUMING] = True
+        return (ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED, None)
 
 
-class TestContext(StateContext[StateType, StateCompletionEvent, StateData]):
-    def __init__(self, processed_states: Set[StateType]):
+class TestContext(StateContext[ConsumerStateType, ConsumerStateCompletionEvent, ConsumerStateData]):
+    def __init__(self, processed_states: Set[ConsumerStateType]):
         super(TestContext, self).__init__(
             definition={
-                StateType.BOOTSTRAP: (State1(processed_states), {
-                    StateCompletionEvent.NO_SNAPSHOT: StateType.CONSUMING,
+                ConsumerStateType.BOOTSTRAP: (State1(processed_states), {
+                    ConsumerStateCompletionEvent.NO_SNAPSHOT: ConsumerStateType.CONSUMING,
                 }),
-                StateType.CONSUMING: (State2(processed_states), {
-                    StateCompletionEvent.CONSUMPTION_COMPLETED: None,
+                ConsumerStateType.CONSUMING: (State2(processed_states), {
+                    ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
                 }),
             },
-            start_state=StateType.BOOTSTRAP,
+            start_state=ConsumerStateType.BOOTSTRAP,
         )
 
 
@@ -56,6 +56,6 @@ class TestStateMachine:
 
         context.run("start")
         assert processed_states == {
-            StateType.BOOTSTRAP: True,
-            StateType.CONSUMING: True,
+            ConsumerStateType.BOOTSTRAP: True,
+            ConsumerStateType.CONSUMING: True,
         }

@@ -1,24 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import Generic, Mapping, Optional, TypeVar, Tuple
+from typing import Generic, Mapping, TypeVar, Tuple, Union
 
 import logging
 
 
 logger = logging.getLogger('snuba.state-machine')
 
-"""Enum that identifies the state type within the state machine. """
+# Enum that identifies the state type within the state machine.
 TStateType = TypeVar('TStateType')
 
-"""
-Enum that identifies the event a state raises upon termination.
-This is used by the context to resolve the next state.
-"""
+
+# Enum that identifies the event a state raises upon termination.
+# This is used by the context to resolve the next state.
 TStateCompletionEvent = TypeVar('TStateCompletionEvent')
 
-"""
-Any context data produced by a state during its work that has to be made
-available to the following states.
-"""
+
+# Any context data produced by a state during its work that has to be made
+# available to the following states.
 TStateData = TypeVar('TStateData')
 
 
@@ -48,7 +46,7 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
         raise NotImplementedError
 
 
-StateTransitions = Mapping[TStateCompletionEvent, Optional[TStateType]]
+StateTransitions = Mapping[TStateCompletionEvent, Union[TStateType, None]]
 
 StateMachineDefinition = Mapping[
     TStateType,
@@ -59,7 +57,7 @@ StateMachineDefinition = Mapping[
 ]
 
 
-class StateContext(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
+class StateMachine(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
     """
     State pattern implementation used to change the logic
     of a component depending the state the component is into.
@@ -74,10 +72,10 @@ class StateContext(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
         start_state: TStateType,
     ) -> None:
         self.__definition = definition
-        self.__current_state_type: Optional[TStateType] = start_state
-        self.__shutdown = False
+        self.__current_state_type: Union[TStateType, None] = start_state
+        self.__has_shutdown = False
 
-    def run(self, initial_data: TStateData = None) -> None:
+    def run(self) -> None:
         """
         Execute the state machine starting from the start_state
         and does not stop until the state machine does not reach
@@ -88,27 +86,28 @@ class StateContext(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
         """
 
         logger.debug("Starting state machine")
-        state_data = initial_data
+        state_data = None
 
-        while self.__current_state_type:
+        while self.__current_state_type is not None:
             event, state_data = self.__get_current_state_object() \
                 .handle(state_data)
 
-            if self.__shutdown:
+            if self.__has_shutdown:
                 next_state_type = None
-            else:
-                current_state_map = self.__definition[self.__current_state_type][1]
-                if event not in current_state_map:
-                    raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
+                break
 
-                next_state_type = current_state_map[event]
+            current_state_map = self.__definition[self.__current_state_type][1]
+            if event not in current_state_map:
+                raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
+
+            next_state_type = current_state_map[event]
 
             logger.debug("Transitioning to state %r", next_state_type)
             self.__current_state_type = next_state_type
 
         logger.debug("Finishing state machine processing")
 
-    def set_shutdown(self) -> None:
+    def signal_shutdown(self) -> None:
         """
         Communicate in a non preemptive way to the state machine that it
         is time to shut down. This status is checked at every state
@@ -116,7 +115,7 @@ class StateContext(Generic[TStateType, TStateCompletionEvent, TStateData], ABC):
         """
         logger.debug("Shutting down state machine")
         self.__get_current_state_object().signal_shutdown()
-        self.__shutdown = True
+        self.__has_shutdown = True
 
     def __get_current_state_object(self) -> State:
         return self.__definition[self.__current_state_type][0]

@@ -1,10 +1,10 @@
-from snuba.stateful_consumer import StateData, StateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
+from snuba.utils.state_machine import State
 
 from typing import Tuple
 
 
-class PausedState(State[StateCompletionEvent, StateData]):
+class PausedState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     In this state the consumer is waiting for the snapshto to be
     ready and loaded. It consumes the control topic waiting for
@@ -15,9 +15,9 @@ class PausedState(State[StateCompletionEvent, StateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, input: StateData) -> Tuple[StateCompletionEvent, StateData]:
+    def handle(self, input: ConsumerConsumerConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         # TODO: Actually wait on the control topic for instructions
         return (
-            StateCompletionEvent.CONSUMPTION_COMPLETED,
-            StateData.no_snapshot_state(),
+            ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
+            ConsumerStateData.no_snapshot_state(),
         )

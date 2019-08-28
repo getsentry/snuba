@@ -70,7 +70,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
         )
 
         def handler(signum, frame):
-            context.set_shutdown()
+            context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
