@@ -14,7 +14,8 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import schemas, settings, state
-from snuba.clickhouse.http import HTTPReader, ClickHouseError as HTTPDriverClickHouseError
+from snuba.clickhouse.http import ClickHouseError as HTTPDriverClickHouseError
+from snuba.reader import Reader
 
 
 logger = logging.getLogger('snuba.util')
@@ -370,7 +371,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(body, sql, client, timer, stats=None):
+def raw_query(body, sql, reader: Reader, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -451,11 +452,7 @@ def raw_query(body, sql, client, timer, stats=None):
                             query_settings['max_threads'] = 1
 
                         try:
-                            result = HTTPReader(
-                                settings.CLICKHOUSE_HOST,
-                                settings.CLICKHOUSE_HTTP_PORT,
-                                {'output_format_json_quote_64bit_integers': '0'},
-                            ).execute(
+                            result = reader.execute(
                                 sql,
                                 query_settings,
                                 # All queries should already be deduplicated at this point
@@ -463,6 +460,7 @@ def raw_query(body, sql, client, timer, stats=None):
                                 query_id=query_id,
                                 with_totals=body.get('totals', False),
                             )
+
                             status = 200
 
                             logger.debug(sql)

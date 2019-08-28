@@ -14,6 +14,7 @@ import jsonschema
 
 from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.http import HTTPReader
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
@@ -29,6 +30,12 @@ clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={
     'readonly': True,
 })
+
+reader = HTTPReader(
+    settings.CLICKHOUSE_HOST,
+    settings.CLICKHOUSE_HTTP_PORT,
+    {'output_format_json_quote_64bit_integers': '0'},
+)
 
 
 try:
@@ -393,7 +400,7 @@ def parse_and_run_query(dataset, body, timer):
         'sample': body.get('sample'),
     }
 
-    return util.raw_query(body, sql, clickhouse_ro, timer, stats)
+    return util.raw_query(body, sql, reader, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
