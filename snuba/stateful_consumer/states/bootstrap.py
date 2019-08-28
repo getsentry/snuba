@@ -5,7 +5,7 @@ from typing import Optional, Sequence, Tuple
 from confluent_kafka import Consumer, Message, TopicPartition
 
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
-from snuba.stateful_consumer.state_context import State
+from snuba.utils.state_machine import State
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
     parse_control_message,
