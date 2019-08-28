@@ -6,6 +6,7 @@ from typing import Iterable, Mapping, Optional
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
+from urllib3.response import HTTPResponse
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.reader import Reader, Result, transform_date_columns
@@ -31,7 +32,13 @@ CLICKHOUSE_ERROR_RE = re.compile(
 )
 
 
-def handle_clickhouse_response(response) -> None:
+def raise_for_error_response(response: HTTPResponse) -> None:
+    """
+    Ensures that a ClickHouse response returned an expected status code. If
+    the response has an unexpected status code, the response body is parsed
+    and a ClickHouseError is raised if possible, otherwise an HTTPError is
+    raised.
+    """
     if response.status != 200:
         # XXX: This should be switched to just parse the JSON body after
         # https://github.com/yandex/ClickHouse/issues/6272 is available.
@@ -77,7 +84,7 @@ class HTTPBatchWriter(BatchWriter):
             chunked=True,
         )
 
-        handle_clickhouse_response(response)
+        raise_for_error_response(response)
 
 
 class HTTPReader(Reader):
@@ -110,7 +117,7 @@ class HTTPReader(Reader):
             body=query.encode("utf-8"),
         )
 
-        handle_clickhouse_response(response)
+        raise_for_error_response(response)
 
         result = json.loads(response.data.decode("utf-8"))
         del result["statistics"]
