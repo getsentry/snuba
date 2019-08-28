@@ -1,6 +1,6 @@
 from batching_kafka_consumer import BatchingKafkaConsumer
 
-from snuba.stateful_consumer import ConsumerStateData, ConsumerStateType, ConsumerStateCompletionEvent
+from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.state_machine import State, StateType, StateMachine
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
@@ -8,7 +8,7 @@ from snuba.stateful_consumer.states.paused import PausedState
 from snuba.stateful_consumer.states.catching_up import CatchingUpState
 
 
-class ConsumerStateMachine(StateMachine[ConsumerStateType, ConsumerStateCompletionEvent, ConsumerStateData]):
+class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
