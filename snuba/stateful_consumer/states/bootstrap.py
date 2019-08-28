@@ -165,12 +165,12 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
 
         msg = self.__recovery_state.get_active_snapshot_msg()
         if isinstance(msg, SnapshotLoaded):
-            state_data = StateData.snapshot_ready_state(
+            state_data = ConsumerStateData.snapshot_ready_state(
                 snapshot_id=msg.id,
                 transaction_data=msg.transaction_info,
             )
         else:
-            state_data = StateData.no_snapshot_state()
+            state_data = ConsumerStateData.no_snapshot_state()
 
         logger.info("Caught up on the control topic")
         return (
