@@ -24,6 +24,11 @@ TStateCompletionEvent = TypeVar('TStateCompletionEvent')
 TStateData = TypeVar('TStateData')
 
 
+class TransitionType(Enum):
+    PAUSE = 0
+    CONTINUE 1
+
+
 class State(Generic[TStateCompletionEvent, TStateData], ABC):
     """
     Encapsulates the state specific logic in the state pattern.
@@ -40,7 +45,7 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def handle(self, state_data: TStateData) -> Tuple[TStateCompletionEvent, TStateData]:
+    def handle(self, state_data: TStateData) -> Tuple[Optional[TStateCompletionEvent], TStateData]:
         """
         Implemented by each state. It runs its own state specific logic and
         returns a tuple that contains the state result, which identifies the
@@ -53,10 +58,13 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
 StateType = Type[State[TStateCompletionEvent, TStateData]]
 
 StateTransitions = Mapping[
-    TStateCompletionEvent,
-    Union[
-        StateType,
-        None,
+    Tuple(StateType, TStateCompletionEvent),
+    Tuple[,
+        TransitionType,
+        Union[
+            TransitionType,
+            None,
+        ]
     ]
 ]
 
@@ -84,7 +92,7 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         self.__current_state_type: Union[StateType, None] = start_state
         self.__has_shutdown = False
 
-    def run(self) -> None:
+    def handle(self, input: TStateData) -> TStateData:
         """
         Execute the state machine starting from the start_state
         and does not stop until the state machine does not reach
@@ -98,10 +106,11 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         """
 
         logger.debug("Starting state machine")
-        state_data = None
-
-        while self.__current_state_type is not None:
+        state_data = input
+        current_transition_type = TransitionType.CONTINUE
+        while self.__current_state_type is not None and current_transition_type == TransitionType.CONTINUE:
             event, state_data = self._build_state(
+                # WE may need to keep them instantiated
                 self.__current_state_type,
             ).handle(state_data)
 
@@ -110,7 +119,10 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
                 break
 
             current_state_map = self.__definition[self.__current_state_type]
-            if event not in current_state_map:
+            if not event:
+                # No event. Remain in the current state
+                return state_data
+            if (self.__current_state_type, event) not in current_state_map:
                 raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
 
             next_state_type = current_state_map[event]
