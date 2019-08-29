@@ -125,12 +125,13 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
             if (self.__current_state_type, event) not in current_state_map:
                 raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
 
-            next_state_type = current_state_map[event]
+            current_transition_type, next_state_type = current_state_map[event]
 
             logger.debug("Transitioning to state %r", next_state_type)
             self.__current_state_type = next_state_type
 
         logger.debug("Finishing state machine processing")
+        return state_data
 
     def signal_shutdown(self) -> None:
         """
