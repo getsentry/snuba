@@ -213,7 +213,7 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         return render_template(
             'query.html',
             query_template=json.dumps(
-                schemas.generate(dataset.get_query_schema()),
+                dataset.get_query_schema().generate_template(),
                 indent=4,
             ),
         )
@@ -380,7 +380,6 @@ def parse_and_run_query(dataset, body, timer):
     table = dataset.get_schema().get_table_name()
 
     sql = format_query(dataset, body, table, prewhere_conditions, final)
-
     timer.mark('prepare_query')
 
     stats = {
