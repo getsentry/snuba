@@ -42,7 +42,7 @@ class TestStrictConsumer:
             on_message=on_message,
         )
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         kafka_consumer.items = [
@@ -56,7 +56,7 @@ class TestStrictConsumer:
         consumer.run()
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_failure(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -69,7 +69,7 @@ class TestStrictConsumer:
 
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_one_message(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -87,7 +87,7 @@ class TestStrictConsumer:
         on_message.assert_called_once_with(msg)
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_commits(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer

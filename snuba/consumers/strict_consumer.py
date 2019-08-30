@@ -1,6 +1,6 @@
 from confluent_kafka import Consumer, KafkaError, Message, TopicPartition
 from enum import Enum
-from typing import Callable, Sequence
+from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import logging
 
@@ -41,14 +41,14 @@ class StrictConsumer:
         group_id: str,
         auto_offset_reset: str,
         partition_assignment_timeout: int,
-        on_partitions_assigned: Callable[[Consumer, Sequence[TopicPartition]], None],
-        on_partitions_revoked: Callable[[Consumer, Sequence[TopicPartition]], None],
+        on_partitions_assigned: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
+        on_partitions_revoked: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
         on_message: Callable[[Message], CommitDecision],
     ) -> None:
         self.__on_partitions_assigned = on_partitions_assigned
         self.__on_partitions_revoked = on_partitions_revoked
         self.__on_message = on_message
-        self._assign_timeout = partition_assignment_timeout
+        self.__assign_timeout = partition_assignment_timeout
 
         self.__shutdown = False
 
@@ -57,26 +57,29 @@ class StrictConsumer:
             'bootstrap.servers': ','.join(bootstrap_servers),
             'group.id': group_id,
             'enable.partition.eof': 'true',
+            'auto.offset.reset': auto_offset_reset,
             'default.topic.config': {
                 'auto.offset.reset': auto_offset_reset,
             },
         }
 
-        self.__consumer = self.create_consumer(consumer_config)
+        self.__consumer = self._create_consumer(consumer_config)
 
         def on_partitions_assigned(
             consumer: Consumer,
             partitions: Sequence[TopicPartition],
         ):
             logger.info("New partitions assigned: %r", partitions)
-            self.__on_partitions_assigned(consumer, partitions)
+            if self.__on_partitions_assigned:
+                self.__on_partitions_assigned(consumer, partitions)
 
         def on_partitions_revoked(
             consumer: Consumer,
             partitions: Sequence[TopicPartition],
         ):
             logger.info("Partitions revoked: %r", partitions)
-            self.__on_partitions_revoked(consumer, partitions)
+            if self.__on_partitions_revoked:
+                self.__on_partitions_revoked(consumer, partitions)
 
         self.__consumer.subscribe(
             [topic],
@@ -84,20 +87,19 @@ class StrictConsumer:
             on_revoke=on_partitions_revoked,
         )
 
-    def create_consumer(self, config) -> Consumer:
+    def _create_consumer(self, config) -> Consumer:
         return Consumer(config)
 
     def run(self) -> None:
-        watermarks = {}
-
-        message = self.__consumer.poll(timeout=self._assign_timeout)
-        if not message:
-            # Since we enabled enable.partition.eof, no message means I could not
-            # consume and it is different from the case I managed to consume and
-            # I reached the end of the partition. Thus we fail.
-            raise NoPartitionAssigned("No partition was assigned within timeout")
+        watermarks: Mapping[Tuple[int, str], int] = {}
 
         while not self.__shutdown:
+            message = self.__consumer.poll(timeout=self.__assign_timeout)
+            if not message:
+                # Since we enabled enable.partition.eof, no message means I could not
+                # consume and it is different from the case I managed to consume and
+                # I reached the end of the partition. Thus we fail.
+                raise NoPartitionAssigned("No partition was assigned within timeout")
             error = message.error()
             if error:
                 if error.code() == KafkaError._PARTITION_EOF:
@@ -105,11 +107,11 @@ class StrictConsumer:
                     self.__consumer.close()
                     return
                 else:
-                    raise Exception(message.error())
+                    raise message.error()
 
             commit_decision = self.__on_message(message)
             if commit_decision == CommitDecision.COMMIT_THIS:
-                self.__consumer.commit()
+                self.__consumer.commit(asynchronous=False)
             elif commit_decision == CommitDecision.COMMIT_PREV:
                 prev_watermark = watermarks.get(
                     (message.partition(), message.topic()),
@@ -120,7 +122,7 @@ class StrictConsumer:
                         topic=message.topic(),
                         offset=prev_watermark,
                     )
-                    self.__consumer.commit(commit_pos)
+                    self.__consumer.commit(commit_pos, asynchronous=False)
                 else:
                     logger.debug(
                         "No previous message to commit on partition %s on topic %s",
@@ -129,13 +131,9 @@ class StrictConsumer:
                     )
 
             watermarks[(message.partition(), message.topic())] = message.offset()
-            message = self.__consumer.poll(timeout=1.0)
 
         self.__consumer.close()
 
-    def force_commit(self, partition: TopicPartition) -> None:
-        self.__consumer.commit(partition)
-
-    def shutdown(self) -> None:
-        logger.debug("Shutting down Strinct Consumer")
+    def singal_shutdown(self) -> None:
+        logger.debug("Shutting down %r", self)
         self.__shutdown = True
