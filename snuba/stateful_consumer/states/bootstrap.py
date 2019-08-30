@@ -64,7 +64,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
         return CommitDecision.DO_NOT_COMMIT
 
     def signal_shutdown(self) -> None:
-        pass
+        self.__consumer.shutdown()
 
     def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         logger.info("Running Consumer")
@@ -75,7 +75,3 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
             ConsumerStateCompletionEvent.NO_SNAPSHOT,
             ConsumerStateData.no_snapshot_state(),
         )
-
-    def set_shutdown(self) -> None:
-        super(BootstrapState, self).set_shutdown()
-        self.__consumer.shutdown()

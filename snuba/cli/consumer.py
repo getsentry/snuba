@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.stateful_consumer.consumer_context import ConsumerStateMachine
+from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
 
 @click.command()
