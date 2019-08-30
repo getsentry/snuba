@@ -275,8 +275,8 @@ def get_config_changes():
 def record_query(data):
     global kfk
     max_redis_queries = 200
-    data = json.dumps(data, for_json=True)
     try:
+        data = json.dumps(data, for_json=True)
         rds.pipeline(transaction=False)\
             .lpush(queries_list, data)\
             .ltrim(queries_list, 0, max_redis_queries - 1)\
@@ -292,8 +292,7 @@ def record_query(data):
             data.encode('utf-8'),
         )
     except Exception as ex:
-        logger.exception(ex)
-        pass
+        logger.exception('Could not record query due to error: %r', ex)
 
 
 def get_queries():
