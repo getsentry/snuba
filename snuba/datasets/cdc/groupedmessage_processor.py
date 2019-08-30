@@ -4,7 +4,12 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 from dataclasses import dataclass
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CdcMessageRow, parse_postgres_datetime
+from snuba.datasets.cdc.cdcprocessors import (
+    CdcProcessor,
+    CdcMessageRow,
+    convert_postgres_datetime,
+    parse_postgres_datetime,
+)
 from snuba.writer import WriterTableRow
 
 
@@ -14,6 +19,15 @@ class GroupMessageRecord:
     last_seen: datetime
     first_seen: datetime
     active_at: Optional[datetime] = None
+    first_release_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class FastGroupMessageRecord:
+    status: int
+    last_seen: str
+    first_seen: str
+    active_at: Optional[str] = None
     first_release_id: Optional[int] = None
 
 
@@ -52,11 +66,11 @@ class GroupedMessageRow(CdcMessageRow):
             offset=None,
             id=int(row['id']),
             record_deleted=False,
-            record_content=GroupMessageRecord(
+            record_content=FastGroupMessageRecord(
                 status=int(row['status']),
-                last_seen=parse_postgres_datetime(row['last_seen']),
-                first_seen=parse_postgres_datetime(row['first_seen']),
-                active_at=parse_postgres_datetime(row['active_at']),
+                last_seen=convert_postgres_datetime(row['last_seen']),
+                first_seen=convert_postgres_datetime(row['first_seen']),
+                active_at=convert_postgres_datetime(row['active_at']),
                 first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
             )
         )

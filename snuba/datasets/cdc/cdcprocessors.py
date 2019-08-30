@@ -13,6 +13,10 @@ KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So part
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 
+date_re = re.compile(
+    "^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})"
+)
+
 date_with_nanosec = re.compile("^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
 
 
@@ -24,6 +28,17 @@ def parse_postgres_datetime(date: str) -> datetime:
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITH_NS)
     else:
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITHOUT_NS)
+
+
+def convert_postgres_datetime(date: str) -> datetime:
+    match = date_re.match(date)
+    year = match[1]
+    month = match[2]
+    day = match[3]
+    hour = match[4]
+    minute = match[5]
+    second = match[6]
+    return f"{year}-{month}-{day} {hour}:{minute}:{second}"
 
 
 class CdcMessageRow(ABC):
