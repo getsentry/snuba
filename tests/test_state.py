@@ -1,3 +1,4 @@
+from collections import ChainMap
 from base import BaseEventsTest
 from functools import partial
 from mock import patch
@@ -8,6 +9,7 @@ import time
 import uuid
 
 from snuba import state
+from snuba.state import safe_dumps
 
 
 class TestState(BaseEventsTest):
@@ -167,3 +169,13 @@ class TestState(BaseEventsTest):
         assert state.abtest('1000/2000:5') in (1000, 2000)
         assert state.abtest('1000/2000:0') == 1000
         assert state.abtest('1.5:1/-1.5:1') in (1.5, -1.5)
+
+
+def test_safe_dumps():
+    assert safe_dumps(
+        ChainMap({'a': 1}, {'b': 2}),
+        sort_keys=True,
+    ) == safe_dumps(
+        {'a': 1, 'b': 2},
+        sort_keys=True,
+    )
