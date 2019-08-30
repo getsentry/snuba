@@ -20,7 +20,7 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 def cleanup(clickhouse_host, clickhouse_port, dry_run, database, dataset, log_level):
     from snuba.cleanup import run_cleanup, logger
-    from snuba.clickhouse import ClickhousePool
+    from snuba.clickhouse.native import ClickhousePool
 
     dataset = get_dataset(dataset)
     table = dataset.get_schema().get_local_table_name()

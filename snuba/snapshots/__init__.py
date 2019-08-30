@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 from contextlib import contextmanager
-from typing import NewType, Generator, IO, Optional, Sequence
+from typing import Any, Mapping, NewType, Generator, IO, Iterable, Optional, Sequence
 from dataclasses import dataclass
 
 SnapshotId = NewType("SnapshotId", str)
+SnapshotTableRow = Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,12 @@ class SnapshotDescriptor:
     id: SnapshotId
     tables: Sequence[TableConfig]
 
+    def get_table(self, table_name: str):
+        for t in self.tables:
+            if t.table == table_name:
+                return t
+        raise ValueError(f"Table {table_name} does not exists in the snapshot")
+
 
 class BulkLoadSource(ABC):
     """
@@ -41,5 +49,5 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_table_file(self, table: str) -> Generator[IO[bytes], None, None]:
+    def get_table_file(self, table: str) -> Generator[Iterable[SnapshotTableRow], None, None]:
         raise NotImplementedError

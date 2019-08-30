@@ -1,4 +1,4 @@
-from snuba.clickhouse import (
+from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     IPv4,
@@ -79,6 +79,4 @@ class TransactionsDataset(Dataset):
             schema=schema,
             processor=TransactionsMessageProcessor(),
             default_topic="events",
-            default_replacement_topic=None,
-            default_commit_log_topic=None,
         )

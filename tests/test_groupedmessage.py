@@ -2,12 +2,19 @@ import pytz
 import simplejson as json
 from datetime import datetime
 
-from base import BaseTest
+from base import BaseDatasetTest
+from snuba.clickhouse.native import ClickhousePool
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
+from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 
 
-class TestGroupedMessageProcessor(BaseTest):
+class TestGroupedMessage(BaseDatasetTest):
+
+    def setup_method(self, test_method):
+        super(TestGroupedMessage, self).setup_method(
+            test_method,
+            'groupedmessage',
+        )
 
     BEGIN_MSG = '{"event":"begin","xid":2380836}'
     COMMIT_MSG = '{"event":"commit"}'
@@ -94,6 +101,19 @@ class TestGroupedMessageProcessor(BaseTest):
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
         assert ret[1] == self.PROCESSED
+        self.write_processed_records(ret[1])
+        cp = ClickhousePool()
+        ret = cp.execute("SELECT * FROM test_groupedmessage_local;")
+        assert ret[0] == (
+            42,  # offset
+            0,  # deleted
+            74,  # id
+            0,  # status
+            datetime(2019, 6, 19, 6, 46, 28),
+            datetime(2019, 6, 19, 6, 45, 32),
+            datetime(2019, 6, 19, 6, 45, 32),
+            None,
+        )
 
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
@@ -102,3 +122,26 @@ class TestGroupedMessageProcessor(BaseTest):
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
         assert ret[1] == self.DELETED
+
+    def test_bulk_load(self):
+        row = GroupedMessageRow.from_bulk({
+            'id': '10',
+            'status': '0',
+            'last_seen': '2019-06-28 17:57:32+00',
+            'first_seen': '2019-06-28 06:40:17+00',
+            'active_at': '2019-06-28 06:40:17+00',
+            'first_release_id': '26',
+        })
+        self.write_processed_records(row.to_clickhouse())
+        cp = ClickhousePool()
+        ret = cp.execute("SELECT * FROM test_groupedmessage_local;")
+        assert ret[0] == (
+            0,  # offset
+            0,  # deleted
+            10,  # id
+            0,  # status
+            datetime(2019, 6, 28, 17, 57, 32),
+            datetime(2019, 6, 28, 6, 40, 17),
+            datetime(2019, 6, 28, 6, 40, 17),
+            26,
+        )

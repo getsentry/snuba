@@ -15,8 +15,6 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
-from snuba.clickhouse import escape_col
-from snuba.reader import NativeDriverReader
 from snuba.schemas import Request
 
 
@@ -29,6 +27,9 @@ QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 ESCAPE_STRING_RE = re.compile(r"(['\\])")
 SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
 TOPK_FUNCTION_RE = re.compile(r'^top([1-9]\d*)$')
+ESCAPE_COL_RE = re.compile(r"([`\\])")
+NEGATE_RE = re.compile(r'^(-?)(.*)$')
+SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 
 
 class InvalidConditionException(Exception):
@@ -47,6 +48,21 @@ def string_col(dataset, col):
         return escape_col(col)
     else:
         return 'toString({})'.format(escape_col(col))
+
+
+def escape_col(col):
+    if not col:
+        return col
+    elif SAFE_COL_RE.match(col):
+        # Column is safe to use without wrapping.
+        return col
+    else:
+        # Column needs special characters escaped, and to be wrapped with
+        # backticks. If the column starts with a '-', keep that outside the
+        # backticks as it is not part of the column name, but used by the query
+        # generator to signify the sort order if we are sorting by this column.
+        col = ESCAPE_COL_RE.sub(r"\\\1", col)
+        return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 
 
 def parse_datetime(value, alignment=1):
@@ -83,7 +99,8 @@ def function_expr(fn, args_expr=''):
         return 'ifNull({}, \'\')'.format(args_expr)
 
     # default: just return fn(args_expr)
-    return  u'{}({})'.format(fn, args_expr)
+    return u'{}({})'.format(fn, args_expr)
+
 
 def is_function(column_expr, depth=0):
     """
@@ -102,7 +119,7 @@ def is_function(column_expr, depth=0):
     Although at the top level, there is no outer function call, and the optional
     3rd argument is interpreted as an alias for the entire expression.
 
-        [func, [arg1] alias] => function(arg1) AS alias
+        [func, [arg1], alias] => function(arg1) AS alias
 
     """
     if (isinstance(column_expr, (tuple, list))
@@ -118,6 +135,7 @@ def is_function(column_expr, depth=0):
     else:
         return None
 
+
 def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
@@ -132,6 +150,8 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
 
     if is_function(column_name, 0):
         return complex_column_expr(dataset, column_name, body)
+    elif isinstance(column_name, (list, tuple)) and aggregate:
+        return complex_column_expr(dataset, [aggregate, column_name, alias], body)
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
@@ -154,9 +174,9 @@ def complex_column_expr(dataset, expr, body, depth=0):
     out = []
     i = 0
     while i < len(args):
-        next_2 = args[i:i+2]
-        if is_function(next_2, depth+1):
-            out.append(complex_column_expr(dataset, next_2, body, depth+1))
+        next_2 = args[i:i + 2]
+        if is_function(next_2, depth + 1):
+            out.append(complex_column_expr(dataset, next_2, body, depth + 1))
             i += 2
         else:
             nxt = args[i]
@@ -262,6 +282,8 @@ def conditions_expr(dataset, conditions, body, depth=0):
     Expansion of columns is handled, as is replacement of columns with aliases,
     if the column has already been expanded and aliased elsewhere.
     """
+    from snuba.clickhouse.columns import Array
+
     if not conditions:
         return ''
 
@@ -296,10 +318,10 @@ def conditions_expr(dataset, conditions, body, depth=0):
         if (
             isinstance(lhs, str) and
             lhs in columns and
-            type(columns[lhs].type) == clickhouse.Array and
+            isinstance(columns[lhs].type, Array) and
             columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
-            ):
+        ):
             any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,
@@ -354,6 +376,8 @@ def raw_query(request: Request, sql, client, timer, stats=None):
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
+    from snuba.clickhouse.native import NativeDriverReader
+
     project_ids = to_list(request.extensions['project']['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}

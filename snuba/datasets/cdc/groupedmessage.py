@@ -1,6 +1,6 @@
-from snuba.clickhouse import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.datasets import Dataset
-from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor
+from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
 
@@ -55,4 +55,5 @@ class GroupedMessageDataset(Dataset):
             source=source,
             source_table=self.POSTGRES_TABLE,
             dest_table=dest_table,
+            row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
         )

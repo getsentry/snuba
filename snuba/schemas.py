@@ -3,7 +3,7 @@ import itertools
 from collections import ChainMap
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Mapping, Union
 
 import jsonschema
 
@@ -34,6 +34,7 @@ GENERIC_QUERY_SCHEMA = {
                     }, {
                         # Aggregate column
                         'anyOf': [
+                            {'$ref': '#/definitions/column_list'},
                             {'$ref': '#/definitions/column_name'},
                             {'enum': ['']},
                             {'type': 'null'},
@@ -52,8 +53,10 @@ GENERIC_QUERY_SCHEMA = {
             '$ref': '#/definitions/column_name',
         },
         'sample': {
-            'type': 'number',
-            'min': 0,
+            'anyOf': [
+                {'type': 'integer', 'minimum': 0},
+                {'type': 'number', 'minimum': 0.0, 'maximum': 1.0},
+            ],
         },
         'conditions': {
             'type': 'array',
@@ -102,17 +105,19 @@ GENERIC_QUERY_SCHEMA = {
             ]
         },
         'limit': {
-            'type': 'number',
+            'type': 'integer',
             'default': 1000,
+            'minimum': 0,
             'maximum': 10000,
         },
         'offset': {
-            'type': 'number',
+            'type': 'integer',
+            'minimum': 0,
         },
         'limitby': {
             'type': 'array',
             'items': [
-                {'type': 'number'},
+                {'type': 'integer', 'minimum': 0},
                 {'$ref': '#/definitions/column_name'},
             ]
         },
@@ -211,10 +216,10 @@ PROJECT_EXTENSION_SCHEMA = {
     'properties': {
         'project': {
             'anyOf': [
-                {'type': 'number'},
+                {'type': 'integer', 'minimum': 1},
                 {
                     'type': 'array',
-                    'items': {'type': 'number'},
+                    'items': {'type': 'integer', 'minimum': 1},
                     'minItems': 1,
                 },
             ]
@@ -243,6 +248,7 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
             'granularity': {
                 'type': 'number',
                 'default': default_granularity,
+                'minimum': 1,
             },
         },
         'additionalProperties': False,
@@ -300,6 +306,26 @@ class RequestSchema:
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
         return Request(query, extensions)
+
+    def __generate_template_impl(self, schema) -> Any:
+        """
+        Generate a (not necessarily valid) object that can be used as a template
+        from the provided schema
+        """
+        typ = schema.get('type')
+        if 'default' in schema:
+            default = schema['default']
+            return default() if callable(default) else default
+        elif typ == 'object':
+            return {prop: self.__generate_template_impl(subschema) for prop, subschema in schema.get('properties', {}).items()}
+        elif typ == 'array':
+            return []
+        elif typ == 'string':
+            return ""
+        return None
+
+    def generate_template(self) -> Any:
+        return self.__generate_template_impl(self.__composite_schema)
 
 
 EVENTS_QUERY_SCHEMA = RequestSchema(GENERIC_QUERY_SCHEMA, {
@@ -369,21 +395,3 @@ def validate_jsonschema(value, schema, set_defaults=True):
     ).validate(value, schema)
 
     return value
-
-
-def generate(schema):
-    """
-    Generate a (not necessarily valid) object that can be used as a template
-    from the provided schema
-    """
-    typ = schema.get('type')
-    if 'default' in schema:
-        default = schema['default']
-        return default() if callable(default) else default
-    elif typ == 'object':
-        return {prop: generate(subschema) for prop, subschema in schema.get('properties', {}).items()}
-    elif typ == 'array':
-        return []
-    elif typ == 'string':
-        return ""
-    return None

@@ -1,6 +1,6 @@
-from typing import Mapping
+from typing import Optional, Mapping
 
-from snuba.clickhouse import escape_col
+from snuba.util import escape_col
 
 
 class Dataset(object):
@@ -13,8 +13,10 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, schema, *, processor, default_topic,
-            default_replacement_topic, default_commit_log_topic):
+    def __init__(self, schema, *, processor,
+            default_topic: str,
+            default_replacement_topic: Optional[str] = None,
+            default_commit_log_topic: Optional[str] = None):
         self._schema = schema
         self.__processor = processor
         self.__default_topic = default_topic
@@ -27,15 +29,16 @@ class Dataset(object):
     def get_processor(self):
         return self.__processor
 
-    def get_writer(self, options=None):
+    def get_writer(self, options=None, table_name=None):
         from snuba import settings
-        from snuba.writer import HTTPBatchWriter
+        from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
             self._schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,
+            table_name,
         )
 
     def default_conditions(self):
@@ -45,13 +48,13 @@ class Dataset(object):
         """
         return []
 
-    def get_default_topic(self):
+    def get_default_topic(self) -> str:
         return self.__default_topic
 
-    def get_default_replacement_topic(self):
+    def get_default_replacement_topic(self) -> Optional[str]:
         return self.__default_replacement_topic
 
-    def get_default_commit_log_topic(self):
+    def get_default_commit_log_topic(self) -> Optional[str]:
         return self.__default_commit_log_topic
 
     def get_default_replication_factor(self):

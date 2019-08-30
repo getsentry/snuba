@@ -2,10 +2,11 @@ import logging
 import signal
 
 import click
-from confluent_kafka import Producer
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
 
 @click.command()
@@ -34,70 +35,54 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
+@click.option('--stateful-consumer', default=False, type=bool, help='Runs a stateful consumer (that manages snapshots) instead of a basic one.')
 def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
-             dogstatsd_host, dogstatsd_port):
+             dogstatsd_host, dogstatsd_port, stateful_consumer):
 
     import sentry_sdk
-    from snuba import util
-    from batching_kafka_consumer import BatchingKafkaConsumer
-    from snuba.consumer import ConsumerWorker
-
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
-    if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset_name,
-            settings.DEFAULT_BROKERS,
-        )
-
-    raw_events_topic = raw_events_topic or dataset.get_default_topic()
-    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
-    commit_log_topic = commit_log_topic or dataset.get_default_commit_log_topic()
-
-    metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-        tags=[
-            "group:%s" % consumer_group,
-            "dataset:%s" % dataset_name,
-        ]
-    )
-
-    producer = Producer({
-        'bootstrap.servers': ','.join(bootstrap_server),
-        'partitioner': 'consistent',
-        'message.max.bytes': 50000000,  # 50MB, default is 1MB
-    })
-
-    consumer = BatchingKafkaConsumer(
-        raw_events_topic,
-        worker=ConsumerWorker(
-            dataset,
-            producer=producer,
-            replacements_topic=replacements_topic,
-            metrics=metrics
-        ),
+    consumer_builder = ConsumerBuilder(
+        dataset_name=dataset_name,
+        raw_topic=raw_events_topic,
+        replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
-        max_batch_time=max_batch_time_ms,
-        metrics=metrics,
+        max_batch_time_ms=max_batch_time_ms,
         bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
-        producer=producer,
         commit_log_topic=commit_log_topic,
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
+        dogstatsd_host=dogstatsd_host,
+        dogstatsd_port=dogstatsd_port
     )
 
-    def handler(signum, frame):
-        consumer.signal_shutdown()
+    if stateful_consumer:
+        context = ConsumerStateMachine(
+            main_consumer=consumer_builder.build_consumer()
+        )
 
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
+        def handler(signum, frame):
+            context.signal_shutdown()
 
-    consumer.run()
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        context.run()
+    else:
+        consumer = consumer_builder.build_consumer()
+
+        def handler(signum, frame):
+            consumer.signal_shutdown()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        consumer.run()

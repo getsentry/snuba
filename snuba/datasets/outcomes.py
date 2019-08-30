@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from snuba.clickhouse import (
+from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     LowCardinality,
@@ -66,6 +66,4 @@ class OutcomesDataset(Dataset):
             schema=schema,
             processor=OutcomesProcessor(),
             default_topic="outcomes",
-            default_replacement_topic=None,
-            default_commit_log_topic=None,
         )
