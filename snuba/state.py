@@ -8,6 +8,9 @@ import re
 import simplejson as json
 import time
 import uuid
+from collections.abc import Mapping
+from functools import partial
+from typing import Any
 
 from snuba import settings
 from snuba.redis import redis_client as rds
@@ -272,11 +275,21 @@ def get_config_changes():
 
 # Query Recording
 
+
+def safe_dumps_default(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {**value}
+    raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
+
+
+safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
+
+
 def record_query(data):
     global kfk
     max_redis_queries = 200
     try:
-        data = json.dumps(data, for_json=True)
+        data = safe_dumps(data)
         rds.pipeline(transaction=False)\
             .lpush(queries_list, data)\
             .ltrim(queries_list, 0, max_redis_queries - 1)\
