@@ -293,7 +293,6 @@ def record_query(data):
         )
     except Exception as ex:
         logger.exception('Could not record query due to error: %r', ex)
-        pass
 
 
 def get_queries():
