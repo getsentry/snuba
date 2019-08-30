@@ -58,7 +58,7 @@ class HTTPBatchWriter(BatchWriter):
             ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
             body=map(self.__encode, rows),
-            chunked=True,
+            chunked=False,
         )
 
         if response.status != 200:
