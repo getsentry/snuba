@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 from dataclasses import dataclass
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CdcMessageRow, parse_poostgres_datetime
+from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CdcMessageRow, parse_postgres_datetime
 from snuba.writer import WriterTableRow
 
 
@@ -37,9 +37,9 @@ class GroupedMessageRow(CdcMessageRow):
             record_deleted=False,
             record_content=GroupMessageRecord(
                 status=raw_data['status'],
-                last_seen=parse_poostgres_datetime(raw_data['last_seen']),
-                first_seen=parse_poostgres_datetime(raw_data['first_seen']),
-                active_at=parse_poostgres_datetime(raw_data['active_at']),
+                last_seen=parse_postgres_datetime(raw_data['last_seen']),
+                first_seen=parse_postgres_datetime(raw_data['first_seen']),
+                active_at=parse_postgres_datetime(raw_data['active_at']),
                 first_release_id=raw_data['first_release_id'],
             )
         )
@@ -54,9 +54,9 @@ class GroupedMessageRow(CdcMessageRow):
             record_deleted=False,
             record_content=GroupMessageRecord(
                 status=int(row['status']),
-                last_seen=parse_poostgres_datetime(row['last_seen']),
-                first_seen=parse_poostgres_datetime(row['first_seen']),
-                active_at=parse_poostgres_datetime(row['active_at']),
+                last_seen=parse_postgres_datetime(row['last_seen']),
+                first_seen=parse_postgres_datetime(row['first_seen']),
+                active_at=parse_postgres_datetime(row['active_at']),
                 first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
             )
         )

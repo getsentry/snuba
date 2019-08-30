@@ -16,7 +16,9 @@ POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 date_with_nanosec = re.compile("^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
 
 
-def parse_poostgres_datetime(date: str) -> datetime:
+def parse_postgres_datetime(date: str) -> datetime:
+    # Postgres dates express the timezone in hours while strptime expects
+    # the timezone to be expressed in HHmm, thus we need to add 00 as minutes.
     date = f"{date}00"
     if (date_with_nanosec.match(date)):
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITH_NS)
