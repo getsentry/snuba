@@ -307,7 +307,7 @@ class RequestSchema:
 
         return Request(query, extensions)
 
-    def __generate_template_impl(self, schema) -> Union[Schema, str, None]:
+    def __generate_template_impl(self, schema) -> Any:
         """
         Generate a (not necessarily valid) object that can be used as a template
         from the provided schema
@@ -324,7 +324,7 @@ class RequestSchema:
             return ""
         return None
 
-    def generate_template(self) -> Schema:
+    def generate_template(self) -> Any:
         return self.__generate_template_impl(self.__composite_schema)
 
 
