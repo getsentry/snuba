@@ -412,7 +412,9 @@ def sdk_distribution(*, timer: Timer):
         ['count()', None, 'count'],
     ]
     request.query['groupby'].extend(['sdk_name', 'rtime'])
-    request.extensions['project']['project'] = []
+    request.extensions['project'] = {
+        'project': [],
+    }
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
