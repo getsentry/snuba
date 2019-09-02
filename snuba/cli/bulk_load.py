@@ -38,4 +38,5 @@ def bulk_load(dataset, dest_table, source, log_level):
         dataset.get_writer({}, dest_table),
         settings.BULK_CLICKHOUSE_BUFFER,
     )
+
     loader.load(writer)
