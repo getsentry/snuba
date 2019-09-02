@@ -49,8 +49,8 @@ class StrictConsumer:
         self.__on_partitions_revoked = on_partitions_revoked
         self.__on_message = on_message
         self.__assign_timeout = partition_assignment_timeout
-
         self.__shutdown = False
+        self.__topic = topic
 
         consumer_config = {
             'enable.auto.commit': False,
@@ -91,6 +91,14 @@ class StrictConsumer:
         return Consumer(config)
 
     def run(self) -> None:
+        partitions_metadata = self.__consumer \
+            .list_topics(self.__topic) \
+            .topics[self.__topic] \
+            .partitions
+
+        assert len(partitions_metadata) == 1, \
+            f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
+
         watermarks: Mapping[Tuple[int, str], int] = {}
 
         while not self.__shutdown:
@@ -134,6 +142,6 @@ class StrictConsumer:
 
         self.__consumer.close()
 
-    def singal_shutdown(self) -> None:
+    def signal_shutdown(self) -> None:
         logger.debug("Shutting down %r", self)
         self.__shutdown = True
