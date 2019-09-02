@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime
 from urllib.parse import urlencode
-from typing import Iterable
+from typing import Callable, Iterable
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
@@ -31,20 +31,21 @@ CLICKHOUSE_ERROR_RE = re.compile(
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self, schema, host, port, options=None, table_name=None):
+    def __init__(self,
+        schema,
+        host,
+        port,
+        encoder: Callable[[WriterTableRow], bytes],
+        options=None,
+        table_name=None,
+        chunked=True,
+    ):
         self.__schema = schema
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
         self.__table_name = table_name or schema.get_table_name()
-
-    def __default(self, value):
-        if isinstance(value, datetime):
-            return value.strftime(DATETIME_FORMAT)
-        else:
-            raise TypeError
-
-    def __encode(self, row: WriterTableRow) -> bytes:
-        return json.dumps(row, default=self.__default).encode("utf-8")
+        self.__chunked = chunked
+        self.__encoder = encoder
 
     def write(self, rows: Iterable[WriterTableRow]):
         response = self.__pool.urlopen(
@@ -57,8 +58,8 @@ class HTTPBatchWriter(BatchWriter):
                 }
             ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
-            body=map(self.__encode, rows),
-            chunked=False,
+            body=map(self.__encoder, rows),
+            chunked=self.__chunked,
         )
 
         if response.status != 200:

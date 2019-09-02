@@ -1,6 +1,12 @@
+import json
+import rapidjson
+
+from datetime import datetime
 from typing import Optional, Mapping
 
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.util import escape_col
+from snuba.writer import WriterTableRow
 
 
 class Dataset(object):
@@ -33,12 +39,46 @@ class Dataset(object):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
+        def default(value):
+            if isinstance(value, datetime):
+                return value.strftime(DATETIME_FORMAT)
+            else:
+                raise TypeError
+
+        def encode(row: WriterTableRow) -> bytes:
+            return json.dumps(row, default=default).encode("utf-8")
+
         return HTTPBatchWriter(
             self._schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
+            encode,
             options,
             table_name,
+        )
+
+    def get_bulk_writer(self, options=None, table_name=None):
+        """
+        This is a stripped down verison of the writer designed
+        for better performance when loading data in bulk.
+        """
+        # TODO: Consider using rapidjson to encode everywhere
+        # once we will be confident it is reliable enough.
+
+        from snuba import settings
+        from snuba.clickhouse.http import HTTPBatchWriter
+
+        return HTTPBatchWriter(
+            self._schema,
+            settings.CLICKHOUSE_HOST,
+            settings.CLICKHOUSE_HTTP_PORT,
+            lambda row: rapidjson.dumps(row).encode("utf-8"),
+            options,
+            table_name,
+            # When loading data in bulk, chunking data does not help
+            # instead it adds a lot of overhead because we are sending
+            # more data to Clickhouse.
+            chunked=False,
         )
 
     def default_conditions(self):
