@@ -21,7 +21,7 @@ class TestFastGroupedMessageLoad:
             "id": "1",
             "status": "0",
             # UTC date with nanoseconds
-            "last_seen": "2019-07-01 18:03:07.984+00",
+            "last_seen": "2019-07-01 18:03:07.984123+00",
             # UTC date without nanosecods
             "first_seen": "2019-07-01 18:03:07+00",
             # None date
