@@ -1,12 +1,13 @@
 import logging
 import click
+import json
 
 from confluent_kafka import Producer
 
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
-from snuba.stateful_consumer.control_protocol import confirm_snapshot_loaded, TransactionData
+from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLoaded
 
 
 @click.command()
@@ -45,20 +46,20 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
         'message.max.bytes': 50000000,  # 50MB, default is 1MB
     })
 
-    def callback(err, msg):
-        logger.debug("Message sent %r", msg)
-
-    confirm_snapshot_loaded(
-        producer=producer,
-        topic=control_topic,
-        callback=callback,
+    msg = SnapshotLoaded(
         id=descriptor.id,
-        dataset=dataset,
-        transaction_data=TransactionData(
+        datasets={},  # This field should be removed
+        transaction_info=TransactionData(
             xmin=descriptor.xmin,
             xmax=descriptor.xmax,
             xip_list=descriptor.xip_list,
         ),
+    )
+    json_string = json.dumps(msg.serialize())
+    producer.produce(
+        control_topic,
+        value=json_string,
+        on_delivery=lambda err, msg: logger.info("Message sent %r", msg.value()),
     )
 
     producer.poll(settings.SNAPSHOT_CONTROL_PRODUCE_TIMEOUT)
