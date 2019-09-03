@@ -16,14 +16,14 @@ class TestStrictConsumer:
             topic="topic",
             bootstrap_servers="somewhere",
             group_id="something",
-            auto_offset_reset="earliest",
+            initial_auto_offset_reset="earliest",
             partition_assignment_timeout=1,
             on_partitions_assigned=None,
             on_partitions_revoked=None,
             on_message=on_message,
         )
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         kafka_consumer.items = [
@@ -37,7 +37,7 @@ class TestStrictConsumer:
         consumer.run()
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_failure(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -50,7 +50,7 @@ class TestStrictConsumer:
 
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_one_message(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -68,7 +68,7 @@ class TestStrictConsumer:
         on_message.assert_called_once_with(msg)
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_commits(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer

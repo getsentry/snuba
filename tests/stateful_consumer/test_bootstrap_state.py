@@ -21,7 +21,7 @@ class TestBootstrapState:
             on_message=on_message,
         )
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         kafka_consumer.items = [
@@ -35,7 +35,7 @@ class TestBootstrapState:
         assert ret[0] == ConsumerStateCompletionEvent.NO_SNAPSHOT
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_init_snapshot(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         kafka_consumer.items = [
@@ -55,7 +55,7 @@ class TestBootstrapState:
         assert ret[0] == ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer.create_consumer')
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_snapshot_loaded(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         kafka_consumer.items = [

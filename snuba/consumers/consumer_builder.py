@@ -49,7 +49,7 @@ class ConsumerBuilder:
         self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
 
         self.producer = Producer({
-            'bootstrap.servers': ','.join(bootstrap_servers),
+            'bootstrap.servers': ','.join(self.bootstrap_servers),
             'partitioner': 'consistent',
             'message.max.bytes': 50000000,  # 50MB, default is 1MB
         })
@@ -58,7 +58,7 @@ class ConsumerBuilder:
             dogstatsd_host, dogstatsd_port, 'snuba.consumer',
             tags=[
                 "group:%s" % group_id,
-                "dataset:%s" % dataset_name,
+                "dataset:%s" % self.dataset_name,
             ]
         )
 

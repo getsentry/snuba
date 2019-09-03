@@ -2,7 +2,7 @@ import logging
 import os
 
 from datetime import datetime, timedelta
-from flask import Flask, redirect, render_template, request
+from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
@@ -18,6 +18,7 @@ from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
+from snuba.schemas import Request, RequestSchema
 from snuba.redis import redis_client
 from snuba.util import Timer
 
@@ -136,10 +137,10 @@ def dashboard(fmt='html'):
 @application.route('/config.<fmt>', methods=['GET', 'POST'])
 def config(fmt='html'):
     if fmt == 'json':
-        if request.method == 'GET':
+        if http_request.method == 'GET':
             return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
-        elif request.method == 'POST':
-            state.set_configs(json.loads(request.data), user=request.headers.get('x-forwarded-email'))
+        elif http_request.method == 'POST':
+            state.set_configs(json.loads(http_request.data), user=http_request.headers.get('x-forwarded-email'))
             return (json.dumps(state.get_raw_configs()), 200, {'Content-Type': 'application/json'})
     else:
         return application.send_static_file('config.html')
@@ -157,7 +158,7 @@ def config_changes():
 @application.route('/health')
 def health():
     down_file_exists = check_down_file_exists()
-    thorough = request.args.get('thorough', False)
+    thorough = http_request.args.get('thorough', False)
     clickhouse_health = check_clickhouse() if thorough else True
 
     if not down_file_exists and clickhouse_health:
@@ -174,14 +175,14 @@ def health():
     return (json.dumps(body), status, {'Content-Type': 'application/json'})
 
 
-def parse_request_body(request):
+def parse_request_body(http_request):
     try:
-        return json.loads(request.data)
+        return json.loads(http_request.data)
     except json.errors.JSONDecodeError as error:
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(body, schema, timer):
+def validate_request_content(body, schema: RequestSchema, timer) -> Request:
     try:
         request = schema.validate(body)
     except jsonschema.ValidationError as error:
@@ -189,16 +190,16 @@ def validate_request_content(body, schema, timer):
 
     timer.mark('validate_schema')
 
-    return {**request.body}
+    return request
 
 
 @application.route('/query', methods=['GET', 'POST'])
 @util.time_request('query')
 def unqualified_query_view(*, timer: Timer):
-    if request.method == 'GET':
+    if http_request.method == 'GET':
         return redirect(f"/{settings.DEFAULT_DATASET_NAME}/query", code=302)
-    elif request.method == 'POST':
-        body = parse_request_body(request)
+    elif http_request.method == 'POST':
+        body = parse_request_body(http_request)
         dataset = get_dataset(body.pop('dataset', settings.DEFAULT_DATASET_NAME))
         return dataset_query(dataset, body, timer)
     else:
@@ -209,28 +210,31 @@ def unqualified_query_view(*, timer: Timer):
 @util.time_request('query')
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
-    if request.method == 'GET':
+    if http_request.method == 'GET':
         return render_template(
             'query.html',
             query_template=json.dumps(
-                schemas.generate(dataset.get_query_schema()),
+                dataset.get_query_schema().generate_template(),
                 indent=4,
             ),
         )
-    elif request.method == 'POST':
-        body = parse_request_body(request)
+    elif http_request.method == 'POST':
+        body = parse_request_body(http_request)
         return dataset_query(dataset, body, timer)
     else:
         assert False, 'unexpected fallthrough'
 
 
 def dataset_query(dataset, body, timer):
-    assert request.method == 'POST'
+    assert http_request.method == 'POST'
     ensure_table_exists(dataset)
 
-    body = validate_request_content(body, dataset.get_query_schema(), timer)
+    result, status = parse_and_run_query(
+        dataset,
+        validate_request_content(body, dataset.get_query_schema(), timer),
+        timer,
+     )
 
-    result, status = parse_and_run_query(dataset, body, timer)
     return (
         json.dumps(
             result,
@@ -241,12 +245,11 @@ def dataset_query(dataset, body, timer):
     )
 
 
-def format_query(dataset, body, table, prewhere_conditions, final) -> str:
+def format_query(dataset, request: Request, table, prewhere_conditions, final) -> str:
     """Generate a SQL string from the parameters."""
-    aggregate_exprs = [
-        util.column_expr(dataset, col, body, alias, agg)
-        for (agg, col, alias) in body['aggregations']
-    ]
+    body = request.body
+
+    aggregate_exprs = [util.column_expr(dataset, col, body, alias, agg) for (agg, col, alias) in body['aggregations']]
     groupby = util.to_list(body['groupby'])
     group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
     selected_cols = [util.column_expr(dataset, util.tuplify(colname), body) for colname in body.get('selected_columns', [])]
@@ -311,37 +314,34 @@ def format_query(dataset, body, table, prewhere_conditions, final) -> str:
 
 
 @split_query
-def parse_and_run_query(dataset, body, timer):
+def parse_and_run_query(dataset, request: Request, timer):
     max_days, date_align = state.get_configs([
         ('max_days', None),
         ('date_align_seconds', 1),
     ])
 
-    to_date = util.parse_datetime(body['to_date'], date_align)
-    from_date = util.parse_datetime(body['from_date'], date_align)
+    to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
+    from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
     assert from_date <= to_date
 
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
-    # XXX: This should already be enforced by the schema at this point.
-    body.setdefault('conditions', [])
-
-    body['conditions'].extend([
+    request.query['conditions'].extend([
         ('timestamp', '>=', from_date.isoformat()),
         ('timestamp', '<', to_date.isoformat()),
     ])
 
-    body['conditions'].extend(dataset.default_conditions())
+    request.query['conditions'].extend(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
-    project_ids = util.to_list(body['project'])
+    project_ids = util.to_list(request.extensions['project']['project'])
     if project_ids:
-        body['conditions'].append(('project_id', 'IN', project_ids))
+        request.query['conditions'].append(('project_id', 'IN', project_ids))
 
-    turbo = body.get('turbo', False)
+    turbo = request.extensions['performance'].get('turbo', False)
     if not turbo:
         final, exclude_group_ids = get_projects_query_flags(project_ids)
         if not final and exclude_group_ids:
@@ -351,11 +351,11 @@ def parse_and_run_query(dataset, body, timer):
             if len(exclude_group_ids) > max_group_ids_exclude:
                 final = True
             else:
-                body['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
+                request.query['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
     else:
         final = False
-        if 'sample' not in body:
-            body['sample'] = settings.TURBO_SAMPLE_RATE
+        if 'sample' not in request.query:
+            request.query['sample'] = settings.TURBO_SAMPLE_RATE
 
     prewhere_conditions = []
     if settings.PREWHERE_KEYS:
@@ -364,7 +364,7 @@ def parse_and_run_query(dataset, body, timer):
         # - Any of its referenced columns are in PREWHERE_KEYS
         prewhere_candidates = [
             (util.columns_in_expr(cond[0]), cond)
-            for cond in body['conditions'] if util.is_condition(cond) and
+            for cond in request.query['conditions'] if util.is_condition(cond) and
             any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
         ]
         # Use the condition that has the highest priority (based on the
@@ -375,24 +375,24 @@ def parse_and_run_query(dataset, body, timer):
         ], key=lambda priority_and_col: priority_and_col[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            body['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, body['conditions']))
+            request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
     table = dataset.get_schema().get_table_name()
 
-    sql = format_query(dataset, body, table, prewhere_conditions, final)
+    sql = format_query(dataset, request, table, prewhere_conditions, final)
 
     timer.mark('prepare_query')
 
     stats = {
         'clickhouse_table': table,
         'final': final,
-        'referrer': request.referrer,
+        'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'sample': body.get('sample'),
+        'sample': request.query.get('sample'),
     }
 
-    return util.raw_query(body, sql, clickhouse_ro, timer, stats)
+    return util.raw_query(request, sql, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -401,23 +401,25 @@ def parse_and_run_query(dataset, body, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
-    body = validate_request_content(
-        parse_request_body(request),
+    request = validate_request_content(
+        parse_request_body(http_request),
         schemas.SDK_STATS_SCHEMA,
         timer,
     )
 
-    body['project'] = []
-    body['aggregations'] = [
+    request.query['aggregations'] = [
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    body['groupby'].extend(['sdk_name', 'rtime'])
+    request.query['groupby'].extend(['sdk_name', 'rtime'])
+    request.extensions['project'] = {
+        'project': [],
+    }
 
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, body, timer)
+    result, status = parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
             result,
@@ -476,7 +478,7 @@ if application.debug or application.testing:
         ensure_table_exists(dataset)
 
         rows = []
-        for message in json.loads(request.data):
+        for message in json.loads(http_request.data):
             action, row = dataset.get_processor().process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
@@ -489,7 +491,7 @@ if application.debug or application.testing:
     def eventstream(dataset_name):
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
-        record = json.loads(request.data)
+        record = json.loads(http_request.data)
 
         version = record[0]
         if version != 2:
@@ -508,7 +510,7 @@ if application.debug or application.testing:
             def offset(self):
                 return None
 
-        message = Message(request.data)
+        message = Message(http_request.data)
 
         type_ = record[1]
         if type_ == 'insert':

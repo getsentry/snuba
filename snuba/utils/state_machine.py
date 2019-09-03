@@ -72,7 +72,7 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
     of a component depending the state the component is into.
     This class coordinates the state transitions.
     Subclasses are use case specific and provide the concrete
-    types for TStateType, TStateData and TStateCompletionEvent.
+    types for TStateData and TStateCompletionEvent.
     """
 
     def __init__(
@@ -92,6 +92,9 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
 
         It processes the shutdown state at every state transition.
         No state processing is preempted via shutdown.
+
+        TODO: support use cases where a stat ecan stop this processing
+        waiting for new input without reaching the terminal state.
         """
 
         logger.debug("Starting state machine")

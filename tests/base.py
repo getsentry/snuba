@@ -6,6 +6,11 @@ import uuid
 
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition, KafkaError
+from confluent_kafka.admin import (
+    ClusterMetadata,
+    PartitionMetadata,
+    TopicMetadata,
+)
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
@@ -98,6 +103,18 @@ class FakeKafkaConsumer(object):
 
     def subscribe(self, *args, **kwargs):
         pass
+
+    def list_topics(self, topic):
+        meta = ClusterMetadata()
+        topic_meta = TopicMetadata()
+        topic_meta.topic = topic
+        topic_meta.partitions = {
+            0: PartitionMetadata()
+        }
+        meta.topics = {
+            topic: topic_meta
+        }
+        return meta
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):

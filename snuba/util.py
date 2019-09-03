@@ -15,6 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import clickhouse, schemas, settings, state
+from snuba.schemas import Request
 
 
 logger = logging.getLogger('snuba.util')
@@ -227,7 +228,7 @@ def is_condition(cond_or_list):
     )
 
 
-def all_referenced_columns(body):
+def all_referenced_columns(query):
     """
     Return the set of all columns that are used by a query.
     """
@@ -235,16 +236,16 @@ def all_referenced_columns(body):
 
     # These fields can reference column names
     for field in ['arrayjoin', 'groupby', 'orderby', 'selected_columns']:
-        if field in body:
-            col_exprs.extend(to_list(body[field]))
+        if field in query:
+            col_exprs.extend(to_list(query[field]))
 
     # Conditions need flattening as they can be nested as AND/OR
-    if 'conditions' in body:
-        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in body['conditions']]))
+    if 'conditions' in query:
+        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query['conditions']]))
         col_exprs.extend([c[0] for c in flat_conditions])
 
-    if 'aggregations' in body:
-        col_exprs.extend([a[1] for a in body['aggregations']])
+    if 'aggregations' in query:
+        col_exprs.extend([a[1] for a in query['aggregations']])
 
     # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
@@ -370,14 +371,14 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(body, sql, client, timer, stats=None):
+def raw_query(request: Request, sql, client, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
     from snuba.clickhouse.native import NativeDriverReader
 
-    project_ids = to_list(body['project'])
+    project_ids = to_list(request.extensions['project']['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
     grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
@@ -404,7 +405,7 @@ def raw_query(body, sql, client, timer, stats=None):
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(body)) > uc_max:
+    if len(all_referenced_columns(request.query)) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 
@@ -446,7 +447,7 @@ def raw_query(body, sql, client, timer, stats=None):
                         # Force query to use the first shard replica, which
                         # should have synchronously received any cluster writes
                         # before this query is run.
-                        consistent = body.get('consistent', False)
+                        consistent = request.extensions['performance'].get('consistent', False)
                         stats['consistent'] = consistent
                         if consistent:
                             query_settings['load_balancing'] = 'in_order'
@@ -459,7 +460,7 @@ def raw_query(body, sql, client, timer, stats=None):
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
                                 query_id=query_id,
-                                with_totals=body.get('totals', False),
+                                with_totals=request.query.get('totals', False),
                             )
                             status = 200
 
@@ -511,7 +512,7 @@ def raw_query(body, sql, client, timer, stats=None):
     if settings.RECORD_QUERIES:
         # send to redis
         state.record_query({
-            'request': body,
+            'request': request.body,
             'sql': sql,
             'timing': timer,
             'stats': stats,
@@ -531,7 +532,7 @@ def raw_query(body, sql, client, timer, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or body.get('debug', False):
+    if settings.STATS_IN_RESPONSE or request.extensions['performance'].get('debug', False):
         result['stats'] = stats
         result['sql'] = sql
 
