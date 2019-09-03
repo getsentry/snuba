@@ -83,6 +83,7 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         self.__definition = definition
         self.__current_state_type: Union[StateType, None] = start_state
         self.__has_shutdown = False
+        self.__current_state = None
 
     def run(self) -> None:
         """
@@ -101,9 +102,10 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         state_data = None
 
         while self.__current_state_type is not None:
-            event, state_data = self._build_state(
+            self.__current_state = self._build_state(
                 self.__current_state_type,
-            ).handle(state_data)
+            )
+            event, state_data = self.__current_state.handle(state_data)
 
             if self.__has_shutdown:
                 next_state_type = None
@@ -127,10 +129,8 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         transition.
         """
         logger.debug("Shutting down state machine")
-        if self.__current_state_type is not None:
-            self._build_state(
-                self.__current_state_type,
-            ).signal_shutdown()
+        if self.__current_state is not None:
+            self.__current_state.signal_shutdown()
         self.__has_shutdown = True
 
     @abstractmethod
