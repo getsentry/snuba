@@ -5,10 +5,9 @@ from unittest.mock import MagicMock
 import uuid
 
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from confluent_kafka import TopicPartition
+from confluent_kafka import TopicPartition, KafkaError
 from confluent_kafka.admin import (
     ClusterMetadata,
-    KafkaError,
     PartitionMetadata,
     TopicMetadata,
 )
