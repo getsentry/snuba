@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import jsonschema
 
-from dataclasses import dataclass
+from confluent_kafka import Producer
+from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 from abc import ABC
 
@@ -157,6 +159,35 @@ class SnapshotLoaded(ControlMessage):
                 xip_list=json["transaction-info"]["xip-list"],
             )
         )
+
+    def serialize(self) -> Mapping[str, Any]:
+        return {
+            "event": "snapshot-loaded",
+            "snapshot-id": self.id,
+            "datasets": self.datasets,
+            "transaction-info": asdict(self.transaction_info),
+        }
+
+
+def confirm_snapshot_loaded(
+    producer: Producer,
+    topic: str,
+    callback,
+    id: SnapshotId,
+    dataset: str,
+    transaction_data: TransactionData,
+) -> None:
+    msg = SnapshotLoaded(
+        id=id,
+        datasets={},  # This field should be removed
+        transaction_info=transaction_data,
+    ).serialize()
+    json_string = json.dumps(msg)
+    producer.produce(
+        topic,
+        value=json_string,
+        on_delivery=callback,
+    )
 
 
 def parse_control_message(message: Mapping[str, Any]) -> ControlMessage:
