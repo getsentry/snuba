@@ -31,7 +31,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
             topic=topic,
             bootstrap_servers=bootstrap_servers,
             group_id=group_id,
-            auto_offset_reset="earliest",
+            initial_auto_offset_reset="earliest",
             partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,
             on_partitions_assigned=None,
             on_partitions_revoked=None,

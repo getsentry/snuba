@@ -11,6 +11,10 @@ class NoPartitionAssigned(Exception):
     pass
 
 
+class PartitionReassigned(Exception):
+    pass
+
+
 class CommitDecision(Enum):
     # Go ahead consuming and do not commit for now
     DO_NOT_COMMIT = 0
@@ -39,7 +43,7 @@ class StrictConsumer:
         topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
-        auto_offset_reset: str,
+        initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
         on_partitions_assigned: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
         on_partitions_revoked: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
@@ -51,15 +55,16 @@ class StrictConsumer:
         self.__assign_timeout = partition_assignment_timeout
         self.__shutdown = False
         self.__topic = topic
+        self.__consuming = False
 
         consumer_config = {
             'enable.auto.commit': False,
             'bootstrap.servers': ','.join(bootstrap_servers),
             'group.id': group_id,
             'enable.partition.eof': 'true',
-            'auto.offset.reset': auto_offset_reset,
+            'auto.offset.reset': initial_auto_offset_reset,
             'default.topic.config': {
-                'auto.offset.reset': auto_offset_reset,
+                'auto.offset.reset': initial_auto_offset_reset,
             },
         }
 
@@ -70,6 +75,13 @@ class StrictConsumer:
             partitions: Sequence[TopicPartition],
         ):
             logger.info("New partitions assigned: %r", partitions)
+            if self.__consuming:
+                # In order to ensure the topic is consumed front to back
+                # we cannot allow assigning a new partition.
+                raise PartitionReassigned(
+                    "Cannot allow partition reassignment while catching up."
+                )
+
             if self.__on_partitions_assigned:
                 self.__on_partitions_assigned(consumer, partitions)
 
@@ -103,6 +115,7 @@ class StrictConsumer:
 
         while not self.__shutdown:
             message = self.__consumer.poll(timeout=self.__assign_timeout)
+            self.__consuming = True
             if not message:
                 # Since we enabled enable.partition.eof, no message means I could not
                 # consume and it is different from the case I managed to consume and
@@ -112,8 +125,7 @@ class StrictConsumer:
             if error:
                 if error.code() == KafkaError._PARTITION_EOF:
                     logger.debug("End of topic reached")
-                    self.__consumer.close()
-                    return
+                    break
                 else:
                     raise message.error()
 
@@ -140,6 +152,7 @@ class StrictConsumer:
 
             watermarks[(message.partition(), message.topic())] = message.offset()
 
+        self.__consuming = False
         self.__consumer.close()
 
     def signal_shutdown(self) -> None:

@@ -35,7 +35,7 @@ class TestStrictConsumer:
             topic="my_topic",
             bootstrap_servers="somewhere",
             group_id="something",
-            auto_offset_reset="earliest",
+            initial_auto_offset_reset="earliest",
             partition_assignment_timeout=1,
             on_partitions_assigned=None,
             on_partitions_revoked=None,
