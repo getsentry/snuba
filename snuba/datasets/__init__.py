@@ -2,7 +2,7 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Mapping
+from typing import Optional, Iterable, Mapping
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.util import escape_col
@@ -45,8 +45,11 @@ class Dataset(object):
             else:
                 raise TypeError
 
-        def encode(row: WriterTableRow) -> bytes:
-            return json.dumps(row, default=default).encode("utf-8")
+        def encode(rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+            return map(
+                lambda row: json.dumps(row, default=default).encode("utf-8"),
+                rows,
+            )
 
         return HTTPBatchWriter(
             self._schema,
@@ -68,11 +71,17 @@ class Dataset(object):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
+        def encode(rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+            ret = bytearray()
+            for row in rows:
+                ret += rapidjson.dumps(row).encode("utf-8")
+            return [ret]
+
         return HTTPBatchWriter(
             self._schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: rapidjson.dumps(row).encode("utf-8"),
+            encode,
             options,
             table_name,
             # When loading data in bulk, chunking data does not help

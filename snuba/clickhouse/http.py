@@ -35,7 +35,7 @@ class HTTPBatchWriter(BatchWriter):
         schema,
         host,
         port,
-        encoder: Callable[[WriterTableRow], bytes],
+        encoder: Callable[[Iterable[WriterTableRow]], Iterable[bytes]],
         options=None,
         table_name=None,
         chunked=True,
@@ -58,7 +58,7 @@ class HTTPBatchWriter(BatchWriter):
                 }
             ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
-            body=map(self.__encoder, rows),
+            body=self.__encoder(rows),
             chunked=self.__chunked,
         )
 
