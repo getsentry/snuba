@@ -6,7 +6,7 @@ from typing import Tuple
 
 class PausedState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     """
-    In this state the consumer is waiting for the snapshto to be
+    In this state the consumer is waiting for the snapshot to be
     ready and loaded. It consumes the control topic waiting for
     the singal the snapshot is ready and the xid coordinates of the
     snapshot.

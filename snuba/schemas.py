@@ -3,7 +3,7 @@ import itertools
 from collections import ChainMap
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Mapping, Union
 
 import jsonschema
 
@@ -307,6 +307,26 @@ class RequestSchema:
 
         return Request(query, extensions)
 
+    def __generate_template_impl(self, schema) -> Any:
+        """
+        Generate a (not necessarily valid) object that can be used as a template
+        from the provided schema
+        """
+        typ = schema.get('type')
+        if 'default' in schema:
+            default = schema['default']
+            return default() if callable(default) else default
+        elif typ == 'object':
+            return {prop: self.__generate_template_impl(subschema) for prop, subschema in schema.get('properties', {}).items()}
+        elif typ == 'array':
+            return []
+        elif typ == 'string':
+            return ""
+        return None
+
+    def generate_template(self) -> Any:
+        return self.__generate_template_impl(self.__composite_schema)
+
 
 EVENTS_QUERY_SCHEMA = RequestSchema(GENERIC_QUERY_SCHEMA, {
     'performance': PERFORMANCE_EXTENSION_SCHEMA,
@@ -375,21 +395,3 @@ def validate_jsonschema(value, schema, set_defaults=True):
     ).validate(value, schema)
 
     return value
-
-
-def generate(schema):
-    """
-    Generate a (not necessarily valid) object that can be used as a template
-    from the provided schema
-    """
-    typ = schema.get('type')
-    if 'default' in schema:
-        default = schema['default']
-        return default() if callable(default) else default
-    elif typ == 'object':
-        return {prop: generate(subschema) for prop, subschema in schema.get('properties', {}).items()}
-    elif typ == 'array':
-        return []
-    elif typ == 'string':
-        return ""
-    return None
