@@ -7,7 +7,8 @@ import logging
 logger = logging.getLogger('snuba.migrate')
 
 
-def _run_schema(conn, clickhouse_table, dataset):
+def _run_schema(conn, schema):
+    clickhouse_table = schema.get_local_table_name()
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr
@@ -53,15 +54,17 @@ def _run_schema(conn, clickhouse_table, dataset):
     local_schema = get_schema()
 
     # Warn user about any *other* schema diffs
-    differences = dataset.get_dataset_tables().get_schema_differences(clickhouse_table, local_schema)
+    differences = schema.get_schema_differences(local_schema)
 
     for difference in differences:
         logger.warn(difference)
 
 
 def run(conn, dataset):
-    for schema_name in dataset.get_dataset_tables().get_all_local_table_names():
-        _run_schema(conn, schema_name, dataset)
+    schemas = [dataset.get_dataset_tables().get_read_schema(), dataset.get_dataset_tables().get_write_schema()]
+
+    for schema in schemas:
+        _run_schema(conn, schema)
 
 
 def rename_dev_table(conn):
