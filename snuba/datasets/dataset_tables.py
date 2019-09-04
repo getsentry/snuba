@@ -1,6 +1,3 @@
-import itertools
-
-
 class DatasetTables(object):
     """
     A collection of tables associated with a dataset, used to obfuscate methods from the schema
@@ -48,6 +45,9 @@ class DatasetTables(object):
         return map(lambda schema: schema.get_local_drop_table_statement(), self.__get_unique_schemas())
 
     def get_schema_differences(self, local_table_name, expected_columns):
+        """
+        Returns a list of differences between the expected_columns and the columns described in the schema.
+        """
         errors = []
         unique_schemas = self.__get_unique_schemas()
         possible_schemas = [schema for schema in unique_schemas if schema.get_local_table_name() == local_table_name]

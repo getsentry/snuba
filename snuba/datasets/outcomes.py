@@ -58,7 +58,7 @@ class OutcomesDataset(Dataset):
             ('event_id', Nullable(UUID())),
         ])
 
-        self.__write_schema = MergeTreeSchema(
+        write_schema = MergeTreeSchema(
             columns=write_columns,
             # TODO: change to outcomes.raw_local when we add multi DB support
             local_table_name=WRITE_SCHEMA_LOCAL_TABLE_NAME,
@@ -79,7 +79,7 @@ class OutcomesDataset(Dataset):
             ('times_seen', UInt(64)),
         ])
 
-        self.__read_schema = SummingMergeTreeSchema(
+        read_schema = SummingMergeTreeSchema(
             columns=read_columns,
             local_table_name=READ_SCHEMA_LOCAL_TABLE_NAME,
             dist_table_name=READ_SCHEMA_DIST_TABLE_NAME,
@@ -113,7 +113,7 @@ class OutcomesDataset(Dataset):
                GROUP BY org_id, project_id, key_id, timestamp, outcome, reason
                """
 
-        self.__materialized_view = MaterializedViewSchema(
+        materialized_view = MaterializedViewSchema(
             local_table_name='outcomes_mv_hourly_local',
             dist_table_name='outcomes_mv_hourly_dist',
             columns=materialized_view_columns,
@@ -125,9 +125,9 @@ class OutcomesDataset(Dataset):
         )
 
         dataset_tables = DatasetTables(
-            read_schema=self.__read_schema,
-            write_schema=self.__write_schema,
-            intermediary_schemas=[self.__materialized_view]
+            read_schema=read_schema,
+            write_schema=write_schema,
+            intermediary_schemas=[materialized_view]
         )
 
         super(OutcomesDataset, self).__init__(
