@@ -3,7 +3,10 @@ class DatasetSchemas(object):
     A collection of tables associated with a dataset, providing access to schemas and aggregated functions
     """
 
-    def __init__(self, read_schema, write_schema, intermediary_schemas=[]):
+    def __init__(self, read_schema, write_schema, intermediary_schemas=None):
+        if intermediary_schemas is None:
+            intermediary_schemas = []
+
         self.__read_schema = read_schema
         self.__write_schema = write_schema
         self.__intermediary_schemas = intermediary_schemas
