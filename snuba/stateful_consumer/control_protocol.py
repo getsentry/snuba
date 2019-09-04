@@ -27,7 +27,7 @@ CONTROL_MSG_SCHEMA = {
                     "type": "string"
                 }
             },
-            "required": ["event", "snapshot-id"],
+            "required": ["snapshot-id"],
         },
         "snapshot-init": {
             "allOf": [
@@ -82,7 +82,8 @@ CONTROL_MSG_SCHEMA = {
                                         {"type": "number"}
                                     ],
                                 },
-                            }
+                            },
+                            "required": ["xmin", "xmax", "xip-list"],
                         }
                     },
                     "required": ["event", "datasets", "transaction-info"],
