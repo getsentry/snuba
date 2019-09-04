@@ -1,4 +1,7 @@
+from typing import Mapping, List
+
 from snuba import settings
+from snuba.clickhouse.columns import ColumnSet
 
 
 def local_dataset_mode():
@@ -46,28 +49,29 @@ class Schema(object):
     def get_columns(self):
         return self._columns
 
-    def get_schema_differences(self, expected_columns):
-        errors = []
+    def get_schema_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+        errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
             if column_name not in self._columns:
-                errors.append("Column '%s' exists in local ClickHouse but not in schema!", column_name)
+                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
                 continue
 
             expected_type = self._columns[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)",
-                    column_name,
-                    expected_type,
-                    column_type
+                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
+                        column_name,
+                        expected_type,
+                        column_type
+                    )
                 )
 
         return errors
 
 
 class TableSchema(Schema):
-    def _get_table_definition(self, name, engine):
+    def _get_table_definition(self, name: str, engine: str) -> str:
         return """
             CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
             'columns': self._columns.for_schema(),
@@ -75,7 +79,7 @@ class TableSchema(Schema):
             'name': name,
         }
 
-    def get_local_table_definition(self):
+    def get_local_table_definition(self) -> str:
         return self._get_table_definition(
             self.get_local_table_name(),
             self._get_local_engine()
@@ -157,15 +161,15 @@ class MaterializedViewSchema(Schema):
 
     def __init__(
             self,
-            local_materialized_view_name,
-            dist_materialized_view_name,
-            columns,
-            query,
-            local_src_table_name,
-            dist_src_table_name,
-            local_dest_table_name,
-            dist_dest_table_name
-    ):
+            local_materialized_view_name: str,
+            dist_materialized_view_name: str,
+            columns: ColumnSet,
+            query: str,
+            local_src_table_name: str,
+            dist_src_table_name: str,
+            local_dest_table_name: str,
+            dist_dest_table_name: str
+    ) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,
@@ -181,13 +185,13 @@ class MaterializedViewSchema(Schema):
         self.__local_dest_table_name = local_dest_table_name
         self.__dist_dest_table_name = dist_dest_table_name
 
-    def __get_local_src_table_name(self):
+    def __get_local_src_table_name(self) -> str:
         return self._make_test_table(self.__local_src_table_name)
 
-    def __get_local_dest_table_name(self):
+    def __get_local_dest_table_name(self) -> str:
         return self._make_test_table(self.__local_dest_table_name)
 
-    def __get_table_definition(self, name, src_table_name, dest_table_name):
+    def __get_table_definition(self, name: str, src_table_name: str, dest_table_name: str) -> str:
         return """
         CREATE MATERIALIZED VIEW %(name)s TO %(dest_table_name)s (%(columns)s) AS %(query)s""" % {
             'name': name,
@@ -198,7 +202,7 @@ class MaterializedViewSchema(Schema):
             'src_table_name': src_table_name,
         }
 
-    def get_local_table_definition(self):
+    def get_local_table_definition(self) -> str:
         return self.__get_table_definition(
             self.get_local_table_name(),
             self.__get_local_src_table_name(),

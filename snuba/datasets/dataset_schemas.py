@@ -1,9 +1,19 @@
+from typing import Optional, List, Iterator
+
+from snuba.datasets.schema import Schema
+
+
 class DatasetSchemas(object):
     """
     A collection of tables associated with a dataset, providing access to schemas and aggregated functions
     """
 
-    def __init__(self, read_schema, write_schema, intermediary_schemas=None):
+    def __init__(
+            self,
+            read_schema: Schema,
+            write_schema: Schema,
+            intermediary_schemas: Optional[List[Schema]] = None
+    ) -> None:
         if intermediary_schemas is None:
             intermediary_schemas = []
 
@@ -11,19 +21,19 @@ class DatasetSchemas(object):
         self.__write_schema = write_schema
         self.__intermediary_schemas = intermediary_schemas
 
-    def get_read_schema(self):
+    def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_write_schema(self):
+    def get_write_schema(self) -> Schema:
         return self.__write_schema
 
-    def __get_unique_schemas(self):
+    def __get_unique_schemas(self) -> List[Schema]:
         all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
 
         return list(set(all_schemas_with_possible_duplicates))
 
-    def get_create_statements(self):
+    def get_create_statements(self) -> Iterator[str]:
         return map(lambda schema: schema.get_local_table_definition(), self.__get_unique_schemas())
 
-    def get_drop_statements(self):
+    def get_drop_statements(self) -> Iterator[str]:
         return map(lambda schema: schema.get_local_drop_table_statement(), self.__get_unique_schemas())
