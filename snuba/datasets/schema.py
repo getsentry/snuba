@@ -157,8 +157,8 @@ class MaterializedViewSchema(Schema):
 
     def __init__(
             self,
-            local_table_name,
-            dist_table_name,
+            local_materialized_view_name,
+            dist_materialized_view_name,
             columns,
             query,
             local_src_table_name,
@@ -166,10 +166,10 @@ class MaterializedViewSchema(Schema):
             local_dest_table_name,
             dist_dest_table_name
     ):
-        super(MaterializedViewSchema, self).__init__(
+        super().__init__(
             columns=columns,
-            local_table_name=local_table_name,
-            dist_table_name=dist_table_name,
+            local_table_name=local_materialized_view_name,
+            dist_table_name=dist_materialized_view_name,
         )
 
         # Make sure the caller has provided a src_table_name in the query
