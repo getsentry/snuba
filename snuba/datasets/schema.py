@@ -50,6 +50,9 @@ class Schema(object):
         return self._columns
 
     def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+        """
+        Returns a list of differences between the expected_columns and the columns described in the schema.
+        """
         errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
