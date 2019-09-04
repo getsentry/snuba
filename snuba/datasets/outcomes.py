@@ -11,7 +11,7 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets import Dataset
-from snuba.datasets.dataset_tables import DatasetTables
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
 from snuba.datasets.schema import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
 from snuba import settings
@@ -124,7 +124,7 @@ class OutcomesDataset(Dataset):
             dist_dest_table_name=READ_SCHEMA_DIST_TABLE_NAME
         )
 
-        dataset_tables = DatasetTables(
+        dataset_tables = DatasetSchemas(
             read_schema=read_schema,
             write_schema=write_schema,
             intermediary_schemas=[materialized_view]

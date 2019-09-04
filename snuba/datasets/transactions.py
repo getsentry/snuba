@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.datasets import Dataset
-from snuba.datasets.dataset_tables import DatasetTables
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 
@@ -76,7 +76,7 @@ class TransactionsDataset(Dataset):
             sample_expr=None,
         )
 
-        dataset_tables = DatasetTables(
+        dataset_tables = DatasetSchemas(
             read_schema=schema,
             write_schema=schema,
         )

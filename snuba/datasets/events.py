@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets import TimeSeriesDataset
-from snuba.datasets.dataset_tables import DatasetTables
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.schemas import EVENTS_QUERY_SCHEMA
@@ -186,7 +186,7 @@ class EventsDataset(TimeSeriesDataset):
             version_column='deleted',
             sample_expr=sample_expr)
 
-        dataset_tables = DatasetTables(
+        dataset_tables = DatasetSchemas(
             read_schema=schema,
             write_schema=schema,
         )

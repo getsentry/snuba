@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.dataset_tables import DatasetTables
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
@@ -44,7 +44,7 @@ class GroupedMessageDataset(CdcDataset):
             sample_expr='id',
         )
 
-        dataset_tables = DatasetTables(
+        dataset_tables = DatasetSchemas(
             read_schema=schema,
             write_schema=schema,
         )

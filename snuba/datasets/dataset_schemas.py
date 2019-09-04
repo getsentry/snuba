@@ -1,4 +1,4 @@
-class DatasetTables(object):
+class DatasetSchemas(object):
     """
     A collection of tables associated with a dataset, used to obfuscate methods from the schema
     """
