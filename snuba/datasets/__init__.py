@@ -34,7 +34,7 @@ class Dataset(object):
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            table_name or self.get_dataset_tables().get_write_table_name(),
+            table_name or self.get_dataset_tables().get_write_schema().get_table_name(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,

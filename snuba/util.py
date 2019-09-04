@@ -314,7 +314,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_dataset_tables().get_read_columns()
+        columns = dataset.get_dataset_tables().get_read_schema().get_columns()
         if (
             isinstance(lhs, str) and
             lhs in columns and

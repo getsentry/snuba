@@ -187,7 +187,7 @@ class BaseDatasetTest(BaseTest):
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
-        self.table = self.dataset.get_dataset_tables().get_write_table_name()
+        self.table = self.dataset.get_dataset_tables().get_write_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):

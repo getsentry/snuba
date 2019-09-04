@@ -53,10 +53,8 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            # TODO: remove get_all_table_names method once we not longer need it in the health check
-            table_names = dataset.get_dataset_tables().get_all_table_names()
 
-            for table_name in table_names:
+            for table_name in dataset.get_read_schema().get_table_name():
                 if (table_name,) not in clickhouse_tables:
                     return False
 
@@ -384,7 +382,7 @@ def parse_and_run_query(dataset, request: Request, timer):
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
             request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    table = dataset.get_dataset_tables().get_read_table_name()
+    table = dataset.get_dataset_tables().get_read_schema().get_table_name()
 
     sql = format_query(dataset, request, table, prewhere_conditions, final)
 

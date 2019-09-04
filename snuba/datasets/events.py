@@ -289,7 +289,7 @@ class EventsDataset(TimeSeriesDataset):
         if col in self._get_promoted_columns():
             actual_tag = self.get_tag_column_map()[col].get(tag, tag)
             if actual_tag in self._get_promoted_columns()[col]:
-                return string_col(self.get_dataset_tables().get_read_columns(), actual_tag)
+                return string_col(self.get_dataset_tables().get_read_schema().get_columns(), actual_tag)
 
         # For the rest, return an expression that looks it up in the nested tags.
         return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
@@ -318,7 +318,7 @@ class EventsDataset(TimeSeriesDataset):
                 col
             )
             val_list = u'arrayConcat([{}], {}.value)'.format(
-                ', '.join(string_col(self.get_dataset_tables().get_read_columns(), p) for p in promoted),
+                ', '.join(string_col(self.get_dataset_tables().get_read_schema().get_columns(), p) for p in promoted),
                 col
             )
 

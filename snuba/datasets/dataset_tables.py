@@ -8,32 +8,16 @@ class DatasetTables(object):
         self.__write_schema = write_schema
         self.__intermediary_schemas = intermediary_schemas
 
-    def get_local_write_table_name(self):
-        return self.__write_schema.get_local_table_name()
+    def get_read_schema(self):
+        return self.__read_schema
 
-    def get_local_read_table_name(self):
-        return self.__read_schema.get_local_table_name()
-
-    def get_write_table_name(self):
-        return self.__write_schema.get_table_name()
-
-    def get_read_table_name(self):
-        return self.__read_schema.get_table_name()
-
-    def get_read_columns(self):
-        return self.__read_schema.get_columns()
-
-    def get_write_columns(self):
-        return self.__write_schema.get_columns()
+    def get_write_schema(self):
+        return self.__write_schema
 
     def __get_unique_schemas(self):
         all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
 
         return list(set(all_schemas_with_possible_duplicates))
-
-    def get_all_table_names(self):
-        # TODO: remove get_all_table_names method once we not longer need it in the health check
-        return map(lambda schema: schema.get_table_name(), self.__get_unique_schemas())
 
     def get_all_local_table_names(self):
         return map(lambda schema: schema.get_local_table_name(), self.__get_unique_schemas())
