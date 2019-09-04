@@ -30,12 +30,7 @@ class DatasetTables(object):
         return self.__write_schema.get_columns()
 
     def __get_unique_schemas(self):
-        all_schemas_with_possible_duplicates = list(
-            itertools.chain.from_iterable([
-                [self.__read_schema, self.__write_schema],
-                self.__intermediary_schemas]
-            )
-        )
+        all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
 
         return list(set(all_schemas_with_possible_duplicates))
 
