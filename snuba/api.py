@@ -53,10 +53,10 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            schemas = dataset.get_schemas()
+            # TODO: remove get_all_table_names method once we not longer need it in the health check
+            table_names = dataset.get_dataset_tables().get_all_table_names()
 
-            for schema in schemas:
-                table_name = schema.get_table_name()
+            for table_name in table_names:
                 if (table_name,) not in clickhouse_tables:
                     return False
 
@@ -469,10 +469,8 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        for schema in dataset.get_schemas():
-            clickhouse_rw.execute(
-                schema.get_local_table_definition()
-            )
+        for statement in dataset.get_dataset_tables().get_create_statements():
+            clickhouse_rw.execute(statement)
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -538,9 +536,8 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        for schema in dataset.get_schemas():
-            table = schema.get_local_table_name()
-            clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
+        for statement in dataset.get_dataset_tables().get_drop_statements():
+            clickhouse_rw.execute(statement)
 
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()

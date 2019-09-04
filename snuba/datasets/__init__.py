@@ -13,36 +13,37 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, write_schema, read_schema, *, processor,
+    def __init__(self, dataset_tables, *, processor,
             default_topic: str,
             default_replacement_topic: Optional[str] = None,
             default_commit_log_topic: Optional[str] = None):
-        self.__write_schema = write_schema
-        self.__read_schema = read_schema
+        self.__dataset_tables = dataset_tables
         self.__processor = processor
         self.__default_topic = default_topic
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
-    def get_read_schema(self):
-        return self.__read_schema
-
-    def get_write_schema(self):
-        return self.__write_schema
-
-    def get_schemas(self):
-        # deduplicate the schemas and return as a list
-        return list(set([self.__read_schema, self.__write_schema]))
+    def get_dataset_tables(self):
+        return self.__dataset_tables
 
     def get_processor(self):
         return self.__processor
+
+    def get_write_schema(self):
+        # TODO(manu): remove this
+        return self.get_dataset_tables().get_write_schema()
+
+    def get_read_schema(self):
+        # TODO(manu): remove this
+        return self.get_dataset_tables().get_read_schema()
+
 
     def get_writer(self, options=None, table_name=None):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            self.__write_schema,
+            self.get_dataset_tables().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,

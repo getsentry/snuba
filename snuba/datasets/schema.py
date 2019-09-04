@@ -40,6 +40,9 @@ class Schema(object):
     def get_local_table_definition(self):
         raise NotImplementedError
 
+    def get_local_drop_table_statement(self):
+        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+
     def get_columns(self):
         return self._columns
 
