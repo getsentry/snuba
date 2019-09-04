@@ -45,9 +45,14 @@ class StrictConsumer:
         group_id: str,
         initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
-        on_partitions_assigned: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
-        on_partitions_revoked: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
         on_message: Callable[[Message], CommitDecision],
+        on_partitions_assigned: Optional[
+            Callable[[Consumer, Sequence[TopicPartition]], None]
+        ] = None,
+        on_partitions_revoked: Optional[
+            Callable[[Consumer, Sequence[TopicPartition]], None]
+        ] = None,
+
     ) -> None:
         self.__on_partitions_assigned = on_partitions_assigned
         self.__on_partitions_revoked = on_partitions_revoked
@@ -142,7 +147,7 @@ class StrictConsumer:
                         topic=message.topic(),
                         offset=prev_watermark,
                     )
-                    self.__consumer.commit(commit_pos, asynchronous=False)
+                    self.__consumer.commit(offsets=[commit_pos], asynchronous=False)
                 else:
                     logger.debug(
                         "No previous message to commit on partition %s on topic %s",
