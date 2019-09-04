@@ -54,7 +54,7 @@ def _run_schema(conn, schema):
     local_schema = get_schema()
 
     # Warn user about any *other* schema diffs
-    differences = schema.get_schema_differences(local_schema)
+    differences = schema.get_column_differences(local_schema)
 
     for difference in differences:
         logger.warn(difference)

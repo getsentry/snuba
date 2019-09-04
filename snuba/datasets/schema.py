@@ -49,7 +49,7 @@ class Schema(object):
     def get_columns(self):
         return self._columns
 
-    def get_schema_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
         errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
