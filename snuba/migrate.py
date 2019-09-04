@@ -60,7 +60,7 @@ def _run_schema(conn, clickhouse_table, dataset):
 
 
 def run(conn, dataset):
-    for schema_name in dataset.get_dataset_tables().get_all_table_names():
+    for schema_name in dataset.get_dataset_tables().get_all_local_table_names():
         _run_schema(conn, schema_name, dataset)
 
 

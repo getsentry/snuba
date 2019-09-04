@@ -11,14 +11,6 @@ class DatasetTables(object):
         self.__write_schema = write_schema
         self.__intermediary_schemas = intermediary_schemas
 
-    def get_write_schema(self):
-        # TODO(manu): remove this
-        return self.__write_schema
-
-    def get_read_schema(self):
-        # TODO(manu): remove this
-        return self.__read_schema
-
     def get_local_write_table_name(self):
         return self.__write_schema.get_local_table_name()
 
@@ -30,6 +22,12 @@ class DatasetTables(object):
 
     def get_read_table_name(self):
         return self.__read_schema.get_table_name()
+
+    def get_read_columns(self):
+        return self.__read_schema.get_columns()
+
+    def get_write_columns(self):
+        return self.__write_schema.get_columns()
 
     def __get_unique_schemas(self):
         all_schemas_with_possible_duplicates = list(

@@ -26,7 +26,7 @@ def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_l
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     dataset = get_dataset(dataset)
-    table = dataset.get_write_schema().get_local_table_name()
+    table = dataset.get_dataset_tables().get_local_write_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     clickhouse = ClickhousePool(clickhouse_host, clickhouse_port, send_receive_timeout=timeout)

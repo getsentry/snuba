@@ -40,8 +40,8 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def string_col(schema, col):
-    col_type = schema.get_columns().get(col, None)
+def string_col(schema_columns, col):
+    col_type = schema_columns.get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
@@ -314,7 +314,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_read_schema().get_columns()
+        columns = dataset.get_dataset_tables().get_read_columns()
         if (
             isinstance(lhs, str) and
             lhs in columns and

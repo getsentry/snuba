@@ -29,25 +29,15 @@ class Dataset(object):
     def get_processor(self):
         return self.__processor
 
-    def get_write_schema(self):
-        # TODO(manu): remove this
-        return self.get_dataset_tables().get_write_schema()
-
-    def get_read_schema(self):
-        # TODO(manu): remove this
-        return self.get_dataset_tables().get_read_schema()
-
-
     def get_writer(self, options=None, table_name=None):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            self.get_dataset_tables().get_write_schema(),
+            table_name or self.get_dataset_tables().get_write_table_name(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,
-            table_name,
         )
 
     def default_conditions(self):
