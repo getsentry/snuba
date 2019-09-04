@@ -119,6 +119,8 @@ class RecoveryState:
             )
             return CommitDecision.DO_NOT_COMMIT
 
+        # TODO: filter out the tables I am not interested into.
+
         self.__past_snapshots.add(msg.id)
         self.__active_snapshot_id = msg.id
         self.__loaded_snapshot_transactions = None

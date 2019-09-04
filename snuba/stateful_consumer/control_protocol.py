@@ -36,8 +36,14 @@ CONTROL_MSG_SCHEMA = {
                     "properties": {
                         "event": {"const": "snapshot-init"},
                         "product": {"type": "string"},
+                        "tables": {
+                            "type": "array",
+                            "items": [
+                                {"type": "string"}
+                            ],
+                        },
                     },
-                    "required": ["event", "product"],
+                    "required": ["event", "product", "tables"],
                 }
             ]
         },
@@ -52,25 +58,12 @@ CONTROL_MSG_SCHEMA = {
                 }
             ]
         },
-        "dataset": {
-            "type": "object",
-            "properties": {
-                "temp_table": {"type": "string"},
-            },
-            "required": ["temp_table"],
-        },
         "snapshot-loaded": {
             "allOf": [
                 {"$ref": "#/definitions/base"},
                 {
                     "properties": {
                         "event": {"const": "snapshot-loaded"},
-                        "datasets": {
-                            "type": "object",
-                            "additionalProperties": {
-                                '$ref': '#/definitions/dataset',
-                            },
-                        },
                         "transaction-info": {
                             "type": "object",
                             "properties": {
@@ -86,7 +79,7 @@ CONTROL_MSG_SCHEMA = {
                             "required": ["xmin", "xmax", "xip-list"],
                         }
                     },
-                    "required": ["event", "datasets", "transaction-info"],
+                    "required": ["event", "transaction-info"],
                 }
             ]
         }
@@ -106,12 +99,14 @@ class ControlMessage(ABC):
 @dataclass(frozen=True)
 class SnapshotInit(ControlMessage):
     product: str
+    tables: Sequence[str]
 
     @classmethod
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-init"
         return SnapshotInit(
             id=json["snapshot-id"],
+            tables=json["tables"],
             product=json["product"],
         )
 
@@ -127,9 +122,6 @@ class SnapshotAbort(ControlMessage):
         )
 
 
-DatasetMetadata = Mapping[str, Any]
-
-
 @dataclass(frozen=True)
 class TransactionData:
     """
@@ -142,8 +134,6 @@ class TransactionData:
 
 @dataclass(frozen=True)
 class SnapshotLoaded(ControlMessage):
-    # TODO: I think we can get rid of datasets as a whole from this message.
-    datasets: Mapping[str, DatasetMetadata]
     transaction_info: TransactionData
 
     @classmethod
@@ -151,7 +141,6 @@ class SnapshotLoaded(ControlMessage):
         assert json["event"] == "snapshot-loaded"
         return SnapshotLoaded(
             id=json["snapshot-id"],
-            datasets=json["datasets"],
             transaction_info=TransactionData(
                 xmin=json["transaction-info"]["xmin"],
                 xmax=json["transaction-info"]["xmax"],

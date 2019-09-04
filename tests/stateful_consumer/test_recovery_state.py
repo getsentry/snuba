@@ -27,7 +27,7 @@ class TestRecoveryState:
         (
             # One snapshot started
             [
-                (SnapshotInit(id="123asd", product="snuba"), CommitDecision.COMMIT_PREV)
+                (SnapshotInit(id="123asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV)
             ],
             ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd",
@@ -35,7 +35,7 @@ class TestRecoveryState:
         (
             # initialized and aborted snapshot
             [
-                (SnapshotInit(id="123asd", product="snuba"), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="123asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
                 (SnapshotAbort(id="123asd"), CommitDecision.COMMIT_THIS),
             ],
             ConsumerStateCompletionEvent.NO_SNAPSHOT,
@@ -44,10 +44,9 @@ class TestRecoveryState:
         (
             # Initialized and ready
             [
-                (SnapshotInit(id="123asd", product="snuba"), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="123asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
                 (SnapshotLoaded(
                     id="123asd",
-                    datasets=None,
                     transaction_info=transaction_data,
                 ), CommitDecision.DO_NOT_COMMIT)
             ],
@@ -57,10 +56,10 @@ class TestRecoveryState:
         (
             # Initialized and multiple overlapping snapshots that are ignored
             [
-                (SnapshotInit(id="123asd", product="snuba"), CommitDecision.COMMIT_PREV),
-                (SnapshotInit(id="234asd", product="someoneelse"), CommitDecision.DO_NOT_COMMIT),
+                (SnapshotInit(id="123asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="234asd", product="someoneelse", tables=None), CommitDecision.DO_NOT_COMMIT),
                 (SnapshotAbort(id="234asd"), CommitDecision.DO_NOT_COMMIT),
-                (SnapshotInit(id="345asd", product="snuba"), CommitDecision.DO_NOT_COMMIT),
+                (SnapshotInit(id="345asd", product="snuba", tables=None), CommitDecision.DO_NOT_COMMIT),
             ],
             ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "123asd"
@@ -68,19 +67,17 @@ class TestRecoveryState:
         (
             # Multiple successful consecutive snapshots
             [
-                (SnapshotInit(id="123asd", product="snuba"), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="123asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
                 (SnapshotLoaded(
                     id="123asd",
-                    datasets=None,
                     transaction_info=transaction_data,
                 ), CommitDecision.DO_NOT_COMMIT),
-                (SnapshotInit(id="234asd", product="snuba"), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="234asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
                 (SnapshotLoaded(
                     id="234asd",
-                    datasets=None,
                     transaction_info=transaction_data,
                 ), CommitDecision.DO_NOT_COMMIT),
-                (SnapshotInit(id="345asd", product="snuba"), CommitDecision.COMMIT_PREV),
+                (SnapshotInit(id="345asd", product="snuba", tables=None), CommitDecision.COMMIT_PREV),
             ],
             ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED,
             "345asd"
