@@ -45,9 +45,14 @@ class StrictConsumer:
         group_id: str,
         initial_auto_offset_reset: str,
         partition_assignment_timeout: int,
-        on_partitions_assigned: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
-        on_partitions_revoked: Optional[Callable[[Consumer, Sequence[TopicPartition]], None]],
         on_message: Callable[[Message], CommitDecision],
+        on_partitions_assigned: Optional[
+            Callable[[Consumer, Sequence[TopicPartition]], None]
+        ] = None,
+        on_partitions_revoked: Optional[
+            Callable[[Consumer, Sequence[TopicPartition]], None]
+        ] = None,
+
     ) -> None:
         self.__on_partitions_assigned = on_partitions_assigned
         self.__on_partitions_revoked = on_partitions_revoked

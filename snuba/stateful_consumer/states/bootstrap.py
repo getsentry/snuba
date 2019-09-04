@@ -1,12 +1,13 @@
-import logging
 import json
+import logging
 
-from typing import Optional, Sequence, Tuple
-from confluent_kafka import Consumer, Message, TopicPartition
+from typing import Sequence, Tuple
+from confluent_kafka import Message, Optional
 
+from snuba import settings
+from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.state_machine import State
-from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
 from snuba.stateful_consumer.control_protocol import (
     parse_control_message,
     SnapshotInit,
@@ -14,7 +15,6 @@ from snuba.stateful_consumer.control_protocol import (
     SnapshotLoaded,
     ControlMessage,
 )
-from snuba import settings
 
 logger = logging.getLogger('snuba.snapshot-load')
 

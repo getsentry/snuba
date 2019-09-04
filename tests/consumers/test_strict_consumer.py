@@ -8,12 +8,31 @@ from unittest.mock import MagicMock
 from base import FakeKafkaConsumer, message
 
 from snuba.consumers.strict_consumer import CommitDecision, NoPartitionAssigned, StrictConsumer
+from snuba.perf import FakeKafkaMessage
 
 
 class TestStrictConsumer:
+
+    def __message(self, offset, partition, value, eof=False) -> FakeKafkaMessage:
+        if eof:
+            error = MagicMock()
+            error.code.return_value = KafkaError._PARTITION_EOF
+        else:
+            error = None
+
+        return FakeKafkaMessage(
+            topic="my_topic",
+            partition=partition,
+            offset=offset,
+            value=value,
+            key=None,
+            headers=None,
+            error=error,
+        )
+
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
-            topic="topic",
+            topic="my_topic",
             bootstrap_servers="somewhere",
             group_id="something",
             initial_auto_offset_reset="earliest",
@@ -54,6 +73,7 @@ class TestStrictConsumer:
     def test_one_message(self, create_consumer) -> None:
         kafka_consumer = FakeKafkaConsumer()
         create_consumer.return_value = kafka_consumer
+
         msg = message(0, 0, "ABCABC", False)
         kafka_consumer.items = [
             msg,
