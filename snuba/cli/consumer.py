@@ -66,7 +66,10 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
 
     if stateful_consumer:
         context = ConsumerStateMachine(
-            main_consumer=consumer_builder.build_consumer()
+            main_consumer=consumer_builder.build_consumer(),
+            topic="cdc_control",
+            bootstrap_servers=bootstrap_server,
+            group_id=consumer_group,
         )
 
         def handler(signum, frame):
