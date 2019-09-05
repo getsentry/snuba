@@ -168,10 +168,10 @@ class MaterializedViewSchema(Schema):
             dist_materialized_view_name: str,
             columns: ColumnSet,
             query: str,
-            local_src_table_name: str,
-            dist_src_table_name: str,
-            local_dest_table_name: str,
-            dist_dest_table_name: str
+            local_source_table_name: str,
+            local_destination_table_name: str,
+            dist_source_table_name: str,
+            dist_destination_table_name: str
     ) -> None:
         super().__init__(
             columns=columns,
@@ -179,35 +179,35 @@ class MaterializedViewSchema(Schema):
             dist_table_name=dist_materialized_view_name,
         )
 
-        # Make sure the caller has provided a src_table_name in the query
-        assert query % {'src_table_name': local_src_table_name} != query
+        # Make sure the caller has provided a source_table_name in the query
+        assert query % {'source_table_name': local_source_table_name} != query
 
         self.__query = query
-        self.__local_src_table_name = local_src_table_name
-        self.__dist_src_table_name = dist_src_table_name
-        self.__local_dest_table_name = local_dest_table_name
-        self.__dist_dest_table_name = dist_dest_table_name
+        self.__local_source_table_name = local_source_table_name
+        self.__local_destination_table_name = local_destination_table_name
+        self.__dist_source_table_name = dist_source_table_name
+        self.__dist_destination_table_name = dist_destination_table_name
 
-    def __get_local_src_table_name(self) -> str:
-        return self._make_test_table(self.__local_src_table_name)
+    def __get_local_source_table_name(self) -> str:
+        return self._make_test_table(self.__local_source_table_name)
 
-    def __get_local_dest_table_name(self) -> str:
-        return self._make_test_table(self.__local_dest_table_name)
+    def __get_local_destination_table_name(self) -> str:
+        return self._make_test_table(self.__local_destination_table_name)
 
-    def __get_table_definition(self, name: str, src_table_name: str, dest_table_name: str) -> str:
+    def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
         return """
-        CREATE MATERIALIZED VIEW %(name)s TO %(dest_table_name)s (%(columns)s) AS %(query)s""" % {
+        CREATE MATERIALIZED VIEW %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {
             'name': name,
-            'dest_table_name': dest_table_name,
+            'destination_table_name': destination_table_name,
             'columns': self._columns.for_schema(),
             'query': self.__query,
         } % {
-            'src_table_name': src_table_name,
+            'source_table_name': source_table_name,
         }
 
     def get_local_table_definition(self) -> str:
         return self.__get_table_definition(
             self.get_local_table_name(),
-            self.__get_local_src_table_name(),
-            self.__get_local_dest_table_name()
+            self.__get_local_source_table_name(),
+            self.__get_local_destination_table_name()
         )

@@ -109,19 +109,19 @@ class OutcomesDataset(Dataset):
                    outcome,
                    ifNull(reason, 'none') AS reason,
                    count() AS times_seen
-               FROM %(src_table_name)s
+               FROM %(source_table_name)s
                GROUP BY org_id, project_id, key_id, timestamp, outcome, reason
                """
 
         materialized_view = MaterializedViewSchema(
-            local_table_name='outcomes_mv_hourly_local',
-            dist_table_name='outcomes_mv_hourly_dist',
+            local_materialized_view_name='outcomes_mv_hourly_local',
+            dist_materialized_view_name='outcomes_mv_hourly_dist',
             columns=materialized_view_columns,
             query=query,
-            local_src_table_name=WRITE_SCHEMA_LOCAL_TABLE_NAME,
-            dist_src_table_name=WRITE_SCHEMA_DIST_TABLE_NAME,
-            local_dest_table_name=READ_SCHEMA_LOCAL_TABLE_NAME,
-            dist_dest_table_name=READ_SCHEMA_DIST_TABLE_NAME
+            local_source_table_name=WRITE_SCHEMA_LOCAL_TABLE_NAME,
+            local_destination_table_name=READ_SCHEMA_LOCAL_TABLE_NAME,
+            dist_source_table_name=WRITE_SCHEMA_DIST_TABLE_NAME,
+            dist_destination_table_name=READ_SCHEMA_DIST_TABLE_NAME
         )
 
         dataset_tables = DatasetSchemas(
