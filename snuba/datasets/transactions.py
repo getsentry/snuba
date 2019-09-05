@@ -76,13 +76,13 @@ class TransactionsDataset(Dataset):
             sample_expr=None,
         )
 
-        dataset_tables = DatasetSchemas(
+        dataset_schemas = DatasetSchemas(
             read_schema=schema,
             write_schema=schema,
         )
 
         super(TransactionsDataset, self).__init__(
-            dataset_tables=dataset_tables,
+            dataset_schemas=dataset_schemas,
             processor=TransactionsMessageProcessor(),
             default_topic="events",
         )

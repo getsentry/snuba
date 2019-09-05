@@ -151,17 +151,17 @@ class BaseTest(object):
             self.dataset = get_dataset(self.dataset_name)
             self.clickhouse = ClickhousePool()
 
-            for statement in self.dataset.get_dataset_tables().get_drop_statements():
+            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
                 self.clickhouse.execute(statement)
 
-            for statement in self.dataset.get_dataset_tables().get_create_statements():
+            for statement in self.dataset.get_dataset_schemas().get_create_statements():
                 self.clickhouse.execute(statement)
 
             redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
-            for statement in self.dataset.get_dataset_tables().get_drop_statements():
+            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
                 self.clickhouse.execute(statement)
 
             redis_client.flushdb()
@@ -187,7 +187,7 @@ class BaseDatasetTest(BaseTest):
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
-        self.table = self.dataset.get_dataset_tables().get_write_schema().get_table_name()
+        self.table = self.dataset.get_dataset_schemas().get_write_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):

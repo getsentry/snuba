@@ -65,7 +65,7 @@ def run(events_file, dataset, repeat=1,
     from snuba.consumer import ConsumerWorker
     from snuba.clickhouse.native import ClickhousePool
 
-    for statement in dataset.get_dataset_tables().get_create_statements():
+    for statement in dataset.get_dataset_schemas().get_create_statements():
         ClickhousePool().execute(statement)
 
     consumer = ConsumerWorker(

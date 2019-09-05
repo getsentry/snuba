@@ -13,18 +13,18 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, dataset_tables, *, processor,
-            default_topic: str,
-            default_replacement_topic: Optional[str] = None,
-            default_commit_log_topic: Optional[str] = None):
-        self.__dataset_tables = dataset_tables
+    def __init__(self, dataset_schemas, *, processor,
+                 default_topic: str,
+                 default_replacement_topic: Optional[str] = None,
+                 default_commit_log_topic: Optional[str] = None):
+        self.__dataset_schemas = dataset_schemas
         self.__processor = processor
         self.__default_topic = default_topic
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
-    def get_dataset_tables(self):
-        return self.__dataset_tables
+    def get_dataset_schemas(self):
+        return self.__dataset_schemas
 
     def get_processor(self):
         return self.__processor
@@ -34,7 +34,7 @@ class Dataset(object):
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            table_name or self.get_dataset_tables().get_write_schema().get_table_name(),
+            table_name or self.get_dataset_schemas().get_write_schema().get_table_name(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,

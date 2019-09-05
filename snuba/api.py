@@ -382,7 +382,7 @@ def parse_and_run_query(dataset, request: Request, timer):
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
             request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    table = dataset.get_dataset_tables().get_read_schema().get_table_name()
+    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
 
     sql = format_query(dataset, request, table, prewhere_conditions, final)
 
@@ -467,7 +467,7 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        for statement in dataset.get_dataset_tables().get_create_statements():
+        for statement in dataset.get_dataset_schemas().get_create_statements():
             clickhouse_rw.execute(statement)
 
         migrate.run(clickhouse_rw, dataset)
@@ -534,7 +534,7 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        for statement in dataset.get_dataset_tables().get_drop_statements():
+        for statement in dataset.get_dataset_schemas().get_drop_statements():
             clickhouse_rw.execute(statement)
 
         ensure_table_exists(dataset, force=True)

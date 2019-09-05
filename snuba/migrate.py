@@ -61,7 +61,7 @@ def _run_schema(conn, schema):
 
 
 def run(conn, dataset):
-    schemas = [dataset.get_dataset_tables().get_read_schema(), dataset.get_dataset_tables().get_write_schema()]
+    schemas = [dataset.get_dataset_schemas().get_read_schema(), dataset.get_dataset_schemas().get_write_schema()]
 
     for schema in schemas:
         _run_schema(conn, schema)
@@ -70,7 +70,7 @@ def run(conn, dataset):
 def rename_dev_table(conn):
     # Migrate from the old events table to the new one if needed
     from snuba.datasets.factory import get_dataset
-    local_table = get_dataset('events').get_dataset_tables().get_write_schema().get_local_table_name()
+    local_table = get_dataset('events').get_dataset_schemas().get_write_schema().get_local_table_name()
     clickhouse_tables = conn.execute('show tables')
     if not (local_table,) in clickhouse_tables and ("dev",) in clickhouse_tables:
         conn.execute("RENAME TABLE dev TO %s" % local_table)

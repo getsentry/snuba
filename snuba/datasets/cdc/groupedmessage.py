@@ -44,13 +44,13 @@ class GroupedMessageDataset(CdcDataset):
             sample_expr='id',
         )
 
-        dataset_tables = DatasetSchemas(
+        dataset_schemas = DatasetSchemas(
             read_schema=schema,
             write_schema=schema,
         )
 
         super(GroupedMessageDataset, self).__init__(
-            dataset_tables=dataset_tables,
+            dataset_schemas=dataset_schemas,
             processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
             default_topic="cdc",
             default_replacement_topic=None,

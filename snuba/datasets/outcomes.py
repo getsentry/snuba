@@ -124,14 +124,14 @@ class OutcomesDataset(Dataset):
             dist_destination_table_name=READ_SCHEMA_DIST_TABLE_NAME
         )
 
-        dataset_tables = DatasetSchemas(
+        dataset_schemas = DatasetSchemas(
             read_schema=read_schema,
             write_schema=write_schema,
             intermediary_schemas=[materialized_view]
         )
 
         super(OutcomesDataset, self).__init__(
-            dataset_tables=dataset_tables,
+            dataset_schemas=dataset_schemas,
             processor=OutcomesProcessor(),
             default_topic="outcomes",
         )
