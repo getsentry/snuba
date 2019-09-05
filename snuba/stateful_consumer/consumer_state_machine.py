@@ -1,4 +1,3 @@
-from batching_kafka_consumer import BatchingKafkaConsumer
 from typing import Optional, Sequence
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
@@ -57,9 +56,7 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
         state_class: StateType,
     ) -> State[ConsumerStateCompletionEvent, ConsumerStateData]:
         if state_class == ConsumingState:
-            return ConsumingState(
-                self.__consumer_builder,
-            )
+            return ConsumingState(self.__consumer_builder)
         elif state_class == BootstrapState:
             return BootstrapState(
                 topic=self.__topic,
@@ -67,8 +64,6 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
                 group_id=self.__group_id,
             )
         elif state_class == CatchingUpState:
-            return CatchingUpState(
-                self.__consumer_builder,
-            )
+            return CatchingUpState(self.__consumer_builder)
         else:
             return state_class()
