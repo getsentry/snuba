@@ -57,7 +57,7 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, ConsumerSt
         if state_class == ConsumingState:
             return ConsumingState(self.__consumer_builder)
         elif state_class == CatchingUpState:
-            return ConsumingState(self.__consumer_builder)
+            return CatchingUpState(self.__consumer_builder)
         elif state_class == BootstrapState:
             return BootstrapState(
                 self.__topic,

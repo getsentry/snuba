@@ -17,10 +17,10 @@ class SnapshotAwareWorker(ConsumerWorker):
         producer: Producer,
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
-        replacements_topic: Optional[str],
+        replacements_topic: Optional[str] = None,
         metrics: Optional[Any] = None,
     ) -> None:
-        super(SnapshotAwareWorker, self).__init__(
+        super().__init__(
             dataset=dataset,
             producer=producer,
             replacements_topic=replacements_topic,
@@ -29,8 +29,8 @@ class SnapshotAwareWorker(ConsumerWorker):
         self.__snapshot_id = snapshot_id
         self.__transaction_data = transaction_data
         self.__catching_up = True
-        self.__skipped_batch = []
-        self.__xip_list_applied = []
+        self.__skipped_batch = set()
+        self.__xip_list_applied = set()
         logger.debug("Starting snapshot aware worker for id %s", self.__snapshot_id)
 
     def _process_message_impl(
@@ -38,10 +38,31 @@ class SnapshotAwareWorker(ConsumerWorker):
         value: Mapping[str, Any],
         metadata: KafkaMessageMetadata,
     ):
-        if self.__catching_up:
-            xid = value.get("xid")
-            if xid:
-                if xid >= self.__transaction_data.xmax:
+        xid = value.get("xid")
+        if xid:
+            if xid < self.__transaction_data.xmax:
+                if xid in self.__transaction_data.xip_list:
+                    self.__xip_list_applied.add(xid)
+                    if len(self.__xip_list_applied) % 100 == 0:
+                        logger.info(
+                            "Applied %d transactions from xip_list",
+                            len(self.__xip_list_applied),
+                        )
+                else:
+                    self.__skipped_batch.add(xid)
+                    if len(self.__skipped_batch) % 100 == 0:
+                        logger.info(
+                            "Skipped %d transactions",
+                            len(self.__skipped_batch),
+                        )
+                    if not self.__catching_up:
+                        logger.debug(
+                            "Transaction received more than once %r",
+                            xid,
+                        )
+                    return
+            else:
+                if self.__catching_up:
                     logger.info(
                         "Found xid(%s) >= xmax:(%s). Catch up phase is over",
                         xid,
@@ -53,24 +74,8 @@ class SnapshotAwareWorker(ConsumerWorker):
                         len(self.__xip_list_applied),
                     )
                     self.__catching_up = False
-                else:
-                    if xid in self.__transaction_data.xip_list:
-                        self.__xip_list_applied.append(xid)
-                        if len(self.__xip_list_applied) % 100 == 0:
-                            logger.info(
-                                "Applied %d transacitons from xip_list",
-                                len(self.__xip_list_applied),
-                            )
-                    else:
-                        self.__skipped_batch.append(xid)
-                        if len(self.__skipped_batch) % 100 == 0:
-                            logger.info(
-                                "Skipped %d transacitons",
-                                len(self.__skipped_batch),
-                            )
-                        return
 
-        return super(SnapshotAwareWorker, self)._process_message_impl(
+        return super()._process_message_impl(
             value,
             metadata,
         )

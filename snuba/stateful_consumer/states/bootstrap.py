@@ -166,7 +166,7 @@ class RecoveryState:
         return CommitDecision.DO_NOT_COMMIT
 
 
-class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
+class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]):
     """
     This is the state the consumer starts into.
     Its job is to either transition to normal operation or to recover a
@@ -222,7 +222,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
                 transaction_data=snapshot[1],
             )
         else:
-            state_data = ConsumerStateData.no_snapshot_state()
+            state_data = None
 
         logger.info("Caught up on the control topic")
         return (

@@ -21,16 +21,8 @@ class ConsumerStateData:
     Represent the state information we pass from one
     state to the other.
     """
-    snapshot_id: Optional[str]
-    transaction_data: Optional[TransactionData]
-
-    @classmethod
-    def no_snapshot_state(cls) -> ConsumerStateData:
-        """
-        Builds an empty ConsumerStateData that represent a state where there is no
-        snapshot to care about.
-        """
-        return ConsumerStateData(None, None)
+    snapshot_id: str
+    transaction_data: TransactionData
 
     @classmethod
     def snapshot_ready_state(
