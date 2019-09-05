@@ -76,7 +76,7 @@ class Schema(object):
 class TableSchema(Schema):
     def _get_table_definition(self, name: str, engine: str) -> str:
         return """
-            CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
             'columns': self._columns.for_schema(),
             'engine': engine,
             'name': name,

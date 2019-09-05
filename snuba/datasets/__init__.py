@@ -14,9 +14,9 @@ class Dataset(object):
     """
 
     def __init__(self, dataset_schemas, *, processor,
-                 default_topic: str,
-                 default_replacement_topic: Optional[str] = None,
-                 default_commit_log_topic: Optional[str] = None):
+            default_topic: str,
+            default_replacement_topic: Optional[str] = None,
+            default_commit_log_topic: Optional[str] = None):
         self.__dataset_schemas = dataset_schemas
         self.__processor = processor
         self.__default_topic = default_topic
