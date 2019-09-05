@@ -215,11 +215,11 @@ class BootstrapState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
         logger.info("Running %r", self.__consumer)
         self.__consumer.run()
 
-        msg = self.__recovery_state.get_active_snapshot_msg()
-        if isinstance(msg, SnapshotLoaded):
+        snapshot = self.__recovery_state.get_active_snapshot()
+        if snapshot:
             state_data = ConsumerStateData.snapshot_ready_state(
-                snapshot_id=msg.id,
-                transaction_data=msg.transaction_info,
+                snapshot_id=snapshot[0],
+                transaction_data=snapshot[1],
             )
         else:
             state_data = ConsumerStateData.no_snapshot_state()
