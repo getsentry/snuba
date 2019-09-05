@@ -79,12 +79,6 @@ class SnapshotAwareWorker(ConsumerWorker):
     def __drop_message(self,
         xid: int,
     ):
-        if not self.__catching_up:
-            logger.error(
-                "Found a duplicate transaction %r. xid < xmax after seeing xmax.",
-                xid,
-            )
-
         current_len = len(self.__skipped)
         self.__skipped.add(xid)
         new_len = len(self.__skipped)
@@ -128,22 +122,23 @@ class SnapshotAwareWorker(ConsumerWorker):
         xid = value.get("xid")
 
         if xid is not None:
-            if self.__catching_up and xid < self.__transaction_data.xmin - 2 ** 32:
-                # xid is the 32 bit integer transaction id. This means it can wrap around
-                # During normal ooperation this is not an issue, but if that happens while
-                # catching up after a snapshot, it would be a cataclysm since we would
-                # skip all transactions for almost 64 bits worth of transacitons.
-                # Better raising this issue, so the user can stop the process and take a
-                # new snapshot.
-                logger.error(
-                    "xid (%d) much lower than xmin (%d)!! Check that xid did not wrap around while paused.",
-                    xid,
-                    self.__transaction_data.xmin,
-                )
-            if xid < self.__transaction_data.xmax:
-                if xid in self.__transaction_data.xip_list:
-                    self.__xip_list_applied.add(xid)
-                else:
-                    return self.__drop_message(xid)
+            if self.__catching_up:
+                if xid < self.__transaction_data.xmin - 2 ** 32:
+                    # xid is the 32 bit integer transaction id. This means it can wrap around
+                    # During normal ooperation this is not an issue, but if that happens while
+                    # catching up after a snapshot, it would be a cataclysm since we would
+                    # skip all transactions for almost 64 bits worth of transacitons.
+                    # Better raising this issue, so the user can stop the process and take a
+                    # new snapshot.
+                    logger.error(
+                        "xid (%d) much lower than xmin (%d)!! Check that xid did not wrap around while paused.",
+                        xid,
+                        self.__transaction_data.xmin,
+                    )
+                if xid < self.__transaction_data.xmax:
+                    if xid in self.__transaction_data.xip_list:
+                        self.__xip_list_applied.add(xid)
+                    else:
+                        return self.__drop_message(xid)
 
         return self.__accept_message(xid, value, metadata)
