@@ -28,9 +28,14 @@ class DatasetSchemas(object):
         return self.__write_schema
 
     def __get_unique_schemas(self) -> List[Schema]:
+        unique_schemas: List[Schema] = []
         all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
 
-        return list(set(all_schemas_with_possible_duplicates))
+        for schema in all_schemas_with_possible_duplicates:
+            if schema not in unique_schemas:
+                unique_schemas.append(schema)
+
+        return unique_schemas
 
     def get_create_statements(self) -> Iterator[str]:
         return map(lambda schema: schema.get_local_table_definition(), self.__get_unique_schemas())

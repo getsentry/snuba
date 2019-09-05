@@ -85,5 +85,4 @@ def bootstrap(bootstrap_server, kafka, force):
         dataset = get_dataset(name)
 
         for statement in dataset.get_dataset_tables().get_create_statements():
-            print(statement)
             ClickhousePool().execute(statement)
