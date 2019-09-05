@@ -42,7 +42,7 @@ class TestBootstrapState:
             message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "product":"snuba", "event":"snapshot-init"}',
+                '{"snapshot-id":"abc123", "tables": [], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
             message(0, 0, None, True),
@@ -62,13 +62,13 @@ class TestBootstrapState:
             message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "product":"somewhere-else", "event":"snapshot-init"}',
+                '{"snapshot-id":"abc123", "product":"somewhere-else", "tables": [], "event":"snapshot-init"}',
                 False,
             ),
             message(
                 1,
                 0,
-                '{"snapshot-id":"abc123", "product":"snuba", "event":"snapshot-init"}',
+                '{"snapshot-id":"abc123", "product":"snuba", "tables": [], "event":"snapshot-init"}',
                 False,
             ),
             message(
@@ -76,7 +76,7 @@ class TestBootstrapState:
                 0,
                 (
                     '{"snapshot-id":"abc123", "event":"snapshot-loaded",'
-                    '"datasets": {}, "transaction-info": {"xmin":123, "xmax":124, "xip-list": []}'
+                    '"transaction-info": {"xmin":123, "xmax":124, "xip-list": []}'
                     '}'
                 ),
                 False,

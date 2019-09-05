@@ -49,7 +49,7 @@ class GroupedMessageDataset(CdcDataset):
             default_topic="cdc",
             default_replacement_topic=None,
             default_commit_log_topic=None,
-            cdc_control_topic="cdc_control",
+            default_control_topic="cdc_control",
         )
 
     def get_bulk_loader(self, source, dest_table):
