@@ -7,7 +7,7 @@ WriterTableRow = Mapping[str, Any]
 
 
 class BatchWriter(object):
-    def __init__(self):
+    def __init__(self, schema):
         raise NotImplementedError
 
     def write(self, rows: Iterable[WriterTableRow]):
