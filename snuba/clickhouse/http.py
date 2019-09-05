@@ -31,10 +31,11 @@ CLICKHOUSE_ERROR_RE = re.compile(
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self, table_name, host, port, options=None):
+    def __init__(self, schema, host, port, options=None, table_name=None):
+        self.__schema = schema
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
-        self.__table_name = table_name
+        self.__table_name = table_name or schema.get_table_name()
 
     def __default(self, value):
         if isinstance(value, datetime):

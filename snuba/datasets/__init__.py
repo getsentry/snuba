@@ -34,10 +34,11 @@ class Dataset(object):
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            table_name or self.get_dataset_schemas().get_write_schema().get_table_name(),
+            self.get_dataset_schemas().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             options,
+            table_name,
         )
 
     def default_conditions(self):
