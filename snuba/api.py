@@ -53,10 +53,9 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-
-            for table_name in dataset.get_read_schema().get_table_name():
-                if (table_name,) not in clickhouse_tables:
-                    return False
+            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+            if (table_name,) not in clickhouse_tables:
+                return False
 
         return True
 
