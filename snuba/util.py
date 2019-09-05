@@ -40,8 +40,8 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def string_col(schema_columns, col):
-    col_type = schema_columns.get(col, None)
+def string_col(dataset, col):
+    col_type = dataset.get_dataset_schemas().get_read_schema().get_columns().get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
