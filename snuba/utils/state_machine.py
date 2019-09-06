@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import (
     Generic,
     Mapping,
+    Optional,
     Type,
     TypeVar,
     Tuple,
@@ -40,7 +41,7 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def handle(self, state_data: TStateData) -> Tuple[TStateCompletionEvent, TStateData]:
+    def handle(self, state_data: Union[TStateData, None]) -> Tuple[TStateCompletionEvent, TStateData]:
         """
         Implemented by each state. It runs its own state specific logic and
         returns a tuple that contains the state result, which identifies the
@@ -55,14 +56,14 @@ StateType = Type[State[TStateCompletionEvent, TStateData]]
 StateTransitions = Mapping[
     TStateCompletionEvent,
     Union[
-        StateType,
+        StateType[TStateCompletionEvent, TStateData],
         None,
     ]
 ]
 
 StateMachineDefinition = Mapping[
-    StateType,
-    StateTransitions,
+    StateType[TStateCompletionEvent, TStateData],
+    StateTransitions[TStateCompletionEvent, TStateData],
 ]
 
 
@@ -77,13 +78,13 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
 
     def __init__(
         self,
-        definition: StateMachineDefinition,
-        start_state: StateType,
+        definition: StateMachineDefinition[TStateCompletionEvent, TStateData],
+        start_state: StateType[TStateCompletionEvent, TStateData],
     ) -> None:
         self.__definition = definition
-        self.__current_state_type: Union[StateType, None] = start_state
+        self.__current_state_type: Union[StateType[TStateCompletionEvent, TStateData], None] = start_state
         self.__has_shutdown = False
-        self.__current_state = None
+        self.__current_state: Optional[State[TStateCompletionEvent, TStateData]] = None
 
     def run(self) -> None:
         """
@@ -102,10 +103,11 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         state_data = None
 
         while self.__current_state_type is not None:
-            self.__current_state = self._build_state(
+            current_state = self._build_state(
                 self.__current_state_type,
             )
-            event, state_data = self.__current_state.handle(state_data)
+            self.__current_state = current_state
+            event, state_data = current_state.handle(state_data)
 
             if self.__has_shutdown:
                 next_state_type = None
@@ -134,7 +136,9 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         self.__has_shutdown = True
 
     @abstractmethod
-    def _build_state(self, state_class: StateType):
+    def _build_state(self,
+        state_class: StateType[TStateCompletionEvent, TStateData],
+    ) -> State[TStateCompletionEvent, TStateData]:
         """
         Factory to provide implementations of the state given
         the type (which is the state class name).
