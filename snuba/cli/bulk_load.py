@@ -39,6 +39,4 @@ def bulk_load(dataset, dest_table, source, log_level):
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
-    import cProfile
-    cProfile.runctx("loader.load(writer)", None, locals(), filename="prof_fast10.txt")
-    # loader.load(writer)
+    loader.load(writer)
