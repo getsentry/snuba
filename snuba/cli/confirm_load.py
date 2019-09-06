@@ -61,4 +61,4 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
         on_delivery=lambda err, msg: logger.info("Message sent %r", msg.value()),
     )
 
-    producer.poll(settings.SNAPSHOT_CONTROL_PRODUCE_TIMEOUT)
+    producer.flush()
