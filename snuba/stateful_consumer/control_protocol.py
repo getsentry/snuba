@@ -152,7 +152,6 @@ class SnapshotLoaded(ControlMessage):
         return {
             "event": "snapshot-loaded",
             "snapshot-id": self.id,
-            "datasets": self.datasets,
             "transaction-info": {
                 "xmin": self.transaction_info.xmin,
                 "xmax": self.transaction_info.xmax,
