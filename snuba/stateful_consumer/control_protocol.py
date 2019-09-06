@@ -104,7 +104,7 @@ class SnapshotInit(ControlMessage):
     @classmethod
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-init"
-        return SnapshotInit(
+        return cls(
             id=json["snapshot-id"],
             tables=json["tables"],
             product=json["product"],
@@ -117,7 +117,7 @@ class SnapshotAbort(ControlMessage):
     @classmethod
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-abort"
-        return SnapshotAbort(
+        return cls(
             id=json["snapshot-id"],
         )
 
@@ -139,7 +139,7 @@ class SnapshotLoaded(ControlMessage):
     @classmethod
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-loaded"
-        return SnapshotLoaded(
+        return cls(
             id=json["snapshot-id"],
             transaction_info=TransactionData(
                 xmin=json["transaction-info"]["xmin"],
