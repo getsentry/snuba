@@ -100,6 +100,9 @@ class OutcomesDataset(Dataset):
             ('times_seen', UInt(64)),
         ])
 
+        # TODO: Find a better way to specify a query for a materialized view
+        # The problem right now is that we have a way to define our columns in a ColumnSet abstraction but the query
+        # doesn't use it.
         query = """
                SELECT
                    org_id,

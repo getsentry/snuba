@@ -17,7 +17,7 @@ class Schema(object):
     TEST_TABLE_PREFIX = "test_"
 
     def __init__(self, local_table_name, dist_table_name, columns):
-        self._columns = columns
+        self.__columns = columns
 
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
@@ -47,7 +47,7 @@ class Schema(object):
         return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
 
     def get_columns(self):
-        return self._columns
+        return self.__columns
 
     def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
         """
@@ -56,11 +56,11 @@ class Schema(object):
         errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
-            if column_name not in self._columns:
+            if column_name not in self.__columns:
                 errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
                 continue
 
-            expected_type = self._columns[column_name].type.for_schema()
+            expected_type = self.__columns[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
@@ -77,7 +77,7 @@ class TableSchema(Schema):
     def _get_table_definition(self, name: str, engine: str) -> str:
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self._columns.for_schema(),
+            'columns': self.get_columns().for_schema(),
             'engine': engine,
             'name': name,
         }
@@ -199,7 +199,7 @@ class MaterializedViewSchema(Schema):
         CREATE MATERIALIZED VIEW %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {
             'name': name,
             'destination_table_name': destination_table_name,
-            'columns': self._columns.for_schema(),
+            'columns': self.get_columns().for_schema(),
             'query': self.__query,
         } % {
             'source_table_name': source_table_name,
