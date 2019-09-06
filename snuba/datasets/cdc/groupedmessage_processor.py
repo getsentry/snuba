@@ -20,6 +20,7 @@ class GroupMessageRecord:
 @dataclass(frozen=True)
 class GroupedMessageRow(CdcMessageRow):
     offset: Optional[int]
+    project_id: int
     id: int
     record_deleted: bool
     record_content: Optional[GroupMessageRecord]
@@ -31,8 +32,9 @@ class GroupedMessageRow(CdcMessageRow):
         columnvalues: Sequence[Any],
     ) -> GroupedMessageRow:
         raw_data = dict(zip(columnnames, columnvalues))
-        return GroupedMessageRow(
+        return cls(
             offset=offset,
+            project_id=raw_data['project_id'],
             id=raw_data['id'],
             record_deleted=False,
             record_content=GroupMessageRecord(
@@ -48,8 +50,9 @@ class GroupedMessageRow(CdcMessageRow):
     def from_bulk(cls,
         row: Mapping[str, Any],
     ) -> GroupedMessageRow:
-        return GroupedMessageRow(
+        return cls(
             offset=None,
+            project_id=int(row['project_id']),
             id=int(row['id']),
             record_deleted=False,
             record_content=GroupMessageRecord(
@@ -65,6 +68,7 @@ class GroupedMessageRow(CdcMessageRow):
         record = self.record_content
         return {
             'offset': self.offset if self.offset is not None else 0,
+            'project_id': self.project_id,
             'id': self.id,
             'record_deleted': 1 if self.record_deleted else 0,
             'status': None if not record else record.status,
@@ -89,9 +93,11 @@ class GroupedMessageProcessor(CdcProcessor):
     ) -> Optional[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
+        project_id = key_values[key_names.index('project_id')]
         id = key_values[key_names.index('id')]
         return GroupedMessageRow(
             offset=offset,
+            project_id=project_id,
             id=id,
             record_deleted=True,
             record_content=None
