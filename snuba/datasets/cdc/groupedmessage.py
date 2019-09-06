@@ -1,11 +1,12 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
-from snuba.datasets import Dataset
+
+from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
 
 
-class GroupedMessageDataset(Dataset):
+class GroupedMessageDataset(CdcDataset):
     """
     This is a clone of the bare minimum fields we need from postgres groupedmessage table
     to replace such a table in event search.
@@ -48,6 +49,7 @@ class GroupedMessageDataset(Dataset):
             default_topic="cdc",
             default_replacement_topic=None,
             default_commit_log_topic=None,
+            default_control_topic="cdc_control",
         )
 
     def get_bulk_loader(self, source, dest_table):
