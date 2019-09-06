@@ -18,7 +18,7 @@ class ConsumingState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
         self,
         consumer_builder: ConsumerBuilder,
     ) -> None:
-        super(ConsumingState, self).__init__()
+        super().__init__()
 
         self.__consumer = consumer_builder.build_base_consumer()
 
@@ -29,5 +29,5 @@ class ConsumingState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
         self.__consumer.run()
         return (
             ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
-            ConsumerStateData.no_snapshot_state(),
+            None,
         )

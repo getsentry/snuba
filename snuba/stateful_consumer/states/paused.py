@@ -19,5 +19,5 @@ class PausedState(State[ConsumerStateCompletionEvent, ConsumerStateData]):
         # TODO: Actually wait on the control topic for instructions
         return (
             ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
-            ConsumerStateData.no_snapshot_state(),
+            None,
         )

@@ -72,7 +72,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
             "Only CDC dataset have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
-            topic=control_topic or dataset.get_control_topic(),
+            topic=control_topic or dataset.get_default_control_topic(),
             bootstrap_servers=bootstrap_server,
             group_id=consumer_group,
         )
