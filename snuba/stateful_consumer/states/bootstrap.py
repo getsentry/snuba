@@ -31,13 +31,13 @@ class RecoveryState:
     - a snapshot-init message the consumer is interested into is the last message of interest
       on the topic.
       In this case the consumer is supposed to pause till there is a snapshot-loaded message
-      or a snapshot-abort message. This message should not be committed until we do not
-      proceed with the next state to persist the current state.
+      or a snapshot-abort message. This message should not be committed until the snapshot
+      has been loaded and the consumer has caught up.
     - a snapshot-loaded message (related with a snapshot-init) message is on the topic.
       This means a snapshot has been successfully uploaded and the consumer needs to interpret
-      the transaciton data, catch up, and then start consuming normally.
+      the transaction data, catch up, and then start consuming normally.
 
-    This class implements all the logic above by consuming all the messaages present
+    This class implements all the logic above by consuming all the messages present
     on the control topic, keeping track of the snapshot we expect to be the one the consumer
     is interested into and producing the ConsumerStateCompletionEvent the state should
     return.
@@ -46,7 +46,7 @@ class RecoveryState:
     - Overlapping snapshots: which means two subsequent snapshot-init messages. In this
       case the first one wins. No other init message will be taken into account until we
       do not observe a completion message for the current snapshot (abort or loaded).
-    - Multiple compelted snapshots present on the control topic in sequence. Here the last one wins
+    - Multiple completed snapshots present on the control topic in sequence. Here the last one wins
       and the previous ones are ignored so we do not need to know whether the previous ones
       were succesfully uploaded or not.
 
@@ -104,16 +104,18 @@ class RecoveryState:
         logger.debug("Processing init message for %r", msg.id)
         if msg.product != settings.SNAPSHOT_LOAD_PRODUCT:
             return self.__commit_if_no_active_snapshot()
+
         if msg.id in self.__past_snapshots:
             logger.warning(
                 "Duplicate Snapshot init: %r",
                 msg.id,
             )
             return self.__commit_if_no_active_snapshot()
+
         if self.__active_snapshot_id and not self.__loaded_snapshot_transactions:
-            logger.error(
+            logger.warning(
                 "A new snapshot-init message was found before a previous one "
-                " was completed. Ignoring. Running %r. Init received %r.",
+                "was completed. Ignoring %r. Continuing with %r.",
                 msg.id,
                 self.__active_snapshot_id,
             )
@@ -136,9 +138,10 @@ class RecoveryState:
             return self.__commit_if_no_active_snapshot()
         if self.__active_snapshot_id != msg.id:
             logger.warning(
-                "Aborting a snapshot that is not active. Active %r, Abort %r",
-                self.__active_snapshot_id,
+                "Received an abort message for a different snapshot than "
+                "the one I am expecting. Ignoring %r. Continuing with %r",
                 msg.id,
+                self.__active_snapshot_id,
             )
             return CommitDecision.DO_NOT_COMMIT
         self.__active_snapshot_id = None
@@ -156,10 +159,10 @@ class RecoveryState:
             return self.__commit_if_no_active_snapshot()
         if self.__active_snapshot_id != msg.id:
             logger.warning(
-                "Received a snapshot-loaded event for a snapshot that "
-                "is not the one we are processing. Active %r, Abort %r",
-                self.__active_snapshot_id,
+                "Received a snapshot-loaded event for a different snapshot than "
+                "the one I am expecting. Ignoring %r. Continuing with %r",
                 msg.id,
+                self.__active_snapshot_id,
             )
             return CommitDecision.DO_NOT_COMMIT
         self.__loaded_snapshot_transactions = msg.transaction_info
@@ -186,8 +189,6 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
             group_id=group_id,
             initial_auto_offset_reset="earliest",
             partition_assignment_timeout=settings.SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT,
-            on_partitions_assigned=None,
-            on_partitions_revoked=None,
             on_message=self.__handle_msg,
         )
 
@@ -205,6 +206,8 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
             commit_decision = self.__recovery_state.process_snapshot_loaded(
                 parsed_message,
             )
+        else:
+            logger.warning("Received an unrecognized message: %r", parsed_message)
 
         return commit_decision
 
