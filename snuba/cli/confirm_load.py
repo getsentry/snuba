@@ -48,7 +48,6 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
 
     msg = SnapshotLoaded(
         id=descriptor.id,
-        datasets={},  # This field should be removed
         transaction_info=TransactionData(
             xmin=descriptor.xmin,
             xmax=descriptor.xmax,
