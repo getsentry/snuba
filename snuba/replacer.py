@@ -309,7 +309,7 @@ def process_delete_tag(message, dataset):
     """ + where
 
     select_columns = []
-    all_columns = dataset.get_dataset_schemas().get_write_schema().get_columns()
+    all_columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
