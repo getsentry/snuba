@@ -5,7 +5,7 @@ from snuba.datasets.schema import Schema
 
 class DatasetSchemas(object):
     """
-    A collection of schemas associated with a dataset, providing access to schemas and aggregated functions
+    A collection of schemas associated with a dataset, providing access to schemas and DDL functions
     """
 
     def __init__(

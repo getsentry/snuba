@@ -17,10 +17,10 @@ from snuba.datasets.schema import MergeTreeSchema, SummingMergeTreeSchema, Mater
 from snuba import settings
 
 
-WRITE_SCHEMA_LOCAL_TABLE_NAME = 'outcomes_raw_local'
-WRITE_SCHEMA_DIST_TABLE_NAME = 'outcomes_raw_dist'
-READ_SCHEMA_LOCAL_TABLE_NAME = 'outcomes_hourly_local'
-READ_SCHEMA_DIST_TABLE_NAME = 'outcomes_hourly_dist'
+WRITE_LOCAL_TABLE_NAME = 'outcomes_raw_local'
+WRITE_DIST_TABLE_NAME = 'outcomes_raw_dist'
+READ_LOCAL_TABLE_NAME = 'outcomes_hourly_local'
+READ_DIST_TABLE_NAME = 'outcomes_hourly_dist'
 
 
 class OutcomesProcessor(MessageProcessor):
@@ -61,8 +61,8 @@ class OutcomesDataset(Dataset):
         write_schema = MergeTreeSchema(
             columns=write_columns,
             # TODO: change to outcomes.raw_local when we add multi DB support
-            local_table_name=WRITE_SCHEMA_LOCAL_TABLE_NAME,
-            dist_table_name=WRITE_SCHEMA_DIST_TABLE_NAME,
+            local_table_name=WRITE_LOCAL_TABLE_NAME,
+            dist_table_name=WRITE_DIST_TABLE_NAME,
             order_by='(org_id, project_id, timestamp)',
             partition_by='(toMonday(timestamp))',
             settings={
@@ -81,8 +81,8 @@ class OutcomesDataset(Dataset):
 
         read_schema = SummingMergeTreeSchema(
             columns=read_columns,
-            local_table_name=READ_SCHEMA_LOCAL_TABLE_NAME,
-            dist_table_name=READ_SCHEMA_DIST_TABLE_NAME,
+            local_table_name=READ_LOCAL_TABLE_NAME,
+            dist_table_name=READ_DIST_TABLE_NAME,
             order_by='(org_id, project_id, key_id, outcome, reason, timestamp)',
             partition_by='(toMonday(timestamp))',
             settings={
@@ -121,10 +121,10 @@ class OutcomesDataset(Dataset):
             dist_materialized_view_name='outcomes_mv_hourly_dist',
             columns=materialized_view_columns,
             query=query,
-            local_source_table_name=WRITE_SCHEMA_LOCAL_TABLE_NAME,
-            local_destination_table_name=READ_SCHEMA_LOCAL_TABLE_NAME,
-            dist_source_table_name=WRITE_SCHEMA_DIST_TABLE_NAME,
-            dist_destination_table_name=READ_SCHEMA_DIST_TABLE_NAME
+            local_source_table_name=WRITE_LOCAL_TABLE_NAME,
+            local_destination_table_name=READ_LOCAL_TABLE_NAME,
+            dist_source_table_name=WRITE_DIST_TABLE_NAME,
+            dist_destination_table_name=READ_DIST_TABLE_NAME
         )
 
         dataset_schemas = DatasetSchemas(

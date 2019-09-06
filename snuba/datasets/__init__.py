@@ -1,6 +1,7 @@
 from typing import Optional, Mapping
 
 from snuba.util import escape_col
+from snuba.datasets.dataset_schemas import DatasetSchemas
 
 
 class Dataset(object):
@@ -23,7 +24,7 @@ class Dataset(object):
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
-    def get_dataset_schemas(self):
+    def get_dataset_schemas(self) -> DatasetSchemas:
         return self.__dataset_schemas
 
     def get_processor(self):
