@@ -45,17 +45,11 @@ class Dataset(object):
             else:
                 raise TypeError
 
-        def encode(rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-            return map(
-                lambda row: json.dumps(row, default=default).encode("utf-8"),
-                rows,
-            )
-
         return HTTPBatchWriter(
             self._schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            encode,
+            lambda row: json.dumps(row, default=default),
             options,
             table_name,
         )
@@ -71,23 +65,14 @@ class Dataset(object):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
-        def encode(rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-            ret = bytearray()
-            for row in rows:
-                ret += rapidjson.dumps(row).encode("utf-8")
-            return [ret]
-
         return HTTPBatchWriter(
             self._schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            encode,
+            lambda row: rapidjson.dumps(row),
             options,
             table_name,
-            # When loading data in bulk, chunking data does not help
-            # instead it adds a lot of overhead because we are sending
-            # more data to Clickhouse.
-            chunked=False,
+            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
     def default_conditions(self):

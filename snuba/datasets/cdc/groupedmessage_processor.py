@@ -59,9 +59,9 @@ class GroupedMessageRow(CdcMessageRow):
                 status=raw_data['status'],
                 last_seen=parse_postgres_datetime(raw_data['last_seen']),
                 first_seen=parse_postgres_datetime(raw_data['first_seen']),
-                active_at=parse_postgres_datetime(raw_data['active_at'])
-                if raw_data['active_at']
-                else None,
+                active_at=(parse_postgres_datetime(raw_data['active_at'])
+                    if raw_data['active_at']
+                    else None),
                 first_release_id=raw_data['first_release_id'],
             )
         )
@@ -78,9 +78,9 @@ class GroupedMessageRow(CdcMessageRow):
                 status=int(row['status']),
                 last_seen=postgres_date_to_clickhouse(row['last_seen']),
                 first_seen=postgres_date_to_clickhouse(row['first_seen']),
-                active_at=postgres_date_to_clickhouse(row['active_at'])
-                if row['active_at']
-                else None,
+                active_at=(postgres_date_to_clickhouse(row['active_at'])
+                    if row['active_at']
+                    else None),
                 first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
             )
         )

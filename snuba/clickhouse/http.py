@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime
 from urllib.parse import urlencode
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Optional
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
@@ -35,17 +35,28 @@ class HTTPBatchWriter(BatchWriter):
         schema,
         host,
         port,
-        encoder: Callable[[Iterable[WriterTableRow]], Iterable[bytes]],
+        encoder: Callable[[WriterTableRow], Iterable[bytes]],
         options=None,
         table_name=None,
-        chunked=True,
+        # if chunk_size is none we let urlopen chunk on its own.
+        chunk_size: Optional[int]=None,
     ):
         self.__schema = schema
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
         self.__table_name = table_name or schema.get_table_name()
-        self.__chunked = chunked
+        self.__chunk_size = chunk_size
         self.__encoder = encoder
+
+    def _prepare_body(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+        ret = []
+        chunk_size = self.__chunk_size or 1
+        for i in range(0, len(rows), chunk_size):
+            chunk = "".join(
+                map(self.__encoder, rows[i:i + chunk_size])
+            )
+            ret.append(chunk.encode("utf-8"))
+        return ret
 
     def write(self, rows: Iterable[WriterTableRow]):
         response = self.__pool.urlopen(
@@ -58,8 +69,8 @@ class HTTPBatchWriter(BatchWriter):
                 }
             ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
-            body=self.__encoder(rows),
-            chunked=self.__chunked,
+            body=self._prepare_body(rows),
+            chunked=self.__chunk_size is None,
         )
 
         if response.status != 200:
