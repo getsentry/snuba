@@ -5,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.cdc import CdcDataset
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
@@ -16,6 +17,8 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
               help='Topic to produce replacement messages info.')
 @click.option('--commit-log-topic', default=None,
               help='Topic for committed offsets to be written to, triggering post-processing task(s)')
+@click.option('--control-topic', default=None,
+              help='Topic used to control the snapshot')
 @click.option('--consumer-group', default='snuba-consumers',
               help='Consumer group use for consuming the raw events topic.')
 @click.option('--bootstrap-server', default=None, multiple=True,
@@ -36,7 +39,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 @click.option('--stateful-consumer', default=False, type=bool, help='Runs a stateful consumer (that manages snapshots) instead of a basic one.')
-def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_group,
+def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
              auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
              dogstatsd_host, dogstatsd_port, stateful_consumer):
@@ -65,9 +68,11 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, consumer_gr
     )
 
     if stateful_consumer:
+        assert isinstance(dataset, CdcDataset), \
+            "Only CDC dataset have a control topic thus are supported."
         context = ConsumerStateMachine(
             main_consumer=consumer_builder.build_consumer(),
-            topic="cdc_control",
+            topic=control_topic or dataset.get_default_control_topic(),
             bootstrap_servers=bootstrap_server,
             group_id=consumer_group,
         )
