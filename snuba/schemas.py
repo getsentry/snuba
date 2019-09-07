@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Union
 
+from snuba.query.query import Query
+
 import jsonschema
 
 
@@ -257,12 +259,12 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
 
 @dataclass(frozen=True)
 class Request:
-    query: Mapping[str, Any]
+    query: Query
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
     def body(self):
-        return ChainMap(self.query, *self.extensions.values())
+        return ChainMap(self.query.get_body(), *self.extensions.values())
 
 
 Schema = Mapping[str, Any]  # placeholder for JSON schema
@@ -299,13 +301,13 @@ class RequestSchema:
     def validate(self, value) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
-        query = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
+        query_body = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
 
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(query, extensions)
+        return Request(Query(query_body), extensions)
 
     def __generate_template_impl(self, schema) -> Any:
         """

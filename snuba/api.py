@@ -327,19 +327,18 @@ def parse_and_run_query(dataset, request: Request, timer):
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
-    request.query['conditions'].extend([
+    request.query.add_conditions([
         ('timestamp', '>=', from_date.isoformat()),
         ('timestamp', '<', to_date.isoformat()),
     ])
-
-    request.query['conditions'].extend(dataset.default_conditions())
+    request.query.add_conditions(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
     project_ids = util.to_list(request.extensions['project']['project'])
     if project_ids:
-        request.query['conditions'].append(('project_id', 'IN', project_ids))
+        request.query.add_conditions([('project_id', 'IN', project_ids)])
 
     turbo = request.extensions['performance'].get('turbo', False)
     if not turbo:
@@ -351,20 +350,22 @@ def parse_and_run_query(dataset, request: Request, timer):
             if len(exclude_group_ids) > max_group_ids_exclude:
                 final = True
             else:
-                request.query['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
+                request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
     else:
         final = False
         if 'sample' not in request.query:
-            request.query['sample'] = settings.TURBO_SAMPLE_RATE
+            request.query.set_field("sample", settings.TURBO_SAMPLE_RATE)
 
     prewhere_conditions = []
+    # TODO: All the pre-where processing should be inside the query class that will format
+    # the structure into SQL.
     if settings.PREWHERE_KEYS:
         # Add any condition to PREWHERE if:
         # - It is a single top-level condition (not OR-nested), and
         # - Any of its referenced columns are in PREWHERE_KEYS
         prewhere_candidates = [
             (util.columns_in_expr(cond[0]), cond)
-            for cond in request.query['conditions'] if util.is_condition(cond) and
+            for cond in request.query.get_conditions() if util.is_condition(cond) and
             any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
         ]
         # Use the condition that has the highest priority (based on the
@@ -375,7 +376,10 @@ def parse_and_run_query(dataset, request: Request, timer):
         ], key=lambda priority_and_col: priority_and_col[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
+            request.query.set_field(
+                'conditions',
+                list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions())),
+            )
 
     table = dataset.get_schema().get_table_name()
 
@@ -389,7 +393,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'sample': request.query.get('sample'),
+        'sample': request.query.get_body().get('sample'),
     }
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
@@ -407,11 +411,11 @@ def sdk_distribution(*, timer: Timer):
         timer,
     )
 
-    request.query['aggregations'] = [
+    request.query.get_body()['aggregations'] = [
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
-    request.query['groupby'].extend(['sdk_name', 'rtime'])
+    request.query.get_body()['groupby'].extend(['sdk_name', 'rtime'])
     request.extensions['project'] = {
         'project': [],
     }
