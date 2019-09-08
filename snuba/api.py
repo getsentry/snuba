@@ -327,6 +327,10 @@ def parse_and_run_query(dataset, request: Request, timer):
     if max_days is not None and (to_date - from_date).days > max_days:
         from_date = to_date - timedelta(days=max_days)
 
+    # TODO: replace all this logic with calls to the extensions query processors
+    # like:
+    # processors = dataset.get_query_processors()
+    # query = processors[extension].process_query(query, request.extensions[extension])
     request.query.add_conditions([
         ('timestamp', '>=', from_date.isoformat()),
         ('timestamp', '<', to_date.isoformat()),

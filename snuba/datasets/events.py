@@ -1,4 +1,8 @@
 import re
+
+from datetime import timedelta
+from typing import Mapping, Tuple
+
 from snuba import state
 from snuba.clickhouse.columns import (
     Array,
@@ -14,7 +18,14 @@ from snuba.clickhouse.columns import (
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
-from snuba.schemas import EVENTS_QUERY_SCHEMA
+from snuba.query.query_processor import DummyExtensionProcessor, ExtensionQueryProcessor
+from snuba.schemas import (
+    Schema,
+    get_time_series_extension_properties,
+    GENERIC_QUERY_SCHEMA,
+    PERFORMANCE_EXTENSION_SCHEMA,
+    PROJECT_EXTENSION_SCHEMA
+)
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -336,5 +347,21 @@ class EventsDataset(TimeSeriesDataset):
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
-    def get_query_schema(self):
-        return EVENTS_QUERY_SCHEMA
+    def _get_extensions(self) -> Mapping[str, Tuple[Schema, ExtensionQueryProcessor]]:
+        return {
+            'performance': (
+                PERFORMANCE_EXTENSION_SCHEMA,
+                DummyExtensionProcessor(),
+            ),
+            'project': (
+                PROJECT_EXTENSION_SCHEMA,
+                DummyExtensionProcessor(),
+            ),
+            'timeseries': (
+                get_time_series_extension_properties(
+                    default_granularity=3600,
+                    default_window=timedelta(days=5),
+                ),
+                DummyExtensionProcessor(),
+            ),
+        }
