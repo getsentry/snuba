@@ -21,7 +21,7 @@ def split_query(query_func):
         ])
         limit = request.query.get_limit()
         remaining_offset = request.query.get_offset()
-        orderby = util.to_list(request.query.get_body().get('orderby'))
+        orderby = util.to_list(request.query.get_orderby())
 
         common_conditions = use_split and limit and not request.query.get_groupby()
 

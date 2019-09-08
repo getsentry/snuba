@@ -5,6 +5,7 @@ from typing import (
     Any,
     Iterable,
     Mapping,
+    Optional,
     Sequence,
     Tuple,
     TypeVar,
@@ -40,6 +41,8 @@ class Query:
     that cannot come in this PR since it also requires a proper
     schema split in the dataset to happen.
     """
+    # TODO: Make getters non nullable when possible. This is a risky
+    # change so we should take one field at a time.
 
     def __init__(self, body: Mapping[str, Any]):
         """
@@ -57,8 +60,8 @@ class Query:
             self.__body[field] = []
         self.__body[field].extend(content)
 
-    def get_selected_column(self) -> Sequence[Any]:
-        return self.__body["selected_columns"]
+    def get_selected_column(self) -> Optional[Sequence[Any]]:
+        return self.__body.get("selected_columns")
 
     def set_selected_columns(
         self,
@@ -66,8 +69,8 @@ class Query:
     ) -> None:
         self.__body["selected_columns"] = columns
 
-    def get_aggregations(self) -> Sequence[Aggregation]:
-        return self.__body["aggregations"]
+    def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
+        return self.__body.get("aggregations")
 
     def set_aggregations(
         self,
@@ -75,8 +78,8 @@ class Query:
     ) -> None:
         self.__body["aggregations"] = aggregations
 
-    def get_groupby(self) -> Sequence[Groupby]:
-        return self.__body["groupby"]
+    def get_groupby(self) -> Optional[Sequence[Groupby]]:
+        return self.__body.get("groupby")
 
     def add_groupby(
         self,
@@ -84,8 +87,8 @@ class Query:
     ) -> None:
         self.__append_to_sequence("groupby", groupby)
 
-    def get_conditions(self) -> Sequence[Condition]:
-        return self.__body["conditions"]
+    def get_conditions(self) -> Optional[Sequence[Condition]]:
+        return self.__body.get("conditions")
 
     def set_conditions(
         self,
@@ -98,6 +101,12 @@ class Query:
         conditions: Sequence[Condition],
     ) -> None:
         self.__append_to_sequence("conditions", conditions)
+
+    def get_orderby(self) -> Optional[Sequence[Any]]:
+        return self.__body.get("orderby")
+
+    def get_sample(self) -> Optional[float]:
+        return self.__body.get("sample")
 
     def set_sample(self, sample: float) -> None:
         self.__body["sample"] = sample

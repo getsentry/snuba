@@ -392,7 +392,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'sample': request.query.get_body().get('sample'),
+        'sample': request.query.get_sample(),
     }
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
