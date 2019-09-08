@@ -233,7 +233,7 @@ def dataset_query(dataset, body, timer):
         dataset,
         validate_request_content(body, dataset.get_query_schema(), timer),
         timer,
-     )
+    )
 
     return (
         json.dumps(
@@ -354,7 +354,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     else:
         final = False
         if 'sample' not in request.query:
-            request.query.set_field("sample", settings.TURBO_SAMPLE_RATE)
+            request.query.set_sample(settings.TURBO_SAMPLE_RATE)
 
     prewhere_conditions = []
     # TODO: All the pre-where processing should be inside the query class that will format
@@ -376,8 +376,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         ], key=lambda priority_and_col: priority_and_col[0])
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            request.query.set_field(
-                'conditions',
+            request.query.set_conditions(
                 list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions())),
             )
 
@@ -411,11 +410,11 @@ def sdk_distribution(*, timer: Timer):
         timer,
     )
 
-    request.query.get_body()['aggregations'] = [
+    request.query.set_aggregations([
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
-    ]
-    request.query.get_body()['groupby'].extend(['sdk_name', 'rtime'])
+    ])
+    request.query.add_groupby(['sdk_name', 'rtime'])
     request.extensions['project'] = {
         'project': [],
     }

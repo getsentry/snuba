@@ -1,6 +1,8 @@
-from typing import Optional, Mapping
+from typing import Optional, Mapping, Tuple
 
 from snuba.util import escape_col
+from snuba.schemas import Schema
+from snuba.query.query_processor import ExtensionQueryProcessor
 
 
 class Dataset(object):
@@ -77,8 +79,14 @@ class Dataset(object):
         """
         raise NotImplementedError
 
-    def get_query_schema(self):
+    def _get_extensions(self) -> Mapping[str, Tuple[Schema, ExtensionQueryProcessor]]:
         raise NotImplementedError('dataset does not support queries')
+
+    def get_query_schema(self) -> Mapping[str, Schema]:
+        return {key: val[0] for (key, val) in self._get_extensions()}
+
+    def get_query_processors(self) -> Mapping[str, ExtensionQueryProcessor]:
+        return {key: val[1] for (key, val) in self._get_extensions()}
 
 
 class TimeSeriesDataset(Dataset):

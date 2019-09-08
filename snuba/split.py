@@ -19,19 +19,21 @@ def split_query(query_func):
         use_split = state.get_configs([
             ('use_split', 0),
         ])
-        limit = request.query.get_body().get('limit', 0)
-        remaining_offset = request.query.get_body().get('offset', 0)
+        limit = request.query.get_limit()
+        remaining_offset = request.query.get_offset()
         orderby = util.to_list(request.query.get_body().get('orderby'))
 
-        common_conditions = use_split and limit and not request.query.get_body().get('groupby')
+        common_conditions = use_split and limit and not request.query.get_groupby()
 
         if common_conditions:
+            # TODO: Move all_referenced_columns into query and remove this dependency.
+            # In order to do this we need to break a circular dependency first
             total_col_count = len(util.all_referenced_columns(request.query.get_body()))
             min_col_count = len(util.all_referenced_columns({**request.query.get_body(), 'selected_columns': MIN_COLS}))
 
             if (
-                request.query.get_body().get('selected_columns')
-                and not request.query.get_body().get('aggregations')
+                request.query.get_selected_column()
+                and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
                 return col_split(dataset, request, *args, **kwargs)
@@ -57,8 +59,8 @@ def split_query(query_func):
             ('split_step', 3600),  # default 1 hour
         ])
 
-        limit = request.query.get_body().get('limit', 0)
-        remaining_offset = request.query.get_body().get('offset', 0)
+        limit = request.query.get_limit()
+        remaining_offset = request.query.get_offset()
 
         to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
         from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
@@ -73,8 +75,8 @@ def split_query(query_func):
             request.extensions['timeseries']['to_date'] = split_end.isoformat()
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
-            request.query.set_field('offset', 0)
-            request.query.set_field('limit', limit - total_results + remaining_offset)
+            request.query.set_offset(0)
+            request.query.set_limit(limit - total_results + remaining_offset)
 
             # The query function may mutate the request body during query
             # evaluation, so we need to copy the body to ensure that the query
@@ -130,7 +132,7 @@ def split_query(query_func):
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_field('selected_columns', MIN_COLS)
+        minimal_request.query.set_selected_columns(MIN_COLS)
         result, status = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
@@ -143,8 +145,8 @@ def split_query(query_func):
 
             event_ids = list(set([event['event_id'] for event in result['data']]))
             request.query.add_conditions([('event_id', 'IN', event_ids)])
-            request.query.set_field('offset', 0)
-            request.query.set_field('limit', len(event_ids))
+            request.query.set_offset(0)
+            request.query.set_limit(len(event_ids))
 
             project_ids = list(set([event['project_id'] for event in result['data']]))
             request.extensions['project']['project'] = project_ids

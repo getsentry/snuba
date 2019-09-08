@@ -1,37 +1,121 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence
+from deprecation import deprecated
+from typing import (
+    Any,
+    Iterable,
+    Mapping,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
+
+
+Condition = Union[
+    Tuple[Any, Any, Any],
+    Iterable[Any],
+]
+
+Aggregation = Union[
+    Tuple[Any, Any, Any],
+    Iterable[Any],
+]
+
+Groupby = Iterable[Any]
+
+TElement = TypeVar("TElement")
 
 
 class Query:
     """
     Represents a parsed query we can edit during query processing.
 
-    This is the bare minimum step in this direction. This is a bare
-    minimum wrapper around the query representation coming in from the
-    client, but it allows us to limit the operaitons we want to expose
-    to the query processing logic so that replacing it with a proper
-    abstract query structure will be much easier.
+    This is the bare minimum abstraction to avoid depending on a mutable
+    Mapping around the code base. Fully untagling the query representation
+    from the code depnding on it wil ltake a lot of PRs, but at least we
+    have a basic abstraction to move functionalities to.
+    It is also the base to split the Clickhouse specific query into
+    an abstract Snuba query and a concrete Clickhouse query, but
+    that cannot come in this PR since it also requires a proper
+    schema split in the dataset to happen.
     """
 
     def __init__(self, body: Mapping[str, Any]):
+        """
+        Expects an already parsed query body.
+        """
+        # TODO: make the parser produce this data structure directly
+        # in order not to expose the internal representation.
         self.__body = body
 
-    def get_body(self) -> Mapping[str, Any]:
-        return self.__body
+    def __append_to_sequence(self,
+        field: str,
+        content: Sequence[TElement],
+    ) -> None:
+        if field not in self.__body:
+            self.__body[field] = []
+        self.__body[field].extend(content)
+
+    def get_selected_column(self) -> Sequence[Any]:
+        return self.__body["selected_columns"]
+
+    def set_selected_columns(
+        self,
+        columns: Sequence[Any],
+    ) -> None:
+        self.__body["selected_columns"] = columns
+
+    def get_aggregations(self) -> Sequence[Aggregation]:
+        return self.__body["aggregations"]
+
+    def set_aggregations(
+        self,
+        aggregations: Sequence[Aggregation],
+    ) -> None:
+        self.__body["aggregations"] = aggregations
+
+    def get_groupby(self) -> Sequence[Groupby]:
+        return self.__body["groupby"]
+
+    def add_groupby(
+        self,
+        groupby: Sequence[Groupby],
+    ) -> None:
+        self.__append_to_sequence("groupby", groupby)
+
+    def get_conditions(self) -> Sequence[Condition]:
+        return self.__body["conditions"]
+
+    def set_conditions(
+        self,
+        conditions: Sequence[Condition]
+    ) -> None:
+        self.__body["conditions"] = conditions
 
     def add_conditions(
         self,
-        conditions: Sequence[Any],
+        conditions: Sequence[Condition],
     ) -> None:
-        self.__body["conditions"].extend(conditions)
+        self.__append_to_sequence("conditions", conditions)
 
-    def get_conditions(self) -> Sequence[Any]:
-        return self.__body["conditions"]
+    def set_sample(self, sample: float) -> None:
+        self.__body["sample"] = sample
 
-    def set_field(
-        self,
-        field: str,
-        value: Any,
-    ) -> None:
-        self.__body[field] = value
+    def get_limit(self) -> int:
+        return self.__body.get('limit', 0)
+
+    def set_limit(self, limit: int) -> None:
+        self.__body["limit"] = limit
+
+    def get_offset(self) -> int:
+        return self.__body.get('offset', 0)
+
+    def set_offset(self, offset: int) -> None:
+        self.__body["offset"] = offset
+
+    @deprecated(
+        details="Do not access the internal query representation "
+        "use the specific accessor methods instead.")
+    def get_body(self) -> Mapping[str, Any]:
+        return self.__body
