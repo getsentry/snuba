@@ -1,13 +1,10 @@
-import json
 import re
-from datetime import datetime
 from urllib.parse import urlencode
 from typing import Callable, Iterable, Optional
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba.clickhouse import DATETIME_FORMAT
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -49,14 +46,16 @@ class HTTPBatchWriter(BatchWriter):
         self.__encoder = encoder
 
     def _prepare_body(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-        ret = []
         chunk_size = self.__chunk_size or 1
-        for i in range(0, len(rows), chunk_size):
-            chunk = "".join(
-                map(self.__encoder, rows[i:i + chunk_size])
-            )
-            ret.append(chunk.encode("utf-8"))
-        return ret
+        chunk = []
+        for row in rows:
+            chunk.append(self.__encoder(row).encode("utf-8"))
+            if len(chunk) == chunk_size:
+                yield b"".join(chunk)
+                chunk = []
+
+        if chunk:
+            yield b"".join(chunk)
 
     def write(self, rows: Iterable[WriterTableRow]):
         response = self.__pool.urlopen(

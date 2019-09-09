@@ -75,4 +75,6 @@ class TestHTTPBatchWriter(BaseEventsTest):
             "mysterious_inexistent_table",
             chunk_size
         )
-        assert writer.chunk(input) == expected_chunks
+        chunks = writer.chunk(input)
+        for chunk, expected in zip(chunks, expected_chunks):
+            assert chunk == expected

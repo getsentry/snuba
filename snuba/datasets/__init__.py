@@ -2,7 +2,7 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Iterable, Mapping
+from typing import Optional, Mapping
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.util import escape_col
