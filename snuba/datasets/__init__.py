@@ -46,7 +46,7 @@ class Dataset(object):
                 raise TypeError
 
         return HTTPBatchWriter(
-            self._schema,
+            self.get_dataset_schemas().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             lambda row: json.dumps(row, default=default),
