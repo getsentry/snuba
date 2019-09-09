@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets import TimeSeriesDataset
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.schemas import EVENTS_QUERY_SCHEMA
@@ -185,8 +186,13 @@ class EventsDataset(TimeSeriesDataset):
             version_column='deleted',
             sample_expr=sample_expr)
 
+        dataset_schemas = DatasetSchemas(
+            read_schema=schema,
+            write_schema=schema,
+        )
+
         super(EventsDataset, self).__init__(
-            schema=schema,
+            dataset_schemas=dataset_schemas,
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
             default_replacement_topic="event-replacements",
