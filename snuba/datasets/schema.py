@@ -196,7 +196,7 @@ class MaterializedViewSchema(Schema):
 
     def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
         return """
-        CREATE MATERIALIZED VIEW %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {
+        CREATE MATERIALIZED VIEW IF NOT EXISTS %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {
             'name': name,
             'destination_table_name': destination_table_name,
             'columns': self.get_columns().for_schema(),
