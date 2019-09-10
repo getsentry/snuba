@@ -34,27 +34,27 @@ class TestHTTPBatchWriter(BaseEventsTest):
     test_data = [
         (
             1,
-            ["a", "b", "c"],
+            [b"a", b"b", b"c"],
             [b"a", b"b", b"c"],
         ),
         (
             0,
-            ["a", "b", "c"],
+            [b"a", b"b", b"c"],
             [b"abc"],
         ),
         (
             2,
-            ["a", "b", "c"],
+            [b"a", b"b", b"c"],
             [b"ab", b"c"],
         ),
         (
             2,
-            ["a", "b", "c", "d"],
+            [b"a", b"b", b"c", b"d"],
             [b"ab", b"cd"],
         ),
         (
             100000,
-            ["a", "b", "c"],
+            [b"a", b"b", b"c"],
             [b"abc"],
         ),
         (

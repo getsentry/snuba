@@ -49,7 +49,7 @@ class Dataset(object):
             self.get_dataset_schemas().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: json.dumps(row, default=default),
+            lambda row: json.dumps(row, default=default).encode("utf-8"),
             options,
             table_name,
         )
@@ -69,7 +69,7 @@ class Dataset(object):
             self.get_dataset_schemas().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: rapidjson.dumps(row),
+            lambda row: rapidjson.dumps(row).encode("utf-8"),
             options,
             table_name,
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
