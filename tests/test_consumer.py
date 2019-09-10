@@ -6,7 +6,7 @@ import time
 from datadog import statsd
 
 from base import (
-    BaseTest,
+    BaseEventsTest,
     FakeBatchingKafkaConsumer,
     FakeKafkaMessage,
     FakeKafkaProducer,
@@ -17,11 +17,7 @@ from base import (
 from snuba.consumer import ConsumerWorker
 
 
-class TestConsumer(BaseTest):
-    def setup_method(self, test_method):
-        super(TestConsumer, self).setup_method(test_method, 'events')
-        self.event = get_event()
-
+class TestConsumer(BaseEventsTest):
     def test_batch_size(self):
         consumer = FakeBatchingKafkaConsumer(
             'topic',

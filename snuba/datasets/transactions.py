@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.datasets import Dataset
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 
@@ -75,8 +76,13 @@ class TransactionsDataset(Dataset):
             sample_expr=None,
         )
 
+        dataset_schemas = DatasetSchemas(
+            read_schema=schema,
+            write_schema=schema,
+        )
+
         super(TransactionsDataset, self).__init__(
-            schema=schema,
+            dataset_schemas=dataset_schemas,
             processor=TransactionsMessageProcessor(),
             default_topic="events",
         )
