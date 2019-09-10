@@ -28,7 +28,7 @@ class SnapshotDescriptor:
     id: SnapshotId
     tables: Sequence[TableConfig]
 
-    def get_table(self, table_name: str):
+    def get_table(self, table_name: str) -> str:
         for t in self.tables:
             if t.table == table_name:
                 return t

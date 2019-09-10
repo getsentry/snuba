@@ -1,11 +1,13 @@
-from batching_kafka_consumer import BatchingKafkaConsumer
-from confluent_kafka import Producer
+from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
+from confluent_kafka import Consumer, Producer
 from typing import Sequence
 
-from snuba.datasets.factory import get_dataset
+from snuba import settings, util
 from snuba.consumer import ConsumerWorker
-from snuba import settings
-from snuba import util
+from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.datasets.factory import get_dataset
+from snuba.snapshots import SnapshotId
+from snuba.stateful_consumer.control_protocol import TransactionData
 
 
 class ConsumerBuilder:
@@ -67,19 +69,10 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def build_consumer(self) -> BatchingKafkaConsumer:
-        """
-        Builds the consumer with a ConsumerWorker.
-        """
-
+    def __build_consumer(self, worker: AbstractBatchWorker) -> Consumer:
         return BatchingKafkaConsumer(
             self.raw_topic,
-            worker=ConsumerWorker(
-                self.dataset,
-                producer=self.producer,
-                replacements_topic=self.replacements_topic,
-                metrics=self.metrics
-            ),
+            worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
             metrics=self.metrics,
@@ -91,3 +84,34 @@ class ConsumerBuilder:
             queued_max_messages_kbytes=self.queued_max_messages_kbytes,
             queued_min_messages=self.queued_min_messages,
         )
+
+    def build_base_consumer(self) -> BatchingKafkaConsumer:
+        """
+        Builds the consumer with a ConsumerWorker.
+        """
+        return self.__build_consumer(
+            ConsumerWorker(
+                self.dataset,
+                producer=self.producer,
+                replacements_topic=self.replacements_topic,
+                metrics=self.metrics
+            )
+        )
+
+    def build_snapshot_aware_consumer(
+        self,
+        snapshot_id: SnapshotId,
+        transaction_data: TransactionData,
+    ) -> BatchingKafkaConsumer:
+        """
+        Builds the consumer with a ConsumerWorker able to handle snapshots.
+        """
+        worker = SnapshotAwareWorker(
+            dataset=self.dataset,
+            producer=self.producer,
+            snapshot_id=snapshot_id,
+            transaction_data=transaction_data,
+            replacements_topic=self.replacements_topic,
+            metrics=self.metrics,
+        )
+        return self.__build_consumer(worker)

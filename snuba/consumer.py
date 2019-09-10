@@ -2,8 +2,10 @@ import collections
 import logging
 import simplejson as json
 
-from batching_kafka_consumer import AbstractBatchWorker
+from typing import Any, Mapping
 
+from batching_kafka_consumer import AbstractBatchWorker
+from snuba.processor import MessageProcessor
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -32,18 +34,27 @@ class ConsumerWorker(AbstractBatchWorker):
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
-        processor = self.__dataset.get_processor()
         value = json.loads(message.value())
         metadata = KafkaMessageMetadata(offset=message.offset(), partition=message.partition())
-        processed = processor.process_message(value, metadata)
+        processed = self._process_message_impl(value, metadata)
         if processed is None:
             return None
 
         action_type = processed[0]
-        if action_type not in set([processor.INSERT, processor.REPLACE]):
+        if action_type not in set(
+            [MessageProcessor.INSERT, MessageProcessor.REPLACE]
+        ):
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
         return processed
+
+    def _process_message_impl(
+        self,
+        value: Mapping[str, Any],
+        metadata: KafkaMessageMetadata,
+    ):
+        processor = self.__dataset.get_processor()
+        return processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:
