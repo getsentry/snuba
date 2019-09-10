@@ -1,9 +1,10 @@
-from typing import Optional, Mapping, Tuple
+from typing import Optional, Mapping
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.util import escape_col
-from snuba.schemas import RequestSchema, Schema, GENERIC_QUERY_SCHEMA
+from snuba.schemas import RequestSchema, GENERIC_QUERY_SCHEMA
 from snuba.query.query_processor import ExtensionQueryProcessor
+from snuba.query.extensions import QueryExtension
 
 
 class Dataset(object):
@@ -80,13 +81,7 @@ class Dataset(object):
         """
         raise NotImplementedError
 
-    def _get_base_schema(self) -> Schema:
-        """
-        The base schema of the query.
-        """
-        return GENERIC_QUERY_SCHEMA
-
-    def _get_extensions(self) -> Mapping[str, Tuple[Schema, ExtensionQueryProcessor]]:
+    def _get_extensions(self) -> Mapping[str, QueryExtension]:
         """
         Returns the extensions for this dataset.
         Every extension comes as a tuple (schema, processor).
@@ -97,15 +92,23 @@ class Dataset(object):
         raise NotImplementedError('dataset does not support queries')
 
     def get_query_schema(self) -> RequestSchema:
-        base_schema = self._get_base_schema()
-        extensions_schemas = {key: val[0] for key, val in self._get_extensions().items()}
+        generic_schema = GENERIC_QUERY_SCHEMA
+        extensions_schemas = {
+            extension_key: extension.get_schema()
+            for extension_key, extension
+            in self._get_extensions().items()
+        }
         return RequestSchema(
-            base_schema,
+            generic_schema,
             extensions_schemas,
         )
 
     def get_query_processors(self) -> Mapping[str, ExtensionQueryProcessor]:
-        return {key: val[1] for key, val in self._get_extensions().items()}
+        return {
+            extension_key: extension.get_processor()
+            for extension_key, extension
+            in self._get_extensions().items()
+        }
 
 
 class TimeSeriesDataset(Dataset):

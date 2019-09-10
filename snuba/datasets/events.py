@@ -19,14 +19,13 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
-from snuba.query.query_processor import DummyExtensionProcessor, ExtensionQueryProcessor
-from snuba.schemas import (
-    Schema,
-    get_time_series_extension_properties,
-    GENERIC_QUERY_SCHEMA,
-    PERFORMANCE_EXTENSION_SCHEMA,
-    PROJECT_EXTENSION_SCHEMA
+from snuba.query.extensions import (
+    PerformanceExtension,
+    ProjectExtension,
+    QueryExtension,
+    TimeseriesExtension,
 )
+
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -353,21 +352,12 @@ class EventsDataset(TimeSeriesDataset):
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
-    def _get_extensions(self) -> Mapping[str, Tuple[Schema, ExtensionQueryProcessor]]:
+    def _get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': (
-                PERFORMANCE_EXTENSION_SCHEMA,
-                DummyExtensionProcessor(),
-            ),
-            'project': (
-                PROJECT_EXTENSION_SCHEMA,
-                DummyExtensionProcessor(),
-            ),
-            'timeseries': (
-                get_time_series_extension_properties(
-                    default_granularity=3600,
-                    default_window=timedelta(days=5),
-                ),
-                DummyExtensionProcessor(),
+            'performance': PerformanceExtension(),
+            'project': ProjectExtension(),
+            'timeseries': TimeseriesExtension(
+                default_granularity=3600,
+                default_window=timedelta(days=5),
             ),
         }

@@ -330,15 +330,6 @@ class RequestSchema:
         return self.__generate_template_impl(self.__composite_schema)
 
 
-EVENTS_QUERY_SCHEMA = RequestSchema(GENERIC_QUERY_SCHEMA, {
-    'performance': PERFORMANCE_EXTENSION_SCHEMA,
-    'project': PROJECT_EXTENSION_SCHEMA,
-    'timeseries': get_time_series_extension_properties(
-        default_granularity=3600,
-        default_window=timedelta(days=5),
-    ),
-})
-
 SDK_STATS_SCHEMA = RequestSchema({
     'type': 'object',
     'properties': {
