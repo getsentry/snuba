@@ -10,7 +10,7 @@ from snuba.writer import WriterTableRow
 
 class FakeHTTPWriter(HTTPBatchWriter):
     def chunk(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-        return self._prepare_body(rows)
+        return self._prepare_chunks(rows)
 
 
 class TestHTTPBatchWriter(BaseEventsTest):
@@ -38,9 +38,9 @@ class TestHTTPBatchWriter(BaseEventsTest):
             [b"a", b"b", b"c"],
         ),
         (
-            None,
+            0,
             ["a", "b", "c"],
-            [b"a", b"b", b"c"],
+            [b"abc"],
         ),
         (
             2,

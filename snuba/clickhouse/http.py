@@ -35,22 +35,33 @@ class HTTPBatchWriter(BatchWriter):
         encoder: Callable[[WriterTableRow], Iterable[bytes]],
         options=None,
         table_name=None,
-        # if chunk_size is none we let urlopen chunk on its own.
-        chunk_size: Optional[int]=None,
+        chunk_size: int = 1,
     ):
-        self.__schema = schema
+        """
+        Builds a writer to send a batch to Clickhouse.
+
+        :param schema: The dataset schema to take the table name from
+        :param host: Clickhosue host
+        :param port: Clickhosue port
+        :param encoder: A function that will be applied to each row to turn it into bytes
+        :param options: options passed to Clickhouse
+        :param table_name: Overrides the table coming from the schema (generally used for uplaoding
+            on temporary tables)
+        :param chunk_size: The chunk size (in rows).
+            We send data to the server with Transfer-Encoding: chunked. If 0 we send the entire
+            content in one chunk.
+        """
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
         self.__table_name = table_name or schema.get_table_name()
         self.__chunk_size = chunk_size
         self.__encoder = encoder
 
-    def _prepare_body(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
-        chunk_size = self.__chunk_size or 1
+    def _prepare_chunks(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
         chunk = []
         for row in rows:
             chunk.append(self.__encoder(row).encode("utf-8"))
-            if len(chunk) == chunk_size:
+            if self.__chunk_size and len(chunk) == self.__chunk_size:
                 yield b"".join(chunk)
                 chunk = []
 
@@ -68,8 +79,8 @@ class HTTPBatchWriter(BatchWriter):
                 }
             ),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
-            body=self._prepare_body(rows),
-            chunked=self.__chunk_size is None,
+            body=self._prepare_chunks(rows),
+            chunked=True,
         )
 
         if response.status != 200:
