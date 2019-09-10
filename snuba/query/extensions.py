@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from datetime import timedelta
 
 from snuba.query.query_processor import (
@@ -20,29 +20,34 @@ class QueryExtension(ABC):
     processing the extension data.
     """
 
-    @abstractmethod
-    def get_schema(self) -> Schema:
-        raise NotImplementedError
+    def __init__(self,
+        schema: Schema,
+        processor: ExtensionQueryProcessor,
+    ) -> None:
+        self.__schema = schema
+        self.__processor = processor
 
-    @abstractmethod
+    def get_schema(self) -> Schema:
+        return self.__schema
+
     def get_processor(self) -> ExtensionQueryProcessor:
-        raise NotImplementedError
+        return self.__processor
 
 
 class PerformanceExtension(QueryExtension):
-    def get_schema(self) -> Schema:
-        return PERFORMANCE_EXTENSION_SCHEMA
-
-    def get_processor(self) -> ExtensionQueryProcessor:
-        return DummyExtensionProcessor()
+    def __init__(self) -> None:
+        super().__init__(
+            schema=PERFORMANCE_EXTENSION_SCHEMA,
+            processor=DummyExtensionProcessor(),
+        )
 
 
 class ProjectExtension(QueryExtension):
-    def get_schema(self) -> Schema:
-        return PROJECT_EXTENSION_SCHEMA
-
-    def get_processor(self) -> ExtensionQueryProcessor:
-        return DummyExtensionProcessor()
+    def __init__(self) -> None:
+        super().__init__(
+            schema=PROJECT_EXTENSION_SCHEMA,
+            processor=DummyExtensionProcessor(),
+        )
 
 
 class TimeseriesExtension(QueryExtension):
@@ -51,14 +56,10 @@ class TimeseriesExtension(QueryExtension):
         default_granularity: int,
         default_window: timedelta,
     ) -> None:
-        self.__default_granularity = default_granularity
-        self.__default_window = default_window
-
-    def get_schema(self) -> Schema:
-        return get_time_series_extension_properties(
-            default_granularity=self.__default_granularity,
-            default_window=self.__default_window,
+        super().__init__(
+            schema=get_time_series_extension_properties(
+                default_granularity=default_granularity,
+                default_window=default_window,
+            ),
+            processor=DummyExtensionProcessor(),
         )
-
-    def get_processor(self) -> ExtensionQueryProcessor:
-        return DummyExtensionProcessor()
