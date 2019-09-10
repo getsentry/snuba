@@ -1,6 +1,6 @@
 import re
 from urllib.parse import urlencode
-from typing import Callable, Generator, Iterable, Optional
+from typing import Callable, Iterable
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
@@ -57,7 +57,7 @@ class HTTPBatchWriter(BatchWriter):
         self.__chunk_size = chunk_size
         self.__encoder = encoder
 
-    def _prepare_chunks(self, rows: Iterable[WriterTableRow]) -> Generator[bytes, None, None]:
+    def _prepare_chunks(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
         chunk = []
         for row in rows:
             chunk.append(self.__encoder(row))
