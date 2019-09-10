@@ -46,13 +46,17 @@ else:
 
 
 def check_clickhouse():
+    """
+    Checks if all the tables in all the enabled datasets exist in ClickHouse
+    """
     try:
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_schema().get_table_name()
+            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
             if (table_name,) not in clickhouse_tables:
                 return False
+
         return True
 
     except Exception:
@@ -384,7 +388,7 @@ def parse_and_run_query(dataset, request: Request, timer):
                 list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions())),
             )
 
-    table = dataset.get_schema().get_table_name()
+    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
 
     sql = format_query(dataset, request, table, prewhere_conditions, final)
 
@@ -469,9 +473,8 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        clickhouse_rw.execute(
-            dataset.get_schema().get_local_table_definition()
-        )
+        for statement in dataset.get_dataset_schemas().get_create_statements():
+            clickhouse_rw.execute(statement)
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -537,9 +540,9 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        table = dataset.get_schema().get_local_table_name()
+        for statement in dataset.get_dataset_schemas().get_drop_statements():
+            clickhouse_rw.execute(statement)
 
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
         return ('ok', 200, {'Content-Type': 'text/plain'})
