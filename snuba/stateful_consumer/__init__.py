@@ -1,6 +1,11 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
+
+from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.snapshots import SnapshotId
 
 
 class ConsumerStateCompletionEvent(Enum):
@@ -17,12 +22,20 @@ class ConsumerStateData:
     Represent the state information we pass from one
     state to the other.
     """
-    snapshot_id: Optional[str]
+    snapshot_id: SnapshotId
+    transaction_data: TransactionData
 
     @classmethod
-    def no_snapshot_state(cls):
+    def snapshot_ready_state(
+        cls,
+        snapshot_id: SnapshotId,
+        transaction_data: TransactionData,
+    ) -> ConsumerStateData:
         """
-        Builds an empty ConsumerStateData that represent a state where there is no
-        snapshot to care about.
+        Builds the StateData to share when we have a valid snapshot id to
+        work on.
         """
-        return ConsumerStateData(None)
+        return ConsumerStateData(
+            snapshot_id=snapshot_id,
+            transaction_data=transaction_data,
+        )

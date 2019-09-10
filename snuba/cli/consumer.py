@@ -71,7 +71,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
         assert isinstance(dataset, CdcDataset), \
             "Only CDC dataset have a control topic thus are supported."
         context = ConsumerStateMachine(
-            main_consumer=consumer_builder.build_consumer(),
+            consumer_builder=consumer_builder,
             topic=control_topic or dataset.get_default_control_topic(),
             bootstrap_servers=bootstrap_server,
             group_id=consumer_group,
@@ -85,7 +85,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
 
         context.run()
     else:
-        consumer = consumer_builder.build_consumer()
+        consumer = consumer_builder.build_base_consumer()
 
         def handler(signum, frame):
             consumer.signal_shutdown()
