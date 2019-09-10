@@ -108,7 +108,7 @@ class SnapshotAwareWorker(ConsumerWorker):
 
         The process is based on these rules:
         - if the processor observes xmax (or a following transaction) it means we are caught
-          up. Unless a transaciton is duplicated on the WAL, we cannot see anymore transactions
+          up. Unless a transaction is duplicated on the WAL, we cannot see anymore transactions
           that was already committed at the time the snapshot was taken. By definition all
           committed transactions that are part of the snapshot will show up on the WAL
           before xmax.
@@ -125,9 +125,9 @@ class SnapshotAwareWorker(ConsumerWorker):
             if self.__catching_up:
                 if xid < self.__transaction_data.xmin - 2 ** 32:
                     # xid is the 32 bit integer transaction id. This means it can wrap around
-                    # During normal ooperation this is not an issue, but if that happens while
+                    # During normal operation this is not an issue, but if that happens while
                     # catching up after a snapshot, it would be a cataclysm since we would
-                    # skip all transactions for almost 64 bits worth of transacitons.
+                    # skip all transactions for almost 64 bits worth of transactions.
                     # Better raising this issue, so the user can stop the process and take a
                     # new snapshot.
                     logger.error(
