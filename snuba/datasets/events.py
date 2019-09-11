@@ -1,7 +1,7 @@
 import re
 
 from datetime import timedelta
-from typing import Mapping, Tuple
+from typing import Mapping
 
 from snuba import state
 from snuba.clickhouse.columns import (
@@ -23,7 +23,7 @@ from snuba.query.extensions import (
     PerformanceExtension,
     ProjectExtension,
     QueryExtension,
-    TimeseriesExtension,
+    TimeSeriesExtension,
 )
 
 from snuba.util import (
@@ -356,7 +356,7 @@ class EventsDataset(TimeSeriesDataset):
         return {
             'performance': PerformanceExtension(),
             'project': ProjectExtension(),
-            'timeseries': TimeseriesExtension(
+            'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
             ),

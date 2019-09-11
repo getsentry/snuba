@@ -115,7 +115,7 @@ class Dataset(object):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
         Returns the extensions for this dataset.
-        Every extension comes as a tuple (schema, processor).
+        Every extension comes as an instance of QueryExtension.
         The schema tells Snuba how to parse the query.
         The processor actually does query processing for this
         extension.
