@@ -1,8 +1,13 @@
+import json
+import rapidjson
+
+from datetime import datetime
 from typing import Optional, Mapping
 
+from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.util import escape_col
 from snuba.query.extensions import QueryExtension
+from snuba.util import escape_col
 
 
 class Dataset(object):
@@ -35,12 +40,40 @@ class Dataset(object):
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
+        def default(value):
+            if isinstance(value, datetime):
+                return value.strftime(DATETIME_FORMAT)
+            else:
+                raise TypeError
+
         return HTTPBatchWriter(
             self.get_dataset_schemas().get_write_schema(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
+            lambda row: json.dumps(row, default=default).encode("utf-8"),
             options,
             table_name,
+        )
+
+    def get_bulk_writer(self, options=None, table_name=None):
+        """
+        This is a stripped down verison of the writer designed
+        for better performance when loading data in bulk.
+        """
+        # TODO: Consider using rapidjson to encode everywhere
+        # once we will be confident it is reliable enough.
+
+        from snuba import settings
+        from snuba.clickhouse.http import HTTPBatchWriter
+
+        return HTTPBatchWriter(
+            self.get_dataset_schemas().get_write_schema(),
+            settings.CLICKHOUSE_HOST,
+            settings.CLICKHOUSE_HTTP_PORT,
+            lambda row: rapidjson.dumps(row).encode("utf-8"),
+            options,
+            table_name,
+            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
     def default_conditions(self):
