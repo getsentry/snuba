@@ -416,7 +416,10 @@ def parse_and_run_query(dataset, request: Request, timer):
 def sdk_distribution(*, timer: Timer):
     request = validate_request_content(
         parse_request_body(http_request),
-        schemas.SDK_STATS_SCHEMA,
+        RequestSchema(
+            schemas.SDK_STATS_BASE_SCHEMA,
+            schemas.SDK_STATS_EXTENSIONS_SCHEMA,
+        ),
         timer,
     )
 

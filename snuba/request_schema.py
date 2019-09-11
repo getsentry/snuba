@@ -59,10 +59,7 @@ class RequestSchema:
             for extension_key, extension
             in extensions.items()
         }
-        return RequestSchema(
-            generic_schema,
-            extensions_schemas,
-        )
+        return cls(generic_schema, extensions_schemas)
 
     def validate(self, value) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
