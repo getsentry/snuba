@@ -76,6 +76,7 @@ setup(
         'python-dateutil==2.7.3',
         'pytz==2018.4',
         'PyYAML==3.13',
+        'python-rapidjson==0.8.0',
         'redis==2.10.6',
         'redis-py-cluster==1.3.5',
         'sentry-sdk==0.10.0',
