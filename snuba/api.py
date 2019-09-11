@@ -18,7 +18,7 @@ from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
-from snuba.schemas import Request, RequestSchema
+from snuba.request_schema import Request, RequestSchema
 from snuba.redis import redis_client
 from snuba.util import Timer
 
@@ -215,10 +215,11 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
     if http_request.method == 'GET':
+        schema = RequestSchema.build_with_extensions(dataset.get_extensions())
         return render_template(
             'query.html',
             query_template=json.dumps(
-                dataset.get_query_schema().generate_template(),
+                schema.generate_template(),
                 indent=4,
             ),
         )
@@ -233,9 +234,10 @@ def dataset_query(dataset, body, timer):
     assert http_request.method == 'POST'
     ensure_table_exists(dataset)
 
+    schema = RequestSchema.build_with_extensions(dataset.get_extensions())
     result, status = parse_and_run_query(
         dataset,
-        validate_request_content(body, dataset.get_query_schema(), timer),
+        validate_request_content(body, schema, timer),
         timer,
     )
 

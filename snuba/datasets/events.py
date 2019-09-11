@@ -352,7 +352,7 @@ class EventsDataset(TimeSeriesDataset):
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
-    def _get_extensions(self) -> Mapping[str, QueryExtension]:
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'performance': PerformanceExtension(),
             'project': ProjectExtension(),
