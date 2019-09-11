@@ -2,7 +2,10 @@
 {% block content %}
     <script>
     function run() {
-      fetch('/query', {
+      dataset = window.location.pathname.split("/").filter(function(p){ return p !== "" })[0]
+      url = "/" + dataset + "/query"
+
+      fetch(url, {
         credentials: 'same-origin',
         method: 'POST',
         body: document.getElementById("query").value
