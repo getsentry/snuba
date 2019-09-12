@@ -1,4 +1,6 @@
 import re
+from typing import Sequence
+
 from snuba import state
 from snuba.clickhouse.columns import (
     Array,
@@ -344,3 +346,6 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_schema(self):
         return EVENTS_QUERY_SCHEMA
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
