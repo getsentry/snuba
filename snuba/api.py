@@ -19,7 +19,7 @@ from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
-from snuba.request_schema import Request, RequestSchema
+from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
 from snuba.util import Timer
 
