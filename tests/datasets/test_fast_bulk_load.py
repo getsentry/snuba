@@ -18,6 +18,7 @@ class TestFastGroupedMessageLoad:
 
     def test_basic_date(self):
         message = GroupedMessageRow.from_bulk({
+            "project_id": "2",
             "id": "1",
             "status": "0",
             # UTC date with nanoseconds
@@ -31,6 +32,7 @@ class TestFastGroupedMessageLoad:
 
         assert message.to_clickhouse() == {
             "offset": 0,
+            "project_id": 2,
             "id": 1,
             "record_deleted": 0,
             "status": 0,
@@ -43,6 +45,7 @@ class TestFastGroupedMessageLoad:
     def test_failure(self):
         with pytest.raises(AssertionError):
             GroupedMessageRow.from_bulk({
+                "project_id": "2",
                 "id": "1",
                 "status": "0",
                 # Non UTC date with nanoseconds
