@@ -295,24 +295,23 @@ def parse_and_run_query(dataset, request: Request, timer):
             request.query['sample'] = settings.TURBO_SAMPLE_RATE
 
     prewhere_conditions = []
-    if settings.PREWHERE_KEYS:
-        # Add any condition to PREWHERE if:
-        # - It is a single top-level condition (not OR-nested), and
-        # - Any of its referenced columns are in PREWHERE_KEYS
-        prewhere_candidates = [
-            (util.columns_in_expr(cond[0]), cond)
-            for cond in request.query['conditions'] if util.is_condition(cond) and
-            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
-        ]
-        # Use the condition that has the highest priority (based on the
-        # position of its columns in the PREWHERE_KEYS list)
-        prewhere_candidates = sorted([
-            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
-            for cols, cond in prewhere_candidates
-        ], key=lambda priority_and_col: priority_and_col[0])
-        if prewhere_candidates:
-            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
+    # Add any condition to PREWHERE if:
+    # - It is a single top-level condition (not OR-nested), and
+    # - Any of its referenced columns are in dataset.get_prewhere_keys()
+    prewhere_candidates = [
+        (util.columns_in_expr(cond[0]), cond)
+        for cond in request.query['conditions'] if util.is_condition(cond) and
+        any(col in dataset.get_prewhere_keys() for col in util.columns_in_expr(cond[0]))
+    ]
+    # Use the condition that has the highest priority (based on the
+    # position of its columns in the prewhere keys list)
+    prewhere_candidates = sorted([
+        (min(dataset.get_prewhere_keys().index(col) for col in cols if col in dataset.get_prewhere_keys()), cond)
+        for cols, cond in prewhere_candidates
+    ], key=lambda priority_and_col: priority_and_col[0])
+    if prewhere_candidates:
+        prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+        request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
     table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
     # TODO: consider moving the performance logic and the pre_where generation into
