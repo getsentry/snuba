@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
@@ -66,3 +68,6 @@ class GroupedMessageDataset(CdcDataset):
             dest_table=dest_table,
             row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
         )
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['project_id']

@@ -1,4 +1,7 @@
 import re
+from datetime import timedelta
+from typing import Sequence
+
 from snuba import state
 from snuba.clickhouse.columns import (
     Array,
@@ -15,7 +18,10 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
-from snuba.schemas import EVENTS_QUERY_SCHEMA
+from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA
+from snuba.request import RequestSchema
+from snuba.schemas import get_time_series_extension_properties
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -343,4 +349,14 @@ class EventsDataset(TimeSeriesDataset):
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
     def get_query_schema(self):
-        return EVENTS_QUERY_SCHEMA
+        return RequestSchema(GENERIC_QUERY_SCHEMA, {
+            'performance': PERFORMANCE_EXTENSION_SCHEMA,
+            'project': PROJECT_EXTENSION_SCHEMA,
+            'timeseries': get_time_series_extension_properties(
+                default_granularity=3600,
+                default_window=timedelta(days=5),
+            ),
+        })
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
