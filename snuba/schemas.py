@@ -5,9 +5,6 @@ from typing import Any, Mapping
 import jsonschema
 
 
-POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
-
-
 def get_time_series_extension_properties(default_granularity: int, default_window: timedelta):
     return {
         'type': 'object',

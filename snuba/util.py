@@ -15,7 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import schemas, settings, state
-from snuba.query.schema import CONDITION_OPERATORS
+from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 
 
@@ -323,7 +323,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
             columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
         ):
-            any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
+            any_or_all = 'arrayExists' if op in POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,
                 op,
