@@ -293,7 +293,7 @@ def parse_and_run_query(dataset, request: Request, timer):
                 request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
     else:
         final = False
-        if 'sample' not in request.query:
+        if request.query.get_sample() is None:
             request.query.set_sample(settings.TURBO_SAMPLE_RATE)
 
     prewhere_conditions = []
