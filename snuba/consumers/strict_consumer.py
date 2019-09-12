@@ -75,7 +75,7 @@ class StrictConsumer:
 
         self.__consumer = self._create_consumer(consumer_config)
 
-        def on_partitions_assigned(
+        def _on_partitions_assigned(
             consumer: Consumer,
             partitions: Sequence[TopicPartition],
         ):
@@ -90,7 +90,7 @@ class StrictConsumer:
             if self.__on_partitions_assigned:
                 self.__on_partitions_assigned(consumer, partitions)
 
-        def on_partitions_revoked(
+        def _on_partitions_revoked(
             consumer: Consumer,
             partitions: Sequence[TopicPartition],
         ):
@@ -100,8 +100,8 @@ class StrictConsumer:
 
         self.__consumer.subscribe(
             [topic],
-            on_assign=on_partitions_assigned,
-            on_revoke=on_partitions_revoked,
+            on_assign=_on_partitions_assigned,
+            on_revoke=_on_partitions_revoked,
         )
 
     def _create_consumer(self, config) -> Consumer:

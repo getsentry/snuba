@@ -87,9 +87,9 @@ class ReplacerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
-        self.dist_table_name = dataset.get_schema().get_table_name()
+        self.dist_table_name = dataset.get_dataset_schemas().get_write_schema().get_table_name()
         self.metrics = metrics
-        self.__all_column_names = [col.escaped for col in dataset.get_schema().get_columns()]
+        self.__all_column_names = [col.escaped for col in dataset.get_dataset_schemas().get_write_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
     def process_message(self, message):
@@ -118,7 +118,10 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dataset.get_schema().get_table_name()})
+            query_args.update({
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_table_name(),
+                'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema().get_table_name(),
+            })
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:
                 continue
@@ -162,13 +165,13 @@ def process_delete_groups(message, required_columns):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(required_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -214,13 +217,13 @@ def process_merge(message, all_column_names):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -255,13 +258,13 @@ def process_unmerge(message, all_column_names):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
@@ -300,13 +303,13 @@ def process_delete_tag(message, dataset):
         where += "AND has(`tags.key`, %(tag_str)s)"
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     select_columns = []
-    all_columns = dataset.get_schema().get_columns()
+    all_columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
@@ -333,7 +336,7 @@ def process_delete_tag(message, dataset):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])

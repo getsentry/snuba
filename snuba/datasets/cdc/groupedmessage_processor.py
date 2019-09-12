@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from dataclasses import dataclass
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor, CdcMessageRow, parse_postgres_datetime
+from snuba.datasets.cdc.cdcprocessors import (
+    CdcProcessor,
+    CdcMessageRow,
+    postgres_date_to_clickhouse,
+    parse_postgres_datetime,
+)
 from snuba.writer import WriterTableRow
 
 
@@ -18,12 +23,27 @@ class GroupMessageRecord:
 
 
 @dataclass(frozen=True)
+class RawGroupMessageRecord:
+    """
+    This is a faster verison of GroupMessageRecord that does
+    not rely on datetime objects. This is useful for bulk load
+    of massive tables to avoid creating and serializing datetime
+    objects at every record.
+    """
+    status: int
+    last_seen: str
+    first_seen: str
+    active_at: Optional[str] = None
+    first_release_id: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class GroupedMessageRow(CdcMessageRow):
     offset: Optional[int]
     project_id: int
     id: int
     record_deleted: bool
-    record_content: Optional[GroupMessageRecord]
+    record_content: Union[None, GroupMessageRecord, RawGroupMessageRecord]
 
     @classmethod
     def from_wal(cls,
@@ -41,7 +61,9 @@ class GroupedMessageRow(CdcMessageRow):
                 status=raw_data['status'],
                 last_seen=parse_postgres_datetime(raw_data['last_seen']),
                 first_seen=parse_postgres_datetime(raw_data['first_seen']),
-                active_at=parse_postgres_datetime(raw_data['active_at']),
+                active_at=(parse_postgres_datetime(raw_data['active_at'])
+                    if raw_data['active_at']
+                    else None),
                 first_release_id=raw_data['first_release_id'],
             )
         )
@@ -55,11 +77,13 @@ class GroupedMessageRow(CdcMessageRow):
             project_id=int(row['project_id']),
             id=int(row['id']),
             record_deleted=False,
-            record_content=GroupMessageRecord(
+            record_content=RawGroupMessageRecord(
                 status=int(row['status']),
-                last_seen=parse_postgres_datetime(row['last_seen']),
-                first_seen=parse_postgres_datetime(row['first_seen']),
-                active_at=parse_postgres_datetime(row['active_at']),
+                last_seen=postgres_date_to_clickhouse(row['last_seen']),
+                first_seen=postgres_date_to_clickhouse(row['first_seen']),
+                active_at=(postgres_date_to_clickhouse(row['active_at'])
+                    if row['active_at']
+                    else None),
                 first_release_id=int(row['first_release_id']) if row['first_release_id'] else None,
             )
         )

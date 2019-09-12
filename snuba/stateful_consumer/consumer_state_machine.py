@@ -1,15 +1,15 @@
-from batching_kafka_consumer import BatchingKafkaConsumer
-from typing import Sequence
+from typing import Optional, Sequence
 
+from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
-from snuba.utils.state_machine import State, StateType, StateMachine
+from snuba.utils.state_machine import State, StateType, StateMachine, TStateCompletionEvent, TStateData
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
 from snuba.stateful_consumer.states.paused import PausedState
 from snuba.stateful_consumer.states.catching_up import CatchingUpState
 
 
-class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, ConsumerStateData]):
+class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
@@ -18,12 +18,12 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, ConsumerSt
 
     def __init__(
         self,
-        main_consumer: BatchingKafkaConsumer,
+        consumer_builder: ConsumerBuilder,
         topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
     ) -> None:
-        self.__main_consumer = main_consumer
+        self.__consumer_builder = consumer_builder
         self.__topic = topic
         self.__bootstrap_servers = bootstrap_servers
         self.__group_id = group_id
@@ -53,15 +53,17 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, ConsumerSt
 
     def _build_state(
         self,
-        state_class: StateType,
-    ) -> State[ConsumerStateCompletionEvent, ConsumerStateData]:
+        state_class: StateType[ConsumerStateCompletionEvent, Optional[ConsumerStateData]],
+    ) -> State[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         if state_class == ConsumingState:
-            return ConsumingState(self.__main_consumer)
+            return ConsumingState(self.__consumer_builder)
         elif state_class == BootstrapState:
             return BootstrapState(
                 topic=self.__topic,
                 bootstrap_servers=self.__bootstrap_servers,
                 group_id=self.__group_id,
             )
+        elif state_class == CatchingUpState:
+            return CatchingUpState(self.__consumer_builder)
         else:
             return state_class()

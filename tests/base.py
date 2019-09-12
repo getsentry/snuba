@@ -1,11 +1,16 @@
 import calendar
 from hashlib import md5
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 import uuid
 
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from confluent_kafka import TopicPartition
-from confluent_kafka.admin import ClusterMetadata, PartitionMetadata, TopicMetadata
+from confluent_kafka import TopicPartition, KafkaError
+from confluent_kafka.admin import (
+    ClusterMetadata,
+    PartitionMetadata,
+    TopicMetadata,
+)
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
@@ -144,17 +149,21 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.table = self.dataset.get_schema().get_table_name()
             self.clickhouse = ClickhousePool()
 
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
-            self.clickhouse.execute(self.dataset.get_schema().get_local_table_definition())
+            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
+                self.clickhouse.execute(statement)
+
+            for statement in self.dataset.get_dataset_schemas().get_create_statements():
+                self.clickhouse.execute(statement)
 
             redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
-            self.clickhouse.execute("DROP TABLE IF EXISTS %s" % self.table)
+            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
+                self.clickhouse.execute(statement)
+
             redis_client.flushdb()
 
 
@@ -178,6 +187,7 @@ class BaseDatasetTest(BaseTest):
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
+        self.table = self.dataset.get_dataset_schemas().get_write_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
@@ -203,3 +213,37 @@ class BaseEventsTest(BaseDatasetTest):
             out.append(processed)
 
         return self.write_processed_records(out)
+
+    def write_processed_events(self, events):
+        if not isinstance(events, (list, tuple)):
+            events = [events]
+
+        rows = []
+        for event in events:
+            rows.append(event)
+
+        return self.write_rows(rows)
+
+    def write_rows(self, rows):
+        if not isinstance(rows, (list, tuple)):
+            rows = [rows]
+
+        self.dataset.get_writer().write(rows)
+
+
+def message(offset, partition, value, eof=False) -> FakeKafkaMessage:
+    if eof:
+        error = MagicMock()
+        error.code.return_value = KafkaError._PARTITION_EOF
+    else:
+        error = None
+
+    return FakeKafkaMessage(
+        topic="topic",
+        partition=partition,
+        offset=offset,
+        value=value,
+        key=None,
+        headers=None,
+        error=error,
+    )

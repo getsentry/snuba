@@ -1,14 +1,17 @@
+from typing import Mapping, List
+
 from snuba import settings
+from snuba.clickhouse.columns import ColumnSet
 
 
 def local_dataset_mode():
     return settings.DATASET_MODE == "local"
 
 
-class TableSchema(object):
+class Schema(object):
     """
     Represents the full set of columns in a clickhouse table, this only contains
-    basic metadata for now. The code to generate the schema comes in a followup PR.
+    basic metadata for now.
     """
 
     TEST_TABLE_PREFIX = "test_"
@@ -19,7 +22,7 @@ class TableSchema(object):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def __make_test_table(self, table_name):
+    def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
 
     def get_local_table_name(self):
@@ -27,7 +30,7 @@ class TableSchema(object):
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
-        return self.__make_test_table(self.__local_table_name)
+        return self._make_test_table(self.__local_table_name)
 
     def get_table_name(self):
         """
@@ -35,17 +38,51 @@ class TableSchema(object):
         In distributed mode this will be a distributed table. In local mode it is a local table.
         """
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
-        return self.__make_test_table(table_name)
+        return self._make_test_table(table_name)
 
-    def _get_table_definition(self, name, engine):
+    def get_local_table_definition(self):
+        raise NotImplementedError
+
+    def get_local_drop_table_statement(self):
+        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+
+    def get_columns(self):
+        return self.__columns
+
+    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+        """
+        Returns a list of differences between the expected_columns and the columns described in the schema.
+        """
+        errors: List[str] = []
+
+        for column_name, column_type in expected_columns.items():
+            if column_name not in self.__columns:
+                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
+                continue
+
+            expected_type = self.__columns[column_name].type.for_schema()
+            if column_type != expected_type:
+                errors.append(
+                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
+                        column_name,
+                        expected_type,
+                        column_type
+                    )
+                )
+
+        return errors
+
+
+class TableSchema(Schema):
+    def _get_table_definition(self, name: str, engine: str) -> str:
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.__columns.for_schema(),
+            'columns': self.get_columns().for_schema(),
             'engine': engine,
             'name': name,
         }
 
-    def get_local_table_definition(self):
+    def get_local_table_definition(self) -> str:
         return self._get_table_definition(
             self.get_local_table_name(),
             self._get_local_engine()
@@ -53,9 +90,6 @@ class TableSchema(object):
 
     def _get_local_engine(self):
         raise NotImplementedError
-
-    def get_columns(self):
-        return self.__columns
 
 
 class MergeTreeSchema(TableSchema):
@@ -118,3 +152,62 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def _get_engine_type(self):
         return "ReplacingMergeTree(%s)" % self.__version_column
+
+
+class SummingMergeTreeSchema(MergeTreeSchema):
+
+    def _get_engine_type(self):
+        return "SummingMergeTree()"
+
+
+class MaterializedViewSchema(Schema):
+
+    def __init__(
+            self,
+            local_materialized_view_name: str,
+            dist_materialized_view_name: str,
+            columns: ColumnSet,
+            query: str,
+            local_source_table_name: str,
+            local_destination_table_name: str,
+            dist_source_table_name: str,
+            dist_destination_table_name: str
+    ) -> None:
+        super().__init__(
+            columns=columns,
+            local_table_name=local_materialized_view_name,
+            dist_table_name=dist_materialized_view_name,
+        )
+
+        # Make sure the caller has provided a source_table_name in the query
+        assert query % {'source_table_name': local_source_table_name} != query
+
+        self.__query = query
+        self.__local_source_table_name = local_source_table_name
+        self.__local_destination_table_name = local_destination_table_name
+        self.__dist_source_table_name = dist_source_table_name
+        self.__dist_destination_table_name = dist_destination_table_name
+
+    def __get_local_source_table_name(self) -> str:
+        return self._make_test_table(self.__local_source_table_name)
+
+    def __get_local_destination_table_name(self) -> str:
+        return self._make_test_table(self.__local_destination_table_name)
+
+    def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
+        return """
+        CREATE MATERIALIZED VIEW IF NOT EXISTS %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {
+            'name': name,
+            'destination_table_name': destination_table_name,
+            'columns': self.get_columns().for_schema(),
+            'query': self.__query,
+        } % {
+            'source_table_name': source_table_name,
+        }
+
+    def get_local_table_definition(self) -> str:
+        return self.__get_table_definition(
+            self.get_local_table_name(),
+            self.__get_local_source_table_name(),
+            self.__get_local_destination_table_name()
+        )
