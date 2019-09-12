@@ -2,7 +2,7 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Mapping, List
+from typing import Optional, Mapping, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.util import escape_col
@@ -114,7 +114,7 @@ class Dataset(object):
     def get_query_schema(self):
         raise NotImplementedError('dataset does not support queries')
 
-    def get_prewhere_keys(self) -> List[str]:
+    def get_prewhere_keys(self) -> Sequence[str]:
         """
         Returns the keys that will be upgraded from a WHERE condition to a PREWHERE.
 
