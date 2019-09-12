@@ -20,7 +20,7 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.request_schema import RequestSchema
+from snuba.request import RequestSchema
 from snuba.schemas import get_time_series_extension_properties
 from snuba.util import (
     alias_expr,

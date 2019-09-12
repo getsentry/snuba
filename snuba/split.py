@@ -3,7 +3,7 @@ from datetime import timedelta
 import math
 
 from snuba import state, util
-from snuba.request_schema import Request
+from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the

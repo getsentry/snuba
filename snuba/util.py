@@ -15,7 +15,8 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import schemas, settings, state
-from snuba.request_schema import Request
+from snuba.query.schema import CONDITION_OPERATORS
+from snuba.request import Request
 
 
 logger = logging.getLogger('snuba.util')
@@ -222,7 +223,7 @@ def is_condition(cond_or_list):
         # a 3-tuple
         len(cond_or_list) == 3 and
         # where the middle element is an operator
-        cond_or_list[1] in schemas.CONDITION_OPERATORS and
+        cond_or_list[1] in CONDITION_OPERATORS and
         # and the first element looks like a column name or expression
         isinstance(cond_or_list[0], (str, tuple, list))
     )
