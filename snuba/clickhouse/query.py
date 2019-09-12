@@ -2,19 +2,18 @@ from typing import Sequence
 
 from snuba import util
 from snuba.datasets import Dataset
-from snuba.request import Request
+from snuba.query import Query
 
 
 class ClickhouseQuery:
     def __init__(self,
         dataset: Dataset,
-        # TODO: replace this with snuba.query. Query as soon as the PR is committed
-        request: Request,
+        query: Query,
         prewhere_conditions: Sequence[str],
         final: bool,
     ) -> None:
         self.__dataset = dataset
-        self.__request = request
+        self.__query = query
         self.__prewhere_conditions = prewhere_conditions
         self.__final = final
 
