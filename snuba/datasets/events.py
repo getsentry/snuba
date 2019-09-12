@@ -1,11 +1,7 @@
 import re
-<< << << < HEAD
 
 from datetime import timedelta
-from typing import Mapping
-== == == =
-from typing import Sequence
->>>>>> > master
+from typing import Mapping, Sequence
 
 from snuba import state
 from snuba.clickhouse.columns import (

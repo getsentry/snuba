@@ -2,7 +2,7 @@ from typing import Sequence
 
 from snuba import util
 from snuba.datasets import Dataset
-from snuba.schemas import Request
+from snuba.request import Request
 
 
 class ClickhouseQuery:

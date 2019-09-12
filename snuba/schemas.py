@@ -1,14 +1,8 @@
 import copy
-import jsonschema
-
-
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 
-Schema = Mapping[str, Any]  # placeholder for JSON schema
-
-CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
-POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
+import jsonschema
 
 
 def get_time_series_extension_properties(default_granularity: int, default_window: timedelta):
@@ -33,6 +27,9 @@ def get_time_series_extension_properties(default_granularity: int, default_windo
         },
         'additionalProperties': False,
     }
+
+
+Schema = Mapping[str, Any]  # placeholder for JSON schema
 
 
 SDK_STATS_BASE_SCHEMA = {
