@@ -12,14 +12,15 @@ import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
 
-from snuba import schemas, settings, state, util
+from snuba import settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
-from snuba.schemas import Request, RequestSchema
+from snuba.request import Request, RequestSchema
+from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
 from snuba.util import Timer
 
@@ -340,7 +341,10 @@ def parse_and_run_query(dataset, request: Request, timer):
 def sdk_distribution(*, timer: Timer):
     request = validate_request_content(
         parse_request_body(http_request),
-        schemas.SDK_STATS_SCHEMA,
+        RequestSchema(
+            SDK_STATS_BASE_SCHEMA,
+            SDK_STATS_EXTENSIONS_SCHEMA,
+        ),
         timer,
     )
 
