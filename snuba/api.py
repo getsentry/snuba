@@ -14,6 +14,7 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.query.schema import QUERY_SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
@@ -282,7 +283,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     if project_ids:
         request.query.add_conditions([('project_id', 'IN', project_ids)])
 
-    turbo = request.extensions['performance'].get('turbo', False)
+    turbo = request.query_settings.get('turbo', False)
     if not turbo:
         final, exclude_group_ids = get_projects_query_flags(project_ids)
         if not final and exclude_group_ids:
@@ -347,6 +348,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
+            QUERY_SETTINGS_SCHEMA,
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,

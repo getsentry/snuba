@@ -20,7 +20,6 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import (
-    PerformanceExtension,
     ProjectExtension,
     QueryExtension,
 )
@@ -385,7 +384,6 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': PerformanceExtension(),
             'project': ProjectExtension(),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
