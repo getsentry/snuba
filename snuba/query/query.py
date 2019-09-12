@@ -5,6 +5,7 @@ from typing import (
     Any,
     Iterable,
     Mapping,
+    MutableMapping,
     Optional,
     Sequence,
     Tuple,
@@ -15,7 +16,7 @@ from typing import (
 
 Condition = Union[
     Tuple[Any, Any, Any],
-    Iterable[Any],
+    Sequence[Any],
 ]
 
 Aggregation = Union[
@@ -44,7 +45,7 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: Mapping[str, Any]):
+    def __init__(self, body: MutableMapping[str, Any]):
         """
         Expects an already parsed query body.
         """
@@ -52,7 +53,7 @@ class Query:
         # in order not to expose the internal representation.
         self.__body = body
 
-    def __append_to_sequence(self,
+    def __extend_sequence(self,
         field: str,
         content: Sequence[TElement],
     ) -> None:
@@ -85,7 +86,7 @@ class Query:
         self,
         groupby: Sequence[Groupby],
     ) -> None:
-        self.__append_to_sequence("groupby", groupby)
+        self.__extend_sequence("groupby", groupby)
 
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
@@ -100,7 +101,7 @@ class Query:
         self,
         conditions: Sequence[Condition],
     ) -> None:
-        self.__append_to_sequence("conditions", conditions)
+        self.__extend_sequence("conditions", conditions)
 
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
