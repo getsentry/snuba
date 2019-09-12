@@ -1,3 +1,5 @@
+from typing import Sequence
+
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
@@ -86,3 +88,6 @@ class TransactionsDataset(Dataset):
             processor=TransactionsMessageProcessor(),
             default_topic="events",
         )
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['event_id', 'project_id']

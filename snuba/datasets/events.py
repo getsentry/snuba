@@ -1,7 +1,11 @@
 import re
+<< << << < HEAD
 
 from datetime import timedelta
 from typing import Mapping
+== == == =
+from typing import Sequence
+>>>>>> > master
 
 from snuba import state
 from snuba.clickhouse.columns import (
@@ -361,3 +365,6 @@ class EventsDataset(TimeSeriesDataset):
                 default_window=timedelta(days=5),
             ),
         }
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']

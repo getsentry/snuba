@@ -411,7 +411,10 @@ class TestApi(BaseApiTest):
 
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
-        settings.PREWHERE_KEYS = ['message']
+        prewhere_keys = get_dataset('events').get_prewhere_keys()
+
+        # Before we run our test, make sure the column exists in our prewhere keys
+        assert 'message' in prewhere_keys
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
@@ -422,7 +425,9 @@ class TestApi(BaseApiTest):
         assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0" in result['sql']
 
         # Choose the highest priority one
-        settings.PREWHERE_KEYS = ['project_id', 'message']
+
+        # Before we run our test, make sure that we have our priorities in the test right.
+        assert prewhere_keys.index('message') < prewhere_keys.index('project_id')
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
@@ -430,7 +435,7 @@ class TestApi(BaseApiTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1)" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message" in result['sql']
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
@@ -441,16 +446,15 @@ class TestApi(BaseApiTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1) AND positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)" in result['sql']
 
     def test_prewhere_conditions_dont_show_up_in_where_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
-        settings.PREWHERE_KEYS = ['project_id']
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
             'conditions': [
-                ['environment', '=', 'prod']
+                ['http_method', '=', 'GET']
             ],
             'limit': 1,
             'debug': True
