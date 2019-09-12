@@ -11,10 +11,12 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
+from uuid import UUID
 
 from snuba import settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
+from snuba.query.extensions import get_time_limit
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
@@ -241,11 +243,18 @@ def dataset_query(dataset, body, timer):
         timer,
     )
 
+    def json_default(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, UUID):
+            return str(obj)
+        return obj
+
     return (
         json.dumps(
             result,
             for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+            default=json_default),
         status,
         {'Content-Type': 'application/json'}
     )
@@ -253,75 +262,60 @@ def dataset_query(dataset, body, timer):
 
 @split_query
 def parse_and_run_query(dataset, request: Request, timer):
-    max_days, date_align = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-    ])
+    from_date, to_date = get_time_limit(request.extensions['timeseries'])
 
-    to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
-    from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
-    assert from_date <= to_date
-
-    if max_days is not None and (to_date - from_date).days > max_days:
-        from_date = to_date - timedelta(days=max_days)
-
-    request.query['conditions'].extend([
-        ('timestamp', '>=', from_date.isoformat()),
-        ('timestamp', '<', to_date.isoformat()),
-    ])
-
+    request.query['conditions'].extend(dataset.get_extensions_conditions(request.extensions))
     request.query['conditions'].extend(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
-    project_ids = util.to_list(request.extensions['project']['project'])
+    project_ids=util.to_list(request.extensions['project']['project'])
     if project_ids:
         request.query['conditions'].append(('project_id', 'IN', project_ids))
 
-    turbo = request.extensions['performance'].get('turbo', False)
+    turbo=request.extensions['performance'].get('turbo', False)
     if not turbo:
-        final, exclude_group_ids = get_projects_query_flags(project_ids)
+        final, exclude_group_ids=get_projects_query_flags(project_ids)
         if not final and exclude_group_ids:
             # If the number of groups to exclude exceeds our limit, the query
             # should just use final instead of the exclusion set.
-            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
+            max_group_ids_exclude=state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
             if len(exclude_group_ids) > max_group_ids_exclude:
-                final = True
+                final=True
             else:
                 request.query['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
     else:
-        final = False
+        final=False
         if 'sample' not in request.query:
-            request.query['sample'] = settings.TURBO_SAMPLE_RATE
+            request.query['sample']=settings.TURBO_SAMPLE_RATE
 
-    prewhere_conditions = []
+    prewhere_conditions=[]
     # Add any condition to PREWHERE if:
     # - It is a single top-level condition (not OR-nested), and
     # - Any of its referenced columns are in dataset.get_prewhere_keys()
-    prewhere_candidates = [
+    prewhere_candidates=[
         (util.columns_in_expr(cond[0]), cond)
         for cond in request.query['conditions'] if util.is_condition(cond) and
         any(col in dataset.get_prewhere_keys() for col in util.columns_in_expr(cond[0]))
     ]
     # Use the condition that has the highest priority (based on the
     # position of its columns in the prewhere keys list)
-    prewhere_candidates = sorted([
+    prewhere_candidates=sorted([
         (min(dataset.get_prewhere_keys().index(col) for col in cols if col in dataset.get_prewhere_keys()), cond)
         for cols, cond in prewhere_candidates
     ], key=lambda priority_and_col: priority_and_col[0])
     if prewhere_candidates:
-        prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-        request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
+        prewhere_conditions=[cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+        request.query['conditions']=list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+    table=dataset.get_dataset_schemas().get_read_schema().get_table_name()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
-
+    sql=ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
     timer.mark('prepare_query')
 
-    stats = {
+    stats={
         'clickhouse_table': table,
         'final': final,
         'referrer': http_request.referrer,
@@ -339,7 +333,7 @@ def parse_and_run_query(dataset, request: Request, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
-    request = validate_request_content(
+    request=validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
             SDK_STATS_BASE_SCHEMA,
@@ -348,19 +342,19 @@ def sdk_distribution(*, timer: Timer):
         timer,
     )
 
-    request.query['aggregations'] = [
+    request.query['aggregations']=[
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
     ]
     request.query['groupby'].extend(['sdk_name', 'rtime'])
-    request.extensions['project'] = {
+    request.extensions['project']={
         'project': [],
     }
 
-    dataset = get_dataset('events')
+    dataset=get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, request, timer)
+    result, status=parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
             result,
@@ -390,7 +384,7 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = {}
+    _ensured={}
 
     def ensure_table_exists(dataset, force=False):
         if not force and _ensured.get(dataset, False):
@@ -408,18 +402,18 @@ if application.debug or application.testing:
 
         migrate.run(clickhouse_rw, dataset)
 
-        _ensured[dataset] = True
+        _ensured[dataset]=True
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
         from snuba.processor import MessageProcessor
 
-        dataset = get_dataset(dataset_name)
+        dataset=get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
-        rows = []
+        rows=[]
         for message in json.loads(http_request.data):
-            action, row = dataset.get_processor().process_message(message)
+            action, row=dataset.get_processor().process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
 
@@ -429,17 +423,17 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/eventstream', methods=['POST'])
     def eventstream(dataset_name):
-        dataset = get_dataset(dataset_name)
+        dataset=get_dataset(dataset_name)
         ensure_table_exists(dataset)
-        record = json.loads(http_request.data)
+        record=json.loads(http_request.data)
 
-        version = record[0]
+        version=record[0]
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
         class Message(object):
             def __init__(self, value):
-                self._value = value
+                self._value=value
 
             def value(self):
                 return self._value
@@ -450,26 +444,26 @@ if application.debug or application.testing:
             def offset(self):
                 return None
 
-        message = Message(http_request.data)
+        message=Message(http_request.data)
 
-        type_ = record[1]
+        type_=record[1]
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None)
+            worker=ConsumerWorker(dataset, producer=None, replacements_topic=None)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, dataset)
+            worker=ReplacerWorker(clickhouse_rw, dataset)
 
-        processed = worker.process_message(message)
+        processed=worker.process_message(message)
         if processed is not None:
-            batch = [processed]
+            batch=[processed]
             worker.flush_batch(batch)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
-        dataset = get_dataset(dataset_name)
+        dataset=get_dataset(dataset_name)
         for statement in dataset.get_dataset_schemas().get_drop_statements():
             clickhouse_rw.execute(statement)
 

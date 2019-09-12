@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Sequence
 
 from snuba.clickhouse.columns import (
@@ -14,13 +15,17 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
-from snuba.datasets import Dataset
+from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
+from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA
+from snuba.request import RequestSchema
+from snuba.schemas import get_time_series_extension_properties
 
 
-class TransactionsDataset(Dataset):
+class TransactionsDataset(TimeSeriesDataset):
     def __init__(self):
         columns = ColumnSet([
             ('project_id', UInt(64)),
@@ -83,11 +88,24 @@ class TransactionsDataset(Dataset):
             write_schema=schema,
         )
 
-        super(TransactionsDataset, self).__init__(
+        super().__init__(
             dataset_schemas=dataset_schemas,
             processor=TransactionsMessageProcessor(),
             default_topic="events",
+            time_group_columns={
+            },
+            timestamp_column='start_ts',
         )
+
+    def get_query_schema(self):
+        return RequestSchema(GENERIC_QUERY_SCHEMA, {
+            'performance': PERFORMANCE_EXTENSION_SCHEMA,
+            'project': PROJECT_EXTENSION_SCHEMA,
+            'timeseries': get_time_series_extension_properties(
+                default_granularity=3600,
+                default_window=timedelta(days=5),
+            ),
+        })
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']

@@ -2,9 +2,10 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Mapping, Sequence
+from typing import Any, Optional, Mapping, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.query.extensions import get_time_limit
 from snuba.util import escape_col
 from snuba.datasets.dataset_schemas import DatasetSchemas
 
@@ -82,6 +83,12 @@ class Dataset(object):
         """
         return []
 
+    def get_extensions_conditions(
+        self,
+        extensions: Mapping[str, Mapping[str, Any]],
+    ) -> Sequence[Any]:
+        return []
+
     def get_default_topic(self) -> str:
         return self.__default_topic
 
@@ -125,11 +132,15 @@ class Dataset(object):
 
 
 class TimeSeriesDataset(Dataset):
-    def __init__(self, *args, time_group_columns: Mapping[str, str], **kwargs):
+    def __init__(self, *args,
+            time_group_columns: Mapping[str, str],
+            timestamp_column: str,
+            **kwargs):
         super().__init__(*args, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
         self.__time_group_columns = time_group_columns
+        self.__timestamp_column = timestamp_column
 
     def __time_expr(self, column_name: str, granularity: int) -> str:
         real_column = self.__time_group_columns[column_name]
@@ -139,6 +150,16 @@ class TimeSeriesDataset(Dataset):
             86400: 'toDate({column})',
         }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
         return template.format(column=real_column, granularity=granularity)
+
+    def get_extensions_conditions(
+        self,
+        extensions: Mapping[str, Mapping[str, Any]],
+    ) -> Sequence[Any]:
+        from_date, to_date = get_time_limit(extensions['timeseries'])
+        return [
+            (self.__timestamp_column, '>=', from_date.isoformat()),
+            (self.__timestamp_column, '<', to_date.isoformat()),
+        ]
 
     def column_expr(self, column_name, body):
         if column_name in self.__time_group_columns:
