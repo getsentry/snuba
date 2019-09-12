@@ -2,7 +2,7 @@
 {% block content %}
     <script>
     function run() {
-      fetch('/query', {
+      fetch(window.location.pathname, {
         credentials: 'same-origin',
         method: 'POST',
         body: document.getElementById("query").value
