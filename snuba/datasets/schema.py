@@ -2,10 +2,7 @@ from typing import Mapping, List
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-
-
-def local_dataset_mode():
-    return settings.DATASET_MODE == "local"
+from snuba.datasets.schema_source import SchemaSource
 
 
 class Schema(object):
@@ -14,13 +11,11 @@ class Schema(object):
     basic metadata for now.
     """
 
-    TEST_TABLE_PREFIX = "test_"
-
-    def __init__(self, local_table_name, dist_table_name, columns):
+    def __init__(self, local_table_name, schema_source, columns):
         self.__columns = columns
 
         self.__local_table_name = local_table_name
-        self.__dist_table_name = dist_table_name
+        self.__schema_source = schema_source
 
     def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
@@ -39,6 +34,9 @@ class Schema(object):
         """
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
         return self._make_test_table(table_name)
+
+    def get_source(self) -> SchemaSource:
+        return self.__schema_source
 
     def get_local_table_definition(self):
         raise NotImplementedError
