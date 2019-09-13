@@ -1,4 +1,4 @@
-from typing import Mapping, List
+from typing import Callable, Mapping, List, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
@@ -16,11 +16,12 @@ class Schema(object):
 
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, local_table_name, dist_table_name, columns):
+    def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
         self.__columns = columns
 
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
+        self.__migration_function = migration_function if migration_function else lambda schema: []
 
     def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
@@ -72,6 +73,11 @@ class Schema(object):
 
         return errors
 
+    def get_migration_statements(
+        self
+    ) -> Callable[[str, Mapping[str, str]], Sequence[str]]:
+        return self.__migration_function
+
 
 class TableSchema(Schema):
     def _get_table_definition(self, name: str, engine: str) -> str:
@@ -95,11 +101,13 @@ class TableSchema(Schema):
 class MergeTreeSchema(TableSchema):
 
     def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, sample_expr=None, settings=None):
+            order_by, partition_by, sample_expr=None, settings=None,
+            migration_function=None):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
-            dist_table_name=dist_table_name)
+            dist_table_name=dist_table_name,
+            migration_function=migration_function)
         self.__order_by = order_by
         self.__partition_by = partition_by
         self.__sample_expr = sample_expr
@@ -139,7 +147,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def __init__(self, local_table_name, dist_table_name, columns,
             order_by, partition_by, version_column,
-            sample_expr=None, settings=None):
+            sample_expr=None, settings=None, migration_function=None):
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -147,7 +155,8 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             order_by=order_by,
             partition_by=partition_by,
             sample_expr=sample_expr,
-            settings=settings)
+            settings=settings,
+            migration_function=migration_function)
         self.__version_column = version_column
 
     def _get_engine_type(self):
