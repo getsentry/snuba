@@ -133,12 +133,21 @@ class Dataset(object):
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
+            dataset_schemas: DatasetSchemas,
             time_group_columns: Mapping[str, str],
             timestamp_column: str,
             **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
+        # The bucketed time column names cannot be overlapping with existing
+        # schema columns
+        read_schema = dataset_schemas.get_read_schema()
+        if read_schema:
+            for bucketed_column in time_group_columns.keys():
+                assert \
+                    bucketed_column not in read_schema.get_columns(), \
+                    f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
         self.__timestamp_column = timestamp_column
 
@@ -155,6 +164,14 @@ class TimeSeriesDataset(Dataset):
         self,
         extensions: Mapping[str, Mapping[str, Any]],
     ) -> Sequence[Any]:
+        """
+        This method is temporary. As soon as we are done with #456
+        the processing would happen the other way around:
+        the dataset will provide extensions and api.py (not directly)
+        will run the processing.
+        Passing extensions instead of the query because I want to keep
+        its scope limited.
+        """
         from_date, to_date = get_time_limit(extensions['timeseries'])
         return [
             (self.__timestamp_column, '>=', from_date.isoformat()),

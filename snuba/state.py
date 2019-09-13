@@ -73,7 +73,7 @@ def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
     pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
     pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
     if per_second_limit is None:
-        pipe.exists("nosuchkey") # no-op if we don't need per-second
+        pipe.exists("nosuchkey")  # no-op if we don't need per-second
     else:
         pipe.zcount(bucket, now - rate_lookback_s, now)  # get historical
     if concurrent_limit is None:
@@ -279,6 +279,8 @@ def get_config_changes():
 def safe_dumps_default(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {**value}
+    elif isinstance(value, uuid.UUID):
+        return str(value)
     raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
 
 
@@ -331,4 +333,4 @@ def get_result(query_id):
 def set_result(query_id, result):
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
-    return rds.set(key, json.dumps(result), ex=timeout)
+    return rds.set(key, safe_dumps(result), ex=timeout)
