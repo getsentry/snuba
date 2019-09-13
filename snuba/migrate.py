@@ -19,7 +19,7 @@ def _run_schema(conn, schema):
 
     migrations = schema.get_migration_statements()(clickhouse_table, local_schema)
     for statement in migrations:
-        logger.info(f"Executing migraiton: {statement}")
+        logger.info(f"Executing migration: {statement}")
         conn.execute(statement)
 
     # Refresh after alters

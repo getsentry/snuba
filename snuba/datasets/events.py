@@ -34,7 +34,7 @@ from snuba.util import (
 NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
-def events_migraitons(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
+def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
     if 'group_id' not in current_schema:
@@ -221,7 +221,7 @@ class EventsDataset(TimeSeriesDataset):
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
             sample_expr=sample_expr,
-            migration_function=events_migraitons)
+            migration_function=events_migrations)
 
         dataset_schemas = DatasetSchemas(
             read_schema=schema,
