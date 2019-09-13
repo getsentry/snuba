@@ -93,6 +93,8 @@ class TransactionsDataset(TimeSeriesDataset):
             processor=TransactionsMessageProcessor(),
             default_topic="events",
             time_group_columns={
+                'start_ts': 'start_ts',
+                'end_ts': 'end_ts',
             },
             timestamp_column='start_ts',
         )
