@@ -76,10 +76,6 @@ def bootstrap(bootstrap_server, kafka, force):
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
 
-    # Migrate from the old table to the new one if needed
-    from snuba import migrate
-    migrate.rename_dev_table(ClickhousePool())
-
     # Create the tables for every dataset.
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
