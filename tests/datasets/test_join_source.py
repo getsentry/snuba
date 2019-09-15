@@ -1,18 +1,18 @@
 import pytest
 
-from snuba.datasets.schema_source import (
+from snuba.datasets.schema_storage import (
     JoinMapping,
-    JoinSchemaSource,
+    JoinSchemaStorage,
     JoinedSource,
     JoinType,
-    TableSchemaSource,
+    TableSchemaStorage,
 )
 
 test_data = [
     (
-        JoinSchemaSource(
-            JoinedSource(TableSchemaSource("table1"), "t1"),
-            JoinedSource(TableSchemaSource("table2"), "t2"),
+        JoinSchemaStorage(
+            JoinedSource(TableSchemaStorage("table1", "table1"), "t1"),
+            JoinedSource(TableSchemaStorage("table2", "table2"), "t2"),
             [
                 JoinMapping(
                     left_alias="t1",
@@ -29,14 +29,14 @@ test_data = [
             ],
             JoinType.INNER
         ),
-        "(table1 t1 INNER JOIN table2 t2 ON t1.c1 = t2.c2 AND t1.c3 = t2.c4)"
+        "(test_table1 t1 INNER JOIN test_table2 t2 ON t1.c1 = t2.c2 AND t1.c3 = t2.c4)"
     ),
     (
-        JoinSchemaSource(
+        JoinSchemaStorage(
             JoinedSource(
-                JoinSchemaSource(
-                    JoinedSource(TableSchemaSource("table1"), "t1"),
-                    JoinedSource(TableSchemaSource("table2"), "t2"),
+                JoinSchemaStorage(
+                    JoinedSource(TableSchemaStorage("table1", "table1"), "t1"),
+                    JoinedSource(TableSchemaStorage("table2", "table2"), "t2"),
                     [
                         JoinMapping(
                             left_alias="t1",
@@ -49,7 +49,7 @@ test_data = [
                 ),
                 None,
             ),
-            JoinedSource(TableSchemaSource("table3"), "t3"),
+            JoinedSource(TableSchemaStorage("table3", "table3"), "t3"),
             [
                 JoinMapping(
                     left_alias="t1",
@@ -60,8 +60,8 @@ test_data = [
             ],
             JoinType.INNER
         ),
-        "((table1 t1 FULL JOIN table2 t2 ON t1.c1 = t2.c2) "
-        " INNER JOIN table3 t3 ON t1.c1 = t3.c3)"
+        "((test_table1 t1 FULL JOIN test_table2 t2 ON t1.c1 = t2.c2) "
+        " INNER JOIN test_table3 t3 ON t1.c1 = t3.c3)"
     )
 ]
 

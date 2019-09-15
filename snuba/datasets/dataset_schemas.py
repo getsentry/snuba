@@ -1,6 +1,6 @@
 from typing import Optional, List, Iterator
 
-from snuba.datasets.schema import Schema
+from snuba.datasets.schema import Schema, TableSchema
 
 
 class DatasetSchemas(object):
@@ -11,7 +11,7 @@ class DatasetSchemas(object):
     def __init__(
             self,
             read_schema: Schema,
-            write_schema: Schema,
+            write_schema: TableSchema,
             intermediary_schemas: Optional[List[Schema]] = None
     ) -> None:
         if intermediary_schemas is None:
@@ -24,7 +24,7 @@ class DatasetSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_write_schema(self) -> Schema:
+    def get_write_schema(self) -> TableSchema:
         return self.__write_schema
 
     def __get_unique_schemas(self) -> List[Schema]:

@@ -8,6 +8,7 @@ from batching_kafka_consumer import AbstractBatchWorker
 
 from . import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.datasets.schema_storage import TableSchemaStorage
 from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
@@ -87,7 +88,6 @@ class ReplacerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
-        self.dist_table_name = dataset.get_dataset_schemas().get_write_schema().get_table_name()
         self.metrics = metrics
         self.__all_column_names = [col.escaped for col in dataset.get_dataset_schemas().get_write_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
@@ -118,9 +118,11 @@ class ReplacerWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
+            read_storage = self.dataset.get_dataset_schemas().get_read_schema().get_storage()
+            write_storage = self.dataset.get_dataset_schemas().get_write_schema().get_writable_storage()
             query_args.update({
-                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_table_name(),
-                'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema().get_table_name(),
+                'dist_read_table_name': read_storage.for_query(),
+                'dist_write_table_name': write_storage.get_table_name(),
             })
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:

@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Optional, Mapping, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.util import escape_col
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.util import escape_col
 
 
 class Dataset(object):

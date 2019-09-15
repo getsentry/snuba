@@ -18,7 +18,7 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
-from snuba.datasets.schema import local_dataset_mode
+from snuba.datasets.schema_storage import local_dataset_mode, TableSchemaStorage
 from snuba.request import Request, RequestSchema
 from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
@@ -55,9 +55,11 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
-            if (table_name,) not in clickhouse_tables:
-                return False
+            source = dataset.get_read_schema().get_storage()
+            if isinstance(source, TableSchemaStorage):
+                table_name = source.get_table_name()
+                if (table_name,) not in clickhouse_tables:
+                    return False
 
         return True
 
@@ -314,7 +316,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
         request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+    source = dataset.get_dataset_schemas().get_read_schema().get_storage().for_query()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
@@ -322,7 +324,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     timer.mark('prepare_query')
 
     stats = {
-        'clickhouse_table': table,
+        'clickhouse_table': source,
         'final': final,
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,

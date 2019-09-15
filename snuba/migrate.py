@@ -4,11 +4,15 @@ Simple schema migration tool. Only intended for local development environment.
 
 import logging
 
+from snuba.datasets.schema import TableSchema
+
 logger = logging.getLogger('snuba.migrate')
 
 
 def _run_schema(conn, schema):
-    clickhouse_table = schema.get_local_table_name()
+    if not isinstance(schema, TableSchema):
+        return
+    clickhouse_table = schema.get_writable_storage().get_local_table_name()
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr

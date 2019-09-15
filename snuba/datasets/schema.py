@@ -2,7 +2,8 @@ from typing import Callable, Mapping, List, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schema_source import SchemaSource
+from snuba.datasets.schema_storage import SchemaStorage
+from snuba.datasets.schema_storage import TableSchemaStorage
 
 
 class Schema(object):
@@ -13,39 +14,22 @@ class Schema(object):
 
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
+    def __init__(self, schema_storage, columns, migration_function=None):
         self.__columns = columns
-
-        self.__local_table_name = local_table_name
-        self.__dist_table_name = dist_table_name
+        self.__schema_storage = schema_storage
         self.__migration_function = migration_function if migration_function else lambda schema: []
 
     def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
 
-    def get_local_table_name(self):
-        """
-        This returns the local table name for a distributed environment.
-        It is supposed to be used in DDL commands and for maintenance.
-        """
-        return self._make_test_table(self.__local_table_name)
-
-    def get_table_name(self):
-        """
-        This represents the table we interact with to send queries to Clickhouse.
-        In distributed mode this will be a distributed table. In local mode it is a local table.
-        """
-        table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
-        return self._make_test_table(table_name)
-
-    def get_source(self) -> SchemaSource:
-        return self.__schema_source
+    def get_storage(self) -> SchemaStorage:
+        return self.__schema_storage
 
     def get_local_table_definition(self):
-        raise NotImplementedError
+        pass
 
     def get_local_drop_table_statement(self):
-        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+        pass
 
     def get_columns(self):
         return self.__columns
@@ -80,6 +64,18 @@ class Schema(object):
 
 
 class TableSchema(Schema):
+    def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
+        schema_storage = TableSchemaStorage(
+            local_table_name=local_table_name,
+            dist_table_name=dist_table_name,
+        )
+        self.__writable_storage = schema_storage
+        super().__init__(
+            columns=columns,
+            schema_storage=schema_storage,
+            migration_function=migration_function,
+        )
+
     def _get_table_definition(self, name: str, engine: str) -> str:
         return """
         CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
@@ -90,12 +86,18 @@ class TableSchema(Schema):
 
     def get_local_table_definition(self) -> str:
         return self._get_table_definition(
-            self.get_local_table_name(),
+            self.get_writable_storage().get_local_table_name(),
             self._get_local_engine()
         )
 
     def _get_local_engine(self):
         raise NotImplementedError
+
+    def get_writable_storage(self) -> TableSchemaStorage:
+        return self.__writable_storage
+
+    def get_local_drop_table_statement(self):
+        return "DROP TABLE IF EXISTS %s" % self.get_writable_storage().get_local_table_name()
 
 
 class MergeTreeSchema(TableSchema):

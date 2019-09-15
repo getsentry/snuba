@@ -5,7 +5,7 @@ from clickhouse_driver import Client
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schema import local_dataset_mode
+from snuba.datasets.schema_storage import local_dataset_mode
 
 
 @click.command()
