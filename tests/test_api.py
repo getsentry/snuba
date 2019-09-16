@@ -875,7 +875,6 @@ class TestApi(BaseApiTest):
         dataset = get_dataset('events')
         table = dataset.get_dataset_schemas() \
             .get_write_schema() \
-            .get_storage() \
             .get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0

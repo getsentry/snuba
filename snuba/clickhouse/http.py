@@ -54,9 +54,7 @@ class HTTPBatchWriter(BatchWriter):
         """
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
-        self.__table_name = table_name or schema \
-            .get_storage() \
-            .get_table_name()
+        self.__table_name = table_name or schema.get_table_name()
         self.__chunk_size = chunk_size
         self.__encoder = encoder
 

@@ -1,6 +1,6 @@
 import pytest
 
-from snuba.datasets.schema_storage import TableSchemaStorage
+from snuba.datasets.schema import TableSchema
 from snuba.datasets.join_schema import (
     JoinMapping,
     JoinSchemaStorage,
@@ -8,11 +8,30 @@ from snuba.datasets.join_schema import (
     JoinType,
 )
 
+
+table1 = TableSchema(
+    local_table_name="table1",
+    dist_table_name="table1",
+    columns=None,
+)
+
+table2 = TableSchema(
+    local_table_name="table2",
+    dist_table_name="table2",
+    columns=None,
+)
+
+table3 = TableSchema(
+    local_table_name="table3",
+    dist_table_name="table3",
+    columns=None,
+)
+
 test_data = [
     (
         JoinSchemaStorage(
-            JoinedSource(TableSchemaStorage("table1", "table1"), "t1"),
-            JoinedSource(TableSchemaStorage("table2", "table2"), "t2"),
+            JoinedSource(table1, "t1"),
+            JoinedSource(table2, "t2"),
             [
                 JoinMapping(
                     left_alias="t1",
@@ -35,8 +54,8 @@ test_data = [
         JoinSchemaStorage(
             JoinedSource(
                 JoinSchemaStorage(
-                    JoinedSource(TableSchemaStorage("table1", "table1"), "t1"),
-                    JoinedSource(TableSchemaStorage("table2", "table2"), "t2"),
+                    JoinedSource(table1, "t1"),
+                    JoinedSource(table2, "t2"),
                     [
                         JoinMapping(
                             left_alias="t1",
@@ -49,7 +68,7 @@ test_data = [
                 ),
                 None,
             ),
-            JoinedSource(TableSchemaStorage("table3", "table3"), "t3"),
+            JoinedSource(table3, "t3"),
             [
                 JoinMapping(
                     left_alias="t1",

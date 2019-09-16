@@ -189,7 +189,6 @@ class BaseEventsTest(BaseDatasetTest):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
         self.table = self.dataset.get_dataset_schemas() \
             .get_write_schema() \
-            .get_storage() \
             .get_table_name()
         self.event = get_event()
 

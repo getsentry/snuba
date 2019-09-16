@@ -7,7 +7,6 @@ from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
-from snuba.datasets.schema_storage import TableSchemaStorage
 from snuba.reader import Reader, Result, transform_date_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -190,13 +189,12 @@ class NativeDriverBatchWriter(BatchWriter):
 
     def write(self, rows: Iterable[WriterTableRow]):
         columns = self.__schema.get_columns()
-        data_source = self.__schema.get_storage()
 
         self.__connection.execute_robust(
             "INSERT INTO %(table)s (%(colnames)s) VALUES"
             % {
                 "colnames": ", ".join(col.escaped for col in columns),
-                "table": data_source.get_table_name(),
+                "table": self.__schema.get_table_name(),
             },
             [self.__row_to_column_list(columns, row) for row in rows],
             types_check=False,

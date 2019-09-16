@@ -24,7 +24,6 @@ class ClickhouseQuery:
         source = self.__dataset \
             .get_dataset_schemas() \
             .get_read_schema() \
-            .get_storage() \
             .for_query()
 
         aggregate_exprs = [util.column_expr(self.__dataset, col, body, alias, agg) for (agg, col, alias) in body['aggregations']]

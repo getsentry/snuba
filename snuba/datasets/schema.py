@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Mapping, List, Sequence
 
+from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schema_storage import SchemaStorage
-from snuba.datasets.schema_storage import TableSchemaStorage
+
+
+def local_dataset_mode():
+    return settings.DATASET_MODE == "local"
 
 
 class Schema(ABC):
@@ -17,7 +20,7 @@ class Schema(ABC):
         self.__migration_function = migration_function if migration_function else lambda schema: []
 
     @abstractmethod
-    def get_storage(self) -> SchemaStorage:
+    def for_query(self) -> str:
         raise NotImplementedError
 
     def get_local_table_definition(self):
@@ -59,16 +62,36 @@ class Schema(ABC):
 
 
 class TableSchema(Schema):
+    TEST_TABLE_PREFIX = "test_"
+
     def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
         super().__init__(
             columns=columns,
             migration_function=migration_function,
         )
-        schema_storage = TableSchemaStorage(
-            local_table_name=local_table_name,
-            dist_table_name=dist_table_name,
-        )
-        self.__storage = schema_storage
+        self.__local_table_name = local_table_name
+        self.__dist_table_name = dist_table_name
+
+    def for_query(self) -> str:
+        return self.get_table_name()
+
+    def _make_test_table(self, table_name):
+        return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
+
+    def get_local_table_name(self):
+        """
+        This returns the local table name for a distributed environment.
+        It is supposed to be used in DDL commands and for maintenance.
+        """
+        return self._make_test_table(self.__local_table_name)
+
+    def get_table_name(self):
+        """
+        This represents the table we interact with to send queries to Clickhouse.
+        In distributed mode this will be a distributed table. In local mode it is a local table.
+        """
+        table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
+        return self._make_test_table(table_name)
 
     def _get_table_definition(self, name: str, engine: str) -> str:
         return """
@@ -80,18 +103,15 @@ class TableSchema(Schema):
 
     def get_local_table_definition(self) -> str:
         return self._get_table_definition(
-            self.get_storage().get_local_table_name(),
+            self.get_local_table_name(),
             self._get_local_engine()
         )
 
     def _get_local_engine(self):
         raise NotImplementedError
 
-    def get_storage(self) -> TableSchemaStorage:
-        return self.__storage
-
     def get_local_drop_table_statement(self):
-        return "DROP TABLE IF EXISTS %s" % self.get_storage().get_local_table_name()
+        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
 
 
 class MergeTreeSchema(TableSchema):
@@ -165,7 +185,7 @@ class SummingMergeTreeSchema(MergeTreeSchema):
         return "SummingMergeTree()"
 
 
-class MaterializedViewSchema(Schema):
+class MaterializedViewSchema(TableSchema):
 
     def __init__(
             self,
@@ -176,32 +196,23 @@ class MaterializedViewSchema(Schema):
             local_source_table_name: str,
             local_destination_table_name: str,
             dist_source_table_name: str,
-            dist_destination_table_name: str
-    ) -> None:
+            dist_destination_table_name: str,
+            migration_function: Callable[[str, Mapping[str, str]], Sequence[str]]) -> None:
         super().__init__(
             columns=columns,
-        )
-
-        self.__source_table_storage = TableSchemaStorage(
-            local_table_name=local_source_table_name,
-            dist_table_name=dist_source_table_name,
-        )
-        self.__dest_table_storage = TableSchemaStorage(
-            local_table_name=local_destination_table_name,
-            dist_table_name=dist_destination_table_name,
-        )
-        self.__view_schema_storage = TableSchemaStorage(
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
+            migration_function=migration_function,
         )
 
         # Make sure the caller has provided a source_table_name in the query
         assert query % {'source_table_name': local_source_table_name} != query
 
         self.__query = query
-
-    def get_storage(self) -> TableSchemaStorage:
-        return self.__view_schema_storage
+        self.__local_source_table_name = local_source_table_name
+        self.__local_destination_table_name = local_destination_table_name
+        self.__dist_source_table_name = dist_source_table_name
+        self.__dist_destination_table_name = dist_destination_table_name
 
     def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
         return """
@@ -216,7 +227,7 @@ class MaterializedViewSchema(Schema):
 
     def get_local_table_definition(self) -> str:
         return self.__get_table_definition(
-            self.__view_schema_storage.get_local_table_name(),
-            self.__source_table_storage.get_local_table_name(),
-            self.__dest_table_storage.get_local_table_name(),
+            self.get_local_table_name(),
+            self.__get_local_source_table_name(),
+            self.__get_local_destination_table_name(),
         )
