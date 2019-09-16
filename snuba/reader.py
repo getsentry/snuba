@@ -39,11 +39,15 @@ class Reader(ABC):
 DATE_TYPE_RE = re.compile(r"(Nullable\()?Date\b")
 DATETIME_TYPE_RE = re.compile(r"(Nullable\()?DateTime\b")
 
+UUID_TYPE_RE = re.compile(r"(Nullable\()?UUID\b")
 
-def transform_date_columns(result: Result) -> Result:
+
+def transform_columns(result: Result) -> Result:
     """
-    Converts timezone-naive date and datetime values returned by ClickHouse
-    into ISO 8601 formatted strings (including the UTC offset.)
+    Converts Clickhouse results into formatted strings. Specifically:
+    - timezone-naive date and datetime values returned by ClickHouse
+       into ISO 8601 formatted strings (including the UTC offset.)
+    - UUID objects into strings
     """
 
     def iterate_rows():
@@ -65,5 +69,8 @@ def transform_date_columns(result: Result) -> Result:
                     .replace(tzinfo=tz.tzutc())
                     .isoformat()
                 )
+        elif UUID_TYPE_RE.match(col["type"]):
+            for row in iterate_rows():
+                row[col["name"]] = str(row[col["name"]])
 
     return result

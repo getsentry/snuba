@@ -238,6 +238,7 @@ class EventsDataset(TimeSeriesDataset):
                 'time': 'timestamp',
                 'rtime': 'received'
             },
+            timestamp_column='timestamp',
         )
 
         self.__metadata_columns = metadata_columns

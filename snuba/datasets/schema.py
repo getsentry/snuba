@@ -21,7 +21,7 @@ class Schema(object):
 
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
-        self.__migration_function = migration_function if migration_function else lambda schema: []
+        self.__migration_function = migration_function if migration_function else lambda table, schema: []
 
     def _make_test_table(self, table_name):
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
