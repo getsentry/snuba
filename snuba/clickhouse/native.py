@@ -7,7 +7,7 @@ from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
-from snuba.reader import Reader, Result, transform_date_columns
+from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -149,7 +149,7 @@ class NativeDriverReader(Reader):
         else:
             result = {"data": data, "meta": meta}
 
-        return transform_date_columns(result)
+        return transform_columns(result)
 
     def execute(
         self,
