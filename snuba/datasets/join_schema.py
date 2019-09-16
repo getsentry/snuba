@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schema import Schema
 
 
@@ -65,11 +66,11 @@ class JoinedSchema(Schema):
 
     def __init__(self,
         join_root: JoinSchemaStorage,
-        migration_function=None,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ) -> None:
         self.__join_storage = join_root
         super().__init__(
-            columns=None,  # TODO: process the joined table to build the columns list
+            columns=ColumnSet([]),  # TODO: process the joined table to build the columns list
             migration_function=migration_function
         )
 

@@ -1,4 +1,4 @@
-from typing import Optional, List, Iterator
+from typing import Optional, List, Sequence
 
 from snuba.datasets.schema import Schema, TableSchema
 
@@ -37,8 +37,16 @@ class DatasetSchemas(object):
 
         return unique_schemas
 
-    def get_create_statements(self) -> Iterator[str]:
-        return map(lambda schema: schema.get_local_table_definition(), self.__get_unique_schemas())
+    def get_create_statements(self) -> Sequence[str]:
+        return [
+            schema.get_local_table_definition()
+            for schema in self.__get_unique_schemas()
+            if isinstance(schema, TableSchema)
+        ]
 
-    def get_drop_statements(self) -> Iterator[str]:
-        return map(lambda schema: schema.get_local_drop_table_statement(), self.__get_unique_schemas())
+    def get_drop_statements(self) -> Sequence[str]:
+        return [
+            schema.get_local_drop_table_statement()
+            for schema in self.__get_unique_schemas()
+            if isinstance(schema, TableSchema)
+        ]

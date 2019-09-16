@@ -118,7 +118,7 @@ class ClickhousePool(object):
             settings=self.client_settings
         )
 
-    def close(self):
+    def close(self) -> None:
         try:
             while True:
                 conn = self.pool.get(block=False)

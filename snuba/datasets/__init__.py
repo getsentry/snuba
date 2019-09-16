@@ -6,7 +6,9 @@ from typing import Optional, Mapping, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.processor import MessageProcessor
 from snuba.util import escape_col
+from snuba.writer import BatchWriter
 
 
 class Dataset(object):
@@ -19,7 +21,10 @@ class Dataset(object):
     This is the the initial boilerplate. schema and processor will come.
     """
 
-    def __init__(self, dataset_schemas, *, processor,
+    def __init__(self,
+            dataset_schemas: DatasetSchemas,
+            *,
+            processor: MessageProcessor,
             default_topic: str,
             default_replacement_topic: Optional[str] = None,
             default_commit_log_topic: Optional[str] = None):
@@ -32,10 +37,10 @@ class Dataset(object):
     def get_dataset_schemas(self) -> DatasetSchemas:
         return self.__dataset_schemas
 
-    def get_processor(self):
+    def get_processor(self) -> MessageProcessor:
         return self.__processor
 
-    def get_writer(self, options=None, table_name=None):
+    def get_writer(self, options=None, table_name=None) -> BatchWriter:
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
@@ -54,7 +59,7 @@ class Dataset(object):
             table_name,
         )
 
-    def get_bulk_writer(self, options=None, table_name=None):
+    def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:
         """
         This is a stripped down verison of the writer designed
         for better performance when loading data in bulk.

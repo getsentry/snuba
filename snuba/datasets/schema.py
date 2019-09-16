@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, List, Sequence
+from typing import Callable, Mapping, Optional, List, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
@@ -15,15 +15,19 @@ class Schema(ABC):
     basic metadata for now.
     """
 
-    def __init__(self, columns, migration_function=None):
+    def __init__(
+        self,
+        columns: ColumnSet,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ) -> None:
         self.__columns = columns
-        self.__migration_function = migration_function if migration_function else lambda schema: []
+        self.__migration_function = migration_function if migration_function else lambda table, schema: []
 
     @abstractmethod
     def get_where_clause(self) -> str:
         raise NotImplementedError
 
-    def get_columns(self):
+    def get_columns(self) -> ColumnSet:
         return self.__columns
 
     def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
@@ -51,14 +55,19 @@ class Schema(ABC):
 
     def get_migration_statements(
         self
-    ) -> Callable[[str, Mapping[str, str]], Sequence[str]]:
+    ) -> Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]:
         return self.__migration_function
 
 
 class TableSchema(Schema):
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
+    def __init__(self,
+        local_table_name: str,
+        dist_table_name: str,
+        columns: ColumnSet,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ):
         super().__init__(
             columns=columns,
             migration_function=migration_function,
@@ -69,17 +78,17 @@ class TableSchema(Schema):
     def get_where_clause(self) -> str:
         return self.get_table_name()
 
-    def _make_test_table(self, table_name):
+    def _make_test_table(self, table_name: str) -> str:
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
 
-    def get_local_table_name(self):
+    def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
         return self._make_test_table(self.__local_table_name)
 
-    def get_table_name(self):
+    def get_table_name(self) -> str:
         """
         This represents the table we interact with to send queries to Clickhouse.
         In distributed mode this will be a distributed table. In local mode it is a local table.
@@ -101,18 +110,25 @@ class TableSchema(Schema):
             self._get_local_engine()
         )
 
-    def _get_local_engine(self):
+    def _get_local_engine(self) -> str:
         raise NotImplementedError
 
-    def get_local_drop_table_statement(self):
+    def get_local_drop_table_statement(self) -> str:
         return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
 
 
 class MergeTreeSchema(TableSchema):
 
-    def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, sample_expr=None, settings=None,
-            migration_function=None):
+    def __init__(self,
+        local_table_name: str,
+        dist_table_name: str,
+        columns: ColumnSet,
+        order_by: str,
+        partition_by: str,
+        sample_expr: Optional[str]=None,
+        settings: Optional[Mapping[str, str]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -123,10 +139,10 @@ class MergeTreeSchema(TableSchema):
         self.__sample_expr = sample_expr
         self.__settings = settings
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "MergeTree()"
 
-    def _get_local_engine(self):
+    def _get_local_engine(self) -> str:
         partition_by_clause = ("PARTITION BY %s" %
             self.__partition_by) if self.__partition_by else ''
 
@@ -155,9 +171,17 @@ class MergeTreeSchema(TableSchema):
 
 class ReplacingMergeTreeSchema(MergeTreeSchema):
 
-    def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, version_column,
-            sample_expr=None, settings=None, migration_function=None):
+    def __init__(self,
+        local_table_name: str,
+        dist_table_name: str,
+        columns: ColumnSet,
+        order_by: str,
+        partition_by: str,
+        version_column: str,
+        sample_expr: Optional[str]=None,
+        settings: Optional[Mapping[str, str]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -169,13 +193,13 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             migration_function=migration_function)
         self.__version_column = version_column
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "ReplacingMergeTree(%s)" % self.__version_column
 
 
 class SummingMergeTreeSchema(MergeTreeSchema):
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "SummingMergeTree()"
 
 
@@ -191,7 +215,7 @@ class MaterializedViewSchema(TableSchema):
             local_destination_table_name: str,
             dist_source_table_name: str,
             dist_destination_table_name: str,
-            migration_function: Callable[[str, Mapping[str, str]], Sequence[str]] = None) -> None:
+            migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]] = None) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,
