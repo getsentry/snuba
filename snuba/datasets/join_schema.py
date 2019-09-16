@@ -19,7 +19,7 @@ class JoinMapping():
     right_alias: str
     right_column: str
 
-    def for_query(self) -> str:
+    def get_where_clause(self) -> str:
         return f"{self.left_alias}.{self.left_column} = " \
             f"{self.right_alias}.{self.right_column}"
 
@@ -47,16 +47,16 @@ class JoinSchemaStorage:
     mapping: Sequence[JoinMapping]
     join_type: JoinType
 
-    def for_query(self) -> str:
-        left_expr = self.left_expression.source.for_query()
+    def get_where_clause(self) -> str:
+        left_expr = self.left_expression.source.get_where_clause()
         left_alias = self.left_expression.alias
         left_str = f"{left_expr} {left_alias or ''}"
 
-        right_expr = self.right_expression.source.for_query()
+        right_expr = self.right_expression.source.get_where_clause()
         right_alias = self.right_expression.alias
         right_str = f"{right_expr} {right_alias or ''}"
 
-        on_clause = " AND ".join([m.for_query() for m in self.mapping])
+        on_clause = " AND ".join([m.get_where_clause() for m in self.mapping])
 
         return f"({left_str} {self.join_type.value} JOIN {right_str} ON {on_clause})"
 
@@ -76,5 +76,5 @@ class JoinedSchema(Schema):
     def get_columns(self):
         raise NotImplementedError("Not implemented yet.")
 
-    def for_query(self) -> str:
-        return self.__join_storage.for_query()
+    def get_where_clause(self) -> str:
+        return self.__join_storage.get_where_clause()

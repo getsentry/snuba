@@ -20,14 +20,8 @@ class Schema(ABC):
         self.__migration_function = migration_function if migration_function else lambda schema: []
 
     @abstractmethod
-    def for_query(self) -> str:
+    def get_where_clause(self) -> str:
         raise NotImplementedError
-
-    def get_local_table_definition(self):
-        pass
-
-    def get_local_drop_table_statement(self):
-        pass
 
     def get_columns(self):
         return self.__columns
@@ -72,7 +66,7 @@ class TableSchema(Schema):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def for_query(self) -> str:
+    def get_where_clause(self) -> str:
         return self.get_table_name()
 
     def _make_test_table(self, table_name):
@@ -197,7 +191,7 @@ class MaterializedViewSchema(TableSchema):
             local_destination_table_name: str,
             dist_source_table_name: str,
             dist_destination_table_name: str,
-            migration_function: Callable[[str, Mapping[str, str]], Sequence[str]]) -> None:
+            migration_function: Callable[[str, Mapping[str, str]], Sequence[str]] = None) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,

@@ -87,5 +87,5 @@ test_data = [
 
 @pytest.mark.parametrize("structure, expected", test_data)
 def test_join_source(structure, expected):
-    join_clause = structure.for_query()
+    join_clause = structure.get_where_clause()
     assert join_clause == expected
