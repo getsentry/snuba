@@ -178,7 +178,7 @@ GENERIC_QUERY_SCHEMA = {
     }
 }
 
-QUERY_SETTINGS_SCHEMA = {
+SETTINGS_SCHEMA = {
     'type': 'object',
     'properties': {
         # Never add FINAL to queries, enable sampling

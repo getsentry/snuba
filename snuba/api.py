@@ -283,7 +283,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     if project_ids:
         request.query.add_conditions([('project_id', 'IN', project_ids)])
 
-    turbo = request.query_settings.get('turbo', False)
+    turbo = request.settings.get('turbo', False)
     if not turbo:
         final, exclude_group_ids = get_projects_query_flags(project_ids)
         if not final and exclude_group_ids:

@@ -9,14 +9,14 @@ from typing import Any, Mapping
 
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
-from snuba.query.schema import GENERIC_QUERY_SCHEMA, QUERY_SETTINGS_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
 from snuba.schemas import Schema, validate_jsonschema
 
 
 @dataclass(frozen=True)
 class Request:
     query: Query
-    query_settings: Mapping[str, str]
+    settings: Mapping[str, str]
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
@@ -28,9 +28,9 @@ class Request:
 
 
 class RequestSchema:
-    def __init__(self, query_schema: Schema, query_settings_schema: Schema, extensions_schemas: Mapping[str, Schema]):
+    def __init__(self, query_schema: Schema, settings_schema: Schema, extensions_schemas: Mapping[str, Schema]):
         self.__query_schema = query_schema
-        self.__query_settings_schema = query_settings_schema
+        self.__settings_schema = settings_schema
         self.__extension_schemas = extensions_schemas
 
         self.__composite_schema = {
@@ -41,7 +41,7 @@ class RequestSchema:
             'additionalProperties': False,
         }
 
-        for schema in itertools.chain([self.__query_schema, self.__query_settings_schema], self.__extension_schemas.values()):
+        for schema in itertools.chain([self.__query_schema, self.__settings_schema], self.__extension_schemas.values()):
             assert schema['type'] == 'object', 'subschema must be object'
             assert schema['additionalProperties'] is False, 'subschema must not allow additional properties'
             self.__composite_schema['required'].extend(schema.get('required', []))
@@ -59,25 +59,25 @@ class RequestSchema:
     @classmethod
     def build_with_extensions(cls, extensions: Mapping[str, QueryExtension]) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
-        query_settings_schema = QUERY_SETTINGS_SCHEMA
+        settings_schema = SETTINGS_SCHEMA
         extensions_schemas = {
             extension_key: extension.get_schema()
             for extension_key, extension
             in extensions.items()
         }
-        return cls(generic_schema, query_settings_schema, extensions_schemas)
+        return cls(generic_schema, settings_schema, extensions_schemas)
 
     def validate(self, value) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
         query_body = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
-        query_settings = {key: value.pop(key) for key in self.__query_settings_schema['properties'].keys() if key in value}
+        settings = {key: value.pop(key) for key in self.__settings_schema['properties'].keys() if key in value}
 
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(Query(query_body), query_settings, extensions)
+        return Request(Query(query_body), settings, extensions)
 
     def __generate_template_impl(self, schema) -> Any:
         """
