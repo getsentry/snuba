@@ -32,7 +32,7 @@ class JoinedSource():
 
 
 @dataclass(frozen=True)
-class JoinSchemaStorage:
+class JoinStructure:
     """
     Abstracts the join clause as a tree.
     Every node in the tree is either a join itself or a
@@ -65,12 +65,12 @@ class JoinSchemaStorage:
 class JoinedSchema(Schema):
     """
     Read only schema that represent multiple joined schemas.
-    The join clause is defined by the JoinSchemaStorage object
+    The join clause is defined by the JoinStructure object
     that keeps reference to the schemas we are joining.
     """
 
     def __init__(self,
-        join_root: JoinSchemaStorage,
+        join_root: JoinStructure,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ) -> None:
         self.__join_storage = join_root

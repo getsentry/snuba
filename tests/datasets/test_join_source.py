@@ -3,7 +3,7 @@ import pytest
 from snuba.datasets.schema import TableSchema
 from snuba.datasets.join_schema import (
     JoinMapping,
-    JoinSchemaStorage,
+    JoinStructure,
     JoinedSource,
     JoinType,
 )
@@ -29,7 +29,7 @@ table3 = TableSchema(
 
 test_data = [
     (
-        JoinSchemaStorage(
+        JoinStructure(
             JoinedSource(table1, "t1"),
             JoinedSource(table2, "t2"),
             [
@@ -51,9 +51,9 @@ test_data = [
         "(test_table1 t1 INNER JOIN test_table2 t2 ON t1.c1 = t2.c2 AND t1.c3 = t2.c4)"
     ),
     (
-        JoinSchemaStorage(
+        JoinStructure(
             JoinedSource(
-                JoinSchemaStorage(
+                JoinStructure(
                     JoinedSource(table1, "t1"),
                     JoinedSource(table2, "t2"),
                     [
