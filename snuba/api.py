@@ -14,7 +14,7 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
-from snuba.query.schema import QUERY_SETTINGS_SCHEMA
+from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
@@ -348,7 +348,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
-            QUERY_SETTINGS_SCHEMA,
+            SETTINGS_SCHEMA,
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
