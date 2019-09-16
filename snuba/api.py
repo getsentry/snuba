@@ -20,7 +20,8 @@ from snuba.query.extensions import get_time_limit
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
-from snuba.datasets.schema import local_dataset_mode, TableSchema
+from snuba.datasets.schemas import local_dataset_mode
+from snuba.datasets.schemas.table_schemas import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
@@ -57,7 +58,7 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            source = dataset.get_read_schema()
+            source = dataset.get_dataset_schemas().get_read_schema()
             if isinstance(source, TableSchema):
                 table_name = source.get_table_name()
                 if (table_name,) not in clickhouse_tables:

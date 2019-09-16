@@ -1,106 +1,39 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, Optional, List, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.schemas import Schema, local_dataset_mode
 
 
-def local_dataset_mode():
-    return settings.DATASET_MODE == "local"
-
-
-class Schema(ABC):
-    """
-    A schema is an abstraction over a data model we can query.
-    It provides a set of columns and a where clause to build the query.
-    Concretely this can represent a table, a view or a group of
-    joined tables.
-    This level of abstraciton only provides read primitives.
-
-    Going on this will be abstract from Clickhouse details. As of
-    now this distinction does not exists to this provides CLickhouse
-    specific details.
-    """
-
-    def __init__(
-        self,
-        columns: ColumnSet,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
-    ) -> None:
-        self.__columns = columns
-        self.__migration_function = migration_function if migration_function else lambda table, schema: []
-
-    @abstractmethod
-    def get_from_clause(self) -> str:
-        """
-        Builds and returns the content of the where clause we need
-        to pass to Clickhouse to execute a query on this schema.
-
-        TODO: Once we have a Snuba Query abstraction (PR 456) this
-        will change to return something more abstract than a string
-        so the query can manipulate it.
-        """
-        raise NotImplementedError
-
-    def get_columns(self) -> ColumnSet:
-        return self.__columns
-
-    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
-        """
-        Returns a list of differences between the expected_columns and the columns described in the schema.
-        """
-        errors: List[str] = []
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in self.__columns:
-                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
-                continue
-
-            expected_type = self.__columns[column_name].type.for_schema()
-            if column_type != expected_type:
-                errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
-                        column_name,
-                        expected_type,
-                        column_type
-                    )
-                )
-
-        return errors
-
-    def get_migration_statements(
-        self
-    ) -> Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]:
-        return self.__migration_function
-
-
-class TableSchema(Schema):
+class TableSchema(Schema, ABC):
     """
     Represent a table-like schema. This means it represents either
     a Clickhouse table, a Clickhouse view or a Materialized view.
 
-    Going on, this abstraction will be split into an abstract entity
-    and a Clickhouse specific TableStore on which we can write.
+    Specifically a TableSchema is something we can read from through
+    a simple select and that provides DDL operations.
     """
 
     TEST_TABLE_PREFIX = "test_"
 
     def __init__(self,
+        *,
+        columns: ColumnSet,
         local_table_name: str,
         dist_table_name: str,
-        columns: ColumnSet,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ):
         super().__init__(
             columns=columns,
-            migration_function=migration_function,
         )
+        self.__migration_function = migration_function if migration_function else lambda table, schema: []
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
     def get_from_clause(self) -> str:
         """
-        In this abstraction the where clause is just the same
+        In this abstraction the from clause is just the same
         table we refer to for writes.
         """
         return self.get_table_name()
@@ -137,19 +70,36 @@ class TableSchema(Schema):
             self._get_local_engine()
         )
 
+    @abstractmethod
     def _get_local_engine(self) -> str:
         raise NotImplementedError
 
     def get_local_drop_table_statement(self) -> str:
         return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
 
+    def get_migration_statements(
+        self
+    ) -> Callable[[str, Mapping[str, str]], Sequence[str]]:
+        return self.__migration_function
 
-class MergeTreeSchema(TableSchema):
+
+class WritableTableSchema(TableSchema):
+    """
+    This class identifies a subset of TableSchemas we can write onto.
+    While it does not provide any functionality by itself, it is used
+    to allow the type checker to prevent us from returning a read only
+    schema from DatasetSchemas.
+    """
+    pass
+
+
+class MergeTreeSchema(WritableTableSchema):
 
     def __init__(self,
+        *,
+        columns: ColumnSet,
         local_table_name: str,
         dist_table_name: str,
-        columns: ColumnSet,
         order_by: str,
         partition_by: str,
         sample_expr: Optional[str]=None,
@@ -199,9 +149,10 @@ class MergeTreeSchema(TableSchema):
 class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def __init__(self,
+        *,
+        columns: ColumnSet,
         local_table_name: str,
         dist_table_name: str,
-        columns: ColumnSet,
         order_by: str,
         partition_by: str,
         version_column: str,
@@ -234,9 +185,10 @@ class MaterializedViewSchema(TableSchema):
 
     def __init__(
             self,
+            *,
+            columns: ColumnSet,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
-            columns: ColumnSet,
             query: str,
             local_source_table_name: str,
             local_destination_table_name: str,
@@ -264,6 +216,9 @@ class MaterializedViewSchema(TableSchema):
 
     def __get_local_destination_table_name(self) -> str:
         return self._make_test_table(self.__local_destination_table_name)
+
+    def _get_local_engine(self) -> str:
+        pass
 
     def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
         return """

@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
-from snuba.datasets.schema import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
+from snuba.datasets.schemas.table_schemas import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
 from snuba import settings
 
 

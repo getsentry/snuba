@@ -1,7 +1,7 @@
 import pytest
 
-from snuba.datasets.schema import TableSchema
-from snuba.datasets.join_schema import (
+from snuba.datasets.schemas.table_schemas import MergeTreeSchema
+from snuba.datasets.schemas.join_schema import (
     JoinMapping,
     JoinStructure,
     JoinedSource,
@@ -9,22 +9,28 @@ from snuba.datasets.join_schema import (
 )
 
 
-table1 = TableSchema(
+table1 = MergeTreeSchema(
+    columns=None,
     local_table_name="table1",
     dist_table_name="table1",
-    columns=None,
+    order_by="",
+    partition_by="",
 )
 
-table2 = TableSchema(
+table2 = MergeTreeSchema(
+    columns=None,
     local_table_name="table2",
     dist_table_name="table2",
-    columns=None,
+    order_by="",
+    partition_by="",
 )
 
-table3 = TableSchema(
+table3 = MergeTreeSchema(
+    columns=None,
     local_table_name="table3",
     dist_table_name="table3",
-    columns=None,
+    order_by="",
+    partition_by="",
 )
 
 test_data = [

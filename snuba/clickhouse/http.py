@@ -5,7 +5,7 @@ from typing import Callable, Iterable
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
-from snuba.datasets.schema import TableSchema
+from snuba.datasets.schemas.table_schemas import TableSchema
 from snuba.writer import BatchWriter, WriterTableRow
 
 
