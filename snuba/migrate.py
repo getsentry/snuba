@@ -12,7 +12,7 @@ logger = logging.getLogger('snuba.migrate')
 def _run_schema(conn, schema):
     if not isinstance(schema, TableSchema):
         return
-    clickhouse_table = schema.get_writable_storage().get_local_table_name()
+    clickhouse_table = schema.get_storage().get_local_table_name()
     get_schema = lambda: {
         column_name: column_type
         for column_name, column_type, default_type, default_expr

@@ -29,7 +29,7 @@ def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_l
     table = dataset \
         .get_dataset_schemas() \
         .get_write_schema() \
-        .get_writable_storage() \
+        .get_storage() \
         .get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

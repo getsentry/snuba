@@ -30,7 +30,7 @@ def cleanup(clickhouse_host, clickhouse_port, dry_run, database, dataset, log_le
     table = dataset \
         .get_dataset_schemas() \
         .get_write_schema() \
-        .get_writable_storage() \
+        .get_storage() \
         .get_local_table_name()
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')

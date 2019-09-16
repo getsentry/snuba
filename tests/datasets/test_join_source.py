@@ -1,11 +1,11 @@
 import pytest
 
-from snuba.datasets.schema_storage import (
+from snuba.datasets.schema_storage import TableSchemaStorage
+from snuba.datasets.join_schema import (
     JoinMapping,
     JoinSchemaStorage,
     JoinedSource,
     JoinType,
-    TableSchemaStorage,
 )
 
 test_data = [

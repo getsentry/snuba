@@ -119,7 +119,7 @@ class ReplacerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
             read_storage = self.dataset.get_dataset_schemas().get_read_schema().get_storage()
-            write_storage = self.dataset.get_dataset_schemas().get_write_schema().get_writable_storage()
+            write_storage = self.dataset.get_dataset_schemas().get_write_schema().get_storage()
             query_args.update({
                 'dist_read_table_name': read_storage.for_query(),
                 'dist_write_table_name': write_storage.get_table_name(),
