@@ -20,7 +20,7 @@ class JoinMapping():
     right_alias: str
     right_column: str
 
-    def get_where_clause(self) -> str:
+    def get_from_clause(self) -> str:
         return f"{self.left_alias}.{self.left_column} = " \
             f"{self.right_alias}.{self.right_column}"
 
@@ -48,16 +48,16 @@ class JoinStructure:
     mapping: Sequence[JoinMapping]
     join_type: JoinType
 
-    def get_where_clause(self) -> str:
-        left_expr = self.left_schema.source.get_where_clause()
+    def get_from_clause(self) -> str:
+        left_expr = self.left_schema.source.get_from_clause()
         left_alias = self.left_schema.alias
         left_str = f"{left_expr} {left_alias or ''}"
 
-        right_expr = self.right_schema.source.get_where_clause()
+        right_expr = self.right_schema.source.get_from_clause()
         right_alias = self.right_schema.alias
         right_str = f"{right_expr} {right_alias or ''}"
 
-        on_clause = " AND ".join([m.get_where_clause() for m in self.mapping])
+        on_clause = " AND ".join([m.get_from_clause() for m in self.mapping])
 
         return f"({left_str} {self.join_type.value} JOIN {right_str} ON {on_clause})"
 
@@ -88,5 +88,5 @@ class JoinedSchema(Schema):
         """
         raise NotImplementedError("Not implemented yet.")
 
-    def get_where_clause(self) -> str:
-        return self.__join_storage.get_where_clause()
+    def get_from_clause(self) -> str:
+        return self.__join_storage.get_from_clause()

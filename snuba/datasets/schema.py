@@ -31,7 +31,7 @@ class Schema(ABC):
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
 
     @abstractmethod
-    def get_where_clause(self) -> str:
+    def get_from_clause(self) -> str:
         """
         Builds and returns the content of the where clause we need
         to pass to Clickhouse to execute a query on this schema.
@@ -98,7 +98,7 @@ class TableSchema(Schema):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def get_where_clause(self) -> str:
+    def get_from_clause(self) -> str:
         """
         In this abstraction the where clause is just the same
         table we refer to for writes.
