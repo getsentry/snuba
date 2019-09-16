@@ -189,7 +189,6 @@ class NativeDriverBatchWriter(BatchWriter):
 
     def write(self, rows: Iterable[WriterTableRow]):
         columns = self.__schema.get_columns()
-
         self.__connection.execute_robust(
             "INSERT INTO %(table)s (%(colnames)s) VALUES"
             % {
