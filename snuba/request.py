@@ -16,7 +16,7 @@ from snuba.schemas import Schema, validate_jsonschema
 @dataclass(frozen=True)
 class Request:
     query: Query
-    settings: Mapping[str, str]
+    settings: Mapping[str, bool]
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
