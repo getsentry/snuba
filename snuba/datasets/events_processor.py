@@ -30,7 +30,7 @@ def extract_user(output, user):
     output['user_id'] = _unicodify(user.get('id', None))
     output['username'] = _unicodify(user.get('username', None))
     output['email'] = _unicodify(user.get('email', None))
-    output['ip_address'] = _unicodify(user.get('ip_address', None))
+    output['ip_address'] = _ensure_valid_ip(user.get('ip_address', None))
 
 
 def extract_extra_tags(output, tags):

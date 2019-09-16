@@ -105,3 +105,18 @@ def _ensure_valid_date(dt):
     if _collapse_uint32(seconds) is None:
         return None
     return dt
+
+
+def _ensure_valid_ip(ip):
+    """
+    IP addresses in e.g. `user.ip_address` might be invalid due to PII stripping.
+    """
+
+    ip = _unicodify(ip)
+    if ip:
+        try:
+            return ipaddress.ip_address(ip)
+        except ValueError:
+            pass
+
+    return None
