@@ -8,6 +8,7 @@ from snuba.processor import (
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
+    _ensure_valid_ip,
     _floatify,
     _hashify,
     _unicodify,

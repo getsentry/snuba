@@ -7,6 +7,7 @@ from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
     _ensure_valid_date,
+    _ensure_valid_ip,
     _unicodify
 )
 from snuba.datasets.events_processor import (
