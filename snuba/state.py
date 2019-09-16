@@ -279,8 +279,6 @@ def get_config_changes():
 def safe_dumps_default(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {**value}
-    elif isinstance(value, uuid.UUID):
-        return str(value)
     raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
 
 
@@ -333,4 +331,4 @@ def get_result(query_id):
 def set_result(query_id, result):
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
-    return rds.set(key, safe_dumps(result), ex=timeout)
+    return rds.set(key, json.dumps(result), ex=timeout)
