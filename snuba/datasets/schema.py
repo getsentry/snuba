@@ -11,8 +11,15 @@ def local_dataset_mode():
 
 class Schema(ABC):
     """
-    Represents the full set of columns in a clickhouse table, this only contains
-    basic metadata for now.
+    A schema is an abstraction over a data model we can query.
+    It provides a set of columns and a where clause to build the query.
+    Concretely this can represent a table, a view or a group of
+    joined tables.
+    This level of abstraciton only provides read primitives.
+
+    Going on this will be abstract from Clickhouse details. As of
+    now this distinction does not exists to this provides CLickhouse
+    specific details.
     """
 
     def __init__(
@@ -25,6 +32,14 @@ class Schema(ABC):
 
     @abstractmethod
     def get_where_clause(self) -> str:
+        """
+        Builds and returns the content of the where clause we need
+        to pass to Clickhouse to execute a query on this schema.
+
+        TODO: Once we have a Snuba Query abstraction (PR 456) this
+        will change to return something more abstract than a string
+        so the query can manipulate it.
+        """
         raise NotImplementedError
 
     def get_columns(self) -> ColumnSet:
@@ -60,6 +75,14 @@ class Schema(ABC):
 
 
 class TableSchema(Schema):
+    """
+    Represent a table-like schema. This means it represents either
+    a Clickhouse table, a Clickhouse view or a Materialized view.
+
+    Going on, this abstraction will be split into an abstract entity
+    and a Clickhouse specific TableStore on which we can write.
+    """
+
     TEST_TABLE_PREFIX = "test_"
 
     def __init__(self,
@@ -76,6 +99,10 @@ class TableSchema(Schema):
         self.__dist_table_name = dist_table_name
 
     def get_where_clause(self) -> str:
+        """
+        In this abstraction the where clause is just the same
+        table we refer to for writes.
+        """
         return self.get_table_name()
 
     def _make_test_table(self, table_name: str) -> str:

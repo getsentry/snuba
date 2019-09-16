@@ -34,27 +34,27 @@ class JoinedSource():
 @dataclass(frozen=True)
 class JoinSchemaStorage:
     """
-    Keep track of a basic multiple join.
-    This builds a tree of sources joined with each other.
-    Every side of the expression has an alias which is used
-    to build the join and the mapping is based on the aliases
-    themselves.
+    Abstracts the join clause as a tree.
+    Every node in the tree is either a join itself or a
+    schema with an alias.
+    Traversing the tree it is possible to build the join
+    clause.
 
     This does not validate the join makes sense nor it checks
     the aliases are valid.
     """
-    left_expression: JoinedSource
-    right_expression: JoinedSource
+    left_schema: JoinedSource
+    right_schema: JoinedSource
     mapping: Sequence[JoinMapping]
     join_type: JoinType
 
     def get_where_clause(self) -> str:
-        left_expr = self.left_expression.source.get_where_clause()
-        left_alias = self.left_expression.alias
+        left_expr = self.left_schema.source.get_where_clause()
+        left_alias = self.left_schema.alias
         left_str = f"{left_expr} {left_alias or ''}"
 
-        right_expr = self.right_expression.source.get_where_clause()
-        right_alias = self.right_expression.alias
+        right_expr = self.right_schema.source.get_where_clause()
+        right_alias = self.right_schema.alias
         right_str = f"{right_expr} {right_alias or ''}"
 
         on_clause = " AND ".join([m.get_where_clause() for m in self.mapping])
@@ -63,6 +63,11 @@ class JoinSchemaStorage:
 
 
 class JoinedSchema(Schema):
+    """
+    Read only schema that represent multiple joined schemas.
+    The join clause is defined by the JoinSchemaStorage object
+    that keeps reference to the schemas we are joining.
+    """
 
     def __init__(self,
         join_root: JoinSchemaStorage,
@@ -75,6 +80,12 @@ class JoinedSchema(Schema):
         )
 
     def get_columns(self):
+        """
+        In this class we need to return the combination of
+        the columns of all the joined tables prefixed with
+        the alias, since the client will provide aliases in the
+        query to disambiguate columns.
+        """
         raise NotImplementedError("Not implemented yet.")
 
     def get_where_clause(self) -> str:
