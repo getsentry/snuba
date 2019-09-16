@@ -8,7 +8,6 @@ from snuba.processor import (
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
-    _ensure_valid_ip,
     _floatify,
     _hashify,
     _unicodify,
@@ -31,7 +30,10 @@ def extract_user(output, user):
     output['user_id'] = _unicodify(user.get('id', None))
     output['username'] = _unicodify(user.get('username', None))
     output['email'] = _unicodify(user.get('email', None))
-    output['ip_address'] = _ensure_valid_ip(user.get('ip_address', None))
+    # N.b.: IP address may be a hash of the real IP address (done by PII
+    # stripping). For as long as we can store arbitrary strings in Clickhouse,
+    # let's index those hashes as well.
+    output['ip_address'] = _unicodify(user.get('ip_address', None))
 
 
 def extract_extra_tags(output, tags):
