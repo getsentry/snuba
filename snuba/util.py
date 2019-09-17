@@ -14,8 +14,9 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
-from snuba import clickhouse, schemas, settings, state
-from snuba.schemas import Request
+from snuba import schemas, settings, state
+from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
+from snuba.request import Request
 
 
 logger = logging.getLogger('snuba.util')
@@ -41,7 +42,7 @@ def to_list(value):
 
 
 def string_col(dataset, col):
-    col_type = dataset.get_schema().get_columns().get(col, None)
+    col_type = dataset.get_dataset_schemas().get_read_schema().get_columns().get(col, None)
     col_type = str(col_type) if col_type else None
 
     if col_type and 'String' in col_type and 'FixedString' not in col_type:
@@ -222,7 +223,7 @@ def is_condition(cond_or_list):
         # a 3-tuple
         len(cond_or_list) == 3 and
         # where the middle element is an operator
-        cond_or_list[1] in schemas.CONDITION_OPERATORS and
+        cond_or_list[1] in CONDITION_OPERATORS and
         # and the first element looks like a column name or expression
         isinstance(cond_or_list[0], (str, tuple, list))
     )
@@ -314,7 +315,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_schema().get_columns()
+        columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
         if (
             isinstance(lhs, str) and
             lhs in columns and
@@ -322,7 +323,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
             columns[lhs].base_name != body.get('arrayjoin') and
             not isinstance(lit, (list, tuple))
         ):
-            any_or_all = 'arrayExists' if op in schemas.POSITIVE_OPERATORS else 'arrayAll'
+            any_or_all = 'arrayExists' if op in POSITIVE_OPERATORS else 'arrayAll'
             return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
                 any_or_all,
                 op,

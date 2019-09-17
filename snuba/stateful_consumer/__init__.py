@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.snapshots import SnapshotId
 
 
 class ConsumerStateCompletionEvent(Enum):
@@ -21,13 +21,13 @@ class ConsumerStateData:
     Represent the state information we pass from one
     state to the other.
     """
-    snapshot_id: str
+    snapshot_id: SnapshotId
     transaction_data: TransactionData
 
     @classmethod
     def snapshot_ready_state(
         cls,
-        snapshot_id: str,
+        snapshot_id: SnapshotId,
         transaction_data: TransactionData,
     ) -> ConsumerStateData:
         """

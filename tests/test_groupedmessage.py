@@ -39,7 +39,7 @@ class TestGroupedMessage(BaseDatasetTest):
     DELETE_MSG = (
         '{"event":"change","xid":2380866,"kind":"delete","schema":"public",'
         '"table": "sentry_groupedmessage",'
-        '"oldkeys":{"keynames":["id"],"keytypes":["bigint"],"keyvalues":[74]}}'
+        '"oldkeys":{"keynames":["id", "project_id"],"keytypes":["bigint", "bigint"],"keyvalues":[74, 2]}}'
     )
 
     INSERT_MSG = (
@@ -62,6 +62,7 @@ class TestGroupedMessage(BaseDatasetTest):
 
     PROCESSED = {
         'offset': 42,
+        'project_id': 2,
         'id': 74,
         'record_deleted': 0,
         'status': 0,
@@ -73,6 +74,7 @@ class TestGroupedMessage(BaseDatasetTest):
 
     DELETED = {
         'offset': 42,
+        'project_id': 2,
         'id': 74,
         'record_deleted': 1,
         'status': None,
@@ -107,6 +109,7 @@ class TestGroupedMessage(BaseDatasetTest):
         assert ret[0] == (
             42,  # offset
             0,  # deleted
+            2,  # project_id
             74,  # id
             0,  # status
             datetime(2019, 6, 19, 6, 46, 28),
@@ -125,6 +128,7 @@ class TestGroupedMessage(BaseDatasetTest):
 
     def test_bulk_load(self):
         row = GroupedMessageRow.from_bulk({
+            'project_id': '2',
             'id': '10',
             'status': '0',
             'last_seen': '2019-06-28 17:57:32+00',
@@ -138,6 +142,7 @@ class TestGroupedMessage(BaseDatasetTest):
         assert ret[0] == (
             0,  # offset
             0,  # deleted
+            2,  # project_id
             10,  # id
             0,  # status
             datetime(2019, 6, 28, 17, 57, 32),

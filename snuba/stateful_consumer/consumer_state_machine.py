@@ -2,7 +2,7 @@ from typing import Optional, Sequence
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
-from snuba.utils.state_machine import State, StateType, StateMachine
+from snuba.utils.state_machine import State, StateType, StateMachine, TStateCompletionEvent, TStateData
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
 from snuba.stateful_consumer.states.consuming import ConsumingState
 from snuba.stateful_consumer.states.paused import PausedState
@@ -53,8 +53,8 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
 
     def _build_state(
         self,
-        state_class: StateType,
-    ) -> State[ConsumerStateCompletionEvent, ConsumerStateData]:
+        state_class: StateType[ConsumerStateCompletionEvent, Optional[ConsumerStateData]],
+    ) -> State[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         if state_class == ConsumingState:
             return ConsumingState(self.__consumer_builder)
         elif state_class == BootstrapState:

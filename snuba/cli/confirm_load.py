@@ -54,7 +54,7 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
             xip_list=descriptor.xip_list,
         ),
     )
-    json_string = json.dumps(msg.serialize())
+    json_string = json.dumps(msg.to_dict())
     producer.produce(
         control_topic,
         value=json_string,

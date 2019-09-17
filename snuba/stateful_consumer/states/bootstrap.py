@@ -1,7 +1,7 @@
 import json
 import logging
 
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Set, Tuple
 from confluent_kafka import Message
 
 from snuba import settings
@@ -53,7 +53,7 @@ class RecoveryState:
     test_recovery_state shows some examples.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # This represents the snapshot id we are currently tracking. It is set after
         # snapshot-init and reset by snapshot-abort or after the current snapshot is
         # loaded and a new init message is found.
@@ -64,7 +64,7 @@ class RecoveryState:
         # Past processed snapshots. This is meant to tie abort and loaded messages
         # to an init message and filter out snapshot messages we are not interested
         # into.
-        self.__past_snapshots = set()
+        self.__past_snapshots: Set[SnapshotId] = set()
 
     def get_completion_event(self) -> ConsumerStateCompletionEvent:
         """
@@ -208,18 +208,21 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
             )
         else:
             logger.warning("Received an unrecognized message: %r", parsed_message)
+            commit_decision = CommitDecision.DO_NOT_COMMIT
 
         return commit_decision
 
     def signal_shutdown(self) -> None:
         self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
+    def handle(self,
+        state_data: Optional[ConsumerStateData],
+    ) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         logger.info("Running %r", self.__consumer)
         self.__consumer.run()
 
         snapshot = self.__recovery_state.get_active_snapshot()
-        if snapshot:
+        if snapshot and snapshot[1] is not None:
             state_data = ConsumerStateData.snapshot_ready_state(
                 snapshot_id=snapshot[0],
                 transaction_data=snapshot[1],

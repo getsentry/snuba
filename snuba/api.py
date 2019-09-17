@@ -11,14 +11,18 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
+from uuid import UUID
 
-from snuba import schemas, settings, state, util
+from snuba import settings, state, util
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.query import ClickhouseQuery
+from snuba.query.extensions import get_time_limit
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schema import local_dataset_mode
-from snuba.schemas import Request, RequestSchema
+from snuba.request import Request, RequestSchema
+from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
 from snuba.util import Timer
 
@@ -46,13 +50,17 @@ else:
 
 
 def check_clickhouse():
+    """
+    Checks if all the tables in all the enabled datasets exist in ClickHouse
+    """
     try:
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_schema().get_table_name()
+            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
             if (table_name,) not in clickhouse_tables:
                 return False
+
         return True
 
     except Exception:
@@ -233,105 +241,30 @@ def dataset_query(dataset, body, timer):
         dataset,
         validate_request_content(body, dataset.get_query_schema(), timer),
         timer,
-     )
+    )
+
+    def json_default(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, UUID):
+            return str(obj)
+        return obj
 
     return (
         json.dumps(
             result,
             for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+            default=json_default),
         status,
         {'Content-Type': 'application/json'}
     )
 
 
-def format_query(dataset, request: Request, table, prewhere_conditions, final) -> str:
-    """Generate a SQL string from the parameters."""
-    body = request.body
-
-    aggregate_exprs = [util.column_expr(dataset, col, body, alias, agg) for (agg, col, alias) in body['aggregations']]
-    groupby = util.to_list(body['groupby'])
-    group_exprs = [util.column_expr(dataset, gb, body) for gb in groupby]
-    selected_cols = [util.column_expr(dataset, util.tuplify(colname), body) for colname in body.get('selected_columns', [])]
-    select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
-
-    from_clause = u'FROM {}'.format(table)
-    if final:
-        from_clause = u'{} FINAL'.format(from_clause)
-    if 'sample' in body:
-        from_clause = u'{} SAMPLE {}'.format(from_clause, body['sample'])
-
-    join_clause = ''
-    if 'arrayjoin' in body:
-        join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin'])
-
-    where_clause = ''
-    if body['conditions']:
-        where_clause = u'WHERE {}'.format(util.conditions_expr(dataset, body['conditions'], body))
-
-    prewhere_clause = ''
-    if prewhere_conditions:
-        prewhere_clause = u'PREWHERE {}'.format(util.conditions_expr(dataset, prewhere_conditions, body))
-
-    group_clause = ''
-    if groupby:
-        group_clause = 'GROUP BY ({})'.format(', '.join(util.column_expr(dataset, gb, body) for gb in groupby))
-        if body.get('totals', False):
-            group_clause = '{} WITH TOTALS'.format(group_clause)
-
-    having_clause = ''
-    having_conditions = body.get('having', [])
-    if having_conditions:
-        assert groupby, 'found HAVING clause with no GROUP BY'
-        having_clause = u'HAVING {}'.format(util.conditions_expr(dataset, having_conditions, body))
-
-    order_clause = ''
-    if body.get('orderby'):
-        orderby = [util.column_expr(dataset, util.tuplify(ob), body) for ob in util.to_list(body['orderby'])]
-        orderby = [u'{} {}'.format(ob.lstrip('-'), 'DESC' if ob.startswith('-') else 'ASC') for ob in orderby]
-        order_clause = u'ORDER BY {}'.format(', '.join(orderby))
-
-    limitby_clause = ''
-    if 'limitby' in body:
-        limitby_clause = 'LIMIT {} BY {}'.format(*body['limitby'])
-
-    limit_clause = ''
-    if 'limit' in body:
-        limit_clause = 'LIMIT {}, {}'.format(body.get('offset', 0), body['limit'])
-
-    return ' '.join([c for c in [
-        select_clause,
-        from_clause,
-        join_clause,
-        prewhere_clause,
-        where_clause,
-        group_clause,
-        having_clause,
-        order_clause,
-        limitby_clause,
-        limit_clause
-    ] if c])
-
-
 @split_query
 def parse_and_run_query(dataset, request: Request, timer):
-    max_days, date_align = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-    ])
+    from_date, to_date = get_time_limit(request.extensions['timeseries'])
 
-    to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
-    from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
-    assert from_date <= to_date
-
-    if max_days is not None and (to_date - from_date).days > max_days:
-        from_date = to_date - timedelta(days=max_days)
-
-    request.query['conditions'].extend([
-        ('timestamp', '>=', from_date.isoformat()),
-        ('timestamp', '<', to_date.isoformat()),
-    ])
-
+    request.query['conditions'].extend(dataset.get_extensions_conditions(request.extensions))
     request.query['conditions'].extend(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
@@ -358,29 +291,28 @@ def parse_and_run_query(dataset, request: Request, timer):
             request.query['sample'] = settings.TURBO_SAMPLE_RATE
 
     prewhere_conditions = []
-    if settings.PREWHERE_KEYS:
-        # Add any condition to PREWHERE if:
-        # - It is a single top-level condition (not OR-nested), and
-        # - Any of its referenced columns are in PREWHERE_KEYS
-        prewhere_candidates = [
-            (util.columns_in_expr(cond[0]), cond)
-            for cond in request.query['conditions'] if util.is_condition(cond) and
-            any(col in settings.PREWHERE_KEYS for col in util.columns_in_expr(cond[0]))
-        ]
-        # Use the condition that has the highest priority (based on the
-        # position of its columns in the PREWHERE_KEYS list)
-        prewhere_candidates = sorted([
-            (min(settings.PREWHERE_KEYS.index(col) for col in cols if col in settings.PREWHERE_KEYS), cond)
-            for cols, cond in prewhere_candidates
-        ], key=lambda priority_and_col: priority_and_col[0])
-        if prewhere_candidates:
-            prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-            request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
+    # Add any condition to PREWHERE if:
+    # - It is a single top-level condition (not OR-nested), and
+    # - Any of its referenced columns are in dataset.get_prewhere_keys()
+    prewhere_candidates = [
+        (util.columns_in_expr(cond[0]), cond)
+        for cond in request.query['conditions'] if util.is_condition(cond) and
+        any(col in dataset.get_prewhere_keys() for col in util.columns_in_expr(cond[0]))
+    ]
+    # Use the condition that has the highest priority (based on the
+    # position of its columns in the prewhere keys list)
+    prewhere_candidates = sorted([
+        (min(dataset.get_prewhere_keys().index(col) for col in cols if col in dataset.get_prewhere_keys()), cond)
+        for cols, cond in prewhere_candidates
+    ], key=lambda priority_and_col: priority_and_col[0])
+    if prewhere_candidates:
+        prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
+        request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    table = dataset.get_schema().get_table_name()
-
-    sql = format_query(dataset, request, table, prewhere_conditions, final)
-
+    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+    # TODO: consider moving the performance logic and the pre_where generation into
+    # ClickhouseQuery since they are Clickhouse specific
+    sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
     timer.mark('prepare_query')
 
     stats = {
@@ -403,7 +335,10 @@ def parse_and_run_query(dataset, request: Request, timer):
 def sdk_distribution(*, timer: Timer):
     request = validate_request_content(
         parse_request_body(http_request),
-        schemas.SDK_STATS_SCHEMA,
+        RequestSchema(
+            SDK_STATS_BASE_SCHEMA,
+            SDK_STATS_EXTENSIONS_SCHEMA,
+        ),
         timer,
     )
 
@@ -458,13 +393,11 @@ if application.debug or application.testing:
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
         from snuba import migrate
-        migrate.rename_dev_table(clickhouse_rw)
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        clickhouse_rw.execute(
-            dataset.get_schema().get_local_table_definition()
-        )
+        for statement in dataset.get_dataset_schemas().get_create_statements():
+            clickhouse_rw.execute(statement)
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -530,9 +463,9 @@ if application.debug or application.testing:
     @application.route('/tests/<dataset_name>/drop', methods=['POST'])
     def drop(dataset_name):
         dataset = get_dataset(dataset_name)
-        table = dataset.get_schema().get_local_table_name()
+        for statement in dataset.get_dataset_schemas().get_drop_statements():
+            clickhouse_rw.execute(statement)
 
-        clickhouse_rw.execute("DROP TABLE IF EXISTS %s" % table)
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
         return ('ok', 200, {'Content-Type': 'text/plain'})

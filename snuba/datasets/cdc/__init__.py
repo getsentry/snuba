@@ -1,16 +1,16 @@
 from snuba.datasets import Dataset
-from snuba.datasets.schema import TableSchema
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 
 
 class CdcDataset(Dataset):
     def __init__(self,
-            schema: TableSchema, *,
+            dataset_schemas: DatasetSchemas, *,
             processor: CdcProcessor,
             default_control_topic: str,
             **kwargs):
         super().__init__(
-            schema=schema,
+            dataset_schemas=dataset_schemas,
             processor=processor,
             **kwargs,
         )

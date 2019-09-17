@@ -3,13 +3,6 @@
 #   project: snuba
 #   repository: getsentry/snuba
 
-kubernetes:
-  credentials:
-    kind: gcloud
-    project: internal-sentry
-    cluster: primary
-    zone: us-central1-b
-
 steps:
 - kind: KubernetesDeployment
   selector:
@@ -23,6 +16,8 @@ steps:
     name: replacer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: outcomes-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: loadbalancer-outcomes-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba

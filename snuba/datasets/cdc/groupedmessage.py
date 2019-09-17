@@ -1,6 +1,9 @@
+from typing import Sequence
+
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schema import ReplacingMergeTreeSchema
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
@@ -25,6 +28,7 @@ class GroupedMessageDataset(CdcDataset):
             # exists on the Sentry side.
             ('record_deleted', UInt(8)),
             # PG columns
+            ('project_id', UInt(64)),
             ('id', UInt(64)),
             ('status', Nullable(UInt(8))),
             ('last_seen', Nullable(DateTime())),
@@ -37,14 +41,19 @@ class GroupedMessageDataset(CdcDataset):
             columns=columns,
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
-            order_by='id',
+            order_by='(project_id, id)',
             partition_by=None,
             version_column='offset',
             sample_expr='id',
         )
 
+        dataset_schemas = DatasetSchemas(
+            read_schema=schema,
+            write_schema=schema,
+        )
+
         super(GroupedMessageDataset, self).__init__(
-            schema=schema,
+            dataset_schemas=dataset_schemas,
             processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
             default_topic="cdc",
             default_replacement_topic=None,
@@ -59,3 +68,6 @@ class GroupedMessageDataset(CdcDataset):
             dest_table=dest_table,
             row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
         )
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['project_id']

@@ -29,15 +29,16 @@ class CatchingUpState(State[ConsumerStateCompletionEvent, Optional[ConsumerState
         if self.__consumer:
             self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
+    def handle(self, state_data: Optional[ConsumerStateData]) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         assert state_data is not None
 
-        self.__consumer = self.__consumer_builder.build_snapshot_aware_consumer(
+        consumer = self.__consumer_builder.build_snapshot_aware_consumer(
             snapshot_id=state_data.snapshot_id,
             transaction_data=state_data.transaction_data,
         )
+        self.__consumer = consumer
 
-        self.__consumer.run()
+        consumer.run()
         return (
             ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED,
             None,

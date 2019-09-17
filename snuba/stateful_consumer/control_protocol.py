@@ -148,7 +148,7 @@ class SnapshotLoaded(ControlMessage):
             )
         )
 
-    def serialize(self) -> Mapping[str, Any]:
+    def to_dict(self) -> Mapping[str, Any]:
         return {
             "event": "snapshot-loaded",
             "snapshot-id": self.id,
