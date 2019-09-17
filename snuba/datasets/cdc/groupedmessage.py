@@ -28,6 +28,7 @@ class GroupedMessageDataset(CdcDataset):
             # exists on the Sentry side.
             ('record_deleted', UInt(8)),
             # PG columns
+            ('project_id', UInt(64)),
             ('id', UInt(64)),
             ('status', Nullable(UInt(8))),
             ('last_seen', Nullable(DateTime())),
@@ -40,7 +41,7 @@ class GroupedMessageDataset(CdcDataset):
             columns=columns,
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
-            order_by='id',
+            order_by='(project_id, id)',
             partition_by=None,
             version_column='offset',
             sample_expr='id',

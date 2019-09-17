@@ -11,10 +11,12 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
+from uuid import UUID
 
 from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
+from snuba.query.extensions import TimeSeriesExtension
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
@@ -242,11 +244,18 @@ def dataset_query(dataset, body, timer):
         timer,
     )
 
+    def json_default(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, UUID):
+            return str(obj)
+        return obj
+
     return (
         json.dumps(
             result,
             for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
+            default=json_default),
         status,
         {'Content-Type': 'application/json'}
     )
@@ -254,24 +263,10 @@ def dataset_query(dataset, body, timer):
 
 @split_query
 def parse_and_run_query(dataset, request: Request, timer):
-    max_days, date_align = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-    ])
+    from_date, to_date = TimeSeriesExtension.get_time_limit(request.extensions['timeseries'])
 
-    to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
-    from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
-    assert from_date <= to_date
-
-    if max_days is not None and (to_date - from_date).days > max_days:
-        from_date = to_date - timedelta(days=max_days)
-
-    # TODO: replace all this logic with calls to the extensions query processors
-    request.query.add_conditions([
-        ('timestamp', '>=', from_date.isoformat()),
-        ('timestamp', '<', to_date.isoformat()),
-    ])
-    request.query.add_conditions(dataset.default_conditions())
+    request.query['conditions'].extend(dataset.get_extensions_conditions(request.extensions))
+    request.query['conditions'].extend(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
@@ -321,7 +316,6 @@ def parse_and_run_query(dataset, request: Request, timer):
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
-
     timer.mark('prepare_query')
 
     stats = {
@@ -402,7 +396,6 @@ if application.debug or application.testing:
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
         from snuba import migrate
-        migrate.rename_dev_table(clickhouse_rw)
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.

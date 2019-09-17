@@ -38,6 +38,36 @@ from snuba.util import (
 NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
+def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+    if 'group_id' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN group_id UInt64 DEFAULT 0" % clickhouse_table)
+
+    if 'device_model' in current_schema:
+        ret.append("ALTER TABLE %s DROP COLUMN device_model" % clickhouse_table)
+
+    if 'sdk_integrations' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN sdk_integrations Array(String)" % clickhouse_table)
+
+    if 'modules.name' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN modules Nested(name String, version String)" % clickhouse_table)
+
+    if 'culprit' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN culprit Nullable(String)" % clickhouse_table)
+
+    if 'search_message' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN search_message Nullable(String)" % clickhouse_table)
+
+    if 'title' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN title Nullable(String)" % clickhouse_table)
+
+    if 'location' not in current_schema:
+        ret.append("ALTER TABLE %s ADD COLUMN location Nullable(String)" % clickhouse_table)
+
+    return ret
+
+
 class EventsDataset(TimeSeriesDataset):
     """
     Represents the collection of classic sentry "error" type events
@@ -194,7 +224,8 @@ class EventsDataset(TimeSeriesDataset):
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
-            sample_expr=sample_expr)
+            sample_expr=sample_expr,
+            migration_function=events_migrations)
 
         dataset_schemas = DatasetSchemas(
             read_schema=schema,
@@ -211,6 +242,7 @@ class EventsDataset(TimeSeriesDataset):
                 'time': 'timestamp',
                 'rtime': 'received'
             },
+            timestamp_column='timestamp',
         )
 
         self.__metadata_columns = metadata_columns
