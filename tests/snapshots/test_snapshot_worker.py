@@ -32,10 +32,7 @@ INSERT_MSG = (
 
 PROCESSED = {
     'offset': 1,
-<<<<<<< HEAD
-=======
     'project_id': 2,
->>>>>>> master
     'id': 74,
     'record_deleted': 0,
     'status': 0,

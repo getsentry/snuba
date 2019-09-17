@@ -5,7 +5,8 @@ import json
 from confluent_kafka import Producer
 
 from snuba import settings
-from snuba.datasets.factory import DATASET_NAMES
+from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLoaded
 
@@ -33,12 +34,24 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
     logger = logging.getLogger('snuba.loaded-snapshot')
     logger.info("Sending load completion message for dataset %s, from source %s", dataset, source)
 
+    dataset = get_dataset(dataset)
+    assert isinstance(dataset, CdcDataset), \
+        "Only CDC dataset have a control topic thus are supported."
+
+    control_topic = control_topic or dataset.get_default_control_topic()
+
     snapshot_source = PostgresSnapshot.load(
         product=settings.SNAPSHOT_LOAD_PRODUCT,
         path=source,
     )
 
     descriptor = snapshot_source.get_descriptor()
+
+    if not bootstrap_server:
+        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
+            dataset,
+            settings.DEFAULT_BROKERS,
+        )
 
     producer = Producer({
         'bootstrap.servers': ','.join(bootstrap_server),
@@ -55,10 +68,17 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
         ),
     )
     json_string = json.dumps(msg.to_dict())
+
+    def delivery_callback(error, message):
+        if error is not None:
+            raise error
+        else:
+            logger.info("Message sent %r", message.value())
+
     producer.produce(
         control_topic,
         value=json_string,
-        on_delivery=lambda err, msg: logger.info("Message sent %r", msg.value()),
+        on_delivery=delivery_callback,
     )
 
     producer.flush()
