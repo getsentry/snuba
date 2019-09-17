@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Sequence
+from typing import Any, MutableMapping, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
+from snuba.clickhouse.http import BatchWriter
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schema import ReplacingMergeTreeSchema
@@ -97,6 +98,33 @@ class TransactionsDataset(TimeSeriesDataset):
                 'bucketed_end': 'finish_ts',
             },
             timestamp_column='start_ts',
+        )
+
+    def __update_options(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+    ) -> MutableMapping[str, Any]:
+        if options is None:
+            options = {}
+        if "insert_allow_materialized_columns" not in options:
+            options["insert_allow_materialized_columns"] = 1
+        return options
+
+    def get_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_writer(
+            self.__update_options(options),
+            table_name,
+        )
+
+    def get_bulk_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_bulk_writer(
+            self.__update_options(options),
+            table_name,
         )
 
     def get_query_schema(self):
