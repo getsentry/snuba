@@ -94,7 +94,7 @@ class TransactionsDataset(TimeSeriesDataset):
             default_topic="events",
             time_group_columns={
                 'bucketed_start': 'start_ts',
-                'bucketed_end': 'end_ts',
+                'bucketed_end': 'finish_ts',
             },
             timestamp_column='start_ts',
         )
