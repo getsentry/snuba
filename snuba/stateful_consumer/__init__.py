@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.snapshots import SnapshotId

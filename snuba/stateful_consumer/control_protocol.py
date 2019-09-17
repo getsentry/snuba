@@ -148,6 +148,17 @@ class SnapshotLoaded(ControlMessage):
             )
         )
 
+    def to_dict(self) -> Mapping[str, Any]:
+        return {
+            "event": "snapshot-loaded",
+            "snapshot-id": self.id,
+            "transaction-info": {
+                "xmin": self.transaction_info.xmin,
+                "xmax": self.transaction_info.xmax,
+                "xip-list": self.transaction_info.xip_list,
+            }
+        }
+
 
 def parse_control_message(message: Mapping[str, Any]) -> ControlMessage:
     jsonschema.validate(message, CONTROL_MSG_SCHEMA)
