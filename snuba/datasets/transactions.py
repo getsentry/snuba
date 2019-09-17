@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, MutableMapping, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -101,8 +101,8 @@ class TransactionsDataset(TimeSeriesDataset):
         )
 
     def __update_options(self,
-        options: Optional[Mapping[str, Any]]=None,
-    ) -> Mapping[str, Any]:
+        options: Optional[MutableMapping[str, Any]]=None,
+    ) -> MutableMapping[str, Any]:
         if options is None:
             options = {}
         if "insert_allow_materialized_columns" not in options:
@@ -110,7 +110,7 @@ class TransactionsDataset(TimeSeriesDataset):
         return options
 
     def get_writer(self,
-        options: Optional[Mapping[str, Any]]=None,
+        options: Optional[MutableMapping[str, Any]]=None,
         table_name: Optional[str]=None,
     ) -> BatchWriter:
         return super().get_writer(
@@ -119,7 +119,7 @@ class TransactionsDataset(TimeSeriesDataset):
         )
 
     def get_bulk_writer(self,
-        options: Optional[Mapping[str, Any]]=None,
+        options: Optional[MutableMapping[str, Any]]=None,
         table_name: Optional[str]=None,
     ) -> BatchWriter:
         return super().get_bulk_writer(
