@@ -31,7 +31,8 @@ def extract_user(output, user):
     output['user_id'] = _unicodify(user.get('id', None))
     output['username'] = _unicodify(user.get('username', None))
     output['email'] = _unicodify(user.get('email', None))
-    output['ip_address'] = str(_ensure_valid_ip(user.get('ip_address', None)))
+    ip_addr = _ensure_valid_ip(user.get('ip_address', None))
+    output['ip_address'] = str(ip_addr) if ip_addr is not None else None
 
 
 def extract_extra_tags(output, tags):
