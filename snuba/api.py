@@ -272,27 +272,27 @@ def dataset_query(dataset, body, timer):
 def parse_and_run_query(
     dataset,
     request: Request,
-    extensions: Mapping[str, Mapping[str, Any]],
+    extension_payloads: Mapping[str, Mapping[str, Any]],
     timer,
 ):
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(extensions['timeseries'])
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(extension_payloads['timeseries'])
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
-            request.extensions[name],
+            extension_payloads[name],
         )
     request.query.add_conditions(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
-    project_ids = util.to_list(request.extensions['project']['project'])
+    project_ids = util.to_list(extension_payloads['project']['project'])
     if project_ids:
         request.query.add_conditions([('project_id', 'IN', project_ids)])
 
-    turbo = request.extensions['performance'].get('turbo', False)
+    turbo = extension_payloads['performance'].get('turbo', False)
     if not turbo:
         final, exclude_group_ids = get_projects_query_flags(project_ids)
         if not final and exclude_group_ids:
