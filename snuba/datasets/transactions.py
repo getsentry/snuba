@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
+from snuba.clickhouse.http import BatchWriter
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schema import ReplacingMergeTreeSchema
@@ -96,8 +97,35 @@ class TransactionsDataset(TimeSeriesDataset):
             default_topic="events",
             time_group_columns={
                 'bucketed_start': 'start_ts',
-                'bucketed_end': 'end_ts',
+                'bucketed_end': 'finish_ts',
             },
+        )
+
+    def __update_options(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+    ) -> MutableMapping[str, Any]:
+        if options is None:
+            options = {}
+        if "insert_allow_materialized_columns" not in options:
+            options["insert_allow_materialized_columns"] = 1
+        return options
+
+    def get_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_writer(
+            self.__update_options(options),
+            table_name,
+        )
+
+    def get_bulk_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_bulk_writer(
+            self.__update_options(options),
+            table_name,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -105,9 +133,11 @@ class TransactionsDataset(TimeSeriesDataset):
             'performance': PerformanceExtension(),
             'project': ProjectExtension(),
             'timeseries': TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column='start_ts',
+                get_time_series_extension_properties(
+                    default_granularity=3600,
+                    default_window=timedelta(days=5),
+                    timestamp_column='start_ts',
+                ),
             ),
         }
 
