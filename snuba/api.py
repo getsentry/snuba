@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
+from typing import Any, Mapping, Tuple
 from uuid import uuid1
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
@@ -189,15 +190,19 @@ def parse_request_body(http_request):
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(body, schema: RequestSchema, timer) -> Request:
+def validate_request_content(
+    body,
+    schema: RequestSchema,
+    timer,
+) -> Tuple[Request, Mapping[str, Mapping[str, Any]]]:
     try:
-        request = schema.validate(body)
+        request, extensions = schema.validate(body)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error
 
     timer.mark('validate_schema')
 
-    return request
+    return (request, extensions)
 
 
 @application.route('/query', methods=['GET', 'POST'])
@@ -238,9 +243,11 @@ def dataset_query(dataset, body, timer):
     ensure_table_exists(dataset)
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
+    request, extensions = validate_request_content(body, schema, timer)
     result, status = parse_and_run_query(
         dataset,
-        validate_request_content(body, schema, timer),
+        request,
+        extensions,
         timer,
     )
 
@@ -262,8 +269,13 @@ def dataset_query(dataset, body, timer):
 
 
 @split_query
-def parse_and_run_query(dataset, request: Request, timer):
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
+def parse_and_run_query(
+    dataset,
+    request: Request,
+    extensions: Mapping[str, Mapping[str, Any]],
+    timer,
+):
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(extensions['timeseries'])
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
@@ -341,7 +353,7 @@ def parse_and_run_query(dataset, request: Request, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
-    request = validate_request_content(
+    request, extensions = validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
@@ -355,7 +367,7 @@ def sdk_distribution(*, timer: Timer):
         ['count()', None, 'count'],
     ])
     request.query.add_groupby(['sdk_name', 'rtime'])
-    request.extensions['project'] = {
+    extensions['project'] = {
         'project': [],
     }
 

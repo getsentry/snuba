@@ -5,7 +5,7 @@ import itertools
 from collections import ChainMap
 from dataclasses import dataclass
 from deprecation import deprecated
-from typing import Any, Mapping
+from typing import Any, Mapping, Tuple
 
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
@@ -16,6 +16,7 @@ from snuba.schemas import Schema, validate_jsonschema
 @dataclass(frozen=True)
 class Request:
     query: Query
+    # TODO: remove extensions from here once we removed dependencies on Request.body
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
@@ -64,7 +65,7 @@ class RequestSchema:
         }
         return cls(generic_schema, extensions_schemas)
 
-    def validate(self, value) -> Request:
+    def validate(self, value) -> Tuple[Request, Mapping[str, Mapping[str, Any]]]:
         value = validate_jsonschema(value, self.__composite_schema)
 
         query_body = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
@@ -73,7 +74,7 @@ class RequestSchema:
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(Query(query_body), extensions)
+        return (Request(Query(query_body), extensions), extensions)
 
     def __generate_template_impl(self, schema) -> Any:
         """
