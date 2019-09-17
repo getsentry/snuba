@@ -136,7 +136,6 @@ class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
             dataset_schemas: DatasetSchemas,
             time_group_columns: Mapping[str, str],
-            timestamp_column: str,
             **kwargs):
         super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
@@ -150,7 +149,6 @@ class TimeSeriesDataset(Dataset):
                     bucketed_column not in read_schema.get_columns(), \
                     f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
-        self.__timestamp_column = timestamp_column
 
     def __time_expr(self, column_name: str, granularity: int) -> str:
         real_column = self.__time_group_columns[column_name]

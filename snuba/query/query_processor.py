@@ -14,14 +14,20 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     class is supposed to provide one method that takes a query
     object of type Query that represent the parsed query to
     process, a context (which depends on the processor) and
-    return a processed query object.
+    updates it.
     """
 
     @abstractmethod
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
-    ) -> Query:
+    ) -> None:
+        # TODO: Now the query is moved around through the Request object, which
+        # is frozen (and it should be), thus the Query itself is mutable since
+        # we cannot reassign it.
+        # Ideally this should return a query insteadof assuming it mutates the
+        # existing one in place. We can move towards an immutable structure
+        # after changing Request.
         raise NotImplementedError
 
 
@@ -34,11 +40,11 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, extension_data: ExtensionData) -> Query:
+    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
         raise NotImplementedError
 
 
 class DummyExtensionProcessor(ExtensionQueryProcessor):
 
-    def process_query(self, query: Query, extension_data: ExtensionData) -> Query:
+    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
         return query
