@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple, Optional, Sequence
+from typing import Mapping, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import Schema
@@ -71,7 +71,7 @@ class JoinStructure:
 
         on_clause = " AND ".join([m.get_join_condition() for m in self.mapping])
 
-        return f"({left_str} {self.join_type.value} JOIN {right_str} ON {on_clause})"
+        return f"{left_str} {self.join_type.value} JOIN {right_str} ON {on_clause}"
 
 
 class JoinedSchema(Schema):
@@ -85,18 +85,33 @@ class JoinedSchema(Schema):
         join_root: JoinStructure,
     ) -> None:
         super().__init__(
-            columns=ColumnSet([]),  # TODO: process the joined table to build the columns list
+            columns=ColumnSet(self.__get_columns(join_root)),
         )
         self.__join_storage = join_root
 
-    def get_columns(self):
-        """
-        In this class we need to return the combination of
-        the columns of all the joined tables prefixed with
-        the alias, since the client will provide aliases in the
-        query to disambiguate columns.
-        """
-        raise NotImplementedError("Not implemented yet.")
+    def __get_schemas(self, structure: JoinStructure) -> Mapping[str, Schema]:
+        def get_schemas_rec(source: JoinedSource) -> Mapping[str, Schema]:
+            if not isinstance(source.source, JoinedSchema):
+                return {source.alias: source.source}
+            else:
+                joined_schema = source.source
+                left = get_schemas_rec(joined_schema.__join_source.left_schema)
+                right = get_schemas_rec(joined_schema.__join_source.left_schema)
+                return {**left, **right}
+
+        return {
+            **get_schemas_rec(structure.left_schema),
+            **get_schemas_rec(structure.right_schema),
+        }
+
+    def __get_columns(self, structure: JoinStructure) -> ColumnSet:
+        schemas = self.__get_schemas(structure)
+        ret = []
+        for alias, schema in schemas.items():
+            for column in schema.get_columns():
+                base = f".{column.base_name}" or ""
+                ret.append((f"{alias}{base}.{column.name}", column.type))
+        return ret
 
     def get_clickhouse_source(self) -> str:
         return self.__join_storage.get_clickhouse_source()
