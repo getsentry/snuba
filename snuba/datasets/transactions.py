@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
-from snuba.clickhouse.http import BatchWriter
+from snuba.writer import BatchWriter
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema

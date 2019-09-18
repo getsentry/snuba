@@ -2,8 +2,8 @@ import pytest
 
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.schemas.join import (
-    JoinExpression,
-    JoinMapping,
+    JoinConditionExpression,
+    JoinCondition,
     JoinStructure,
     JoinedSource,
     JoinType,
@@ -37,16 +37,16 @@ table3 = MergeTreeSchema(
 test_data = [
     (
         JoinStructure(
-            JoinedSource(table1, "t1"),
-            JoinedSource(table2, "t2"),
+            JoinedSource("t1", table1),
+            JoinedSource("t2", table2),
             [
-                JoinMapping(
-                    left=JoinExpression(table_alias="t1", column="c1"),
-                    right=JoinExpression(table_alias="t2", column="c2"),
+                JoinCondition(
+                    left=JoinConditionExpression(table_alias="t1", column="c1"),
+                    right=JoinConditionExpression(table_alias="t2", column="c2"),
                 ),
-                JoinMapping(
-                    left=JoinExpression(table_alias="t1", column="c3"),
-                    right=JoinExpression(table_alias="t2", column="c4"),
+                JoinCondition(
+                    left=JoinConditionExpression(table_alias="t1", column="c3"),
+                    right=JoinConditionExpression(table_alias="t2", column="c4"),
                 )
             ],
             JoinType.INNER
@@ -56,24 +56,24 @@ test_data = [
     (
         JoinStructure(
             JoinedSource(
+                None,
                 JoinStructure(
-                    JoinedSource(table1, "t1"),
-                    JoinedSource(table2, "t2"),
+                    JoinedSource("t1", table1),
+                    JoinedSource("t2", table2),
                     [
-                        JoinMapping(
-                            left=JoinExpression(table_alias="t1", column="c1"),
-                            right=JoinExpression(table_alias="t2", column="c2"),
+                        JoinCondition(
+                            left=JoinConditionExpression(table_alias="t1", column="c1"),
+                            right=JoinConditionExpression(table_alias="t2", column="c2"),
                         ),
                     ],
                     JoinType.FULL
                 ),
-                None,
             ),
-            JoinedSource(table3, "t3"),
+            JoinedSource("t3", table3),
             [
-                JoinMapping(
-                    left=JoinExpression(table_alias="t1", column="c1"),
-                    right=JoinExpression(table_alias="t3", column="c3"),
+                JoinCondition(
+                    left=JoinConditionExpression(table_alias="t1", column="c1"),
+                    right=JoinConditionExpression(table_alias="t3", column="c3"),
                 ),
             ],
             JoinType.INNER

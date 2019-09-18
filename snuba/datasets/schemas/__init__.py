@@ -12,7 +12,7 @@ class Schema(ABC):
     joined tables.
     This level of abstraction only provides read primitives.
 
-    As of now this we do not have a strict separation between a Snuba abstract
+    As of now we do not have a strict separation between a Snuba abstract
     schema and a Clickhouse concrete schema. When this will exist, this
     class will break up into snuba schema and clickhouse schema.
     """
@@ -27,7 +27,7 @@ class Schema(ABC):
     def get_clickhouse_source(self) -> str:
         """
         Builds and returns the content of the FROM clause Clickhouse
-        needs to execute a query on this schema.
+        needs in order to execute a query on this schema.
         This can be a simple table or a view for simple dataset
         or the join clause for joined datasets.
 

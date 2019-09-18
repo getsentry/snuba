@@ -52,7 +52,7 @@ class Dataset(object):
                 raise TypeError
 
         return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema(),
+            self.get_dataset_schemas().get_write_schema_enforce(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             lambda row: json.dumps(row, default=default).encode("utf-8"),
@@ -72,7 +72,7 @@ class Dataset(object):
         from snuba.clickhouse.http import HTTPBatchWriter
 
         return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema(),
+            self.get_dataset_schemas().get_write_schema_enforce(),
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             lambda row: rapidjson.dumps(row).encode("utf-8"),
