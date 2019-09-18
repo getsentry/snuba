@@ -62,6 +62,9 @@ class TableSchema(Schema, ABC):
 
     @abstractmethod
     def get_local_table_definition(self) -> str:
+        """
+        Returns the DDL statement to create the local table.
+        """
         raise NotImplementedError
 
     def get_migration_statements(
