@@ -8,9 +8,10 @@ from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
     JoinedSchema,
-    JoinedSource,
     JoinStructure,
     JoinType,
+    SchemaJoinedSource,
+    SubJoinSource,
 )
 from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
@@ -24,11 +25,11 @@ class EventsV2(TimeSeriesDataset):
         events = get_dataset("events")
 
         join_structure = JoinStructure(
-            left_schema=JoinedSource(
+            left_source=SchemaJoinedSource(
                 "groups",
                 grouped_message.get_dataset_schemas().get_read_schema(),
             ),
-            right_schema=JoinedSource(
+            right_source=SchemaJoinedSource(
                 "events",
                 events.get_dataset_schemas().get_read_schema(),
             ),
