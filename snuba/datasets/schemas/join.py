@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Mapping, Optional, Sequence
+from typing import NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import Schema
@@ -13,20 +13,23 @@ class JoinType(Enum):
     FULL = "FULL"
 
 
-@dataclass(frozen=True)
-class JoinMapping():
-    left_alias: str
-    left_column: str
-    right_alias: str
-    right_column: str
-
-    def get_from_clause(self) -> str:
-        return f"{self.left_alias}.{self.left_column} = " \
-            f"{self.right_alias}.{self.right_column}"
+class JoinExpression(NamedTuple):
+    table_alias: str
+    column: str
 
 
 @dataclass(frozen=True)
-class JoinedSource():
+class JoinMapping:
+    left: JoinExpression
+    right: JoinExpression
+
+    def get_join_condition(self) -> str:
+        return f"{self.left.table_alias}.{self.left.column} = " \
+            f"{self.right.table_alias}.{self.right.column}"
+
+
+@dataclass(frozen=True)
+class JoinedSource:
     source: Schema
     alias: Optional[str]
 
@@ -48,16 +51,16 @@ class JoinStructure:
     mapping: Sequence[JoinMapping]
     join_type: JoinType
 
-    def get_from_clause(self) -> str:
-        left_expr = self.left_schema.source.get_from_clause()
+    def get_clickhouse_source(self) -> str:
+        left_expr = self.left_schema.source.get_clickhouse_source()
         left_alias = self.left_schema.alias
         left_str = f"{left_expr} {left_alias or ''}"
 
-        right_expr = self.right_schema.source.get_from_clause()
+        right_expr = self.right_schema.source.get_clickhouse_source()
         right_alias = self.right_schema.alias
         right_str = f"{right_expr} {right_alias or ''}"
 
-        on_clause = " AND ".join([m.get_from_clause() for m in self.mapping])
+        on_clause = " AND ".join([m.get_join_condition() for m in self.mapping])
 
         return f"({left_str} {self.join_type.value} JOIN {right_str} ON {on_clause})"
 
@@ -72,10 +75,10 @@ class JoinedSchema(Schema):
     def __init__(self,
         join_root: JoinStructure,
     ) -> None:
-        self.__join_storage = join_root
         super().__init__(
             columns=ColumnSet([]),  # TODO: process the joined table to build the columns list
         )
+        self.__join_storage = join_root
 
     def get_columns(self):
         """
@@ -86,5 +89,5 @@ class JoinedSchema(Schema):
         """
         raise NotImplementedError("Not implemented yet.")
 
-    def get_from_clause(self) -> str:
-        return self.__join_storage.get_from_clause()
+    def get_clickhouse_source(self) -> str:
+        return self.__join_storage.get_clickhouse_source()

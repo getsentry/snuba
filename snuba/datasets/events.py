@@ -17,7 +17,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schemas.table_schemas import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import RequestSchema

@@ -3,7 +3,8 @@ from typing import Callable, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas import Schema, local_dataset_mode
+from snuba.datasets.schemas import Schema
+from snuba.util import local_dataset_mode
 
 
 class TableSchema(Schema, ABC):
@@ -18,8 +19,8 @@ class TableSchema(Schema, ABC):
     TEST_TABLE_PREFIX = "test_"
 
     def __init__(self,
-        *,
         columns: ColumnSet,
+        *,
         local_table_name: str,
         dist_table_name: str,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
@@ -31,7 +32,7 @@ class TableSchema(Schema, ABC):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def get_from_clause(self) -> str:
+    def get_clickhouse_source(self) -> str:
         """
         In this abstraction the from clause is just the same
         table we refer to for writes.
@@ -56,26 +57,12 @@ class TableSchema(Schema, ABC):
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
         return self._make_test_table(table_name)
 
-    def _get_table_definition(self, name: str, engine: str) -> str:
-        return """
-        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.get_columns().for_schema(),
-            'engine': engine,
-            'name': name,
-        }
-
-    def get_local_table_definition(self) -> str:
-        return self._get_table_definition(
-            self.get_local_table_name(),
-            self._get_local_engine()
-        )
-
-    @abstractmethod
-    def _get_local_engine(self) -> str:
-        raise NotImplementedError
-
     def get_local_drop_table_statement(self) -> str:
         return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+
+    @abstractmethod
+    def get_local_table_definition(self) -> str:
+        raise NotImplementedError
 
     def get_migration_statements(
         self
@@ -96,8 +83,8 @@ class WritableTableSchema(TableSchema):
 class MergeTreeSchema(WritableTableSchema):
 
     def __init__(self,
-        *,
         columns: ColumnSet,
+        *,
         local_table_name: str,
         dist_table_name: str,
         order_by: str,
@@ -145,12 +132,26 @@ class MergeTreeSchema(WritableTableSchema):
             'settings_clause': settings_clause,
         }
 
+    def __get_table_definition(self, name: str, engine: str) -> str:
+        return """
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self.get_columns().for_schema(),
+            'engine': engine,
+            'name': name,
+        }
+
+    def get_local_table_definition(self) -> str:
+        return self.__get_table_definition(
+            self.get_local_table_name(),
+            self._get_local_engine()
+        )
+
 
 class ReplacingMergeTreeSchema(MergeTreeSchema):
 
     def __init__(self,
-        *,
         columns: ColumnSet,
+        *,
         local_table_name: str,
         dist_table_name: str,
         order_by: str,
@@ -185,8 +186,8 @@ class MaterializedViewSchema(TableSchema):
 
     def __init__(
             self,
-            *,
             columns: ColumnSet,
+            *,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
             query: str,

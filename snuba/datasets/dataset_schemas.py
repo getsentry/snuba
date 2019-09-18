@@ -1,7 +1,7 @@
 from typing import Optional, List, Sequence
 
 from snuba.datasets.schemas import Schema
-from snuba.datasets.schemas.table_schemas import TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 
 
 class DatasetSchemas(object):
@@ -28,7 +28,7 @@ class DatasetSchemas(object):
     def get_write_schema(self) -> WritableTableSchema:
         return self.__write_schema
 
-    def __get_unique_schemas(self) -> List[Schema]:
+    def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
         all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
 

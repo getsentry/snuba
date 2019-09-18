@@ -1,12 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Mapping, List
 
-from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-
-
-def local_dataset_mode():
-    return settings.DATASET_MODE == "local"
 
 
 class Schema(ABC):
@@ -24,16 +19,17 @@ class Schema(ABC):
 
     def __init__(
         self,
-        *,
         columns: ColumnSet,
     ) -> None:
         self.__columns = columns
 
     @abstractmethod
-    def get_from_clause(self) -> str:
+    def get_clickhouse_source(self) -> str:
         """
-        Builds and returns the content of the FROM clause we need
-        to pass to Clickhouse to execute a query on this schema.
+        Builds and returns the content of the FROM clause Clickhouse
+        needs to execute a query on this schema.
+        This can be a simple table or a view for simple dataset
+        or the join clause for joined datasets.
 
         TODO: Once we have a Snuba Query abstraction (PR 456) this
         will change to return something more abstract than a string

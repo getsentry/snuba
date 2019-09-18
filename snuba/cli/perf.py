@@ -20,7 +20,7 @@ import sys
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.datasets.schemas import local_dataset_mode
+from snuba.util import local_dataset_mode
 
 
 @click.command()

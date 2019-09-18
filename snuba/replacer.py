@@ -118,7 +118,7 @@ class ReplacerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
             query_args.update({
-                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_from_clause(),
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_clickhouse_source(),
                 'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema().get_table_name(),
             })
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]

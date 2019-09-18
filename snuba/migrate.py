@@ -4,7 +4,7 @@ Simple schema migration tool. Only intended for local development environment.
 
 import logging
 
-from snuba.datasets.schemas.table_schemas import TableSchema
+from snuba.datasets.schemas.tables import TableSchema
 
 logger = logging.getLogger('snuba.migrate')
 

@@ -20,12 +20,11 @@ from snuba.query.extensions import get_time_limit
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
-from snuba.datasets.schemas import local_dataset_mode
-from snuba.datasets.schemas.table_schemas import TableSchema
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
-from snuba.util import Timer
+from snuba.util import local_dataset_mode, Timer
 
 
 logger = logging.getLogger('snuba.api')
@@ -312,7 +311,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
         request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
 
-    source = dataset.get_dataset_schemas().get_read_schema().get_from_clause()
+    source = dataset.get_dataset_schemas().get_read_schema().get_clickhouse_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
