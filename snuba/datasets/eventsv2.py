@@ -20,7 +20,7 @@ from snuba.schemas import get_time_series_extension_properties
 
 
 class EventsV2(TimeSeriesDataset):
-    def __init__(self):
+    def __init__(self) -> None:
         grouped_message = get_dataset("groupedmessage")
         events = get_dataset("events")
 
@@ -61,7 +61,7 @@ class EventsV2(TimeSeriesDataset):
             timestamp_column='events.timestamp',
         )
 
-    def get_query_schema(self):
+    def get_query_schema(self) -> RequestSchema:
         return RequestSchema(GENERIC_QUERY_SCHEMA, {
             'performance': PERFORMANCE_EXTENSION_SCHEMA,
             'project': PROJECT_EXTENSION_SCHEMA,
