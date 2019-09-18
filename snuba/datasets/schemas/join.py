@@ -13,25 +13,35 @@ class JoinType(Enum):
     FULL = "FULL"
 
 
-class JoinExpression(NamedTuple):
+class JoinConditionExpression(NamedTuple):
+    """
+    Represent one qualified column [alias.column] in the
+    ON clause within the join expression.
+    """
     table_alias: str
     column: str
 
 
 @dataclass(frozen=True)
-class JoinMapping:
-    left: JoinExpression
-    right: JoinExpression
+class JoinCondition:
+    """
+    Represent a condition in the ON clause in the JOIN expression
+    """
+    left: JoinConditionExpression
+    right: JoinConditionExpression
 
     def get_join_condition(self) -> str:
         return f"{self.left.table_alias}.{self.left.column} = " \
             f"{self.right.table_alias}.{self.right.column}"
 
 
-@dataclass(frozen=True)
-class JoinedSource:
-    source: Schema
+class JoinedSource(NamedTuple):
+    """
+    Represent one qualified data source in the JOIN expression.
+    It can be a table, a view or another join expression.
+    """
     alias: Optional[str]
+    source: Schema
 
 
 @dataclass(frozen=True)
@@ -40,15 +50,14 @@ class JoinStructure:
     Abstracts the join clause as a tree.
     Every node in the tree is either a join itself or a
     schema with an alias.
-    Traversing the tree it is possible to build the join
-    clause.
+    Traversing the tree it is possible to build the join clause.
 
     This does not validate the join makes sense nor it checks
     the aliases are valid.
     """
     left_schema: JoinedSource
     right_schema: JoinedSource
-    mapping: Sequence[JoinMapping]
+    mapping: Sequence[JoinCondition]
     join_type: JoinType
 
     def get_clickhouse_source(self) -> str:
