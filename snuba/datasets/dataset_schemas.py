@@ -1,4 +1,4 @@
-from typing import Optional, List, Sequence
+from typing import Optional, List, Sequence, Union
 
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
@@ -12,7 +12,7 @@ class DatasetSchemas(object):
     def __init__(
             self,
             read_schema: Schema,
-            write_schema: WritableTableSchema,
+            write_schema: Union[WritableTableSchema, None],
             intermediary_schemas: Optional[List[Schema]] = None
     ) -> None:
         if intermediary_schemas is None:
@@ -25,12 +25,21 @@ class DatasetSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_write_schema(self) -> WritableTableSchema:
+    def get_write_schema(self) -> Union[WritableTableSchema, None]:
         return self.__write_schema
+
+    def get_write_schema_enforce(self) -> WritableTableSchema:
+        schema = self.__write_schema
+        assert schema is not None, "Dataset does not have a write schema."
+        return schema
 
     def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
-        all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
+
+        all_schemas_with_possible_duplicates = [self.__read_schema]
+        if self.__write_schema:
+            all_schemas_with_possible_duplicates.append(self.__write_schema)
+        all_schemas_with_possible_duplicates.extend(self.__intermediary_schemas)
 
         for schema in all_schemas_with_possible_duplicates:
             if schema not in unique_schemas:
