@@ -382,12 +382,13 @@ def raw_query(request: Request, sql, client, timer, stats=None):
     project_ids = to_list(request.extensions['project']['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
+    grl, gcl, prl, pcl, use_cache, use_deduper, uc_max = state.get_configs([
         ('global_per_second_limit', None),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
         ('use_cache', 0),
+        ('use_deduper', 1),
         ('uncompressed_cache_max_cols', 5),
     ])
 
@@ -413,7 +414,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
     timer.mark('get_configs')
 
     query_id = md5(force_bytes(sql)).hexdigest()
-    with state.deduper(query_id) as is_dupe:
+    with state.deduper(query_id if use_deduper else None) as is_dupe:
         timer.mark('dedupe_wait')
 
         result = state.get_result(query_id) if use_cache else None
@@ -460,7 +461,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                                 query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
-                                query_id=query_id,
+                                query_id=query_id if use_deduper else None,
                                 with_totals=request.query.get('totals', False),
                             )
                             status = 200
