@@ -53,6 +53,7 @@ setup(
         'mccabe==0.6.1',
         'mock==2.0.0',
         'more-itertools==4.2.0',
+        'mypy-extensions==0.4.1',
         'packaging==17.1',
         'parso==0.2.1',
         'pathlib2==2.3.2',

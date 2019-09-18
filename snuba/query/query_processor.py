@@ -1,9 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, TypeVar
+from typing import Any, Generic, TypeVar
 
 from snuba.query.query import Query
-
-ExtensionData = Mapping[str, Any]
 
 TQueryProcessContext = TypeVar("TQueryProcessContext")
 
@@ -31,20 +29,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
         raise NotImplementedError
 
 
-class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
-    """
-    Common parent class for all the extension processors. The only
-    contribution of this class is to resolve the generic context to
-    extension data. So subclasses of this one can be used to process
-    query extensions.
-    """
+class DummyExtensionProcessor(QueryProcessor[Any]):
 
-    @abstractmethod
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
-        raise NotImplementedError
-
-
-class DummyExtensionProcessor(ExtensionQueryProcessor):
-
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
-        return query
+    def process_query(self, query: Query, extension_data: Any) -> None:
+        pass

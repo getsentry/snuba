@@ -1,22 +1,24 @@
-from abc import ABC
-from datetime import timedelta
-from typing import Any, Mapping, Tuple
+from abc import ABC, abstractstaticmethod
+from datetime import datetime, timedelta
+from mypy_extensions import TypedDict
+from typing import Any, Generic, Mapping, Tuple, TypeVar
 
 from snuba import state
 from snuba import util
 from snuba.query.query import Query
 from snuba.query.query_processor import (
     DummyExtensionProcessor,
-    ExtensionData,
-    ExtensionQueryProcessor
+    QueryProcessor,
 )
 from snuba.schemas import (
     get_time_series_extension_properties,
     Schema
 )
 
+TExtensionPayload = TypeVar("TExtensionPayload")
 
-class QueryExtension(ABC):
+
+class QueryExtension(ABC, Generic[TExtensionPayload]):
     """
     Defines a query extension by coupling a query extension schema
     and a query extension processor that updates the query by
@@ -25,7 +27,7 @@ class QueryExtension(ABC):
 
     def __init__(self,
         schema: Schema,
-        processor: ExtensionQueryProcessor,
+        processor: QueryProcessor[TExtensionPayload],
     ) -> None:
         self.__schema = schema
         self.__processor = processor
@@ -33,7 +35,11 @@ class QueryExtension(ABC):
     def get_schema(self) -> Schema:
         return self.__schema
 
-    def get_processor(self) -> ExtensionQueryProcessor:
+    @abstractstaticmethod
+    def parse_payload(cls, payload: Mapping[str, Any]) -> TExtensionPayload:
+        raise NotImplementedError
+
+    def get_processor(self) -> QueryProcessor[TExtensionPayload]:
         return self.__processor
 
 
@@ -80,28 +86,40 @@ PERFORMANCE_EXTENSION_SCHEMA = {
 }
 
 
-class PerformanceExtension(QueryExtension):
+class PerformanceExtension(QueryExtension[Any]):
     def __init__(self) -> None:
         super().__init__(
             schema=PERFORMANCE_EXTENSION_SCHEMA,
             processor=DummyExtensionProcessor(),
         )
 
+    def parse_payload(cls, payload: Mapping[str, Any]) -> Any:
+        return payload
 
-class ProjectExtension(QueryExtension):
+
+class ProjectExtension(QueryExtension[Any]):
     def __init__(self) -> None:
         super().__init__(
             schema=PROJECT_EXTENSION_SCHEMA,
             processor=DummyExtensionProcessor(),
         )
 
+    def parse_payload(cls, payload: Mapping[str, Any]) -> Any:
+        return payload
 
-class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
+
+class TimeSeriesExtensionPayload(TypedDict):
+    from_date: str
+    to_date: str
+    granularity: int
+
+
+class TimeSeriesExtensionProcessor(QueryProcessor[TimeSeriesExtensionPayload]):
     def __init__(self, timstamp_column: str):
         self.__timestamp_column = timstamp_column
 
     @classmethod
-    def get_time_limit(cls, timeseries_extension: Mapping[str, Any]) -> Tuple[int, int]:
+    def get_time_limit(cls, timeseries_extension: TimeSeriesExtensionPayload) -> Tuple[datetime, datetime]:
         max_days, date_align = state.get_configs([
             ('max_days', None),
             ('date_align_seconds', 1),
@@ -116,7 +134,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
 
         return (from_date, to_date)
 
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
+    def process_query(self, query: Query, extension_data: TimeSeriesExtensionPayload) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.add_conditions([
             (self.__timestamp_column, '>=', from_date.isoformat()),
@@ -124,7 +142,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
         ])
 
 
-class TimeSeriesExtension(QueryExtension):
+class TimeSeriesExtension(QueryExtension[TimeSeriesExtensionPayload]):
     def __init__(
         self,
         default_granularity: int,
@@ -137,4 +155,12 @@ class TimeSeriesExtension(QueryExtension):
                 default_window=default_window,
             ),
             processor=TimeSeriesExtensionProcessor(timestamp_column),
+        )
+
+    @classmethod
+    def parse_payload(cls, payload: Mapping[str, Any]) -> TimeSeriesExtensionPayload:
+        return TimeSeriesExtensionPayload(
+            from_date=payload["from_date"],
+            to_date=payload["to_date"],
+            granularity=payload["granularity"],
         )

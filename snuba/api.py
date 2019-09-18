@@ -17,7 +17,7 @@ from uuid import UUID
 from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.extensions import TimeSeriesExtensionProcessor
+from snuba.query.extensions import TimeSeriesExtension, TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
@@ -275,13 +275,15 @@ def parse_and_run_query(
     extension_payloads: Mapping[str, Mapping[str, Any]],
     timer,
 ):
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(extension_payloads['timeseries'])
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
+        TimeSeriesExtension.parse_payload(extension_payloads['timeseries'])
+    )
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
-            extension_payloads[name],
+            extension.parse_payload(extension_payloads[name]),
         )
     request.query.add_conditions(dataset.default_conditions())
 
