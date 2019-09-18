@@ -461,7 +461,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                                 query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
-                                query_id=query_id,
+                                query_id=query_id if use_deduper else None,
                                 with_totals=request.query.get('totals', False),
                             )
                             status = 200
