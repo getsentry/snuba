@@ -10,7 +10,7 @@ test_data = [
     (
         complex_join_structure,
         "test_table1 t1 FULL JOIN test_table2 t2 ON t1.c1 = t2.c2 "
-        " INNER JOIN test_table3 t3 ON t1.c1 = t3.c3"
+        "INNER JOIN test_table3 t3 ON t1.c1 = t3.c3"
     )
 ]
 

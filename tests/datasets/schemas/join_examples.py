@@ -9,8 +9,9 @@ from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
     JoinStructure,
-    JoinedSource,
     JoinType,
+    SchemaJoinedSource,
+    SubJoinSource,
 )
 
 
@@ -56,9 +57,10 @@ table3 = MergeTreeSchema(
     partition_by="",
 )
 
+
 simple_join_structure = JoinStructure(
-    JoinedSource("t1", table1),
-    JoinedSource("t2", table2),
+    SchemaJoinedSource("t1", table1),
+    SchemaJoinedSource("t2", table2),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -73,11 +75,10 @@ simple_join_structure = JoinStructure(
 )
 
 complex_join_structure = JoinStructure(
-    JoinedSource(
-        None,
+    SubJoinSource(
         JoinStructure(
-            JoinedSource("t1", table1),
-            JoinedSource("t2", table2),
+            SchemaJoinedSource("t1", table1),
+            SchemaJoinedSource("t2", table2),
             [
                 JoinCondition(
                     left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -87,7 +88,7 @@ complex_join_structure = JoinStructure(
             JoinType.FULL
         ),
     ),
-    JoinedSource("t3", table3),
+    SchemaJoinedSource("t3", table3),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),

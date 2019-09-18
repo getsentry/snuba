@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping, NamedTuple, Optional, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import Schema
@@ -42,10 +42,15 @@ class JoinedSource(ABC):
     """
     Represent an abstract node in the Join Structure tree. It can be
     a schema that will have an alias or another join structure.
-    This class only knows how to print itself in the Join clause.
+    This class only knows how to print itself in the Join clause and
+    how to return all the schemas (with aliases) included in the subtrees.
     """
     @abstractmethod
     def print(self) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_schemas(self) -> Mapping[str, Schema]:
         raise NotImplementedError
 
 
@@ -61,6 +66,9 @@ class SchemaJoinedSource(JoinedSource):
     def print(self) -> str:
         return f"{self.schema.get_clickhouse_source()} {self.alias}"
 
+    def get_schemas(self) -> Mapping[str, Schema]:
+        return {self.alias: self.schema}
+
 
 @dataclass(frozen=True)
 class SubJoinSource(JoinedSource):
@@ -71,6 +79,11 @@ class SubJoinSource(JoinedSource):
 
     def print(self) -> str:
         return f"{self.structure.get_clickhouse_source()}"
+
+    def get_schemas(self) -> Mapping[str, Schema]:
+        left = self.structure.left_source.get_schemas()
+        right = self.structure.right_source.get_schemas()
+        return {**left, **right}
 
 
 @dataclass(frozen=True)
@@ -113,28 +126,13 @@ class JoinedSchema(Schema):
         )
         self.__join_structure = join_root
 
-    def __get_schemas(self, structure: JoinStructure) -> Mapping[str, Schema]:
-        def get_schemas_rec(source: JoinedSource) -> Mapping[str, Schema]:
-            if not isinstance(source.source, JoinStructure):
-                return {source.alias: source.source}
-            else:
-                joined_structure = source.source
-                left = get_schemas_rec(joined_structure.left_schema)
-                right = get_schemas_rec(joined_structure.right_schema)
-                return {**left, **right}
-
-        return {
-            **get_schemas_rec(structure.left_schema),
-            **get_schemas_rec(structure.right_schema),
-        }
-
     def __get_columns(self, structure: JoinStructure) -> ColumnSet:
         """
         Extracts all the columns recursively from the joined schemas and
         flattens this structure adding the columns into one ColumnSet
         prepended with the schema alias.
         """
-        schemas = self.__get_schemas(structure)
+        schemas = SubJoinSource(structure).get_schemas()
         ret = []
         for alias, schema in schemas.items():
             # Iterate over the structured columns. get_columns() flattens nested
