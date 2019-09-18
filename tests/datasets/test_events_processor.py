@@ -410,14 +410,14 @@ class TestEventsProcessor(BaseEventsTest):
             'id': 'user_id',
             'email': 'user_email',
             'username': 'user_username',
-            'ip_address': 'user_ip_address',
+            'ip_address': '127.0.0.2',
         }
         output = {}
 
         extract_user(output, user)
 
         assert output == {'email': u'user_email',
-                          'ip_address': u'user_ip_address',
+                          'ip_address': u'127.0.0.2',
                           'user_id': u'user_id',
                           'username': u'user_username'}
 
