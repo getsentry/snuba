@@ -5,7 +5,8 @@ from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
     JoinStructure,
-    JoinedSource,
+    SchemaJoinedSource,
+    SubJoinSource,
     JoinType,
 )
 
@@ -37,8 +38,8 @@ table3 = MergeTreeSchema(
 test_data = [
     (
         JoinStructure(
-            JoinedSource("t1", table1),
-            JoinedSource("t2", table2),
+            SchemaJoinedSource("t1", table1),
+            SchemaJoinedSource("t2", table2),
             [
                 JoinCondition(
                     left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -55,11 +56,10 @@ test_data = [
     ),
     (
         JoinStructure(
-            JoinedSource(
-                None,
+            SubJoinSource(
                 JoinStructure(
-                    JoinedSource("t1", table1),
-                    JoinedSource("t2", table2),
+                    SchemaJoinedSource("t1", table1),
+                    SchemaJoinedSource("t2", table2),
                     [
                         JoinCondition(
                             left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -69,7 +69,7 @@ test_data = [
                     JoinType.FULL
                 ),
             ),
-            JoinedSource("t3", table3),
+            SchemaJoinedSource("t3", table3),
             [
                 JoinCondition(
                     left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -79,7 +79,7 @@ test_data = [
             JoinType.INNER
         ),
         "((test_table1 t1 FULL JOIN test_table2 t2 ON t1.c1 = t2.c2) "
-        " INNER JOIN test_table3 t3 ON t1.c1 = t3.c3)"
+        "INNER JOIN test_table3 t3 ON t1.c1 = t3.c3)"
     )
 ]
 
