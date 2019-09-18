@@ -1,7 +1,8 @@
 import pytest
 
-from snuba.datasets.schemas.table_schemas import MergeTreeSchema
-from snuba.datasets.schemas.join_schema import (
+from snuba.datasets.schemas.tables import MergeTreeSchema
+from snuba.datasets.schemas.join import (
+    JoinExpression,
     JoinMapping,
     JoinStructure,
     JoinedSource,
@@ -40,16 +41,12 @@ test_data = [
             JoinedSource(table2, "t2"),
             [
                 JoinMapping(
-                    left_alias="t1",
-                    left_column="c1",
-                    right_alias="t2",
-                    right_column="c2",
+                    left=JoinExpression(table_alias="t1", column="c1"),
+                    right=JoinExpression(table_alias="t2", column="c2"),
                 ),
                 JoinMapping(
-                    left_alias="t1",
-                    left_column="c3",
-                    right_alias="t2",
-                    right_column="c4",
+                    left=JoinExpression(table_alias="t1", column="c3"),
+                    right=JoinExpression(table_alias="t2", column="c4"),
                 )
             ],
             JoinType.INNER
@@ -64,10 +61,8 @@ test_data = [
                     JoinedSource(table2, "t2"),
                     [
                         JoinMapping(
-                            left_alias="t1",
-                            left_column="c1",
-                            right_alias="t2",
-                            right_column="c2",
+                            left=JoinExpression(table_alias="t1", column="c1"),
+                            right=JoinExpression(table_alias="t2", column="c2"),
                         ),
                     ],
                     JoinType.FULL
@@ -77,10 +72,8 @@ test_data = [
             JoinedSource(table3, "t3"),
             [
                 JoinMapping(
-                    left_alias="t1",
-                    left_column="c1",
-                    right_alias="t3",
-                    right_column="c3",
+                    left=JoinExpression(table_alias="t1", column="c1"),
+                    right=JoinExpression(table_alias="t3", column="c3"),
                 ),
             ],
             JoinType.INNER
@@ -93,5 +86,5 @@ test_data = [
 
 @pytest.mark.parametrize("structure, expected", test_data)
 def test_join_source(structure, expected):
-    join_clause = structure.get_from_clause()
+    join_clause = structure.get_clickhouse_source()
     assert join_clause == expected
