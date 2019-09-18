@@ -85,18 +85,18 @@ class JoinedSchema(Schema):
         join_root: JoinStructure,
     ) -> None:
         super().__init__(
-            columns=ColumnSet(self.__get_columns(join_root)),
+            columns=self.__get_columns(join_root),
         )
-        self.__join_storage = join_root
+        self.__join_structure = join_root
 
     def __get_schemas(self, structure: JoinStructure) -> Mapping[str, Schema]:
         def get_schemas_rec(source: JoinedSource) -> Mapping[str, Schema]:
-            if not isinstance(source.source, JoinedSchema):
+            if not isinstance(source.source, JoinStructure):
                 return {source.alias: source.source}
             else:
-                joined_schema = source.source
-                left = get_schemas_rec(joined_schema.__join_source.left_schema)
-                right = get_schemas_rec(joined_schema.__join_source.left_schema)
+                joined_structure = source.source
+                left = get_schemas_rec(joined_structure.left_schema)
+                right = get_schemas_rec(joined_structure.right_schema)
                 return {**left, **right}
 
         return {
@@ -105,13 +105,19 @@ class JoinedSchema(Schema):
         }
 
     def __get_columns(self, structure: JoinStructure) -> ColumnSet:
+        """
+        Extracts all the columns recursively from the joined schemas and
+        flattens this structure adding the columns into one ColumnSet
+        prepended with the schema alias.
+        """
         schemas = self.__get_schemas(structure)
         ret = []
         for alias, schema in schemas.items():
-            for column in schema.get_columns():
-                base = f".{column.base_name}" or ""
-                ret.append((f"{alias}{base}.{column.name}", column.type))
-        return ret
+            # Iterate over the structured columns. get_columns() flattens nested
+            # columns. We need them intact here.
+            for column in schema.get_columns().columns:
+                ret.append((f"{alias}.{column.name}", column.type))
+        return ColumnSet(ret)
 
     def get_clickhouse_source(self) -> str:
-        return self.__join_storage.get_clickhouse_source()
+        return self.__join_structure.get_clickhouse_source()
