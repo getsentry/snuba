@@ -1,7 +1,9 @@
+import ipaddress
 from datetime import datetime
 import re
 from hashlib import md5
 import simplejson as json
+from typing import Any, Optional, Union
 
 from snuba.util import force_bytes
 
@@ -105,3 +107,18 @@ def _ensure_valid_date(dt):
     if _collapse_uint32(seconds) is None:
         return None
     return dt
+
+
+def _ensure_valid_ip(ip: Any) -> Optional[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
+    """
+    IP addresses in e.g. `user.ip_address` might be invalid due to PII stripping.
+    """
+
+    ip = _unicodify(ip)
+    if ip:
+        try:
+            return ipaddress.ip_address(ip)
+        except ValueError:
+            pass
+
+    return None
