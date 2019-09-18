@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping, NamedTuple, Optional, Sequence
@@ -35,13 +38,39 @@ class JoinCondition:
             f"{self.right.table_alias}.{self.right.column}"
 
 
-class JoinedSource(NamedTuple):
+class JoinedSource(ABC):
+    """
+    Represent an abstract node in the Join Structure tree. It can be
+    a schema that will have an alias or another join structure.
+    This class only knows how to print itself in the Join clause.
+    """
+    @abstractmethod
+    def print(self) -> str:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class SchemaJoinedSource(JoinedSource):
     """
     Represent one qualified data source in the JOIN expression.
-    It can be a table, a view or another join expression.
+    It can be a table or a view.
     """
-    alias: Optional[str]
-    source: Schema
+    alias: str
+    schema: Schema
+
+    def print(self) -> str:
+        return f"{self.schema.get_clickhouse_source()} {self.alias}"
+
+
+@dataclass(frozen=True)
+class SubJoinSource(JoinedSource):
+    """
+    Represents a sub expression in the join clause, which is a join on its own.
+    """
+    structure: JoinStructure
+
+    def print(self) -> str:
+        return f"{self.structure.get_clickhouse_source()}"
 
 
 @dataclass(frozen=True)
@@ -55,19 +84,14 @@ class JoinStructure:
     This does not validate the join makes sense nor it checks
     the aliases are valid.
     """
-    left_schema: JoinedSource
-    right_schema: JoinedSource
+    left_source: JoinedSource
+    right_source: JoinedSource
     mapping: Sequence[JoinCondition]
     join_type: JoinType
 
     def get_clickhouse_source(self) -> str:
-        left_expr = self.left_schema.source.get_clickhouse_source()
-        left_alias = self.left_schema.alias
-        left_str = f"{left_expr} {left_alias or ''}"
-
-        right_expr = self.right_schema.source.get_clickhouse_source()
-        right_alias = self.right_schema.alias
-        right_str = f"{right_expr} {right_alias or ''}"
+        left_str = self.left_source.print()
+        right_str = self.right_source.print()
 
         on_clause = " AND ".join([m.get_join_condition() for m in self.mapping])
 
