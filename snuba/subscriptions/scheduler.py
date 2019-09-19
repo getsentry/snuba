@@ -1,9 +1,53 @@
 from __future__ import annotations
 
+import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
-from confluent_kafka import TIMESTAMP_LOG_APPEND_TIME, Consumer, TopicPartition
+from confluent_kafka import TIMESTAMP_LOG_APPEND_TIME
+from confluent_kafka import Consumer as KafkaConsumer
+from confluent_kafka import TopicPartition
+
+
+logger = logging.getLogger(__name__)
+
+
+TMessage = TypeVar("TMessage")
+
+
+class Consumer(Generic[TMessage], ABC):
+    @abstractmethod
+    def subscribe(
+        self,
+        topics: Sequence[str],
+        on_assign: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
+        on_revoke: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def poll(self, timeout: Optional[float] = None) -> Optional[TMessage]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def commit(self, asynchronous: bool = True) -> Optional[Sequence[TopicPartition]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self) -> None:
+        raise NotImplementedError
 
 
 class Task:
@@ -50,20 +94,51 @@ class TaskSet:
     Represents a collection of tasks to be executed.
     """
 
+    topic: str
     partition: int
     interval: Interval
     tasks: Sequence[Task]
 
 
-class Scheduler:
+def get_boolean_configuration_value(
+    configuration: Mapping[str, Any], key: str, default: bool
+) -> bool:
+    value = configuration.get(key, default)
+    if isinstance(value, str):
+        return value.lower().strip() == "true"
+    elif isinstance(value, bool):
+        return value
+    else:
+        raise TypeError(f"unexpected value for {key!r}")
+
+
+class PartitionState:
+    def __init__(self) -> None:
+        self.__state: Union[None, Position, Interval] = None
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}: {self.__state}>"
+
+    def send(self, position: Position) -> Union[None, Position, Interval]:
+        if self.__state is None:
+            self.__state = position
+            return self.__state
+        elif isinstance(self.__state, Position):
+            self.__state = Interval(self.__state, position)
+            return self.__state
+        elif isinstance(self.__state, Interval):
+            self.__state = self.__state.shift(position)
+            return self.__state
+        else:
+            raise ValueError("unexpected state")
+
+
+class TaskSetConsumer(Consumer[TaskSet]):
     """
     Identifies tasks to be executed based on the data within a Kafka topic.
     """
 
-    def __init__(self, configuration: Mapping[str, Any], topic: str) -> None:
-        self.__configuration = configuration
-        self.__topic = topic
-
+    def __init__(self, configuration: Mapping[str, Any]) -> None:
         # There are three valid states for a partition in this mapping:
         # 1. Partitions that have been assigned but have not yet had any messages
         # consumed from them will have a value of ``None``.
@@ -102,25 +177,62 @@ class Scheduler:
         # next tasks to be executed will be those that are scheduled between
         # the timestamps of "MB" and "MC" (again: lower bound exclusive, upper
         # bound inclusive): T6 and T7.
-        self.__partitions: MutableMapping[int, Union[None, Position, Interval]] = {}
+        self.__topic_partition_states: MutableMapping[
+            Tuple[str, int], PartitionState
+        ] = {}
 
-        self.__consumer = Consumer(configuration)
-        self.__consumer.subscribe(
-            [topic], on_assign=self.__on_assign, on_revoke=self.__on_revoke
+        # Using the built-in ``enable.auto.offset.store`` behavior will cause
+        # gaps in task execution during restarts or rebalances, since it will
+        # set the next offset to be consumed as the most recently message
+        # consumed's offset + 1. In our case, we always want the first message
+        # to be consumed after a rebalance to be *the same* as the previously
+        # consumed message. To account for this, we have to always disable it,
+        # and use our own implementation that stores the offset of the most
+        # recently received message in a partition, instead of that offset + 1.
+        self.__consumer = KafkaConsumer(
+            {**configuration, "enable.auto.offset.store": "false"}
         )
 
-    def __on_assign(
-        self, consumer: Consumer, assignment: Sequence[TopicPartition]
-    ) -> None:
-        for tp in assignment:
-            if tp.partition not in self.__partitions:
-                self.__partitions[tp.partition] = None
+        # XXX: There's no way to deal with this right now and *not* store
+        # offsets, so this option is effectively required.
+        self.__enable_auto_offset_store = get_boolean_configuration_value(
+            configuration, "enable.auto.offset.store", True
+        )
 
-    def __on_revoke(
-        self, consumer: Consumer, assignment: Sequence[TopicPartition]
+    def subscribe(
+        self,
+        topics: Sequence[str],
+        on_assign: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
+        on_revoke: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
     ) -> None:
-        for tp in assignment:
-            del self.__partitions[tp.partition]
+        def on_assign_callback(
+            consumer: Any, assignment: Sequence[TopicPartition]
+        ) -> None:
+            for tp in assignment:
+                key = (tp.topic, tp.partition)
+                if key not in self.__topic_partition_states:
+                    state = PartitionState()
+                    self.__topic_partition_states[key] = state
+                    logger.debug("Initialized partition state for %r: %r", key, state)
+
+            if on_assign is not None:
+                on_assign(assignment)
+
+        def on_revoke_callback(
+            consumer: Any, assignment: Sequence[TopicPartition]
+        ) -> None:
+            # XXX: Check to see if this causes any weird shit during rebalancing.
+            for tp in assignment:
+                key = (tp.topic, tp.partition)
+                state = self.__topic_partition_states.pop(key)
+                logger.debug("Discarded partition state for %r: %r", key, state)
+
+            if on_revoke is not None:
+                on_revoke(assignment)
+
+        self.__consumer.subscribe(
+            topics, on_assign=on_assign_callback, on_revoke=on_revoke_callback
+        )
 
     def poll(self, timeout: Optional[float] = None) -> Optional[TaskSet]:
         """
@@ -137,39 +249,33 @@ class Scheduler:
         timestamp_type, timestamp = message.timestamp()
         assert timestamp_type == TIMESTAMP_LOG_APPEND_TIME
 
-        position = Position(message.offset(), timestamp / 1000.0)
+        state = self.__topic_partition_states[
+            (message.topic(), message.partition())
+        ].send(Position(message.offset(), timestamp / 1000.0))
 
-        partition = message.partition()
-        state = self.__partitions[partition]
-
-        if state is None:
-            state = position
-            result = None
-        elif isinstance(state, Position):
-            state = Interval(state, position)
-            result = None
+        if isinstance(state, Position):
+            tasks = None
         elif isinstance(state, Interval):
-            state = state.shift(position)
-            # TODO: Get tasks that are scheduled between the interval.
-            result = TaskSet(partition, state, [])
+            tasks = TaskSet(message.topic(), message.partition(), state, [])
         else:
             raise ValueError("unexpected state")
 
-        self.__partitions[partition] = state
+        if self.__enable_auto_offset_store:
+            self.__consumer.store_offsets(
+                offsets=[
+                    TopicPartition(
+                        message.topic(), message.partition(), message.offset()
+                    )
+                ]
+            )
 
-        return result
+        return tasks
 
-    def done(self, tasks: TaskSet) -> None:
-        """
-        Mark all tasks within the task set as completed.
-        """
-        assert self.__partitions[tasks.partition] == tasks.interval
-
-        # N.B.: ``store_offset``'s handling of offset values differs from that
-        # of ``commit``! The offset passed to ``store_offset`` will be the
-        # offset of the first message read when the consumer restarts.
-        self.__consumer.store_offsets(
-            offsets=[
-                TopicPartition(self.__topic, tasks.partition, tasks.interval.upper)
-            ]
+    def commit(self, asynchronous: bool = True) -> Optional[Sequence[TopicPartition]]:
+        offsets: Optional[Sequence[TopicPartition]] = self.__consumer.commit(
+            asynchronous=asynchronous
         )
+        return offsets
+
+    def close(self) -> None:
+        self.__consumer.close()
