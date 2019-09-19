@@ -33,7 +33,7 @@ class JoinCondition:
     left: JoinConditionExpression
     right: JoinConditionExpression
 
-    def get_join_condition(self) -> str:
+    def __str__(self) -> str:
         return f"{self.left.table_alias}.{self.left.column} = " \
             f"{self.right.table_alias}.{self.right.column}"
 
@@ -44,9 +44,7 @@ class JoinedSource(ABC):
     a schema that will have an alias or another join structure.
     This class only knows how to print itself in the Join clause.
     """
-    @abstractmethod
-    def print(self) -> str:
-        raise NotImplementedError
+    pass
 
 
 @dataclass(frozen=True)
@@ -58,8 +56,8 @@ class SchemaJoinedSource(JoinedSource):
     alias: str
     schema: Schema
 
-    def print(self) -> str:
-        return f"{self.schema.get_clickhouse_source()} {self.alias}"
+    def __str__(self) -> str:
+        return f"{self.schema.get_data_source()} {self.alias}"
 
 
 @dataclass(frozen=True)
@@ -69,8 +67,8 @@ class SubJoinSource(JoinedSource):
     """
     structure: JoinStructure
 
-    def print(self) -> str:
-        return f"{self.structure.get_clickhouse_source()}"
+    def __str__(self) -> str:
+        return f"{self.structure.get_data_source()}"
 
 
 @dataclass(frozen=True)
@@ -89,13 +87,11 @@ class JoinStructure:
     mapping: Sequence[JoinCondition]
     join_type: JoinType
 
-    def get_clickhouse_source(self) -> str:
-        left_str = self.left_source.print()
-        right_str = self.right_source.print()
+    def get_data_source(self) -> str:
 
-        on_clause = " AND ".join([m.get_join_condition() for m in self.mapping])
+        on_clause = " AND ".join([str(m) for m in self.mapping])
 
-        return f"({left_str} {self.join_type.value} JOIN {right_str} ON {on_clause})"
+        return f"({self.left_source} {self.join_type.value} JOIN {self.right_source} ON {on_clause})"
 
 
 class JoinedSchema(Schema):
@@ -122,5 +118,5 @@ class JoinedSchema(Schema):
         """
         raise NotImplementedError("Not implemented yet.")
 
-    def get_clickhouse_source(self) -> str:
-        return self.__join_storage.get_clickhouse_source()
+    def get_data_source(self) -> str:
+        return self.__join_storage.get_data_source()

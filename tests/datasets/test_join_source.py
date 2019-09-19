@@ -86,5 +86,5 @@ test_data = [
 
 @pytest.mark.parametrize("structure, expected", test_data)
 def test_join_source(structure, expected):
-    join_clause = structure.get_clickhouse_source()
+    join_clause = structure.get_data_source()
     assert join_clause == expected
