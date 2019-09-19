@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import Any, Mapping, Tuple
 
 from snuba import state
-from snuba import util
+from snuba.util import parse_datetime
 from snuba.query.query import Query
 from snuba.query.query_processor import (
     DummyExtensionProcessor,
@@ -107,8 +107,8 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
             ('date_align_seconds', 1),
         ])
 
-        to_date = util.parse_datetime(timeseries_extension['to_date'], date_align)
-        from_date = util.parse_datetime(timeseries_extension['from_date'], date_align)
+        to_date = parse_datetime(timeseries_extension['to_date'], date_align)
+        from_date = parse_datetime(timeseries_extension['from_date'], date_align)
         assert from_date <= to_date
 
         if max_days is not None and (to_date - from_date).days > max_days:
