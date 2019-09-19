@@ -3,7 +3,7 @@ import datetime
 from typing import Sequence
 
 from snuba import state
-from snuba.query.extensions import TimeSeriesExtension
+from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Query, Condition
 from snuba.schemas import validate_jsonschema
 

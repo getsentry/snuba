@@ -16,7 +16,7 @@ from uuid import UUID
 from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.extensions import TimeSeriesExtensionProcessor
+from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
