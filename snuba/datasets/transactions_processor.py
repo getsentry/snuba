@@ -7,6 +7,7 @@ from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
     _ensure_valid_date,
+    _ensure_valid_ip,
     _unicodify
 )
 from snuba.datasets.events_processor import (
@@ -99,9 +100,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
         processed["user_email"] = user_data["email"]
-        ip_address = user_data["ip_address"]
+        ip_address = _ensure_valid_ip(user_data["ip_address"])
+
         if ip_address:
-            ip_address = ipaddress.ip_address(ip_address)
             if ip_address.version == 4:
                 processed["ip_address_v4"] = str(ip_address)
             elif ip_address.version == 6:

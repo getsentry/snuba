@@ -87,9 +87,8 @@ class ReplacerWorker(AbstractBatchWorker):
     def __init__(self, clickhouse, dataset, metrics=None):
         self.clickhouse = clickhouse
         self.dataset = dataset
-        self.dist_table_name = dataset.get_dataset_schemas().get_write_schema().get_table_name()
         self.metrics = metrics
-        self.__all_column_names = [col.escaped for col in dataset.get_dataset_schemas().get_write_schema().get_columns()]
+        self.__all_column_names = [col.escaped for col in dataset.get_dataset_schemas().get_write_schema_enforce().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
     def process_message(self, message):
@@ -119,8 +118,8 @@ class ReplacerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         for count_query_template, insert_query_template, query_args, query_time_flags in batch:
             query_args.update({
-                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_table_name(),
-                'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema().get_table_name(),
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source(),
+                'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name(),
             })
             count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
             if count == 0:

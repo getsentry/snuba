@@ -23,10 +23,10 @@ class ClickhouseQuery:
         """Generate a SQL string from the parameters."""
         body = self.__request.body
         query = self.__request.query
-        table = self.__dataset \
+        source = self.__dataset \
             .get_dataset_schemas() \
             .get_read_schema() \
-            .get_table_name()
+            .get_data_source()
 
         aggregate_exprs = [util.column_expr(self.__dataset, col, body, alias, agg) for (agg, col, alias) in query.get_aggregations()]
         groupby = util.to_list(query.get_groupby())
@@ -34,7 +34,7 @@ class ClickhouseQuery:
         selected_cols = [util.column_expr(self.__dataset, util.tuplify(colname), body) for colname in query.get_selected_column()]
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
-        from_clause = u'FROM {}'.format(table)
+        from_clause = u'FROM {}'.format(source)
         if self.__final:
             from_clause = u'{} FINAL'.format(from_clause)
         if query.get_sample():

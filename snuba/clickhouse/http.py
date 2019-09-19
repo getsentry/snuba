@@ -5,6 +5,7 @@ from typing import Callable, Iterable
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -29,7 +30,7 @@ CLICKHOUSE_ERROR_RE = re.compile(
 
 class HTTPBatchWriter(BatchWriter):
     def __init__(self,
-        schema,
+        schema: TableSchema,
         host,
         port,
         encoder: Callable[[WriterTableRow], bytes],
