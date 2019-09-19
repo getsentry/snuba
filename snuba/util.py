@@ -37,6 +37,10 @@ class InvalidConditionException(Exception):
     pass
 
 
+def local_dataset_mode():
+    return settings.DATASET_MODE == "local"
+
+
 def to_list(value):
     return value if isinstance(value, list) else [value]
 
