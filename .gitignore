@@ -1,6 +1,7 @@
-*.swp
 *.pyc
-snuba.egg-info/
-.pytest_cache/
+*.swp
 .coverage
+.mypy_cache/
+.pytest_cache/
 htmlcov/
+snuba.egg-info/
