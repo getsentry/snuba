@@ -3,7 +3,6 @@ from __future__ import annotations
 from deprecation import deprecated
 from typing import (
     Any,
-    Iterable,
     Mapping,
     MutableMapping,
     Optional,
@@ -21,10 +20,10 @@ Condition = Union[
 
 Aggregation = Union[
     Tuple[Any, Any, Any],
-    Iterable[Any],
+    Sequence[Any],
 ]
 
-Groupby = Iterable[Any]
+Groupby = Sequence[Any]
 
 TElement = TypeVar("TElement")
 
