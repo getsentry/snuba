@@ -1,15 +1,9 @@
-import json
-import rapidjson
-
-from datetime import datetime
 from typing import Any, Optional, Mapping, Sequence
 
-from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.processor import MessageProcessor
+from snuba.datasets.table_storage import KafkaFedTableWriter
 from snuba.query.extensions import get_time_limit
 from snuba.util import escape_col
-from snuba.writer import BatchWriter
 
 
 class Dataset(object):
@@ -25,61 +19,19 @@ class Dataset(object):
     def __init__(self,
             dataset_schemas: DatasetSchemas,
             *,
-            processor: MessageProcessor,
-            default_topic: str,
+            table_writer: Optional[KafkaFedTableWriter],
             default_replacement_topic: Optional[str] = None,
             default_commit_log_topic: Optional[str] = None):
         self.__dataset_schemas = dataset_schemas
-        self.__processor = processor
-        self.__default_topic = default_topic
+        self.__table_writer = table_writer
         self.__default_replacement_topic = default_replacement_topic
         self.__default_commit_log_topic = default_commit_log_topic
 
     def get_dataset_schemas(self) -> DatasetSchemas:
         return self.__dataset_schemas
 
-    def get_processor(self) -> MessageProcessor:
-        return self.__processor
-
-    def get_writer(self, options=None, table_name=None) -> BatchWriter:
-        from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
-
-        def default(value):
-            if isinstance(value, datetime):
-                return value.strftime(DATETIME_FORMAT)
-            else:
-                raise TypeError
-
-        return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema_enforce(),
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: json.dumps(row, default=default).encode("utf-8"),
-            options,
-            table_name,
-        )
-
-    def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:
-        """
-        This is a stripped down verison of the writer designed
-        for better performance when loading data in bulk.
-        """
-        # TODO: Consider using rapidjson to encode everywhere
-        # once we will be confident it is reliable enough.
-
-        from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
-
-        return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema_enforce(),
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: rapidjson.dumps(row).encode("utf-8"),
-            options,
-            table_name,
-            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
-        )
+    def get_table_writer(self) -> Optional[KafkaFedTableWriter]:
+        return self.__table_writer
 
     def default_conditions(self):
         """
@@ -94,20 +46,11 @@ class Dataset(object):
     ) -> Sequence[Any]:
         return []
 
-    def get_default_topic(self) -> str:
-        return self.__default_topic
-
     def get_default_replacement_topic(self) -> Optional[str]:
         return self.__default_replacement_topic
 
     def get_default_commit_log_topic(self) -> Optional[str]:
         return self.__default_commit_log_topic
-
-    def get_default_replication_factor(self):
-        return 1
-
-    def get_default_partitions(self):
-        return 1
 
     def column_expr(self, column_name, body):
         """
@@ -115,13 +58,6 @@ class Dataset(object):
         that evaluate to something else.
         """
         return escape_col(column_name)
-
-    def get_bulk_loader(self, source, dest_table):
-        """
-        Returns the instance of the bulk loader to populate the dataset from an
-        external source when present.
-        """
-        raise NotImplementedError
 
     def get_query_schema(self):
         raise NotImplementedError('dataset does not support queries')

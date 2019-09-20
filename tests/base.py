@@ -181,7 +181,7 @@ class BaseDatasetTest(BaseTest):
     def write_rows(self, rows):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
-        self.dataset.get_writer().write(rows)
+        self.dataset.get_table_writer().get_writer().write(rows)
 
 
 class BaseEventsTest(BaseDatasetTest):
@@ -209,7 +209,7 @@ class BaseEventsTest(BaseDatasetTest):
         for event in events:
             if 'primary_hash' not in event:
                 event = wrap_raw_event(event)
-            _, processed = self.dataset.get_processor().process_message(event)
+            _, processed = self.dataset.get_table_writer().get_processor().process_message(event)
             out.append(processed)
 
         return self.write_processed_records(out)
@@ -228,7 +228,7 @@ class BaseEventsTest(BaseDatasetTest):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        self.dataset.get_writer().write(rows)
+        self.dataset.get_table_writer().get_writer().write(rows)
 
 
 def message(offset, partition, value, eof=False) -> FakeKafkaMessage:

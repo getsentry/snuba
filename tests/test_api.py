@@ -64,7 +64,7 @@ class TestApi(BaseApiTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(self.dataset.get_processor().process_insert({
+                    events.append(self.dataset.get_table_writer().get_processor().process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
