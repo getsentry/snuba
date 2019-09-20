@@ -32,7 +32,7 @@ class TableSchema(Schema, ABC):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
 
-    def get_clickhouse_source(self) -> str:
+    def get_data_source(self) -> str:
         """
         In this abstraction the from clause is just the same
         table we refer to for writes.
@@ -109,7 +109,7 @@ class MergeTreeSchema(WritableTableSchema):
     def _get_engine_type(self) -> str:
         return "MergeTree()"
 
-    def _get_local_engine(self) -> str:
+    def __get_local_engine(self) -> str:
         partition_by_clause = ("PARTITION BY %s" %
             self.__partition_by) if self.__partition_by else ''
 
@@ -146,7 +146,7 @@ class MergeTreeSchema(WritableTableSchema):
     def get_local_table_definition(self) -> str:
         return self.__get_table_definition(
             self.get_local_table_name(),
-            self._get_local_engine()
+            self.__get_local_engine()
         )
 
 

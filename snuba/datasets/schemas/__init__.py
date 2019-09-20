@@ -24,7 +24,7 @@ class Schema(ABC):
         self.__columns = columns
 
     @abstractmethod
-    def get_clickhouse_source(self) -> str:
+    def get_data_source(self) -> str:
         """
         Builds and returns the content of the FROM clause Clickhouse
         needs in order to execute a query on this schema.
