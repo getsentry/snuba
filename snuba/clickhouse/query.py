@@ -31,7 +31,8 @@ class ClickhouseQuery:
         aggregate_exprs = [util.column_expr(self.__dataset, col, body, alias, agg) for (agg, col, alias) in query.get_aggregations()]
         groupby = util.to_list(query.get_groupby())
         group_exprs = [util.column_expr(self.__dataset, gb, body) for gb in groupby]
-        selected_cols = [util.column_expr(self.__dataset, util.tuplify(colname), body) for colname in query.get_selected_column()]
+        column_names = query.get_selected_columns() or []
+        selected_cols = [util.column_expr(self.__dataset, util.tuplify(colname), body) for colname in column_names]
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
         from_clause = u'FROM {}'.format(source)

@@ -60,7 +60,7 @@ class Query:
             self.__body[field] = []
         self.__body[field].extend(content)
 
-    def get_selected_column(self) -> Optional[Sequence[Any]]:
+    def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
     def set_selected_columns(

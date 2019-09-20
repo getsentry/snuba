@@ -133,11 +133,9 @@ class TransactionsDataset(TimeSeriesDataset):
             'performance': PerformanceExtension(),
             'project': ProjectExtension(),
             'timeseries': TimeSeriesExtension(
-                get_time_series_extension_properties(
-                    default_granularity=3600,
-                    default_window=timedelta(days=5),
-                    timestamp_column='start_ts',
-                ),
+                default_granularity=3600,
+                default_window=timedelta(days=5),
+                timestamp_column='start_ts',
             ),
         }
 

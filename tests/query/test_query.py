@@ -4,7 +4,7 @@ from snuba.query.query import Query
 def test_empty_query():
     query = Query({})
 
-    assert query.get_selected_column() is None
+    assert query.get_selected_columns() is None
     assert query.get_aggregations() is None
     assert query.get_groupby() is None
     assert query.get_conditions() is None
@@ -26,7 +26,7 @@ def test_full_query():
         "offset": 50,
     })
 
-    assert query.get_selected_column() == ["c1", "c2", "c3"]
+    assert query.get_selected_columns() == ["c1", "c2", "c3"]
     assert query.get_aggregations() == [["count()", "", "count"]]
     assert query.get_groupby() == ["project_id"]
     assert query.get_conditions() == [["c1", "=", "a"]]
@@ -49,7 +49,7 @@ def test_edit_query():
     })
 
     query.set_selected_columns(["c4"])
-    assert query.get_selected_column() == ["c4"]
+    assert query.get_selected_columns() == ["c4"]
 
     query.set_aggregations([["different_agg()", "", "something"]])
     assert query.get_aggregations() == [["different_agg()", "", "something"]]
