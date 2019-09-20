@@ -30,8 +30,10 @@ class Dataset(object):
     def get_dataset_schemas(self) -> DatasetSchemas:
         return self.__dataset_schemas
 
-    def get_table_writer(self) -> Optional[KafkaFedTableWriter]:
-        return self.__table_writer
+    def get_table_writer(self) -> KafkaFedTableWriter:
+        table_writer = self.__table_writer
+        assert table_writer, "This dataset does not support writing"
+        return table_writer
 
     def default_conditions(self):
         """
