@@ -16,7 +16,7 @@ class FakeHTTPWriter(HTTPBatchWriter):
 class TestHTTPBatchWriter(BaseEventsTest):
     def test_error_handling(self):
         try:
-            self.dataset.get_table_writer().get_writer(table_name="invalid").write([{"x": "y"}])
+            self.dataset.get_writer(table_name="invalid").write([{"x": "y"}])
         except ClickHouseError as error:
             assert error.code == 60
             assert error.type == 'DB::Exception'
@@ -24,7 +24,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
             assert False, "expected error"
 
         try:
-            self.dataset.get_table_writer().get_writer().write([{"timestamp": "invalid"}])
+            self.dataset.get_writer().write([{"timestamp": "invalid"}])
         except ClickHouseError as error:
             assert error.code == 41
             assert error.type == 'DB::Exception'

@@ -33,10 +33,8 @@ def test_joined_columns():
 
     # Checks equality between flattened columns. Nested columns are
     # exploded here
-    assert set([c.flattened for c in columns]) \
-        == set([c.flattened for c in expected_columns])
+    assert columns == expected_columns
 
     # Checks equality between the structured set of columns. Nested columns
     # are not exploded.
-    assert set([repr(c) for c in columns.columns]) \
-        == set([repr(c) for c in expected_columns.columns])
+    assert columns.columns == expected_columns.columns

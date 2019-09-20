@@ -140,8 +140,8 @@ class TestConsumer(BaseEventsTest):
         test_worker = ConsumerWorker(self.dataset, producer, self.dataset.get_default_replacement_topic())
 
         test_worker.flush_batch([
-            (self.dataset.get_table_writer().get_processor().REPLACE, ('1', {'project_id': 1})),
-            (self.dataset.get_table_writer().get_processor().REPLACE, ('2', {'project_id': 2})),
+            (self.dataset.get_processor().REPLACE, ('1', {'project_id': 1})),
+            (self.dataset.get_processor().REPLACE, ('2', {'project_id': 2})),
         ])
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == \

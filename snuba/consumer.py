@@ -25,7 +25,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        self.__writer = dataset.get_table_writer().get_writer({
+        self.__writer = dataset.get_writer({
             'load_balancing': 'in_order',
             'insert_distributed_sync': 1,
         })
@@ -53,7 +53,7 @@ class ConsumerWorker(AbstractBatchWorker):
         value: Mapping[str, Any],
         metadata: KafkaMessageMetadata,
     ):
-        processor = self.__dataset.get_table_writer().get_processor()
+        processor = self.__dataset.get_processor()
         return processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
@@ -64,7 +64,7 @@ class ConsumerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
-        processor = self.__dataset.get_table_writer().get_processor()
+        processor = self.__dataset.get_processor()
         inserts = []
         replacements = []
 

@@ -44,7 +44,7 @@ class ConsumerBuilder:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        self.raw_topic = raw_topic or self.dataset.get_table_writer().get_default_topic()
+        self.raw_topic = raw_topic or self.dataset.get_default_topic()
         self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
         self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
 

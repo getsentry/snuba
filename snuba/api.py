@@ -414,11 +414,11 @@ if application.debug or application.testing:
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_table_writer().get_processor().process_message(message)
+            action, row = dataset.get_processor().process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
 
-        dataset.get_table_writer().get_writer().write(rows)
+        dataset.get_writer().write(rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
