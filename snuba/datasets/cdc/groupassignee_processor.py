@@ -15,8 +15,6 @@ from snuba.writer import WriterTableRow
 
 @dataclass(frozen=True)
 class GroupAssigneeRecord:
-    project_id: int
-    group_id: int
     date_added: datetime
     user_id: Optional[int]
     team_id: Optional[int]
@@ -26,7 +24,8 @@ class GroupAssigneeRecord:
 class GroupAssigneeRow(CdcMessageRow):
     offset: Optional[int]
     record_deleted: bool
-    id: int
+    project_id: int
+    group_id: int
     record_content: Union[None, GroupAssigneeRecord]
 
     @classmethod
@@ -38,11 +37,10 @@ class GroupAssigneeRow(CdcMessageRow):
         raw_data = dict(zip(columnnames, columnvalues))
         return cls(
             offset=offset,
-            id=raw_data['id'],
             record_deleted=False,
+            project_id=raw_data['project_id'],
+            group_id=raw_data['group_id'],
             record_content=GroupAssigneeRecord(
-                project_id=raw_data['project_id'],
-                group_id=raw_data['group_id'],
                 date_added=parse_postgres_datetime(raw_data['date_added']),
                 user_id=int(raw_data["user_id"]) if raw_data["user_id"] is not None else None,
                 team_id=int(raw_data["team_id"]) if raw_data["team_id"] is not None else None,
@@ -55,11 +53,10 @@ class GroupAssigneeRow(CdcMessageRow):
     ) -> GroupAssigneeRow:
         return cls(
             offset=0,
-            id=row['id'],
             record_deleted=False,
+            project_id=row['project_id'],
+            group_id=row['group_id'],
             record_content=GroupAssigneeRecord(
-                project_id=row['project_id'],
-                group_id=row['group_id'],
                 date_added=postgres_date_to_clickhouse(row['date_added']),
                 user_id=int(row["user_id"]) if row["user_id"] != "" else None,
                 team_id=int(row["team_id"]) if row["team_id"] != "" else None,
@@ -72,9 +69,8 @@ class GroupAssigneeRow(CdcMessageRow):
             'offset': self.offset if self.offset is not None else 0,
             # TODO: project_id and group_id will become part of the key,
             # then we will never have to set them to 0.
-            'project_id': 0 if not record else record.project_id,
-            'group_id': 0 if not record else record.group_id,
-            'id': self.id,
+            'project_id': self.project_id,
+            'group_id': self.group_id,
             'record_deleted': 1 if self.record_deleted else 0,
             'date_added': None if not record else record.date_added,
             'user_id': None if not record else record.user_id,
@@ -96,10 +92,12 @@ class GroupAssigneeProcessor(CdcProcessor):
     ) -> Optional[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
-        id = key_values[key_names.index('id')]
+        project_id = key_values[key_names.index('project_id')]
+        group_id = key_values[key_names.index('group_id')]
         return GroupAssigneeRow(
             offset=offset,
-            id=id,
             record_deleted=True,
+            project_id=project_id,
+            group_id=group_id,
             record_content=None
         ).to_clickhouse()

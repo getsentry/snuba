@@ -27,7 +27,7 @@ class TestGroupassignee(BaseDatasetTest):
 
     DELETE_MSG = (
         '{"event":"change","xid":3803954,"timestamp":"2019-09-19 00:17:21.44787+00","kind":"delete","schema":"public","table":"sent'
-        'ry_groupasignee","oldkeys":{"keynames":["id"],"keytypes":["bigint"],"keyvalues":[35]}}'
+        'ry_groupasignee","oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
     )
 
     INSERT_MSG = (
@@ -41,7 +41,6 @@ class TestGroupassignee(BaseDatasetTest):
         'offset': 42,
         'project_id': 2,
         'group_id': 1359,
-        'id': 35,
         'record_deleted': 0,
         'user_id': 1,
         'team_id': None,
@@ -50,9 +49,8 @@ class TestGroupassignee(BaseDatasetTest):
 
     DELETED = {
         'offset': 42,
-        'group_id': 0,
-        'project_id': 0,
-        'id': 35,
+        'project_id': 2,
+        'group_id': 1359,
         'record_deleted': 1,
         'user_id': None,
         'team_id': None,
@@ -84,7 +82,6 @@ class TestGroupassignee(BaseDatasetTest):
         assert ret[0] == (
             42,     # offset
             0,      # deleted
-            35,     # id
             2,      # project_id
             1359,   # group_id
             datetime(2019, 9, 19, 0, 17, 55),
@@ -103,7 +100,6 @@ class TestGroupassignee(BaseDatasetTest):
     def test_bulk_load(self):
         row = GroupAssigneeRow.from_bulk({
             'project_id': '2',
-            'id': '35',
             'group_id': '1359',
             'date_added': '2019-09-19 00:17:55+00',
             'user_id': '1',
@@ -115,7 +111,6 @@ class TestGroupassignee(BaseDatasetTest):
         assert ret[0] == (
             0,     # offset
             0,      # deleted
-            35,     # id
             2,      # project_id
             1359,   # group_id
             datetime(2019, 9, 19, 0, 17, 55),

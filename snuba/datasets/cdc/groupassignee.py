@@ -4,7 +4,7 @@ from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, GroupAssigneeRow
-from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
 
 
@@ -26,7 +26,6 @@ class GroupAssigneeDataset(CdcDataset):
             ("offset", UInt(64)),
             ("record_deleted", UInt(8)),
             # PG columns
-            ("id", UInt(64)),
             ("project_id", UInt(64)),
             ("group_id", UInt(64)),
             ("date_added", Nullable(DateTime())),
@@ -40,10 +39,9 @@ class GroupAssigneeDataset(CdcDataset):
             dist_table_name='groupassignee_dist',
             # TODO: add project id and group id to the identity key in postgres
             # and then add them here.
-            order_by='(id)',
+            order_by='(project_id, group_id)',
             partition_by=None,
             version_column='offset',
-            sample_expr='id',
         )
 
         dataset_schemas = DatasetSchemas(
@@ -55,8 +53,6 @@ class GroupAssigneeDataset(CdcDataset):
             dataset_schemas=dataset_schemas,
             processor=GroupAssigneeProcessor(self.POSTGRES_TABLE),
             default_topic="cdc",
-            default_replacement_topic=None,
-            default_commit_log_topic=None,
             default_control_topic="cdc_control",
         )
 
