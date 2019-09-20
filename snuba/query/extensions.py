@@ -2,7 +2,8 @@ from abc import ABC
 
 from snuba.query.query_processor import (
     DummyExtensionProcessor,
-    ExtensionQueryProcessor
+    ExtensionQueryProcessor,
+    ProjectExtensionProcessor
 )
 from snuba.schemas import (
     Schema
@@ -54,5 +55,5 @@ class ProjectExtension(QueryExtension):
     def __init__(self) -> None:
         super().__init__(
             schema=PROJECT_EXTENSION_SCHEMA,
-            processor=DummyExtensionProcessor(),
+            processor=ProjectExtensionProcessor(),
         )

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, TypeVar
 
 from snuba.query.query import Query
+from snuba import state, settings, util
+from snuba.replacer import get_projects_query_flags
 
 ExtensionData = Mapping[str, Any]
 
@@ -21,6 +23,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
+        request_settings: Mapping[str, bool]
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -40,11 +43,39 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
         raise NotImplementedError
 
 
 class DummyExtensionProcessor(ExtensionQueryProcessor):
 
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
         return query
+
+
+class ProjectExtensionProcessor(ExtensionQueryProcessor):
+
+    # TODO(manu): make sure this is fine by https://github.com/getsentry/snuba/pull/473
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
+        # NOTE: we rely entirely on the schema to make sure that regular snuba
+        # queries are required to send a project_id filter. Some other special
+        # internal query types do not require a project_id filter.
+        project_ids = util.to_list(extension_data['project'])
+        if project_ids:
+            query.add_conditions([('project_id', 'IN', project_ids)])
+
+        turbo = request_settings.get('turbo', False)
+        if not turbo:
+            final, exclude_group_ids = get_projects_query_flags(project_ids)
+            if not final and exclude_group_ids:
+                # If the number of groups to exclude exceeds our limit, the query
+                # should just use final instead of the exclusion set.
+                max_group_ids_exclude = state.get_config('max_group_ids_exclude',
+                                                         settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
+                if len(exclude_group_ids) > max_group_ids_exclude:
+                    query.set_final(True)
+                else:
+                    query.set_final(False)
+                    query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
+            else:
+                query.set_final(final)

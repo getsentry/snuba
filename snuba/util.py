@@ -16,7 +16,6 @@ import time
 
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
-from snuba.request import Request
 
 
 logger = logging.getLogger('snuba.util')
@@ -376,7 +375,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(request: Request, sql, client, timer, stats=None):
+def raw_query(request, sql, client, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON

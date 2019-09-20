@@ -273,29 +273,14 @@ def parse_and_run_query(dataset, request: Request, timer):
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
+            request.settings
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    # NOTE: we rely entirely on the schema to make sure that regular snuba
-    # queries are required to send a project_id filter. Some other special
-    # internal query types do not require a project_id filter.
-    project_ids = util.to_list(request.extensions['project']['project'])
-    if project_ids:
-        request.query.add_conditions([('project_id', 'IN', project_ids)])
-
+    # TODO(manu): move this to clickhouse query
     turbo = request.settings.get('turbo', False)
-    if not turbo:
-        final, exclude_group_ids = get_projects_query_flags(project_ids)
-        if not final and exclude_group_ids:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
-            if len(exclude_group_ids) > max_group_ids_exclude:
-                final = True
-            else:
-                request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
-    else:
-        final = False
+    if turbo:
+        request.query.set_final(False)
         if request.query.get_sample() is None:
             request.query.set_sample(settings.TURBO_SAMPLE_RATE)
 
@@ -323,15 +308,14 @@ def parse_and_run_query(dataset, request: Request, timer):
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
+    sql = ClickhouseQuery(dataset, request, prewhere_conditions, request.query.get_final()).format()
     timer.mark('prepare_query')
 
     stats = {
         'clickhouse_table': source,
-        'final': final,
+        'final': request.query.get_final(),
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
-        'num_projects': len(project_ids),
         'sample': request.query.get_sample(),
     }
 
