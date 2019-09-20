@@ -21,7 +21,6 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import (
-    PerformanceExtension,
     ProjectExtension,
     QueryExtension,
 )
@@ -130,7 +129,6 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': PerformanceExtension(),
             'project': ProjectExtension(),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
