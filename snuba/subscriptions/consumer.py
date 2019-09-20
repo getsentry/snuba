@@ -211,7 +211,7 @@ class TaskSetConsumer(Consumer[TaskSet]):
         )
 
     def poll(self, timeout: Optional[float] = None) -> Optional[TaskSet]:
-        message = self.__consumer.poll(timeout)
+        message = self.__consumer.poll(*[timeout] if timeout is not None else [])
         if message is None:
             return None
 
