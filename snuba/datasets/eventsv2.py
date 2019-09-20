@@ -61,6 +61,9 @@ class EventsV2(TimeSeriesDataset):
             timestamp_column='events.timestamp',
         )
 
+    # TODO: Implement column_expr by delegating to the dependent
+    # datasets
+
     def get_query_schema(self) -> RequestSchema:
         return RequestSchema(GENERIC_QUERY_SCHEMA, {
             'performance': PERFORMANCE_EXTENSION_SCHEMA,

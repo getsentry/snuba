@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping, NamedTuple, Sequence
@@ -81,7 +82,7 @@ class SubJoinSource(JoinedSource):
     def get_schemas(self) -> Mapping[str, Schema]:
         left = self.structure.left_source.get_schemas()
         right = self.structure.right_source.get_schemas()
-        return {**left, **right}
+        return ChainMap(left, right)
 
 
 @dataclass(frozen=True)
