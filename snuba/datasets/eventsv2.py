@@ -53,8 +53,7 @@ class EventsV2(TimeSeriesDataset):
         )
         super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=None,
-            default_topic=None,
+            table_writer=None,
             time_group_columns={
                 'events.time': 'events.timestamp',
             },

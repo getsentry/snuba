@@ -14,6 +14,7 @@ from snuba.datasets import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
 from snuba.datasets.schemas.tables import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
+from snuba.datasets.table_storage import KafkaFedTableWriter
 from snuba import settings
 
 
@@ -133,8 +134,13 @@ class OutcomesDataset(Dataset):
             intermediary_schemas=[materialized_view]
         )
 
-        super(OutcomesDataset, self).__init__(
-            dataset_schemas=dataset_schemas,
+        table_writer = KafkaFedTableWriter(
+            write_schema=write_schema,
             processor=OutcomesProcessor(),
             default_topic="outcomes",
+        )
+
+        super(OutcomesDataset, self).__init__(
+            dataset_schemas=dataset_schemas,
+            table_writer=table_writer,
         )

@@ -32,10 +32,10 @@ def bulk_load(dataset, dest_table, source, log_level):
         path=source,
     )
 
-    loader = dataset.get_bulk_loader(snapshot_source, dest_table)
+    loader = dataset.get_table_writer().get_bulk_loader(snapshot_source, dest_table)
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
-        dataset.get_bulk_writer(table_name=dest_table),
+        dataset.get_table_writer().get_bulk_writer(table_name=dest_table),
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 

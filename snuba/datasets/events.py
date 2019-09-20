@@ -16,6 +16,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.table_storage import KafkaFedTableWriter
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
@@ -228,10 +229,15 @@ class EventsDataset(TimeSeriesDataset):
             write_schema=schema,
         )
 
-        super(EventsDataset, self).__init__(
-            dataset_schemas=dataset_schemas,
+        table_writer = KafkaFedTableWriter(
+            write_schema=schema,
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
+        )
+
+        super(EventsDataset, self).__init__(
+            dataset_schemas=dataset_schemas,
+            table_writer=table_writer,
             default_replacement_topic="event-replacements",
             default_commit_log_topic="snuba-commit-log",
             time_group_columns={
