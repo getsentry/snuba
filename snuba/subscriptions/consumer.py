@@ -1,57 +1,28 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
-    Generic,
     Mapping,
     MutableMapping,
     Optional,
     Sequence,
     Tuple,
-    TypeVar,
     Union,
 )
 
-from confluent_kafka import TIMESTAMP_LOG_APPEND_TIME
-from confluent_kafka import Consumer as KafkaConsumer
-from confluent_kafka import TopicPartition
+from confluent_kafka import (
+    TIMESTAMP_LOG_APPEND_TIME,
+    Consumer as KafkaConsumer,
+    TopicPartition,
+)
+
+from snuba.utils.kafka.consumer import Consumer
 
 
 logger = logging.getLogger(__name__)
-
-
-TMessage = TypeVar("TMessage")
-
-
-class Consumer(Generic[TMessage], ABC):
-    @abstractmethod
-    def subscribe(
-        self,
-        topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
-        on_revoke: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
-    ) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def poll(self, timeout: Optional[float] = None) -> Optional[TMessage]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def commit(self, asynchronous: bool = True) -> Optional[Sequence[TopicPartition]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def close(self) -> None:
-        raise NotImplementedError
-
-
-class Task:
-    """Represents a single task to be executed."""
 
 
 @dataclass(frozen=True)
@@ -86,6 +57,11 @@ class Interval:
         bound.
         """
         return Interval(self.upper, position)
+
+
+@dataclass(frozen=True)
+class Task:
+    """Represents a single task to be executed."""
 
 
 @dataclass(frozen=True)
@@ -235,9 +211,6 @@ class TaskSetConsumer(Consumer[TaskSet]):
         )
 
     def poll(self, timeout: Optional[float] = None) -> Optional[TaskSet]:
-        """
-        Poll to see if any tasks are ready to execute.
-        """
         message = self.__consumer.poll(timeout)
         if message is None:
             return None
@@ -256,6 +229,8 @@ class TaskSetConsumer(Consumer[TaskSet]):
         if isinstance(state, Position):
             tasks = None
         elif isinstance(state, Interval):
+            # TODO: Fetch tasks that are scheduled between the interval
+            # endpoints for this topic and partition.
             tasks = TaskSet(message.topic(), message.partition(), state, [])
         else:
             raise ValueError("unexpected state")
