@@ -14,7 +14,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
-from snuba import schemas, settings, state
+from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 
@@ -233,7 +233,7 @@ def is_condition(cond_or_list):
     )
 
 
-def all_referenced_columns(query):
+def all_referenced_columns(query_body):
     """
     Return the set of all columns that are used by a query.
     """
@@ -241,16 +241,16 @@ def all_referenced_columns(query):
 
     # These fields can reference column names
     for field in ['arrayjoin', 'groupby', 'orderby', 'selected_columns']:
-        if field in query:
-            col_exprs.extend(to_list(query[field]))
+        if field in query_body:
+            col_exprs.extend(to_list(query_body[field]))
 
     # Conditions need flattening as they can be nested as AND/OR
-    if 'conditions' in query:
-        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query['conditions']]))
+    if 'conditions' in query_body:
+        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query_body['conditions']]))
         col_exprs.extend([c[0] for c in flat_conditions])
 
-    if 'aggregations' in query:
-        col_exprs.extend([a[1] for a in query['aggregations']])
+    if 'aggregations' in query_body:
+        col_exprs.extend([a[1] for a in query_body['aggregations']])
 
     # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
@@ -411,7 +411,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(request.query)) > uc_max:
+    if len(all_referenced_columns(request.query.get_body())) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 
@@ -466,7 +466,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
                                 query_id=query_id if use_deduper else None,
-                                with_totals=request.query.get('totals', False),
+                                with_totals=request.query.get_body().get('totals', False),
                             )
                             status = 200
 

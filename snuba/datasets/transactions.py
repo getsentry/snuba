@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -20,10 +20,12 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
-from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.request import RequestSchema
-from snuba.schemas import get_time_series_extension_properties
+from snuba.query.extensions import (
+    PerformanceExtension,
+    ProjectExtension,
+    QueryExtension,
+)
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 class TransactionsDataset(TimeSeriesDataset):
@@ -97,7 +99,6 @@ class TransactionsDataset(TimeSeriesDataset):
                 'bucketed_start': 'start_ts',
                 'bucketed_end': 'finish_ts',
             },
-            timestamp_column='start_ts',
         )
 
     def __update_options(self,
@@ -127,15 +128,16 @@ class TransactionsDataset(TimeSeriesDataset):
             table_name,
         )
 
-    def get_query_schema(self):
-        return RequestSchema(GENERIC_QUERY_SCHEMA, {
-            'performance': PERFORMANCE_EXTENSION_SCHEMA,
-            'project': PROJECT_EXTENSION_SCHEMA,
-            'timeseries': get_time_series_extension_properties(
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {
+            'performance': PerformanceExtension(),
+            'project': ProjectExtension(),
+            'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
+                timestamp_column='start_ts',
             ),
-        })
+        }
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']
