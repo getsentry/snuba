@@ -1,13 +1,9 @@
 from typing import Any, Optional, Mapping, Sequence
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
-<< << << < HEAD
 from snuba.datasets.table_storage import KafkaFedTableWriter
-from snuba.query.extensions import get_time_limit
-== == == =
-from snuba.processor import MessageProcessor
 from snuba.query.extensions import QueryExtension
->>>>>> > master
+
 from snuba.util import escape_col
 
 
