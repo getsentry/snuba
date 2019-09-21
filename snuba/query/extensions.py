@@ -1,8 +1,53 @@
-from datetime import timedelta
-from typing import Any, Mapping, Tuple
+from abc import ABC
 
-from snuba import state
-from snuba import util
+from snuba.query.query_processor import (
+    DummyExtensionProcessor,
+    ExtensionQueryProcessor
+)
+from snuba.schemas import (
+    Schema
+)
+
+
+class QueryExtension(ABC):
+    """
+    Defines a query extension by coupling a query extension schema
+    and a query extension processor that updates the query by
+    processing the extension data.
+    """
+
+    def __init__(self,
+        schema: Schema,
+        processor: ExtensionQueryProcessor,
+    ) -> None:
+        self.__schema = schema
+        self.__processor = processor
+
+    def get_schema(self) -> Schema:
+        return self.__schema
+
+    def get_processor(self) -> ExtensionQueryProcessor:
+        return self.__processor
+
+
+PROJECT_EXTENSION_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'project': {
+            'anyOf': [
+                {'type': 'integer', 'minimum': 1},
+                {
+                    'type': 'array',
+                    'items': {'type': 'integer', 'minimum': 1},
+                    'minItems': 1,
+                },
+            ]
+        },
+    },
+    # Need to select down to the project level for customer isolation and performance
+    'required': ['project'],
+    'additionalProperties': False,
+}
 
 PERFORMANCE_EXTENSION_SCHEMA = {
     'type': 'object',
@@ -27,37 +72,18 @@ PERFORMANCE_EXTENSION_SCHEMA = {
     'additionalProperties': False,
 }
 
-PROJECT_EXTENSION_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'project': {
-            'anyOf': [
-                {'type': 'integer', 'minimum': 1},
-                {
-                    'type': 'array',
-                    'items': {'type': 'integer', 'minimum': 1},
-                    'minItems': 1,
-                },
-            ]
-        },
-    },
-    # Need to select down to the project level for customer isolation and performance
-    'required': ['project'],
-    'additionalProperties': False,
-}
+
+class PerformanceExtension(QueryExtension):
+    def __init__(self) -> None:
+        super().__init__(
+            schema=PERFORMANCE_EXTENSION_SCHEMA,
+            processor=DummyExtensionProcessor(),
+        )
 
 
-def get_time_limit(timeseries_extension: Mapping[str, Any]) -> Tuple[int, int]:
-    max_days, date_align = state.get_configs([
-        ('max_days', None),
-        ('date_align_seconds', 1),
-    ])
-
-    to_date = util.parse_datetime(timeseries_extension['to_date'], date_align)
-    from_date = util.parse_datetime(timeseries_extension['from_date'], date_align)
-    assert from_date <= to_date
-
-    if max_days is not None and (to_date - from_date).days > max_days:
-        from_date = to_date - timedelta(days=max_days)
-
-    return (from_date, to_date)
+class ProjectExtension(QueryExtension):
+    def __init__(self) -> None:
+        super().__init__(
+            schema=PROJECT_EXTENSION_SCHEMA,
+            processor=DummyExtensionProcessor(),
+        )
