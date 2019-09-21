@@ -273,16 +273,10 @@ def parse_and_run_query(dataset, request: Request, timer):
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
-            request.settings
+            request.settings,
+            request.state
         )
     request.query.add_conditions(dataset.default_conditions())
-
-    # TODO(manu): move this to clickhouse query
-    turbo = request.settings.get('turbo', False)
-    if turbo:
-        request.query.set_final(False)
-        if request.query.get_sample() is None:
-            request.query.set_sample(settings.TURBO_SAMPLE_RATE)
 
     prewhere_conditions = []
     # Add any condition to PREWHERE if:
@@ -308,16 +302,21 @@ def parse_and_run_query(dataset, request: Request, timer):
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions, request.query.get_final()).format()
+    clickhouse_query = ClickhouseQuery(dataset, request, prewhere_conditions)
+
+    sql = clickhouse_query.format()
     timer.mark('prepare_query')
 
     stats = {
         'clickhouse_table': source,
-        'final': request.query.get_final(),
+        'final': clickhouse_query.final,
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'sample': request.query.get_sample(),
     }
+
+    if 'num_projects' in request.state:
+        stats.update({'num_projects': request.state['num_projects']})
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
 

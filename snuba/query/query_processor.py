@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, TypeVar
 
 from snuba.query.query import Query
-from snuba import state, settings, util
+from snuba import settings, util
+from snuba.state import get_config
 from snuba.replacer import get_projects_query_flags
 
 ExtensionData = Mapping[str, Any]
@@ -23,7 +24,8 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
-        request_settings: Mapping[str, bool]
+        request_settings: Mapping[str, bool],
+        state: Mapping[str, Any]
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -43,24 +45,26 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool], state: Mapping[str, Any]) -> None:
         raise NotImplementedError
 
 
 class DummyExtensionProcessor(ExtensionQueryProcessor):
 
-    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool], state: Mapping[str, Any]) -> None:
         return query
 
 
 class ProjectExtensionProcessor(ExtensionQueryProcessor):
 
     # TODO(manu): make sure this is fine by https://github.com/getsentry/snuba/pull/473
-    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool]) -> None:
+    def process_query(self, query: Query, extension_data: ExtensionData, request_settings: Mapping[str, bool], state: Mapping[str, Any]) -> None:
         # NOTE: we rely entirely on the schema to make sure that regular snuba
         # queries are required to send a project_id filter. Some other special
         # internal query types do not require a project_id filter.
         project_ids = util.to_list(extension_data['project'])
+        state.update({'num_projects': len(project_ids)})
+
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
 
@@ -70,12 +74,11 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
-                max_group_ids_exclude = state.get_config('max_group_ids_exclude',
-                                                         settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
+                max_group_ids_exclude = get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
                 if len(exclude_group_ids) > max_group_ids_exclude:
-                    query.set_final(True)
+                    state.update({'final': True})
                 else:
-                    query.set_final(False)
+                    state.update({'final': False})
                     query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
             else:
-                query.set_final(final)
+                state.update({'final': final})

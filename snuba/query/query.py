@@ -123,13 +123,6 @@ class Query:
     def set_offset(self, offset: int) -> None:
         self.__body["offset"] = offset
 
-    # TODO(manu): get this out of query
-    def set_final(self, final: bool) -> None:
-        self.__body["final"] = final
-
-    def get_final(self) -> bool:
-        return self.__body.get('final', False)
-
     @deprecated(
         details="Do not access the internal query representation "
         "use the specific accessor methods instead.")

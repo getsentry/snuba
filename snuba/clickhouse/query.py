@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba import util
+from snuba import util, settings
 from snuba.datasets import Dataset
 from snuba.request import Request
 
@@ -12,12 +12,20 @@ class ClickhouseQuery:
         # body anymore.
         request: Request,
         prewhere_conditions: Sequence[str],
-        final: bool,
     ) -> None:
         self.__dataset = dataset
         self.__request = request
         self.__prewhere_conditions = prewhere_conditions
-        self.__final = final
+
+        turbo = self.__request.settings.get('turbo', False)
+        self.final = False  # this is a public variable so that api can read it for stats
+
+        if turbo:
+            self.final = False
+            if self.__request.query.get_sample() is None:
+                request.query.set_sample(settings.TURBO_SAMPLE_RATE)
+        elif 'final' in self.__request.state:
+            self.final = self.__request.state['final']
 
     def format(self) -> str:
         """Generate a SQL string from the parameters."""
@@ -36,10 +44,12 @@ class ClickhouseQuery:
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
         from_clause = u'FROM {}'.format(source)
-        if self.__final:
+
+        if self.final:
             from_clause = u'{} FINAL'.format(from_clause)
-        if query.get_sample():
-            from_clause = u'{} SAMPLE {}'.format(from_clause, query.get_sample())
+
+        if self.__request.query.get_sample():
+            from_clause = u'{} SAMPLE {}'.format(from_clause, self.__request.query.get_sample())
 
         join_clause = ''
         if 'arrayjoin' in body:
