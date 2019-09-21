@@ -1,7 +1,7 @@
-from typing import Any, Optional, Mapping, Sequence
+from typing import Optional, Mapping, Sequence
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.table_storage import KafkaFedTableWriter
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 
 from snuba.util import escape_col
@@ -9,18 +9,21 @@ from snuba.util import escape_col
 
 class Dataset(object):
     """
-    A Dataset defines the complete set of data sources, schemas, and
-    transformations that are required to:
-        - Consume, transform, and insert data payloads from Kafka into Clickhouse.
-        - Define how Snuba API queries are transformed into SQL.
-
-    This is the the initial boilerplate. schema and processor will come.
+    A dataset represent one or multiple entities in the Snuba data model.
+    The class is a facade to access the components used to write on the
+    data model and to query the entities.
+    To query the data model, it provides a schema (for one table or for
+    multiple joined tables), query processing features and query exension
+    parsing features.
+    To write it CAN provide a TableWriter, which has a schema as well and
+    provides a way to stream input from different sources and write them to
+    Clickhouse.
     """
 
     def __init__(self,
             dataset_schemas: DatasetSchemas,
             *,
-            table_writer: Optional[KafkaFedTableWriter],
+            table_writer: Optional[TableWriter],
             default_replacement_topic: Optional[str] = None,
             default_commit_log_topic: Optional[str] = None):
         self.__dataset_schemas = dataset_schemas
@@ -29,10 +32,33 @@ class Dataset(object):
         self.__default_commit_log_topic = default_commit_log_topic
 
     def get_dataset_schemas(self) -> DatasetSchemas:
+        """
+        Returns the collections of schemas for DDL operations and for
+        query.
+        See TableWriter to get a write schema.
+        """
         return self.__dataset_schemas
 
-    def get_table_writer(self) -> Optional[KafkaFedTableWriter]:
-        return self.__table_writer
+    def can_write(self) -> bool:
+        """
+        Returns True if this dataset has write capabilities
+        """
+        return self.__table_writer is not None
+
+    def get_table_writer(self) -> TableWriter:
+        """
+        Returns the TableWriter or throws if the dataaset is a readonly one.
+
+        Once we will have a full TableStorage implementation this method will
+        disappear since we will have a table storage factory that will return
+        only writable ones, scripts will depend on table storage instead of
+        going through datasets.
+        """
+        table_writer = self.__table_writer
+        assert \
+            table_writer is not None, \
+            f"Dataset {self} does not have write capability"
+        return table_writer
 
     def default_conditions(self):
         """

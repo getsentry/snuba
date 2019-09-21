@@ -187,7 +187,7 @@ class BaseDatasetTest(BaseTest):
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
-        self.table = self.dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name()
+        self.table = self.dataset.get_table_writer().get_write_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
@@ -209,7 +209,7 @@ class BaseEventsTest(BaseDatasetTest):
         for event in events:
             if 'primary_hash' not in event:
                 event = wrap_raw_event(event)
-            _, processed = self.dataset.get_table_writer().get_processor().process_message(event)
+            _, processed = self.dataset.get_table_writer().get_stream_loader().get_processor().process_message(event)
             out.append(processed)
 
         return self.write_processed_records(out)

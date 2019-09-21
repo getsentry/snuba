@@ -7,18 +7,16 @@ from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.table_storage import KafkaFedTableWriter
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
 
 
-class GroupedMessageTableWriter(KafkaFedTableWriter):
+class GroupedMessageTableWriter(TableWriter):
     def __init__(self,
                 postgres_table: str,
-                processor: CdcProcessor,
                 **kwargs,
             ):
         super().__init__(
-            processor=processor,
             **kwargs
         )
         self.__postgres_table = postgres_table
@@ -78,10 +76,12 @@ class GroupedMessageDataset(CdcDataset):
         super().__init__(
             dataset_schemas=dataset_schemas,
             table_writer=GroupedMessageTableWriter(
-                postgres_table=self.POSTGRES_TABLE,
-                processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
                 write_schema=schema,
-                default_topic="cdc",
+                stream_loader=KafkaStreamLoader(
+                    processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
+                    default_topic="cdc",
+                ),
+                postgres_table=self.POSTGRES_TABLE,
             ),
             default_control_topic="cdc_control",
         )

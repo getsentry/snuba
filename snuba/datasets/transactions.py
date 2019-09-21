@@ -17,7 +17,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets import TimeSeriesDataset
-from snuba.datasets.table_storage import KafkaFedTableWriter
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
@@ -29,7 +29,7 @@ from snuba.query.extensions import (
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class TransactionsTableWriter(KafkaFedTableWriter):
+class TransactionsTableWriter(TableWriter):
     def __update_options(self,
         options: Optional[MutableMapping[str, Any]]=None,
     ) -> MutableMapping[str, Any]:
@@ -125,8 +125,10 @@ class TransactionsDataset(TimeSeriesDataset):
             dataset_schemas=dataset_schemas,
             table_writer=TransactionsTableWriter(
                 write_schema=schema,
-                processor=TransactionsMessageProcessor(),
-                default_topic="events",
+                stream_loader=KafkaStreamLoader(
+                    processor=TransactionsMessageProcessor(),
+                    default_topic="events",
+                ),
             ),
             time_group_columns={
                 'bucketed_start': 'start_ts',

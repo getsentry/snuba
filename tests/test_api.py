@@ -64,7 +64,7 @@ class TestApi(BaseApiTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(self.dataset.get_table_writer().get_processor().process_insert({
+                    events.append(self.dataset.get_table_writer().get_stream_loader().get_processor().process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
@@ -873,7 +873,7 @@ class TestApi(BaseApiTest):
 
         assert self.app.post('/tests/events/drop').status_code == 200
         dataset = get_dataset('events')
-        table = dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name()
+        table = dataset.get_table_writer().get_write_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 

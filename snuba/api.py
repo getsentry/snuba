@@ -1,7 +1,7 @@
 import logging
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
@@ -422,7 +422,11 @@ if application.debug or application.testing:
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_table_writer().get_processor().process_message(message)
+            action, row = dataset \
+                .get_table_writer() \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
 

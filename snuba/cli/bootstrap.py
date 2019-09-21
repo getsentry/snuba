@@ -40,13 +40,15 @@ def bootstrap(bootstrap_server, kafka, force):
         topics = []
         for name in DATASET_NAMES:
             dataset = get_dataset(name)
-            partitions = dataset.get_table_writer().get_default_partitions()
-            replication = dataset.get_table_writer().get_default_replication_factor()
-            topics.extend([
-                (dataset.get_table_writer().get_default_topic(), partitions, replication),
-                (dataset.get_default_replacement_topic(), partitions, replication),
-                (dataset.get_default_commit_log_topic(), partitions, replication),
-            ])
+            if dataset.can_write():
+                stream_loader = dataset.get_table_writer().get_stream_loader()
+                partitions = stream_loader.get_default_partitions()
+                replication = stream_loader.get_default_replication_factor()
+                topics.extend([
+                    (stream_loader.get_default_topic(), partitions, replication),
+                    (dataset.get_default_replacement_topic(), partitions, replication),
+                    (dataset.get_default_commit_log_topic(), partitions, replication),
+                ])
 
         topics = [NewTopic(t[0], num_partitions=t[1], replication_factor=t[2])
             for t in topics

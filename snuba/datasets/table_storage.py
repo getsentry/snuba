@@ -6,20 +6,61 @@ from datetime import datetime
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
+from snuba.snapshots.bulk_load import BulkLoader
 from snuba.writer import BatchWriter
+
+
+class KafkaStreamLoader:
+    """
+    This class is a stream loader for a TableWriter. It provides what we need
+    to start a Kafka consumer to fill in the table.
+    """
+
+    def __init__(
+        self,
+        processor: MessageProcessor,
+        default_topic: str,
+    ) -> None:
+        self.__processor = processor
+        self.__default_topic = default_topic
+
+    def get_processor(self) -> MessageProcessor:
+        return self.__processor
+
+    def get_default_topic(self) -> str:
+        return self.__default_topic
+
+    def get_default_replication_factor(self):
+        return 1
+
+    def get_default_partitions(self):
+        return 1
 
 
 class TableWriter:
     """
-    Provides the features needed to write on a Clickhouse table.
-    This will evolve into a more comprehensive representation
-    of a Clickhouse table. It will inherit more features from
-    the dataset when the dataset itself will become an aggregate
-    of table storages.
+    This class provides to a dataset write support on a Clickhouse table.
+    It is schema aware (the Clickhouse write schema), it provides a writer
+    to write on Clickhouse and a two loaders: one for bulk load of the table
+    and the other for streaming load.
+
+    Eventually, after some heavier refactoring of the consumer scripts,
+    we could make the writing process more abstract and hide in this class
+    the streaming, processing and writing. The writer in such architecture
+    could coordinate the injestion process but that requires a reshuffle
+    of responsibilities in the consumer scripts and a common interface
+    between bulk load and stream load.
     """
 
-    def __init__(self, write_schema: WritableTableSchema) -> None:
+    def __init__(self,
+        write_schema: WritableTableSchema,
+        stream_loader: KafkaStreamLoader,
+    ) -> None:
         self.__table_schema = write_schema
+        self.__stream_loader = stream_loader
+
+    def get_write_schema(self) -> WritableTableSchema:
+        return self.__table_schema
 
     def get_writer(self, options=None, table_name=None) -> BatchWriter:
         from snuba import settings
@@ -61,38 +102,12 @@ class TableWriter:
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
-    def get_bulk_loader(self, source, dest_table):
+    def get_bulk_loader(self, source, dest_table) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
         """
         raise NotImplementedError
 
-
-class KafkaFedTableWriter(TableWriter):
-    """
-    A TableWriter that listens onto a Kafka topic and
-    processes the messages.
-    """
-
-    def __init__(
-        self,
-        write_schema: WritableTableSchema,
-        processor: MessageProcessor,
-        default_topic: str,
-    ) -> None:
-        super().__init__(write_schema)
-        self.__processor = processor
-        self.__default_topic = default_topic
-
-    def get_processor(self) -> MessageProcessor:
-        return self.__processor
-
-    def get_default_topic(self) -> str:
-        return self.__default_topic
-
-    def get_default_replication_factor(self):
-        return 1
-
-    def get_default_partitions(self):
-        return 1
+    def get_stream_loader(self) -> KafkaStreamLoader:
+        return self.__stream_loader
