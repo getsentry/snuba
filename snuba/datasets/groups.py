@@ -26,17 +26,20 @@ class Groups(TimeSeriesDataset):
     the events table.
     """
 
+    EVENTS_ALIAS = "events"
+    GROUPS_ALIAS = "groups"
+
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         self.__events = get_dataset("events")
 
         join_structure = JoinStructure(
             left_source=SchemaJoinedSource(
-                "groups",
+                self.GROUPS_ALIAS,
                 self.__grouped_message.get_dataset_schemas().get_read_schema(),
             ),
             right_source=SchemaJoinedSource(
-                "events",
+                self.EVENTS_ALIAS,
                 self.__events.get_dataset_schemas().get_read_schema(),
             ),
             mapping=[
