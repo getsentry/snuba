@@ -1,4 +1,5 @@
 import re
+
 from datetime import timedelta
 from typing import Mapping, Sequence
 
@@ -18,10 +19,13 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
-from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.request import RequestSchema
-from snuba.schemas import get_time_series_extension_properties
+from snuba.query.extensions import (
+    PerformanceExtension,
+    ProjectExtension,
+    QueryExtension,
+)
+from snuba.query.timeseries import TimeSeriesExtension
+
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -238,7 +242,6 @@ class EventsDataset(TimeSeriesDataset):
                 'time': 'timestamp',
                 'rtime': 'received'
             },
-            timestamp_column='timestamp',
         )
 
         self.__metadata_columns = metadata_columns
@@ -380,15 +383,16 @@ class EventsDataset(TimeSeriesDataset):
             # to re-use as we won't need it.
             return 'arrayJoin({})'.format(key_list if k_or_v == 'key' else val_list)
 
-    def get_query_schema(self):
-        return RequestSchema(GENERIC_QUERY_SCHEMA, {
-            'performance': PERFORMANCE_EXTENSION_SCHEMA,
-            'project': PROJECT_EXTENSION_SCHEMA,
-            'timeseries': get_time_series_extension_properties(
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {
+            'performance': PerformanceExtension(),
+            'project': ProjectExtension(),
+            'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
+                timestamp_column='timestamp',
             ),
-        })
+        }
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
