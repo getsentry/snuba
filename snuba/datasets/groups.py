@@ -29,6 +29,8 @@ class Groups(TimeSeriesDataset):
     EVENTS_ALIAS = "events"
     GROUPS_ALIAS = "groups"
 
+    ALIASED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.]+)$")
+
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         self.__events = get_dataset("events")
@@ -76,10 +78,10 @@ class Groups(TimeSeriesDataset):
         ]
 
     def column_expr(self, column_name, body):
-        # This dataset is meant to replace events and groupedmessage
-        # (which will be TableStorage), thus column_expr will exist
-        # only at this level.
-        return self.__events.column_expr(column_name, body)
+        if column_name in self.get_dataset_schemas().get_read_schema().get_columns():
+            return super().column_expr(column_name, body)
+        else:
+            return self.__events.column_expr(column_name, body)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
