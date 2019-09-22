@@ -2,7 +2,7 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Any, Optional, Mapping, Sequence
+from typing import Optional, Mapping, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.dataset_schemas import DatasetSchemas
@@ -25,8 +25,10 @@ class Dataset(object):
     def __init__(self,
             dataset_schemas: DatasetSchemas,
             *,
-            processor: MessageProcessor,
-            default_topic: str,
+            processor: Optional[MessageProcessor],
+            default_topic: Optional[str],
+            # PR 479 changes the architecture of the dataset
+            # allowing a dataset not to have write functions.
             default_replacement_topic: Optional[str] = None,
             default_commit_log_topic: Optional[str] = None):
         self.__dataset_schemas = dataset_schemas
@@ -38,7 +40,7 @@ class Dataset(object):
     def get_dataset_schemas(self) -> DatasetSchemas:
         return self.__dataset_schemas
 
-    def get_processor(self) -> MessageProcessor:
+    def get_processor(self) -> Optional[MessageProcessor]:
         return self.__processor
 
     def get_writer(self, options=None, table_name=None) -> BatchWriter:
@@ -88,7 +90,7 @@ class Dataset(object):
         """
         return []
 
-    def get_default_topic(self) -> str:
+    def get_default_topic(self) -> Optional[str]:
         return self.__default_topic
 
     def get_default_replacement_topic(self) -> Optional[str]:

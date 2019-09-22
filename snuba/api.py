@@ -422,7 +422,9 @@ if application.debug or application.testing:
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_processor().process_message(message)
+            processor = dataset.get_processor()
+            assert processor is not None
+            action, row = processor.process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
 

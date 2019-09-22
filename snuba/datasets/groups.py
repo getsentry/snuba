@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
@@ -11,27 +11,33 @@ from snuba.datasets.schemas.join import (
     JoinStructure,
     JoinType,
     SchemaJoinedSource,
-    SubJoinSource,
 )
-from snuba.query.extensions import PERFORMANCE_EXTENSION_SCHEMA, PROJECT_EXTENSION_SCHEMA
-from snuba.query.schema import GENERIC_QUERY_SCHEMA
-from snuba.request import RequestSchema
-from snuba.schemas import get_time_series_extension_properties
+from snuba.query.extensions import (
+    PerformanceExtension,
+    ProjectExtension,
+    QueryExtension,
+)
+from snuba.query.timeseries import TimeSeriesExtension
 
 
-class EventsV2(TimeSeriesDataset):
+class Groups(TimeSeriesDataset):
+    """
+    Experimental dataset that provides Groups data joined with
+    the events table.
+    """
+
     def __init__(self) -> None:
-        grouped_message = get_dataset("groupedmessage")
-        events = get_dataset("events")
+        self.__grouped_message = get_dataset("groupedmessage")
+        self.__events = get_dataset("events")
 
         join_structure = JoinStructure(
             left_source=SchemaJoinedSource(
                 "groups",
-                grouped_message.get_dataset_schemas().get_read_schema(),
+                self.__grouped_message.get_dataset_schemas().get_read_schema(),
             ),
             right_source=SchemaJoinedSource(
                 "events",
-                events.get_dataset_schemas().get_read_schema(),
+                self.__events.get_dataset_schemas().get_read_schema(),
             ),
             mapping=[
                 JoinCondition(
@@ -58,21 +64,30 @@ class EventsV2(TimeSeriesDataset):
             time_group_columns={
                 'events.time': 'events.timestamp',
             },
-            timestamp_column='events.timestamp',
         )
 
-    # TODO: Implement column_expr by delegating to the dependent
-    # datasets
+    def default_conditions(self):
+        return [
+            ('events.deleted', '=', 0),
+            ('groups.record_deleted', '=', 0),
+        ]
 
-    def get_query_schema(self) -> RequestSchema:
-        return RequestSchema(GENERIC_QUERY_SCHEMA, {
-            'performance': PERFORMANCE_EXTENSION_SCHEMA,
-            'project': PROJECT_EXTENSION_SCHEMA,
-            'timeseries': get_time_series_extension_properties(
+    def column_expr(self, column_name, body):
+        # This dataset is meant to replace events and groupedmessage
+        # (which will be TableStorage), thus column_expr will exist
+        # only at this level.
+        return self.__events.column_expr(column_name, body)
+
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {
+            'performance': PerformanceExtension(),
+            'project': ProjectExtension(),
+            'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
+                timestamp_column='events.timestamp',
             ),
-        })
+        }
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['events.event_id', 'events.project_id']

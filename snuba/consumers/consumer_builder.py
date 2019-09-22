@@ -44,6 +44,8 @@ class ConsumerBuilder:
         else:
             self.bootstrap_servers = bootstrap_servers
 
+        assert self.dataset.get_default_topic(), \
+            f"Dataset {self.dataset} does not support ingestion through Kafka."
         self.raw_topic = raw_topic or self.dataset.get_default_topic()
         self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
         self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()

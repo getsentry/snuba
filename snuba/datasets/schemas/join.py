@@ -103,7 +103,7 @@ class JoinStructure:
 
     def get_data_source(self) -> str:
         on_clause = " AND ".join([str(m) for m in self.mapping])
-        return f"({self.left_source} {self.join_type.value} JOIN {self.right_source} ON {on_clause})"
+        return f"{self.left_source} {self.join_type.value} JOIN {self.right_source} ON {on_clause}"
 
 
 class JoinedSchema(Schema):
@@ -137,4 +137,4 @@ class JoinedSchema(Schema):
         return ColumnSet(ret)
 
     def get_data_source(self) -> str:
-        return self.__join_storage.get_data_source()
+        return self.__join_structure.get_data_source()

@@ -25,13 +25,13 @@ def get_dataset(name):
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
-    from snuba.datasets.eventsv2 import EventsV2
+    from snuba.datasets.groups import Groups
     dataset_mappings = {
         'events': EventsDataset,
         'groupedmessage': GroupedMessageDataset,
         'transactions': TransactionsDataset,
         'outcomes': OutcomesDataset,
-        'eventsv2': EventsV2,
+        'groups': Groups,
     }
 
     try:
