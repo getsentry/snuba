@@ -17,6 +17,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets import TimeSeriesDataset
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
@@ -26,6 +27,35 @@ from snuba.query.extensions import (
     QueryExtension,
 )
 from snuba.query.timeseries import TimeSeriesExtension
+
+
+class TransactionsTableWriter(TableWriter):
+    def __update_options(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+    ) -> MutableMapping[str, Any]:
+        if options is None:
+            options = {}
+        if "insert_allow_materialized_columns" not in options:
+            options["insert_allow_materialized_columns"] = 1
+        return options
+
+    def get_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_writer(
+            self.__update_options(options),
+            table_name,
+        )
+
+    def get_bulk_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_bulk_writer(
+            self.__update_options(options),
+            table_name,
+        )
 
 
 class TransactionsDataset(TimeSeriesDataset):
@@ -93,39 +123,17 @@ class TransactionsDataset(TimeSeriesDataset):
 
         super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=TransactionsMessageProcessor(),
-            default_topic="events",
+            table_writer=TransactionsTableWriter(
+                write_schema=schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=TransactionsMessageProcessor(),
+                    default_topic="events",
+                ),
+            ),
             time_group_columns={
                 'bucketed_start': 'start_ts',
                 'bucketed_end': 'finish_ts',
             },
-        )
-
-    def __update_options(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-    ) -> MutableMapping[str, Any]:
-        if options is None:
-            options = {}
-        if "insert_allow_materialized_columns" not in options:
-            options["insert_allow_materialized_columns"] = 1
-        return options
-
-    def get_writer(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-        table_name: Optional[str]=None,
-    ) -> BatchWriter:
-        return super().get_writer(
-            self.__update_options(options),
-            table_name,
-        )
-
-    def get_bulk_writer(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-        table_name: Optional[str]=None,
-    ) -> BatchWriter:
-        return super().get_bulk_writer(
-            self.__update_options(options),
-            table_name,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

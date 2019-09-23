@@ -5,7 +5,7 @@ from typing import Sequence
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 
@@ -44,11 +44,16 @@ class ConsumerBuilder:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        assert self.dataset.get_default_topic(), \
-            f"Dataset {self.dataset} does not support ingestion through Kafka."
-        self.raw_topic = raw_topic or self.dataset.get_default_topic()
-        self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
-        self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
+        stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
+        self.raw_topic = raw_topic or stream_loader.get_default_topic_spec().topic_name
+        default_replacement_topic_name = stream_loader.get_replacement_topic_spec().topic_name \
+            if stream_loader.get_replacement_topic_spec() \
+            else None
+        self.replacements_topic = replacements_topic or default_replacement_topic_name
+        default_commit_log_topic_name = stream_loader.get_commit_log_topic_spec().topic_name \
+            if stream_loader.get_commit_log_topic_spec() \
+            else None
+        self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
 
         self.producer = Producer({
             'bootstrap.servers': ','.join(self.bootstrap_servers),

@@ -1,7 +1,7 @@
 import logging
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
@@ -19,7 +19,7 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
+from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
@@ -422,13 +422,14 @@ if application.debug or application.testing:
 
         rows = []
         for message in json.loads(http_request.data):
-            processor = dataset.get_processor()
-            assert processor is not None
-            action, row = processor.process_message(message)
+            action, row = enforce_table_writer(dataset) \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(message)
             assert action is MessageProcessor.INSERT
             rows.append(row)
 
-        dataset.get_writer().write(rows)
+        enforce_table_writer(dataset).get_writer().write(rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
