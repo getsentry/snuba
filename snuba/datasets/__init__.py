@@ -41,7 +41,7 @@ class Dataset(object):
         """
         return self.__table_writer is not None
 
-    def get_table_writer(self) -> TableWriter:
+    def get_table_writer(self) -> Optional[TableWriter]:
         """
         Returns the TableWriter or throws if the dataaset is a readonly one.
 
@@ -50,11 +50,7 @@ class Dataset(object):
         only writable ones, scripts will depend on table storage instead of
         going through datasets.
         """
-        table_writer = self.__table_writer
-        assert \
-            table_writer is not None, \
-            f"Dataset {self} does not have write capability"
-        return table_writer
+        return self.__table_writer
 
     def default_conditions(self):
         """
