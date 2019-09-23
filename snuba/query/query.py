@@ -3,7 +3,6 @@ from __future__ import annotations
 from deprecation import deprecated
 from typing import (
     Any,
-    Iterable,
     Mapping,
     MutableMapping,
     Optional,
@@ -21,10 +20,10 @@ Condition = Union[
 
 Aggregation = Union[
     Tuple[Any, Any, Any],
-    Iterable[Any],
+    Sequence[Any],
 ]
 
-Groupby = Iterable[Any]
+Groupby = Sequence[Any]
 
 Limitby = Tuple[int, str]
 
@@ -63,7 +62,7 @@ class Query:
             self.__body[field] = []
         self.__body[field].extend(content)
 
-    def get_selected_column(self) -> Optional[Sequence[Any]]:
+    def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
     def set_selected_columns(

@@ -15,10 +15,10 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
-from snuba.clickhouse.http import BatchWriter
+from snuba.writer import BatchWriter
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import (
     PerformanceExtension,
@@ -133,11 +133,9 @@ class TransactionsDataset(TimeSeriesDataset):
             'performance': PerformanceExtension(),
             'project': ProjectExtension(),
             'timeseries': TimeSeriesExtension(
-                get_time_series_extension_properties(
-                    default_granularity=3600,
-                    default_window=timedelta(days=5),
-                    timestamp_column='start_ts',
-                ),
+                default_granularity=3600,
+                default_window=timedelta(days=5),
+                timestamp_column='start_ts',
             ),
         }
 

@@ -18,13 +18,13 @@ from snuba.clickhouse.columns import (
 from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schema import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import (
     PerformanceExtension,
     ProjectExtension,
     QueryExtension,
-    TimeSeriesExtension,
 )
+from snuba.query.timeseries import TimeSeriesExtension
 
 from snuba.util import (
     alias_expr,

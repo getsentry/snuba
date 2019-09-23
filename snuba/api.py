@@ -17,14 +17,14 @@ from uuid import UUID
 from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.extensions import TimeSeriesExtension, TimeSeriesExtensionProcessor
+from snuba.query.timeseries import TimeSeriesExtension, TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
-from snuba.datasets.schema import local_dataset_mode
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
-from snuba.util import Timer
+from snuba.util import local_dataset_mode, Timer
 
 
 logger = logging.getLogger('snuba.api')
@@ -57,9 +57,11 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
-            if (table_name,) not in clickhouse_tables:
-                return False
+            source = dataset.get_dataset_schemas().get_read_schema()
+            if isinstance(source, TableSchema):
+                table_name = source.get_table_name()
+                if (table_name,) not in clickhouse_tables:
+                    return False
 
         return True
 
@@ -331,14 +333,14 @@ def parse_and_run_query(
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
-    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
     timer.mark('prepare_query')
 
     stats = {
-        'clickhouse_table': table,
+        'clickhouse_table': source,
         'final': final,
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,

@@ -81,12 +81,21 @@ RUN set -ex; \
         liblz4-dev \
         libpcre3-dev \
         make \
+        wget \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
     make install-python-dependencies; \
+    mkdir /tmp/uwsgi-dogstatsd; \
+    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
+        | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
+    uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
+    rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
+    mkdir -p /var/lib/uwsgi; \
+    mv dogstatsd_plugin.so /var/lib/uwsgi/; \
+    uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     snuba --help; \
     \
     apt-get purge -y --auto-remove $buildDeps
@@ -94,7 +103,12 @@ RUN set -ex; \
 ARG SNUBA_VERSION_SHA
 ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
     FLASK_DEBUG=0 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    UWSGI_ENABLE_METRICS=true \
+    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
+    UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
+    UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
+
 
 EXPOSE 1218
 

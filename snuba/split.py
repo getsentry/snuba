@@ -33,7 +33,7 @@ def split_query(query_func):
             min_col_count = len(util.all_referenced_columns({**request.query.get_body(), 'selected_columns': MIN_COLS}))
 
             if (
-                request.query.get_selected_column()
+                request.query.get_selected_columns()
                 and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
