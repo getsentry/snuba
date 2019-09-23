@@ -4,7 +4,7 @@ import signal
 import click
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.datasets.cdc import CdcDataset
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine

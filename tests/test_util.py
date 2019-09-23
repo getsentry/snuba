@@ -4,7 +4,7 @@ import time
 
 from base import BaseTest
 
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.factory import get_dataset
 from snuba.util import (
     all_referenced_columns,
     column_expr,

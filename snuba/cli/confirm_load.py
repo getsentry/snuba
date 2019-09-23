@@ -6,7 +6,7 @@ from confluent_kafka import Producer
 
 from snuba import settings
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLoaded
 
