@@ -23,6 +23,8 @@ Aggregation = Union[
     Sequence[Any],
 ]
 
+AliasedColumn = Tuple[Optional[str], str]
+
 Groupby = Sequence[Any]
 
 TElement = TypeVar("TElement")

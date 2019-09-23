@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Mapping, NamedTuple, Sequence
 
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import QualifiedColumnSet
 from snuba.datasets.schemas import Schema
 
 
@@ -121,20 +121,15 @@ class JoinedSchema(Schema):
         )
         self.__join_structure = join_root
 
-    def __get_columns(self, structure: JoinStructure) -> ColumnSet:
+    def __get_columns(self, structure: JoinStructure) -> QualifiedColumnSet:
         """
         Extracts all the columns recursively from the joined schemas and
         flattens this structure adding the columns into one ColumnSet
         prepended with the schema alias.
         """
         schemas = SubJoinSource(structure).get_schemas()
-        ret = []
-        for alias, schema in schemas.items():
-            # Iterate over the structured columns. get_columns() flattens nested
-            # columns. We need them intact here.
-            for column in schema.get_columns().columns:
-                ret.append((f"{alias}.{column.name}", column.type))
-        return ColumnSet(ret)
+        column_sets = {alias: schema.get_columns() for alias, schema in schemas.items()}
+        return QualifiedColumnSet(column_sets)
 
     def get_data_source(self) -> str:
         return self.__join_structure.get_data_source()

@@ -1,3 +1,5 @@
+import re
+
 from datetime import timedelta
 from typing import Mapping, Sequence
 
@@ -17,6 +19,7 @@ from snuba.query.extensions import (
     ProjectExtension,
     QueryExtension,
 )
+from snuba.query.query import AliasedColumn
 from snuba.query.timeseries import TimeSeriesExtension
 
 
@@ -77,10 +80,28 @@ class Groups(TimeSeriesDataset):
             ('groups.record_deleted', '=', 0),
         ]
 
-    def column_expr(self, column_name, body):
-        if column_name in self.get_dataset_schemas().get_read_schema().get_columns():
-            return super().column_expr(column_name, body)
+    def __parse_qualified_column(self, column_name: str) -> AliasedColumn:
+        # TODO: This logic should be general and in the Query class.
+        # cannot do that yet since the column processing methods like
+        # column_expr do not have access to the Query yet.
+        match = self.ALIASED_COLUMN_REGEX.match(column_name)
+        if not match or not match[1] in [self.EVENTS_ALIAS, self.GROUPS_ALIAS]:
+            return (None, column_name)
         else:
+            return (match[1], match[2])
+
+    def column_expr(self, column_name, body):
+        aliased_column = self.__parse_qualified_column(column_name)
+        table_alias = aliased_column[0]
+        if table_alias == self.GROUPS_ALIAS:
+            return self.__grouped_message.column_expr(column_name, body)
+        else:
+            # this allows to delegate columns like tags[blabla] to
+            # events without requiring them to be prefixed with the
+            # table name.
+            # That kind of logic that applies to the whole dataset should
+            # be here, but this is not needed in this dataset since
+            # only events have some custom column_expr logic.
             return self.__events.column_expr(column_name, body)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
