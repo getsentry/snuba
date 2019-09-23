@@ -17,7 +17,6 @@ from snuba.schemas import Schema, validate_jsonschema
 class Request:
     query: Query
     settings: Mapping[str, bool]  # settings provided by the request
-    state: Mapping[str, Any]  # intermediate state; used to pass state from query processors to clickhouse query
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
@@ -78,7 +77,7 @@ class RequestSchema:
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(Query(query_body), settings, {}, extensions)
+        return Request(Query(query_body), settings, extensions)
 
     def __generate_template_impl(self, schema) -> Any:
         """

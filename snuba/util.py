@@ -17,7 +17,6 @@ import time
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 
-
 logger = logging.getLogger('snuba.util')
 
 

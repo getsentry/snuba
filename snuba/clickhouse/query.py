@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Any, Mapping
 
 from snuba import util, settings
 from snuba.datasets import Dataset
@@ -12,10 +12,12 @@ class ClickhouseQuery:
         # body anymore.
         request: Request,
         prewhere_conditions: Sequence[str],
+        query_state: Mapping[str, Any],
     ) -> None:
         self.__dataset = dataset
         self.__request = request
         self.__prewhere_conditions = prewhere_conditions
+        self.__query_state = query_state
 
         turbo = self.__request.settings.get('turbo', False)
         self.final = False  # this is a public variable so that api can read it for stats
@@ -24,8 +26,8 @@ class ClickhouseQuery:
             self.final = False
             if self.__request.query.get_sample() is None:
                 request.query.set_sample(settings.TURBO_SAMPLE_RATE)
-        elif 'final' in self.__request.state:
-            self.final = self.__request.state['final']
+        elif 'final' in self.__query_state:
+            self.final = self.__query_state['final']
 
     def format(self) -> str:
         """Generate a SQL string from the parameters."""

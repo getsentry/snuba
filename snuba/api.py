@@ -269,12 +269,14 @@ def parse_and_run_query(dataset, request: Request, timer):
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
+    query_state = {}
+
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
             request.settings,
-            request.state
+            query_state
         )
     request.query.add_conditions(dataset.default_conditions())
 
@@ -302,7 +304,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    clickhouse_query = ClickhouseQuery(dataset, request, prewhere_conditions)
+    clickhouse_query = ClickhouseQuery(dataset, request, prewhere_conditions, query_state)
 
     sql = clickhouse_query.format()
     timer.mark('prepare_query')
@@ -315,8 +317,8 @@ def parse_and_run_query(dataset, request: Request, timer):
         'sample': request.query.get_sample(),
     }
 
-    if 'num_projects' in request.state:
-        stats.update({'num_projects': request.state['num_projects']})
+    if 'num_projects' in query_state:
+        stats.update({'num_projects': query_state['num_projects']})
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
 

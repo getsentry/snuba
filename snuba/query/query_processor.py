@@ -25,7 +25,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
         query: Query,
         context_data: TQueryProcessContext,
         request_settings: Mapping[str, bool],
-        request_state: Mapping[str, Any]
+        query_state: Mapping[str, Any]
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -49,7 +49,7 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
             self, query: Query,
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
-            request_state: Mapping[str, Any]
+            query_state: Mapping[str, Any]
     ) -> None:
         raise NotImplementedError
 
@@ -61,7 +61,7 @@ class DummyExtensionProcessor(ExtensionQueryProcessor):
             query: Query,
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
-            request_state: Mapping[str, Any]
+            query_state: Mapping[str, Any]
     ) -> None:
         return query
 
@@ -73,13 +73,13 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             query: Query,
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
-            request_state: Mapping[str, Any]
+            query_state: Mapping[str, Any]
     ) -> None:
         # NOTE: we rely entirely on the schema to make sure that regular snuba
         # queries are required to send a project_id filter. Some other special
         # internal query types do not require a project_id filter.
         project_ids = util.to_list(extension_data['project'])
-        request_state.update({'num_projects': len(project_ids)})
+        query_state.update({'num_projects': len(project_ids)})
 
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
@@ -92,9 +92,9 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
                 # should just use final instead of the exclusion set.
                 max_group_ids_exclude = get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
                 if len(exclude_group_ids) > max_group_ids_exclude:
-                    request_state.update({'final': True})
+                    query_state.update({'final': True})
                 else:
-                    request_state.update({'final': False})
+                    query_state.update({'final': False})
                     query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
             else:
-                request_state.update({'final': final})
+                query_state.update({'final': final})
