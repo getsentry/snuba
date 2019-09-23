@@ -13,7 +13,7 @@ from confluent_kafka.admin import (
 )
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
 from snuba.perf import FakeKafkaMessage
@@ -181,13 +181,13 @@ class BaseDatasetTest(BaseTest):
     def write_rows(self, rows):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
-        self.dataset.get_writer().write(rows)
+        enforce_table_writer(self.dataset).get_writer().write(rows)
 
 
 class BaseEventsTest(BaseDatasetTest):
     def setup_method(self, test_method):
         super(BaseEventsTest, self).setup_method(test_method, 'events')
-        self.table = self.dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name()
+        self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
         self.event = get_event()
 
     def create_event_for_date(self, dt, retention_days=settings.DEFAULT_RETENTION_DAYS):
@@ -209,7 +209,7 @@ class BaseEventsTest(BaseDatasetTest):
         for event in events:
             if 'primary_hash' not in event:
                 event = wrap_raw_event(event)
-            _, processed = self.dataset.get_processor().process_message(event)
+            _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(event)
             out.append(processed)
 
         return self.write_processed_records(out)
@@ -228,7 +228,7 @@ class BaseEventsTest(BaseDatasetTest):
         if not isinstance(rows, (list, tuple)):
             rows = [rows]
 
-        self.dataset.get_writer().write(rows)
+        enforce_table_writer(self.dataset).get_writer().write(rows)
 
 
 def message(offset, partition, value, eof=False) -> FakeKafkaMessage:
