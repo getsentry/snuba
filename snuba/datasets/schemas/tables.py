@@ -221,9 +221,6 @@ class MaterializedViewSchema(TableSchema):
     def __get_local_destination_table_name(self) -> str:
         return self._make_test_table(self.__local_destination_table_name)
 
-    def _get_local_engine(self) -> str:
-        pass
-
     def __get_table_definition(self, name: str, source_table_name: str, destination_table_name: str) -> str:
         return """
         CREATE MATERIALIZED VIEW IF NOT EXISTS %(name)s TO %(destination_table_name)s (%(columns)s) AS %(query)s""" % {

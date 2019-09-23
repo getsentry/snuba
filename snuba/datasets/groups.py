@@ -32,7 +32,7 @@ class Groups(TimeSeriesDataset):
     EVENTS_ALIAS = "events"
     GROUPS_ALIAS = "groups"
 
-    ALIASED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.]+)$")
+    QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.]+)$")
 
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
@@ -84,7 +84,7 @@ class Groups(TimeSeriesDataset):
         # TODO: This logic should be general and in the Query class.
         # cannot do that yet since the column processing methods like
         # column_expr do not have access to the Query yet.
-        match = self.ALIASED_COLUMN_REGEX.match(column_name)
+        match = self.QUALIFIED_COLUMN_REGEX.match(column_name)
         if not match or not match[1] in [self.EVENTS_ALIAS, self.GROUPS_ALIAS]:
             return (None, column_name)
         else:

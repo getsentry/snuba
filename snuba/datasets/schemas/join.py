@@ -124,8 +124,7 @@ class JoinedSchema(Schema):
     def __get_columns(self, structure: JoinStructure) -> QualifiedColumnSet:
         """
         Extracts all the columns recursively from the joined schemas and
-        flattens this structure adding the columns into one ColumnSet
-        prepended with the schema alias.
+        builds a column set that preserves the structure.
         """
         schemas = SubJoinSource(structure).get_schemas()
         column_sets = {alias: schema.get_columns() for alias, schema in schemas.items()}
