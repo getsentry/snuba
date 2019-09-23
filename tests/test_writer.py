@@ -4,6 +4,7 @@ from typing import Iterable
 
 from base import BaseEventsTest
 from snuba.clickhouse.http import ClickHouseError, HTTPBatchWriter
+from snuba.datasets.factory import enforce_table_writer
 from snuba import settings
 from snuba.writer import WriterTableRow
 
@@ -16,7 +17,7 @@ class FakeHTTPWriter(HTTPBatchWriter):
 class TestHTTPBatchWriter(BaseEventsTest):
     def test_error_handling(self):
         try:
-            self.dataset.get_writer(table_name="invalid").write([{"x": "y"}])
+            enforce_table_writer(self.dataset).get_writer(table_name="invalid").write([{"x": "y"}])
         except ClickHouseError as error:
             assert error.code == 60
             assert error.type == 'DB::Exception'
@@ -24,7 +25,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
             assert False, "expected error"
 
         try:
-            self.dataset.get_writer().write([{"timestamp": "invalid"}])
+            enforce_table_writer(self.dataset).get_writer().write([{"timestamp": "invalid"}])
         except ClickHouseError as error:
             assert error.code == 41
             assert error.type == 'DB::Exception'

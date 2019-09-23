@@ -1,4 +1,6 @@
 from snuba import settings
+from snuba.datasets import Dataset
+from snuba.datasets.table_storage import TableWriter
 
 DATASETS_IMPL = {}
 
@@ -46,3 +48,9 @@ def get_dataset(name):
 
 def get_enabled_dataset_names():
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
+
+
+def enforce_table_writer(dataset: Dataset) -> TableWriter:
+    table_writer = dataset.get_table_writer()
+    assert table_writer is not None, f"Dataset{dataset} is not writable"
+    return table_writer

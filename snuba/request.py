@@ -1,24 +1,29 @@
+from __future__ import annotations
+
 import itertools
 
 from collections import ChainMap
 from dataclasses import dataclass
-
+from deprecation import deprecated
 from typing import Any, Mapping
 
-from snuba.schemas import (
-    validate_jsonschema,
-    Schema
-)
+from snuba.query.extensions import QueryExtension
+from snuba.query.query import Query
+from snuba.query.schema import GENERIC_QUERY_SCHEMA
+from snuba.schemas import Schema, validate_jsonschema
 
 
 @dataclass(frozen=True)
 class Request:
-    query: Mapping[str, Any]
+    query: Query
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
+    @deprecated(
+        details="Do not access the internal query representation "
+        "use the specific accessor methods on the query object instead.")
     def body(self):
-        return ChainMap(self.query, *self.extensions.values())
+        return ChainMap(self.query.get_body(), *self.extensions.values())
 
 
 class RequestSchema:
@@ -49,16 +54,26 @@ class RequestSchema:
 
         self.__composite_schema['required'] = set(self.__composite_schema['required'])
 
+    @classmethod
+    def build_with_extensions(cls, extensions: Mapping[str, QueryExtension]) -> RequestSchema:
+        generic_schema = GENERIC_QUERY_SCHEMA
+        extensions_schemas = {
+            extension_key: extension.get_schema()
+            for extension_key, extension
+            in extensions.items()
+        }
+        return cls(generic_schema, extensions_schemas)
+
     def validate(self, value) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
-        query = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
+        query_body = {key: value.pop(key) for key in self.__query_schema['properties'].keys() if key in value}
 
         extensions = {}
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(query, extensions)
+        return Request(Query(query_body), extensions)
 
     def __generate_template_impl(self, schema) -> Any:
         """
