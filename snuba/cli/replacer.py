@@ -48,7 +48,10 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
-    replacements_topic = replacements_topic or dataset.get_default_replacement_topic()
+    stream_loader = dataset.get_table_writer().get_stream_loader()
+    default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+    assert default_replacement_topic_spec is not None, f"Dataset {dataset} does not have a replacement topic."
+    replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',

@@ -9,7 +9,7 @@ from snuba.clickhouse.native import ClickhousePool
 
 class TestClickhouse(BaseEventsTest):
     def test_flattened(self):
-        columns = self.dataset.get_table_writer().get_write_schema().get_columns()
+        columns = self.dataset.get_table_writer().get_schema().get_columns()
         assert columns['group_id'].type == UInt(64)
         assert columns['group_id'].name == 'group_id'
         assert columns['group_id'].base_name is None

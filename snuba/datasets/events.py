@@ -238,14 +238,14 @@ class EventsDataset(TimeSeriesDataset):
             stream_loader=KafkaStreamLoader(
                 processor=EventsProcessor(promoted_tag_columns),
                 default_topic="events",
+                replacement_topic="event-replacements",
+                commit_log_topic="snuba-commit-log",
             )
         )
 
         super(EventsDataset, self).__init__(
             dataset_schemas=dataset_schemas,
             table_writer=table_writer,
-            default_replacement_topic="event-replacements",
-            default_commit_log_topic="snuba-commit-log",
             time_group_columns={
                 'time': 'timestamp',
                 'rtime': 'received'

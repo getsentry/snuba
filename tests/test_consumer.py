@@ -105,7 +105,8 @@ class TestConsumer(BaseEventsTest):
             def partition(self):
                 return 456
 
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), self.dataset.get_default_replacement_topic())
+        replacement_topic = self.dataset.get_table_writer().get_stream_loader().get_replacement_topic_spec()
+        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name)
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -114,7 +115,8 @@ class TestConsumer(BaseEventsTest):
         ) == [(self.event['project_id'], self.event['event_id'], 123, 456)]
 
     def test_skip_too_old(self):
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), self.dataset.get_default_replacement_topic())
+        replacement_topic = self.dataset.get_table_writer().get_stream_loader().get_replacement_topic_spec()
+        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -137,7 +139,8 @@ class TestConsumer(BaseEventsTest):
 
     def test_produce_replacement_messages(self):
         producer = FakeKafkaProducer()
-        test_worker = ConsumerWorker(self.dataset, producer, self.dataset.get_default_replacement_topic())
+        replacement_topic = self.dataset.get_table_writer().get_stream_loader().get_replacement_topic_spec()
+        test_worker = ConsumerWorker(self.dataset, producer, replacement_topic.topic_name)
 
         test_worker.flush_batch([
             (self.dataset.get_table_writer().get_stream_loader().get_processor().REPLACE, ('1', {'project_id': 1})),

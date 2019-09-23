@@ -23,13 +23,9 @@ class Dataset(object):
     def __init__(self,
             dataset_schemas: DatasetSchemas,
             *,
-            table_writer: Optional[TableWriter],
-            default_replacement_topic: Optional[str] = None,
-            default_commit_log_topic: Optional[str] = None):
+            table_writer: Optional[TableWriter] = None):
         self.__dataset_schemas = dataset_schemas
         self.__table_writer = table_writer
-        self.__default_replacement_topic = default_replacement_topic
-        self.__default_commit_log_topic = default_commit_log_topic
 
     def get_dataset_schemas(self) -> DatasetSchemas:
         """
@@ -66,12 +62,6 @@ class Dataset(object):
         queries on this dataset.
         """
         return []
-
-    def get_default_replacement_topic(self) -> Optional[str]:
-        return self.__default_replacement_topic
-
-    def get_default_commit_log_topic(self) -> Optional[str]:
-        return self.__default_commit_log_topic
 
     def column_expr(self, column_name, body):
         """

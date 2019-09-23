@@ -9,7 +9,7 @@ class CdcDataset(Dataset):
             **kwargs):
         super().__init__(
             dataset_schemas=dataset_schemas,
-            ** kwargs,
+            **kwargs,
         )
         self.__default_control_topic = default_control_topic
 

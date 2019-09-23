@@ -1,13 +1,22 @@
+from dataclasses import dataclass
 import json
 import rapidjson
 
 from datetime import datetime
+from typing import Optional, Sequence
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.snapshots.bulk_load import BulkLoader
 from snuba.writer import BatchWriter
+
+
+@dataclass(frozen=True)
+class KafkaTopicSpec:
+    topic_name: str
+    replication_factor: int = 1
+    partitions_number: int = 1
 
 
 class KafkaStreamLoader:
@@ -20,21 +29,37 @@ class KafkaStreamLoader:
         self,
         processor: MessageProcessor,
         default_topic: str,
+        replacement_topic: Optional[str]=None,
+        commit_log_topic: Optional[str]=None,
     ) -> None:
         self.__processor = processor
-        self.__default_topic = default_topic
+        self.__default_topic_spec = KafkaTopicSpec(topic_name=default_topic)
+        self.__replacement_topic_spec = KafkaTopicSpec(topic_name=replacement_topic) \
+            if replacement_topic \
+            else None
+        self.__commit_log_topic_spec = KafkaTopicSpec(topic_name=commit_log_topic) \
+            if commit_log_topic \
+            else None
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
 
-    def get_default_topic(self) -> str:
-        return self.__default_topic
+    def get_default_topic_spec(self) -> KafkaTopicSpec:
+        return self.__default_topic_spec
 
-    def get_default_replication_factor(self):
-        return 1
+    def get_replacement_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__replacement_topic_spec
 
-    def get_default_partitions(self):
-        return 1
+    def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
+        return self.__commit_log_topic_spec
+
+    def get_all_topic_specs(self) -> Sequence[KafkaTopicSpec]:
+        ret = [self.__default_topic_spec]
+        if self.__replacement_topic_spec:
+            ret.append(self.__replacement_topic_spec)
+        if self.__commit_log_topic_spec:
+            ret.append(self.__commit_log_topic_spec)
+        return ret
 
 
 class TableWriter:
@@ -47,7 +72,7 @@ class TableWriter:
     Eventually, after some heavier refactoring of the consumer scripts,
     we could make the writing process more abstract and hide in this class
     the streaming, processing and writing. The writer in such architecture
-    could coordinate the injestion process but that requires a reshuffle
+    could coordinate the ingestion process but that requires a reshuffle
     of responsibilities in the consumer scripts and a common interface
     between bulk load and stream load.
     """
@@ -59,7 +84,7 @@ class TableWriter:
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
 
-    def get_write_schema(self) -> WritableTableSchema:
+    def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
     def get_writer(self, options=None, table_name=None) -> BatchWriter:
