@@ -12,7 +12,7 @@ import time
 import uuid
 
 from snuba import settings, state
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
 from base import BaseEventsTest
@@ -64,7 +64,7 @@ class TestApi(BaseApiTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(self.dataset.get_table_writer().get_stream_loader().get_processor().process_insert({
+                    events.append(enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,

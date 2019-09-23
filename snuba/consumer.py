@@ -5,6 +5,7 @@ import simplejson as json
 from typing import Any, Mapping
 
 from batching_kafka_consumer import AbstractBatchWorker
+from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import MessageProcessor
 
 logger = logging.getLogger('snuba.consumer')
@@ -25,7 +26,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        self.__writer = dataset.get_table_writer().get_writer({
+        self.__writer = enforce_table_writer(dataset).get_writer({
             'load_balancing': 'in_order',
             'insert_distributed_sync': 1,
         })

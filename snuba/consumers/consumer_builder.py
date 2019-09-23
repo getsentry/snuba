@@ -5,7 +5,7 @@ from typing import Sequence
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 
@@ -44,7 +44,7 @@ class ConsumerBuilder:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        stream_loader = self.dataset.get_table_writer().get_stream_loader()
+        stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
         self.raw_topic = raw_topic or stream_loader.get_default_topic_spec().topic_name
         default_replacement_topic_name = stream_loader.get_replacement_topic_spec().topic_name \
             if stream_loader.get_replacement_topic_spec() \

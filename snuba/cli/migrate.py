@@ -4,7 +4,7 @@ import click
 from clickhouse_driver import Client
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.util import local_dataset_mode
 
 

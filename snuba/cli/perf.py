@@ -19,7 +19,7 @@ import click
 import sys
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
 from snuba.util import local_dataset_mode
 
 

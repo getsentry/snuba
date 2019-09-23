@@ -1,7 +1,7 @@
 import click
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
 
 
 @click.command()
@@ -40,8 +40,9 @@ def bootstrap(bootstrap_server, kafka, force):
         topics = []
         for name in DATASET_NAMES:
             dataset = get_dataset(name)
-            if dataset.can_write():
-                stream_loader = dataset.get_table_writer().get_stream_loader()
+            table_writer = dataset.get_table_writer()
+            if table_writer:
+                stream_loader = table_writer.get_stream_loader()
                 for topic_spec in stream_loader.get_all_topic_specs():
                     topics.append(
                         NewTopic(
