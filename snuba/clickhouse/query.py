@@ -49,7 +49,7 @@ class ClickhouseQuery:
             from_clause = u'{} FINAL'.format(from_clause)
 
         if query.get_sample():
-            from_clause = u'{} SAMPLE {}'.format(from_clause, self.__request.query.get_sample())
+            from_clause = u'{} SAMPLE {}'.format(from_clause, query.get_sample())
 
         join_clause = ''
         if 'arrayjoin' in body:
