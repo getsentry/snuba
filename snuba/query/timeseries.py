@@ -35,7 +35,8 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
             query: Query,
             extension_data: ExtensionData,
             settings: Mapping[str, bool],
-            request_state: Mapping[str, Any]
+            query_hints: Mapping[str, Any],
+            stats: Mapping[str, Any]
     ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.add_conditions([
