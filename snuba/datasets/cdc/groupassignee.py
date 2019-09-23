@@ -5,7 +5,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, GroupAssigneeRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.snapshots.bulk_load import SingleTableBulkLoader
+from snuba.snapshots.bulk_load import BulkLoadSource, SingleTableBulkLoader
 
 
 class GroupAssigneeDataset(CdcDataset):
@@ -56,7 +56,7 @@ class GroupAssigneeDataset(CdcDataset):
             default_control_topic="cdc_control",
         )
 
-    def get_bulk_loader(self, source, dest_table):
+    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str):
         return SingleTableBulkLoader(
             source=source,
             source_table=self.POSTGRES_TABLE,
