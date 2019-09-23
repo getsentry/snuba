@@ -48,7 +48,7 @@ class ClickhouseQuery:
         if self.final:
             from_clause = u'{} FINAL'.format(from_clause)
 
-        if self.__request.query.get_sample():
+        if query.get_sample():
             from_clause = u'{} SAMPLE {}'.format(from_clause, self.__request.query.get_sample())
 
         join_clause = ''
