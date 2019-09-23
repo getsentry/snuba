@@ -17,7 +17,7 @@ from snuba.schemas import Schema, validate_jsonschema
 class Request:
     query: Query
     settings: Mapping[str, bool]  # settings provided by the request
-    state: Mapping[str, Any]  # intermediate state
+    state: Mapping[str, Any]  # intermediate state; used to pass state from query processors to clickhouse query
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property

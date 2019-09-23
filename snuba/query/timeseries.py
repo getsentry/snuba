@@ -30,7 +30,13 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
 
         return (from_date, to_date)
 
-    def process_query(self, query: Query, extension_data: ExtensionData, settings: Mapping[str, bool], state: Mapping[str, Any]) -> None:
+    def process_query(
+            self,
+            query: Query,
+            extension_data: ExtensionData,
+            settings: Mapping[str, bool],
+            request_state: Mapping[str, Any]
+    ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.add_conditions([
             (self.__timestamp_column, '>=', from_date.isoformat()),
