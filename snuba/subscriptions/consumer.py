@@ -19,6 +19,7 @@ from confluent_kafka import (
     TopicPartition,
 )
 
+from snuba.utils.kafka.configuration import get_bool_configuration_value
 from snuba.utils.kafka.consumer import Consumer
 
 
@@ -74,18 +75,6 @@ class TaskSet:
     partition: int
     interval: Interval
     tasks: Sequence[Task]
-
-
-def get_boolean_configuration_value(
-    configuration: Mapping[str, Any], key: str, default: bool
-) -> bool:
-    value = configuration.get(key, default)
-    if isinstance(value, str):
-        return value.lower().strip() == "true"
-    elif isinstance(value, bool):
-        return value
-    else:
-        raise TypeError(f"unexpected value for {key!r}")
 
 
 class PartitionState:
@@ -220,7 +209,7 @@ class TaskSetConsumer(Consumer[TaskSet]):
         # stored offsets to be committed) is to use the automatic offset
         # storage. (There is no ``store_offsets`` method.) That makes this
         # configuration value effectively required
-        self.__enable_auto_offset_store = get_boolean_configuration_value(
+        self.__enable_auto_offset_store = get_bool_configuration_value(
             configuration, "enable.auto.offset.store", True
         )
 
