@@ -24,8 +24,8 @@ from snuba.query.extensions import (
     PerformanceExtension,
     ProjectExtension,
     QueryExtension,
-    TimeSeriesExtension,
 )
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 class TransactionsDataset(TimeSeriesDataset):
