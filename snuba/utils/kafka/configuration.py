@@ -11,11 +11,13 @@ def get_bool_configuration_value(
     # https://github.com/edenhill/librdkafka/blob/c8293af/src/rdkafka_conf.c#L1633-L1660
     value = configuration.get(key, default)
     if isinstance(value, str):
-        value = value.lower().strip()
+        value = value.lower()
         if value in {"true", "t", "1"}:
             return True
         elif value in {"false", "f", "0"}:
             return False
+        else:
+            raise ValueError(f"unexpected value for {key!r}")
     elif isinstance(value, bool):
         return value
 

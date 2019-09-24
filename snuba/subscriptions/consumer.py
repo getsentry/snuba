@@ -48,8 +48,11 @@ class Interval:
     upper: Position
 
     def __post_init__(self) -> None:
-        assert self.upper.offset > self.lower.offset
-        assert self.upper.timestamp >= self.lower.timestamp
+        if not self.upper.offset > self.lower.offset:
+            raise ValueError('upper offset must be greater than lower offset')
+
+        if not self.upper.timestamp >= self.lower.timestamp:
+            raise ValueError('upper timestamp must be greater than or equal to lower timestamp')
 
     def shift(self, position: Position) -> Interval:
         """
