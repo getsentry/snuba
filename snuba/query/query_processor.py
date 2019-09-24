@@ -60,4 +60,4 @@ class DummyExtensionProcessor(ExtensionQueryProcessor):
             request_settings: Mapping[str, bool],
             query_hints: Mapping[str, Any],
     ) -> None:
-        return query
+        pass
