@@ -23,7 +23,6 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
         context_data: TQueryProcessContext,
         request_settings: Mapping[str, bool],
         query_hints: Mapping[str, Any],  # used to pass hints from the extension processors to the clickhouse query
-        stats: Mapping[str, Any],
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -48,7 +47,6 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
             query_hints: Mapping[str, Any],
-            stats: Mapping[str, Any],
     ) -> None:
         raise NotImplementedError
 
@@ -61,6 +59,5 @@ class DummyExtensionProcessor(ExtensionQueryProcessor):
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
             query_hints: Mapping[str, Any],
-            stats: Mapping[str, Any],
     ) -> None:
         return query

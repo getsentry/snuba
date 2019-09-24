@@ -58,5 +58,5 @@ def test_query_extension_processing(raw_data: dict, expected_conditions: Sequenc
         "conditions": []
     })
 
-    extension.get_processor().process_query(query, valid_data, {}, {}, {})
+    extension.get_processor().process_query(query, valid_data, {}, {})
     assert query.get_conditions() == expected_conditions

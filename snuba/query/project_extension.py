@@ -37,13 +37,11 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             extension_data: ExtensionData,
             request_settings: Mapping[str, bool],
             query_hints: Mapping[str, Any],
-            stats: Mapping[str, Any],
     ) -> None:
         # NOTE: we rely entirely on the schema to make sure that regular snuba
         # queries are required to send a project_id filter. Some other special
         # internal query types do not require a project_id filter.
         project_ids = util.to_list(extension_data['project'])
-        stats.update({'num_projects': len(project_ids)})
 
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])

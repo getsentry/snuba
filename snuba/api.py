@@ -18,7 +18,6 @@ from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
@@ -271,15 +270,13 @@ def parse_and_run_query(dataset, request: Request, timer):
     extensions = dataset.get_extensions()
 
     query_hints = {}
-    stats = {}
 
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
             request.settings,
-            query_hints,
-            stats
+            query_hints
         )
     request.query.add_conditions(dataset.default_conditions())
 
@@ -312,13 +309,13 @@ def parse_and_run_query(dataset, request: Request, timer):
     sql = clickhouse_query.format()
     timer.mark('prepare_query')
 
-    stats.update({
+    stats = {
         'clickhouse_table': source,
         'final': clickhouse_query.final,
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'sample': request.query.get_sample(),
-    })
+    }
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
 
