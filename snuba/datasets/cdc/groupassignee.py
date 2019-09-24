@@ -5,7 +5,27 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, GroupAssigneeRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.snapshots.bulk_load import BulkLoadSource, SingleTableBulkLoader
+
+
+class GroupAssigneeTableWriter(TableWriter):
+    def __init__(self,
+                postgres_table: str,
+                **kwargs,
+            ):
+        super().__init__(
+            **kwargs
+        )
+        self.__postgres_table = postgres_table
+
+    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str):
+        return SingleTableBulkLoader(
+            source=source,
+            source_table=self.__postgres_table,
+            dest_table=dest_table,
+            row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),
+        )
 
 
 class GroupAssigneeDataset(CdcDataset):
@@ -51,17 +71,15 @@ class GroupAssigneeDataset(CdcDataset):
 
         super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=GroupAssigneeProcessor(self.POSTGRES_TABLE),
-            default_topic="cdc",
+            table_writer=GroupAssigneeTableWriter(
+                write_schema=schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=GroupAssigneeProcessor(self.POSTGRES_TABLE),
+                    default_topic="cdc",
+                ),
+                postgres_table=self.POSTGRES_TABLE,
+            ),
             default_control_topic="cdc_control",
-        )
-
-    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str):
-        return SingleTableBulkLoader(
-            source=source,
-            source_table=self.POSTGRES_TABLE,
-            dest_table=dest_table,
-            row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:
