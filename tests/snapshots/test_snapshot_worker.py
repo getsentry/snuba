@@ -8,7 +8,7 @@ from uuid import uuid1
 from base import FakeKafkaProducer, message as build_msg
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.processor import MessageProcessor
+from snuba.processor import ProcessorAction
 from snuba.stateful_consumer.control_protocol import TransactionData
 
 
@@ -61,15 +61,15 @@ class TestSnapshotWorker:
         (
             INSERT_MSG % {"xid": 120},
             (
-                MessageProcessor.INSERT,
-                PROCESSED,
+                ProcessorAction.INSERT,
+                [PROCESSED],
             )
         ),
         (
             INSERT_MSG % {"xid": 210},
             (
-                MessageProcessor.INSERT,
-                PROCESSED,
+                ProcessorAction.INSERT,
+                [PROCESSED],
             )
         )
     ]

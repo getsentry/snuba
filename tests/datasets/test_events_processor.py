@@ -7,7 +7,11 @@ from base import BaseEventsTest
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import InvalidMessageType, InvalidMessageVersion
+from snuba.processor import (
+    InvalidMessageType,
+    InvalidMessageVersion,
+    ProcessorAction,
+)
 from snuba.datasets.events_processor import (
     enforce_retention,
     extract_base,
@@ -22,13 +26,13 @@ class TestEventsProcessor(BaseEventsTest):
         _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(self.event)
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
-            assert processed[field] == self.event[field]
+            assert processed[0][field] == self.event[field]
 
     def test_simple_version_0(self):
         _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message((0, 'insert', self.event))
 
         for field in ('event_id', 'project_id', 'message', 'platform'):
-            assert processed[field] == self.event[field]
+            assert processed[0][field] == self.event[field]
 
     def test_simple_version_1(self):
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
@@ -51,14 +55,14 @@ class TestEventsProcessor(BaseEventsTest):
 
         _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(self.event)
 
-        assert processed['message'] == '{"what": "why is this in the message"}'
+        assert processed[0]['message'] == '{"what": "why is this in the message"}'
 
     def test_hash_invalid_primary_hash(self):
         self.event['primary_hash'] = b"'tinymce' \u063a\u064a\u0631 \u0645\u062d".decode('unicode-escape')
 
         _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(self.event)
 
-        assert processed['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
+        assert processed[0]['primary_hash'] == 'a52ccc1a61c2258e918b43b5aff50db1'
 
     def test_extract_required(self):
         now = datetime.utcnow()
@@ -171,56 +175,56 @@ class TestEventsProcessor(BaseEventsTest):
         message = (2, 'start_delete_groups', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_end_delete_groups(self):
         project_id = 1
         message = (2, 'end_delete_groups', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_start_merge(self):
         project_id = 1
         message = (2, 'start_merge', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_end_merge(self):
         project_id = 1
         message = (2, 'end_merge', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_start_unmerge(self):
         project_id = 1
         message = (2, 'start_unmerge', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_end_unmerge(self):
         project_id = 1
         message = (2, 'end_unmerge', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_start_delete_tag(self):
         project_id = 1
         message = (2, 'start_delete_tag', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_v2_end_delete_tag(self):
         project_id = 1
         message = (2, 'end_delete_tag', {'project_id': project_id})
         processor = enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         assert processor.process_message(message) == \
-            (processor.REPLACE, (str(project_id), message))
+            (ProcessorAction.REPLACE, [(str(project_id), message)])
 
     def test_extract_sdk(self):
         sdk = {

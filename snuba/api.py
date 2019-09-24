@@ -415,7 +415,7 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
-        from snuba.processor import MessageProcessor
+        from snuba.processor import ProcessorAction
 
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
@@ -426,7 +426,7 @@ if application.debug or application.testing:
                 .get_stream_loader() \
                 .get_processor() \
                 .process_message(message)
-            assert action is MessageProcessor.INSERT
+            assert action is ProcessorAction.INSERT
             rows.append(row)
 
         enforce_table_writer(dataset).get_writer().write(rows)

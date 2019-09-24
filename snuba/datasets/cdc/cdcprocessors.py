@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence, Type
 
-from snuba.processor import MessageProcessor
+from snuba.processor import MessageProcessor, ProcessorAction, ProcessedMessage
 from snuba.writer import WriterTableRow
 
 KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
@@ -75,52 +75,54 @@ class CdcProcessor(MessageProcessor):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
 
-    def _process_begin(self, offset: int):
-        pass
+    def _process_begin(self, offset: int) -> Sequence[WriterTableRow]:
+        return []
 
-    def _process_commit(self, offset: int):
-        pass
+    def _process_commit(self, offset: int) -> Sequence[WriterTableRow]:
+        return []
 
     def _process_insert(self,
         offset: int,
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
-    ) -> Optional[WriterTableRow]:
-        return self._message_row_class.from_wal(
+    ) -> Sequence[WriterTableRow]:
+        return [self._message_row_class.from_wal(
             offset,
             columnnames,
             columnvalues
-        ).to_clickhouse()
+        ).to_clickhouse()]
 
     def _process_update(self,
         offset: int,
         key: Mapping[str, Any],
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
-    ) -> Optional[WriterTableRow]:
+    ) -> Sequence[WriterTableRow]:
         old_key = dict(zip(key['keynames'], key['keyvalues']))
         new_key = {
             key: columnvalues[columnnames.index(key)]
             for key
             in key['keynames']
         }
-        # We cannot support a change in the identity of the record
-        # clickhouse will use the identity column to find rows to merge.
-        # if we change it, merging won't work.
-        assert old_key == new_key, 'Changing Primary Key is not supported.'
-        return self._message_row_class.from_wal(
+
+        ret = []
+        if old_key != new_key:
+            ret.extend(self._process_delete(offset, key))
+
+        ret.extend(self._message_row_class.from_wal(
             offset,
             columnnames,
             columnvalues
-        ).to_clickhouse()
+        ).to_clickhouse())
+        return ret
 
     def _process_delete(self,
         offset: int,
         key: Mapping[str, Any],
-    ) -> Optional[WriterTableRow]:
-        pass
+    ) -> Sequence[WriterTableRow]:
+        return []
 
-    def process_message(self, value, metadata):
+    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
 
         partition = metadata.partition
@@ -129,9 +131,9 @@ class CdcProcessor(MessageProcessor):
         offset = metadata.offset
         event = value['event']
         if event == 'begin':
-            message = self._process_begin(offset)
+            messages = self._process_begin(offset)
         elif event == 'commit':
-            message = self._process_commit(offset)
+            messages = self._process_commit(offset)
         elif event == 'change':
             table_name = value['table']
             if table_name != self.pg_table:
@@ -139,19 +141,22 @@ class CdcProcessor(MessageProcessor):
 
             operation = value['kind']
             if operation == 'insert':
-                message = self._process_insert(
+                messages = self._process_insert(
                     offset, value['columnnames'], value['columnvalues'])
             elif operation == 'update':
-                message = self._process_update(
+                messages = self._process_update(
                     offset, value['oldkeys'], value['columnnames'], value['columnvalues'])
             elif operation == 'delete':
-                message = self._process_delete(offset, value['oldkeys'])
+                messages = self._process_delete(offset, value['oldkeys'])
             else:
                 raise ValueError("Invalid value for operation in replication log: %s" % value['kind'])
         else:
             raise ValueError("Invalid value for event in replication log: %s" % value['event'])
 
-        if message is None:
+        if not messages:
             return None
 
-        return (self.INSERT, message)
+        return ProcessedMessage(
+            action=ProcessorAction.INSERT,
+            data=messages,
+        )

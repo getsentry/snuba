@@ -16,6 +16,7 @@ from base import (
 
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import ProcessedMessage, ProcessorAction
 
 
 class TestConsumer(BaseEventsTest):
@@ -144,8 +145,14 @@ class TestConsumer(BaseEventsTest):
         test_worker = ConsumerWorker(self.dataset, producer, replacement_topic.topic_name)
 
         test_worker.flush_batch([
-            (enforce_table_writer(self.dataset).get_stream_loader().get_processor().REPLACE, ('1', {'project_id': 1})),
-            (enforce_table_writer(self.dataset).get_stream_loader().get_processor().REPLACE, ('2', {'project_id': 2})),
+            ProcessedMessage(
+                action=ProcessorAction.REPLACE,
+                data=[('1', {'project_id': 1})],
+            ),
+            ProcessedMessage(
+                action=ProcessorAction.REPLACE,
+                data=[('2', {'project_id': 2})],
+            ),
         ])
 
         assert [(m._topic, m._key, m._value) for m in producer.messages] == \

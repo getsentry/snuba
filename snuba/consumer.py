@@ -2,11 +2,15 @@ import collections
 import logging
 import simplejson as json
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from batching_kafka_consumer import AbstractBatchWorker
 from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import MessageProcessor
+from snuba.processor import (
+    MessageProcessor,
+    ProcessedMessage,
+    ProcessorAction,
+)
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -31,7 +35,7 @@ class ConsumerWorker(AbstractBatchWorker):
             'insert_distributed_sync': 1,
         })
 
-    def process_message(self, message):
+    def process_message(self, message) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
@@ -43,7 +47,7 @@ class ConsumerWorker(AbstractBatchWorker):
 
         action_type = processed[0]
         if action_type not in set(
-            [MessageProcessor.INSERT, MessageProcessor.REPLACE]
+            [ProcessorAction.INSERT, ProcessorAction.REPLACE]
         ):
             raise InvalidActionType("Invalid action type: {}".format(action_type))
 
@@ -53,7 +57,7 @@ class ConsumerWorker(AbstractBatchWorker):
         self,
         value: Mapping[str, Any],
         metadata: KafkaMessageMetadata,
-    ):
+    ) -> Optional[ProcessedMessage]:
         processor = enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
         return processor.process_message(value, metadata)
 
@@ -65,15 +69,14 @@ class ConsumerWorker(AbstractBatchWorker):
     def flush_batch(self, batch):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
-        processor = enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
         inserts = []
         replacements = []
 
-        for action_type, data in batch:
-            if action_type == processor.INSERT:
-                inserts.append(data)
-            elif action_type == processor.REPLACE:
-                replacements.append(data)
+        for message in batch:
+            if message.action == ProcessorAction.INSERT:
+                inserts.extend(message.data)
+            elif message.action == ProcessorAction.REPLACE:
+                replacements.extend(message.data)
 
         if inserts:
             self.__writer.write(inserts)
