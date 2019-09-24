@@ -20,11 +20,9 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.query.extensions import (
-    ProjectExtension,
-    QueryExtension,
-)
+from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.project_extension import ProjectExtension
 
 from snuba.util import (
     alias_expr,

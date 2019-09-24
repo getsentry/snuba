@@ -2,9 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, TypeVar
 
 from snuba.query.query import Query
-from snuba import settings, util
-from snuba.state import get_config
-from snuba.replacer import get_projects_query_flags
 
 ExtensionData = Mapping[str, Any]
 
@@ -67,38 +64,3 @@ class DummyExtensionProcessor(ExtensionQueryProcessor):
             stats: Mapping[str, Any],
     ) -> None:
         return query
-
-
-class ProjectExtensionProcessor(ExtensionQueryProcessor):
-
-    def process_query(
-            self,
-            query: Query,
-            extension_data: ExtensionData,
-            request_settings: Mapping[str, bool],
-            query_hints: Mapping[str, Any],
-            stats: Mapping[str, Any],
-    ) -> None:
-        # NOTE: we rely entirely on the schema to make sure that regular snuba
-        # queries are required to send a project_id filter. Some other special
-        # internal query types do not require a project_id filter.
-        project_ids = util.to_list(extension_data['project'])
-        stats.update({'num_projects': len(project_ids)})
-
-        if project_ids:
-            query.add_conditions([('project_id', 'IN', project_ids)])
-
-        turbo = request_settings.get('turbo', False)
-        if not turbo:
-            final, exclude_group_ids = get_projects_query_flags(project_ids)
-            if not final and exclude_group_ids:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
-                if len(exclude_group_ids) > max_group_ids_exclude:
-                    query_hints.update({'final': True})
-                else:
-                    query_hints.update({'final': False})
-                    query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
-            else:
-                query_hints.update({'final': final})
