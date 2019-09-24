@@ -311,7 +311,7 @@ def parse_and_run_query(dataset, request: Request, timer):
 
     stats = {
         'clickhouse_table': source,
-        'final': clickhouse_query.final,
+        'final': clickhouse_query.get_final(),
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'sample': request.query.get_sample(),

@@ -20,14 +20,17 @@ class ClickhouseQuery:
         self.__query_hints = query_hints
 
         turbo = self.__request.settings.get('turbo', False)
-        self.final = False  # this is a public variable so that api can read it for stats
+        self.__final = False
 
         if turbo:
-            self.final = False
+            self.__final = False
             if self.__request.query.get_sample() is None:
                 request.query.set_sample(settings.TURBO_SAMPLE_RATE)
         elif 'final' in self.__query_hints:
-            self.final = self.__query_hints['final']
+            self.__final = self.__query_hints['final']
+
+    def get_final(self):
+        return self.__final
 
     def format(self) -> str:
         """Generate a SQL string from the parameters."""
@@ -47,7 +50,7 @@ class ClickhouseQuery:
 
         from_clause = u'FROM {}'.format(source)
 
-        if self.final:
+        if self.__final:
             from_clause = u'{} FINAL'.format(from_clause)
 
         if query.get_sample():
