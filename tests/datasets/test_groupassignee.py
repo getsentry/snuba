@@ -75,8 +75,8 @@ class TestGroupassignee(BaseDatasetTest):
 
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
-        assert ret[1] == self.PROCESSED
-        self.write_processed_records(ret[1])
+        assert ret.data == [self.PROCESSED]
+        self.write_processed_records(ret.data)
         cp = ClickhousePool()
         ret = cp.execute("SELECT * FROM test_groupassignee_local;")
         assert ret[0] == (
@@ -91,11 +91,11 @@ class TestGroupassignee(BaseDatasetTest):
 
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
-        assert ret[1] == self.PROCESSED
+        assert ret.data == [self.PROCESSED]
 
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
-        assert ret[1] == self.DELETED
+        assert ret.data == [self.DELETED]
 
     def test_bulk_load(self):
         row = GroupAssigneeRow.from_bulk({

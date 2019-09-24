@@ -89,15 +89,15 @@ class GroupAssigneeProcessor(CdcProcessor):
     def _process_delete(self,
         offset: int,
         key: Mapping[str, Any],
-    ) -> Optional[WriterTableRow]:
+    ) -> Sequence[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
         project_id = key_values[key_names.index('project_id')]
         group_id = key_values[key_names.index('group_id')]
-        return GroupAssigneeRow(
+        return [GroupAssigneeRow(
             offset=offset,
             record_deleted=True,
             project_id=project_id,
             group_id=group_id,
             record_content=None
-        ).to_clickhouse()
+        ).to_clickhouse()]
