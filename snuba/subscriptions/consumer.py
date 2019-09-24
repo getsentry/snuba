@@ -252,6 +252,9 @@ class TaskSetConsumer(Consumer[TaskSet]):
         )
 
     def poll(self, timeout: Optional[float] = None) -> Optional[TaskSet]:
+        # NOTE: The ``Consumer`` implementation only accepts real numbers as
+        # the timeout, not ``None``. There is no value that represents "no
+        # timeout", other than the lack of any argument at all.
         message = self.__consumer.poll(*[timeout] if timeout is not None else [])
         if message is None:
             return None
