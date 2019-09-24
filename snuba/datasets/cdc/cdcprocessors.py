@@ -109,7 +109,7 @@ class CdcProcessor(MessageProcessor):
         if old_key != new_key:
             ret.extend(self._process_delete(offset, key))
 
-        ret.extend(self._message_row_class.from_wal(
+        ret.append(self._message_row_class.from_wal(
             offset,
             columnnames,
             columnvalues
