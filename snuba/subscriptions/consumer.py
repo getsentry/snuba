@@ -270,6 +270,12 @@ class TaskSetConsumer(Consumer[TaskSet]):
     def __get_committed_offsets(
         self, partitions: Sequence[TopicPartition]
     ) -> Iterator[TopicPartition]:
+        """
+        Fetch the committed offset for each partition provided. If there is
+        no committed offset for a partition, the offset corresponding to the
+        behavior defined by the ``auto.offset.reset`` configuration variable
+        is used.
+        """
         for partition in self.__consumer.committed(partitions):
             if partition.error is not None:
                 raise partition.error
@@ -301,8 +307,9 @@ class TaskSetConsumer(Consumer[TaskSet]):
         def on_assign_callback(
             consumer: Any, assignment: Sequence[TopicPartition]
         ) -> None:
+            # Partition offsets are always reset to the committed offset during
+            # assignment -- see the class comment for details.
             assignment = list(self.__get_committed_offsets(assignment))
-
             self.__consumer.assign(assignment)
 
             for partition in assignment:
