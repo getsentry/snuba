@@ -1,6 +1,9 @@
 import pytest
 
-from snuba.utils.kafka.configuration import get_bool_configuration_value
+from snuba.utils.kafka.configuration import (
+    get_bool_configuration_value,
+    get_enum_configuration_value,
+)
 
 
 def test_get_bool_configuration_value():
@@ -21,3 +24,53 @@ def test_get_bool_configuration_value():
 
     with pytest.raises(TypeError):
         assert get_bool_configuration_value({"key": None}, "key", True)
+
+
+def test_get_enum_configuration_value():
+    assert (
+        get_enum_configuration_value(
+            {}, "auto.offset.reset", {"earliest": set(["beginning"])}, "earliest"
+        )
+        == "earliest"
+    )
+    assert (
+        get_enum_configuration_value(
+            {}, "auto.offset.reset", {"earliest": set(["beginning"])}, "beginning"
+        )
+        == "earliest"
+    )
+
+    assert (
+        get_enum_configuration_value(
+            {"auto.offset.reset": "earliest"},
+            "auto.offset.reset",
+            {"earliest": set([])},
+            "",
+        )
+        == "earliest"
+    )
+    assert (
+        get_enum_configuration_value(
+            {"auto.offset.reset": "beginning"},
+            "auto.offset.reset",
+            {"earliest": set(["beginning"])},
+            "",
+        )
+        == "earliest"
+    )
+
+    with pytest.raises(ValueError):
+        assert get_enum_configuration_value(
+            {"auto.offset.reset": "invalid"},
+            "auto.offset.reset",
+            {"earliest": set(["beginning"])},
+            "",
+        )
+
+    with pytest.raises(TypeError):
+        assert get_enum_configuration_value(
+            {"auto.offset.reset": None},
+            "auto.offset.reset",
+            {"earliest": set(["beginning"])},
+            "",
+        )
