@@ -114,15 +114,15 @@ class GroupedMessageProcessor(CdcProcessor):
     def _process_delete(self,
         offset: int,
         key: Mapping[str, Any],
-    ) -> Optional[WriterTableRow]:
+    ) -> Sequence[WriterTableRow]:
         key_names = key['keynames']
         key_values = key['keyvalues']
         project_id = key_values[key_names.index('project_id')]
         id = key_values[key_names.index('id')]
-        return GroupedMessageRow(
+        return [GroupedMessageRow(
             offset=offset,
             project_id=project_id,
             id=id,
             record_deleted=True,
             record_content=None
-        ).to_clickhouse()
+        ).to_clickhouse()]
