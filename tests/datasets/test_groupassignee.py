@@ -18,11 +18,18 @@ class TestGroupassignee(BaseDatasetTest):
 
     BEGIN_MSG = '{"event":"begin","xid":2380836}'
     COMMIT_MSG = '{"event":"commit"}'
-    UPDATE_MSG = (
+    UPDATE_MSG_NO_KEY_CHANGE = (
         '{"event":"change","xid":3803891,"timestamp":"2019-09-19 00:06:56.376853+00","kind":"update","schema":"public","table":'
         '"sentry_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint",'
         '"bigint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,2,1359,1,"2019-09-19 00:17:55+00"'
-        ',null],"oldkeys":{"keynames":["id"],"keytypes":["bigint"],"keyvalues":[35]}}'
+        ',null],"oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
+    )
+
+    UPDATE_MSG_WITH_KEY_CHANGE = (
+        '{"event":"change","xid":3803891,"timestamp":"2019-09-19 00:06:56.376853+00","kind":"update","schema":"public","table":'
+        '"sentry_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint",'
+        '"bigint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,3,1359,1,"2019-09-19 00:17:55+00"'
+        ',null],"oldkeys":{"keynames":["project_id", "group_id"],"keytypes":["bigint", "bigint"],"keyvalues":[2, 1359]}}'
     )
 
     DELETE_MSG = (
@@ -40,6 +47,16 @@ class TestGroupassignee(BaseDatasetTest):
     PROCESSED = {
         'offset': 42,
         'project_id': 2,
+        'group_id': 1359,
+        'record_deleted': 0,
+        'user_id': 1,
+        'team_id': None,
+        'date_added': datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
+    }
+
+    PROCESSED_UPDATE = {
+        'offset': 42,
+        'project_id': 3,
         'group_id': 1359,
         'record_deleted': 0,
         'user_id': 1,
@@ -89,9 +106,15 @@ class TestGroupassignee(BaseDatasetTest):
             None,   # team_id
         )
 
-        update_msg = json.loads(self.UPDATE_MSG)
+        update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.PROCESSED]
+
+        # Tests an update with key change which becomes a two inserts:
+        # one deletion and the insertion of the new row.
+        update_msg = json.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
+        ret = processor.process_message(update_msg, metadata)
+        assert ret.data == [self.DELETED, self.PROCESSED_UPDATE]
 
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)

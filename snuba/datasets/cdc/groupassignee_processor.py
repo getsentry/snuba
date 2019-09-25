@@ -67,8 +67,6 @@ class GroupAssigneeRow(CdcMessageRow):
         record = self.record_content
         return {
             'offset': self.offset if self.offset is not None else 0,
-            # TODO: project_id and group_id will become part of the key,
-            # then we will never have to set them to 0.
             'project_id': self.project_id,
             'group_id': self.group_id,
             'record_deleted': 1 if self.record_deleted else 0,
