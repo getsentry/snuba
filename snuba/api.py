@@ -422,12 +422,13 @@ if application.debug or application.testing:
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = enforce_table_writer(dataset) \
+            processed_message = enforce_table_writer(dataset) \
                 .get_stream_loader() \
                 .get_processor() \
                 .process_message(message)
-            assert action is ProcessorAction.INSERT
-            rows.append(row)
+            if processed_message:
+                assert processed_message.action is ProcessorAction.INSERT
+                rows.extend(processed_message.data)
 
         enforce_table_writer(dataset).get_writer().write(rows)
 
