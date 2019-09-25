@@ -157,14 +157,14 @@ class BaseTest(object):
             for statement in self.dataset.get_dataset_schemas().get_create_statements():
                 self.clickhouse.execute(statement)
 
-            redis_client.flushdb()
+        redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
             for statement in self.dataset.get_dataset_schemas().get_drop_statements():
                 self.clickhouse.execute(statement)
 
-            redis_client.flushdb()
+        redis_client.flushdb()
 
 
 class BaseDatasetTest(BaseTest):
