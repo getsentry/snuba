@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
+    Iterator,
     Mapping,
     MutableMapping,
     Optional,
@@ -14,12 +15,16 @@ from typing import (
 )
 
 from confluent_kafka import (
+    OFFSET_INVALID,
     TIMESTAMP_LOG_APPEND_TIME,
     Consumer as KafkaConsumer,
     TopicPartition,
 )
 
-from snuba.utils.kafka.configuration import get_bool_configuration_value
+from snuba.utils.kafka.configuration import (
+    get_bool_configuration_value,
+    get_enum_configuration_value,
+)
 from snuba.utils.kafka.consumer import Consumer
 
 
@@ -49,10 +54,12 @@ class Interval:
 
     def __post_init__(self) -> None:
         if not self.upper.offset > self.lower.offset:
-            raise ValueError('upper offset must be greater than lower offset')
+            raise ValueError("upper offset must be greater than lower offset")
 
         if not self.upper.timestamp >= self.lower.timestamp:
-            raise ValueError('upper timestamp must be greater than or equal to lower timestamp')
+            raise ValueError(
+                "upper timestamp must be greater than or equal to lower timestamp"
+            )
 
     def shift(self, position: Position) -> Interval:
         """
@@ -149,6 +156,17 @@ class TaskSetConsumer(Consumer[TaskSet]):
     for the topic -- not the producer of the message -- ensuring that each
     partition timestamp moves monotonically.
 
+    There is also a slight difference between the vanilla ``Consumer``
+    behavior and this implementation during rebalancing: whenever a partition
+    is assigned to this consumer, offsets are *always* automatically reset to
+    the committed offset for that partition (or if no offsets have been
+    committed for that partition, the offset is reset in accordance with the
+    ``auto.offset.reset`` configuration value.) This causes partitions that
+    are maintained across a rebalance to have the same offset management
+    behavior as a partition that is moved from one consumer to another. To
+    prevent uncommitted messages from being consumed multiple times,
+    ``commit`` should be called in the partition revocation callback.
+
     This consumer can either be used with automatic timed offset commit (the
     librdkafka default, set using the ``enable.auto.commit`` configuration
     value) or manual calls to ``commit``.
@@ -188,6 +206,28 @@ class TaskSetConsumer(Consumer[TaskSet]):
     # has just been assigned this partition. The first interval formed by that
     # consumer will be ``(MB, MC)``, with a corresponding task set returned
     # that contains both T6 and T7.
+    #
+    # This also introduces an additional complexity during rebalancing
+    # operations, since partition state has to be discarded on partition
+    # revocation and initialized on partition assignment. Take this example,
+    # where a consumer has a partition revoked and immediately reassigned
+    # during rebalancing:
+    #
+    #   Messages:            MA          MB          MC
+    #   Timeline:  +----------+-----------+-----------+-----------
+    #                               ^- Rebalance Here
+    #      State:  -:-        MA:-  -:-   MB:-        MB:MC
+    #
+    # The default Kafka consumer would recieve these messages in the order [MA,
+    # MB, MC] to minimize duplicate deliveries, regardless of whether or not
+    # the partition offset was committed during rebalancing. In our consumer,
+    # would lead to a scenario where the MA:MB interval is never returned from
+    # a ``poll`` call. To avoid this, we reset *every* partition to its
+    # committed offset on assignment (even partitions that were previously
+    # owned by this consumer.) This can lead to duplicated delivery of messages
+    # that were consumed but not committed by this consumer -- but that would
+    # be the same outcome if this partition was moved between independent
+    # consumers anyway.
 
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__topic_partition_states: MutableMapping[
@@ -208,6 +248,17 @@ class TaskSetConsumer(Consumer[TaskSet]):
             {**configuration, "enable.auto.offset.store": "false"}
         )
 
+        self.__auto_offset_reset = get_enum_configuration_value(
+            configuration,
+            "auto.offset.reset",
+            {
+                "earliest": set(["smallest", "beginning"]),
+                "latest": set(["largest", "end"]),
+                "error": set(),
+            },
+            "largest",
+        )
+
         # XXX: The only way to store offsets (and correspondingly, cause those
         # stored offsets to be committed) is to use the automatic offset
         # storage. (There is no ``store_offsets`` method.) That makes this
@@ -215,6 +266,31 @@ class TaskSetConsumer(Consumer[TaskSet]):
         self.__enable_auto_offset_store = get_bool_configuration_value(
             configuration, "enable.auto.offset.store", True
         )
+
+    def __get_committed_offsets(
+        self, partitions: Sequence[TopicPartition]
+    ) -> Iterator[TopicPartition]:
+        for partition in self.__consumer.committed(partitions):
+            if partition.error is not None:
+                raise partition.error
+
+            if not partition.offset == OFFSET_INVALID:
+                yield partition
+            else:
+                if self.__auto_offset_reset == "error":
+                    raise Exception  # TODO: Add error message here.
+
+                earliest, latest = self.__consumer.get_watermark_offsets(
+                    partition, cached=False
+                )
+                if self.__auto_offset_reset == "earliest":
+                    yield TopicPartition(partition.topic, partition.partition, earliest)
+                elif self.__auto_offset_reset == "latest":
+                    yield TopicPartition(partition.topic, partition.partition, latest)
+                else:
+                    raise ValueError(
+                        f'unexpected value for "auto.offset.reset": {self.__auto_offset_reset!r}'
+                    )
 
     def subscribe(
         self,
@@ -225,12 +301,17 @@ class TaskSetConsumer(Consumer[TaskSet]):
         def on_assign_callback(
             consumer: Any, assignment: Sequence[TopicPartition]
         ) -> None:
-            for tp in assignment:
-                key = (tp.topic, tp.partition)
-                if key not in self.__topic_partition_states:
-                    state = PartitionState()
-                    self.__topic_partition_states[key] = state
-                    logger.debug("Initialized partition state for %r: %r", key, state)
+            assignment = list(self.__get_committed_offsets(assignment))
+
+            self.__consumer.assign(assignment)
+
+            for partition in assignment:
+                key = (partition.topic, partition.partition)
+                assert key not in self.__topic_partition_states
+
+                state = PartitionState()
+                self.__topic_partition_states[key] = state
+                logger.debug("Initialized partition state for assigned partition %r: %r", key, state)
 
             if on_assign is not None:
                 on_assign(assignment)
@@ -238,11 +319,10 @@ class TaskSetConsumer(Consumer[TaskSet]):
         def on_revoke_callback(
             consumer: Any, assignment: Sequence[TopicPartition]
         ) -> None:
-            # XXX: Check to see if this causes any weird shit during rebalancing.
-            for tp in assignment:
-                key = (tp.topic, tp.partition)
+            for partition in assignment:
+                key = (partition.topic, partition.partition)
                 state = self.__topic_partition_states.pop(key)
-                logger.debug("Discarded partition state for %r: %r", key, state)
+                logger.debug("Discarded partition state for revoked partition %r: %r", key, state)
 
             if on_revoke is not None:
                 on_revoke(assignment)

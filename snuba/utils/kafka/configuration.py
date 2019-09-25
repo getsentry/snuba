@@ -1,4 +1,4 @@
-from typing import Any, Mapping
+from typing import Any, Mapping, Set
 
 
 def get_bool_configuration_value(
@@ -20,5 +20,31 @@ def get_bool_configuration_value(
             raise ValueError(f"unexpected value for {key!r}")
     elif isinstance(value, bool):
         return value
+
+    raise TypeError(f"unexpected value for {key!r}")
+
+
+def get_enum_configuration_value(
+    configuration: Mapping[str, Any],
+    key: str,
+    values: Mapping[str, Set[str]],
+    default: str,
+) -> str:
+    """
+    Return the value of a value in a librdkafka configuration dictionary as
+    the canonical name from a mapping of canonical names to a set of aliases.
+    """
+    value = configuration.get(key, default)
+    if isinstance(value, str):
+        value = value.lower()
+
+        if value in values:
+            return value
+
+        for canonical, aliases in values.items():
+            if value in aliases:
+                return canonical
+
+        raise ValueError(f"unexpected value for {key!r}")
 
     raise TypeError(f"unexpected value for {key!r}")
