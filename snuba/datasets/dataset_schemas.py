@@ -1,6 +1,7 @@
-from typing import Optional, List, Iterator
+from typing import Optional, List, Sequence, Union
 
-from snuba.datasets.schema import Schema
+from snuba.datasets.schemas import Schema
+from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 
 
 class DatasetSchemas(object):
@@ -11,7 +12,7 @@ class DatasetSchemas(object):
     def __init__(
             self,
             read_schema: Schema,
-            write_schema: Schema,
+            write_schema: Union[WritableTableSchema, None],
             intermediary_schemas: Optional[List[Schema]] = None
     ) -> None:
         if intermediary_schemas is None:
@@ -24,12 +25,13 @@ class DatasetSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_write_schema(self) -> Schema:
-        return self.__write_schema
-
-    def __get_unique_schemas(self) -> List[Schema]:
+    def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
-        all_schemas_with_possible_duplicates = [self.__read_schema, self.__write_schema] + self.__intermediary_schemas
+
+        all_schemas_with_possible_duplicates = [self.__read_schema]
+        if self.__write_schema:
+            all_schemas_with_possible_duplicates.append(self.__write_schema)
+        all_schemas_with_possible_duplicates.extend(self.__intermediary_schemas)
 
         for schema in all_schemas_with_possible_duplicates:
             if schema not in unique_schemas:
@@ -37,8 +39,16 @@ class DatasetSchemas(object):
 
         return unique_schemas
 
-    def get_create_statements(self) -> Iterator[str]:
-        return map(lambda schema: schema.get_local_table_definition(), self.__get_unique_schemas())
+    def get_create_statements(self) -> Sequence[str]:
+        return [
+            schema.get_local_table_definition()
+            for schema in self.__get_unique_schemas()
+            if isinstance(schema, TableSchema)
+        ]
 
-    def get_drop_statements(self) -> Iterator[str]:
-        return map(lambda schema: schema.get_local_drop_table_statement(), self.__get_unique_schemas())
+    def get_drop_statements(self) -> Sequence[str]:
+        return [
+            schema.get_local_drop_table_statement()
+            for schema in self.__get_unique_schemas()
+            if isinstance(schema, TableSchema)
+        ]

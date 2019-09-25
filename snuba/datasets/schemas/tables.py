@@ -1,39 +1,55 @@
-from typing import Callable, Mapping, List, Sequence
+from abc import ABC, abstractmethod
+from typing import Callable, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.schemas import Schema
+from snuba.util import local_dataset_mode
 
 
-def local_dataset_mode():
-    return settings.DATASET_MODE == "local"
-
-
-class Schema(object):
+class TableSchema(Schema, ABC):
     """
-    Represents the full set of columns in a clickhouse table, this only contains
-    basic metadata for now.
+    Represent a table-like schema. This means it represents either
+    a Clickhouse table, a Clickhouse view or a Materialized view.
+
+    Specifically a TableSchema is something we can read from through
+    a simple select and that provides DDL operations.
     """
 
     TEST_TABLE_PREFIX = "test_"
 
-    def __init__(self, local_table_name, dist_table_name, columns, migration_function=None):
-        self.__columns = columns
-
+    def __init__(self,
+        columns: ColumnSet,
+        *,
+        local_table_name: str,
+        dist_table_name: str,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ):
+        super().__init__(
+            columns=columns,
+        )
+        self.__migration_function = migration_function if migration_function else lambda table, schema: []
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
-        self.__migration_function = migration_function if migration_function else lambda table, schema: []
 
-    def _make_test_table(self, table_name):
+    def get_data_source(self) -> str:
+        """
+        In this abstraction the from clause is just the same
+        table we refer to for writes.
+        """
+        return self.get_table_name()
+
+    def _make_test_table(self, table_name: str) -> str:
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)
 
-    def get_local_table_name(self):
+    def get_local_table_name(self) -> str:
         """
         This returns the local table name for a distributed environment.
         It is supposed to be used in DDL commands and for maintenance.
         """
         return self._make_test_table(self.__local_table_name)
 
-    def get_table_name(self):
+    def get_table_name(self) -> str:
         """
         This represents the table we interact with to send queries to Clickhouse.
         In distributed mode this will be a distributed table. In local mode it is a local table.
@@ -41,37 +57,15 @@ class Schema(object):
         table_name = self.__local_table_name if local_dataset_mode() else self.__dist_table_name
         return self._make_test_table(table_name)
 
-    def get_local_table_definition(self):
-        raise NotImplementedError
-
-    def get_local_drop_table_statement(self):
+    def get_local_drop_table_statement(self) -> str:
         return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
 
-    def get_columns(self):
-        return self.__columns
-
-    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+    @abstractmethod
+    def get_local_table_definition(self) -> str:
         """
-        Returns a list of differences between the expected_columns and the columns described in the schema.
+        Returns the DDL statement to create the local table.
         """
-        errors: List[str] = []
-
-        for column_name, column_type in expected_columns.items():
-            if column_name not in self.__columns:
-                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
-                continue
-
-            expected_type = self.__columns[column_name].type.for_schema()
-            if column_type != expected_type:
-                errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
-                        column_name,
-                        expected_type,
-                        column_type
-                    )
-                )
-
-        return errors
+        raise NotImplementedError
 
     def get_migration_statements(
         self
@@ -79,30 +73,29 @@ class Schema(object):
         return self.__migration_function
 
 
-class TableSchema(Schema):
-    def _get_table_definition(self, name: str, engine: str) -> str:
-        return """
-        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
-            'columns': self.get_columns().for_schema(),
-            'engine': engine,
-            'name': name,
-        }
-
-    def get_local_table_definition(self) -> str:
-        return self._get_table_definition(
-            self.get_local_table_name(),
-            self._get_local_engine()
-        )
-
-    def _get_local_engine(self):
-        raise NotImplementedError
+class WritableTableSchema(TableSchema):
+    """
+    This class identifies a subset of TableSchemas we can write onto.
+    While it does not provide any functionality by itself, it is used
+    to allow the type checker to prevent us from returning a read only
+    schema from DatasetSchemas.
+    """
+    pass
 
 
-class MergeTreeSchema(TableSchema):
+class MergeTreeSchema(WritableTableSchema):
 
-    def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, sample_expr=None, settings=None,
-            migration_function=None):
+    def __init__(self,
+        columns: ColumnSet,
+        *,
+        local_table_name: str,
+        dist_table_name: str,
+        order_by: str,
+        partition_by: Optional[str],
+        sample_expr: Optional[str]=None,
+        settings: Optional[Mapping[str, str]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -113,10 +106,10 @@ class MergeTreeSchema(TableSchema):
         self.__sample_expr = sample_expr
         self.__settings = settings
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "MergeTree()"
 
-    def _get_local_engine(self):
+    def __get_local_engine(self) -> str:
         partition_by_clause = ("PARTITION BY %s" %
             self.__partition_by) if self.__partition_by else ''
 
@@ -142,12 +135,35 @@ class MergeTreeSchema(TableSchema):
             'settings_clause': settings_clause,
         }
 
+    def __get_table_definition(self, name: str, engine: str) -> str:
+        return """
+        CREATE TABLE IF NOT EXISTS %(name)s (%(columns)s) ENGINE = %(engine)s""" % {
+            'columns': self.get_columns().for_schema(),
+            'engine': engine,
+            'name': name,
+        }
+
+    def get_local_table_definition(self) -> str:
+        return self.__get_table_definition(
+            self.get_local_table_name(),
+            self.__get_local_engine()
+        )
+
 
 class ReplacingMergeTreeSchema(MergeTreeSchema):
 
-    def __init__(self, local_table_name, dist_table_name, columns,
-            order_by, partition_by, version_column,
-            sample_expr=None, settings=None, migration_function=None):
+    def __init__(self,
+        columns: ColumnSet,
+        *,
+        local_table_name: str,
+        dist_table_name: str,
+        order_by: str,
+        partition_by: str,
+        version_column: str,
+        sample_expr: Optional[str]=None,
+        settings: Optional[Mapping[str, str]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+    ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
@@ -159,33 +175,35 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             migration_function=migration_function)
         self.__version_column = version_column
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "ReplacingMergeTree(%s)" % self.__version_column
 
 
 class SummingMergeTreeSchema(MergeTreeSchema):
 
-    def _get_engine_type(self):
+    def _get_engine_type(self) -> str:
         return "SummingMergeTree()"
 
 
-class MaterializedViewSchema(Schema):
+class MaterializedViewSchema(TableSchema):
 
     def __init__(
             self,
+            columns: ColumnSet,
+            *,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
-            columns: ColumnSet,
             query: str,
             local_source_table_name: str,
             local_destination_table_name: str,
             dist_source_table_name: str,
-            dist_destination_table_name: str
-    ) -> None:
+            dist_destination_table_name: str,
+            migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]] = None) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
+            migration_function=migration_function,
         )
 
         # Make sure the caller has provided a source_table_name in the query
@@ -218,5 +236,5 @@ class MaterializedViewSchema(Schema):
         return self.__get_table_definition(
             self.get_local_table_name(),
             self.__get_local_source_table_name(),
-            self.__get_local_destination_table_name()
+            self.__get_local_destination_table_name(),
         )

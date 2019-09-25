@@ -1,7 +1,7 @@
 import logging
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
@@ -13,18 +13,17 @@ from werkzeug.exceptions import BadRequest
 import jsonschema
 from uuid import UUID
 
-from snuba import settings, state, util
+from snuba import schemas, settings, state, util
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.extensions import get_time_limit
+from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
-from snuba.datasets.schema import local_dataset_mode
+from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
+from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
-from snuba.schemas import SDK_STATS_BASE_SCHEMA, SDK_STATS_EXTENSIONS_SCHEMA
 from snuba.redis import redis_client
-from snuba.util import Timer
+from snuba.util import local_dataset_mode, Timer
 
 
 logger = logging.getLogger('snuba.api')
@@ -57,9 +56,11 @@ def check_clickhouse():
         clickhouse_tables = clickhouse_ro.execute('show tables')
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            table_name = dataset.get_dataset_schemas().get_read_schema().get_table_name()
-            if (table_name,) not in clickhouse_tables:
-                return False
+            source = dataset.get_dataset_schemas().get_read_schema()
+            if isinstance(source, TableSchema):
+                table_name = source.get_table_name()
+                if (table_name,) not in clickhouse_tables:
+                    return False
 
         return True
 
@@ -219,10 +220,11 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
     if http_request.method == 'GET':
+        schema = RequestSchema.build_with_extensions(dataset.get_extensions())
         return render_template(
             'query.html',
             query_template=json.dumps(
-                dataset.get_query_schema().generate_template(),
+                schema.generate_template(),
                 indent=4,
             ),
         )
@@ -237,9 +239,10 @@ def dataset_query(dataset, body, timer):
     assert http_request.method == 'POST'
     ensure_table_exists(dataset)
 
+    schema = RequestSchema.build_with_extensions(dataset.get_extensions())
     result, status = parse_and_run_query(
         dataset,
-        validate_request_content(body, dataset.get_query_schema(), timer),
+        validate_request_content(body, schema, timer),
         timer,
     )
 
@@ -262,17 +265,22 @@ def dataset_query(dataset, body, timer):
 
 @split_query
 def parse_and_run_query(dataset, request: Request, timer):
-    from_date, to_date = get_time_limit(request.extensions['timeseries'])
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
-    request.query['conditions'].extend(dataset.get_extensions_conditions(request.extensions))
-    request.query['conditions'].extend(dataset.default_conditions())
+    extensions = dataset.get_extensions()
+    for name, extension in extensions.items():
+        extension.get_processor().process_query(
+            request.query,
+            request.extensions[name],
+        )
+    request.query.add_conditions(dataset.default_conditions())
 
     # NOTE: we rely entirely on the schema to make sure that regular snuba
     # queries are required to send a project_id filter. Some other special
     # internal query types do not require a project_id filter.
     project_ids = util.to_list(request.extensions['project']['project'])
     if project_ids:
-        request.query['conditions'].append(('project_id', 'IN', project_ids))
+        request.query.add_conditions([('project_id', 'IN', project_ids)])
 
     turbo = request.extensions['performance'].get('turbo', False)
     if not turbo:
@@ -284,11 +292,11 @@ def parse_and_run_query(dataset, request: Request, timer):
             if len(exclude_group_ids) > max_group_ids_exclude:
                 final = True
             else:
-                request.query['conditions'].append((['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids))
+                request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
     else:
         final = False
-        if 'sample' not in request.query:
-            request.query['sample'] = settings.TURBO_SAMPLE_RATE
+        if request.query.get_sample() is None:
+            request.query.set_sample(settings.TURBO_SAMPLE_RATE)
 
     prewhere_conditions = []
     # Add any condition to PREWHERE if:
@@ -296,7 +304,7 @@ def parse_and_run_query(dataset, request: Request, timer):
     # - Any of its referenced columns are in dataset.get_prewhere_keys()
     prewhere_candidates = [
         (util.columns_in_expr(cond[0]), cond)
-        for cond in request.query['conditions'] if util.is_condition(cond) and
+        for cond in request.query.get_conditions() if util.is_condition(cond) and
         any(col in dataset.get_prewhere_keys() for col in util.columns_in_expr(cond[0]))
     ]
     # Use the condition that has the highest priority (based on the
@@ -307,21 +315,23 @@ def parse_and_run_query(dataset, request: Request, timer):
     ], key=lambda priority_and_col: priority_and_col[0])
     if prewhere_candidates:
         prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
-        request.query['conditions'] = list(filter(lambda cond: cond not in prewhere_conditions, request.query['conditions']))
+        request.query.set_conditions(
+            list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
+        )
 
-    table = dataset.get_dataset_schemas().get_read_schema().get_table_name()
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
     timer.mark('prepare_query')
 
     stats = {
-        'clickhouse_table': table,
+        'clickhouse_table': source,
         'final': final,
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
         'num_projects': len(project_ids),
-        'sample': request.query.get('sample'),
+        'sample': request.query.get_sample(),
     }
 
     return util.raw_query(request, sql, clickhouse_ro, timer, stats)
@@ -336,17 +346,17 @@ def sdk_distribution(*, timer: Timer):
     request = validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
-            SDK_STATS_BASE_SCHEMA,
-            SDK_STATS_EXTENSIONS_SCHEMA,
+            schemas.SDK_STATS_BASE_SCHEMA,
+            schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
     )
 
-    request.query['aggregations'] = [
+    request.query.set_aggregations([
         ['uniq', 'project_id', 'projects'],
         ['count()', None, 'count'],
-    ]
-    request.query['groupby'].extend(['sdk_name', 'rtime'])
+    ])
+    request.query.add_groupby(['sdk_name', 'rtime'])
     request.extensions['project'] = {
         'project': [],
     }
@@ -405,18 +415,22 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
-        from snuba.processor import MessageProcessor
+        from snuba.processor import ProcessorAction
 
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_processor().process_message(message)
-            assert action is MessageProcessor.INSERT
-            rows.append(row)
+            processed_message = enforce_table_writer(dataset) \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(message)
+            if processed_message:
+                assert processed_message.action is ProcessorAction.INSERT
+                rows.extend(processed_message.data)
 
-        dataset.get_writer().write(rows)
+        enforce_table_writer(dataset).get_writer().write(rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 

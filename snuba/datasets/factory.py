@@ -1,9 +1,12 @@
 from snuba import settings
+from snuba.datasets import Dataset
+from snuba.datasets.table_storage import TableWriter
 
 DATASETS_IMPL = {}
 
 DATASET_NAMES = {
     'events',
+    'groupassignee',
     'groupedmessage',
     'transactions',
     'outcomes',
@@ -22,11 +25,14 @@ def get_dataset(name):
         raise InvalidDatasetError(f"dataset {name!r} is not available in this environment")
 
     from snuba.datasets.events import EventsDataset
+    from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
+
     dataset_mappings = {
         'events': EventsDataset,
+        'groupassignee': GroupAssigneeDataset,
         'groupedmessage': GroupedMessageDataset,
         'transactions': TransactionsDataset,
         'outcomes': OutcomesDataset,
@@ -42,3 +48,9 @@ def get_dataset(name):
 
 def get_enabled_dataset_names():
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
+
+
+def enforce_table_writer(dataset: Dataset) -> TableWriter:
+    table_writer = dataset.get_table_writer()
+    assert table_writer is not None, f"Dataset{dataset} is not writable"
+    return table_writer

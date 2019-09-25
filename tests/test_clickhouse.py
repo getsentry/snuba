@@ -4,12 +4,13 @@ from clickhouse_driver import errors
 from mock import patch, call
 
 from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
+from snuba.datasets.factory import enforce_table_writer
 from snuba.clickhouse.native import ClickhousePool
 
 
 class TestClickhouse(BaseEventsTest):
     def test_flattened(self):
-        columns = self.dataset.get_dataset_schemas().get_write_schema().get_columns()
+        columns = enforce_table_writer(self.dataset).get_schema().get_columns()
         assert columns['group_id'].type == UInt(64)
         assert columns['group_id'].name == 'group_id'
         assert columns['group_id'].base_name is None

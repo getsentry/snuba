@@ -14,7 +14,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
-from snuba import schemas, settings, state
+from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 
@@ -35,6 +35,10 @@ SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 
 class InvalidConditionException(Exception):
     pass
+
+
+def local_dataset_mode():
+    return settings.DATASET_MODE == "local"
 
 
 def to_list(value):
@@ -229,7 +233,7 @@ def is_condition(cond_or_list):
     )
 
 
-def all_referenced_columns(query):
+def all_referenced_columns(query_body):
     """
     Return the set of all columns that are used by a query.
     """
@@ -237,16 +241,16 @@ def all_referenced_columns(query):
 
     # These fields can reference column names
     for field in ['arrayjoin', 'groupby', 'orderby', 'selected_columns']:
-        if field in query:
-            col_exprs.extend(to_list(query[field]))
+        if field in query_body:
+            col_exprs.extend(to_list(query_body[field]))
 
     # Conditions need flattening as they can be nested as AND/OR
-    if 'conditions' in query:
-        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query['conditions']]))
+    if 'conditions' in query_body:
+        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query_body['conditions']]))
         col_exprs.extend([c[0] for c in flat_conditions])
 
-    if 'aggregations' in query:
-        col_exprs.extend([a[1] for a in query['aggregations']])
+    if 'aggregations' in query_body:
+        col_exprs.extend([a[1] for a in query_body['aggregations']])
 
     # Return the set of all columns referenced in any expression
     return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
@@ -382,12 +386,13 @@ def raw_query(request: Request, sql, client, timer, stats=None):
     project_ids = to_list(request.extensions['project']['project'])
     project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache, uc_max = state.get_configs([
+    grl, gcl, prl, pcl, use_cache, use_deduper, uc_max = state.get_configs([
         ('global_per_second_limit', None),
         ('global_concurrent_limit', 1000),
         ('project_per_second_limit', 1000),
         ('project_concurrent_limit', 1000),
         ('use_cache', 0),
+        ('use_deduper', 1),
         ('uncompressed_cache_max_cols', 5),
     ])
 
@@ -406,14 +411,14 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(request.query)) > uc_max:
+    if len(all_referenced_columns(request.query.get_body())) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 
     timer.mark('get_configs')
 
     query_id = md5(force_bytes(sql)).hexdigest()
-    with state.deduper(query_id) as is_dupe:
+    with state.deduper(query_id if use_deduper else None) as is_dupe:
         timer.mark('dedupe_wait')
 
         result = state.get_result(query_id) if use_cache else None
@@ -460,8 +465,8 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                                 query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't
-                                query_id=query_id,
-                                with_totals=request.query.get('totals', False),
+                                query_id=query_id if use_deduper else None,
+                                with_totals=request.query.get_body().get('totals', False),
                             )
                             status = 200
 

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 import ipaddress
 import uuid
@@ -6,7 +7,10 @@ import uuid
 from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
+    ProcessorAction,
+    ProcessedMessage,
     _ensure_valid_date,
+    _ensure_valid_ip,
     _unicodify
 )
 from snuba.datasets.events_processor import (
@@ -33,8 +37,8 @@ class TransactionsMessageProcessor(MessageProcessor):
         milliseconds = int(timestamp.microsecond / 1000)
         return (timestamp, milliseconds)
 
-    def process_message(self, message, metadata=None):
-        action_type = self.INSERT
+    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+        action_type = ProcessorAction.INSERT
         processed = {'deleted': 0}
         if not (isinstance(message, (list, tuple)) and len(message) >= 2):
             return None
@@ -99,9 +103,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
         processed["user_email"] = user_data["email"]
-        ip_address = user_data["ip_address"]
+        ip_address = _ensure_valid_ip(user_data["ip_address"])
+
         if ip_address:
-            ip_address = ipaddress.ip_address(ip_address)
             if ip_address.version == 4:
                 processed["ip_address_v4"] = str(ip_address)
             elif ip_address.version == 6:
@@ -111,4 +115,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed['partition'] = metadata.partition
             processed['offset'] = metadata.offset
 
-        return (action_type, processed)
+        return ProcessedMessage(
+            action=action_type,
+            data=[processed],
+        )

@@ -1,7 +1,11 @@
-from datetime import datetime
+import ipaddress
 import re
+
+from datetime import datetime
+from enum import Enum
 from hashlib import md5
 import simplejson as json
+from typing import Any, NamedTuple, Optional, Sequence, Union
 
 from snuba.util import force_bytes
 
@@ -9,16 +13,27 @@ HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
 MAX_UINT32 = 2 ** 32 - 1
 
 
+class ProcessorAction(Enum):
+    INSERT = 0
+    REPLACE = 1
+
+
+class ProcessedMessage(NamedTuple):
+    action: ProcessorAction
+    data: Sequence[Any]
+
+
 class MessageProcessor(object):
     """
     The Processor is responsible for converting an incoming message body from the
     event stream into a row or statement to be inserted or executed against clickhouse.
     """
-    # action types
-    INSERT = 0
-    REPLACE = 1
 
-    def process_message(self, message, metadata=None):
+    def process_message(
+        self,
+        message,
+        metadata=None,
+    ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
@@ -105,3 +120,18 @@ def _ensure_valid_date(dt):
     if _collapse_uint32(seconds) is None:
         return None
     return dt
+
+
+def _ensure_valid_ip(ip: Any) -> Optional[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
+    """
+    IP addresses in e.g. `user.ip_address` might be invalid due to PII stripping.
+    """
+
+    ip = _unicodify(ip)
+    if ip:
+        try:
+            return ipaddress.ip_address(ip)
+        except ValueError:
+            pass
+
+    return None
