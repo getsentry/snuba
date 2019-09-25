@@ -300,7 +300,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         lhs, op, lit = conditions
 
         if (
-            lhs in ('received', 'timestamp') and
+            lhs in ('start_ts', 'finish_ts', 'received', 'timestamp') and
             op in ('>', '<', '>=', '<=', '=', '!=') and
             isinstance(lit, str)
         ):
