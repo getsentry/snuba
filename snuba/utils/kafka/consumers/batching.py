@@ -1,7 +1,7 @@
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union, cast
 
 from confluent_kafka import (
     KafkaError,
@@ -121,6 +121,13 @@ class BatchingKafkaConsumer(object):
         queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
         metrics_sample_rates=None,
     ):
+        if (
+            dead_letter_topic is not None or commit_log_topic is not None
+        ) and producer is None:
+            raise ValueError(
+                "producer is required when using dead letter or commit log topic"
+            )
+
         self.worker = worker
 
         self.max_batch_size = max_batch_size
@@ -135,17 +142,15 @@ class BatchingKafkaConsumer(object):
 
         self.__batch_results = []
         self.__batch_offsets = {}  # (topic, partition) = [low, high]
-        self.__batch_deadline = None
+        self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count = 0
         # the total amount of time, in milliseconds, that it took to process
         # the messages in this batch (does not included time spent waiting for
         # new messages)
         self.__batch_processing_time_ms = 0.0
 
-        if not isinstance(topics, (list, tuple)):
+        if isinstance(topics, str):
             topics = [topics]
-        elif isinstance(topics, tuple):
-            topics = list(topics)
 
         self.consumer = self.create_consumer(
             topics,
@@ -255,6 +260,7 @@ class BatchingKafkaConsumer(object):
                 logger.exception(
                     "Error handling message, sending to dead letter topic."
                 )
+                assert self.producer is not None  # HACK: type
                 self.producer.produce(
                     self.dead_letter_topic,
                     key=msg.key(),
@@ -360,7 +366,9 @@ class BatchingKafkaConsumer(object):
         retries = 3
         while True:
             try:
-                offsets = self.consumer.commit(asynchronous=False)
+                offsets = cast(
+                    List[TopicPartition], self.consumer.commit(asynchronous=False)
+                )  # HACK: type
                 logger.debug("Committed offsets: %s", offsets)
                 break  # success
             except KafkaException as e:
@@ -379,6 +387,7 @@ class BatchingKafkaConsumer(object):
                     raise
 
         if self.commit_log_topic:
+
             for item in offsets:
                 if item.offset in self.LOGICAL_OFFSETS:
                     logger.debug(
@@ -396,6 +405,7 @@ class BatchingKafkaConsumer(object):
                         item.partition,
                     )
 
+                assert self.producer is not None  # HACK: type
                 self.producer.produce(
                     self.commit_log_topic,
                     key="{}:{}:{}".format(
