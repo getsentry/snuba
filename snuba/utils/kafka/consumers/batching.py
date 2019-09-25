@@ -2,7 +2,18 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, MutableMapping, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    Generic,
+    List,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from confluent_kafka import (
     KafkaError,
@@ -26,13 +37,16 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 
 
-class AbstractBatchWorker(ABC):
+TOutput = TypeVar("TOutput")
+
+
+class AbstractBatchWorker(Generic[TOutput], ABC):
     """The `BatchingKafkaConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: Message):
+    def process_message(self, message: Message) -> Optional[TOutput]:
         """Called with each (raw) Kafka message, allowing the worker to do
         incremental (preferablly local!) work on events. The object returned
         is put into the batch maintained by the `BatchingKafkaConsumer`.
@@ -45,7 +59,7 @@ class AbstractBatchWorker(ABC):
         pass
 
     @abstractmethod
-    def flush_batch(self, batch):
+    def flush_batch(self, batch: Sequence[TOutput]) -> None:
         """Called with a list of pre-processed (by `process_message`) objects.
         The worker should write the batch of processed messages into whatever
         store(s) it is maintaining. Afterwards the Kafka offsets are committed.
@@ -71,7 +85,7 @@ class Offsets:
     high: int
 
 
-class BatchingKafkaConsumer(object):
+class BatchingKafkaConsumer(Generic[TOutput]):
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingKafkaConsumer` handles the rest.
@@ -115,7 +129,7 @@ class BatchingKafkaConsumer(object):
     def __init__(
         self,
         topics: Union[Sequence[str], str],
-        worker: AbstractBatchWorker,
+        worker: AbstractBatchWorker[TOutput],
         max_batch_size: int,
         max_batch_time: Union[int, float],
         bootstrap_servers: Sequence[str],
@@ -148,7 +162,7 @@ class BatchingKafkaConsumer(object):
 
         self.shutdown = False
 
-        self.__batch_results = []
+        self.__batch_results: MutableSequence[TOutput] = []
         self.__batch_offsets: MutableMapping[
             Tuple[str, int], Offsets
         ] = {}  # (topic, partition) = Offsets
