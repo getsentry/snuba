@@ -185,8 +185,8 @@ class BaseDatasetTest(BaseTest):
 
 
 class BaseEventsTest(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super(BaseEventsTest, self).setup_method(test_method, 'events')
+    def setup_method(self, test_method, dataset_name='events'):
+        super(BaseEventsTest, self).setup_method(test_method, dataset_name)
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
         self.event = get_event()
 
