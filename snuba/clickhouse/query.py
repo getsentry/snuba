@@ -1,4 +1,4 @@
-from typing import Sequence, Any, Mapping
+from typing import Sequence
 
 from snuba import util, settings
 from snuba.datasets import Dataset

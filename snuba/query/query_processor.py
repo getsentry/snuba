@@ -21,7 +21,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
-        query_hints: QueryHints,  # used to pass hints from the extension processors to the clickhouse query
+        query_hints: QueryHints,
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since

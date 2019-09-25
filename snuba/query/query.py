@@ -133,5 +133,9 @@ class Query:
 
 @dataclass
 class QueryHints:
+    """
+    A mutable structure that is meant to be modified by the extension processors so that it can pass hints
+    for the construction of the clickhouse query
+    """
     turbo: bool
     final: bool
