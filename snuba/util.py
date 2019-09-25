@@ -452,7 +452,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                         # Force query to use the first shard replica, which
                         # should have synchronously received any cluster writes
                         # before this query is run.
-                        consistent = request.settings.get('consistent', False)
+                        consistent = request.settings.consistent
                         stats['consistent'] = consistent
                         if consistent:
                             query_settings['load_balancing'] = 'in_order'
@@ -537,7 +537,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.settings.get('debug', False):
+    if settings.STATS_IN_RESPONSE or request.settings.debug:
         result['stats'] = stats
         result['sql'] = sql
 

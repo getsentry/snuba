@@ -8,7 +8,7 @@ from deprecation import deprecated
 from typing import Any, Mapping
 
 from snuba.query.extensions import QueryExtension
-from snuba.query.query import Query
+from snuba.query.query import Query, QueryHints
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
 from snuba.schemas import Schema, validate_jsonschema
 
@@ -16,7 +16,7 @@ from snuba.schemas import Schema, validate_jsonschema
 @dataclass(frozen=True)
 class Request:
     query: Query
-    settings: Mapping[str, bool]  # settings provided by the request
+    settings: RequestSettings  # settings provided by the request
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
@@ -25,6 +25,19 @@ class Request:
         "use the specific accessor methods on the query object instead.")
     def body(self):
         return ChainMap(self.query.get_body(), *self.extensions.values())
+
+
+@dataclass(frozen=True)
+class RequestSettings:
+    turbo: bool
+    consistent: bool
+    debug: bool
+
+    def get_query_hints(self) -> QueryHints:
+        return QueryHints(
+            turbo=self.turbo,
+            final=False
+        )
 
 
 class RequestSchema:
@@ -77,7 +90,11 @@ class RequestSchema:
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
-        return Request(Query(query_body), settings, extensions)
+        return Request(
+            Query(query_body),
+            RequestSettings(settings['turbo'], settings['consistent'], settings['debug']),
+            extensions
+        )
 
     def __generate_template_impl(self, schema) -> Any:
         """

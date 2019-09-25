@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, TypeVar
 
-from snuba.query.query import Query
+from snuba.query.query import Query, QueryHints
 
 ExtensionData = Mapping[str, Any]
 
@@ -21,8 +21,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
-        request_settings: Mapping[str, bool],
-        query_hints: Mapping[str, Any],  # used to pass hints from the extension processors to the clickhouse query
+        query_hints: QueryHints,  # used to pass hints from the extension processors to the clickhouse query
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -45,8 +44,7 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
     def process_query(
             self, query: Query,
             extension_data: ExtensionData,
-            request_settings: Mapping[str, bool],
-            query_hints: Mapping[str, Any],
+            query_hints: QueryHints,
     ) -> None:
         raise NotImplementedError
 
@@ -57,7 +55,6 @@ class DummyExtensionProcessor(ExtensionQueryProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            request_settings: Mapping[str, bool],
-            query_hints: Mapping[str, Any],
+            query_hints: QueryHints,
     ) -> None:
         pass

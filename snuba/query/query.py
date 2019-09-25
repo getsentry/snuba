@@ -11,6 +11,7 @@ from typing import (
     TypeVar,
     Union,
 )
+from dataclasses import dataclass
 
 
 Condition = Union[
@@ -128,3 +129,9 @@ class Query:
         "use the specific accessor methods instead.")
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
+
+
+@dataclass
+class QueryHints:
+    turbo: bool
+    final: bool
