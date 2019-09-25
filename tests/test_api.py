@@ -1159,58 +1159,61 @@ class TestTransactionsApi(BaseApiTest):
                 if tock % p == 0:
                     trace_id = '7400045b25c443b885914600aa83ad04'
                     span_id = '8841662216cc598b'
-                    processed = self.dataset.get_processor().process_message((2, 'insert', {
-                        'project_id': p,
-                        'event_id': uuid.uuid4().hex,
-                        'deleted': 0,
-                        'datetime': (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-                        'platform': self.platforms[(tock * p) % len(self.platforms)],
-                        'retention_days': settings.DEFAULT_RETENTION_DAYS,
-                        'data': {
-                            # Project N sends every Nth (mod len(hashes)) hash (and platform)
-                            'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                            'type': 'transaction',
-                            'transaction': '/api/do_things',
-                            'start_timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                            'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                            'tags': {
-                                # Sentry
-                                'environment': self.environments[(tock * p) % len(self.environments)],
-                                'sentry:release': str(tick),
-                                'sentry:dist': 'dist1',
+                    processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(
+                        (2,
+                        'insert',
+                        {
+                            'project_id': p,
+                            'event_id': uuid.uuid4().hex,
+                            'deleted': 0,
+                            'datetime': (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                            'platform': self.platforms[(tock * p) % len(self.platforms)],
+                            'retention_days': settings.DEFAULT_RETENTION_DAYS,
+                            'data': {
+                                # Project N sends every Nth (mod len(hashes)) hash (and platform)
+                                'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                                'type': 'transaction',
+                                'transaction': '/api/do_things',
+                                'start_timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                                'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                                'tags': {
+                                    # Sentry
+                                    'environment': self.environments[(tock * p) % len(self.environments)],
+                                    'sentry:release': str(tick),
+                                    'sentry:dist': 'dist1',
 
-                                # User
-                                'foo': 'baz',
-                                'foo.bar': 'qux',
-                                'os_name': 'linux',
-                            },
-                            'user': {
-                                'email': 'sally@example.org',
-                                'ip_address': '8.8.8.8',
-                            },
-                            'contexts': {
-                                'trace': {
-                                    'trace_id': trace_id,
-                                    'span_id': span_id,
-                                    'op': 'http',
+                                    # User
+                                    'foo': 'baz',
+                                    'foo.bar': 'qux',
+                                    'os_name': 'linux',
                                 },
-                            },
-                            'spans': [
-                                {
-                                    'op': 'db',
-                                    'trace_id': trace_id,
-                                    'span_id': span_id + '1',
-                                    'parent_span_id': None,
-                                    'same_process_as_parent': True,
-                                    'description': 'SELECT * FROM users',
-                                    'data': {},
-                                    'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                                }
-                            ]
-                        }
-                    }))
-                    events.append(processed[1])
-        self.write_processed_records(events)
+                                'user': {
+                                    'email': 'sally@example.org',
+                                    'ip_address': '8.8.8.8',
+                                },
+                                'contexts': {
+                                    'trace': {
+                                        'trace_id': trace_id,
+                                        'span_id': span_id,
+                                        'op': 'http',
+                                    },
+                                },
+                                'spans': [
+                                    {
+                                        'op': 'db',
+                                        'trace_id': trace_id,
+                                        'span_id': span_id + '1',
+                                        'parent_span_id': None,
+                                        'same_process_as_parent': True,
+                                        'description': 'SELECT * FROM users',
+                                        'data': {},
+                                        'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                                    }
+                                ]
+                            }
+                        }))
+                    events.extend(processed.data)
+        self.write_processed_events(events)
 
     def test_read_ip(self):
         skew = timedelta(minutes=180)
@@ -1245,7 +1248,7 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data['data']) > 1, data
-        assert 'transaction_name' in data['data']
+        assert 'transaction_name' in data['data'][0]
 
 
 class TestCreateSubscriptionApi(BaseApiTest):

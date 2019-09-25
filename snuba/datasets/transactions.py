@@ -39,13 +39,6 @@ class TransactionsTableWriter(TableWriter):
             options["insert_allow_materialized_columns"] = 1
         return options
 
-    def column_expr(self, column_name, body):
-        if column_name == 'ip_address_v4':
-            return 'IPv4NumToString(ip_address_v4)'
-        if column_name == 'ip_address_v6':
-            return 'IPv6NumToString(ip_address_v6)'
-        return super().column_expr(column_name, body)
-
     def get_writer(self,
         options: Optional[MutableMapping[str, Any]]=None,
         table_name: Optional[str]=None,
@@ -153,6 +146,13 @@ class TransactionsDataset(TimeSeriesDataset):
                 timestamp_column='start_ts',
             ),
         }
+
+    def column_expr(self, column_name, body):
+        if column_name == 'ip_address_v4':
+            return 'IPv4NumToString(ip_address_v4)'
+        if column_name == 'ip_address_v6':
+            return 'IPv6NumToString(ip_address_v6)'
+        return super().column_expr(column_name, body)
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']
