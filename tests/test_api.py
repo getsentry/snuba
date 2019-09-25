@@ -1212,7 +1212,6 @@ class TestTransactionsApi(BaseApiTest):
                     events.append(processed[1])
         self.write_processed_records(events)
 
-    @pytest.mark.xfail(reason="Clickhouse drivers are missing ipv4 support")
     def test_read_ip(self):
         skew = timedelta(minutes=180)
         response = self.app.post('/query', data=json.dumps({
@@ -1226,8 +1225,8 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data['data']) > 1, data
-        assert 'ip_address_v4' in data['data']
-        assert 'ip_address_v6' in data['data']
+        assert 'ip_address_v4' in data['data'][0]
+        assert 'ip_address_v6' in data['data'][0]
 
     def test_start_ts_microsecond_truncation(self):
         skew = timedelta(minutes=180)
