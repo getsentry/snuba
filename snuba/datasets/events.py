@@ -22,7 +22,7 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.query.project_extension import ProjectExtension
+from snuba.query.project_extension import ProjectWithGroupsExtension
 
 from snuba.util import (
     alias_expr,
@@ -390,7 +390,7 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'project': ProjectExtension(),
+            'project': ProjectWithGroupsExtension(),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

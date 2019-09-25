@@ -1,5 +1,3 @@
-from typing import Mapping, Any
-
 from snuba import settings, util
 from snuba.state import get_config
 from snuba.replacer import get_projects_query_flags
@@ -44,6 +42,23 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
 
+
+class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
+
+    def process_query(
+            self,
+            query: Query,
+            extension_data: ExtensionData,
+            query_hints: QueryHints,
+    ) -> None:
+        # NOTE: we rely entirely on the schema to make sure that regular snuba
+        # queries are required to send a project_id filter. Some other special
+        # internal query types do not require a project_id filter.
+        project_ids = util.to_list(extension_data['project'])
+
+        if project_ids:
+            query.add_conditions([('project_id', 'IN', project_ids)])
+
         if not query_hints.turbo:
             final, exclude_group_ids = get_projects_query_flags(project_ids)
             if not final and exclude_group_ids:
@@ -63,4 +78,12 @@ class ProjectExtension(QueryExtension):
         super().__init__(
             schema=PROJECT_EXTENSION_SCHEMA,
             processor=ProjectExtensionProcessor(),
+        )
+
+
+class ProjectWithGroupsExtension(QueryExtension):
+    def __init__(self) -> None:
+        super().__init__(
+            schema=PROJECT_EXTENSION_SCHEMA,
+            processor=ProjectWithGroupsProcessor()
         )
