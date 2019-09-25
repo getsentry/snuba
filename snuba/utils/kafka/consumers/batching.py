@@ -1,7 +1,8 @@
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional, Sequence, Union, cast
+from dataclasses import dataclass
+from typing import List, MutableMapping, Optional, Sequence, Tuple, Union, cast
 
 from confluent_kafka import (
     KafkaError,
@@ -61,6 +62,13 @@ class AbstractBatchWorker(ABC):
 
         A simple example would be closing any remaining backend connections."""
         pass
+
+
+@dataclass
+class Offsets:
+    __slots__ = ["low", "high"]
+    low: int
+    high: int
 
 
 class BatchingKafkaConsumer(object):
@@ -141,7 +149,9 @@ class BatchingKafkaConsumer(object):
         self.shutdown = False
 
         self.__batch_results = []
-        self.__batch_offsets = {}  # (topic, partition) = [low, high]
+        self.__batch_offsets: MutableMapping[
+            Tuple[str, int], Offsets
+        ] = {}  # (topic, partition) = Offsets
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -285,9 +295,11 @@ class BatchingKafkaConsumer(object):
 
             topic_partition_key = (msg.topic(), msg.partition())
             if topic_partition_key in self.__batch_offsets:
-                self.__batch_offsets[topic_partition_key][1] = msg.offset()
+                self.__batch_offsets[topic_partition_key].high = msg.offset()
             else:
-                self.__batch_offsets[topic_partition_key] = [msg.offset(), msg.offset()]
+                self.__batch_offsets[topic_partition_key] = Offsets(
+                    msg.offset(), msg.offset()
+                )
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
