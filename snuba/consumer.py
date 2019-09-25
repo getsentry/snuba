@@ -2,12 +2,11 @@ import collections
 import logging
 import simplejson as json
 
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from batching_kafka_consumer import AbstractBatchWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
-    MessageProcessor,
     ProcessedMessage,
     ProcessorAction,
 )
@@ -45,11 +44,10 @@ class ConsumerWorker(AbstractBatchWorker):
         if processed is None:
             return None
 
-        action_type = processed[0]
-        if action_type not in set(
+        if processed.action not in set(
             [ProcessorAction.INSERT, ProcessorAction.REPLACE]
         ):
-            raise InvalidActionType("Invalid action type: {}".format(action_type))
+            raise InvalidActionType("Invalid action type: {}".format(processed.action))
 
         return processed
 
@@ -66,7 +64,7 @@ class ConsumerWorker(AbstractBatchWorker):
             # errors are KafkaError objects and inherit from BaseException
             raise error
 
-    def flush_batch(self, batch):
+    def flush_batch(self, batch: Sequence[ProcessedMessage]):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
         inserts = []

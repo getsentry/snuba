@@ -192,5 +192,5 @@ class TestTransactionsProcessor(BaseTest):
         processor = TransactionsMessageProcessor()
         ret = processor.process_message(message.serialize(), meta)
 
-        assert ret[0] == ProcessorAction.INSERT
-        assert ret[1] == [message.build_result(meta)]
+        assert ret.action == ProcessorAction.INSERT
+        assert ret.data == [message.build_result(meta)]
