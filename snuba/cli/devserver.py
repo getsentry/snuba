@@ -34,7 +34,7 @@ def devserver(bootstrap, workers):
         os.execvp(daemons[0][1][0], daemons[0][1])
 
     daemons += [
-        ('transaction-consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug', '--dataset=transactions', '--consumer-group=g2']),
+        ('transaction-consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug', '--dataset=transactions', '--consumer-group=transactions_group']),
         ('consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug']),
         ('replacer', ['snuba', 'replacer', '--auto-offset-reset=latest', '--log-level=debug']),
     ]
