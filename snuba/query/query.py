@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from deprecation import deprecated
 from typing import (
     Any,
@@ -11,7 +12,6 @@ from typing import (
     TypeVar,
     Union,
 )
-from dataclasses import dataclass
 
 
 Condition = Union[

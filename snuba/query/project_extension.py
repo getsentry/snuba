@@ -1,10 +1,9 @@
 from snuba import settings, util
-from snuba.state import get_config
-from snuba.replacer import get_projects_query_flags
 from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
-from snuba.query.query_processor import ExtensionData
 from snuba.query.query import Query, QueryHints
-
+from snuba.query.query_processor import ExtensionData
+from snuba.replacer import get_projects_query_flags
+from snuba.state import get_config
 
 PROJECT_EXTENSION_SCHEMA = {
     'type': 'object',
