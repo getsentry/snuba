@@ -216,27 +216,6 @@ class TaskSetConsumer(Consumer[TaskSet]):
     # consumer will be ``(MB, MC)``, with a corresponding task set returned
     # that contains both T6 and T7.
     #
-    # This also introduces an additional complexity during rebalancing
-    # operations, since partition state has to be discarded on partition
-    # revocation and initialized on partition assignment. Take this example,
-    # where a consumer has a partition revoked and immediately reassigned
-    # during rebalancing:
-    #
-    #   Messages:            MA          MB          MC
-    #   Timeline:  +----------+-----------+-----------+-----------
-    #                               ^- Rebalance Here
-    #      State:  -:-        MA:-  -:-   MB:-        MB:MC
-    #
-    # The default Kafka consumer would recieve these messages in the order [MA,
-    # MB, MC] to minimize duplicate deliveries, regardless of whether or not
-    # the partition offset was committed during rebalancing. In our consumer,
-    # would lead to a scenario where the MA:MB interval is never returned from
-    # a ``poll`` call. To avoid this, we reset *every* partition to its
-    # committed offset on assignment (even partitions that were previously
-    # owned by this consumer.) This can lead to duplicated delivery of messages
-    # that were consumed but not committed by this consumer -- but that would
-    # be the same outcome if this partition was moved between independent
-    # consumers anyway.
 
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__topic_partition_states: MutableMapping[PartitionKey, PartitionState] = {}
@@ -314,8 +293,35 @@ class TaskSetConsumer(Consumer[TaskSet]):
         def on_assign_callback(
             consumer: Any, assignment: Sequence[TopicPartition]
         ) -> None:
-            # Partition offsets are always reset to the committed offset during
-            # assignment -- see the class comment for details.
+            # Returning intervals between messages rather than messages
+            # themselves introduces additional complexity during rebalancing
+            # operations, since partition state has to be discarded on
+            # partition revocation and initialized on partition assignment.
+            #
+            # Take this example, where a consumer has a partition revoked and
+            # immediately reassigned during rebalancing:
+            #
+            #   Messages:            MA          MB          MC
+            #   Timeline:  +----------+-----------+-----------+-----------
+            #                               ^- Rebalance Here
+            #      State:  -:-        MA:-  -:-   MB:-        MB:MC
+            #
+            # The default Kafka consumer would recieve these messages in the
+            # order [MA, MB, MC] to minimize duplicate deliveries, regardless
+            # of whether or not the partition offset was committed during
+            # rebalancing. In our consumer, returning messages in that order
+            # (without duplicates) would lead to a scenario where the MA:MB
+            # interval is never returned from a ``poll`` call if a rebalance
+            # occurs between the delivery of those two messages.
+            #
+            # To avoid this, we reset *every* partition to its committed offset
+            # on assignment (even partitions that were previously owned by this
+            # consumer.) This can lead to duplicated delivery of messages that
+            # were consumed but not committed by this consumer when this
+            # consumer maintains the assignment of a given partition across a
+            # rebalance operation -- but that would be the same outcome if this
+            # partition was assigned to a different consumer anyway, so the
+            # drawback is minimal.
             assignment = list(self.__get_committed_offsets(assignment))
             self.__consumer.assign(assignment)
 
