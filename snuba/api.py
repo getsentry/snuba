@@ -18,7 +18,6 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
-from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
@@ -263,7 +262,14 @@ def dataset_query(dataset, body, timer):
     )
 
 
-@split_query
+def dataset_split_query(query_func):
+    def wrapper(dataset, *args, **kwargs):
+        return dataset.split_query(query_func, *args, **kwargs)
+
+    return wrapper
+
+
+@dataset_split_query
 def parse_and_run_query(dataset, request: Request, timer):
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 

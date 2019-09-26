@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 
-import ipaddress
 import uuid
 
 from snuba.processor import (
@@ -13,7 +12,7 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify
 )
-from snuba.datasets.events_processor import (
+from snuba.datasets.events.events_processor import (
     enforce_retention,
     extract_base,
     extract_extra_contexts,

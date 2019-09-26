@@ -93,6 +93,9 @@ class Dataset(object):
         """
         return []
 
+    def split_query(self, query_func, *args, **kwargs):
+        return query_func(self, *args, **kwargs)
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
