@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Optional, Sequence, TypeVar
-
-from confluent_kafka import TopicPartition
+from typing import Callable, Generic, NewType, Optional, Sequence, Tuple, TypeVar
 
 
 TMessage = TypeVar("TMessage")
+
+Topic = NewType("Topic", str)
+Partition = NewType("Partition", int)
+Offset = NewType("Offset", int)
 
 
 class Consumer(Generic[TMessage], ABC):
@@ -12,8 +14,8 @@ class Consumer(Generic[TMessage], ABC):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
-        on_revoke: Optional[Callable[[Sequence[TopicPartition]], Any]] = None,
+        on_assign: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
     ) -> None:
         raise NotImplementedError
 
@@ -22,7 +24,9 @@ class Consumer(Generic[TMessage], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def commit(self, asynchronous: bool = True) -> Optional[Sequence[TopicPartition]]:
+    def commit(
+        self, asynchronous: bool = True
+    ) -> Optional[Sequence[Tuple[Topic, Partition, Offset]]]:
         raise NotImplementedError
 
     @abstractmethod

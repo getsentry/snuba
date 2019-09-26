@@ -18,19 +18,18 @@ from typing import (
 )
 
 from confluent_kafka import (
+    OFFSET_BEGINNING,
+    OFFSET_END,
+    OFFSET_INVALID,
+    OFFSET_STORED,
     KafkaError,
     KafkaException,
     Message,
     Producer,
-    TopicPartition,
-    OFFSET_BEGINNING,
-    OFFSET_END,
-    OFFSET_STORED,
-    OFFSET_INVALID,
 )
 
+from snuba.utils.kafka.consumers.abstract import Offset, Partition, Topic
 from snuba.utils.kafka.consumers.confluent import Consumer
-
 
 logger = logging.getLogger("batching-kafka-consumer")
 
@@ -221,10 +220,14 @@ class BatchingKafkaConsumer(Generic[TOutput]):
             }
         )
 
-        def on_partitions_assigned(partitions: Sequence[TopicPartition]) -> None:
+        def on_partitions_assigned(
+            partitions: Sequence[Tuple[Topic, Partition]]
+        ) -> None:
             logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(partitions: Sequence[TopicPartition]) -> None:
+        def on_partitions_revoked(
+            partitions: Sequence[Tuple[Topic, Partition]]
+        ) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
@@ -392,7 +395,8 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         while True:
             try:
                 offsets = cast(
-                    List[TopicPartition], self.consumer.commit(asynchronous=False)
+                    List[Tuple[Topic, Partition, Offset]],
+                    self.consumer.commit(asynchronous=False),
                 )  # HACK: type
                 logger.debug("Committed offsets: %s", offsets)
                 break  # success
@@ -413,29 +417,29 @@ class BatchingKafkaConsumer(Generic[TOutput]):
 
         if self.commit_log_topic:
 
-            for item in offsets:
-                if item.offset in self.LOGICAL_OFFSETS:
+            for topic, partition, offset in offsets:
+                if offset in self.LOGICAL_OFFSETS:
                     logger.debug(
                         "Skipped publishing logical offset (%r) to commit log for %s/%s",
-                        item.offset,
-                        item.topic,
-                        item.partition,
+                        offset,
+                        topic,
+                        partition,
                     )
                     continue
-                elif item.offset < 0:
+                elif offset < 0:
                     logger.warning(
                         "Found unexpected negative offset (%r) after commit for %s/%s",
-                        item.offset,
-                        item.topic,
-                        item.partition,
+                        offset,
+                        topic,
+                        partition,
                     )
 
                 assert self.producer is not None  # HACK: type
                 self.producer.produce(
                     self.commit_log_topic,
-                    key="{}:{}:{}".format(
-                        item.topic, item.partition, self.group_id
-                    ).encode("utf-8"),
-                    value="{}".format(item.offset).encode("utf-8"),
+                    key="{}:{}:{}".format(topic, partition, self.group_id).encode(
+                        "utf-8"
+                    ),
+                    value="{}".format(offset).encode("utf-8"),
                     on_delivery=self._commit_message_delivery_callback,
                 )
