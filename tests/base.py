@@ -185,8 +185,8 @@ class BaseDatasetTest(BaseTest):
 
 
 class BaseEventsTest(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super(BaseEventsTest, self).setup_method(test_method, 'events')
+    def setup_method(self, test_method, dataset_name='events'):
+        super(BaseEventsTest, self).setup_method(test_method, dataset_name)
         self.table = enforce_table_writer(self.dataset).get_schema().get_table_name()
         self.event = get_event()
 
@@ -232,6 +232,15 @@ class BaseEventsTest(BaseDatasetTest):
             rows = [rows]
 
         enforce_table_writer(self.dataset).get_writer().write(rows)
+
+
+class BaseApiTest(BaseEventsTest):
+    def setup_method(self, test_method, dataset_name='events'):
+        super().setup_method(test_method, dataset_name)
+        from snuba.api import application
+        assert application.testing is True
+        application.config['PROPAGATE_EXCEPTIONS'] = False
+        self.app = application.test_client()
 
 
 def message(offset, partition, value, eof=False) -> FakeKafkaMessage:

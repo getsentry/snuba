@@ -1,10 +1,10 @@
-from typing import Optional, Mapping, Sequence
+from typing import Optional, Mapping, Sequence, Tuple
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 
-from snuba.util import escape_col
+from snuba.util import escape_col, parse_datetime
 
 
 class Dataset(object):
@@ -66,6 +66,14 @@ class Dataset(object):
         """
         return escape_col(column_name)
 
+    def process_condition(self, condition) -> Tuple[str, str, any]:
+        """
+        Return a processed condition tuple.
+        This enables a dataset to do any parsing/transformations
+        a condition before it is added to the query.
+        """
+        return condition
+
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
         Returns the extensions for this dataset.
@@ -90,6 +98,7 @@ class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
             dataset_schemas: DatasetSchemas,
             time_group_columns: Mapping[str, str],
+            time_parse_columns: Sequence[str],
             **kwargs):
         super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
@@ -103,6 +112,7 @@ class TimeSeriesDataset(Dataset):
                     bucketed_column not in read_schema.get_columns(), \
                     f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
+        self.__time_parse_columns = time_parse_columns
 
     def __time_expr(self, column_name: str, granularity: int) -> str:
         real_column = self.__time_group_columns[column_name]
@@ -118,3 +128,13 @@ class TimeSeriesDataset(Dataset):
             return self.__time_expr(column_name, body['granularity'])
         else:
             return super().column_expr(column_name, body)
+
+    def process_condition(self, condition) -> Tuple[str, str, any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns and
+            op in ('>', '<', '>=', '<=', '=', '!=') and
+            isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit
