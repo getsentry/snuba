@@ -415,19 +415,20 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
-        from snuba.processor import MessageProcessor
+        from snuba.processor import ProcessorAction
 
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = enforce_table_writer(dataset) \
+            processed_message = enforce_table_writer(dataset) \
                 .get_stream_loader() \
                 .get_processor() \
                 .process_message(message)
-            assert action is MessageProcessor.INSERT
-            rows.append(row)
+            if processed_message:
+                assert processed_message.action is ProcessorAction.INSERT
+                rows.extend(processed_message.data)
 
         enforce_table_writer(dataset).get_writer().write(rows)
 

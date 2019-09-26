@@ -91,7 +91,7 @@ class MergeTreeSchema(WritableTableSchema):
         local_table_name: str,
         dist_table_name: str,
         order_by: str,
-        partition_by: str,
+        partition_by: Optional[str],
         sample_expr: Optional[str]=None,
         settings: Optional[Mapping[str, str]]=None,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,

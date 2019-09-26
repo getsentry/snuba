@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from typing import Optional
+
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
@@ -15,6 +17,8 @@ from snuba.processor import (
     InvalidMessageType,
     InvalidMessageVersion,
     MessageProcessor,
+    ProcessorAction,
+    ProcessedMessage,
 )
 
 logger = logging.getLogger('snuba.processor')
@@ -88,7 +92,7 @@ class EventsProcessor(MessageProcessor):
     def __init__(self, promoted_tag_columns):
         self.__promoted_tag_columns = promoted_tag_columns
 
-    def process_message(self, message, metadata=None):
+    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
         """\
         Process a raw message into a tuple of (action_type, processed_message):
         * action_type: one of the sentinel values INSERT or REPLACE
@@ -100,7 +104,7 @@ class EventsProcessor(MessageProcessor):
 
         if isinstance(message, dict):
             # deprecated unwrapped event message == insert
-            action_type = self.INSERT
+            action_type = ProcessorAction.INSERT
             try:
                 processed = self.process_insert(message, metadata)
             except EventTooOld:
@@ -115,7 +119,7 @@ class EventsProcessor(MessageProcessor):
                 # version 2: (2, type, data, [state])
                 type_, event = message[1:3]
                 if type_ == 'insert':
-                    action_type = self.INSERT
+                    action_type = ProcessorAction.INSERT
                     try:
                         processed = self.process_insert(event, metadata)
                     except EventTooOld:
@@ -138,7 +142,7 @@ class EventsProcessor(MessageProcessor):
                                     'start_delete_tag', 'end_delete_groups', 'end_merge',
                                     'end_unmerge', 'end_delete_tag'):
                             # pass raw events along to republish
-                            action_type = self.REPLACE
+                            action_type = ProcessorAction.REPLACE
                             processed = (str(event['project_id']), message)
                         else:
                             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -149,7 +153,10 @@ class EventsProcessor(MessageProcessor):
         if processed is None:
             return None
 
-        return (action_type, processed)
+        return ProcessedMessage(
+            action=action_type,
+            data=[processed],
+        )
 
     def process_insert(self, message, metadata=None):
         processed = {'deleted': 0}
