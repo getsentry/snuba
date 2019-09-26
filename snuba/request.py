@@ -90,9 +90,15 @@ class RequestSchema:
         for extension_name, extension_schema in self.__extension_schemas.items():
             extensions[extension_name] = {key: value.pop(key) for key in extension_schema['properties'].keys() if key in value}
 
+        query = Query(query_body)
+        request_settings = RequestSettings(settings['turbo'], settings['consistent'], settings['debug'])
+
+        if request_settings.turbo and query.get_sample() is None:
+            query.set_sample(settings.TURBO_SAMPLE_RATE)
+
         return Request(
-            Query(query_body),
-            RequestSettings(settings['turbo'], settings['consistent'], settings['debug']),
+            query,
+            request_settings,
             extensions
         )
 

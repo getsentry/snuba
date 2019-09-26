@@ -34,8 +34,8 @@ class Query:
     Represents a parsed query we can edit during query processing.
 
     This is the bare minimum abstraction to avoid depending on a mutable
-    Mapping around the code base. Fully untagling the query representation
-    from the code depnding on it wil ltake a lot of PRs, but at least we
+    Mapping around the code base. Fully untangling the query representation
+    from the code depending on it wil take a lot of PRs, but at least we
     have a basic abstraction to move functionalities to.
     It is also the base to split the Clickhouse specific query into
     an abstract Snuba query and a concrete Clickhouse query, but

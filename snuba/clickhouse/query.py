@@ -20,10 +20,6 @@ class ClickhouseQuery:
         self.__prewhere_conditions = prewhere_conditions
         self.__query_hints = query_hints
 
-        if self.__query_hints.turbo:
-            if self.__request.query.get_sample() is None:
-                request.query.set_sample(settings.TURBO_SAMPLE_RATE)
-
     def format(self) -> str:
         """Generate a SQL string from the parameters."""
         body = self.__request.body
