@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
+    NamedTuple,
     Optional,
     Sequence,
     Tuple,
@@ -73,6 +74,7 @@ class Interval:
 @dataclass(frozen=True)
 class Task:
     """Represents a single task to be executed."""
+
     # TODO: Additional fields will be filled in later -- this will eventually
     # contain everything that is required to executed a subscribed query.
 
@@ -87,6 +89,11 @@ class TaskSet:
     partition: int
     interval: Interval
     tasks: Sequence[Task]
+
+
+class PartitionKey(NamedTuple):
+    topic: str
+    partition: int
 
 
 class PartitionState:
@@ -232,9 +239,7 @@ class TaskSetConsumer(Consumer[TaskSet]):
     # consumers anyway.
 
     def __init__(self, configuration: Mapping[str, Any]) -> None:
-        self.__topic_partition_states: MutableMapping[
-            Tuple[str, int], PartitionState
-        ] = {}
+        self.__topic_partition_states: MutableMapping[PartitionKey, PartitionState] = {}
 
         # Using the built-in ``enable.auto.offset.store`` behavior will cause
         # gaps in task execution during restarts or rebalances, since it sets
@@ -315,12 +320,16 @@ class TaskSetConsumer(Consumer[TaskSet]):
             self.__consumer.assign(assignment)
 
             for partition in assignment:
-                key = (partition.topic, partition.partition)
+                key = PartitionKey(partition.topic, partition.partition)
                 assert key not in self.__topic_partition_states
 
                 state = PartitionState()
                 self.__topic_partition_states[key] = state
-                logger.debug("Initialized partition state for assigned partition %r: %r", key, state)
+                logger.debug(
+                    "Initialized partition state for assigned partition %r: %r",
+                    key,
+                    state,
+                )
 
             if on_assign is not None:
                 on_assign(assignment)
@@ -329,9 +338,11 @@ class TaskSetConsumer(Consumer[TaskSet]):
             consumer: Any, assignment: Sequence[TopicPartition]
         ) -> None:
             for partition in assignment:
-                key = (partition.topic, partition.partition)
+                key = PartitionKey(partition.topic, partition.partition)
                 state = self.__topic_partition_states.pop(key)
-                logger.debug("Discarded partition state for revoked partition %r: %r", key, state)
+                logger.debug(
+                    "Discarded partition state for revoked partition %r: %r", key, state
+                )
 
             if on_revoke is not None:
                 on_revoke(assignment)
@@ -356,7 +367,7 @@ class TaskSetConsumer(Consumer[TaskSet]):
         assert timestamp_type == TIMESTAMP_LOG_APPEND_TIME
 
         interval = self.__topic_partition_states[
-            (message.topic(), message.partition())
+            PartitionKey(message.topic(), message.partition())
         ].set_position(Position(message.offset(), timestamp / 1000.0))
 
         if interval is not None:
