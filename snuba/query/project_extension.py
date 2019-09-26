@@ -73,16 +73,8 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
 
 
 class ProjectExtension(QueryExtension):
-    def __init__(self) -> None:
+    def __init__(self, processor: ProjectExtensionProcessor) -> None:
         super().__init__(
             schema=PROJECT_EXTENSION_SCHEMA,
-            processor=ProjectExtensionProcessor(),
-        )
-
-
-class ProjectWithGroupsExtension(QueryExtension):
-    def __init__(self) -> None:
-        super().__init__(
-            schema=PROJECT_EXTENSION_SCHEMA,
-            processor=ProjectWithGroupsProcessor()
+            processor=processor,
         )

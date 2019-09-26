@@ -1,14 +1,11 @@
-from base import BaseTest
-
 import pytest
 from typing import Sequence
 
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsExtension
+from base import BaseTest
+from snuba import replacer, state
+from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
 from snuba.query.query import Query, Condition, QueryHints
 from snuba.schemas import validate_jsonschema
-from snuba import replacer, state
-from snuba.redis import redis_client
-
 
 project_extension_test_data = [
     (
@@ -32,7 +29,9 @@ project_extension_test_data = [
 
 @pytest.mark.parametrize("raw_data, expected_conditions", project_extension_test_data)
 def test_project_extension_query_processing(raw_data: dict, expected_conditions: Sequence[Condition]):
-    extension = ProjectExtension()
+    extension = ProjectExtension(
+        processor=ProjectExtensionProcessor()
+    )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         "conditions": []
@@ -48,7 +47,9 @@ class TestProjectExtensionWithGroups(BaseTest):
         super().setup_method(test_method)
         raw_data = {'project': 2}
         
-        self.extension = ProjectWithGroupsExtension()
+        self.extension = ProjectExtension(
+            processor=ProjectWithGroupsProcessor()
+        )
         self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
         self.query = Query({
             "conditions": []
