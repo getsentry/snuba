@@ -3,8 +3,10 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
+    Any,
     Generic,
     List,
+    Mapping,
     MutableMapping,
     MutableSequence,
     Optional,
@@ -134,15 +136,15 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         max_batch_time: Union[int, float],
         bootstrap_servers: Sequence[str],
         group_id: str,
-        metrics=None,
+        metrics: Optional[Any] = None,
         producer: Optional[Producer] = None,
         dead_letter_topic: Optional[str] = None,
         commit_log_topic: Optional[str] = None,
         auto_offset_reset: str = "error",
         queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
         queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-        metrics_sample_rates=None,
-    ):
+        metrics_sample_rates: Optional[Mapping[str, float]] = None,
+    ) -> None:
         if (
             dead_letter_topic is not None or commit_log_topic is not None
         ) and producer is None:
@@ -155,7 +157,7 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time  # in milliseconds
         self.__metrics = metrics
-        self.__metrics_sample_rates = (
+        self.__metrics_sample_rates: Mapping[str, float] = (
             metrics_sample_rates if metrics_sample_rates is not None else {}
         )
         self.group_id = group_id
@@ -189,15 +191,12 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         self.commit_log_topic = commit_log_topic
         self.dead_letter_topic = dead_letter_topic
 
-    def __record_timing(self, metric, value, tags=None):
+    def __record_timing(self, metric: str, value: Union[int, float]) -> None:
         if self.__metrics is None:
             return
 
-        return self.__metrics.timing(
-            metric,
-            value,
-            tags=tags,
-            sample_rate=self.__metrics_sample_rates.get(metric, 1),
+        self.__metrics.timing(
+            metric, value, sample_rate=self.__metrics_sample_rates.get(metric, 1)
         )
 
     def create_consumer(
