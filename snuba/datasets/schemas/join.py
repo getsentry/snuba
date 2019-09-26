@@ -50,6 +50,11 @@ class JoinedSource(ABC):
 
     @abstractmethod
     def get_schemas(self) -> Mapping[str, Schema]:
+        """
+        Returns the mapping between alias and schema in the joined expression.
+        This is called when navigating the join tree to build a comprehensive
+        mapping of all the referenced schemas with their aliases.
+        """
         raise NotImplementedError
 
 
@@ -82,6 +87,11 @@ class SubJoinSource(JoinedSource):
     def get_schemas(self) -> Mapping[str, Schema]:
         left = self.structure.left_source.get_schemas()
         right = self.structure.right_source.get_schemas()
+        overlapping_aliases = left.keys() & right.keys()
+        for alias in overlapping_aliases:
+            # Ensures none defines the same alias twice in the join referring
+            # to different tables.
+            assert left[alias] == right[alias]
         return ChainMap(left, right)
 
 

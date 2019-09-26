@@ -5,6 +5,7 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
+    NamedTuple,
     Optional,
     Sequence,
     Tuple,
@@ -23,11 +24,14 @@ Aggregation = Union[
     Sequence[Any],
 ]
 
-AliasedColumn = Tuple[Optional[str], str]
-
 Groupby = Sequence[Any]
 
 TElement = TypeVar("TElement")
+
+
+class QualifiedColumn(NamedTuple):
+    alias: Optional[str]
+    column: str
 
 
 class Query:

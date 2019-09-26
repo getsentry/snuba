@@ -19,7 +19,7 @@ from snuba.query.extensions import (
     ProjectExtension,
     QueryExtension,
 )
-from snuba.query.query import AliasedColumn
+from snuba.query.query import QualifiedColumn
 from snuba.query.timeseries import TimeSeriesExtension
 
 
@@ -49,12 +49,20 @@ class Groups(TimeSeriesDataset):
             ),
             mapping=[
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="groups", column="project_id"),
-                    right=JoinConditionExpression(table_alias="events", column="project_id"),
+                    left=JoinConditionExpression(
+                        table_alias=self.GROUPS_ALIAS,
+                        column="project_id"),
+                    right=JoinConditionExpression(
+                        table_alias=self.EVENTS_ALIAS,
+                        column="project_id"),
                 ),
                 JoinCondition(
-                    left=JoinConditionExpression(table_alias="groups", column="id"),
-                    right=JoinConditionExpression(table_alias="events", column="group_id"),
+                    left=JoinConditionExpression(
+                        table_alias=self.GROUPS_ALIAS,
+                        column="id"),
+                    right=JoinConditionExpression(
+                        table_alias=self.EVENTS_ALIAS,
+                        column="group_id"),
                 ),
             ],
             join_type=JoinType.LEFT,
@@ -67,8 +75,6 @@ class Groups(TimeSeriesDataset):
         )
         super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=None,
-            default_topic=None,
             time_group_columns={
                 'events.time': 'events.timestamp',
             },
@@ -80,15 +86,15 @@ class Groups(TimeSeriesDataset):
             ('groups.record_deleted', '=', 0),
         ]
 
-    def __parse_qualified_column(self, column_name: str) -> AliasedColumn:
+    def __parse_qualified_column(self, column_name: str) -> QualifiedColumn:
         # TODO: This logic should be general and in the Query class.
         # cannot do that yet since the column processing methods like
         # column_expr do not have access to the Query yet.
         match = self.QUALIFIED_COLUMN_REGEX.match(column_name)
         if not match or not match[1] in [self.EVENTS_ALIAS, self.GROUPS_ALIAS]:
-            return (None, column_name)
+            return QualifiedColumn(alias=None, column=column_name)
         else:
-            return (match[1], match[2])
+            return QualifiedColumn(alias=match[1], column=match[2])
 
     def column_expr(self, column_name, body):
         aliased_column = self.__parse_qualified_column(column_name)

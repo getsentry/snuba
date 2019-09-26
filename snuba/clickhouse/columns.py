@@ -323,4 +323,3 @@ class QualifiedColumnSet(ColumnSet):
             for column in column_set.columns:
                 flat_columns.append((f"{alias}.{column.name}", column.type))
         super().__init__(flat_columns)
-        self.__column_sets = column_sets
