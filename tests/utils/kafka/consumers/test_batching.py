@@ -9,16 +9,22 @@ from six.moves import range
 
 
 class FakeKafkaMessage(object):
-    def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
+    def __init__(
+        self, topic, partition, offset, value, key=None, headers=None, error=None
+    ):
         self._topic = topic
         self._partition = partition
         self._offset = offset
         self._value = value
         self._key = key
-        self._headers = {
-            six.text_type(k): six.text_type(v) if v else None
-            for k, v in six.iteritems(headers)
-        } if headers else None
+        self._headers = (
+            {
+                six.text_type(k): six.text_type(v) if v else None
+                for k, v in six.iteritems(headers)
+            }
+            if headers
+            else None
+        )
         self._headers = headers
         self._error = error
 
@@ -93,8 +99,7 @@ class FakeKafkaConsumer(object):
         self.commit_calls += 1
         return [
             TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in
-            six.iteritems(self.positions)
+            for (topic, partition), offset in six.iteritems(self.positions)
         ]
 
     def close(self, *args, **kwargs):
@@ -127,17 +132,19 @@ class FakeWorker(AbstractBatchWorker):
 class TestConsumer(object):
     def test_batch_size(self):
         consumer = FakeBatchingKafkaConsumer(
-            'topic',
+            "topic",
             worker=FakeWorker(),
             max_batch_size=2,
             max_batch_time=100,
             bootstrap_servers=None,
-            group_id='group',
-            commit_log_topic='commits',
+            group_id="group",
+            commit_log_topic="commits",
             producer=FakeKafkaProducer(),
         )
 
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [
+            FakeKafkaMessage("topic", 0, i, i) for i in [1, 2, 3]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
         consumer._shutdown()
@@ -150,35 +157,45 @@ class TestConsumer(object):
 
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
-        assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(2 + 1).encode('utf-8')  # offsets are last processed message offset + 1
+        assert commit_message.topic() == "commits"
+        assert commit_message.key() == "{}:{}:{}".format("topic", 0, "group").encode(
+            "utf-8"
+        )
+        assert commit_message.value() == "{}".format(2 + 1).encode(
+            "utf-8"
+        )  # offsets are last processed message offset + 1
 
-    @patch('time.time')
+    @patch("time.time")
     def test_batch_time(self, mock_time):
         consumer = FakeBatchingKafkaConsumer(
-            'topic',
+            "topic",
             worker=FakeWorker(),
             max_batch_size=100,
             max_batch_time=2000,
             bootstrap_servers=None,
-            group_id='group',
-            commit_log_topic='commits',
+            group_id="group",
+            commit_log_topic="commits",
             producer=FakeKafkaProducer(),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [
+            FakeKafkaMessage("topic", 0, i, i) for i in [1, 2, 3]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]]
+        consumer.consumer.items = [
+            FakeKafkaMessage("topic", 0, i, i) for i in [4, 5, 6]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]]
+        consumer.consumer.items = [
+            FakeKafkaMessage("topic", 0, i, i) for i in [7, 8, 9]
+        ]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
@@ -192,9 +209,13 @@ class TestConsumer(object):
 
         assert len(consumer.producer.messages) == 1
         commit_message = consumer.producer.messages[0]
-        assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
+        assert commit_message.topic() == "commits"
+        assert commit_message.key() == "{}:{}:{}".format("topic", 0, "group").encode(
+            "utf-8"
+        )
+        assert commit_message.value() == "{}".format(6 + 1).encode(
+            "utf-8"
+        )  # offsets are last processed message offset + 1
 
     def test_dead_letter_topic(self):
         class FailingFakeWorker(FakeWorker):
@@ -203,24 +224,33 @@ class TestConsumer(object):
 
         producer = FakeKafkaProducer()
         consumer = FakeBatchingKafkaConsumer(
-            'topic',
+            "topic",
             worker=FailingFakeWorker(),
             max_batch_size=100,
             max_batch_time=2000,
             bootstrap_servers=None,
-            group_id='group',
+            group_id="group",
             producer=producer,
-            dead_letter_topic='dlt'
+            dead_letter_topic="dlt",
         )
 
-        message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
+        message = FakeKafkaMessage(
+            "topic", partition=1, offset=2, key="key", value="value"
+        )
         consumer.consumer.items = [message]
         consumer._run_once()
 
         assert len(producer.messages) == 1
         produced_message = producer.messages[0]
 
-        assert ('dlt', message.key(), message.value()) \
-            == (produced_message.topic(), produced_message.key(), produced_message.value())
+        assert ("dlt", message.key(), message.value()) == (
+            produced_message.topic(),
+            produced_message.key(),
+            produced_message.value(),
+        )
 
-        assert produced_message.headers() == {'partition': '1', 'offset': '2', 'topic': 'topic'}
+        assert produced_message.headers() == {
+            "partition": "1",
+            "offset": "2",
+            "topic": "topic",
+        }
