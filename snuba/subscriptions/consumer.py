@@ -73,6 +73,8 @@ class Interval:
 @dataclass(frozen=True)
 class Task:
     """Represents a single task to be executed."""
+    # TODO: Additional fields will be filled in later -- this will eventually
+    # contain everything that is required to executed a subscribed query.
 
 
 @dataclass(frozen=True)
