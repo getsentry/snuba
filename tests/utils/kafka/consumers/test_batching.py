@@ -1,9 +1,13 @@
 import time
 from datetime import datetime
 
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 from mock import patch
+
+from snuba.utils.kafka.consumers.batching import (
+    AbstractBatchWorker,
+    BatchingKafkaConsumer,
+)
 
 
 class FakeKafkaMessage(object):
