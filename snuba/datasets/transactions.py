@@ -134,6 +134,7 @@ class TransactionsDataset(TimeSeriesDataset):
                 'bucketed_start': 'start_ts',
                 'bucketed_end': 'finish_ts',
             },
+            time_parse_columns=('start_ts', 'finish_ts')
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
