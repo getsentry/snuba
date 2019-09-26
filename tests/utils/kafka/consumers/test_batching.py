@@ -1,19 +1,28 @@
 import time
 from datetime import datetime
+from typing import Callable, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
 from confluent_kafka import TopicPartition
 from mock import patch
 
+from snuba.utils.kafka.consumers.abstract import Consumer, Offset, Partition, Topic
 from snuba.utils.kafka.consumers.batching import (
     AbstractBatchWorker,
     BatchingKafkaConsumer,
 )
 
 
-class FakeKafkaMessage(object):
+class FakeKafkaMessage:
     def __init__(
-        self, topic, partition, offset, value, key=None, headers=None, error=None
-    ):
+        self,
+        topic: str,
+        partition: int,
+        offset: int,
+        value: str,
+        key: str = None,
+        headers=None,
+        error=None,
+    ) -> None:
         self._topic = topic
         self._partition = partition
         self._offset = offset
@@ -27,19 +36,19 @@ class FakeKafkaMessage(object):
         self._headers = headers
         self._error = error
 
-    def topic(self):
+    def topic(self) -> str:
         return self._topic
 
-    def partition(self):
+    def partition(self) -> int:
         return self._partition
 
-    def offset(self):
+    def offset(self) -> int:
         return self._offset
 
-    def value(self):
+    def value(self) -> str:
         return self._value
 
-    def key(self):
+    def key(self) -> str:
         return self._key
 
     def headers(self):
@@ -77,36 +86,48 @@ class FakeKafkaProducer(object):
             self._callbacks.append((on_delivery, message))
 
 
-class FakeKafkaConsumer(object):
-    def __init__(self):
-        self.items = []
+class FakeKafkaConsumer(Consumer[FakeKafkaMessage]):
+    def __init__(self) -> None:
+        self.items: MutableSequence[FakeKafkaMessage] = []
         self.commit_calls = 0
         self.close_calls = 0
-        self.positions = {}
+        self.positions: MutableMapping[Tuple[Topic, Partition], Offset] = {}
 
-    def poll(self, *args, **kwargs):
+    def subscribe(
+        self,
+        topics: Sequence[str],
+        on_assign: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
+    ) -> None:
+        raise NotImplementedError
+
+    def poll(self, timeout: Optional[float] = None) -> Optional[FakeKafkaMessage]:
         try:
             message = self.items.pop(0)
         except IndexError:
             return None
 
-        self.positions[(message.topic(), message.partition())] = message.offset() + 1
+        self.positions[
+            (Topic(message.topic()), Partition(message.partition()))
+        ] = Offset(message.offset() + 1)
 
         return message
 
-    def commit(self, *args, **kwargs):
+    def commit(
+        self, asynchronous: bool = True
+    ) -> Optional[Sequence[Tuple[Topic, Partition, Offset]]]:
         self.commit_calls += 1
         return [
-            TopicPartition(topic, partition, offset)
+            (topic, partition, offset)
             for (topic, partition), offset in self.positions.items()
         ]
 
-    def close(self, *args, **kwargs):
+    def close(self) -> None:
         self.close_calls += 1
 
 
-class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, *args, **kwargs):
+class FakeBatchingKafkaConsumer(BatchingKafkaConsumer[FakeKafkaMessage]):
+    def create_consumer(self, *args, **kwargs) -> FakeKafkaConsumer:
         return FakeKafkaConsumer()
 
 
