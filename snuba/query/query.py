@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from deprecation import deprecated
 from typing import (
     Any,
@@ -52,6 +51,7 @@ class Query:
         # TODO: make the parser produce this data structure directly
         # in order not to expose the internal representation.
         self.__body = body
+        self.__final = False
 
     def __extend_sequence(self,
         field: str,
@@ -124,18 +124,14 @@ class Query:
     def set_offset(self, offset: int) -> None:
         self.__body["offset"] = offset
 
+    def get_final(self) -> bool:
+        return self.__final
+
+    def set_final(self, final) -> None:
+        self.__final = final
+
     @deprecated(
         details="Do not access the internal query representation "
         "use the specific accessor methods instead.")
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
-
-
-@dataclass
-class QueryHints:
-    """
-    A mutable structure that is meant to be modified by the extension processors so that it can pass hints
-    for the construction of the clickhouse query
-    """
-    turbo: bool
-    final: bool

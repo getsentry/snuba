@@ -4,7 +4,8 @@ from typing import Sequence
 from base import BaseTest
 from snuba import replacer, state
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
-from snuba.query.query import Query, Condition, QueryHints
+from snuba.query.query import Query, Condition
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import validate_jsonschema
 
 project_extension_test_data = [
@@ -36,9 +37,10 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
     query = Query({
         "conditions": []
     })
-    query_hints = QueryHints(turbo=False, final=False)
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, query_hints)
+    extension.get_processor().process_query(query, valid_data, request_settings)
+
     assert query.get_conditions() == expected_conditions
 
 
@@ -56,47 +58,49 @@ class TestProjectExtensionWithGroups(BaseTest):
         })
 
     def test_with_turbo(self):
-        query_hints = QueryHints(turbo=True, final=False)
+        request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, query_hints)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
 
     def test_without_turbo_with_projects_needing_final(self):
-        query_hints = QueryHints(turbo=False, final=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         replacer.set_project_needs_final(2)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, query_hints)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
-        assert query_hints.final
+        assert self.query.get_final()
 
     def test_without_turbo_without_projects_needing_final(self):
-        query_hints = QueryHints(turbo=False, final=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, query_hints)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
-        assert not query_hints.final
+        assert not self.query.get_final()
 
     def test_when_there_are_not_many_groups_to_exclude(self):
-        query_hints = QueryHints(turbo=False, final=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         state.set_config('max_group_ids_exclude', 5)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, query_hints)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         expected = [
             ('project_id', 'IN', [2]),
             (['assumeNotNull', ['group_id']], 'NOT IN', [100, 101, 102])
         ]
-
         assert self.query.get_conditions() == expected
-        assert not query_hints.final
+        assert not self.query.get_final()
 
     def test_when_there_are_too_many_groups_to_exclude(self):
-        query_hints = QueryHints(turbo=False, final=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         state.set_config('max_group_ids_exclude', 2)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, query_hints)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
-        assert query_hints.final
+        assert self.query.get_final()

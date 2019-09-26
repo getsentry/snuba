@@ -1,9 +1,11 @@
 from snuba import settings, util
 from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
-from snuba.query.query import Query, QueryHints
+from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
+from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
+
 
 PROJECT_EXTENSION_SCHEMA = {
     'type': 'object',
@@ -31,7 +33,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            query_hints: QueryHints,
+            request_settings: RequestSettings,
     ) -> None:
         project_ids = util.to_list(extension_data['project'])
 
@@ -45,25 +47,25 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            query_hints: QueryHints,
+            request_settings: RequestSettings,
     ) -> None:
         project_ids = util.to_list(extension_data['project'])
 
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
 
-        if not query_hints.turbo:
+        if not request_settings.turbo:
             final, exclude_group_ids = get_projects_query_flags(project_ids)
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
                 max_group_ids_exclude = get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
                 if len(exclude_group_ids) > max_group_ids_exclude:
-                    query_hints.final = True
+                    query.set_final(True)
                 else:
                     query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
             else:
-                query_hints.final = final
+                query.set_final(final)
 
 
 class ProjectExtension(QueryExtension):

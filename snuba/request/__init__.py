@@ -8,8 +8,9 @@ from deprecation import deprecated
 from typing import Any, Mapping
 
 from snuba.query.extensions import QueryExtension
-from snuba.query.query import Query, QueryHints
+from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import Schema, validate_jsonschema
 
 
@@ -25,19 +26,6 @@ class Request:
         "use the specific accessor methods on the query object instead.")
     def body(self):
         return ChainMap(self.query.get_body(), *self.extensions.values())
-
-
-@dataclass(frozen=True)
-class RequestSettings:
-    turbo: bool
-    consistent: bool
-    debug: bool
-
-    def get_query_hints(self) -> QueryHints:
-        return QueryHints(
-            turbo=self.turbo,
-            final=False
-        )
 
 
 class RequestSchema:
