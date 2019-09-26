@@ -40,11 +40,14 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
+    from snuba.datasets.events import EventsDataset
     from snuba.replacer import Replacement, ReplacerWorker
     from snuba.utils.kafka.consumers.batching import BatchingKafkaConsumer
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset_name)
+    if not isinstance(dataset, EventsDataset):
+        raise TypeError('replacer only compatible with EventsDataset')
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
