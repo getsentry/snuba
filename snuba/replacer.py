@@ -10,7 +10,7 @@ from confluent_kafka import Message
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets import Dataset
+from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
@@ -98,8 +98,8 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker[Replacement]):
-    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics=None) -> None:
+class ReplacerWorker(AbstractBatchWorker):
+    def __init__(self, clickhouse: ClickhousePool, dataset: EventsDataset, metrics=None) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics
