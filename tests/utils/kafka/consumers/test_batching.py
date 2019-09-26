@@ -1,11 +1,9 @@
 import time
 from datetime import datetime
 
-import six
 from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition
 from mock import patch
-from six.moves import range
 
 
 class FakeKafkaMessage(object):
@@ -18,10 +16,7 @@ class FakeKafkaMessage(object):
         self._value = value
         self._key = key
         self._headers = (
-            {
-                six.text_type(k): six.text_type(v) if v else None
-                for k, v in six.iteritems(headers)
-            }
+            {str(k): str(v) if v else None for k, v in headers.items()}
             if headers
             else None
         )
@@ -99,7 +94,7 @@ class FakeKafkaConsumer(object):
         self.commit_calls += 1
         return [
             TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in six.iteritems(self.positions)
+            for (topic, partition), offset in self.positions.items()
         ]
 
     def close(self, *args, **kwargs):
