@@ -148,6 +148,7 @@ class TransactionsDataset(TimeSeriesDataset):
         }
 
     def column_expr(self, column_name, body):
+        # TODO remove these casts when clickhouse-driver is >= 0.0.19
         if column_name == 'ip_address_v4':
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
