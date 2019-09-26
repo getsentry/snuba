@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from snuba import util
+from snuba import util, settings
 from snuba.datasets import Dataset
 from snuba.request import Request
 
@@ -38,8 +38,13 @@ class ClickhouseQuery:
         if self.__request.query.get_final():
             from_clause = u'{} FINAL'.format(from_clause)
 
-        if query.get_sample():
-            from_clause = u'{} SAMPLE {}'.format(from_clause, query.get_sample())
+        if self.__request.settings.turbo:
+            sample_rate = settings.TURBO_SAMPLE_RATE
+        else:
+            sample_rate = query.get_sample()
+
+        if sample_rate:
+            from_clause = u'{} SAMPLE {}'.format(from_clause, sample_rate)
 
         join_clause = ''
         if 'arrayjoin' in body:

@@ -42,6 +42,11 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
 
 
 class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
+    """
+    Extension processor that makes changes to the query by
+    1. Adding the project
+    2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
+    """
 
     def process_query(
             self,
