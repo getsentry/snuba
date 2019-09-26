@@ -47,20 +47,20 @@ class TestReplacer(BaseEventsTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
+        replacement = self.replacer.process_message(self._wrap(message))
 
-        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.count_query_template).strip() == \
             "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.insert_query_template).strip() == \
             "INSERT INTO %(dist_write_table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert query_args == {
+        assert replacement.query_args == {
             'group_ids': '1, 2, 3',
             'project_id': self.project_id,
             'required_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days',
             'select_columns': 'event_id, project_id, group_id, timestamp, 1, retention_days',
             'timestamp': timestamp.strftime(DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.EXCLUDE_GROUPS, self.project_id, [1, 2, 3])
+        assert replacement.query_time_flags == (replacer.EXCLUDE_GROUPS, self.project_id, [1, 2, 3])
 
     def test_merge_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -71,20 +71,20 @@ class TestReplacer(BaseEventsTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
+        replacement = self.replacer.process_message(self._wrap(message))
 
-        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.count_query_template).strip() == \
             "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.insert_query_template).strip() == \
             "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert query_args == {
+        assert replacement.query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'select_columns': 'event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'previous_group_ids': ", ".join(str(gid) for gid in [1, 2]),
             'project_id': self.project_id,
             'timestamp': timestamp.strftime(DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.EXCLUDE_GROUPS, self.project_id, [1, 2])
+        assert replacement.query_time_flags == (replacer.EXCLUDE_GROUPS, self.project_id, [1, 2])
 
     def test_unmerge_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -96,13 +96,13 @@ class TestReplacer(BaseEventsTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
+        replacement = self.replacer.process_message(self._wrap(message))
 
-        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.count_query_template).strip() == \
             "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.insert_query_template).strip() == \
             "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
-        assert query_args == {
+        assert replacement.query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'select_columns': 'event_id, project_id, 2, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'hashes': "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'",
@@ -110,7 +110,7 @@ class TestReplacer(BaseEventsTest):
             'project_id': self.project_id,
             'timestamp': timestamp.strftime(DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
 
     def test_delete_promoted_tag_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -120,13 +120,13 @@ class TestReplacer(BaseEventsTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
+        replacement = self.replacer.process_message(self._wrap(message))
 
-        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.count_query_template).strip() == \
             "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND %(tag_column)s IS NOT NULL"
-        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.insert_query_template).strip() == \
             "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND %(tag_column)s IS NOT NULL"
-        assert query_args == {
+        assert replacement.query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'select_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, NULL, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, \'sentry:user\')), `tags.key`), arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, \'sentry:user\'), arrayEnumerate(`tags.value`))), contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'tag_column': '`sentry:user`',
@@ -134,7 +134,7 @@ class TestReplacer(BaseEventsTest):
             'project_id': self.project_id,
             'timestamp': timestamp.strftime(DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
 
     def test_delete_unpromoted_tag_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -144,13 +144,13 @@ class TestReplacer(BaseEventsTest):
             'datetime': timestamp.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),
         })
 
-        count_query_template, insert_query_template, query_args, query_time_flags = self.replacer.process_message(self._wrap(message))
+        replacement = self.replacer.process_message(self._wrap(message))
 
-        assert re.sub("[\n ]+", " ", count_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.count_query_template).strip() == \
             "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
-        assert re.sub("[\n ]+", " ", insert_query_template).strip() == \
+        assert re.sub("[\n ]+", " ", replacement.insert_query_template).strip() == \
             "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted AND has(`tags.key`, %(tag_str)s)"
-        assert query_args == {
+        assert replacement.query_args == {
             'all_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'select_columns': 'event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, arrayFilter(x -> (indexOf(`tags.key`, x) != indexOf(`tags.key`, \'foo:bar\')), `tags.key`), arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, \'foo:bar\'), arrayEnumerate(`tags.value`))), contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version',
             'tag_column': '`foo:bar`',
@@ -158,7 +158,7 @@ class TestReplacer(BaseEventsTest):
             'project_id': self.project_id,
             'timestamp': timestamp.strftime(DATETIME_FORMAT),
         }
-        assert query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
 
     def test_delete_groups_insert(self):
         self.event['project_id'] = self.project_id
