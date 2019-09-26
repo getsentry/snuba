@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
-from batching_kafka_consumer import AbstractBatchWorker
 from confluent_kafka import Message
 
 from snuba.clickhouse import DATETIME_FORMAT
@@ -16,6 +15,7 @@ from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
+from snuba.utils.kafka.consumers.batching import AbstractBatchWorker
 
 from . import settings
 
@@ -98,7 +98,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker):
+class ReplacerWorker(AbstractBatchWorker[Replacement]):
     def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics=None) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
