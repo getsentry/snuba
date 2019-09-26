@@ -209,8 +209,11 @@ class BaseEventsTest(BaseDatasetTest):
         for event in events:
             if 'primary_hash' not in event:
                 event = wrap_raw_event(event)
-            _, processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message(event)
-            out.append(processed)
+            processed = enforce_table_writer(self.dataset) \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(event)
+            out.extend(processed.data)
 
         return self.write_processed_records(out)
 

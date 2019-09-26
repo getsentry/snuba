@@ -6,6 +6,7 @@ DATASETS_IMPL = {}
 
 DATASET_NAMES = {
     'events',
+    'groupassignee',
     'groupedmessage',
     'transactions',
     'outcomes',
@@ -24,11 +25,14 @@ def get_dataset(name):
         raise InvalidDatasetError(f"dataset {name!r} is not available in this environment")
 
     from snuba.datasets.events import EventsDataset
+    from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
+
     dataset_mappings = {
         'events': EventsDataset,
+        'groupassignee': GroupAssigneeDataset,
         'groupedmessage': GroupedMessageDataset,
         'transactions': TransactionsDataset,
         'outcomes': OutcomesDataset,
