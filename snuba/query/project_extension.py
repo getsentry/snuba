@@ -33,9 +33,6 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             extension_data: ExtensionData,
             query_hints: QueryHints,
     ) -> None:
-        # NOTE: we rely entirely on the schema to make sure that regular snuba
-        # queries are required to send a project_id filter. Some other special
-        # internal query types do not require a project_id filter.
         project_ids = util.to_list(extension_data['project'])
 
         if project_ids:
@@ -50,9 +47,6 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
             extension_data: ExtensionData,
             query_hints: QueryHints,
     ) -> None:
-        # NOTE: we rely entirely on the schema to make sure that regular snuba
-        # queries are required to send a project_id filter. Some other special
-        # internal query types do not require a project_id filter.
         project_ids = util.to_list(extension_data['project'])
 
         if project_ids:
