@@ -20,7 +20,7 @@ from base import BaseEventsTest
 
 class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method, dataset_name='events'):
-        super(BaseApiTest, self).setup_method(test_method, dataset_name)
+        super().setup_method(test_method, dataset_name)
         from snuba.api import application
         assert application.testing is True
         application.config['PROPAGATE_EXCEPTIONS'] = False
@@ -29,7 +29,7 @@ class BaseApiTest(BaseEventsTest):
 
 class TestApi(BaseApiTest):
     def setup_method(self, test_method, dataset_name='events'):
-        super(TestApi, self).setup_method(test_method, dataset_name)
+        super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -1123,7 +1123,7 @@ class TestApi(BaseApiTest):
 class TestTransactionsApi(BaseApiTest):
 
     def setup_method(self, test_method, dataset_name='transactions'):
-        super(TestTransactionsApi, self).setup_method(test_method, dataset_name)
+        super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
