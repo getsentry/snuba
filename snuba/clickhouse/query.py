@@ -38,10 +38,12 @@ class ClickhouseQuery:
         if self.__request.query.get_final():
             from_clause = u'{} FINAL'.format(from_clause)
 
-        if self.__request.settings.turbo:
+        if query.get_sample():
+            sample_rate = query.get_sample()
+        elif self.__request.settings.turbo:
             sample_rate = settings.TURBO_SAMPLE_RATE
         else:
-            sample_rate = query.get_sample()
+            sample_rate = None
 
         if sample_rate:
             from_clause = u'{} SAMPLE {}'.format(from_clause, sample_rate)

@@ -109,9 +109,6 @@ class Query:
     def get_sample(self) -> Optional[float]:
         return self.__body.get("sample")
 
-    def set_sample(self, sample: float) -> None:
-        self.__body["sample"] = sample
-
     def get_limit(self) -> int:
         return self.__body.get('limit', 0)
 

@@ -277,6 +277,9 @@ def parse_and_run_query(dataset, request: Request, timer):
         )
     request.query.add_conditions(dataset.default_conditions())
 
+    if request.settings.turbo:
+        request.query.set_final(False)
+
     prewhere_conditions = []
     # Add any condition to PREWHERE if:
     # - It is a single top-level condition (not OR-nested), and
