@@ -29,20 +29,20 @@ class TagColumnProcessor:
         # The ColumnSet of the dataset. Used to format promoted
         # columns with the right type.
         self.__columns = columns
-        # Keeps a dictionary of promoted columns. the key of the mapping
+        # Keeps a dictionary of promoted columns. The key of the mapping
         # can be 'tags' or 'contexts'. The values is a set of flattened
         # columns.
         self.__promoted_columns = promoted_columns
         # A mapping between column representing promoted tags and the
-        # correspinding tag.
+        # corresponding tag.
         self.__column_tag_map = column_tag_map
 
-    def process_tags_expression(self,
+    def process_column_expression(self,
         column_name: str,
         body: MutableMapping[str, Any],
     ) -> Union[None, Any]:
         """
-        This method resolves the tag or context processes it and formats
+        This method resolves the tag or context, processes it and formats
         the column expression for the query. It is supposed to be called
         by column_expr methods in the datasets.
 
@@ -52,8 +52,7 @@ class TagColumnProcessor:
             return self.__tag_expr(column_name)
         elif column_name in ['tags_key', 'tags_value']:
             return self.__tags_expr(column_name, body)
-        else:
-            return None
+        return None
 
     def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
         # And a reverse map from the tags the client expects to the database columns

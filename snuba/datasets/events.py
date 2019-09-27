@@ -17,7 +17,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.tags_dataset import TagColumnProcessor
+from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import (
     PerformanceExtension,
     ProjectExtension,
@@ -258,9 +258,10 @@ class EventsDataset(TimeSeriesDataset):
         ]
 
     def column_expr(self, column_name, body):
-        ret = self.__tags_processor.process_tags_expression(column_name, body)
-        if ret:
-            return ret
+        processed_column = self.__tags_processor.process_column_expression(column_name, body)
+        if processed_column:
+            # If processed_column is None, this was not a tag/context expression
+            return processed_column
         elif column_name == 'issue' or column_name == 'group_id':
             return 'nullIf(group_id, 0)'
         elif column_name == 'message':

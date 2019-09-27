@@ -20,7 +20,7 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.tags_dataset import TagColumnProcessor
+from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import (
     PerformanceExtension,
@@ -175,9 +175,10 @@ class TransactionsDataset(TimeSeriesDataset):
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
-        ret = self.__tags_processor.process_tags_expression(column_name, body)
-        if ret:
-            return ret
+        processed_column = self.__tags_processor.process_column_expression(column_name, body)
+        if processed_column:
+            # If processed_column is None, this was not a tag/context expression
+            return processed_column
         return super().column_expr(column_name, body)
 
     def get_prewhere_keys(self) -> Sequence[str]:
