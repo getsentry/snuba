@@ -16,9 +16,12 @@ from snuba.util import escape_col, parse_datetime
 
 
 class SplitQueryFunc(Protocol):
+    """
+    The function definition for parse_and_run_query. Used for typing.
+    """
     def __call__(
             self,
-            dataset: Request,
+            dataset: 'Dataset',
             request: Request,
             *args: Any,
             **kwargs: Any
@@ -117,6 +120,15 @@ class Dataset(object):
             *args: Any,
             **kwargs: Any
     ) -> Tuple[Mapping[str, Any], int]:
+        """
+        Splits the running of the query into multiple steps.
+
+        Clickhouse doesn't have a great query planner for certain cases, so, we want to be able to
+        be able to divide the query into multiple steps. The primary use for splitting up queries
+        is to increase the performance of queries.
+
+        The implementation here does not do any splitting because by default, we don't need to split.
+        """
         return query_func(self, *args, **kwargs)
 
 

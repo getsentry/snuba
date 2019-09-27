@@ -265,6 +265,10 @@ def dataset_query(dataset, body, timer):
 
 
 def split_query_by_dataset(query_func: SplitQueryFunc):
+    """
+    Splits the query based on the dataset
+    """
+
     def wrapper(dataset, *args, **kwargs):
         return dataset.split_query(query_func, *args, **kwargs)
 
