@@ -5,7 +5,6 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
-    NamedTuple,
     Optional,
     Sequence,
     Tuple,

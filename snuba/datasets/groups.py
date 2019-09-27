@@ -85,7 +85,7 @@ class Groups(TimeSeriesDataset):
 
     def column_expr(self, column_name, body, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction
-        # as joinable datasets. That will be easier through the TableStorage abstraciton.
+        # as joinable datasets. That will be easier through the TableStorage abstraction.
         # Thus, as of now, receiving a table_alias here is not supported.
         assert table_alias == "", \
             "Groups dataset cannot be referenced with table aliases. Alias provided {table_alias}"
@@ -120,4 +120,4 @@ class Groups(TimeSeriesDataset):
         }
 
     def get_prewhere_keys(self) -> Sequence[str]:
-        return ['events.event_id', 'events.project_id']
+        return ['events.event_id', 'events.issue', 'events.tags[sentry:release]', 'events.message', 'events.environment', 'events.project_id']
