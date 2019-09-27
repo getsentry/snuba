@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets import TimeSeriesDataset, SplitQueryFunc
+from snuba.datasets import SplitQueryFunc, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.events.events_processor import EventsProcessor
 from snuba.datasets.events.split import split_query
