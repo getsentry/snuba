@@ -17,6 +17,7 @@ from snuba.datasets.schemas.join import (
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.query import Condition
 
 
 class Groups(TimeSeriesDataset):
@@ -77,11 +78,10 @@ class Groups(TimeSeriesDataset):
             time_parse_columns=['events.timestamp'],
         )
 
-    def default_conditions(self):
-        return [
-            ('events.deleted', '=', 0),
-            ('groups.record_deleted', '=', 0),
-        ]
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
+        events_conditions = self.__events.default_conditions(self.EVENTS_ALIAS)
+        groups_conditions = self.__grouped_message.default_conditions(self.GROUPS_ALIAS)
+        return events_conditions + groups_conditions
 
     def column_expr(self, column_name, body, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction

@@ -3,6 +3,7 @@ from typing import Optional, Mapping, Sequence, Tuple
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
+from snuba.query.query import Condition
 from snuba.util import escape_col, parse_datetime, qualified_column
 
 
@@ -51,7 +52,7 @@ class Dataset(object):
         """
         return self.__table_writer
 
-    def default_conditions(self):
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
         """
         Return a list of the default conditions that should be applied to all
         queries on this dataset.

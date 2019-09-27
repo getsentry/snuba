@@ -3,12 +3,13 @@ from typing import Sequence
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.query.query import Condition
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
+from snuba.util import qualified_column
 
 
 class GroupedMessageTableWriter(TableWriter):
@@ -85,6 +86,11 @@ class GroupedMessageDataset(CdcDataset):
             ),
             default_control_topic="cdc_control",
         )
+
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
+        return [
+            (qualified_column('record_deleted', table_alias), '=', 0),
+        ]
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['project_id']

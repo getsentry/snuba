@@ -18,6 +18,7 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.query import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -250,9 +251,9 @@ class EventsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-    def default_conditions(self):
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
         return [
-            ('deleted', '=', 0),
+            (qualified_column('deleted', table_alias), '=', 0),
         ]
 
     def column_expr(self, column_name, body, table_alias: str=""):
