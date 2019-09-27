@@ -1,5 +1,5 @@
 import re
-from typing import Any, Mapping, Set, Union
+from typing import Any, Mapping, MutableMapping, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
@@ -15,17 +15,39 @@ NESTED_COL_EXPR_RE = re.compile(r'^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$')
 
 
 class TagColumnProcessor:
+    """
+    Provides the query processing features for tables that have
+    tags and contexts nested columns. This simply extracts these
+    features originally developed in the Events dataset.
+    """
 
     def __init__(self,
         columns: ColumnSet,
         promoted_columns: Mapping[str, Set[str]],
         column_tag_map: Mapping[str, Mapping[str, str]]
     ) -> None:
+        # The ColumnSet of the dataset. Used to format promoted
+        # columns with the right type.
         self.__columns = columns
+        # Keeps a dictionary of promoted columns. the key of the mapping
+        # can be 'tags' or 'contexts'. The values is a set of flattened
+        # columns.
         self.__promoted_columns = promoted_columns
+        # A mapping between column representing promoted tags and the
+        # correspinding tag.
         self.__column_tag_map = column_tag_map
 
-    def _process_tags_expression(self, column_name, body) -> Union[None, Any]:
+    def process_tags_expression(self,
+        column_name: str,
+        body: MutableMapping[str, Any],
+    ) -> Union[None, Any]:
+        """
+        This method resolves the tag or context processes it and formats
+        the column expression for the query. It is supposed to be called
+        by column_expr methods in the datasets.
+
+        It returns None if the column is not a tag or context.
+        """
         if NESTED_COL_EXPR_RE.match(column_name):
             return self.__tag_expr(column_name)
         elif column_name in ['tags_key', 'tags_value']:
@@ -33,13 +55,13 @@ class TagColumnProcessor:
         else:
             return None
 
-    def get_tag_column_map(self):
+    def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
         # And a reverse map from the tags the client expects to the database columns
         return {
             col: dict(map(reversed, trans.items())) for col, trans in self.__column_tag_map.items()
         }
 
-    def __string_col(self, col):
+    def __string_col(self, col: str) -> str:
         col_type = self.__columns.get(col, None)
         col_type = str(col_type) if col_type else None
 
@@ -48,7 +70,7 @@ class TagColumnProcessor:
         else:
             return 'toString({})'.format(escape_col(col))
 
-    def __tag_expr(self, column_name):
+    def __tag_expr(self, column_name: str) -> str:
         """
         Return an expression for the value of a single named tag.
 
@@ -59,7 +81,7 @@ class TagColumnProcessor:
 
         # For promoted tags, return the column name.
         if col in self.__promoted_columns:
-            actual_tag = self.get_tag_column_map()[col].get(tag, tag)
+            actual_tag = self.__get_tag_column_map()[col].get(tag, tag)
             if actual_tag in self.__promoted_columns[col]:
                 return self.__string_col(actual_tag)
 
@@ -69,7 +91,10 @@ class TagColumnProcessor:
             'tag': escape_literal(tag)
         })
 
-    def __tags_expr(self, column_name, body):
+    def __tags_expr(self,
+        column_name: str,
+        body: MutableMapping[str, Any],
+    ) -> str:
         """
         Return an expression that array-joins on tags to produce an output with one
         row per tag.
