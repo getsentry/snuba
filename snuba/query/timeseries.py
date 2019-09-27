@@ -7,6 +7,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.query_processor import ExtensionQueryProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import get_time_series_extension_properties
 
 
@@ -30,7 +31,12 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
 
         return (from_date, to_date)
 
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
+    def process_query(
+            self,
+            query: Query,
+            extension_data: ExtensionData,
+            request_settings: RequestSettings,
+    ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
         query.add_conditions([
             (self.__timestamp_column, '>=', from_date.isoformat()),

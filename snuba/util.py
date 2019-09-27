@@ -17,7 +17,6 @@ from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 
-
 logger = logging.getLogger('snuba.util')
 
 
@@ -435,7 +434,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                         # Force query to use the first shard replica, which
                         # should have synchronously received any cluster writes
                         # before this query is run.
-                        consistent = request.extensions['performance'].get('consistent', False)
+                        consistent = request.settings.consistent
                         stats['consistent'] = consistent
                         if consistent:
                             query_settings['load_balancing'] = 'in_order'
@@ -520,7 +519,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.extensions['performance'].get('debug', False):
+    if settings.STATS_IN_RESPONSE or request.settings.debug:
         result['stats'] = stats
         result['sql'] = sql
 

@@ -22,12 +22,9 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.query.extensions import (
-    PerformanceExtension,
-    ProjectExtension,
-    QueryExtension,
-)
+from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 
 
 class TransactionsTableWriter(TableWriter):
@@ -160,8 +157,9 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': PerformanceExtension(),
-            'project': ProjectExtension(),
+            'project': ProjectExtension(
+                processor=ProjectExtensionProcessor()
+            ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
