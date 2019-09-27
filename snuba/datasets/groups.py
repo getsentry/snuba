@@ -14,11 +14,8 @@ from snuba.datasets.schemas.join import (
     JoinType,
     SchemaJoinedSource,
 )
-from snuba.query.extensions import (
-    PerformanceExtension,
-    ProjectExtension,
-    QueryExtension,
-)
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 
 
@@ -77,6 +74,7 @@ class Groups(TimeSeriesDataset):
             time_group_columns={
                 'events.time': 'events.timestamp',
             },
+            time_parse_columns=['events.timestamp'],
         )
 
     def default_conditions(self):
@@ -111,8 +109,9 @@ class Groups(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': PerformanceExtension(),
-            'project': ProjectExtension(),
+            'project': ProjectExtension(
+                processor=ProjectWithGroupsProcessor()
+            ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

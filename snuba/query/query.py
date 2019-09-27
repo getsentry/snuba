@@ -34,8 +34,8 @@ class Query:
     Represents a parsed query we can edit during query processing.
 
     This is the bare minimum abstraction to avoid depending on a mutable
-    Mapping around the code base. Fully untagling the query representation
-    from the code depnding on it wil ltake a lot of PRs, but at least we
+    Mapping around the code base. Fully untangling the query representation
+    from the code depending on it wil take a lot of PRs, but at least we
     have a basic abstraction to move functionalities to.
     It is also the base to split the Clickhouse specific query into
     an abstract Snuba query and a concrete Clickhouse query, but
@@ -52,6 +52,7 @@ class Query:
         # TODO: make the parser produce this data structure directly
         # in order not to expose the internal representation.
         self.__body = body
+        self.__final = False
 
     def __extend_sequence(self,
         field: str,
@@ -109,9 +110,6 @@ class Query:
     def get_sample(self) -> Optional[float]:
         return self.__body.get("sample")
 
-    def set_sample(self, sample: float) -> None:
-        self.__body["sample"] = sample
-
     def get_limit(self) -> int:
         return self.__body.get('limit', 0)
 
@@ -123,6 +121,12 @@ class Query:
 
     def set_offset(self, offset: int) -> None:
         self.__body["offset"] = offset
+
+    def get_final(self) -> bool:
+        return self.__final
+
+    def set_final(self, final) -> None:
+        self.__final = final
 
     @deprecated(
         details="Do not access the internal query representation "
