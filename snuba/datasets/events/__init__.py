@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Any, Mapping, Sequence, Tuple
 
 from snuba import state
-from snuba.datasets.events.split import split_query
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -17,8 +16,9 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets import TimeSeriesDataset, SplitQueryFunc
-from snuba.datasets.events.events_processor import EventsProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.events.events_processor import EventsProcessor
+from snuba.datasets.events.split import split_query
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import (
