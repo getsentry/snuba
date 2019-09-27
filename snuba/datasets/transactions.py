@@ -131,6 +131,7 @@ class TransactionsDataset(TimeSeriesDataset):
                 'bucketed_start': 'start_ts',
                 'bucketed_end': 'finish_ts',
             },
+            time_parse_columns=('start_ts', 'finish_ts')
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -144,6 +145,14 @@ class TransactionsDataset(TimeSeriesDataset):
                 timestamp_column='start_ts',
             ),
         }
+
+    def column_expr(self, column_name, body):
+        # TODO remove these casts when clickhouse-driver is >= 0.0.19
+        if column_name == 'ip_address_v4':
+            return 'IPv4NumToString(ip_address_v4)'
+        if column_name == 'ip_address_v6':
+            return 'IPv6NumToString(ip_address_v6)'
+        return super().column_expr(column_name, body)
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']

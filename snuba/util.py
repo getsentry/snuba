@@ -3,7 +3,6 @@ from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
-from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
@@ -296,14 +295,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         sub = OrderedDict((conditions_expr(dataset, cond, body, depth + 1), None) for cond in conditions)
         return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
-        lhs, op, lit = conditions
-
-        if (
-            lhs in ('received', 'timestamp') and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
+        lhs, op, lit = dataset.process_condition(conditions)
 
         # facilitate deduping IN conditions by sorting them.
         if op in ('IN', 'NOT IN') and isinstance(lit, tuple):

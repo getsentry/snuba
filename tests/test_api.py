@@ -15,21 +15,12 @@ from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
-from base import BaseEventsTest
-
-
-class BaseApiTest(BaseEventsTest):
-    def setup_method(self, test_method):
-        super(BaseApiTest, self).setup_method(test_method)
-        from snuba.api import application
-        assert application.testing is True
-        application.config['PROPAGATE_EXCEPTIONS'] = False
-        self.app = application.test_client()
+from base import BaseApiTest
 
 
 class TestApi(BaseApiTest):
-    def setup_method(self, test_method):
-        super(TestApi, self).setup_method(test_method)
+    def setup_method(self, test_method, dataset_name='events'):
+        super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -103,17 +94,17 @@ class TestApi(BaseApiTest):
                             }
                         }
                     }))
+        print(events[0])
         self.write_processed_records(events)
 
     def redis_db_size(self):
         # dbsize could be an integer for a single node cluster or a dictionary
         # with one key value pair per node for a multi node cluster
         dbsize = redis_client.dbsize()
-        if type(dbsize) is dict:
+        if isinstance(dbsize, dict):
             return sum(dbsize.values())
         else:
             return dbsize
-
 
     def test_count(self):
         """
