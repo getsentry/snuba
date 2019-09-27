@@ -20,6 +20,7 @@ from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.tags_dataset import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import (
     PerformanceExtension,
@@ -121,6 +122,12 @@ class TransactionsDataset(TimeSeriesDataset):
             write_schema=schema,
         )
 
+        self.__tags_processor = TagColumnProcessor(
+            columns=columns,
+            promoted_columns=self._get_promoted_columns(),
+            column_tag_map=self._get_column_tag_map(),
+        )
+
         super().__init__(
             dataset_schemas=dataset_schemas,
             table_writer=TransactionsTableWriter(
@@ -136,6 +143,20 @@ class TransactionsDataset(TimeSeriesDataset):
             },
             time_parse_columns=('start_ts', 'finish_ts')
         )
+
+    def _get_promoted_columns(self):
+        # TODO: Support promoted tags
+        return {
+            'tags': frozenset(),
+            'contexts': frozenset(),
+        }
+
+    def _get_column_tag_map(self):
+        # TODO: Support promoted tags
+        return {
+            'tags': {},
+            'contexts': {},
+        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
@@ -154,6 +175,9 @@ class TransactionsDataset(TimeSeriesDataset):
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
+        ret = self.__tags_processor._process_tags_expression(column_name, body)
+        if ret:
+            return ret
         return super().column_expr(column_name, body)
 
     def get_prewhere_keys(self) -> Sequence[str]:
