@@ -94,7 +94,6 @@ class TestApi(BaseApiTest):
                             }
                         }
                     }))
-        print(events[0])
         self.write_processed_records(events)
 
     def redis_db_size(self):

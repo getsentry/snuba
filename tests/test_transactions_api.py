@@ -65,8 +65,9 @@ class TestTransactionsApi(BaseApiTest):
                                 'received': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
                                 'type': 'transaction',
                                 'transaction': '/api/do_things',
-                                'start_timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
-                                'timestamp': calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+
+                                'start_timestamp': datetime.timestamp(self.base_time + timedelta(minutes=tick)),
+                                'timestamp': datetime.timestamp(self.base_time + timedelta(minutes=tick)),
                                 'tags': {
                                     # Sentry
                                     'environment': self.environments[(tock * p) % len(self.environments)],
