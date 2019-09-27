@@ -1,10 +1,28 @@
-from typing import Optional, Mapping, Sequence, Tuple
+from typing import (
+    Any,
+    Optional,
+    Mapping,
+    Sequence,
+    Tuple,
+)
+from typing_extensions import Protocol
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
+from snuba.request import Request
 
 from snuba.util import escape_col, parse_datetime
+
+
+class SplitQueryFunc(Protocol):
+    def __call__(
+            self,
+            dataset: Request,
+            request: Request,
+            *args: Any,
+            **kwargs: Any
+    ) -> Tuple[Mapping[str, Any], int]: ...
 
 
 class Dataset(object):
@@ -93,7 +111,12 @@ class Dataset(object):
         """
         return []
 
-    def split_query(self, query_func, *args, **kwargs):
+    def split_query(
+            self,
+            query_func: SplitQueryFunc,
+            *args: Any,
+            **kwargs: Any
+    ) -> Tuple[Mapping[str, Any], int]:
         return query_func(self, *args, **kwargs)
 
 

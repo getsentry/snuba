@@ -6,7 +6,7 @@ from dateutil.parser import parse as dateutil_parse
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
-from typing import NamedTuple
+from typing import Any, Mapping, NamedTuple, Tuple
 import logging
 import numbers
 import re
@@ -368,7 +368,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(request: Request, sql, client, timer, stats=None):
+def raw_query(request: Request, sql, client, timer, stats=None) -> Tuple[Mapping[str, Any], int]:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON

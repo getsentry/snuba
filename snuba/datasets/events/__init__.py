@@ -1,10 +1,10 @@
 import re
 
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Any, Mapping, Sequence, Tuple
 
 from snuba import state
-from snuba.datasets.events import split
+from snuba.datasets.events.split import split_query
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -16,10 +16,10 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets import TimeSeriesDataset
+from snuba.datasets import TimeSeriesDataset, SplitQueryFunc
+from snuba.datasets.events.events_processor import EventsProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.events.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.query.extensions import (
     PerformanceExtension,
@@ -407,5 +407,10 @@ class EventsDataset(TimeSeriesDataset):
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
 
-    def split_query(self, query_func, *args, **kwargs):
-        return split.split_query(query_func)(self, *args, **kwargs)
+    def split_query(
+            self,
+            query_func: SplitQueryFunc,
+            *args: Any,
+            **kwargs: Any
+    ) -> Tuple[Mapping[str, Any], int]:
+        return split_query(query_func, self, *args, **kwargs)

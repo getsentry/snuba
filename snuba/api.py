@@ -9,6 +9,7 @@ import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
+from typing import Any, Mapping, Tuple
 from werkzeug.exceptions import BadRequest
 import jsonschema
 from uuid import UUID
@@ -18,6 +19,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.replacer import get_projects_query_flags
+from snuba.datasets import Dataset, SplitQueryFunc
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
@@ -262,15 +264,15 @@ def dataset_query(dataset, body, timer):
     )
 
 
-def dataset_split_query(query_func):
+def split_query_by_dataset(query_func: SplitQueryFunc):
     def wrapper(dataset, *args, **kwargs):
         return dataset.split_query(query_func, *args, **kwargs)
 
     return wrapper
 
 
-@dataset_split_query
-def parse_and_run_query(dataset, request: Request, timer):
+@split_query_by_dataset
+def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> Tuple[Mapping[str, Any], int]:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
