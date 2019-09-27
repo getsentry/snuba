@@ -85,6 +85,7 @@ setup(
         'singledispatch==3.4.0.3',
         'traceback2==1.4.0',
         'traitlets==4.3.2',
+        'typing-extensions==3.7.4',
         'unittest2==1.1.0',
         'urllib3==1.25.3',
         'uWSGI==2.0.17',
