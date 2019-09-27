@@ -32,6 +32,7 @@ from snuba.util import (
     all_referenced_columns,
     escape_literal,
     string_col,
+    qualified_column,
 )
 
 
@@ -263,20 +264,22 @@ class EventsDataset(TimeSeriesDataset):
             ('deleted', '=', 0),
         ]
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         if NESTED_COL_EXPR_RE.match(column_name):
-            return self._tag_expr(column_name)
+            return self._tag_expr(column_name, table_alias)
         elif column_name in ['tags_key', 'tags_value']:
-            return self._tags_expr(column_name, body)
+            return self._tags_expr(column_name, body, table_alias)
         elif column_name == 'issue' or column_name == 'group_id':
-            return 'nullIf(group_id, 0)'
+            return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
         elif column_name == 'message':
             # Because of the rename from message->search_message without backfill,
             # records will have one or the other of these fields.
             # TODO this can be removed once all data has search_message filled in.
-            return 'coalesce(search_message, message)'
+            search_message = qualified_column('search_message', table_alias)
+            message = qualified_column('message', table_alias)
+            return f"coalesce({search_message}, {message})"
         else:
-            return super().column_expr(column_name, body)
+            return super().column_expr(column_name, body, table_alias)
 
     def get_metadata_columns(self):
         return self.__metadata_columns
@@ -325,7 +328,7 @@ class EventsDataset(TimeSeriesDataset):
             for col in self._get_promoted_columns()
         }
 
-    def _tag_expr(self, column_name):
+    def _tag_expr(self, column_name, table_alias: str=""):
         """
         Return an expression for the value of a single named tag.
 
@@ -333,20 +336,19 @@ class EventsDataset(TimeSeriesDataset):
         "promoted" to a top level column, or whether we have to look in the tags map.
         """
         col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
-
         # For promoted tags, return the column name.
         if col in self._get_promoted_columns():
             actual_tag = self.get_tag_column_map()[col].get(tag, tag)
             if actual_tag in self._get_promoted_columns()[col]:
-                return string_col(self, actual_tag)
+                return qualified_column(string_col(self, actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
         return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
-            'col': col,
+            'col': qualified_column(col, table_alias),
             'tag': escape_literal(tag)
         })
 
-    def _tags_expr(self, column_name, body):
+    def _tags_expr(self, column_name, body, table_alias: str=""):
         """
         Return an expression that array-joins on tags to produce an output with one
         row per tag.
@@ -355,23 +357,26 @@ class EventsDataset(TimeSeriesDataset):
         col, k_or_v = column_name.split('_', 1)
         nested_tags_only = state.get_config('nested_tags_only', 1)
 
+        qualified_col = qualified_column(col, table_alias)
         # Generate parallel lists of keys and values to arrayJoin on
         if nested_tags_only:
-            key_list = '{}.key'.format(col)
-            val_list = '{}.value'.format(col)
+            key_list = '{}.key'.format(qualified_col)
+            val_list = '{}.value'.format(qualified_col)
         else:
             promoted = self._get_promoted_columns()[col]
             col_map = self._get_column_tag_map()[col]
             key_list = u'arrayConcat([{}], {}.key)'.format(
                 u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-                col
+                qualified_col
             )
             val_list = u'arrayConcat([{}], {}.value)'.format(
                 ', '.join(string_col(self, p) for p in promoted),
-                col
+                qualified_col
             )
 
-        cols_used = all_referenced_columns(body) & set(['tags_key', 'tags_value'])
+        qualified_key = qualified_column("tags_key", table_alias)
+        qualified_value = qualified_column("tags_value", table_alias)
+        cols_used = all_referenced_columns(body) & set([qualified_key, qualified_value])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.

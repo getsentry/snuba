@@ -7,7 +7,7 @@ from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import logging
 import numbers
 import re
@@ -31,6 +31,7 @@ TOPK_FUNCTION_RE = re.compile(r'^top([1-9]\d*)$')
 ESCAPE_COL_RE = re.compile(r"([`\\])")
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
 SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
+SAFE_ALIAS_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
 class InvalidConditionException(Exception):
@@ -45,6 +46,14 @@ def to_list(value):
     return value if isinstance(value, list) else [value]
 
 
+def qualified_column(column_name: str, alias: str="") -> str:
+    """
+    Returns a column in the form "table.column" if the table is not
+    empty. If the table is empty it returns the column itself.
+    """
+    return column_name if not alias else f"{alias}.{column_name}"
+
+
 def string_col(dataset, col):
     col_type = dataset.get_dataset_schemas().get_read_schema().get_columns().get(col, None)
     col_type = str(col_type) if col_type else None
@@ -55,19 +64,32 @@ def string_col(dataset, col):
         return 'toString({})'.format(escape_col(col))
 
 
-def escape_col(col):
-    if not col:
-        return col
-    elif SAFE_COL_RE.match(col):
-        # Column is safe to use without wrapping.
-        return col
+def escape_expression(expr: Optional[str], regex) -> Optional[str]:
+    if not expr:
+        return expr
+    elif regex.match(expr):
+        # Column/Alias is safe to use without wrapping.
+        return expr
     else:
-        # Column needs special characters escaped, and to be wrapped with
+        # Column/Alias needs special characters escaped, and to be wrapped with
         # backticks. If the column starts with a '-', keep that outside the
         # backticks as it is not part of the column name, but used by the query
         # generator to signify the sort order if we are sorting by this column.
-        col = ESCAPE_COL_RE.sub(r"\\\1", col)
+        col = ESCAPE_COL_RE.sub(r"\\\1", expr)
         return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
+
+
+def escape_alias(alias):
+    """
+    Alias escaping is different than column names when we introduce table aliases.
+    Using the column escaping function would consider "." safe, which is not for
+    an alias.
+    """
+    return escape_expression(alias, SAFE_ALIAS_RE)
+
+
+def escape_col(col):
+    return escape_expression(col, SAFE_COL_RE)
 
 
 def parse_datetime(value, alignment=1):
@@ -165,8 +187,11 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     if aggregate:
         expr = function_expr(aggregate, expr)
 
-    alias = escape_col(alias or column_name)
-
+    use_escape_alias = state.get_config("use_escape_alias", 0)
+    # This is a precaution during the rollout.
+    alias = escape_alias(alias or column_name) \
+        if use_escape_alias \
+        else escape_col(alias or column_name)
     return alias_expr(expr, alias, body)
 
 

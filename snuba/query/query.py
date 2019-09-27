@@ -29,11 +29,6 @@ Groupby = Sequence[Any]
 TElement = TypeVar("TElement")
 
 
-class QualifiedColumn(NamedTuple):
-    alias: Optional[str]
-    column: str
-
-
 class Query:
     """
     Represents a parsed query we can edit during query processing.

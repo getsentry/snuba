@@ -5,11 +5,13 @@ import time
 from base import BaseTest
 
 from snuba.datasets.factory import get_dataset
+from snuba import state
 from snuba.util import (
     all_referenced_columns,
     column_expr,
     complex_column_expr,
     conditions_expr,
+    escape_alias,
     escape_col,
     escape_literal,
     tuplify,
@@ -41,8 +43,16 @@ class TestUtil(BaseTest):
         assert escape_col("`") == r"`\``"
         assert escape_col("production`; --") == r"`production\`; --`"
 
+    def test_escape_alias(self):
+        assert escape_alias(None) is None
+        assert escape_alias('') == ''
+        assert escape_alias('foo') == 'foo'
+        assert escape_alias('foo.bar') == '`foo.bar`'
+        assert escape_alias('foo:bar') == '`foo:bar`'
+
     @pytest.mark.parametrize('dataset', DATASETS)
     def test_conditions_expr(self, dataset):
+        state.set_config('use_escape_alias', 1)
         conditions = [['a', '=', 1]]
         assert conditions_expr(dataset, conditions, {}) == 'a = 1'
 
@@ -81,7 +91,7 @@ class TestUtil(BaseTest):
         assert conditions_expr(dataset, conditions, {}) == 'primary_hash LIKE \'%foo%\''
 
         conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
-        assert conditions_expr(dataset, conditions, {}) == 'notEmpty(arrayElement(exception_stacks.type, 1)) = 1'
+        assert conditions_expr(dataset, conditions, {}) == 'notEmpty(arrayElement((exception_stacks.type AS `exception_stacks.type`), 1)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
         assert conditions_expr(dataset, conditions, {}) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
@@ -102,11 +112,11 @@ class TestUtil(BaseTest):
 
         # Test scalar condition on array column is expanded as an iterator.
         conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
-        assert conditions_expr(dataset, conditions, {}) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), exception_frames.filename)'
+        assert conditions_expr(dataset, conditions, {}) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
 
         # Test negative scalar condition on array column is expanded as an all() type iterator.
         conditions = [['exception_frames.filename', 'NOT LIKE', '%foo%']]
-        assert conditions_expr(dataset, conditions, {}) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), exception_frames.filename)'
+        assert conditions_expr(dataset, conditions, {}) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
 
         # Test that a duplicate IN condition is deduplicated even if
         # the lists are in different orders.[

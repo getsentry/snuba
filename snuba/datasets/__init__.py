@@ -4,7 +4,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 
-from snuba.util import escape_col
+from snuba.util import escape_col, qualified_column
 
 
 class Dataset(object):
@@ -59,12 +59,12 @@ class Dataset(object):
         """
         return []
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
         """
-        return escape_col(column_name)
+        return escape_col(qualified_column(column_name, table_alias))
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
@@ -104,8 +104,9 @@ class TimeSeriesDataset(Dataset):
                     f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
 
-    def __time_expr(self, column_name: str, granularity: int) -> str:
+    def __time_expr(self, column_name: str, granularity: int, table_alias: str="") -> str:
         real_column = self.__time_group_columns[column_name]
+        real_column = qualified_column(real_column, table_alias)
         template = {
             3600: 'toStartOfHour({column})',
             60: 'toStartOfMinute({column})',
@@ -113,8 +114,8 @@ class TimeSeriesDataset(Dataset):
         }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
         return template.format(column=real_column, granularity=granularity)
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         if column_name in self.__time_group_columns:
-            return self.__time_expr(column_name, body['granularity'])
+            return self.__time_expr(column_name, body['granularity'], table_alias)
         else:
-            return super().column_expr(column_name, body)
+            return super().column_expr(column_name, body, table_alias)
