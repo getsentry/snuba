@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 import uuid
 
 from snuba.clickhouse.columns import (
@@ -12,8 +13,9 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.processor import _ensure_valid_date, MessageProcessor, _unicodify
+from snuba.processor import _ensure_valid_date, MessageProcessor, ProcessorAction, ProcessedMessage, _unicodify
 from snuba.datasets.schemas.tables import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba import settings
 
 
@@ -24,7 +26,7 @@ READ_DIST_TABLE_NAME = 'outcomes_hourly_dist'
 
 
 class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata):
+    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
         v_uuid = value.get('event_id')
         message = {
@@ -39,7 +41,10 @@ class OutcomesProcessor(MessageProcessor):
             'event_id': str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
         }
 
-        return (self.INSERT, message)
+        return ProcessedMessage(
+            action=ProcessorAction.INSERT,
+            data=[message],
+        )
 
 
 class OutcomesDataset(Dataset):
@@ -133,8 +138,15 @@ class OutcomesDataset(Dataset):
             intermediary_schemas=[materialized_view]
         )
 
-        super(OutcomesDataset, self).__init__(
+        table_writer = TableWriter(
+            write_schema=write_schema,
+            stream_loader=KafkaStreamLoader(
+                processor=OutcomesProcessor(),
+                default_topic="outcomes",
+            ),
+        )
+
+        super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=OutcomesProcessor(),
-            default_topic="outcomes",
+            table_writer=table_writer,
         )

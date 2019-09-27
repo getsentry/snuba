@@ -12,24 +12,15 @@ import time
 import uuid
 
 from snuba import settings, state
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
-from base import BaseEventsTest
-
-
-class BaseApiTest(BaseEventsTest):
-    def setup_method(self, test_method):
-        super(BaseApiTest, self).setup_method(test_method)
-        from snuba.api import application
-        assert application.testing is True
-        application.config['PROPAGATE_EXCEPTIONS'] = False
-        self.app = application.test_client()
+from base import BaseApiTest
 
 
 class TestApi(BaseApiTest):
-    def setup_method(self, test_method):
-        super(TestApi, self).setup_method(test_method)
+    def setup_method(self, test_method, dataset_name='events'):
+        super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -64,7 +55,7 @@ class TestApi(BaseApiTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(self.dataset.get_processor().process_insert({
+                    events.append(enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
@@ -109,11 +100,10 @@ class TestApi(BaseApiTest):
         # dbsize could be an integer for a single node cluster or a dictionary
         # with one key value pair per node for a multi node cluster
         dbsize = redis_client.dbsize()
-        if type(dbsize) is dict:
+        if isinstance(dbsize, dict):
             return sum(dbsize.values())
         else:
             return dbsize
-
 
     def test_count(self):
         """
@@ -873,7 +863,7 @@ class TestApi(BaseApiTest):
 
         assert self.app.post('/tests/events/drop').status_code == 200
         dataset = get_dataset('events')
-        table = dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name()
+        table = dataset.get_table_writer().get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 

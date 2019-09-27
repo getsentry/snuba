@@ -1,7 +1,7 @@
 import logging
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
@@ -14,12 +14,12 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.replacer import get_projects_query_flags
 from snuba.split import split_query
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
+from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
@@ -268,35 +268,17 @@ def parse_and_run_query(dataset, request: Request, timer):
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
+
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
+            request.settings
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    # NOTE: we rely entirely on the schema to make sure that regular snuba
-    # queries are required to send a project_id filter. Some other special
-    # internal query types do not require a project_id filter.
-    project_ids = util.to_list(request.extensions['project']['project'])
-    if project_ids:
-        request.query.add_conditions([('project_id', 'IN', project_ids)])
-
-    turbo = request.extensions['performance'].get('turbo', False)
-    if not turbo:
-        final, exclude_group_ids = get_projects_query_flags(project_ids)
-        if not final and exclude_group_ids:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
-            if len(exclude_group_ids) > max_group_ids_exclude:
-                final = True
-            else:
-                request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
-    else:
-        final = False
-        if request.query.get_sample() is None:
-            request.query.set_sample(settings.TURBO_SAMPLE_RATE)
+    if request.settings.turbo:
+        request.query.set_final(False)
 
     prewhere_conditions = []
     # Add any condition to PREWHERE if:
@@ -322,15 +304,14 @@ def parse_and_run_query(dataset, request: Request, timer):
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
+    sql = ClickhouseQuery(dataset, request, prewhere_conditions).format()
     timer.mark('prepare_query')
 
     stats = {
         'clickhouse_table': source,
-        'final': final,
+        'final': request.query.get_final(),
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
-        'num_projects': len(project_ids),
         'sample': request.query.get_sample(),
     }
 
@@ -347,6 +328,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
+            SETTINGS_SCHEMA,
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
@@ -415,18 +397,22 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
-        from snuba.processor import MessageProcessor
+        from snuba.processor import ProcessorAction
 
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_processor().process_message(message)
-            assert action is MessageProcessor.INSERT
-            rows.append(row)
+            processed_message = enforce_table_writer(dataset) \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(message)
+            if processed_message:
+                assert processed_message.action is ProcessorAction.INSERT
+                rows.extend(processed_message.data)
 
-        dataset.get_writer().write(rows)
+        enforce_table_writer(dataset).get_writer().write(rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 

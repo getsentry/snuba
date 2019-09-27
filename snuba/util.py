@@ -3,7 +3,6 @@ from collections import namedtuple, OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
-from dateutil.tz import tz
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
@@ -17,7 +16,6 @@ import time
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
-
 
 logger = logging.getLogger('snuba.util')
 
@@ -43,16 +41,6 @@ def local_dataset_mode():
 
 def to_list(value):
     return value if isinstance(value, list) else [value]
-
-
-def string_col(dataset, col):
-    col_type = dataset.get_dataset_schemas().get_read_schema().get_columns().get(col, None)
-    col_type = str(col_type) if col_type else None
-
-    if col_type and 'String' in col_type and 'FixedString' not in col_type:
-        return escape_col(col)
-    else:
-        return 'toString({})'.format(escape_col(col))
 
 
 def escape_col(col):
@@ -297,14 +285,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
         sub = OrderedDict((conditions_expr(dataset, cond, body, depth + 1), None) for cond in conditions)
         return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
-        lhs, op, lit = conditions
-
-        if (
-            lhs in ('received', 'timestamp') and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
-        ):
-            lit = parse_datetime(lit)
+        lhs, op, lit = dataset.process_condition(conditions)
 
         # facilitate deduping IN conditions by sorting them.
         if op in ('IN', 'NOT IN') and isinstance(lit, tuple):
@@ -453,7 +434,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                         # Force query to use the first shard replica, which
                         # should have synchronously received any cluster writes
                         # before this query is run.
-                        consistent = request.extensions['performance'].get('consistent', False)
+                        consistent = request.settings.consistent
                         stats['consistent'] = consistent
                         if consistent:
                             query_settings['load_balancing'] = 'in_order'
@@ -538,7 +519,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.extensions['performance'].get('debug', False):
+    if settings.STATS_IN_RESPONSE or request.settings.debug:
         result['stats'] = stats
         result['sql'] = sql
 

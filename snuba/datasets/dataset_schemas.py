@@ -25,14 +25,6 @@ class DatasetSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_write_schema(self) -> Union[WritableTableSchema, None]:
-        return self.__write_schema
-
-    def get_write_schema_enforce(self) -> WritableTableSchema:
-        schema = self.__write_schema
-        assert schema is not None, "Dataset does not have a write schema."
-        return schema
-
     def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
 

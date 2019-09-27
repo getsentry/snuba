@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Generic, Mapping, TypeVar
 
 from snuba.query.query import Query
+from snuba.request.request_settings import RequestSettings
 
 ExtensionData = Mapping[str, Any]
 
@@ -21,6 +22,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
     def process_query(self,
         query: Query,
         context_data: TQueryProcessContext,
+        request_settings: RequestSettings,
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
@@ -40,11 +42,20 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
+    def process_query(
+            self, query: Query,
+            extension_data: ExtensionData,
+            request_settings: RequestSettings,
+    ) -> None:
         raise NotImplementedError
 
 
 class DummyExtensionProcessor(ExtensionQueryProcessor):
 
-    def process_query(self, query: Query, extension_data: ExtensionData) -> None:
-        return query
+    def process_query(
+            self,
+            query: Query,
+            extension_data: ExtensionData,
+            request_settings: RequestSettings,
+    ) -> None:
+        pass

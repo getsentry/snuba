@@ -17,15 +17,43 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets import TimeSeriesDataset
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
-from snuba.query.extensions import (
-    PerformanceExtension,
-    ProjectExtension,
-    QueryExtension,
-)
+from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+
+
+class TransactionsTableWriter(TableWriter):
+    def __update_options(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+    ) -> MutableMapping[str, Any]:
+        if options is None:
+            options = {}
+        if "insert_allow_materialized_columns" not in options:
+            options["insert_allow_materialized_columns"] = 1
+        return options
+
+    def get_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_writer(
+            self.__update_options(options),
+            table_name,
+        )
+
+    def get_bulk_writer(self,
+        options: Optional[MutableMapping[str, Any]]=None,
+        table_name: Optional[str]=None,
+    ) -> BatchWriter:
+        return super().get_bulk_writer(
+            self.__update_options(options),
+            table_name,
+        )
 
 
 class TransactionsDataset(TimeSeriesDataset):
@@ -91,53 +119,65 @@ class TransactionsDataset(TimeSeriesDataset):
             write_schema=schema,
         )
 
+        self.__tags_processor = TagColumnProcessor(
+            columns=columns,
+            promoted_columns=self._get_promoted_columns(),
+            column_tag_map=self._get_column_tag_map(),
+        )
+
         super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=TransactionsMessageProcessor(),
-            default_topic="events",
+            table_writer=TransactionsTableWriter(
+                write_schema=schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=TransactionsMessageProcessor(),
+                    default_topic="events",
+                ),
+            ),
             time_group_columns={
                 'bucketed_start': 'start_ts',
                 'bucketed_end': 'finish_ts',
             },
+            time_parse_columns=('start_ts', 'finish_ts')
         )
 
-    def __update_options(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-    ) -> MutableMapping[str, Any]:
-        if options is None:
-            options = {}
-        if "insert_allow_materialized_columns" not in options:
-            options["insert_allow_materialized_columns"] = 1
-        return options
+    def _get_promoted_columns(self):
+        # TODO: Support promoted tags
+        return {
+            'tags': frozenset(),
+            'contexts': frozenset(),
+        }
 
-    def get_writer(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-        table_name: Optional[str]=None,
-    ) -> BatchWriter:
-        return super().get_writer(
-            self.__update_options(options),
-            table_name,
-        )
-
-    def get_bulk_writer(self,
-        options: Optional[MutableMapping[str, Any]]=None,
-        table_name: Optional[str]=None,
-    ) -> BatchWriter:
-        return super().get_bulk_writer(
-            self.__update_options(options),
-            table_name,
-        )
+    def _get_column_tag_map(self):
+        # TODO: Support promoted tags
+        return {
+            'tags': {},
+            'contexts': {},
+        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'performance': PerformanceExtension(),
-            'project': ProjectExtension(),
+            'project': ProjectExtension(
+                processor=ProjectExtensionProcessor()
+            ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
                 timestamp_column='start_ts',
             ),
         }
+
+    def column_expr(self, column_name, body):
+        # TODO remove these casts when clickhouse-driver is >= 0.0.19
+        if column_name == 'ip_address_v4':
+            return 'IPv4NumToString(ip_address_v4)'
+        if column_name == 'ip_address_v6':
+            return 'IPv6NumToString(ip_address_v6)'
+        processed_column = self.__tags_processor.process_column_expression(column_name, body)
+        if processed_column:
+            # If processed_column is None, this was not a tag/context expression
+            return processed_column
+        return super().column_expr(column_name, body)
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']

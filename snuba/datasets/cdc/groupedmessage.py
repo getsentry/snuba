@@ -3,10 +3,31 @@ from typing import Sequence
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.snapshots.bulk_load import SingleTableBulkLoader
+
+
+class GroupedMessageTableWriter(TableWriter):
+    def __init__(self,
+                postgres_table: str,
+                **kwargs,
+            ):
+        super().__init__(
+            **kwargs
+        )
+        self.__postgres_table = postgres_table
+
+    def get_bulk_loader(self, source, dest_table):
+        return SingleTableBulkLoader(
+            source=source,
+            source_table=self.__postgres_table,
+            dest_table=dest_table,
+            row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
+        )
 
 
 class GroupedMessageDataset(CdcDataset):
@@ -52,21 +73,17 @@ class GroupedMessageDataset(CdcDataset):
             write_schema=schema,
         )
 
-        super(GroupedMessageDataset, self).__init__(
+        super().__init__(
             dataset_schemas=dataset_schemas,
-            processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
-            default_topic="cdc",
-            default_replacement_topic=None,
-            default_commit_log_topic=None,
+            table_writer=GroupedMessageTableWriter(
+                write_schema=schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
+                    default_topic="cdc",
+                ),
+                postgres_table=self.POSTGRES_TABLE,
+            ),
             default_control_topic="cdc_control",
-        )
-
-    def get_bulk_loader(self, source, dest_table):
-        return SingleTableBulkLoader(
-            source=source,
-            source_table=self.POSTGRES_TABLE,
-            dest_table=dest_table,
-            row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:

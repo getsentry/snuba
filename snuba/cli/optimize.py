@@ -3,7 +3,7 @@ import logging
 import click
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
 
 
 @click.command()
@@ -26,7 +26,7 @@ def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_l
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     dataset = get_dataset(dataset)
-    table = dataset.get_dataset_schemas().get_write_schema_enforce().get_local_table_name()
+    table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     clickhouse = ClickhousePool(clickhouse_host, clickhouse_port, send_receive_timeout=timeout)

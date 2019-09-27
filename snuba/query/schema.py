@@ -177,3 +177,26 @@ GENERIC_QUERY_SCHEMA = {
         },
     }
 }
+
+SETTINGS_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        # Never add FINAL to queries, enable sampling
+        'turbo': {
+            'type': 'boolean',
+            'default': False,
+        },
+        # Force queries to hit the first shard replica, ensuring the query
+        # sees data that was written before the query. This burdens the
+        # first replica, so should only be used when absolutely necessary.
+        'consistent': {
+            'type': 'boolean',
+            'default': False,
+        },
+        'debug': {
+            'type': 'boolean',
+            'default': False,
+        },
+    },
+    'additionalProperties': False,
+}

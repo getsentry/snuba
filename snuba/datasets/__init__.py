@@ -1,85 +1,56 @@
-import json
-import rapidjson
+from typing import Optional, Mapping, Sequence, Tuple
 
-from datetime import datetime
-from typing import Any, Optional, Mapping, Sequence
-
-from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.processor import MessageProcessor
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
-from snuba.util import escape_col
-from snuba.writer import BatchWriter
+
+from snuba.util import escape_col, parse_datetime
 
 
 class Dataset(object):
     """
-    A Dataset defines the complete set of data sources, schemas, and
-    transformations that are required to:
-        - Consume, transform, and insert data payloads from Kafka into Clickhouse.
-        - Define how Snuba API queries are transformed into SQL.
-
-    This is the the initial boilerplate. schema and processor will come.
+    A dataset represent one or multiple entities in the Snuba data model.
+    The class is a facade to access the components used to write on the
+    data model and to query the entities.
+    To query the data model, it provides a schema (for one table or for
+    multiple joined tables), query processing features and query exension
+    parsing features.
+    To write it CAN provide a TableWriter, which has a schema as well and
+    provides a way to stream input from different sources and write them to
+    Clickhouse.
     """
 
     def __init__(self,
             dataset_schemas: DatasetSchemas,
             *,
-            processor: MessageProcessor,
-            default_topic: str,
-            default_replacement_topic: Optional[str] = None,
-            default_commit_log_topic: Optional[str] = None):
+            table_writer: Optional[TableWriter] = None):
         self.__dataset_schemas = dataset_schemas
-        self.__processor = processor
-        self.__default_topic = default_topic
-        self.__default_replacement_topic = default_replacement_topic
-        self.__default_commit_log_topic = default_commit_log_topic
+        self.__table_writer = table_writer
 
     def get_dataset_schemas(self) -> DatasetSchemas:
+        """
+        Returns the collections of schemas for DDL operations and for
+        query.
+        See TableWriter to get a write schema.
+        """
         return self.__dataset_schemas
 
-    def get_processor(self) -> MessageProcessor:
-        return self.__processor
-
-    def get_writer(self, options=None, table_name=None) -> BatchWriter:
-        from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
-
-        def default(value):
-            if isinstance(value, datetime):
-                return value.strftime(DATETIME_FORMAT)
-            else:
-                raise TypeError
-
-        return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema_enforce(),
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: json.dumps(row, default=default).encode("utf-8"),
-            options,
-            table_name,
-        )
-
-    def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:
+    def can_write(self) -> bool:
         """
-        This is a stripped down verison of the writer designed
-        for better performance when loading data in bulk.
+        Returns True if this dataset has write capabilities
         """
-        # TODO: Consider using rapidjson to encode everywhere
-        # once we will be confident it is reliable enough.
+        return self.__table_writer is not None
 
-        from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
+    def get_table_writer(self) -> Optional[TableWriter]:
+        """
+        Returns the TableWriter or throws if the dataaset is a readonly one.
 
-        return HTTPBatchWriter(
-            self.get_dataset_schemas().get_write_schema_enforce(),
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: rapidjson.dumps(row).encode("utf-8"),
-            options,
-            table_name,
-            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
-        )
+        Once we will have a full TableStorage implementation this method will
+        disappear since we will have a table storage factory that will return
+        only writable ones, scripts will depend on table storage instead of
+        going through datasets.
+        """
+        return self.__table_writer
 
     def default_conditions(self):
         """
@@ -88,21 +59,6 @@ class Dataset(object):
         """
         return []
 
-    def get_default_topic(self) -> str:
-        return self.__default_topic
-
-    def get_default_replacement_topic(self) -> Optional[str]:
-        return self.__default_replacement_topic
-
-    def get_default_commit_log_topic(self) -> Optional[str]:
-        return self.__default_commit_log_topic
-
-    def get_default_replication_factor(self):
-        return 1
-
-    def get_default_partitions(self):
-        return 1
-
     def column_expr(self, column_name, body):
         """
         Return an expression for the column name. Handle special column aliases
@@ -110,12 +66,13 @@ class Dataset(object):
         """
         return escape_col(column_name)
 
-    def get_bulk_loader(self, source, dest_table):
+    def process_condition(self, condition) -> Tuple[str, str, any]:
         """
-        Returns the instance of the bulk loader to populate the dataset from an
-        external source when present.
+        Return a processed condition tuple.
+        This enables a dataset to do any parsing/transformations
+        a condition before it is added to the query.
         """
-        raise NotImplementedError
+        return condition
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
@@ -141,6 +98,7 @@ class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
             dataset_schemas: DatasetSchemas,
             time_group_columns: Mapping[str, str],
+            time_parse_columns: Sequence[str],
             **kwargs):
         super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
@@ -154,6 +112,7 @@ class TimeSeriesDataset(Dataset):
                     bucketed_column not in read_schema.get_columns(), \
                     f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
+        self.__time_parse_columns = time_parse_columns
 
     def __time_expr(self, column_name: str, granularity: int) -> str:
         real_column = self.__time_group_columns[column_name]
@@ -169,3 +128,13 @@ class TimeSeriesDataset(Dataset):
             return self.__time_expr(column_name, body['granularity'])
         else:
             return super().column_expr(column_name, body)
+
+    def process_condition(self, condition) -> Tuple[str, str, any]:
+        lhs, op, lit = condition
+        if (
+            lhs in self.__time_parse_columns and
+            op in ('>', '<', '>=', '<=', '=', '!=') and
+            isinstance(lit, str)
+        ):
+            lit = parse_datetime(lit)
+        return lhs, op, lit
