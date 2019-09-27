@@ -258,7 +258,7 @@ class EventsDataset(TimeSeriesDataset):
         ]
 
     def column_expr(self, column_name, body):
-        ret = self.__tags_processor._process_tags_expression(column_name, body)
+        ret = self.__tags_processor.process_tags_expression(column_name, body)
         if ret:
             return ret
         elif column_name == 'issue' or column_name == 'group_id':

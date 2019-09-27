@@ -175,7 +175,7 @@ class TransactionsDataset(TimeSeriesDataset):
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
-        ret = self.__tags_processor._process_tags_expression(column_name, body)
+        ret = self.__tags_processor.process_tags_expression(column_name, body)
         if ret:
             return ret
         return super().column_expr(column_name, body)
