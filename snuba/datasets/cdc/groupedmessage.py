@@ -3,12 +3,11 @@ from typing import Sequence
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.cdc.cdcprocessors import CdcProcessor
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.snapshots.bulk_load import SingleTableBulkLoader
+from snuba.snapshots.single_table_loader import SingleTableBulkLoader
 
 
 class GroupedMessageTableWriter(TableWriter):

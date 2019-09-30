@@ -82,7 +82,9 @@ def split_query(query_func):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
-            result, status = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            query_result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            result = query_result.result
+            status = result.status
 
             # If something failed, discard all progress and just return that
             if status != 200:
@@ -133,7 +135,9 @@ def split_query(query_func):
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(MIN_COLS)
-        result, status = query_func(dataset, minimal_request, *args, **kwargs)
+        query_result = query_func(dataset, minimal_request, *args, **kwargs)
+        result = query_result.result
+        status = query_result.status
         del minimal_request
 
         # If something failed, just return

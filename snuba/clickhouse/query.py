@@ -20,6 +20,7 @@ class ClickhouseQuery:
     def format(self) -> str:
         """Generate a SQL string from the parameters."""
         body = self.__request.body
+        body['alias_cache'] = []
         query = self.__request.query
         source = self.__dataset \
             .get_dataset_schemas() \
