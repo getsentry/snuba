@@ -3,6 +3,7 @@ from typing import Optional, Mapping, Sequence, Tuple
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
+from snuba.query.parsing import ParsingContext
 
 from snuba.util import escape_col, parse_datetime
 
@@ -59,7 +60,7 @@ class Dataset(object):
         """
         return []
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, context: ParsingContext):
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
@@ -123,11 +124,11 @@ class TimeSeriesDataset(Dataset):
         }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
         return template.format(column=real_column, granularity=granularity)
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, context: ParsingContext):
         if column_name in self.__time_group_columns:
             return self.__time_expr(column_name, body['granularity'])
         else:
-            return super().column_expr(column_name, body)
+            return super().column_expr(column_name, body, context)
 
     def process_condition(self, condition) -> Tuple[str, str, any]:
         lhs, op, lit = condition
