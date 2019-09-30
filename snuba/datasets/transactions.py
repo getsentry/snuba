@@ -167,13 +167,13 @@ class TransactionsDataset(TimeSeriesDataset):
             ),
         }
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         # TODO remove these casts when clickhouse-driver is >= 0.0.19
         if column_name == 'ip_address_v4':
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
-        processed_column = self.__tags_processor.process_column_expression(column_name, body)
+        processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column

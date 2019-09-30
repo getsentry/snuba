@@ -8,6 +8,7 @@ from snuba.util import (
     all_referenced_columns,
     escape_literal,
     escape_col,
+    qualified_column,
 )
 
 # A column name like "tags[url]"
@@ -40,6 +41,7 @@ class TagColumnProcessor:
     def process_column_expression(self,
         column_name: str,
         body: MutableMapping[str, Any],
+        table_alias: str="",
     ) -> Union[None, Any]:
         """
         This method resolves the tag or context, processes it and formats
@@ -49,9 +51,9 @@ class TagColumnProcessor:
         It returns None if the column is not a tag or context.
         """
         if NESTED_COL_EXPR_RE.match(column_name):
-            return self.__tag_expr(column_name)
+            return self.__tag_expr(column_name, table_alias)
         elif column_name in ['tags_key', 'tags_value']:
-            return self.__tags_expr(column_name, body)
+            return self.__tags_expr(column_name, body, table_alias)
         return None
 
     def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
@@ -69,7 +71,10 @@ class TagColumnProcessor:
         else:
             return 'toString({})'.format(escape_col(col))
 
-    def __tag_expr(self, column_name: str) -> str:
+    def __tag_expr(self,
+        column_name: str,
+        table_alias: str="",
+    ) -> str:
         """
         Return an expression for the value of a single named tag.
 
@@ -77,22 +82,22 @@ class TagColumnProcessor:
         "promoted" to a top level column, or whether we have to look in the tags map.
         """
         col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
-
         # For promoted tags, return the column name.
         if col in self.__promoted_columns:
             actual_tag = self.__get_tag_column_map()[col].get(tag, tag)
             if actual_tag in self.__promoted_columns[col]:
-                return self.__string_col(actual_tag)
+                return qualified_column(self.__string_col(actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
         return u'{col}.value[indexOf({col}.key, {tag})]'.format(**{
-            'col': col,
+            'col': qualified_column(col, table_alias),
             'tag': escape_literal(tag)
         })
 
     def __tags_expr(self,
         column_name: str,
         body: MutableMapping[str, Any],
+        table_alias: str="",
     ) -> str:
         """
         Return an expression that array-joins on tags to produce an output with one
@@ -102,23 +107,26 @@ class TagColumnProcessor:
         col, k_or_v = column_name.split('_', 1)
         nested_tags_only = state.get_config('nested_tags_only', 1)
 
+        qualified_col = qualified_column(col, table_alias)
         # Generate parallel lists of keys and values to arrayJoin on
         if nested_tags_only:
-            key_list = '{}.key'.format(col)
-            val_list = '{}.value'.format(col)
+            key_list = '{}.key'.format(qualified_col)
+            val_list = '{}.value'.format(qualified_col)
         else:
             promoted = self.__promoted_columns[col]
             col_map = self.__column_tag_map[col]
             key_list = u'arrayConcat([{}], {}.key)'.format(
                 u', '.join(u'\'{}\''.format(col_map.get(p, p)) for p in promoted),
-                col
+                qualified_col
             )
             val_list = u'arrayConcat([{}], {}.value)'.format(
                 ', '.join(self.__string_col(p) for p in promoted),
-                col
+                qualified_col
             )
 
-        cols_used = all_referenced_columns(body) & set(['tags_key', 'tags_value'])
+        qualified_key = qualified_column("tags_key", table_alias)
+        qualified_value = qualified_column("tags_value", table_alias)
+        cols_used = all_referenced_columns(body) & set([qualified_key, qualified_value])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.
