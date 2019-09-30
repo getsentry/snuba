@@ -93,6 +93,12 @@ class Dataset(object):
         """
         return []
 
+    def get_min_columns(self) -> Sequence[str]:
+        return NotImplementedError('dataset does not support get_min_columns')
+
+    def get_timestamp_column(self) -> str:
+        return NotImplementedError('dataset does not support get_timestamp_column')
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
@@ -133,9 +139,9 @@ class TimeSeriesDataset(Dataset):
     def process_condition(self, condition) -> Tuple[str, str, any]:
         lhs, op, lit = condition
         if (
-            lhs in self.__time_parse_columns and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
+            lhs in self.__time_parse_columns
+            and op in ('>', '<', '>=', '<=', '=', '!=')
+            and isinstance(lit, str)
         ):
             lit = parse_datetime(lit)
         return lhs, op, lit

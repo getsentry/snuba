@@ -141,3 +141,22 @@ class TestTransactionsApi(BaseApiTest):
         assert response.status_code == 200
         assert len(data['data']) > 1, data
         assert 'transaction_name' in data['data'][0]
+
+    def test_split_query(self):
+        skew = timedelta(minutes=180)
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'transactions',
+            'project': 1,
+            'selected_columns': [
+                'event_id',
+                'project_id',
+                'transaction_name',
+                'transaction_hash',
+                'tags_key'
+            ],
+            'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
+            'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
+        }))
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data['data']) > 1, data

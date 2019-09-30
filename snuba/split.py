@@ -29,7 +29,10 @@ def split_query(query_func):
             # TODO: Move all_referenced_columns into query and remove this dependency.
             # In order to do this we need to break a circular dependency first
             total_col_count = len(util.all_referenced_columns(request.query.get_body()))
-            min_col_count = len(util.all_referenced_columns({**request.query.get_body(), 'selected_columns': MIN_COLS}))
+            min_col_count = len(util.all_referenced_columns({
+                **request.query.get_body(),
+                'selected_columns': dataset.get_min_columns()
+            }))
 
             if (
                 request.query.get_selected_columns()
@@ -132,7 +135,7 @@ def split_query(query_func):
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(MIN_COLS)
+        minimal_request.query.set_selected_columns(dataset.get_min_columns())
         result, status = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
@@ -151,7 +154,8 @@ def split_query(query_func):
             project_ids = list(set([event['project_id'] for event in result['data']]))
             request.extensions['project']['project'] = project_ids
 
-            timestamps = [event['timestamp'] for event in result['data']]
+            timestamp_field = dataset.get_timestamp_column()
+            timestamps = [event[timestamp_field] for event in result['data']]
             request.extensions['timeseries']['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.

@@ -256,6 +256,12 @@ class EventsDataset(TimeSeriesDataset):
             (qualified_column('deleted', table_alias), '=', 0),
         ]
 
+    def get_min_columns(self) -> Sequence[str]:
+        return ('event_id', 'project_id', 'timestamp')
+
+    def get_timestamp_column(self) -> str:
+        return 'timestamp'
+
     def column_expr(self, column_name, body, table_alias: str=""):
         processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
         if processed_column:

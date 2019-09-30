@@ -179,5 +179,11 @@ class TransactionsDataset(TimeSeriesDataset):
             return processed_column
         return super().column_expr(column_name, body)
 
+    def get_min_columns(self) -> Sequence[str]:
+        return ('event_id', 'project_id', 'start_ts')
+
+    def get_timestamp_column(self) -> str:
+        return 'start_ts'
+
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']
