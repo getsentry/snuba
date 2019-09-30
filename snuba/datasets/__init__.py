@@ -94,9 +94,18 @@ class Dataset(object):
         return []
 
     def get_min_columns(self) -> Sequence[str]:
+        """
+        Return a list of the smallest subset of columns for a dataset.
+
+        This subset must include an event_id and timestamp type column, and
+        is used by the query splitter to help optimize loading wide results.
+        """
         return NotImplementedError('dataset does not support get_min_columns')
 
     def get_timestamp_column(self) -> str:
+        """
+        Return the name of the datetime column from get_min_columns.
+        """
         return NotImplementedError('dataset does not support get_timestamp_column')
 
 
