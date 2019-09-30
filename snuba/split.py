@@ -10,7 +10,6 @@ from snuba.request import Request
 # worst case (there are 0 results in the database) would have us making 4
 # queries before hitting the 90d limit (2+20+200+2000 hours == 92 days).
 STEP_GROWTH = 10
-MIN_COLS = ['project_id', 'event_id', 'timestamp']
 
 
 def split_query(query_func):
