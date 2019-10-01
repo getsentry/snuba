@@ -45,16 +45,52 @@ class Consumer(Generic[TMessage], ABC):
         on_assign: Optional[Callable[[Sequence[TopicPartitionKey]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartitionKey]], None]] = None,
     ) -> None:
+        """
+        Subscribe to topics. This replaces a previous subscription. This
+        method does not block.
+
+        The ``on_assign`` and ``on_revoke`` callbacks are called when the
+        subscription state changes with the updated assignment for this
+        consumer.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def poll(self, timeout: Optional[float] = None) -> Optional[TMessage]:
+        """
+        Return the next message available to be consumed, if available. If no
+        message is available, this method will block up to the ``timeout``
+        value: ``0.0`` represents "do not block", while ``None`` represents
+        "block until a message is available (or forever)".
+
+        Calling this method may also invoke subscription state change
+        callbacks.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def commit(self) -> Mapping[TopicPartitionKey, Offset]:
+        """
+        Synchronously commit staged offsets for all partitions in this
+        consumer's assignment set. Returns a mapping of TopicPartitionKey
+        with the committed offsets (the next offset that would be yielded
+        after restart for a partition) as values.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def close(self) -> None:
+        """
+        Close the consumer. This stops consuming messages, *may* commit
+        staged offsets (depending on the implementation), and leaves the
+        consumer group.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
         raise NotImplementedError
