@@ -53,19 +53,11 @@ class Consumer(AbstractConsumer[Message]):
     def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
         return self.__consumer.poll(*[timeout] if timeout is not None else [])
 
-    def commit(
-        self, asynchronous: bool = True
-    ) -> Optional[Mapping[TopicPartitionKey, Offset]]:
-        offsets: Optional[Sequence[TopicPartition]] = self.__consumer.commit(
-            asynchronous=asynchronous
-        )
-        if offsets is not None:
-            return {
-                TopicPartitionKey(i.topic, i.partition): Offset(i.offset)
-                for i in offsets
-            }
-        else:
-            return None
+    def commit(self) -> Mapping[TopicPartitionKey, Offset]:
+        offsets: Sequence[TopicPartition] = self.__consumer.commit(asynchronous=False)
+        return {
+            TopicPartitionKey(i.topic, i.partition): Offset(i.offset) for i in offsets
+        }
 
     def close(self) -> None:
         self.__consumer.close()

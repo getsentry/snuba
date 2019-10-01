@@ -29,6 +29,8 @@ class Consumer(Generic[TMessage], ABC):
 
     This interface is heavily "inspired" by the Confluent Kafka Consumer
     implementation, but only exposes a limited set of the available methods.
+    All methods are blocking unless noted in the method documentation itself.
+
     This interface also includes several minor changes that are intended to
     improve ease of use and improve the quality of the development and
     testing experience through type annotations. Most code that uses the
@@ -50,9 +52,7 @@ class Consumer(Generic[TMessage], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def commit(
-        self, asynchronous: bool = True
-    ) -> Optional[Mapping[TopicPartitionKey, Offset]]:
+    def commit(self) -> Mapping[TopicPartitionKey, Offset]:
         raise NotImplementedError
 
     @abstractmethod

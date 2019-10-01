@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Generic,
-    List,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -14,7 +13,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 from confluent_kafka import (
@@ -28,7 +26,7 @@ from confluent_kafka import (
     Producer,
 )
 
-from snuba.utils.kafka.consumers.abstract import Offset, TopicPartitionKey
+from snuba.utils.kafka.consumers.abstract import TopicPartitionKey
 from snuba.utils.kafka.consumers.confluent import Consumer
 
 logger = logging.getLogger("batching-kafka-consumer")
@@ -390,10 +388,7 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         retries = 3
         while True:
             try:
-                offsets = cast(
-                    Mapping[TopicPartitionKey, Offset],
-                    self.consumer.commit(asynchronous=False),
-                )  # HACK: type
+                offsets = self.consumer.commit()
                 logger.debug("Committed offsets: %s", offsets)
                 break  # success
             except KafkaException as e:
