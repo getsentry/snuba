@@ -28,7 +28,7 @@ from confluent_kafka import (
     Producer,
 )
 
-from snuba.utils.kafka.consumers.abstract import Offset, Partition, Topic
+from snuba.utils.kafka.consumers.abstract import Offset, TopicPartitionKey
 from snuba.utils.kafka.consumers.confluent import Consumer
 
 logger = logging.getLogger("batching-kafka-consumer")
@@ -220,14 +220,10 @@ class BatchingKafkaConsumer(Generic[TOutput]):
             }
         )
 
-        def on_partitions_assigned(
-            partitions: Sequence[Tuple[Topic, Partition]]
-        ) -> None:
+        def on_partitions_assigned(partitions: Sequence[TopicPartitionKey]) -> None:
             logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(
-            partitions: Sequence[Tuple[Topic, Partition]]
-        ) -> None:
+        def on_partitions_revoked(partitions: Sequence[TopicPartitionKey]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
@@ -395,7 +391,7 @@ class BatchingKafkaConsumer(Generic[TOutput]):
         while True:
             try:
                 offsets = cast(
-                    List[Tuple[Topic, Partition, Offset]],
+                    Mapping[TopicPartitionKey, Offset],
                     self.consumer.commit(asynchronous=False),
                 )  # HACK: type
                 logger.debug("Committed offsets: %s", offsets)
@@ -417,29 +413,27 @@ class BatchingKafkaConsumer(Generic[TOutput]):
 
         if self.commit_log_topic:
 
-            for topic, partition, offset in offsets:
+            for key, offset in offsets.items():
                 if offset in self.LOGICAL_OFFSETS:
                     logger.debug(
-                        "Skipped publishing logical offset (%r) to commit log for %s/%s",
+                        "Skipped publishing logical offset (%r) to commit log for %s",
                         offset,
-                        topic,
-                        partition,
+                        key,
                     )
                     continue
                 elif offset < 0:
                     logger.warning(
-                        "Found unexpected negative offset (%r) after commit for %s/%s",
+                        "Found unexpected negative offset (%r) after commit for %s",
                         offset,
-                        topic,
-                        partition,
+                        key,
                     )
 
                 assert self.producer is not None  # HACK: type
                 self.producer.produce(
                     self.commit_log_topic,
-                    key="{}:{}:{}".format(topic, partition, self.group_id).encode(
-                        "utf-8"
-                    ),
+                    key="{}:{}:{}".format(
+                        key.topic, key.partition, self.group_id
+                    ).encode("utf-8"),
                     value="{}".format(offset).encode("utf-8"),
                     on_delivery=self._commit_message_delivery_callback,
                 )

@@ -1,11 +1,18 @@
 import time
 from datetime import datetime
-from typing import Callable, MutableMapping, MutableSequence, Optional, Sequence, Tuple
+from typing import (
+    Callable,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
-from confluent_kafka import TopicPartition
 from mock import patch
 
-from snuba.utils.kafka.consumers.abstract import Consumer, Offset, Partition, Topic
+from snuba.utils.kafka.consumers.abstract import Consumer, Offset, TopicPartitionKey
 from snuba.utils.kafka.consumers.batching import (
     AbstractBatchWorker,
     BatchingKafkaConsumer,
@@ -91,13 +98,13 @@ class FakeKafkaConsumer(Consumer[FakeKafkaMessage]):
         self.items: MutableSequence[FakeKafkaMessage] = []
         self.commit_calls = 0
         self.close_calls = 0
-        self.positions: MutableMapping[Tuple[Topic, Partition], Offset] = {}
+        self.positions: MutableMapping[Tuple[str, int], Offset] = {}
 
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
-        on_revoke: Optional[Callable[[Sequence[Tuple[Topic, Partition]]], None]] = None,
+        on_assign: Optional[Callable[[Sequence[TopicPartitionKey]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[TopicPartitionKey]], None]] = None,
     ) -> None:
         raise NotImplementedError
 
@@ -108,19 +115,16 @@ class FakeKafkaConsumer(Consumer[FakeKafkaMessage]):
             return None
 
         self.positions[
-            (Topic(message.topic()), Partition(message.partition()))
+            TopicPartitionKey(message.topic(), message.partition())
         ] = Offset(message.offset() + 1)
 
         return message
 
     def commit(
         self, asynchronous: bool = True
-    ) -> Optional[Sequence[Tuple[Topic, Partition, Offset]]]:
+    ) -> Optional[Mapping[TopicPartitionKey, Offset]]:
         self.commit_calls += 1
-        return [
-            (topic, partition, offset)
-            for (topic, partition), offset in self.positions.items()
-        ]
+        return self.positions
 
     def close(self) -> None:
         self.close_calls += 1
