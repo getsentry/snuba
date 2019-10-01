@@ -36,10 +36,12 @@ def topic() -> Iterator[str]:
             confluent.Consumer(
                 {
                     **configuration,
+                    "auto.offset.reset": "latest",
+                    "enable.auto.commit": "false",
+                    "enable.auto.offset.store": "true",
+                    "enable.partition.eof": "false",
                     "group.id": "test",
                     "session.timeout.ms": 1000,
-                    "auto.offset.reset": "latest",
-                    "enable.partition.eof": "false",
                 }
             ),
             Producer({**configuration}),
@@ -71,6 +73,10 @@ def test_consumer(topic: str, consumer: abstract.Consumer, producer: Producer) -
     assert message.topic() == topic
     assert message.partition() == 0
     assert message.value() == value
+
+    assert consumer.commit() == {
+        TopicPartitionKey(topic, 0): message.value() + 1,
+    }
 
     consumer.close()
 
