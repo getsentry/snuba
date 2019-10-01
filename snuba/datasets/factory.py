@@ -1,10 +1,13 @@
+from typing import Callable, MutableMapping, Set, Sequence
+
 from snuba import settings
 from snuba.datasets import Dataset
 from snuba.datasets.table_storage import TableWriter
 
-DATASETS_IMPL = {}
 
-DATASET_NAMES = {
+DATASETS_IMPL: MutableMapping[str, Dataset] = {}
+
+DATASET_NAMES: Set[str] = {
     'events',
     'groupassignee',
     'groupedmessage',
@@ -17,7 +20,7 @@ class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
 
 
-def get_dataset(name):
+def get_dataset(name: str) -> Dataset:
     if name in DATASETS_IMPL:
         return DATASETS_IMPL[name]
 
@@ -30,7 +33,8 @@ def get_dataset(name):
     from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.groups import Groups
-    dataset_mappings = {
+
+    dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
         'events': EventsDataset,
         'groupassignee': GroupAssigneeDataset,
         'groupedmessage': GroupedMessageDataset,
@@ -40,14 +44,14 @@ def get_dataset(name):
     }
 
     try:
-        dataset = DATASETS_IMPL[name] = dataset_mappings[name]()
+        dataset = DATASETS_IMPL[name] = dataset_factories[name]()
     except KeyError as error:
         raise InvalidDatasetError(f"dataset {name!r} does not exist") from error
 
     return dataset
 
 
-def get_enabled_dataset_names():
+def get_enabled_dataset_names() -> Sequence[str]:
     return [name for name in DATASET_NAMES if name not in settings.DISABLED_DATASETS]
 
 
