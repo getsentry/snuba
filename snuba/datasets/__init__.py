@@ -1,10 +1,24 @@
-from typing import Optional, Mapping, Sequence, Tuple
+from typing import Optional, Mapping, NamedTuple, Sequence, Tuple, Union
 
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Condition
 from snuba.util import escape_col, parse_datetime, qualified_column
+
+
+class ColumnSplitSpec(NamedTuple):
+    """
+    Provides the column names needed to perform column splitting.
+    id_column represent the identity of the row.
+
+    """
+    id_column: str
+    project_column: str
+    timestamp_column: str
+
+    def get_min_columns(self) -> Sequence[str]:
+        return [self.id_column, self.project_column, self.timestamp_column]
 
 
 class Dataset(object):
@@ -93,20 +107,11 @@ class Dataset(object):
         """
         return []
 
-    def get_min_columns(self) -> Sequence[str]:
+    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         """
-        Return a list of the smallest subset of columns for a dataset.
-
-        This subset must include an event_id and timestamp type column, and
-        is used by the query splitter to help optimize loading wide results.
+        Return the parameters to perform the column split of the query.
         """
-        return NotImplementedError('dataset does not support get_min_columns')
-
-    def get_timestamp_column(self) -> str:
-        """
-        Return the name of the datetime column from get_min_columns.
-        """
-        return NotImplementedError('dataset does not support get_timestamp_column')
+        return None
 
 
 class TimeSeriesDataset(Dataset):

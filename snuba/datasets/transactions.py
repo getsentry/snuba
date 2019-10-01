@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -16,7 +16,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.writer import BatchWriter
-from snuba.datasets import TimeSeriesDataset
+from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -179,11 +179,12 @@ class TransactionsDataset(TimeSeriesDataset):
             return processed_column
         return super().column_expr(column_name, body)
 
-    def get_min_columns(self) -> Sequence[str]:
-        return ('event_id', 'project_id', 'start_ts')
-
-    def get_timestamp_column(self) -> str:
-        return 'start_ts'
+    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
+        return ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="start_ts",
+        )
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']

@@ -28,13 +28,18 @@ def split_query(query_func):
             # TODO: Move all_referenced_columns into query and remove this dependency.
             # In order to do this we need to break a circular dependency first
             total_col_count = len(util.all_referenced_columns(request.query.get_body()))
-            min_col_count = len(util.all_referenced_columns({
-                **request.query.get_body(),
-                'selected_columns': dataset.get_min_columns()
-            }))
+            column_split_spec = dataset.get_split_query_spec()
+            if column_split_spec:
+                min_col_count = len(util.all_referenced_columns({
+                    **request.query.get_body(),
+                    'selected_columns': column_split_spec.get_min_columns()
+                }))
+            else:
+                min_col_count = None
 
             if (
-                request.query.get_selected_columns()
+                column_split_spec
+                and request.query.get_selected_columns()
                 and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
@@ -133,8 +138,11 @@ def split_query(query_func):
         # The query function may mutate the request body during query
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
+        column_split_spec = dataset.get_split_query_spec()
+        assert column_split_spec is not None, \
+            "Cannot perform a column split on a dataset that does not have a split query spec."
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(dataset.get_min_columns())
+        minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
         result, status = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
@@ -145,15 +153,15 @@ def split_query(query_func):
         if result['data']:
             request = copy.deepcopy(request)
 
-            event_ids = list(set([event['event_id'] for event in result['data']]))
-            request.query.add_conditions([('event_id', 'IN', event_ids)])
+            event_ids = list(set([event[column_split_spec.id_column] for event in result['data']]))
+            request.query.add_conditions([(column_split_spec.id_column, 'IN', event_ids)])
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
 
-            project_ids = list(set([event['project_id'] for event in result['data']]))
+            project_ids = list(set([event[column_split_spec.project_column] for event in result['data']]))
             request.extensions['project']['project'] = project_ids
 
-            timestamp_field = dataset.get_timestamp_column()
+            timestamp_field = column_split_spec.timestamp_column
             timestamps = [event[timestamp_field] for event in result['data']]
             request.extensions['timeseries']['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
