@@ -1,7 +1,7 @@
 from typing import Any, Callable, Mapping, Optional, Sequence
 
 from confluent_kafka import Consumer as ConfluentConsumer
-from confluent_kafka import Message, TopicPartition
+from confluent_kafka import KafkaError, Message, TopicPartition
 
 from snuba.utils.kafka.consumers.abstract import (
     Consumer as AbstractConsumer,
@@ -51,7 +51,19 @@ class Consumer(AbstractConsumer[Message]):
         self.__consumer.subscribe(topics, **kwargs)
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
-        return self.__consumer.poll(*[timeout] if timeout is not None else [])
+        message: Optional[Message] = self.__consumer.poll(
+            *[timeout] if timeout is not None else []
+        )
+        if message is None:
+            return None
+
+        # TODO: We'll likely want to wrap this in the future to include the
+        # error as well as contextual data: at least the topic and partition.
+        error: Optional[KafkaError] = message.error()
+        if error is not None:
+            raise error
+
+        return message
 
     def commit(self) -> Mapping[TopicPartitionKey, Offset]:
         offsets: Sequence[TopicPartition] = self.__consumer.commit(asynchronous=False)
