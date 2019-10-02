@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 import uuid
 
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import TopicPartition, KafkaError
 from confluent_kafka.admin import (
     ClusterMetadata,
@@ -115,29 +114,6 @@ class FakeKafkaConsumer(object):
             topic: topic_meta
         }
         return meta
-
-
-class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
-    def create_consumer(self, *args, **kwargs):
-        return FakeKafkaConsumer()
-
-
-class FakeWorker(AbstractBatchWorker):
-    def __init__(self, *args, **kwargs):
-        super(FakeWorker, self).__init__(*args, **kwargs)
-        self.processed = []
-        self.flushed = []
-        self.shutdown_calls = 0
-
-    def process_message(self, message):
-        self.processed.append(message.value())
-        return message.value()
-
-    def flush_batch(self, batch):
-        self.flushed.append(batch)
-
-    def shutdown(self):
-        self.shutdown_calls += 1
 
 
 class BaseTest(object):
