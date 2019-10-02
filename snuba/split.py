@@ -4,6 +4,7 @@ import math
 
 from snuba import state, util
 from snuba.datasets import ColumnSplitSpec
+from snuba.query_engine import QueryResult
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -92,7 +93,9 @@ def split_query(query_func):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
-            result, status = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            query_result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            result = query_result.result
+            status = query_result.status
 
             # If something failed, discard all progress and just return that
             if status != 200:
@@ -129,7 +132,7 @@ def split_query(query_func):
                 except OverflowError:
                     split_start = from_date
 
-        return overall_result, status
+        return QueryResult(overall_result, status)
 
     def col_split(dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs):
         """
@@ -143,12 +146,14 @@ def split_query(query_func):
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
-        result, status = query_func(dataset, minimal_request, *args, **kwargs)
+        query_result = query_func(dataset, minimal_request, *args, **kwargs)
+        result = query_result.result
+        status = query_result.status
         del minimal_request
 
         # If something failed, just return
         if status != 200:
-            return result, status
+            return QueryResult(result, status)
 
         if result['data']:
             request = copy.deepcopy(request)

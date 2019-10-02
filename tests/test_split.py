@@ -5,6 +5,7 @@ from snuba import state
 from snuba.datasets import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
+from snuba.query_engine import QueryResult
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.split import split_query
@@ -98,9 +99,9 @@ def test_col_split(
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
-            return ({"data": first_query_data}, 200)
+            return QueryResult({"data": first_query_data}, 200)
         elif selected_cols == list(second_query_data[0].keys()):
-            return ({"data": second_query_data}, 200)
+            return QueryResult({"data": second_query_data}, 200)
         else:
             raise ValueError(f"Unexpected selected columns: {selected_cols}")
 
