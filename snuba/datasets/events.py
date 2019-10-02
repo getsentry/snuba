@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets import TimeSeriesDataset
+from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
@@ -256,11 +256,12 @@ class EventsDataset(TimeSeriesDataset):
             (qualified_column('deleted', table_alias), '=', 0),
         ]
 
-    def get_min_columns(self) -> Sequence[str]:
-        return ('event_id', 'project_id', 'timestamp')
-
-    def get_timestamp_column(self) -> str:
-        return 'timestamp'
+    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
+        return ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        )
 
     def column_expr(self, column_name, body, table_alias: str=""):
         processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
