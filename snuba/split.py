@@ -3,6 +3,7 @@ from datetime import timedelta
 import math
 
 from snuba import state, util
+from snuba.datasets import ColumnSplitSpec
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -43,7 +44,7 @@ def split_query(query_func):
                 and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
-                return col_split(dataset, request, *args, **kwargs)
+                return col_split(dataset, request, column_split_spec, *args, **kwargs)
             elif orderby[:1] == ['-timestamp'] and remaining_offset < 1000:
                 return time_split(dataset, request, *args, **kwargs)
 
@@ -128,7 +129,7 @@ def split_query(query_func):
 
         return overall_result, status
 
-    def col_split(dataset, request: Request, *args, **kwargs):
+    def col_split(dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs):
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
@@ -138,9 +139,6 @@ def split_query(query_func):
         # The query function may mutate the request body during query
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
-        column_split_spec = dataset.get_split_query_spec()
-        assert column_split_spec is not None, \
-            "Cannot perform a column split on a dataset that does not have a split query spec."
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
         result, status = query_func(dataset, minimal_request, *args, **kwargs)
