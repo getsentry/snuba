@@ -16,6 +16,7 @@ from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
+from snuba.utils.metrics import Metrics
 
 from . import settings
 
@@ -99,7 +100,7 @@ class Replacement:
 
 
 class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics=None) -> None:
+    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: Metrics) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics
@@ -155,9 +156,8 @@ class ReplacerWorker(AbstractBatchWorker):
             self.clickhouse.execute_robust(query)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
-            if self.metrics:
-                self.metrics.timing('replacements.count', count)
-                self.metrics.timing('replacements.duration', duration)
+            self.metrics.timing('replacements.count', count)
+            self.metrics.timing('replacements.duration', duration)
 
     def shutdown(self) -> None:
         pass

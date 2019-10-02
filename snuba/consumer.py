@@ -10,6 +10,7 @@ from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
+from snuba.utils.metrics import Metrics
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -24,7 +25,7 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, dataset, producer, replacements_topic, metrics=None):
+    def __init__(self, dataset, producer, replacements_topic, metrics: Metrics):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
@@ -79,8 +80,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if inserts:
             self.__writer.write(inserts)
 
-            if self.metrics:
-                self.metrics.timing('inserts', len(inserts))
+            self.metrics.timing('inserts', len(inserts))
 
         if replacements:
             for key, replacement in replacements:

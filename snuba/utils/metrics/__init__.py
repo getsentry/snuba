@@ -1,10 +1,12 @@
 from random import random
 from collections import ChainMap
 from typing import Mapping, Optional, Union
-from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 
 Tags = Mapping[str, str]
+
+
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 
 class Metrics:

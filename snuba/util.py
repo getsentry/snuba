@@ -526,16 +526,17 @@ def raw_query(request: Request, sql, client, timer, stats=None):
             'status': status,
         })
 
-        # send to datadog
-        tags = [
-            'status:{}'.format(status),
-            'referrer:{}'.format(stats.get('referrer', 'none')),
-            'final:{}'.format(stats.get('final', False))
-        ]
-        mark_tags = [
-            'final:{}'.format(stats.get('final', False))
-        ]
-        timer.send_metrics_to(metrics, tags=tags, mark_tags=mark_tags)
+        timer.send_metrics_to(
+            metrics,
+            tags={
+                'status': str(status),
+                'referrer': stats.get('referrer', 'none'),
+                'final': str(stats.get('final', False)),
+            },
+            mark_tags={
+                'final': str(stats.get('final', False)),
+            }
+        )
 
     result['timing'] = timer
 
@@ -573,7 +574,7 @@ class Timer(object):
     def for_json(self):
         return self.finish()
 
-    def send_metrics_to(self, metrics, tags=None, mark_tags=None):
+    def send_metrics_to(self, metrics: Metrics, tags: Optional[Mapping[str, str]] = None, mark_tags: Optional[Mapping[str, str]] = None):
         name = self.marks[0][0]
         final = self.finish()
         metrics.timing(name, final['duration_ms'], tags=tags)
@@ -631,15 +632,18 @@ def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = 
     """Create a DogStatsd object with the specified prefix and tags. Prefixes
     must start with `snuba.<category>`, for example: `snuba.processor`."""
     from datadog import DogStatsd
-    from snuba.utils.metrics.backends.datadog import DatadogMetrics
+    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     bits = prefix.split('.', 2)
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
     return Metrics(
-        DatadogMetrics(
+        DatadogMetricsBackend(
             DogStatsd(host=host, port=port),
         ),
         namespace=prefix,
         tags=tags,
     )
+
+
+metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
