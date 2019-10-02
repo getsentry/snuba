@@ -1,7 +1,7 @@
 from collections import ChainMap
 from base import BaseEventsTest
 from functools import partial
-from mock import patch
+from unittest.mock import patch
 import random
 import simplejson as json
 from threading import Thread
