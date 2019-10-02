@@ -123,6 +123,22 @@ class TestTransactionsApi(BaseApiTest):
         assert 'ip_address_v4' in data['data'][0]
         assert 'ip_address_v6' in data['data'][0]
 
+    def test_read_lowcard(self):
+        skew = timedelta(minutes=180)
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'transactions',
+            'project': 1,
+            'selected_columns': ['transaction_op', 'platform'],
+            'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
+            'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
+            'orderby': 'start_ts'
+        }))
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data['data']) > 1, data
+        assert 'platform' in data['data'][0]
+        assert data['data'][0]['transaction_op'] == "http"
+
     def test_start_ts_microsecond_truncation(self):
         skew = timedelta(minutes=180)
         response = self.app.post('/query', data=json.dumps({
