@@ -51,7 +51,6 @@ setup(
         'Markdown==2.6.11',
         'MarkupSafe==1.0',
         'mccabe==0.6.1',
-        'mock==2.0.0',
         'more-itertools==4.2.0',
         'packaging==17.1',
         'parso==0.2.1',
