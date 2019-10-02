@@ -19,7 +19,8 @@ def split_query(query_func):
         use_split = state.get_configs([
             ('use_split', 0),
         ])
-        limit = request.query.get_limit()
+        query_limit = request.query.get_limit()
+        limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
         orderby = util.to_list(request.query.get_orderby())
 
@@ -67,7 +68,8 @@ def split_query(query_func):
             ('split_step', 3600),  # default 1 hour
         ])
 
-        limit = request.query.get_limit()
+        query_limit = request.query.get_limit()
+        limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
 
         to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
