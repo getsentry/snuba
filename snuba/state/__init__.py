@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from confluent_kafka import Producer
-from contextlib import contextmanager
+from contextlib import contextmanager, AbstractContextManager, ExitStack
 import logging
 import random
 import re
@@ -35,76 +35,6 @@ queries_list = 'snuba-queries'
 max_query_duration_s = 60
 # Window for determining query rate
 rate_lookback_s = 60
-
-
-@contextmanager
-def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
-    """
-    A context manager for rate limiting that allows for limiting based on
-    on a rolling-window per-second rate as well as the number of requests
-    concurrently running.
-
-    Uses a single redis sorted set per rate-limiting bucket to track both the
-    concurrency and rate, the score is the query timestamp. Queries are thrown
-    ahead in time when they start so we can count them as concurrent, and
-    thrown back to their start time once they finish so we can count them
-    towards the historical rate.
-
-               time >>----->
-    +-----------------------------+--------------------------------+
-    | historical query window     | currently executing queries    |
-    +-----------------------------+--------------------------------+
-                                  ^
-                                 now
-    """
-    bucket = '{}{}'.format(ratelimit_prefix, bucket)
-    query_id = uuid.uuid4()
-    now = time.time()
-    bypass_rate_limit, rate_history_s = get_configs([
-        ('bypass_rate_limit', 0),
-        ('rate_history_sec', 3600)
-    ])
-
-    if bypass_rate_limit == 1:
-        yield (True, 0, 0)
-        return
-
-    pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
-    pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
-    if per_second_limit is None:
-        pipe.exists("nosuchkey")  # no-op if we don't need per-second
-    else:
-        pipe.zcount(bucket, now - rate_lookback_s, now)  # get historical
-    if concurrent_limit is None:
-        pipe.exists("nosuchkey")  # no-op if we don't need concurrent
-    else:
-        pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
-
-    try:
-        _, _, historical, concurrent = pipe.execute()
-        historical = int(historical)
-        concurrent = int(concurrent)
-    except Exception as ex:
-        logger.exception(ex)
-        yield (True, 0, 0)  # fail open if redis is having issues
-        return
-
-    per_second = historical / float(rate_lookback_s)
-    allowed = (per_second_limit is None or per_second <= per_second_limit) and\
-        (concurrent_limit is None or concurrent <= concurrent_limit)
-    try:
-        yield (allowed, per_second, concurrent)
-    finally:
-        try:
-            if allowed:
-                # return the query to its start time
-                rds.zincrby(bucket, query_id, -float(max_query_duration_s))
-            else:
-                rds.zrem(bucket, query_id)  # not allowed / not counted
-        except Exception as ex:
-            logger.exception(ex)
-            pass
 
 
 def get_concurrent(bucket):
