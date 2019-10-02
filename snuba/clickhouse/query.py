@@ -49,8 +49,8 @@ class ClickhouseQuery:
             from_clause = u'{} SAMPLE {}'.format(from_clause, sample_rate)
 
         join_clause = ''
-        if 'arrayjoin' in body:
-            join_clause = u'ARRAY JOIN {}'.format(body['arrayjoin'])
+        if query.get_arrayjoin():
+            join_clause = u'ARRAY JOIN {}'.format(query.get_arrayjoin())
 
         where_clause = ''
         if query.get_conditions():
@@ -63,11 +63,11 @@ class ClickhouseQuery:
         group_clause = ''
         if groupby:
             group_clause = 'GROUP BY ({})'.format(', '.join(util.column_expr(self.__dataset, gb, body) for gb in groupby))
-            if body.get('totals', False):
+            if query.has_totals():
                 group_clause = '{} WITH TOTALS'.format(group_clause)
 
         having_clause = ''
-        having_conditions = body.get('having', [])
+        having_conditions = query.get_having()
         if having_conditions:
             assert groupby, 'found HAVING clause with no GROUP BY'
             having_clause = u'HAVING {}'.format(util.conditions_expr(self.__dataset, having_conditions, body))
@@ -79,12 +79,12 @@ class ClickhouseQuery:
             order_clause = u'ORDER BY {}'.format(', '.join(orderby))
 
         limitby_clause = ''
-        if 'limitby' in body:
-            limitby_clause = 'LIMIT {} BY {}'.format(*body['limitby'])
+        if query.get_limitby() is not None:
+            limitby_clause = 'LIMIT {} BY {}'.format(*query.get_limitby())
 
         limit_clause = ''
-        if 'limit' in body:
-            limit_clause = 'LIMIT {}, {}'.format(query.get_offset(), body['limit'])
+        if query.get_limit() is not None:
+            limit_clause = 'LIMIT {}, {}'.format(query.get_offset(), query.get_limit())
 
         return ' '.join([c for c in [
             select_clause,

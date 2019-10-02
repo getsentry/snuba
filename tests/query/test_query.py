@@ -8,44 +8,60 @@ def test_empty_query():
     assert query.get_aggregations() is None
     assert query.get_groupby() is None
     assert query.get_conditions() is None
+    assert query.get_arrayjoin() is None
+    assert query.get_having() == []
     assert query.get_orderby() is None
+    assert query.get_limitby() is None
     assert query.get_sample() is None
-    assert query.get_limit() == 0
+    assert query.get_limit() is None
     assert query.get_offset() == 0
+    assert query.has_totals() is False
 
 
 def test_full_query():
     query = Query({
         "selected_columns": ["c1", "c2", "c3"],
         "conditions": [["c1", "=", "a"]],
+        "arrayjoin": "tags",
+        "having": [["c4", "=", "c"]],
         "groupby": ["project_id"],
         "aggregations": [["count()", "", "count"]],
         "orderby": "event_id",
+        "limitby": (100, "environment"),
         "sample": 10,
         "limit": 100,
         "offset": 50,
+        "totals": True,
     })
 
     assert query.get_selected_columns() == ["c1", "c2", "c3"]
     assert query.get_aggregations() == [["count()", "", "count"]]
     assert query.get_groupby() == ["project_id"]
     assert query.get_conditions() == [["c1", "=", "a"]]
+    assert query.get_arrayjoin() == "tags"
+    assert query.get_having() == [["c4", "=", "c"]]
     assert query.get_orderby() == "event_id"
+    assert query.get_limitby() == (100, "environment")
     assert query.get_sample() == 10
     assert query.get_limit() == 100
     assert query.get_offset() == 50
+    assert query.has_totals() is True
 
 
 def test_edit_query():
     query = Query({
         "selected_columns": ["c1", "c2", "c3"],
         "conditions": [["c1", "=", "a"]],
+        "arrayjoin": "tags",
+        "having": [["c4", "=", "c"]],
         "groupby": ["project_id"],
         "aggregations": [["count()", "", "count"]],
         "orderby": "event_id",
+        "limitby": (100, "environment"),
         "sample": 10,
         "limit": 100,
         "offset": 50,
+        "totals": True,
     })
 
     query.set_selected_columns(["c4"])
@@ -67,3 +83,6 @@ def test_edit_query():
     assert query.get_conditions() == [
         ["c6", "=", "10"],
     ]
+
+    query.set_arrayjoin("not_tags")
+    assert query.get_arrayjoin() == "not_tags"

@@ -426,6 +426,8 @@ def raw_query(request: Request, sql, client, timer, stats=None):
             try:
                 with RateLimitAggregator(request.settings.get_rate_limit_params()) as rate_limit_stats:
                     stats.update(rate_limit_stats)
+                    timer.mark('rate_limit')
+
                     # Experiment, reduce max threads by 1 for each extra concurrent query
                     # that a project has running beyond the first one
                     if 'max_threads' in query_settings and \
@@ -450,7 +452,7 @@ def raw_query(request: Request, sql, client, timer, stats=None):
                             # All queries should already be deduplicated at this point
                             # But the query_id will let us know if they aren't
                             query_id=query_id if use_deduper else None,
-                            with_totals=request.query.get_body().get('totals', False),
+                            with_totals=request.query.has_totals(),
                         )
                         status = 200
 
