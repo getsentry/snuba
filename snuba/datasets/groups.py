@@ -18,6 +18,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Condition
+from snuba.state.rate_limit import GlobalRateLimit, ProjectRateLimit
 
 
 class Groups(TimeSeriesDataset):
@@ -121,3 +122,6 @@ class Groups(TimeSeriesDataset):
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['events.event_id', 'events.issue', 'events.tags[sentry:release]', 'events.message', 'events.environment', 'events.project_id']
+
+    def get_rate_limits(self, request):
+        return [GlobalRateLimit(request), ProjectRateLimit(request)]

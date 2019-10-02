@@ -5,7 +5,7 @@ from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Condition
 from snuba.util import escape_col, parse_datetime, qualified_column
-from snuba.state.rate_limit import GlobalRateLimit, ProjectRateLimit
+from snuba.state.rate_limit import GlobalRateLimit
 
 
 class Dataset(object):
@@ -110,7 +110,7 @@ class Dataset(object):
         return NotImplementedError('dataset does not support get_timestamp_column')
 
     def get_rate_limits(self, request):
-        return [GlobalRateLimit(request), ProjectRateLimit(request)]
+        return [GlobalRateLimit(request)]
 
 
 class TimeSeriesDataset(Dataset):
