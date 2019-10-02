@@ -3,15 +3,21 @@ from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass
 import logging
 import time
+from typing import Mapping, Sequence
 import uuid
 
-from snuba import state, util
+from snuba import state
 
 logger = logging.getLogger('snuba.state.rate_limit')
 
 
-@dataclass
+@dataclass(frozen=True)
 class RateLimitParameters:
+    """
+    The configuration object which defines all the needed properties to create
+    a rate limit.
+    """
+
     rate_limit_name: str
     bucket: str
     per_second_limit: float
@@ -44,13 +50,13 @@ class RateLimit(AbstractContextManager):
                                  now
     """
 
-    def __init__(self, rate_limit_params: RateLimitParameters):
+    def __init__(self, rate_limit_params: RateLimitParameters) -> None:
         self.__rate_limit_params = rate_limit_params
         self.__did_run = False
         self.__query_id = None
         self.__bucket = None
 
-    def __enter__(self):
+    def __enter__(self) -> Mapping[str, float]:
         self.__bucket = '{}{}'.format(state.ratelimit_prefix, self.__rate_limit_params.bucket)
         self.__query_id = uuid.uuid4()
         now = time.time()
@@ -108,7 +114,7 @@ class RateLimit(AbstractContextManager):
 
         return stats
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         try:
             if self.__did_run:
                 # return the query to its start time
@@ -120,7 +126,11 @@ class RateLimit(AbstractContextManager):
             pass
 
 
-def get_global_rate_limit_params():
+def get_global_rate_limit_params() -> RateLimitParameters:
+    """
+    Returns the configuration object for the global rate limit
+    """
+
     (per_second, concurr) = state.get_configs([
         ('global_per_second_limit', None),
         ('global_concurrent_limit', 1000),
@@ -134,12 +144,19 @@ def get_global_rate_limit_params():
     )
 
 
-class RateLimitAggregator:
-    def __init__(self, rate_limit_params):
+class RateLimitAggregator(AbstractContextManager):
+    """
+    Runs the rate limits provided by the `rate_limit_params` configuration object.
+
+    It runs the rate limits in the order they are received and calls the cleanup block
+    (__exit__) in the reverse order.
+    """
+
+    def __init__(self, rate_limit_params: Sequence[RateLimitParameters]) -> None:
         self.rate_limits = map(RateLimit, rate_limit_params)
         self.stack = ExitStack()
 
-    def __enter__(self):
+    def __enter__(self) -> Mapping[str, float]:
         stats = {}
 
         for rate_limit in self.rate_limits:
@@ -148,5 +165,5 @@ class RateLimitAggregator:
 
         return stats
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.stack.pop_all().close()

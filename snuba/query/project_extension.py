@@ -35,7 +35,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         super().__init__()
         self._project_ids = None
 
-    def _get_rate_limit_params(self, project_ids: Sequence[int]):
+    def _get_rate_limit_params(self, project_ids: Sequence[int]) -> RateLimitParameters:
         project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
 
         prl, pcl = get_configs([

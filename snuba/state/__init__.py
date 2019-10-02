@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 
 from confluent_kafka import Producer
-from contextlib import contextmanager, AbstractContextManager, ExitStack
+from contextlib import contextmanager
 import logging
 import random
 import re

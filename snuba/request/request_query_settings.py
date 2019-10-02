@@ -4,7 +4,7 @@ from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParame
 
 
 class RequestQuerySettings:
-    def __init__(self, turbo: bool, consistent: bool, debug: bool):
+    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
