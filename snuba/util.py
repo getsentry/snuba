@@ -1,5 +1,5 @@
 from clickhouse_driver.errors import Error as ClickHouseError
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
@@ -14,7 +14,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import time
 
 from snuba import settings, state
-from snuba.state.rate_limit import RateLimitAggregator
+from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 
@@ -377,7 +377,7 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-def raw_query(request: Request, sql, client, timer, rate_limits, stats=None):
+def raw_query(request: Request, sql, client, timer, stats=None):
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -423,9 +423,9 @@ def raw_query(request: Request, sql, client, timer, rate_limits, stats=None):
         if result:
             status = 200
         else:
-            with RateLimitAggregator(rate_limits) as (error, rate_limit_stats):
-                stats.update(rate_limit_stats)
-                if not error:
+            try:
+                with RateLimitAggregator(request.settings.get_rate_limit_params()) as rate_limit_stats:
+                    stats.update(rate_limit_stats)
                     # Experiment, reduce max threads by 1 for each extra concurrent query
                     # that a project has running beyond the first one
                     if 'max_threads' in query_settings and \
@@ -437,7 +437,7 @@ def raw_query(request: Request, sql, client, timer, rate_limits, stats=None):
                     # Force query to use the first shard replica, which
                     # should have synchronously received any cluster writes
                     # before this query is run.
-                    consistent = request.settings.consistent
+                    consistent = request.settings.get_consistent()
                     stats['consistent'] = consistent
                     if consistent:
                         query_settings['load_balancing'] = 'in_order'
@@ -480,13 +480,14 @@ def raw_query(request: Request, sql, client, timer, rate_limits, stats=None):
                                 'type': 'unknown',
                                 'message': error,
                             }}
-                else:
-                    status = 429
-                    result = {'error': {
-                        'type': 'ratelimit',
-                        'message': 'rate limit exceeded',
-                        'detail': error
-                    }}
+            except RateLimitExceeded as ex:
+                error = str(ex)
+                status = 429
+                result = {'error': {
+                    'type': 'ratelimit',
+                    'message': 'rate limit exceeded',
+                    'detail': error
+                }}
 
     stats.update(query_settings)
 
@@ -513,7 +514,7 @@ def raw_query(request: Request, sql, client, timer, rate_limits, stats=None):
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.settings.debug:
+    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result['stats'] = stats
         result['sql'] = sql
 

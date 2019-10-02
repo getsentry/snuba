@@ -23,7 +23,6 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
-from snuba.state.rate_limit import GlobalRateLimit, ProjectRateLimit
 
 
 def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
@@ -338,6 +337,3 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
-
-    def get_rate_limits(self, request):
-        return [GlobalRateLimit(request), ProjectRateLimit(request)]

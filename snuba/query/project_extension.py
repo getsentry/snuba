@@ -1,10 +1,13 @@
+from typing import Sequence
+
 from snuba import settings, util
 from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
 from snuba.request.request_settings import RequestSettings
-from snuba.state import get_config
+from snuba.state import get_config, get_configs
+from snuba.state.rate_limit import RateLimitParameters
 
 
 PROJECT_EXTENSION_SCHEMA = {
@@ -28,6 +31,30 @@ PROJECT_EXTENSION_SCHEMA = {
 
 
 class ProjectExtensionProcessor(ExtensionQueryProcessor):
+    def __init__(self):
+        super().__init__()
+        self._project_ids = None
+
+    def _get_rate_limit_params(self, project_ids: Sequence[int]):
+        project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
+
+        prl, pcl = get_configs([
+            ('project_per_second_limit', 1000),
+            ('project_concurrent_limit', 1000),
+        ])
+
+        # Specific projects can have their rate limits overridden
+        (per_second, concurr) = get_configs([
+            ('project_per_second_limit_{}'.format(project_id), prl),
+            ('project_concurrent_limit_{}'.format(project_id), pcl),
+        ])
+
+        return RateLimitParameters(
+            rate_limit_name='project',
+            bucket=str(project_id),
+            per_second_limit=per_second,
+            concurrent_limit=concurr,
+        )
 
     def process_query(
             self,
@@ -35,10 +62,12 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             extension_data: ExtensionData,
             request_settings: RequestSettings,
     ) -> None:
-        project_ids = util.to_list(extension_data['project'])
+        self._project_ids = util.to_list(extension_data['project'])
 
-        if project_ids:
-            query.add_conditions([('project_id', 'IN', project_ids)])
+        if self._project_ids:
+            query.add_conditions([('project_id', 'IN', self._project_ids)])
+
+        request_settings.add_rate_limit(self._get_rate_limit_params(self._project_ids))
 
 
 class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
@@ -54,13 +83,10 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
             extension_data: ExtensionData,
             request_settings: RequestSettings,
     ) -> None:
-        project_ids = util.to_list(extension_data['project'])
+        super().process_query(query, extension_data, request_settings)
 
-        if project_ids:
-            query.add_conditions([('project_id', 'IN', project_ids)])
-
-        if not request_settings.turbo:
-            final, exclude_group_ids = get_projects_query_flags(project_ids)
+        if not request_settings.get_turbo():
+            final, exclude_group_ids = get_projects_query_flags(self._project_ids)
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.

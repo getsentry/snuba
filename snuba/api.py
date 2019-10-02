@@ -277,7 +277,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    if request.settings.turbo:
+    if request.settings.get_turbo():
         request.query.set_final(False)
 
     prewhere_conditions = []
@@ -301,8 +301,6 @@ def parse_and_run_query(dataset, request: Request, timer):
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
-    rate_limits = dataset.get_rate_limits(request)
-
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
@@ -317,7 +315,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         'sample': request.query.get_sample(),
     }
 
-    return util.raw_query(request, sql, clickhouse_ro, timer, rate_limits, stats)
+    return util.raw_query(request, sql, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to

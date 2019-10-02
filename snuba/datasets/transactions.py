@@ -25,7 +25,6 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.state.rate_limit import GlobalRateLimit, ProjectRateLimit
 
 
 class TransactionsTableWriter(TableWriter):
@@ -188,6 +187,3 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['event_id', 'project_id']
-
-    def get_rate_limits(self, request):
-        return [GlobalRateLimit(request), ProjectRateLimit(request)]
