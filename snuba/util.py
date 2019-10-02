@@ -6,7 +6,7 @@ from dateutil.parser import parse as dateutil_parse
 from functools import wraps
 from hashlib import md5
 from itertools import chain, groupby
-from typing import NamedTuple, Optional
+from typing import Mapping, NamedTuple, Optional
 import logging
 import numbers
 import re
@@ -16,6 +16,7 @@ import time
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
+from snuba.utils.metrics import Metrics
 
 logger = logging.getLogger('snuba.util')
 
@@ -626,16 +627,19 @@ def settings_override(overrides):
             setattr(settings, k, v)
 
 
-def create_metrics(host, port, prefix, tags=None):
+def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = None) -> Metrics:
     """Create a DogStatsd object with the specified prefix and tags. Prefixes
     must start with `snuba.<category>`, for example: `snuba.processor`."""
-
     from datadog import DogStatsd
+    from snuba.utils.metrics.backends.datadog import DatadogMetrics
 
     bits = prefix.split('.', 2)
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
-    return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)
-
-
-metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
+    return Metrics(
+        DatadogMetrics(
+            DogStatsd(host=host, port=port),
+        ),
+        namespace=prefix,
+        tags=tags,
+    )
