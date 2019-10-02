@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from contextlib import AbstractContextManager, ExitStack
+from dataclasses import dataclass
 import logging
 import time
 import uuid
@@ -8,6 +9,13 @@ import uuid
 from snuba import state, util
 
 logger = logging.getLogger('snuba.state.rate_limit')
+
+
+@dataclass
+class RateLimitParameters:
+    bucket: str
+    per_second_limit: float
+    concurrent_limit: float
 
 
 class RateLimit(AbstractContextManager, ABC):
@@ -37,17 +45,17 @@ class RateLimit(AbstractContextManager, ABC):
         self.__bucket = None
 
     @abstractmethod
-    def get_bucket(self):
+    def _get_rate_limit_params(self):
         raise NotImplementedError
 
     @abstractmethod
-    def get_rate_limits(self):
+    def _get_rate_limit_name(self):
         raise NotImplementedError
 
     def __enter__(self):
-        (per_second_limit, concurrent_limit) = self.get_rate_limits()
+        rate_limit_params = self._get_rate_limit_params()
 
-        self.__bucket = '{}{}'.format(state.ratelimit_prefix, self.get_bucket())
+        self.__bucket = '{}{}'.format(state.ratelimit_prefix, rate_limit_params.bucket)
         self.__query_id = uuid.uuid4()
         now = time.time()
         bypass_rate_limit, rate_history_s = state.get_configs([
@@ -61,11 +69,11 @@ class RateLimit(AbstractContextManager, ABC):
         pipe = state.rds.pipeline(transaction=False)
         pipe.zremrangebyscore(self.__bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
         pipe.zadd(self.__bucket, now + state.max_query_duration_s, self.__query_id)  # add query
-        if per_second_limit is None:
+        if rate_limit_params.per_second_limit is None:
             pipe.exists("nosuchkey")  # no-op if we don't need per-second
         else:
             pipe.zcount(self.__bucket, now - state.rate_lookback_s, now)  # get historical
-        if concurrent_limit is None:
+        if rate_limit_params.concurrent_limit is None:
             pipe.exists("nosuchkey")  # no-op if we don't need concurrent
         else:
             pipe.zcount(self.__bucket, '({:f}'.format(now), '+inf')  # get concurrent
@@ -82,15 +90,15 @@ class RateLimit(AbstractContextManager, ABC):
         per_second = historical / float(state.rate_lookback_s)
 
         stats = {
-            '{}_rate'.format(self.__bucket): per_second,
-            '{}_concurrent'.format(self.__bucket): concurrent,
+            '{}_rate'.format(self._get_rate_limit_name()): per_second,
+            '{}_concurrent'.format(self._get_rate_limit_name()): concurrent,
 
         }
 
         Reason = namedtuple('reason', 'scope name val limit')
         reasons = [
-            Reason(self.__bucket, 'concurrent', concurrent, concurrent_limit),
-            Reason(self.__bucket, 'per-second', per_second, per_second_limit),
+            Reason(self._get_rate_limit_name(), 'concurrent', concurrent, rate_limit_params.concurrent_limit),
+            Reason(self._get_rate_limit_name(), 'per-second', per_second, rate_limit_params.per_second_limit),
         ]
 
         reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
@@ -111,21 +119,27 @@ class RateLimit(AbstractContextManager, ABC):
 
 
 class GlobalRateLimit(RateLimit):
-    def get_bucket(self):
+    def _get_rate_limit_name(self):
         return 'global'
 
-    def get_rate_limits(self):
-        return state.get_configs([
+    def _get_rate_limit_params(self):
+        (per_second, concurr) = state.get_configs([
             ('global_per_second_limit', None),
             ('global_concurrent_limit', 1000),
         ])
 
+        return RateLimitParameters(
+            bucket='global',
+            per_second_limit=per_second,
+            concurrent_limit=concurr,
+        )
+
 
 class ProjectRateLimit(RateLimit):
-    def get_bucket(self):
+    def _get_rate_limit_name(self):
         return 'project'
 
-    def get_rate_limits(self):
+    def _get_rate_limit_params(self):
         assert 'project' in self._request.extensions
 
         project_ids = util.to_list(self._request.extensions['project']['project'])
@@ -137,10 +151,16 @@ class ProjectRateLimit(RateLimit):
         ])
 
         # Specific projects can have their rate limits overridden
-        return state.get_configs([
+        (per_second, concurr) = state.get_configs([
             ('project_per_second_limit_{}'.format(project_id), prl),
             ('project_concurrent_limit_{}'.format(project_id), pcl),
         ])
+
+        return RateLimitParameters(
+            bucket=str(project_id),
+            per_second_limit=per_second,
+            concurrent_limit=concurr,
+        )
 
 
 class RateLimitAggregator:
