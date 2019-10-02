@@ -173,11 +173,7 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     if aggregate:
         expr = function_expr(aggregate, expr)
 
-    use_escape_alias = state.get_config("use_escape_alias", 0)
-    # This is a precaution during the rollout.
-    alias = escape_alias(alias or column_name) \
-        if use_escape_alias \
-        else escape_col(alias or column_name)
+    alias = escape_alias(alias or column_name)
     return alias_expr(expr, alias, body)
 
 
