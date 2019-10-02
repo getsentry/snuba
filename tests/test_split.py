@@ -2,11 +2,13 @@ import pytest
 from typing import Any, Mapping
 
 from snuba import state
+from snuba.datasets import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.split import split_query
+from snuba.util import Timer
 
 
 def setup_function(function):
@@ -20,8 +22,8 @@ test_data_no_split = [
 ]
 
 
-@pytest.mark.parametrize("dataset", test_data_no_split)
-def test_no_split(dataset: str):
+@pytest.mark.parametrize("dataset_name", test_data_no_split)
+def test_no_split(dataset_name: str):
     query = Query({
         "selected_columns": ["event_id"],
         "conditions": [""],
@@ -32,7 +34,7 @@ def test_no_split(dataset: str):
     })
 
     @split_query
-    def do_query(dataset, request: Request, timer):
+    def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
     request = Request(
@@ -41,7 +43,7 @@ def test_no_split(dataset: str):
         {},
     )
 
-    events = get_dataset(dataset)
+    events = get_dataset(dataset_name)
     do_query(events, request, None)
 
 
@@ -85,15 +87,15 @@ test_data_col = [
 ]
 
 
-@pytest.mark.parametrize("dataset, first_query_data, second_query_data", test_data_col)
+@pytest.mark.parametrize("dataset_name, first_query_data, second_query_data", test_data_col)
 def test_col_split(
-    dataset: str,
+    dataset_name: str,
     first_query_data: Mapping[str, Any],
     second_query_data: Mapping[str, Any],
 ):
 
     @split_query
-    def do_query(dataset, request: Request, timer):
+    def do_query(dataset: Dataset, request: Request, timer: Timer):
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
             return ({"data": first_query_data}, 200)
@@ -124,5 +126,5 @@ def test_col_split(
         },
     )
 
-    events = get_dataset(dataset)
+    events = get_dataset(dataset_name)
     do_query(events, request, None)
