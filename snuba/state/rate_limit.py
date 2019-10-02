@@ -45,10 +45,9 @@ class RateLimit(AbstractContextManager, ABC):
         raise NotImplementedError
 
     def __enter__(self):
-        bucket = self.get_bucket()
         (per_second_limit, concurrent_limit) = self.get_rate_limits()
 
-        self.__bucket = '{}{}'.format(state.ratelimit_prefix, bucket)
+        self.__bucket = '{}{}'.format(state.ratelimit_prefix, self.get_bucket())
         self.__query_id = uuid.uuid4()
         now = time.time()
         bypass_rate_limit, rate_history_s = state.get_configs([
@@ -60,16 +59,16 @@ class RateLimit(AbstractContextManager, ABC):
             return (True, 0, 0)
 
         pipe = state.rds.pipeline(transaction=False)
-        pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
-        pipe.zadd(bucket, now + state.max_query_duration_s, self.__query_id)  # add query
+        pipe.zremrangebyscore(self.__bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
+        pipe.zadd(self.__bucket, now + state.max_query_duration_s, self.__query_id)  # add query
         if per_second_limit is None:
             pipe.exists("nosuchkey")  # no-op if we don't need per-second
         else:
-            pipe.zcount(bucket, now - state.rate_lookback_s, now)  # get historical
+            pipe.zcount(self.__bucket, now - state.rate_lookback_s, now)  # get historical
         if concurrent_limit is None:
             pipe.exists("nosuchkey")  # no-op if we don't need concurrent
         else:
-            pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
+            pipe.zcount(self.__bucket, '({:f}'.format(now), '+inf')  # get concurrent
 
         try:
             _, _, historical, concurrent = pipe.execute()
@@ -83,15 +82,15 @@ class RateLimit(AbstractContextManager, ABC):
         per_second = historical / float(state.rate_lookback_s)
 
         stats = {
-            '{}_rate'.format(bucket): per_second,
-            '{}_concurrent'.format(bucket): concurrent,
+            '{}_rate'.format(self.__bucket): per_second,
+            '{}_concurrent'.format(self.__bucket): concurrent,
 
         }
 
         Reason = namedtuple('reason', 'scope name val limit')
         reasons = [
-            Reason(bucket, 'concurrent', concurrent, concurrent_limit),
-            Reason(bucket, 'per-second', per_second, per_second_limit),
+            Reason(self.__bucket, 'concurrent', concurrent, concurrent_limit),
+            Reason(self.__bucket, 'per-second', per_second, per_second_limit),
         ]
 
         reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
