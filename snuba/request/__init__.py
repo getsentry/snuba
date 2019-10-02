@@ -10,14 +10,14 @@ from typing import Any, Mapping
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_query_settings import RequestQuerySettings
 from snuba.schemas import Schema, validate_jsonschema
 
 
 @dataclass(frozen=True)
 class Request:
     query: Query
-    settings: RequestSettings  # settings provided by the request
+    settings: RequestQuerySettings  # settings provided by the request
     extensions: Mapping[str, Mapping[str, Any]]
 
     @property
@@ -80,7 +80,7 @@ class RequestSchema:
 
         return Request(
             Query(query_body),
-            RequestSettings(settings['turbo'], settings['consistent'], settings['debug']),
+            RequestQuerySettings(settings['turbo'], settings['consistent'], settings['debug']),
             extensions
         )
 

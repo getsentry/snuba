@@ -3,7 +3,7 @@ from mock import patch
 
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query import Query
-from snuba.request import Request, RequestSettings
+from snuba.request import Request, RequestQuerySettings
 
 
 class TestClickhouseQuery(BaseEventsTest):
@@ -14,8 +14,8 @@ class TestClickhouseQuery(BaseEventsTest):
             "groupby": [],
             "sample": 0.1
         })
-        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-        request = Request(query=query, settings=request_settings, extensions={})
+        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+        request = Request(query=query, settings=request_query_settings, extensions={})
 
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
@@ -28,8 +28,8 @@ class TestClickhouseQuery(BaseEventsTest):
             "groupby": [],
             "sample": 0.1
         })
-        request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
-        request = Request(query=query, settings=request_settings, extensions={})
+        request_query_settings = RequestQuerySettings(turbo=True, consistent=False, debug=False)
+        request = Request(query=query, settings=request_query_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
         assert 'SAMPLE 0.1' in clickhouse_query.format()
@@ -41,9 +41,9 @@ class TestClickhouseQuery(BaseEventsTest):
             "aggregations": [],
             "groupby": [],
         })
-        request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
+        request_query_settings = RequestQuerySettings(turbo=True, consistent=False, debug=False)
 
-        request = Request(query=query, settings=request_settings, extensions={})
+        request = Request(query=query, settings=request_query_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
         assert "SAMPLE 0.2" in clickhouse_query.format()
@@ -54,9 +54,9 @@ class TestClickhouseQuery(BaseEventsTest):
             "aggregations": [],
             "groupby": [],
         })
-        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
 
-        request = Request(query=query, settings=request_settings, extensions={})
+        request = Request(query=query, settings=request_query_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
         assert 'SAMPLE' not in clickhouse_query.format()

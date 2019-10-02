@@ -5,7 +5,7 @@ from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_query_settings import RequestQuerySettings
 from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import RateLimitParameters
 
@@ -60,14 +60,14 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            request_settings: RequestSettings,
+            request_query_settings: RequestQuerySettings,
     ) -> None:
         self._project_ids = util.to_list(extension_data['project'])
 
         if self._project_ids:
             query.add_conditions([('project_id', 'IN', self._project_ids)])
 
-        request_settings.add_rate_limit(self._get_rate_limit_params(self._project_ids))
+        request_query_settings.add_rate_limit(self._get_rate_limit_params(self._project_ids))
 
 
 class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
@@ -81,11 +81,11 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            request_settings: RequestSettings,
+            request_query_settings: RequestQuerySettings,
     ) -> None:
-        super().process_query(query, extension_data, request_settings)
+        super().process_query(query, extension_data, request_query_settings)
 
-        if not request_settings.get_turbo():
+        if not request_query_settings.get_turbo():
             final, exclude_group_ids = get_projects_query_flags(self._project_ids)
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query

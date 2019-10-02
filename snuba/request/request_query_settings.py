@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
 
 
-class RequestSettings:
+class RequestQuerySettings:
     def __init__(self, turbo: bool, consistent: bool, debug: bool):
         self.__turbo = turbo
         self.__consistent = consistent
