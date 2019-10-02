@@ -18,9 +18,11 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.query import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.util import qualified_column
 
 
 def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
@@ -249,25 +251,33 @@ class EventsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-    def default_conditions(self):
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
         return [
-            ('deleted', '=', 0),
+            (qualified_column('deleted', table_alias), '=', 0),
         ]
 
-    def column_expr(self, column_name, body):
-        processed_column = self.__tags_processor.process_column_expression(column_name, body)
+    def get_min_columns(self) -> Sequence[str]:
+        return ('event_id', 'project_id', 'timestamp')
+
+    def get_timestamp_column(self) -> str:
+        return 'timestamp'
+
+    def column_expr(self, column_name, body, table_alias: str=""):
+        processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column
         elif column_name == 'issue' or column_name == 'group_id':
-            return 'nullIf(group_id, 0)'
+            return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
         elif column_name == 'message':
             # Because of the rename from message->search_message without backfill,
             # records will have one or the other of these fields.
             # TODO this can be removed once all data has search_message filled in.
-            return 'coalesce(search_message, message)'
+            search_message = qualified_column('search_message', table_alias)
+            message = qualified_column('message', table_alias)
+            return f"coalesce({search_message}, {message})"
         else:
-            return super().column_expr(column_name, body)
+            return super().column_expr(column_name, body, table_alias)
 
     def get_promoted_tag_columns(self):
         return self.__promoted_tag_columns

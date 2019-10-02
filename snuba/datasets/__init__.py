@@ -3,8 +3,8 @@ from typing import Optional, Mapping, Sequence, Tuple
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
-
-from snuba.util import escape_col, parse_datetime
+from snuba.query.query import Condition
+from snuba.util import escape_col, parse_datetime, qualified_column
 
 
 class Dataset(object):
@@ -52,19 +52,19 @@ class Dataset(object):
         """
         return self.__table_writer
 
-    def default_conditions(self):
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
         """
         Return a list of the default conditions that should be applied to all
         queries on this dataset.
         """
         return []
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
         """
-        return escape_col(column_name)
+        return escape_col(qualified_column(column_name, table_alias))
 
     def process_condition(self, condition) -> Tuple[str, str, any]:
         """
@@ -93,6 +93,21 @@ class Dataset(object):
         """
         return []
 
+    def get_min_columns(self) -> Sequence[str]:
+        """
+        Return a list of the smallest subset of columns for a dataset.
+
+        This subset must include an event_id and timestamp type column, and
+        is used by the query splitter to help optimize loading wide results.
+        """
+        return NotImplementedError('dataset does not support get_min_columns')
+
+    def get_timestamp_column(self) -> str:
+        """
+        Return the name of the datetime column from get_min_columns.
+        """
+        return NotImplementedError('dataset does not support get_timestamp_column')
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(self, *args,
@@ -114,8 +129,9 @@ class TimeSeriesDataset(Dataset):
         self.__time_group_columns = time_group_columns
         self.__time_parse_columns = time_parse_columns
 
-    def __time_expr(self, column_name: str, granularity: int) -> str:
+    def __time_expr(self, column_name: str, granularity: int, table_alias: str="") -> str:
         real_column = self.__time_group_columns[column_name]
+        real_column = qualified_column(real_column, table_alias)
         template = {
             3600: 'toStartOfHour({column})',
             60: 'toStartOfMinute({column})',
@@ -123,18 +139,18 @@ class TimeSeriesDataset(Dataset):
         }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
         return template.format(column=real_column, granularity=granularity)
 
-    def column_expr(self, column_name, body):
+    def column_expr(self, column_name, body, table_alias: str=""):
         if column_name in self.__time_group_columns:
-            return self.__time_expr(column_name, body['granularity'])
+            return self.__time_expr(column_name, body['granularity'], table_alias)
         else:
-            return super().column_expr(column_name, body)
+            return super().column_expr(column_name, body, table_alias)
 
     def process_condition(self, condition) -> Tuple[str, str, any]:
         lhs, op, lit = condition
         if (
-            lhs in self.__time_parse_columns and
-            op in ('>', '<', '>=', '<=', '=', '!=') and
-            isinstance(lit, str)
+            lhs in self.__time_parse_columns
+            and op in ('>', '<', '>=', '<=', '=', '!=')
+            and isinstance(lit, str)
         ):
             lit = parse_datetime(lit)
         return lhs, op, lit
