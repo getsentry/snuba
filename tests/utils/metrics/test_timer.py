@@ -1,9 +1,11 @@
-import time
+from snuba.utils.metrics.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 
 
 def test_timer():
-    t = Timer("timer")
+    time = TestingClock()
+
+    t = Timer("timer", clock=time)
     time.sleep(0.001)
     t.mark("thing1")
     time.sleep(0.001)

@@ -1,9 +1,9 @@
-import time
 from itertools import groupby
 from typing import Optional, Mapping, MutableSequence, Tuple
 from mypy_extensions import TypedDict
 
-from snuba.utils.metrics.metrics import Metrics
+from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.clock import Clock, SystemClock
 from snuba.utils.metrics.types import Tags
 
 
@@ -14,14 +14,16 @@ class TimerData(TypedDict):
 
 
 class Timer:
-    def __init__(self, name: str):
+    def __init__(self, name: str, clock: Clock = SystemClock()):
         self.__name = name
-        self.__marks: MutableSequence[Tuple[str, float]] = [(name, time.time())]
+        self.__clock = clock
+
+        self.__marks: MutableSequence[Tuple[str, float]] = [(self.__name, self.__clock.time())]
         self.__data: Optional[TimerData] = None
 
     def mark(self, name: str) -> None:
         self.__data = None
-        self.__marks.append((name, time.time()))
+        self.__marks.append((name, self.__clock.time()))
 
     def __diff_ms(self, start: float, end: float) -> int:
         return int((end - start) * 1000)
@@ -29,7 +31,7 @@ class Timer:
     def finish(self) -> TimerData:
         if self.__data is None:
             start = self.__marks[0][1]
-            end = time.time() if len(self.__marks) == 1 else self.__marks[-1][1]
+            end = self.__clock.time() if len(self.__marks) == 1 else self.__marks[-1][1]
             durations = [
                 (name, self.__diff_ms(self.__marks[i][1], ts))
                 for i, (name, ts) in enumerate(self.__marks[1:])
