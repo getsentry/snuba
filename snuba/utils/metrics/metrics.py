@@ -1,6 +1,7 @@
-from random import random
 from collections import ChainMap
+from random import random
 from typing import Mapping, Optional, Union
+
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
 
@@ -25,7 +26,7 @@ class Metrics:
             return name
 
     def __merge_tags(self, tags: Optional[Tags]) -> Tags:
-        return ChainMap(*[d for d in [self.__tags, tags] if d is not None])
+        return ChainMap(*[d for d in [tags, self.__tags] if d is not None])
 
     def __is_sampled(self, name: str) -> bool:
         return self.__sample_rates.get(name, 1.0) >= random()
