@@ -1,16 +1,23 @@
 from itertools import groupby
-from typing import Optional, Mapping, MutableSequence, Tuple
-from mypy_extensions import TypedDict
+from typing import Optional, Mapping, MutableSequence, Tuple, TYPE_CHECKING
 
 from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.clock import Clock, SystemClock
 from snuba.utils.metrics.types import Tags
 
+if TYPE_CHECKING:
+    from mypy_extensions import TypedDict
 
-class TimerData(TypedDict):
-    timestamp: int
-    duration_ms: int
-    marks_ms: Mapping[str, int]
+    class TimerData(TypedDict):
+        timestamp: int
+        duration_ms: int
+        marks_ms: Mapping[str, int]
+
+
+else:
+    from typing import Any
+
+    TimerData = Mapping[Any, Any]
 
 
 class Timer:
