@@ -7,6 +7,10 @@ from snuba.utils.metrics.types import Tags
 
 
 class DatadogMetricsBackend(MetricsBackend):
+    """
+    A metrics backend that records metrics to Datadog.
+    """
+
     def __init__(self, client: DogStatsd):
         self.__client = client
 

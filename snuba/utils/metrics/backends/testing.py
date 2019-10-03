@@ -22,8 +22,15 @@ class Timing(NamedTuple):
     tags: Optional[Tags]
 
 
-# TODO: This might make sense to extend the dummy metrics backend.
 class TestingMetricsBackend(MetricsBackend):
+    """
+    A metrics backend that logs all metrics recorded. Intended for testing
+    the behavior of the metrics implementations themselves. Not for general
+    use (it will cause unbounded memory consumption.)
+    """
+
+    # TODO: This might make sense to extend the dummy metrics backend.
+
     def __init__(self) -> None:
         self.calls: MutableSequence[Union[Increment, Gauge, Timing]] = []
 

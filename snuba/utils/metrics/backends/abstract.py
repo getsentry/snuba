@@ -5,6 +5,10 @@ from snuba.utils.metrics.types import Tags
 
 
 class MetricsBackend(ABC):
+    """
+    An abstract class that defines the interface for metrics backends.
+    """
+
     @abstractmethod
     def increment(
         self, name: str, value: Union[int, float] = 1, tags: Optional[Tags] = None

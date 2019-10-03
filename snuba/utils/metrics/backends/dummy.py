@@ -6,7 +6,16 @@ from snuba.utils.metrics.types import Tags
 
 
 class DummyMetricsBackend(MetricsBackend):
-    def __init__(self, strict: bool = True):
+    """
+    A metrics backend that does not record metrics. Intended for use during
+    development, or other environments where metrics support may not be
+    required.
+    """
+
+    def __init__(self, strict: bool = False):
+        """
+        :param strict: Enable runtime type checking of parameter values.
+        """
         self.__strict = strict
 
     def __validate_tags(self, tags: Tags) -> None:

@@ -3,6 +3,10 @@ from abc import ABC, abstractmethod
 
 
 class Clock(ABC):
+    """
+    An abstract clock interface.
+    """
+
     @abstractmethod
     def time(self) -> float:
         raise NotImplementedError
@@ -13,6 +17,10 @@ class Clock(ABC):
 
 
 class SystemClock(Clock):
+    """
+    A clock implementation that uses the system clock for the current time.
+    """
+
     def time(self) -> float:
         return time.time()
 
@@ -21,6 +29,11 @@ class SystemClock(Clock):
 
 
 class TestingClock(Clock):
+    """
+    A clock implementation that uses a stable time for testing. To advance
+    the time, use the ``sleep`` method.
+    """
+
     def __init__(self) -> None:
         self.__time = 0.0
 
