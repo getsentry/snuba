@@ -16,6 +16,7 @@ from snuba.datasets.schemas.join import (
 )
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.extensions import QueryExtension
+from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Condition
 
@@ -83,7 +84,7 @@ class Groups(TimeSeriesDataset):
         groups_conditions = self.__grouped_message.default_conditions(self.GROUPS_ALIAS)
         return events_conditions + groups_conditions
 
-    def column_expr(self, column_name, body, table_alias: str=""):
+    def column_expr(self, column_name, body, parsing_context: ParsingContext, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
         # Thus, as of now, receiving a table_alias here is not supported.
@@ -94,14 +95,14 @@ class Groups(TimeSeriesDataset):
         if not match:
             # anything that is not prefixed with a table alias is simply
             # escaped and returned. It could be a literal.
-            return super().column_expr(column_name, body, table_alias)
+            return super().column_expr(column_name, body, parsing_context, table_alias)
         else:
             table_alias = match[1]
             simple_column_name = match[2]
             if table_alias == self.GROUPS_ALIAS:
-                return self.__grouped_message.column_expr(simple_column_name, body, table_alias)
+                return self.__grouped_message.column_expr(simple_column_name, body, parsing_context, table_alias)
             elif table_alias == self.EVENTS_ALIAS:
-                return self.__events.column_expr(simple_column_name, body, table_alias)
+                return self.__events.column_expr(simple_column_name, body, parsing_context, table_alias)
             else:
                 # This is probably an error condition. To keep consistency with the behavior
                 # in existing datasets, we let Clickhouse figure it out.

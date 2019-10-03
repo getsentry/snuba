@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.parsing import ParsingContext
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -41,6 +42,7 @@ class TagColumnProcessor:
     def process_column_expression(self,
         column_name: str,
         body: MutableMapping[str, Any],
+        parsing_context: ParsingContext,
         table_alias: str="",
     ) -> Union[None, Any]:
         """
@@ -53,7 +55,7 @@ class TagColumnProcessor:
         if NESTED_COL_EXPR_RE.match(column_name):
             return self.__tag_expr(column_name, table_alias)
         elif column_name in ['tags_key', 'tags_value']:
-            return self.__tags_expr(column_name, body, table_alias)
+            return self.__tags_expr(column_name, body, parsing_context, table_alias)
         return None
 
     def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
@@ -97,6 +99,7 @@ class TagColumnProcessor:
     def __tags_expr(self,
         column_name: str,
         body: MutableMapping[str, Any],
+        parsing_context: ParsingContext,
         table_alias: str="",
     ) -> str:
         """
@@ -138,7 +141,7 @@ class TagColumnProcessor:
             # put the all_tags expression in the alias cache so we can use the alias
             # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
             # expanding the whole tags expression again.
-            expr = alias_expr(expr, 'all_tags', body)
+            expr = alias_expr(expr, 'all_tags', parsing_context)
             return u'({})[{}]'.format(expr, 1 if k_or_v == 'key' else 2)
         else:
             # If we are only ever going to use one of tags_key or tags_value, don't
