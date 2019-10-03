@@ -44,6 +44,57 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
     assert query.get_conditions() == expected_conditions
 
 
+def test_project_extension_query_adds_rate_limits():
+    extension = ProjectExtension(
+        processor=ProjectExtensionProcessor()
+    )
+    raw_data = {
+        'project': [2, 3]
+    }
+    valid_data = validate_jsonschema(raw_data, extension.get_schema())
+    query = Query({
+        'conditions': []
+    })
+    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+
+    num_rate_limits_before_processing = len(request_query_settings.get_rate_limit_params())
+    extension.get_processor().process_query(query, valid_data, request_query_settings)
+
+    rate_limits = request_query_settings.get_rate_limit_params()
+    # make sure a rate limit was added by the processing
+    assert len(rate_limits) == num_rate_limits_before_processing + 1
+
+    most_recent_rate_limit = rate_limits[-1]
+    assert most_recent_rate_limit.bucket == '2'
+    assert most_recent_rate_limit.per_second_limit == 1000
+    assert most_recent_rate_limit.concurrent_limit == 1000
+
+
+def test_project_extension_project_rate_limits_are_overridden():
+    extension = ProjectExtension(
+        processor=ProjectExtensionProcessor()
+    )
+    raw_data = {
+        'project': [2, 3]
+    }
+    valid_data = validate_jsonschema(raw_data, extension.get_schema())
+    query = Query({
+        'conditions': []
+    })
+    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+    state.set_config('project_per_second_limit_2', 5)
+    state.set_config('project_concurrent_limit_2', 10)
+
+    extension.get_processor().process_query(query, valid_data, request_query_settings)
+
+    rate_limits = request_query_settings.get_rate_limit_params()
+    most_recent_rate_limit = rate_limits[-1]
+
+    assert most_recent_rate_limit.bucket == '2'
+    assert most_recent_rate_limit.per_second_limit == 5
+    assert most_recent_rate_limit.concurrent_limit == 10
+
+
 class TestProjectExtensionWithGroups(BaseTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)

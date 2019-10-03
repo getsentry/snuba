@@ -108,17 +108,20 @@ class RateLimit(AbstractContextManager):
         reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
 
         if reason:
+            self.__return_query_to_start_time()
             raise RateLimitExceeded(
                 '{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}'.format(r=reason)
             )
 
         return stats
 
+    def __return_query_to_start_time(self):
+        state.rds.zincrby(self.__bucket, self.__query_id, -float(state.max_query_duration_s))
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         try:
             if self.__did_run:
-                # return the query to its start time
-                state.rds.zincrby(self.__bucket, self.__query_id, -float(state.max_query_duration_s))
+                self.__return_query_to_start_time()
             else:
                 state.rds.zrem(self.__bucket, self.__query_id)  # not allowed / not counted
         except Exception as ex:
@@ -165,5 +168,5 @@ class RateLimitAggregator(AbstractContextManager):
 
         return stats
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.stack.pop_all().close()
