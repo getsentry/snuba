@@ -4,7 +4,7 @@ from snuba.utils.metrics.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 
 
-def test_timer():
+def test_timer() -> None:
     time = TestingClock()
 
     t = Timer("timer", clock=time)
@@ -31,7 +31,7 @@ def test_timer():
     }
 
 
-def test_timer_send_metrics():
+def test_timer_send_metrics() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend)
 

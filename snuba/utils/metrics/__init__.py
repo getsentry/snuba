@@ -1,1 +1,1 @@
-from snuba.utils.metrics.metrics import Metrics  # noqa
+from snuba.utils.metrics.metrics import Metrics as Metrics  # noqa

@@ -7,7 +7,7 @@ from snuba.utils.metrics.backends.testing import (
 from snuba.utils.metrics.metrics import Metrics
 
 
-def test_increment():
+def test_increment() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend)
 
@@ -18,7 +18,7 @@ def test_increment():
     assert backend.calls[-1] == Increment("key", 1, {"key": "value"})
 
 
-def test_gauge():
+def test_gauge() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend)
 
@@ -29,7 +29,7 @@ def test_gauge():
     assert backend.calls[-1] == Gauge("key", 1, {"key": "value"})
 
 
-def test_timing():
+def test_timing() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend)
 
@@ -40,7 +40,7 @@ def test_timing():
     assert backend.calls[-1] == Timing("key", 1, {"key": "value"})
 
 
-def test_constant_tags():
+def test_constant_tags() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend, tags={"constant-key": "value"})
 
@@ -58,17 +58,17 @@ def test_constant_tags():
     assert backend.calls[-1] == Increment("key", 1, {"constant-key": "override"})
 
 
-def test_namespace():
+def test_namespace() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend, namespace="prefix")
 
-    # TODO: More comprehensive per-method coverage?
+    # TODO: More comprehensive per-method coveragye?
 
     metrics.increment("key", 1)
     assert backend.calls[-1] == Increment("prefix.key", 1, {})
 
 
-def test_sampling_rate():
+def test_sampling_rate() -> None:
     backend = TestingMetricsBackend()
     metrics = Metrics(backend, sample_rates={"sampled": 0.0})
 
