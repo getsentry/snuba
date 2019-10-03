@@ -23,9 +23,10 @@ from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, ge
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
-from snuba.util import local_dataset_mode, Timer
+from snuba.util import local_dataset_mode
 from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.metrics.timer import Timer
 
 
 logger = logging.getLogger('snuba.api')

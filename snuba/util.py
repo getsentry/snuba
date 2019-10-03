@@ -5,18 +5,19 @@ from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
 from hashlib import md5
-from itertools import chain, groupby
+from itertools import chain
 from typing import Mapping, NamedTuple, Optional
 import logging
 import numbers
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
-import time
 
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.timer import Timer
+
 
 logger = logging.getLogger('snuba.util')
 
@@ -545,41 +546,6 @@ def raw_query(request: Request, sql, client, timer, stats=None):
         result['sql'] = sql
 
     return (result, status)
-
-
-class Timer(object):
-    def __init__(self, name=''):
-        self.marks = [(name, time.time())]
-        self.final = None
-
-    def mark(self, name):
-        self.final = None
-        self.marks.append((name, time.time()))
-
-    def finish(self):
-        if not self.final:
-            start = self.marks[0][1]
-            end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
-            diff_ms = lambda start, end: int((end - start) * 1000)
-            durations = [(name, diff_ms(self.marks[i][1], ts)) for i, (name, ts) in enumerate(self.marks[1:])]
-            self.final = {
-                'timestamp': int(start),
-                'duration_ms': diff_ms(start, end),
-                'marks_ms': {
-                    key: sum(d[1] for d in group) for key, group in groupby(sorted(durations), key=lambda x: x[0])
-                }
-            }
-        return self.final
-
-    def for_json(self):
-        return self.finish()
-
-    def send_metrics_to(self, metrics: Metrics, tags: Optional[Mapping[str, str]] = None, mark_tags: Optional[Mapping[str, str]] = None):
-        name = self.marks[0][0]
-        final = self.finish()
-        metrics.timing(name, final['duration_ms'], tags=tags)
-        for mark, duration in final['marks_ms'].items():
-            metrics.timing('{}.{}'.format(name, mark), duration, tags=mark_tags)
 
 
 def time_request(name):
