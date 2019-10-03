@@ -23,7 +23,10 @@ class Metrics:
         self.__sample_rates = sample_rates if sample_rates is not None else {}
 
     def __apply_namespace(self, name: str) -> str:
-        return f"{self.__namespace}.{name}"
+        if self.__namespace is not None:
+            return f"{self.__namespace}.{name}"
+        else:
+            return name
 
     def __merge_tags(self, tags: Optional[Tags]) -> Tags:
         return ChainMap(*[d for d in [self.__tags, tags] if d is not None])
