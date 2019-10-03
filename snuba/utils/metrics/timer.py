@@ -18,7 +18,9 @@ class Timer:
         self.__name = name
         self.__clock = clock
 
-        self.__marks: MutableSequence[Tuple[str, float]] = [(self.__name, self.__clock.time())]
+        self.__marks: MutableSequence[Tuple[str, float]] = [
+            (self.__name, self.__clock.time())
+        ]
         self.__data: Optional[TimerData] = None
 
     def mark(self, name: str) -> None:
