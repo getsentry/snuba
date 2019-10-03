@@ -3,7 +3,8 @@ from itertools import groupby
 from typing import Optional, Mapping, MutableSequence, Tuple
 from mypy_extensions import TypedDict
 
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.metrics import Metrics
+from snuba.utils.metrics.types import Tags
 
 
 class TimerData(TypedDict):
@@ -49,8 +50,8 @@ class Timer:
     def send_metrics_to(
         self,
         metrics: Metrics,
-        tags: Optional[Mapping[str, str]] = None,
-        mark_tags: Optional[Mapping[str, str]] = None,
+        tags: Optional[Tags] = None,
+        mark_tags: Optional[Tags] = None,
     ) -> None:
         data = self.finish()
         metrics.timing(self.__name, data["duration_ms"], tags=tags)

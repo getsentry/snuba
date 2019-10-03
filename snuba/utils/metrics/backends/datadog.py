@@ -2,8 +2,8 @@ from typing import Optional, Sequence, Union
 
 from datadog import DogStatsd
 
-from snuba.utils.metrics import Tags
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.types import Tags
 
 
 class DatadogMetricsBackend(MetricsBackend):

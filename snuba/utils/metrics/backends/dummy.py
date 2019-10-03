@@ -1,8 +1,8 @@
 from collections import Mapping
 from typing import Optional, Union
 
-from snuba.utils.metrics import Tags
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.types import Tags
 
 
 class DummyMetricsBackend(MetricsBackend):

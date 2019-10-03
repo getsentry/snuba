@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Union
 
-from snuba.utils.metrics import Tags
+from snuba.utils.metrics.types import Tags
 
 
 class MetricsBackend(ABC):
