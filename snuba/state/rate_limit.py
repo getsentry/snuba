@@ -66,7 +66,7 @@ class RateLimit(AbstractContextManager):
         ])
 
         if bypass_rate_limit == 1:
-            return (True, 0, 0)
+            return {}
 
         pipe = state.rds.pipeline(transaction=False)
         pipe.zremrangebyscore(self.__bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
@@ -87,7 +87,7 @@ class RateLimit(AbstractContextManager):
             self.__did_run = True
         except Exception as ex:
             logger.exception(ex)
-            return (True, 0, 0)  # fail open if redis is having issues
+            return {}  # fail open if redis is having issues
 
         per_second = historical / float(state.rate_lookback_s)
 
