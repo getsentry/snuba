@@ -96,7 +96,7 @@ class TestSnapshotWorker:
             snapshot_id=str(snapshot_id),
             transaction_data=transact_data,
             replacements_topic=None,
-            metrics=Metrics(DummyMetricsBackend()),
+            metrics=Metrics(DummyMetricsBackend(strict=True)),
         )
 
         ret = worker.process_message(
