@@ -76,3 +76,6 @@ def test_sampling_rate():
 
     metrics.increment("sampled", 1)
     assert backend.calls == []
+
+    metrics.increment("unsampled", 1, {})
+    assert backend.calls == [Increment("unsampled", 1, {})]
