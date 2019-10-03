@@ -7,6 +7,7 @@ from typing import Any, MutableMapping, NamedTuple
 
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.request import Request
 from snuba.util import (
     all_referenced_columns,
@@ -28,7 +29,7 @@ class QueryResult(NamedTuple):
 
 def raw_query(
     request: Request,
-    sql: str,
+    query: ClickhouseQuery,
     client: ClickhousePool,
     timer: Timer,
     stats=None,
@@ -73,6 +74,7 @@ def raw_query(
 
     timer.mark('get_configs')
 
+    sql = query.format_sql()
     query_id = md5(force_bytes(sql)).hexdigest()
     with state.deduper(query_id if use_deduper else None) as is_dupe:
         timer.mark('dedupe_wait')
@@ -117,7 +119,7 @@ def raw_query(
 
                         try:
                             result = NativeDriverReader(client).execute(
-                                sql,
+                                query,
                                 query_settings,
                                 # All queries should already be deduplicated at this point
                                 # But the query_id will let us know if they aren't

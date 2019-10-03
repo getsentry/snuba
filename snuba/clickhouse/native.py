@@ -7,6 +7,7 @@ from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -128,7 +129,7 @@ class ClickhousePool(object):
             pass
 
 
-class NativeDriverReader(Reader):
+class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client):
         self.__client = client
 
@@ -153,7 +154,7 @@ class NativeDriverReader(Reader):
 
     def execute(
         self,
-        query: str,
+        query: ClickhouseQuery,
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,
@@ -165,9 +166,10 @@ class NativeDriverReader(Reader):
         if query_id is not None:
             kwargs["query_id"] = query_id
 
+        sql = query.format_sql()
         return self.__transform_result(
             self.__client.execute(
-                query, with_column_types=True, settings=settings, **kwargs
+                sql, with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
         )
