@@ -3,7 +3,8 @@ from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass
 import logging
 import time
-from typing import Mapping, Sequence
+from types import TracebackType
+from typing import Mapping, MutableMapping, Optional, Sequence, Type
 import uuid
 
 from snuba import state
@@ -20,8 +21,8 @@ class RateLimitParameters:
 
     rate_limit_name: str
     bucket: str
-    per_second_limit: float
-    concurrent_limit: float
+    per_second_limit: Optional[float]
+    concurrent_limit: Optional[float]
 
 
 class RateLimitExceeded(Exception):
@@ -53,12 +54,10 @@ class RateLimit(AbstractContextManager):
     def __init__(self, rate_limit_params: RateLimitParameters) -> None:
         self.__rate_limit_params = rate_limit_params
         self.__did_run = False
-        self.__query_id = None
-        self.__bucket = None
+        self.__query_id = uuid.uuid4()
+        self.__bucket = '{}{}'.format(state.ratelimit_prefix, self.__rate_limit_params.bucket)
 
     def __enter__(self) -> Mapping[str, float]:
-        self.__bucket = '{}{}'.format(state.ratelimit_prefix, self.__rate_limit_params.bucket)
-        self.__query_id = uuid.uuid4()
         now = time.time()
         bypass_rate_limit, rate_history_s = state.get_configs([
             ('bypass_rate_limit', 0),
@@ -93,7 +92,7 @@ class RateLimit(AbstractContextManager):
 
         rate_limit_name = self.__rate_limit_params.rate_limit_name
 
-        stats = {
+        stats: Mapping[str, float] = {
             '{}_rate'.format(rate_limit_name): per_second,
             '{}_concurrent'.format(rate_limit_name): concurrent,
 
@@ -115,10 +114,15 @@ class RateLimit(AbstractContextManager):
 
         return stats
 
-    def __return_query_to_start_time(self):
+    def __return_query_to_start_time(self) -> None:
         state.rds.zincrby(self.__bucket, self.__query_id, -float(state.max_query_duration_s))
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+            self,
+            exc_type: Optional[Type[BaseException]],
+            exc_val: Optional[BaseException],
+            exc_tb: Optional[TracebackType]
+    ) -> None:
         try:
             if self.__did_run:
                 self.__return_query_to_start_time()
@@ -159,8 +163,8 @@ class RateLimitAggregator(AbstractContextManager):
         self.rate_limits = map(RateLimit, rate_limit_params)
         self.stack = ExitStack()
 
-    def __enter__(self) -> Mapping[str, float]:
-        stats = {}
+    def __enter__(self) -> MutableMapping[str, float]:
+        stats: MutableMapping[str, float] = {}
 
         for rate_limit in self.rate_limits:
             child_stats = self.stack.enter_context(rate_limit)
@@ -168,5 +172,10 @@ class RateLimitAggregator(AbstractContextManager):
 
         return stats
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+            self,
+            exc_type: Optional[Type[BaseException]],
+            exc_val: Optional[BaseException],
+            exc_tb: Optional[TracebackType]
+    ) -> None:
         self.stack.pop_all().close()
