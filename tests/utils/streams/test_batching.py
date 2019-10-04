@@ -1,9 +1,9 @@
 import time
 from datetime import datetime
+from unittest.mock import patch
 
 import six
 from confluent_kafka import TopicPartition
-from mock import patch
 from six.moves import range
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
