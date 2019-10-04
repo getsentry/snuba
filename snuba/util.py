@@ -17,6 +17,7 @@ from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.types import Tags
 
 
 logger = logging.getLogger('snuba.util')
@@ -594,7 +595,7 @@ def settings_override(overrides):
             setattr(settings, k, v)
 
 
-def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = None) -> MetricsBackend:
+def create_metrics(host: str, port: int, prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     """Create a DogStatsd object with the specified prefix and tags. Prefixes
     must start with `snuba.<category>`, for example: `snuba.processor`."""
     from datadog import DogStatsd
