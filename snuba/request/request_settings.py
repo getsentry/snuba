@@ -6,6 +6,11 @@ from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParame
 class RequestSettings:
     """
     Settings that apply to how the query in the request should be run.
+
+    The settings provided in this class do not directly affect the SQL statement that will created.
+
+    They can indirectly affect the SQL statement that will be formed. For example, `turbo` affects
+    the formation of the query for projects, but it doesn't directly appear in the SQL statement.
     """
 
     def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
