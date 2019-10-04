@@ -110,7 +110,12 @@ def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Mapping[str, 
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
 
     if reason:
-        state.rds.zrem(bucket, query_id)  # not allowed / not counted
+        try:
+            state.rds.zrem(bucket, query_id)  # not allowed / not counted
+        except Exception as ex:
+            logger.exception(ex)
+            pass
+
         raise RateLimitExceeded(
             '{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}'.format(r=reason)
         )
