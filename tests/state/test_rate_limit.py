@@ -86,18 +86,18 @@ class TestRateLimit(BaseTest):
         with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
             pass
 
+        # raise when the inner rate limit should fail
         rate_limit_params_outer = RateLimitParameters('foo', 'bar', None, 0)
         rate_limit_params_inner = RateLimitParameters('foo', 'bar', None, 5)
 
-        # raise when the inner rate limit should fail
         with pytest.raises(RateLimitExceeded):
             with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
                 pass
 
+        # raise when the outer rate limit should fail
         rate_limit_params_outer = RateLimitParameters('foo', 'bar', None, 5)
         rate_limit_params_inner = RateLimitParameters('foo', 'bar', None, 0)
 
-        # raise when the outer rate limit should fail
         with pytest.raises(RateLimitExceeded):
             with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
                 pass
