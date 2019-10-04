@@ -31,9 +31,11 @@ PROJECT_EXTENSION_SCHEMA = {
 
 
 class ProjectExtensionProcessor(ExtensionQueryProcessor):
-    def __init__(self):
-        super().__init__()
-        self._project_ids = None
+    """
+    Extension processor for datasets that require a project ID to be given in the request.
+
+    It extracts the project IDs from the query and adds project specific rate limits.
+    """
 
     def _get_rate_limit_params(self, project_ids: Sequence[int]) -> RateLimitParameters:
         project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
@@ -56,18 +58,28 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             concurrent_limit=concurr,
         )
 
+    def do_post_processing(
+            self,
+            project_ids: Sequence[int],
+            query: Query,
+            request_query_settings: RequestQuerySettings,
+    ) -> None:
+        pass
+
     def process_query(
             self,
             query: Query,
             extension_data: ExtensionData,
             request_query_settings: RequestQuerySettings,
     ) -> None:
-        self._project_ids = util.to_list(extension_data['project'])
+        project_ids = util.to_list(extension_data['project'])
 
-        if self._project_ids:
-            query.add_conditions([('project_id', 'IN', self._project_ids)])
+        if project_ids:
+            query.add_conditions([('project_id', 'IN', project_ids)])
 
-        request_query_settings.add_rate_limit(self._get_rate_limit_params(self._project_ids))
+        request_query_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
+
+        self.do_post_processing(project_ids, query, request_query_settings)
 
 
 class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
@@ -77,16 +89,14 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
-    def process_query(
+    def do_post_processing(
             self,
+            project_ids: Sequence[int],
             query: Query,
-            extension_data: ExtensionData,
             request_query_settings: RequestQuerySettings,
     ) -> None:
-        super().process_query(query, extension_data, request_query_settings)
-
         if not request_query_settings.get_turbo():
-            final, exclude_group_ids = get_projects_query_flags(self._project_ids)
+            final, exclude_group_ids = get_projects_query_flags(project_ids)
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
