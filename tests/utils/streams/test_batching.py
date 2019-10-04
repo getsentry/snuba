@@ -191,33 +191,3 @@ class TestConsumer(object):
         assert commit_message.topic() == 'commits'
         assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
         assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
-
-    def test_dead_letter_topic(self):
-        class FailingFakeWorker(FakeWorker):
-            def process_message(*args, **kwargs):
-                1 / 0
-
-        producer = FakeKafkaProducer()
-        consumer = FakeBatchingKafkaConsumer(
-            'topic',
-            worker=FailingFakeWorker(),
-            max_batch_size=100,
-            max_batch_time=2000,
-            bootstrap_servers=None,
-            group_id='group',
-            producer=producer,
-            dead_letter_topic='dlt',
-            metrics=DummyMetricsBackend(strict=True),
-        )
-
-        message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
-        consumer.consumer.items = [message]
-        consumer._run_once()
-
-        assert len(producer.messages) == 1
-        produced_message = producer.messages[0]
-
-        assert ('dlt', message.key(), message.value()) \
-            == (produced_message.topic(), produced_message.key(), produced_message.value())
-
-        assert produced_message.headers() == {'partition': '1', 'offset': '2', 'topic': 'topic'}

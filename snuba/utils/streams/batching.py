@@ -122,7 +122,6 @@ class BatchingKafkaConsumer:
         group_id: str,
         metrics: MetricsBackend,
         producer: Optional[Producer] = None,
-        dead_letter_topic: Optional[str] = None,
         commit_log_topic: Optional[str] = None,
         auto_offset_reset: str = "error",
         queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
@@ -160,7 +159,6 @@ class BatchingKafkaConsumer:
 
         self.producer = producer
         self.commit_log_topic = commit_log_topic
-        self.dead_letter_topic = dead_letter_topic
 
     def create_consumer(
         self,
@@ -243,43 +241,22 @@ class BatchingKafkaConsumer:
         if not self.__batch_deadline:
             self.__batch_deadline = self.max_batch_time / 1000.0 + start
 
-        try:
-            result = self.worker.process_message(msg)
-        except Exception:
-            if self.dead_letter_topic:
-                logger.exception(
-                    "Error handling message, sending to dead letter topic."
-                )
-                assert self.producer is not None  # XXX: Hack to ensure non-Optional
-                self.producer.produce(
-                    self.dead_letter_topic,
-                    key=msg.key(),
-                    value=msg.value(),
-                    headers={
-                        "partition": str(msg.partition()) if msg.partition() else None,
-                        "offset": str(msg.offset()) if msg.offset() else None,
-                        "topic": msg.topic(),
-                    },
-                    on_delivery=self._commit_message_delivery_callback,
-                )
-            else:
-                raise
-        else:
-            if result is not None:
-                self.__batch_results.append(result)
-        finally:
-            duration = (time.time() - start) * 1000
-            self.__batch_messages_processed_count += 1
-            self.__batch_processing_time_ms += duration
-            self.__metrics.timing("process_message", duration)
+        result = self.worker.process_message(msg)
+        if result is not None:
+            self.__batch_results.append(result)
 
-            topic_partition_key = (msg.topic(), msg.partition())
-            if topic_partition_key in self.__batch_offsets:
-                self.__batch_offsets[topic_partition_key].hi = msg.offset()
-            else:
-                self.__batch_offsets[topic_partition_key] = Offsets(
-                    msg.offset(), msg.offset()
-                )
+        duration = (time.time() - start) * 1000
+        self.__batch_messages_processed_count += 1
+        self.__batch_processing_time_ms += duration
+        self.__metrics.timing("process_message", duration)
+
+        topic_partition_key = (msg.topic(), msg.partition())
+        if topic_partition_key in self.__batch_offsets:
+            self.__batch_offsets[topic_partition_key].hi = msg.offset()
+        else:
+            self.__batch_offsets[topic_partition_key] = Offsets(
+                msg.offset(), msg.offset()
+            )
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
