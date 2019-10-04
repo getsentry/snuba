@@ -1,7 +1,6 @@
-import abc
 import logging
-import six
 import time
+from abc import ABC, abstractmethod
 
 from confluent_kafka import (
     Consumer, KafkaError, KafkaException,
@@ -18,13 +17,12 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 
 
-@six.add_metaclass(abc.ABCMeta)
-class AbstractBatchWorker(object):
+class AbstractBatchWorker(ABC):
     """The `BatchingKafkaConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
-    @abc.abstractmethod
+    @abstractmethod
     def process_message(self, message):
         """Called with each (raw) Kafka message, allowing the worker to do
         incremental (preferablly local!) work on events. The object returned
@@ -37,7 +35,7 @@ class AbstractBatchWorker(object):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def flush_batch(self, batch):
         """Called with a list of pre-processed (by `process_message`) objects.
         The worker should write the batch of processed messages into whatever
@@ -47,7 +45,7 @@ class AbstractBatchWorker(object):
         """
         pass
 
-    @abc.abstractmethod
+    @abstractmethod
     def shutdown(self):
         """Called when the `BatchingKafkaConsumer` is shutting down (because it
         was signalled to do so). Provides the worker a chance to do any final
@@ -216,8 +214,8 @@ class BatchingKafkaConsumer(object):
                     key=msg.key(),
                     value=msg.value(),
                     headers={
-                        'partition': six.text_type(msg.partition()) if msg.partition() else None,
-                        'offset': six.text_type(msg.offset()) if msg.offset() else None,
+                        'partition': str(msg.partition()) if msg.partition() else None,
+                        'offset': str(msg.offset()) if msg.offset() else None,
                         'topic': msg.topic(),
                     },
                     on_delivery=self._commit_message_delivery_callback,

@@ -2,9 +2,7 @@ import time
 from datetime import datetime
 from unittest.mock import patch
 
-import six
 from confluent_kafka import TopicPartition
-from six.moves import range
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
@@ -18,8 +16,8 @@ class FakeKafkaMessage(object):
         self._value = value
         self._key = key
         self._headers = {
-            six.text_type(k): six.text_type(v) if v else None
-            for k, v in six.iteritems(headers)
+            str(k): str(v) if v else None
+            for k, v in headers.items()
         } if headers else None
         self._headers = headers
         self._error = error
@@ -96,7 +94,7 @@ class FakeKafkaConsumer(object):
         return [
             TopicPartition(topic, partition, offset)
             for (topic, partition), offset in
-            six.iteritems(self.positions)
+            self.positions.items()
         ]
 
     def close(self, *args, **kwargs):
