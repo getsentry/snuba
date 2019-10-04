@@ -1,15 +1,28 @@
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import (
+    Any,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from confluent_kafka import (
     Consumer,
     KafkaError,
     KafkaException,
+    Message,
     OFFSET_BEGINNING,
     OFFSET_END,
     OFFSET_STORED,
     OFFSET_INVALID,
+    Producer,
+    TopicPartition,
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -28,7 +41,7 @@ class AbstractBatchWorker(ABC):
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message):
+    def process_message(self, message: Message) -> Optional[Any]:
         """Called with each (raw) Kafka message, allowing the worker to do
         incremental (preferablly local!) work on events. The object returned
         is put into the batch maintained by the `BatchingKafkaConsumer`.
@@ -41,7 +54,7 @@ class AbstractBatchWorker(ABC):
         pass
 
     @abstractmethod
-    def flush_batch(self, batch):
+    def flush_batch(self, batch: Sequence[Any]) -> None:
         """Called with a list of pre-processed (by `process_message`) objects.
         The worker should write the batch of processed messages into whatever
         store(s) it is maintaining. Afterwards the Kafka offsets are committed.
@@ -49,6 +62,13 @@ class AbstractBatchWorker(ABC):
         A simple example would be writing the batch to another Kafka topic.
         """
         pass
+
+
+@dataclass
+class Offsets:
+    __slots__ = ["lo", "hi"]
+    lo: int
+    hi: int
 
 
 class BatchingKafkaConsumer(object):
@@ -94,20 +114,20 @@ class BatchingKafkaConsumer(object):
 
     def __init__(
         self,
-        topics,
-        worker,
-        max_batch_size,
-        max_batch_time,
-        bootstrap_servers,
-        group_id,
+        topics: Union[str, Sequence[str]],
+        worker: AbstractBatchWorker,
+        max_batch_size: int,
+        max_batch_time: int,
+        bootstrap_servers: Sequence[str],
+        group_id: str,
         metrics: MetricsBackend,
-        producer=None,
-        dead_letter_topic=None,
-        commit_log_topic=None,
-        auto_offset_reset="error",
-        queued_max_messages_kbytes=DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-        queued_min_messages=DEFAULT_QUEUED_MIN_MESSAGES,
-    ):
+        producer: Optional[Producer] = None,
+        dead_letter_topic: Optional[str] = None,
+        commit_log_topic: Optional[str] = None,
+        auto_offset_reset: str = "error",
+        queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+        queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+    ) -> None:
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -118,22 +138,19 @@ class BatchingKafkaConsumer(object):
 
         self.shutdown = False
 
-        self.__batch_results = []
-        self.__batch_offsets = {}  # (topic, partition) = [low, high]
-        self.__batch_deadline = None
-        self.__batch_messages_processed_count = 0
+        self.__batch_results: MutableSequence[Any] = []
+        self.__batch_offsets: MutableMapping[
+            Tuple[str, int], Offsets
+        ] = {}  # (topic, partition) = Offsets
+        self.__batch_deadline: Optional[float] = None
+        self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
         # the messages in this batch (does not included time spent waiting for
         # new messages)
-        self.__batch_processing_time_ms = 0.0
-
-        if not isinstance(topics, (list, tuple)):
-            topics = [topics]
-        elif isinstance(topics, tuple):
-            topics = list(topics)
+        self.__batch_processing_time_ms: float = 0.0
 
         self.consumer = self.create_consumer(
-            topics,
+            [topics] if isinstance(topics, str) else topics,
             bootstrap_servers,
             group_id,
             auto_offset_reset,
@@ -147,13 +164,13 @@ class BatchingKafkaConsumer(object):
 
     def create_consumer(
         self,
-        topics,
-        bootstrap_servers,
-        group_id,
-        auto_offset_reset,
-        queued_max_messages_kbytes,
-        queued_min_messages,
-    ):
+        topics: Sequence[str],
+        bootstrap_servers: Sequence[str],
+        group_id: str,
+        auto_offset_reset: str,
+        queued_max_messages_kbytes: int,
+        queued_min_messages: int,
+    ) -> Consumer:
 
         consumer_config = {
             "enable.auto.commit": False,
@@ -167,10 +184,14 @@ class BatchingKafkaConsumer(object):
 
         consumer = Consumer(consumer_config)
 
-        def on_partitions_assigned(consumer, partitions):
+        def on_partitions_assigned(
+            consumer: Consumer, partitions: Sequence[TopicPartition]
+        ) -> None:
             logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(consumer, partitions):
+        def on_partitions_revoked(
+            consumer: Consumer, partitions: Sequence[TopicPartition]
+        ) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
@@ -181,7 +202,7 @@ class BatchingKafkaConsumer(object):
 
         return consumer
 
-    def run(self):
+    def run(self) -> None:
         "The main run loop, see class docstring for more information."
 
         logger.debug("Starting")
@@ -190,7 +211,7 @@ class BatchingKafkaConsumer(object):
 
         self._shutdown()
 
-    def _run_once(self):
+    def _run_once(self) -> None:
         self._flush()
 
         if self.producer:
@@ -208,14 +229,14 @@ class BatchingKafkaConsumer(object):
 
         self._handle_message(msg)
 
-    def signal_shutdown(self):
+    def signal_shutdown(self) -> None:
         """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
         Typically called from a signal handler."""
         logger.debug("Shutdown signalled")
 
         self.shutdown = True
 
-    def _handle_message(self, msg):
+    def _handle_message(self, msg: Message) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -229,6 +250,7 @@ class BatchingKafkaConsumer(object):
                 logger.exception(
                     "Error handling message, sending to dead letter topic."
                 )
+                assert self.producer is not None  # XXX: Hack to ensure non-Optional
                 self.producer.produce(
                     self.dead_letter_topic,
                     key=msg.key(),
@@ -253,11 +275,13 @@ class BatchingKafkaConsumer(object):
 
             topic_partition_key = (msg.topic(), msg.partition())
             if topic_partition_key in self.__batch_offsets:
-                self.__batch_offsets[topic_partition_key][1] = msg.offset()
+                self.__batch_offsets[topic_partition_key].hi = msg.offset()
             else:
-                self.__batch_offsets[topic_partition_key] = [msg.offset(), msg.offset()]
+                self.__batch_offsets[topic_partition_key] = Offsets(
+                    msg.offset(), msg.offset()
+                )
 
-    def _shutdown(self):
+    def _shutdown(self) -> None:
         logger.debug("Stopping")
 
         # drop in-memory events, letting the next consumer take over where we left off
@@ -268,7 +292,7 @@ class BatchingKafkaConsumer(object):
         self.consumer.close()
         logger.debug("Stopped")
 
-    def _reset_batch(self):
+    def _reset_batch(self) -> None:
         logger.debug("Resetting in-memory batch")
         self.__batch_results = []
         self.__batch_offsets = {}
@@ -276,7 +300,7 @@ class BatchingKafkaConsumer(object):
         self.__batch_messages_processed_count = 0
         self.__batch_processing_time_ms = 0.0
 
-    def _flush(self, force=False):
+    def _flush(self, force: bool = False) -> None:
         """Decides whether the `BatchingKafkaConsumer` should flush because of either
         batch size or time. If so, delegate to the worker, clear the current batch,
         and commit offsets to Kafka."""
@@ -322,11 +346,13 @@ class BatchingKafkaConsumer(object):
 
         self._reset_batch()
 
-    def _commit_message_delivery_callback(self, error, message):
+    def _commit_message_delivery_callback(
+        self, error: Optional[KafkaError], message: Message
+    ) -> None:
         if error is not None:
             raise Exception(error.str())
 
-    def _commit(self):
+    def _commit(self) -> None:
         retries = 3
         while True:
             try:
@@ -366,6 +392,7 @@ class BatchingKafkaConsumer(object):
                         item.partition,
                     )
 
+                assert self.producer is not None  # XXX: Hack to ensure non-Optional
                 self.producer.produce(
                     self.commit_log_topic,
                     key="{}:{}:{}".format(
