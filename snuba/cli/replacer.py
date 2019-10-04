@@ -55,7 +55,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',
-        tags=["group:%s" % consumer_group]
+        tags={"group": consumer_group}
     )
 
     client_settings = {
