@@ -18,6 +18,8 @@ from snuba import state
 
 logger = logging.getLogger('snuba.state.rate_limit')
 
+RateLimitStats = Mapping[str, float]
+
 
 @dataclass(frozen=True)
 class RateLimitParameters:
@@ -39,7 +41,7 @@ class RateLimitExceeded(Exception):
 
 
 @contextmanager
-def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Mapping[str, float]]:
+def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[RateLimitStats]:
     """
     A context manager for rate limiting that allows for limiting based on
     on a rolling-window per-second rate as well as the number of requests
@@ -161,11 +163,11 @@ class RateLimitAggregator(AbstractContextManager):
         self.rate_limit_params = rate_limit_params
         self.stack = ExitStack()
 
-    def __enter__(self) -> MutableMapping[str, float]:
+    def __enter__(self) -> RateLimitStats:
         stats: MutableMapping[str, float] = {}
 
         for rate_limit_param in self.rate_limit_params:
-            child_stats: Mapping[str, float] = self.stack.enter_context(rate_limit(rate_limit_param))
+            child_stats: RateLimitStats = self.stack.enter_context(rate_limit(rate_limit_param))
             stats.update(child_stats)
 
         return stats
