@@ -36,7 +36,7 @@ class Metrics:
         """
         self.__backend = backend
         self.__namespace = namespace
-        self.__tags = tags
+        self.__tags = tags if tags is not None else {}
         self.__sample_rates = sample_rates if sample_rates is not None else {}
 
     def __apply_namespace(self, name: str) -> str:
@@ -46,7 +46,7 @@ class Metrics:
             return name
 
     def __merge_tags(self, tags: Optional[Tags]) -> Tags:
-        return ChainMap(*[d for d in [tags, self.__tags] if d is not None])
+        return ChainMap(tags or {}, self.__tags)
 
     def __is_sampled(self, name: str) -> bool:
         """
