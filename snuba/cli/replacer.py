@@ -40,8 +40,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
-    from batching_kafka_consumer import BatchingKafkaConsumer
     from snuba.replacer import ReplacerWorker
+    from snuba.utils.streams.batching import BatchingKafkaConsumer
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset)
