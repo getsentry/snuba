@@ -1,4 +1,3 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import Consumer, Producer
 from typing import Sequence
 
@@ -8,6 +7,7 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 
 
 class ConsumerBuilder:

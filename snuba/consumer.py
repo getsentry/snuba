@@ -4,13 +4,13 @@ import simplejson as json
 
 from typing import Any, Mapping, Optional, Sequence
 
-from batching_kafka_consumer import AbstractBatchWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
 
 logger = logging.getLogger('snuba.consumer')
 
