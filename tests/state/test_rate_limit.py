@@ -30,7 +30,7 @@ class TestRateLimit(BaseTest):
         with rate_limit(rate_limit_params):
             pass
 
-        # # Concurrent limit with concurrent queries
+        # Concurrent limit with concurrent queries
         rate_limit_params = RateLimitParameters('foo', 'bar', None, 1)
 
         with pytest.raises(RateLimitExceeded):
