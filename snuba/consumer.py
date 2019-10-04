@@ -92,6 +92,3 @@ class ConsumerWorker(AbstractBatchWorker):
                 )
 
             self.producer.flush()
-
-    def shutdown(self):
-        pass

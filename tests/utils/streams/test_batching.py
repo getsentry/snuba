@@ -111,7 +111,6 @@ class FakeWorker(AbstractBatchWorker):
         super(FakeWorker, self).__init__(*args, **kwargs)
         self.processed = []
         self.flushed = []
-        self.shutdown_calls = 0
 
     def process_message(self, message):
         self.processed.append(message.value())
@@ -119,9 +118,6 @@ class FakeWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         self.flushed.append(batch)
-
-    def shutdown(self):
-        self.shutdown_calls += 1
 
 
 class TestConsumer(object):
@@ -145,7 +141,6 @@ class TestConsumer(object):
 
         assert consumer.worker.processed == [1, 2, 3]
         assert consumer.worker.flushed == [[1, 2]]
-        assert consumer.worker.shutdown_calls == 1
         assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
 
@@ -188,7 +183,6 @@ class TestConsumer(object):
 
         assert consumer.worker.processed == [1, 2, 3, 4, 5, 6, 7, 8, 9]
         assert consumer.worker.flushed == [[1, 2, 3, 4, 5, 6]]
-        assert consumer.worker.shutdown_calls == 1
         assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
 

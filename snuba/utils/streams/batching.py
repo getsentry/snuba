@@ -45,15 +45,6 @@ class AbstractBatchWorker(ABC):
         """
         pass
 
-    @abstractmethod
-    def shutdown(self):
-        """Called when the `BatchingKafkaConsumer` is shutting down (because it
-        was signalled to do so). Provides the worker a chance to do any final
-        cleanup.
-
-        A simple example would be closing any remaining backend connections."""
-        pass
-
 
 class BatchingKafkaConsumer(object):
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
@@ -243,9 +234,7 @@ class BatchingKafkaConsumer(object):
         # drop in-memory events, letting the next consumer take over where we left off
         self._reset_batch()
 
-        # tell the consumer to shutdown, and close the consumer
-        logger.debug("Stopping worker")
-        self.worker.shutdown()
+        # close the consumer
         logger.debug("Stopping consumer")
         self.consumer.close()
         logger.debug("Stopped")
