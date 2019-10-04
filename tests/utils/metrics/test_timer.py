@@ -1,6 +1,6 @@
-from snuba.utils.metrics.backends.testing import TestingMetricsBackend, Timing
 from snuba.utils.metrics.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
+from tests.backends.metrics import TestingMetricsBackend, Timing
 
 
 def test_timer() -> None:
