@@ -6,6 +6,7 @@ from confluent_kafka import TopicPartition
 from mock import patch
 from six.moves import range
 
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 
 
@@ -136,6 +137,7 @@ class TestConsumer(object):
             group_id='group',
             commit_log_topic='commits',
             producer=FakeKafkaProducer(),
+            metrics=DummyMetricsBackend(strict=True),
         )
 
         consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
@@ -166,6 +168,7 @@ class TestConsumer(object):
             group_id='group',
             commit_log_topic='commits',
             producer=FakeKafkaProducer(),
+            metrics=DummyMetricsBackend(strict=True),
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
@@ -211,7 +214,8 @@ class TestConsumer(object):
             bootstrap_servers=None,
             group_id='group',
             producer=producer,
-            dead_letter_topic='dlt'
+            dead_letter_topic='dlt',
+            metrics=DummyMetricsBackend(strict=True),
         )
 
         message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
