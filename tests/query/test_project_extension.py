@@ -5,7 +5,7 @@ from base import BaseTest
 from snuba import replacer, state
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
 from snuba.query.query import Query, Condition
-from snuba.request.request_query_settings import RequestQuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import validate_jsonschema
 
 project_extension_test_data = [
@@ -37,9 +37,9 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
     query = Query({
         "conditions": []
     })
-    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, request_query_settings)
+    extension.get_processor().process_query(query, valid_data, request_settings)
 
     assert query.get_conditions() == expected_conditions
 
@@ -55,12 +55,12 @@ def test_project_extension_query_adds_rate_limits():
     query = Query({
         'conditions': []
     })
-    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    num_rate_limits_before_processing = len(request_query_settings.get_rate_limit_params())
-    extension.get_processor().process_query(query, valid_data, request_query_settings)
+    num_rate_limits_before_processing = len(request_settings.get_rate_limit_params())
+    extension.get_processor().process_query(query, valid_data, request_settings)
 
-    rate_limits = request_query_settings.get_rate_limit_params()
+    rate_limits = request_settings.get_rate_limit_params()
     # make sure a rate limit was added by the processing
     assert len(rate_limits) == num_rate_limits_before_processing + 1
 
@@ -81,13 +81,13 @@ def test_project_extension_project_rate_limits_are_overridden():
     query = Query({
         'conditions': []
     })
-    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     state.set_config('project_per_second_limit_2', 5)
     state.set_config('project_concurrent_limit_2', 10)
 
-    extension.get_processor().process_query(query, valid_data, request_query_settings)
+    extension.get_processor().process_query(query, valid_data, request_settings)
 
-    rate_limits = request_query_settings.get_rate_limit_params()
+    rate_limits = request_settings.get_rate_limit_params()
     most_recent_rate_limit = rate_limits[-1]
 
     assert most_recent_rate_limit.bucket == '2'
@@ -109,35 +109,35 @@ class TestProjectExtensionWithGroups(BaseTest):
         })
 
     def test_with_turbo(self):
-        request_query_settings = RequestQuerySettings(turbo=True, consistent=False, debug=False)
+        request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_query_settings)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
 
     def test_without_turbo_with_projects_needing_final(self):
-        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         replacer.set_project_needs_final(2)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_query_settings)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert self.query.get_final()
 
     def test_without_turbo_without_projects_needing_final(self):
-        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_query_settings)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert not self.query.get_final()
 
     def test_when_there_are_not_many_groups_to_exclude(self):
-        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         state.set_config('max_group_ids_exclude', 5)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_query_settings)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         expected = [
             ('project_id', 'IN', [2]),
@@ -147,11 +147,11 @@ class TestProjectExtensionWithGroups(BaseTest):
         assert not self.query.get_final()
 
     def test_when_there_are_too_many_groups_to_exclude(self):
-        request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         state.set_config('max_group_ids_exclude', 2)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_query_settings)
+        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert self.query.get_final()

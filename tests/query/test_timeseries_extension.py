@@ -5,7 +5,7 @@ from typing import Sequence
 from snuba import state
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Query, Condition
-from snuba.request.request_query_settings import RequestQuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import validate_jsonschema
 
 
@@ -59,7 +59,7 @@ def test_query_extension_processing(raw_data: dict, expected_conditions: Sequenc
         "conditions": []
     })
 
-    request_query_settings = RequestQuerySettings(turbo=False, consistent=False, debug=False)
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, request_query_settings)
+    extension.get_processor().process_query(query, valid_data, request_settings)
     assert query.get_conditions() == expected_conditions

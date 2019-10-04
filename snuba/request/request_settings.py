@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
 
 
-class RequestQuerySettings:
+class RequestSettings:
     """
     Settings that apply to how the query in the request should be run.
     """

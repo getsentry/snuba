@@ -5,7 +5,7 @@ from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
-from snuba.request.request_query_settings import RequestQuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import RateLimitParameters
 
@@ -62,7 +62,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             self,
             project_ids: Sequence[int],
             query: Query,
-            request_query_settings: RequestQuerySettings,
+            request_settings: RequestSettings,
     ) -> None:
         pass
 
@@ -70,16 +70,16 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             self,
             query: Query,
             extension_data: ExtensionData,
-            request_query_settings: RequestQuerySettings,
+            request_settings: RequestSettings,
     ) -> None:
         project_ids = util.to_list(extension_data['project'])
 
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
 
-        request_query_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
+        request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 
-        self.do_post_processing(project_ids, query, request_query_settings)
+        self.do_post_processing(project_ids, query, request_settings)
 
 
 class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
@@ -93,9 +93,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
             self,
             project_ids: Sequence[int],
             query: Query,
-            request_query_settings: RequestQuerySettings,
+            request_settings: RequestSettings,
     ) -> None:
-        if not request_query_settings.get_turbo():
+        if not request_settings.get_turbo():
             final, exclude_group_ids = get_projects_query_flags(project_ids)
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query

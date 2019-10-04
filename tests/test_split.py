@@ -6,7 +6,7 @@ from snuba.datasets import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
 from snuba.request import Request
-from snuba.request.request_query_settings import RequestQuerySettings
+from snuba.request.request_settings import RequestSettings
 from snuba.split import split_query
 from snuba.util import Timer
 
@@ -39,7 +39,7 @@ def test_no_split(dataset_name: str):
 
     request = Request(
         query,
-        RequestQuerySettings(False, False, False),
+        RequestSettings(False, False, False),
         {},
     )
 
@@ -115,7 +115,7 @@ def test_col_split(
 
     request = Request(
         query,
-        RequestQuerySettings(False, False, False),
+        RequestSettings(False, False, False),
         {
             "project": {"project": 1},
             "timeseries": {
