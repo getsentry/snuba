@@ -3,14 +3,19 @@ import time
 from abc import ABC, abstractmethod
 
 from confluent_kafka import (
-    Consumer, KafkaError, KafkaException,
-    OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID
+    Consumer,
+    KafkaError,
+    KafkaException,
+    OFFSET_BEGINNING,
+    OFFSET_END,
+    OFFSET_STORED,
+    OFFSET_INVALID,
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 
-logger = logging.getLogger('batching-kafka-consumer')
+logger = logging.getLogger("batching-kafka-consumer")
 
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
@@ -74,20 +79,35 @@ class BatchingKafkaConsumer(object):
 
     # Set of logical (not literal) offsets to not publish to the commit log.
     # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
-    LOGICAL_OFFSETS = frozenset([OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID])
+    LOGICAL_OFFSETS = frozenset(
+        [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
+    )
 
     # Set of error codes that can be returned by ``consumer.poll`` calls which
     # are generally able to be recovered from after a series of retries.
-    RECOVERABLE_ERRORS = frozenset([
-        KafkaError._PARTITION_EOF,
-        KafkaError._TRANSPORT,  # Local: Broker transport failure
-    ])
+    RECOVERABLE_ERRORS = frozenset(
+        [
+            KafkaError._PARTITION_EOF,
+            KafkaError._TRANSPORT,  # Local: Broker transport failure
+        ]
+    )
 
-    def __init__(self, topics, worker, max_batch_size, max_batch_time, bootstrap_servers,
-                 group_id, metrics: MetricsBackend, producer=None, dead_letter_topic=None,
-                 commit_log_topic=None, auto_offset_reset='error',
-                 queued_max_messages_kbytes=DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-                 queued_min_messages=DEFAULT_QUEUED_MIN_MESSAGES):
+    def __init__(
+        self,
+        topics,
+        worker,
+        max_batch_size,
+        max_batch_time,
+        bootstrap_servers,
+        group_id,
+        metrics: MetricsBackend,
+        producer=None,
+        dead_letter_topic=None,
+        commit_log_topic=None,
+        auto_offset_reset="error",
+        queued_max_messages_kbytes=DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+        queued_min_messages=DEFAULT_QUEUED_MIN_MESSAGES,
+    ):
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -113,27 +133,36 @@ class BatchingKafkaConsumer(object):
             topics = list(topics)
 
         self.consumer = self.create_consumer(
-            topics, bootstrap_servers, group_id, auto_offset_reset,
-            queued_max_messages_kbytes, queued_min_messages
+            topics,
+            bootstrap_servers,
+            group_id,
+            auto_offset_reset,
+            queued_max_messages_kbytes,
+            queued_min_messages,
         )
 
         self.producer = producer
         self.commit_log_topic = commit_log_topic
         self.dead_letter_topic = dead_letter_topic
 
-    def create_consumer(self, topics, bootstrap_servers, group_id, auto_offset_reset,
-            queued_max_messages_kbytes, queued_min_messages):
+    def create_consumer(
+        self,
+        topics,
+        bootstrap_servers,
+        group_id,
+        auto_offset_reset,
+        queued_max_messages_kbytes,
+        queued_min_messages,
+    ):
 
         consumer_config = {
-            'enable.auto.commit': False,
-            'bootstrap.servers': ','.join(bootstrap_servers),
-            'group.id': group_id,
-            'default.topic.config': {
-                'auto.offset.reset': auto_offset_reset,
-            },
+            "enable.auto.commit": False,
+            "bootstrap.servers": ",".join(bootstrap_servers),
+            "group.id": group_id,
+            "default.topic.config": {"auto.offset.reset": auto_offset_reset},
             # overridden to reduce memory usage when there's a large backlog
-            'queued.max.messages.kbytes': queued_max_messages_kbytes,
-            'queued.min.messages': queued_min_messages,
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
         }
 
         consumer = Consumer(consumer_config)
@@ -147,9 +176,7 @@ class BatchingKafkaConsumer(object):
             self._flush(force=True)
 
         consumer.subscribe(
-            topics,
-            on_assign=on_partitions_assigned,
-            on_revoke=on_partitions_revoked,
+            topics, on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
         )
 
         return consumer
@@ -199,15 +226,17 @@ class BatchingKafkaConsumer(object):
             result = self.worker.process_message(msg)
         except Exception:
             if self.dead_letter_topic:
-                logger.exception("Error handling message, sending to dead letter topic.")
+                logger.exception(
+                    "Error handling message, sending to dead letter topic."
+                )
                 self.producer.produce(
                     self.dead_letter_topic,
                     key=msg.key(),
                     value=msg.value(),
                     headers={
-                        'partition': str(msg.partition()) if msg.partition() else None,
-                        'offset': str(msg.offset()) if msg.offset() else None,
-                        'topic': msg.topic(),
+                        "partition": str(msg.partition()) if msg.partition() else None,
+                        "offset": str(msg.offset()) if msg.offset() else None,
+                        "topic": msg.topic(),
                     },
                     on_delivery=self._commit_message_delivery_callback,
                 )
@@ -220,7 +249,7 @@ class BatchingKafkaConsumer(object):
             duration = (time.time() - start) * 1000
             self.__batch_messages_processed_count += 1
             self.__batch_processing_time_ms += duration
-            self.__metrics.timing('process_message', duration)
+            self.__metrics.timing("process_message", duration)
 
             topic_partition_key = (msg.topic(), msg.partition())
             if topic_partition_key in self.__batch_offsets:
@@ -261,11 +290,15 @@ class BatchingKafkaConsumer(object):
 
         logger.info(
             "Flushing %s items (from %r): forced:%s size:%s time:%s",
-            len(self.__batch_results), self.__batch_offsets, force, batch_by_size, batch_by_time
+            len(self.__batch_results),
+            self.__batch_offsets,
+            force,
+            batch_by_size,
+            batch_by_time,
         )
 
         self.__metrics.timing(
-            'process_message.normalized',
+            "process_message.normalized",
             self.__batch_processing_time_ms / self.__batch_messages_processed_count,
         )
 
@@ -276,8 +309,10 @@ class BatchingKafkaConsumer(object):
             self.worker.flush_batch(self.__batch_results)
             flush_duration = (time.time() - flush_start) * 1000
             logger.info("Worker flush took %dms", flush_duration)
-            self.__metrics.timing('batch.flush', flush_duration)
-            self.__metrics.timing('batch.flush.normalized', flush_duration / batch_results_length)
+            self.__metrics.timing("batch.flush", flush_duration)
+            self.__metrics.timing(
+                "batch.flush.normalized", flush_duration / batch_results_length
+            )
 
         logger.debug("Committing Kafka offsets")
         commit_start = time.time()
@@ -299,9 +334,11 @@ class BatchingKafkaConsumer(object):
                 logger.debug("Committed offsets: %s", offsets)
                 break  # success
             except KafkaException as e:
-                if e.args[0].code() in (KafkaError.REQUEST_TIMED_OUT,
-                                        KafkaError.NOT_COORDINATOR_FOR_GROUP,
-                                        KafkaError._WAIT_COORD):
+                if e.args[0].code() in (
+                    KafkaError.REQUEST_TIMED_OUT,
+                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError._WAIT_COORD,
+                ):
                     logger.warning("Commit failed: %s (%d retries)", str(e), retries)
                     if retries <= 0:
                         raise
@@ -314,14 +351,26 @@ class BatchingKafkaConsumer(object):
         if self.commit_log_topic:
             for item in offsets:
                 if item.offset in self.LOGICAL_OFFSETS:
-                    logger.debug('Skipped publishing logical offset (%r) to commit log for %s/%s', item.offset, item.topic, item.partition)
+                    logger.debug(
+                        "Skipped publishing logical offset (%r) to commit log for %s/%s",
+                        item.offset,
+                        item.topic,
+                        item.partition,
+                    )
                     continue
                 elif item.offset < 0:
-                    logger.warning('Found unexpected negative offset (%r) after commit for %s/%s', item.offset, item.topic, item.partition)
+                    logger.warning(
+                        "Found unexpected negative offset (%r) after commit for %s/%s",
+                        item.offset,
+                        item.topic,
+                        item.partition,
+                    )
 
                 self.producer.produce(
                     self.commit_log_topic,
-                    key='{}:{}:{}'.format(item.topic, item.partition, self.group_id).encode('utf-8'),
-                    value='{}'.format(item.offset).encode('utf-8'),
+                    key="{}:{}:{}".format(
+                        item.topic, item.partition, self.group_id
+                    ).encode("utf-8"),
+                    value="{}".format(item.offset).encode("utf-8"),
                     on_delivery=self._commit_message_delivery_callback,
                 )
