@@ -71,7 +71,7 @@ class Offsets:
     hi: int
 
 
-class BatchingKafkaConsumer(object):
+class BatchingKafkaConsumer:
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingKafkaConsumer` handles the rest.
