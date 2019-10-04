@@ -9,7 +9,6 @@ from base import BaseEventsTest, FakeKafkaMessage
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
@@ -22,7 +21,7 @@ class TestReplacer(BaseEventsTest):
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
-        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset, Metrics(DummyMetricsBackend(strict=True)))
+        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset, DummyMetricsBackend(strict=True))
 
         self.project_id = 1
 

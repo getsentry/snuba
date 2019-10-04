@@ -1,7 +1,7 @@
 from itertools import groupby
 from typing import Optional, Mapping, MutableSequence, Tuple, TYPE_CHECKING
 
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.clock import Clock, SystemClock
 from snuba.utils.metrics.types import Tags
 
@@ -60,11 +60,11 @@ class Timer:
 
     def send_metrics_to(
         self,
-        metrics: Metrics,
+        backend: MetricsBackend,
         tags: Optional[Tags] = None,
         mark_tags: Optional[Tags] = None,
     ) -> None:
         data = self.finish()
-        metrics.timing(self.__name, data["duration_ms"], tags=tags)
+        backend.timing(self.__name, data["duration_ms"], tags=tags)
         for mark, duration in data["marks_ms"].items():
-            metrics.timing(f"{self.__name}.{mark}", duration, tags=mark_tags)
+            backend.timing(f"{self.__name}.{mark}", duration, tags=mark_tags)

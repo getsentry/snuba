@@ -15,7 +15,7 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba import settings, state
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 
 
@@ -594,7 +594,7 @@ def settings_override(overrides):
             setattr(settings, k, v)
 
 
-def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = None) -> Metrics:
+def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = None) -> MetricsBackend:
     """Create a DogStatsd object with the specified prefix and tags. Prefixes
     must start with `snuba.<category>`, for example: `snuba.processor`."""
     from datadog import DogStatsd
@@ -603,13 +603,13 @@ def create_metrics(host: str, port: int, prefix: str, tags: Mapping[str, str] = 
     bits = prefix.split('.', 2)
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
-    return Metrics(
-        DatadogMetricsBackend(
-            DogStatsd(host=host, port=port),
+    return DatadogMetricsBackend(
+        DogStatsd(
+            host=host,
+            port=port,
+            namespace=prefix,
+            constant_tags=[f'{key}:{value}' for key, value in tags.items()] if tags is not None else None,
         ),
-        namespace=prefix,
-        tags=tags,
     )
-
 
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')

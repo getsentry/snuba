@@ -16,7 +16,7 @@ from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 from . import settings
 
@@ -100,7 +100,7 @@ class Replacement:
 
 
 class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: Metrics) -> None:
+    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics

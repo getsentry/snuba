@@ -1,4 +1,3 @@
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.testing import TestingMetricsBackend, Timing
 from snuba.utils.metrics.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
@@ -33,7 +32,6 @@ def test_timer() -> None:
 
 def test_timer_send_metrics() -> None:
     backend = TestingMetricsBackend()
-    metrics = Metrics(backend)
 
     time = TestingClock()
 
@@ -43,7 +41,7 @@ def test_timer_send_metrics() -> None:
     time.sleep(10)
     t.mark("thing2")
     t.send_metrics_to(
-        metrics, tags={"key": "value"}, mark_tags={"mark-key": "mark-value"}
+        backend, tags={"key": "value"}, mark_tags={"mark-key": "mark-value"}
     )
 
     assert backend.calls == [

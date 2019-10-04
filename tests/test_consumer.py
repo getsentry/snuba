@@ -10,13 +10,12 @@ from base import (
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 class TestConsumer(BaseEventsTest):
 
-    metrics = Metrics(DummyMetricsBackend())
+    metrics = DummyMetricsBackend()
 
     def test_offsets(self):
         event = self.event

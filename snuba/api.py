@@ -24,7 +24,6 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 
@@ -445,7 +444,7 @@ if application.debug or application.testing:
         message = Message(http_request.data)
 
         type_ = record[1]
-        metrics = Metrics(DummyMetricsBackend())
+        metrics = DummyMetricsBackend()
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
             worker = ConsumerWorker(dataset, producer=None, replacements_topic=None, metrics=metrics)

@@ -10,7 +10,6 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
@@ -96,7 +95,7 @@ class TestSnapshotWorker:
             snapshot_id=str(snapshot_id),
             transaction_data=transact_data,
             replacements_topic=None,
-            metrics=Metrics(DummyMetricsBackend(strict=True)),
+            metrics=DummyMetricsBackend(strict=True),
         )
 
         ret = worker.process_message(

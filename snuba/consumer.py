@@ -10,7 +10,7 @@ from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -25,7 +25,7 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, dataset, producer, replacements_topic, metrics: Metrics):
+    def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic

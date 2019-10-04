@@ -6,7 +6,6 @@ import time
 from itertools import chain
 
 from snuba.util import settings_override
-from snuba.utils.metrics import Metrics
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
@@ -74,7 +73,7 @@ def run(events_file, dataset, repeat=1,
         dataset=dataset,
         producer=None,
         replacements_topic=None,
-        metrics=Metrics(DummyMetricsBackend())
+        metrics=DummyMetricsBackend(),
     )
 
     messages = get_messages(events_file)

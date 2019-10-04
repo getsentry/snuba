@@ -7,7 +7,7 @@ from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.datasets import Dataset
 from snuba.snapshots import SnapshotId
-from snuba.utils.metrics import Metrics
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 
 logger = logging.getLogger('snuba.snapshot-consumer')
 
@@ -36,7 +36,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         producer: Producer,
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
-        metrics: Metrics,
+        metrics: MetricsBackend,
         replacements_topic: Optional[str] = None,
     ) -> None:
         super().__init__(
