@@ -2,16 +2,18 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
-from itertools import chain, groupby
+from itertools import chain
 from typing import NamedTuple, Optional, OrderedDict
 import logging
 import numbers
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
-import time
 
 from snuba import settings
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.timer import Timer
+from snuba.utils.metrics.types import Tags
 
 logger = logging.getLogger('snuba.util')
 
@@ -372,41 +374,6 @@ def escape_literal(value):
         raise ValueError(u'Do not know how to escape {} for SQL'.format(type(value)))
 
 
-class Timer(object):
-    def __init__(self, name=''):
-        self.marks = [(name, time.time())]
-        self.final = None
-
-    def mark(self, name):
-        self.final = None
-        self.marks.append((name, time.time()))
-
-    def finish(self):
-        if not self.final:
-            start = self.marks[0][1]
-            end = time.time() if len(self.marks) == 1 else self.marks[-1][1]
-            diff_ms = lambda start, end: int((end - start) * 1000)
-            durations = [(name, diff_ms(self.marks[i][1], ts)) for i, (name, ts) in enumerate(self.marks[1:])]
-            self.final = {
-                'timestamp': int(start),
-                'duration_ms': diff_ms(start, end),
-                'marks_ms': {
-                    key: sum(d[1] for d in group) for key, group in groupby(sorted(durations), key=lambda x: x[0])
-                }
-            }
-        return self.final
-
-    def for_json(self):
-        return self.finish()
-
-    def send_metrics_to(self, metrics, tags=None, mark_tags=None):
-        name = self.marks[0][0]
-        final = self.finish()
-        metrics.timing(name, final['duration_ms'], tags=tags)
-        for mark, duration in final['marks_ms'].items():
-            metrics.timing('{}.{}'.format(name, mark), duration, tags=mark_tags)
-
-
 def time_request(name):
     def decorator(func):
         @wraps(func)
@@ -453,16 +420,23 @@ def settings_override(overrides):
             setattr(settings, k, v)
 
 
-def create_metrics(host, port, prefix, tags=None):
+def create_metrics(host: str, port: int, prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     """Create a DogStatsd object with the specified prefix and tags. Prefixes
     must start with `snuba.<category>`, for example: `snuba.processor`."""
-
     from datadog import DogStatsd
+    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     bits = prefix.split('.', 2)
     assert len(bits) >= 2 and bits[0] == 'snuba', "prefix must be like `snuba.<category>`"
 
-    return DogStatsd(host=host, port=port, namespace=prefix, constant_tags=tags)
+    return DatadogMetricsBackend(
+        DogStatsd(
+            host=host,
+            port=port,
+            namespace=prefix,
+            constant_tags=[f'{key}:{value}' for key, value in tags.items()] if tags is not None else None,
+        ),
+    )
 
 
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')

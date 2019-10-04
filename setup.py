@@ -14,7 +14,6 @@ setup(
         'attrs==18.1.0',
         'autopep8==1.3.5',
         'backcall==0.1.0',
-        'batching-kafka-consumer==0.0.5',
         'blinker==1.4',
         'certifi==2018.4.16',
         'chardet==3.0.4',

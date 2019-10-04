@@ -4,12 +4,13 @@ import simplejson as json
 
 from typing import Any, Mapping, Optional, Sequence
 
-from batching_kafka_consumer import AbstractBatchWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -24,7 +25,7 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, dataset, producer, replacements_topic, metrics=None):
+    def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
@@ -79,8 +80,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if inserts:
             self.__writer.write(inserts)
 
-            if self.metrics:
-                self.metrics.timing('inserts', len(inserts))
+            self.metrics.timing('inserts', len(inserts))
 
         if replacements:
             for key, replacement in replacements:
