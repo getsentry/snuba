@@ -14,14 +14,14 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.api.query import QueryResult, raw_query
+from snuba.api.split import split_query
 from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.query_engine import QueryResult, raw_query
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client

@@ -16,7 +16,7 @@ from snuba.util import (
     to_list,
 )
 
-logger = logging.getLogger('snuba.query_engine')
+logger = logging.getLogger('snuba.query')
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
 

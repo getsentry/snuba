@@ -6,7 +6,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.snapshots import BulkLoadSource
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
 from snuba.snapshots import SnapshotTableRow
-from snuba.snapshots.bulk_load import BulkLoader
+from snuba.snapshots.loaders import BulkLoader
 
 
 class SingleTableBulkLoader(BulkLoader):
