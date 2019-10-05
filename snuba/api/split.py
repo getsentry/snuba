@@ -4,7 +4,7 @@ import math
 
 from snuba import state, util
 from snuba.datasets import ColumnSplitSpec
-from snuba.query_engine import QueryResult
+from snuba.api.query import QueryResult
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by

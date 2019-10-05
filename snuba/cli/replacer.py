@@ -40,8 +40,8 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
-    from batching_kafka_consumer import BatchingKafkaConsumer
     from snuba.replacer import ReplacerWorker
+    from snuba.utils.streams.batching import BatchingKafkaConsumer
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset)
@@ -55,7 +55,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, 'snuba.replacer',
-        tags=["group:%s" % consumer_group]
+        tags={"group": consumer_group}
     )
 
     client_settings = {
