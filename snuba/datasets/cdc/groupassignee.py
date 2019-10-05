@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, G
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.snapshots import BulkLoadSource
-from snuba.snapshots.single_table_loader import SingleTableBulkLoader
+from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
 
 class GroupAssigneeTableWriter(TableWriter):

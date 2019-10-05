@@ -17,9 +17,8 @@ from snuba.util import (
     to_list,
 )
 
-logger = logging.getLogger('snuba.query_engine')
+logger = logging.getLogger('snuba.query')
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
-
 
 class QueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
@@ -183,16 +182,17 @@ def raw_query(
             'status': status,
         })
 
-        # send to datadog
-        tags = [
-            'status:{}'.format(status),
-            'referrer:{}'.format(stats.get('referrer', 'none')),
-            'final:{}'.format(stats.get('final', False))
-        ]
-        mark_tags = [
-            'final:{}'.format(stats.get('final', False))
-        ]
-        timer.send_metrics_to(metrics, tags=tags, mark_tags=mark_tags)
+        timer.send_metrics_to(
+            metrics,
+            tags={
+                'status': str(status),
+                'referrer': stats.get('referrer', 'none'),
+                'final': str(stats.get('final', False)),
+            },
+            mark_tags={
+                'final': str(stats.get('final', False)),
+            }
+        )
 
     result['timing'] = timer
 
