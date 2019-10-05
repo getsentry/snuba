@@ -437,6 +437,3 @@ def create_metrics(host: str, port: int, prefix: str, tags: Optional[Tags] = Non
             constant_tags=[f'{key}:{value}' for key, value in tags.items()] if tags is not None else None,
         ),
     )
-
-
-metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
