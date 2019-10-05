@@ -306,6 +306,8 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         )
 
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    # TODO: consider moving the performance logic and the pre_where generation into
+    # ClickhouseQuery since they are Clickhouse specific
     query = ClickhouseQuery(dataset, request, prewhere_conditions)
     timer.mark('prepare_query')
 
