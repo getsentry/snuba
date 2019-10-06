@@ -20,6 +20,7 @@ from snuba.util import (
 logger = logging.getLogger('snuba.query')
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
+
 class QueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
     result: MutableMapping[str, MutableMapping[str, Any]]
@@ -67,7 +68,7 @@ def raw_query(
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(request.query.get_body())) > uc_max:
+    if len(all_referenced_columns(request.query)) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 

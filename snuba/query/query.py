@@ -144,7 +144,7 @@ class Query:
     def get_final(self) -> bool:
         return self.__final
 
-    def set_final(self, final) -> None:
+    def set_final(self, final: bool) -> None:
         self.__final = final
 
     def set_granularity(self, granularity: int) -> None:

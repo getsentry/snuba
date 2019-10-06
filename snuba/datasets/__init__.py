@@ -4,7 +4,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Condition
+from snuba.query.query import Condition, Query
 from snuba.util import escape_col, parse_datetime, qualified_column
 
 
@@ -74,7 +74,7 @@ class Dataset(object):
         """
         return []
 
-    def column_expr(self, column_name, body, parsing_context: ParsingContext, table_alias: str=""):
+    def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         """
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
@@ -145,11 +145,11 @@ class TimeSeriesDataset(Dataset):
         }.get(granularity, 'toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})')
         return template.format(column=real_column, granularity=granularity)
 
-    def column_expr(self, column_name, body, parsing_context: ParsingContext, table_alias: str=""):
+    def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         if column_name in self.__time_group_columns:
-            return self.__time_expr(column_name, body['granularity'], table_alias)
+            return self.__time_expr(column_name, query.get_granularity(), table_alias)
         else:
-            return super().column_expr(column_name, body, parsing_context, table_alias)
+            return super().column_expr(column_name, query, parsing_context, table_alias)
 
     def process_condition(self, condition) -> Tuple[str, str, any]:
         lhs, op, lit = condition
