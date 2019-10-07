@@ -6,42 +6,7 @@ from confluent_kafka import TopicPartition
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-
-
-class FakeKafkaMessage(object):
-    def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
-        self._topic = topic
-        self._partition = partition
-        self._offset = offset
-        self._value = value
-        self._key = key
-        self._headers = {
-            str(k): str(v) if v else None
-            for k, v in headers.items()
-        } if headers else None
-        self._headers = headers
-        self._error = error
-
-    def topic(self):
-        return self._topic
-
-    def partition(self):
-        return self._partition
-
-    def offset(self):
-        return self._offset
-
-    def value(self):
-        return self._value
-
-    def key(self):
-        return self._key
-
-    def headers(self):
-        return self._headers
-
-    def error(self):
-        return self._error
+from base import FakeConfluentKafkaMessage
 
 
 class FakeKafkaProducer(object):
@@ -59,7 +24,7 @@ class FakeKafkaProducer(object):
         return self.poll()
 
     def produce(self, topic, value, key=None, headers=None, on_delivery=None):
-        message = FakeKafkaMessage(
+        message = FakeConfluentKafkaMessage(
             topic=topic,
             partition=None,  # XXX: the partition is unknown (depends on librdkafka)
             offset=None,  # XXX: the offset is unknown (depends on state)
@@ -134,7 +99,7 @@ class TestConsumer(object):
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
         consumer._shutdown()
@@ -165,17 +130,17 @@ class TestConsumer(object):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]]
+        consumer.consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        consumer.consumer.items = [FakeKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]]
+        consumer.consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]]
         for x in range(len(consumer.consumer.items)):
             consumer._run_once()
 

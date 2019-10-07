@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from base import BaseEventsTest, FakeKafkaMessage
+from base import BaseEventsTest, FakeConfluentKafkaMessage
 
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
@@ -26,7 +26,7 @@ class TestReplacer(BaseEventsTest):
         self.project_id = 1
 
     def _wrap(self, msg):
-        return FakeKafkaMessage('topic', 0, 0, json.dumps(msg).encode('utf-8'))
+        return FakeConfluentKafkaMessage('topic', 0, 0, json.dumps(msg).encode('utf-8'))
 
     def _issue_count(self, project_id, group_id=None):
         args = {

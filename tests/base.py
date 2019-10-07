@@ -15,7 +15,7 @@ from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
-from snuba.perf import FakeKafkaMessage
+from snuba.perf import FakeConfluentKafkaMessage
 
 
 def wrap_raw_event(event):
@@ -59,7 +59,7 @@ class FakeKafkaProducer(object):
         return self.poll()
 
     def produce(self, topic, value, key=None, headers=None, on_delivery=None):
-        message = FakeKafkaMessage(
+        message = FakeConfluentKafkaMessage(
             topic=topic,
             partition=None,  # XXX: the partition is unknown (depends on librdkafka)
             offset=None,  # XXX: the offset is unknown (depends on state)
@@ -219,14 +219,14 @@ class BaseApiTest(BaseEventsTest):
         self.app = application.test_client()
 
 
-def message(offset, partition, value, eof=False) -> FakeKafkaMessage:
+def message(offset, partition, value, eof=False) -> FakeConfluentKafkaMessage:
     if eof:
         error = MagicMock()
         error.code.return_value = KafkaError._PARTITION_EOF
     else:
         error = None
 
-    return FakeKafkaMessage(
+    return FakeConfluentKafkaMessage(
         topic="topic",
         partition=partition,
         offset=offset,
