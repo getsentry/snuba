@@ -8,7 +8,7 @@ from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor,
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.query import Condition
-from snuba.snapshots.bulk_load import SingleTableBulkLoader
+from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 from snuba.util import qualified_column
 
 

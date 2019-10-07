@@ -4,6 +4,7 @@ import math
 
 from snuba import state, util
 from snuba.datasets import ColumnSplitSpec
+from snuba.api.query import QueryResult
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -92,17 +93,18 @@ def split_query(query_func):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
-            result, status = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            query_result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            status = query_result.status
 
             # If something failed, discard all progress and just return that
             if status != 200:
-                overall_result = result
+                overall_result = query_result.result
                 break
 
             if overall_result is None:
-                overall_result = result
+                overall_result = query_result.result
             else:
-                overall_result['data'].extend(result['data'])
+                overall_result['data'].extend(query_result.result['data'])
 
             if remaining_offset > 0 and len(overall_result['data']) > 0:
                 to_trim = min(remaining_offset, len(overall_result['data']))
@@ -112,7 +114,7 @@ def split_query(query_func):
             total_results = len(overall_result['data'])
 
             if total_results < limit:
-                if len(result['data']) == 0:
+                if len(query_result.result['data']) == 0:
                     # If we got nothing from the last query, expand the range by a static factor
                     split_step = split_step * STEP_GROWTH
                 else:
@@ -120,7 +122,7 @@ def split_query(query_func):
                     # range should be for the next query based on how many results we got for
                     # our last query and its time range, and how many we have left to fetch.
                     remaining = limit - total_results
-                    split_step = split_step * math.ceil(remaining / float(len(result['data'])))
+                    split_step = split_step * math.ceil(remaining / float(len(query_result.result['data'])))
 
                 # Set the start and end of the next query based on the new range.
                 split_end = split_start
@@ -129,7 +131,7 @@ def split_query(query_func):
                 except OverflowError:
                     split_start = from_date
 
-        return overall_result, status
+        return QueryResult(overall_result, status)
 
     def col_split(dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs):
         """
@@ -143,26 +145,26 @@ def split_query(query_func):
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
-        result, status = query_func(dataset, minimal_request, *args, **kwargs)
+        query_result = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
         # If something failed, just return
-        if status != 200:
-            return result, status
+        if query_result.status != 200:
+            return QueryResult(query_result.result, query_result.status)
 
-        if result['data']:
+        if query_result.result['data']:
             request = copy.deepcopy(request)
 
-            event_ids = list(set([event[column_split_spec.id_column] for event in result['data']]))
+            event_ids = list(set([event[column_split_spec.id_column] for event in query_result.result['data']]))
             request.query.add_conditions([(column_split_spec.id_column, 'IN', event_ids)])
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
 
-            project_ids = list(set([event[column_split_spec.project_column] for event in result['data']]))
+            project_ids = list(set([event[column_split_spec.project_column] for event in query_result.result['data']]))
             request.extensions['project']['project'] = project_ids
 
             timestamp_field = column_split_spec.timestamp_column
-            timestamps = [event[timestamp_field] for event in result['data']]
+            timestamps = [event[timestamp_field] for event in query_result.result['data']]
             request.extensions['timeseries']['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.

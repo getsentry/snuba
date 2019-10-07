@@ -16,7 +16,7 @@ class TestReplacer(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestReplacer, self).setup_method(test_method)
 
-        from snuba.api import application
+        from snuba.views import application
         assert application.testing is True
 
         self.app = application.test_client()

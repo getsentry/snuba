@@ -1,5 +1,4 @@
-from abc import ABC, abstractmethod
-from typing import Any, Callable, Mapping
+from typing import Callable
 
 import logging
 
@@ -7,19 +6,7 @@ from snuba.clickhouse.native import ClickhousePool
 from snuba.snapshots import BulkLoadSource
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
 from snuba.snapshots import SnapshotTableRow
-
-
-class BulkLoader(ABC):
-    """
-    Loads data from a source into a Snuba dataset.
-
-    Implementations can be dataset specific.
-    The dataset returns an instance of this class to be used to perform
-    the bulk load operation.
-    """
-    @abstractmethod
-    def load(self, writer: BufferedWriterWrapper) -> None:
-        raise NotImplementedError
+from snuba.snapshots.loaders import BulkLoader
 
 
 class SingleTableBulkLoader(BulkLoader):
