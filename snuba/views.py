@@ -14,14 +14,16 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.api.query import QueryResult, raw_query
+from snuba.api.split import split_query
 from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.split import split_query
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.request import Request, RequestSchema
+from snuba.request import Request
+from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -242,7 +244,7 @@ def dataset_query(dataset, body, timer):
     ensure_table_exists(dataset)
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
-    result, status = parse_and_run_query(
+    query_result = parse_and_run_query(
         dataset,
         validate_request_content(body, schema, timer),
         timer,
@@ -257,16 +259,16 @@ def dataset_query(dataset, body, timer):
 
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=json_default),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 
 
 @split_query
-def parse_and_run_query(dataset, request: Request, timer):
+def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
@@ -317,7 +319,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         'sample': request.query.get_sample(),
     }
 
-    return util.raw_query(request, sql, clickhouse_ro, timer, stats)
+    return raw_query(request, sql, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -348,13 +350,13 @@ def sdk_distribution(*, timer: Timer):
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, request, timer)
+    query_result = parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 

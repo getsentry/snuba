@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from base import FakeKafkaConsumer, message
 
+from snuba.datasets.factory import get_dataset
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
@@ -29,11 +30,41 @@ class TestBootstrapState:
         ]
         create_consumer.return_value = kafka_consumer
 
-        bootstrap = BootstrapState("cdc_control", "somewhere", "something")
+        bootstrap = BootstrapState(
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_dataset("groupedmessage"),
+        )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.NO_SNAPSHOT
         assert kafka_consumer.commit_calls == 0
+
+    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    def test_snapshot_for_other_table(self, create_consumer) -> None:
+        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer.items = [
+            message(
+                0,
+                0,
+                '{"snapshot-id":"abc123", "tables": ["someone_else"], "product":"snuba", "event":"snapshot-init"}',
+                False,
+            ),
+            message(0, 0, None, True),
+        ]
+        create_consumer.return_value = kafka_consumer
+
+        bootstrap = BootstrapState(
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_dataset("groupedmessage"),
+        )
+
+        ret = bootstrap.handle(None)
+        assert ret[0] == ConsumerStateCompletionEvent.NO_SNAPSHOT
+        assert kafka_consumer.commit_calls == 1
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_init_snapshot(self, create_consumer) -> None:
@@ -42,14 +73,19 @@ class TestBootstrapState:
             message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "tables": [], "product":"snuba", "event":"snapshot-init"}',
+                '{"snapshot-id":"abc123", "tables": ["sentry_groupedmessage"], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
             message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
-        bootstrap = BootstrapState("cdc_control", "somewhere", "something")
+        bootstrap = BootstrapState(
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_dataset("groupedmessage"),
+        )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED
@@ -68,7 +104,7 @@ class TestBootstrapState:
             message(
                 1,
                 0,
-                '{"snapshot-id":"abc123", "product":"snuba", "tables": [], "event":"snapshot-init"}',
+                '{"snapshot-id":"abc123", "product":"snuba", "tables": ["sentry_groupedmessage"], "event":"snapshot-init"}',
                 False,
             ),
             message(
@@ -85,7 +121,12 @@ class TestBootstrapState:
         ]
         create_consumer.return_value = kafka_consumer
 
-        bootstrap = BootstrapState("cdc_control", "somewhere", "something")
+        bootstrap = BootstrapState(
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_dataset("groupedmessage"),
+        )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED

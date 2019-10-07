@@ -6,7 +6,8 @@ from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, GroupAssigneeRow
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.snapshots.bulk_load import BulkLoadSource, SingleTableBulkLoader
+from snuba.snapshots import BulkLoadSource
+from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
 
 class GroupAssigneeTableWriter(TableWriter):
@@ -78,6 +79,7 @@ class GroupAssigneeDataset(CdcDataset):
                 postgres_table=self.POSTGRES_TABLE,
             ),
             default_control_topic="cdc_control",
+            postgres_table=self.POSTGRES_TABLE,
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:
