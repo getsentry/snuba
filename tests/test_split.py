@@ -8,7 +8,7 @@ from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.split import split_query
-from snuba.util import Timer
+from snuba.utils.metrics.timer import Timer
 
 
 def setup_function(function):
