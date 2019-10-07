@@ -5,29 +5,12 @@ from unittest.mock import patch
 from unittest.mock import MagicMock
 
 
-from base import FakeConfluentKafkaMessage, FakeConfluentKafkaConsumer, message
+from base import FakeConfluentKafkaConsumer, message
 
 from snuba.consumers.strict_consumer import CommitDecision, NoPartitionAssigned, StrictConsumer
 
 
 class TestStrictConsumer:
-
-    def __message(self, offset, partition, value, eof=False) -> FakeConfluentKafkaMessage:
-        if eof:
-            error = MagicMock()
-            error.code.return_value = KafkaError._PARTITION_EOF
-        else:
-            error = None
-
-        return FakeConfluentKafkaMessage(
-            topic="my_topic",
-            partition=partition,
-            offset=offset,
-            value=value,
-            key=None,
-            headers=None,
-            error=error,
-        )
 
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
