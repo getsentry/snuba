@@ -72,7 +72,7 @@ class FakeConfluentKafkaProducer(object):
             self._callbacks.append((on_delivery, message))
 
 
-class FakeKafkaConsumer(object):
+class FakeConfluentKafkaConsumer(object):
     def __init__(self):
         self.items = []
         self.commit_calls = 0

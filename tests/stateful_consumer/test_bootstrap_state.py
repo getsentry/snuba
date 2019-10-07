@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from base import FakeKafkaConsumer, message
+from base import FakeConfluentKafkaConsumer, message
 
 from snuba.datasets.factory import get_dataset
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
@@ -24,7 +24,7 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             message(0, 0, None, True),
         ]
@@ -43,7 +43,7 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_snapshot_for_other_table(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             message(
                 0,
@@ -68,7 +68,7 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_init_snapshot(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             message(
                 0,
@@ -93,7 +93,7 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_snapshot_loaded(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
             message(
                 0,
