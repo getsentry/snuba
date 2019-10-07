@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid1
 
-from base import FakeKafkaProducer, message as build_msg
+from base import FakeConfluentKafkaProducer, message as build_msg
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
@@ -91,7 +91,7 @@ class TestSnapshotWorker:
 
         worker = SnapshotAwareWorker(
             dataset=dataset,
-            producer=FakeKafkaProducer(),
+            producer=FakeConfluentKafkaProducer(),
             snapshot_id=str(snapshot_id),
             transaction_data=transact_data,
             replacements_topic=None,

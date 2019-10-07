@@ -6,35 +6,7 @@ from confluent_kafka import TopicPartition
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from base import FakeConfluentKafkaMessage
-
-
-class FakeKafkaProducer(object):
-    def __init__(self):
-        self.messages = []
-        self._callbacks = []
-
-    def poll(self, *args, **kwargs):
-        while self._callbacks:
-            callback, message = self._callbacks.pop()
-            callback(None, message)
-        return 0
-
-    def flush(self):
-        return self.poll()
-
-    def produce(self, topic, value, key=None, headers=None, on_delivery=None):
-        message = FakeConfluentKafkaMessage(
-            topic=topic,
-            partition=None,  # XXX: the partition is unknown (depends on librdkafka)
-            offset=None,  # XXX: the offset is unknown (depends on state)
-            key=key,
-            value=value,
-            headers=headers,
-        )
-        self.messages.append(message)
-        if on_delivery is not None:
-            self._callbacks.append((on_delivery, message))
+from base import FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
 
 
 class FakeKafkaConsumer(object):
@@ -95,7 +67,7 @@ class TestConsumer(object):
             bootstrap_servers=None,
             group_id='group',
             commit_log_topic='commits',
-            producer=FakeKafkaProducer(),
+            producer=FakeConfluentKafkaProducer(),
             metrics=DummyMetricsBackend(strict=True),
         )
 
@@ -125,7 +97,7 @@ class TestConsumer(object):
             bootstrap_servers=None,
             group_id='group',
             commit_log_topic='commits',
-            producer=FakeKafkaProducer(),
+            producer=FakeConfluentKafkaProducer(),
             metrics=DummyMetricsBackend(strict=True),
         )
 

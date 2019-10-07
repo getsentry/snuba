@@ -44,7 +44,7 @@ def get_event():
     return wrap_raw_event(raw_event)
 
 
-class FakeKafkaProducer(object):
+class FakeConfluentKafkaProducer(object):
     def __init__(self):
         self.messages = []
         self._callbacks = []

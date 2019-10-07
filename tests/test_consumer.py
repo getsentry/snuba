@@ -4,7 +4,7 @@ import simplejson as json
 
 from base import (
     BaseEventsTest,
-    FakeKafkaProducer,
+    FakeConfluentKafkaProducer,
 )
 
 from snuba.consumer import ConsumerWorker
@@ -32,7 +32,7 @@ class TestConsumer(BaseEventsTest):
                 return 456
 
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name, self.metrics)
+        test_worker = ConsumerWorker(self.dataset, FakeConfluentKafkaProducer(), replacement_topic.topic_name, self.metrics)
         batch = [test_worker.process_message(FakeMessage())]
         test_worker.flush_batch(batch)
 
@@ -42,7 +42,7 @@ class TestConsumer(BaseEventsTest):
 
     def test_skip_too_old(self):
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name, self.metrics)
+        test_worker = ConsumerWorker(self.dataset, FakeConfluentKafkaProducer(), replacement_topic.topic_name, self.metrics)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -64,7 +64,7 @@ class TestConsumer(BaseEventsTest):
         assert test_worker.process_message(FakeMessage()) is None
 
     def test_produce_replacement_messages(self):
-        producer = FakeKafkaProducer()
+        producer = FakeConfluentKafkaProducer()
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
         test_worker = ConsumerWorker(self.dataset, producer, replacement_topic.topic_name, self.metrics)
 
