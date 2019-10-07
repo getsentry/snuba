@@ -78,6 +78,7 @@ class GroupAssigneeDataset(CdcDataset):
                 postgres_table=self.POSTGRES_TABLE,
             ),
             default_control_topic="cdc_control",
+            postgres_table=self.POSTGRES_TABLE,
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:
