@@ -6,6 +6,7 @@ from confluent_kafka import Message
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
+from snuba.datasets.cdc import CdcDataset
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import (
@@ -53,7 +54,7 @@ class RecoveryState:
     test_recovery_state shows some examples.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, postgres_table_name: str) -> None:
         # This represents the snapshot id we are currently tracking. It is set after
         # snapshot-init and reset by snapshot-abort or after the current snapshot is
         # loaded and a new init message is found.
@@ -65,6 +66,10 @@ class RecoveryState:
         # to an init message and filter out snapshot messages we are not interested
         # into.
         self.__past_snapshots: Set[SnapshotId] = set()
+        # The postgres table present in the snapshot this state is interested into.
+        # The control topic may include snapshots regarding different postgres table.
+        # The bootstrap state needs to filter out those it is not interested into.
+        self.__postgres_table_name = postgres_table_name
 
     def get_completion_event(self) -> ConsumerStateCompletionEvent:
         """
@@ -102,7 +107,9 @@ class RecoveryState:
         commit the message for failover.
         """
         logger.debug("Processing init message for %r", msg.id)
-        if msg.product != settings.SNAPSHOT_LOAD_PRODUCT:
+        if msg.product != settings.SNAPSHOT_LOAD_PRODUCT or \
+                self.__postgres_table_name not in msg.tables:
+            # Not a snapshot this consumer is interested into.
             return self.__commit_if_no_active_snapshot()
 
         if msg.id in self.__past_snapshots:
@@ -120,8 +127,6 @@ class RecoveryState:
                 self.__active_snapshot_id,
             )
             return CommitDecision.DO_NOT_COMMIT
-
-        # TODO: filter out the tables I am not interested into.
 
         self.__past_snapshots.add(msg.id)
         self.__active_snapshot_id = msg.id
@@ -182,6 +187,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
         topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
+        dataset: CdcDataset,
     ):
         self.__consumer = StrictConsumer(
             topic=topic,
@@ -192,7 +198,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
             on_message=self.__handle_msg,
         )
 
-        self.__recovery_state = RecoveryState()
+        self.__recovery_state = RecoveryState(dataset.get_postgres_table())
 
     def __handle_msg(self, message: Message) -> CommitDecision:
         value = json.loads(message.value())
