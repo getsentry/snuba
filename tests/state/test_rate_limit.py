@@ -4,7 +4,14 @@ import uuid
 
 from base import BaseTest
 from snuba import state
-from snuba.state.rate_limit import rate_limit, RateLimitAggregator, RateLimitExceeded, RateLimitParameters
+from snuba.state.rate_limit import (
+    rate_limit,
+    RateLimitAggregator,
+    RateLimitExceeded,
+    RateLimitParameters,
+    RateLimitStats,
+    RateLimitStatsContainer,
+)
 
 
 class TestRateLimit(BaseTest):
@@ -101,3 +108,17 @@ class TestRateLimit(BaseTest):
         with pytest.raises(RateLimitExceeded):
             with RateLimitAggregator([rate_limit_params_outer, rate_limit_params_inner]):
                 pass
+
+    def test_rate_limit_container(self):
+        rate_limit_container = RateLimitStatsContainer()
+        rate_limit_stats = RateLimitStats(rate=0.5, concurrent=2)
+
+        rate_limit_container.add_stats('foo', rate_limit_stats)
+
+        assert rate_limit_container.get_stats('foo') == rate_limit_stats
+        assert rate_limit_container.get_stats('bar') is None
+
+        assert rate_limit_container.to_dict() == {
+            'foo_rate': 0.5,
+            'foo_concurrent': 2
+        }

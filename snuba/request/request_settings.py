@@ -7,7 +7,7 @@ class RequestSettings:
     """
     Settings that apply to how the query in the request should be run.
 
-    The settings provided in this class do not directly affect the SQL statement that will created
+    The settings provided in this class do not directly affect the SQL statement that will be created
     (i.e. they do not directly appear in the SQL statement).
 
     They can indirectly affect the SQL statement that will be formed. For example, `turbo` affects

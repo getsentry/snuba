@@ -7,7 +7,7 @@ from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
-from snuba.state.rate_limit import RateLimitParameters
+from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME
 
 
 PROJECT_EXTENSION_SCHEMA = {
@@ -52,7 +52,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         ])
 
         return RateLimitParameters(
-            rate_limit_name='project',
+            rate_limit_name=PROJECT_RATE_LIMIT_NAME,
             bucket=str(project_id),
             per_second_limit=per_second,
             concurrent_limit=concurr,

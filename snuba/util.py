@@ -13,7 +13,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings, state
-from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded
+from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded, PROJECT_RATE_LIMIT_NAME
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.request import Request
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -427,17 +427,19 @@ def raw_query(request: Request, sql, client, timer, stats=None):
             status = 200
         else:
             try:
-                with RateLimitAggregator(request.settings.get_rate_limit_params()) as rate_limit_stats:
-                    stats.update(rate_limit_stats)
+                with RateLimitAggregator(request.settings.get_rate_limit_params()) as rate_limit_stats_container:
+                    stats.update(rate_limit_stats_container.to_dict())
                     timer.mark('rate_limit')
 
                     # Experiment, reduce max threads by 1 for each extra concurrent query
                     # that a project has running beyond the first one
+                    project_rate_limit_stats = rate_limit_stats_container.get_stats(PROJECT_RATE_LIMIT_NAME)
+
                     if 'max_threads' in query_settings and \
-                            'project_concurrent' in rate_limit_stats \
-                            and rate_limit_stats['project_concurrent'] > 1:
+                            project_rate_limit_stats is not None \
+                            and project_rate_limit_stats.concurrent > 1:
                         maxt = query_settings['max_threads']
-                        query_settings['max_threads'] = max(1, maxt - rate_limit_stats['project_concurrent'] + 1)
+                        query_settings['max_threads'] = max(1, maxt - project_rate_limit_stats.concurrent + 1)
 
                     # Force query to use the first shard replica, which
                     # should have synchronously received any cluster writes
