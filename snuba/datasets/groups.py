@@ -1,9 +1,9 @@
 import re
 
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Union
 
-from snuba.datasets import TimeSeriesDataset
+from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -119,5 +119,14 @@ class Groups(TimeSeriesDataset):
             ),
         }
 
+    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
+        return ColumnSplitSpec(
+            id_column="events.event_id",
+            project_column="events.project_id",
+            timestamp_column="events.timestamp",
+        )
+
     def get_prewhere_keys(self) -> Sequence[str]:
-        return ['events.event_id', 'events.issue', 'events.tags[sentry:release]', 'events.message', 'events.environment', 'events.project_id']
+        # TODO: revisit how to build the prewhere clause on join
+        # queries.
+        return []

@@ -3,7 +3,7 @@ import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
 from functools import partial
-from mock import patch
+from unittest.mock import patch
 import pytest
 import pytz
 from sentry_sdk import Hub, Client

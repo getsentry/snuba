@@ -25,6 +25,8 @@ Aggregation = Union[
 
 Groupby = Sequence[Any]
 
+Limitby = Tuple[int, str]
+
 TElement = TypeVar("TElement")
 
 
@@ -103,14 +105,29 @@ class Query:
     ) -> None:
         self.__extend_sequence("conditions", conditions)
 
+    def set_arrayjoin(
+        self,
+        arrayjoin: str
+    ) -> None:
+        self.__body["arrayjoin"] = arrayjoin
+
+    def get_arrayjoin(self) -> Optional[str]:
+        return self.__body.get("arrayjoin", None)
+
+    def get_having(self) -> Sequence[Condition]:
+        return self.__body.get("having", [])
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
+
+    def get_limitby(self) -> Optional[Limitby]:
+        return self.__body.get("limitby")
 
     def get_sample(self) -> Optional[float]:
         return self.__body.get("sample")
 
-    def get_limit(self) -> int:
-        return self.__body.get('limit', 0)
+    def get_limit(self) -> Optional[int]:
+        return self.__body.get('limit', None)
 
     def set_limit(self, limit: int) -> None:
         self.__body["limit"] = limit
@@ -120,6 +137,9 @@ class Query:
 
     def set_offset(self, offset: int) -> None:
         self.__body["offset"] = offset
+
+    def has_totals(self) -> bool:
+        return self.__body.get("totals", False)
 
     def get_final(self) -> bool:
         return self.__final

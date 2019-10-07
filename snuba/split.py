@@ -3,6 +3,7 @@ from datetime import timedelta
 import math
 
 from snuba import state, util
+from snuba.datasets import ColumnSplitSpec
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -18,7 +19,8 @@ def split_query(query_func):
         use_split = state.get_configs([
             ('use_split', 0),
         ])
-        limit = request.query.get_limit()
+        query_limit = request.query.get_limit()
+        limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
         orderby = util.to_list(request.query.get_orderby())
 
@@ -28,17 +30,22 @@ def split_query(query_func):
             # TODO: Move all_referenced_columns into query and remove this dependency.
             # In order to do this we need to break a circular dependency first
             total_col_count = len(util.all_referenced_columns(request.query.get_body()))
-            min_col_count = len(util.all_referenced_columns({
-                **request.query.get_body(),
-                'selected_columns': dataset.get_min_columns()
-            }))
+            column_split_spec = dataset.get_split_query_spec()
+            if column_split_spec:
+                min_col_count = len(util.all_referenced_columns({
+                    **request.query.get_body(),
+                    'selected_columns': column_split_spec.get_min_columns()
+                }))
+            else:
+                min_col_count = None
 
             if (
-                request.query.get_selected_columns()
+                column_split_spec
+                and request.query.get_selected_columns()
                 and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
-                return col_split(dataset, request, *args, **kwargs)
+                return col_split(dataset, request, column_split_spec, *args, **kwargs)
             elif orderby[:1] == ['-timestamp'] and remaining_offset < 1000:
                 return time_split(dataset, request, *args, **kwargs)
 
@@ -61,7 +68,8 @@ def split_query(query_func):
             ('split_step', 3600),  # default 1 hour
         ])
 
-        limit = request.query.get_limit()
+        query_limit = request.query.get_limit()
+        limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
 
         to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
@@ -123,7 +131,7 @@ def split_query(query_func):
 
         return overall_result, status
 
-    def col_split(dataset, request: Request, *args, **kwargs):
+    def col_split(dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs):
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
@@ -134,7 +142,7 @@ def split_query(query_func):
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(dataset.get_min_columns())
+        minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
         result, status = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
@@ -145,15 +153,15 @@ def split_query(query_func):
         if result['data']:
             request = copy.deepcopy(request)
 
-            event_ids = list(set([event['event_id'] for event in result['data']]))
-            request.query.add_conditions([('event_id', 'IN', event_ids)])
+            event_ids = list(set([event[column_split_spec.id_column] for event in result['data']]))
+            request.query.add_conditions([(column_split_spec.id_column, 'IN', event_ids)])
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
 
-            project_ids = list(set([event['project_id'] for event in result['data']]))
+            project_ids = list(set([event[column_split_spec.project_column] for event in result['data']]))
             request.extensions['project']['project'] = project_ids
 
-            timestamp_field = dataset.get_timestamp_column()
+            timestamp_field = column_split_spec.timestamp_column
             timestamps = [event[timestamp_field] for event in result['data']]
             request.extensions['timeseries']['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)

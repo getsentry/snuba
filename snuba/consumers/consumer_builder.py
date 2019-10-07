@@ -1,4 +1,3 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
 from confluent_kafka import Consumer, Producer
 from typing import Sequence
 
@@ -8,6 +7,7 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 
 
 class ConsumerBuilder:
@@ -63,10 +63,10 @@ class ConsumerBuilder:
 
         self.metrics = util.create_metrics(
             dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-            tags=[
-                "group:%s" % group_id,
-                "dataset:%s" % self.dataset_name,
-            ]
+            tags={
+                "group": group_id,
+                "dataset": self.dataset_name,
+            }
         )
 
         self.max_batch_size = max_batch_size
@@ -118,7 +118,7 @@ class ConsumerBuilder:
             producer=self.producer,
             snapshot_id=snapshot_id,
             transaction_data=transaction_data,
-            replacements_topic=self.replacements_topic,
             metrics=self.metrics,
+            replacements_topic=self.replacements_topic,
         )
         return self.__build_consumer(worker)

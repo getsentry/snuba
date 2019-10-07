@@ -9,6 +9,7 @@ from base import BaseEventsTest, FakeKafkaMessage
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 
 
 class TestReplacer(BaseEventsTest):
@@ -20,7 +21,7 @@ class TestReplacer(BaseEventsTest):
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
-        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset)
+        self.replacer = replacer.ReplacerWorker(self.clickhouse, self.dataset, DummyMetricsBackend(strict=True))
 
         self.project_id = 1
 
@@ -168,7 +169,6 @@ class TestReplacer(BaseEventsTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -186,8 +186,8 @@ class TestReplacer(BaseEventsTest):
             def offset(self):
                 return 42
 
-        processed = test_worker.process_message(FakeMessage())
-        test_worker.flush_batch([processed])
+        processed = self.replacer.process_message(FakeMessage())
+        self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == []
 
@@ -199,7 +199,6 @@ class TestReplacer(BaseEventsTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -218,8 +217,8 @@ class TestReplacer(BaseEventsTest):
             def offset(self):
                 return 42
 
-        processed = test_worker.process_message(FakeMessage())
-        test_worker.flush_batch([processed])
+        processed = self.replacer.process_message(FakeMessage())
+        self.replacer.flush_batch([processed])
 
         assert self._issue_count(1) == [{'count': 1, 'issue': 2}]
 
@@ -232,7 +231,6 @@ class TestReplacer(BaseEventsTest):
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         project_id = self.project_id
 
@@ -252,8 +250,8 @@ class TestReplacer(BaseEventsTest):
             def offset(self):
                 return 42
 
-        processed = test_worker.process_message(FakeMessage())
-        test_worker.flush_batch([processed])
+        processed = self.replacer.process_message(FakeMessage())
+        self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 2}]
 
@@ -278,7 +276,6 @@ class TestReplacer(BaseEventsTest):
         assert _issue_count(total=True) == [{'count': 1, 'issue': 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
-        test_worker = replacer.ReplacerWorker(self.clickhouse, self.dataset)
 
         class FakeMessage(object):
             def value(self):
@@ -294,8 +291,8 @@ class TestReplacer(BaseEventsTest):
             def offset(self):
                 return 42
 
-        processed = test_worker.process_message(FakeMessage())
-        test_worker.flush_batch([processed])
+        processed = self.replacer.process_message(FakeMessage())
+        self.replacer.flush_batch([processed])
 
         assert _issue_count() == []
         assert _issue_count(total=True) == [{'count': 1, 'issue': 1}]

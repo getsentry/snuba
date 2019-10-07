@@ -23,7 +23,9 @@ from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, ge
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request, RequestSchema
 from snuba.redis import redis_client
-from snuba.util import local_dataset_mode, Timer
+from snuba.util import local_dataset_mode
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.metrics.timer import Timer
 
 
 logger = logging.getLogger('snuba.api')
@@ -442,12 +444,13 @@ if application.debug or application.testing:
         message = Message(http_request.data)
 
         type_ = record[1]
+        metrics = DummyMetricsBackend()
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, dataset)
+            worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:
