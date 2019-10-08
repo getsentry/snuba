@@ -33,7 +33,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
-def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_host, clickhouse_port, dataset,
+def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse_host, clickhouse_port, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
              queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
 
@@ -41,7 +41,7 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams.batching import BatchingKafkaConsumer
+    from snuba.utils.streams.batching import BatchingKafkaConsumer, build_confluent_kafka_consumer
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset)
@@ -77,18 +77,21 @@ def replacer(replacements_topic, consumer_group, bootstrap_server, clickhouse_ho
     )
 
     replacer = BatchingKafkaConsumer(
+        build_confluent_kafka_consumer(
+            bootstrap_servers=bootstrap_server,
+            group_id=consumer_group,
+            auto_offset_reset=auto_offset_reset,
+            queued_max_messages_kbytes=queued_max_messages_kbytes,
+            queued_min_messages=queued_min_messages,
+        ),
         replacements_topic,
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
-        bootstrap_servers=bootstrap_server,
         group_id=consumer_group,
         producer=None,
         commit_log_topic=None,
-        auto_offset_reset=auto_offset_reset,
-        queued_max_messages_kbytes=queued_max_messages_kbytes,
-        queued_min_messages=queued_min_messages,
     )
 
     def handler(signum, frame):
