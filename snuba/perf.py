@@ -4,6 +4,7 @@ import os
 import tempfile
 import time
 from itertools import chain
+from typing import Optional
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -13,7 +14,10 @@ logger = logging.getLogger('snuba.perf')
 
 
 class FakeConfluentKafkaMessage(object):
-    def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
+    def __init__(self, topic: str, partition: int, offset, value: Optional[bytes], key=None, headers=None, error=None) -> None:
+        if value is not None:
+            assert isinstance(value, bytes)
+
         self._topic = topic
         self._partition = partition
         self._offset = offset
@@ -35,7 +39,7 @@ class FakeConfluentKafkaMessage(object):
     def offset(self):
         return self._offset
 
-    def value(self):
+    def value(self) -> Optional[bytes]:
         return self._value
 
     def key(self):
@@ -53,7 +57,7 @@ def get_messages(events_file):
     messages = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
-        messages.append(FakeConfluentKafkaMessage('events', 1, 0, raw_event))
+        messages.append(FakeConfluentKafkaMessage('events', 1, 0, raw_event.encode('utf-8')))
     return messages
 
 

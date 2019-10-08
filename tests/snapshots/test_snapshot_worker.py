@@ -78,7 +78,7 @@ class TestSnapshotWorker:
     @pytest.mark.parametrize("message, expected", test_data)
     def test_send_message(
         self,
-        message: bytes,
+        message: str,
         expected: Optional[ProcessedMessage],
     ) -> None:
         dataset = get_dataset("groupedmessage")
@@ -99,6 +99,6 @@ class TestSnapshotWorker:
         )
 
         ret = worker.process_message(
-            build_confluent_kafka_message(1, 0, message)
+            build_confluent_kafka_message(1, 0, message.encode('utf-8'))
         )
         assert ret == expected

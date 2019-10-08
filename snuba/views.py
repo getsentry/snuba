@@ -22,6 +22,7 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.perf import FakeConfluentKafkaMessage
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
@@ -430,20 +431,7 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        class Message(object):
-            def __init__(self, value):
-                self._value = value
-
-            def value(self):
-                return self._value
-
-            def partition(self):
-                return None
-
-            def offset(self):
-                return None
-
-        message = Message(http_request.data)
+        message = FakeConfluentKafkaMessage('topic', 0, 0, http_request.data)
 
         type_ = record[1]
         metrics = DummyMetricsBackend()

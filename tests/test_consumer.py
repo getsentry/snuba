@@ -20,7 +20,7 @@ class TestConsumer(BaseEventsTest):
         message = build_confluent_kafka_message(
             123,
             456,
-            json.dumps((0, 'insert', event))  # event doesn't really matter
+            json.dumps((0, 'insert', event)).encode('utf-8')  # event doesn't really matter
         )
 
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
@@ -43,7 +43,11 @@ class TestConsumer(BaseEventsTest):
         event['data']['datetime'] = old_timestamp_str
         event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
 
-        message = build_confluent_kafka_message(42, 1, json.dumps((0, 'insert', event)))
+        message = build_confluent_kafka_message(
+            42,
+            1,
+            json.dumps((0, 'insert', event)).encode('utf-8'),
+        )
 
         assert test_worker.process_message(message) is None
 
