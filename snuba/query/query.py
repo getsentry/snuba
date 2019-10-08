@@ -144,8 +144,23 @@ class Query:
     def get_final(self) -> bool:
         return self.__final
 
-    def set_final(self, final) -> None:
+    def set_final(self, final: bool) -> None:
         self.__final = final
+
+    def set_granularity(self, granularity: int) -> None:
+        """
+        Temporary method to move the management of granularity
+        out of the body. This is the only usage left of the body
+        during the query column processing. That processing is
+        going to move to a place where this object is being built.
+        But in order to do that we need first to decouple it from
+        the query body, thus we need to move the granularity out of
+        the body even if it does not really belong here.
+        """
+        self.__body["granularity"] = granularity
+
+    def get_granularity(self) -> Optional[int]:
+        return self.__body.get("granularity")
 
     @deprecated(
         details="Do not access the internal query representation "

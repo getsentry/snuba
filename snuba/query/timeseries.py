@@ -38,6 +38,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
             request_settings: RequestSettings,
     ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
+        query.set_granularity(extension_data["granularity"])
         query.add_conditions([
             (self.__timestamp_column, '>=', from_date.isoformat()),
             (self.__timestamp_column, '<', to_date.isoformat()),

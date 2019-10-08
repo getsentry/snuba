@@ -32,6 +32,7 @@ def test_full_query():
         "limit": 100,
         "offset": 50,
         "totals": True,
+        "granularity": 60,
     })
 
     assert query.get_selected_columns() == ["c1", "c2", "c3"]
@@ -46,6 +47,7 @@ def test_full_query():
     assert query.get_limit() == 100
     assert query.get_offset() == 50
     assert query.has_totals() is True
+    assert query.get_granularity() == 60
 
 
 def test_edit_query():
@@ -86,3 +88,6 @@ def test_edit_query():
 
     query.set_arrayjoin("not_tags")
     assert query.get_arrayjoin() == "not_tags"
+
+    query.set_granularity(7200)
+    assert query.get_granularity() == 7200

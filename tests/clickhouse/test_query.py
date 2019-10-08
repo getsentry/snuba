@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 from unittest.mock import patch
 
 from snuba.clickhouse.query import ClickhouseQuery
@@ -15,9 +15,13 @@ class TestClickhouseQuery(BaseEventsTest):
             "sample": 0.1
         })
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-        request = Request(query=query, settings=request_settings, extensions={})
 
-        clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
+        clickhouse_query = ClickhouseQuery(
+            dataset=self.dataset,
+            query=query,
+            settings=request_settings,
+            prewhere_conditions=[],
+        )
 
         assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
 
@@ -29,8 +33,12 @@ class TestClickhouseQuery(BaseEventsTest):
             "sample": 0.1
         })
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
-        request = Request(query=query, settings=request_settings, extensions={})
-        clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
+        clickhouse_query = ClickhouseQuery(
+            dataset=self.dataset,
+            query=query,
+            settings=request_settings,
+            prewhere_conditions=[],
+        )
 
         assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
 
@@ -43,8 +51,12 @@ class TestClickhouseQuery(BaseEventsTest):
         })
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
 
-        request = Request(query=query, settings=request_settings, extensions={})
-        clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
+        clickhouse_query = ClickhouseQuery(
+            dataset=self.dataset,
+            query=query,
+            settings=request_settings,
+            prewhere_conditions=[],
+        )
 
         assert "SAMPLE 0.2" in clickhouse_query.format_sql()
 
@@ -56,7 +68,11 @@ class TestClickhouseQuery(BaseEventsTest):
         })
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        request = Request(query=query, settings=request_settings, extensions={})
-        clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
+        clickhouse_query = ClickhouseQuery(
+            dataset=self.dataset,
+            query=query,
+            settings=request_settings,
+            prewhere_conditions=[],
+        )
 
         assert 'SAMPLE' not in clickhouse_query.format_sql()

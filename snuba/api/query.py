@@ -1,6 +1,7 @@
 import logging
 
 from clickhouse_driver.errors import Error as ClickHouseError
+from collections import namedtuple
 from hashlib import md5
 from typing import Any, MutableMapping, NamedTuple
 
@@ -55,7 +56,7 @@ def raw_query(
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(request.query.get_body())) > uc_max:
+    if len(all_referenced_columns(request.query)) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 

@@ -1,9 +1,10 @@
 import re
-from typing import Any, Mapping, MutableMapping, Set, Union
+from typing import Any, Mapping, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.parsing import ParsingContext
+from snuba.query.query import Query
 from snuba.util import (
     alias_expr,
     all_referenced_columns,
@@ -41,7 +42,7 @@ class TagColumnProcessor:
 
     def process_column_expression(self,
         column_name: str,
-        body: MutableMapping[str, Any],
+        query: Query,
         parsing_context: ParsingContext,
         table_alias: str="",
     ) -> Union[None, Any]:
@@ -55,7 +56,7 @@ class TagColumnProcessor:
         if NESTED_COL_EXPR_RE.match(column_name):
             return self.__tag_expr(column_name, table_alias)
         elif column_name in ['tags_key', 'tags_value']:
-            return self.__tags_expr(column_name, body, parsing_context, table_alias)
+            return self.__tags_expr(column_name, query, parsing_context, table_alias)
         return None
 
     def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
@@ -98,7 +99,7 @@ class TagColumnProcessor:
 
     def __tags_expr(self,
         column_name: str,
-        body: MutableMapping[str, Any],
+        query: Query,
         parsing_context: ParsingContext,
         table_alias: str="",
     ) -> str:
@@ -129,7 +130,7 @@ class TagColumnProcessor:
 
         qualified_key = qualified_column("tags_key", table_alias)
         qualified_value = qualified_column("tags_value", table_alias)
-        cols_used = all_referenced_columns(body) & set([qualified_key, qualified_value])
+        cols_used = all_referenced_columns(query) & set([qualified_key, qualified_value])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.

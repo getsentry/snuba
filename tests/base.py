@@ -28,7 +28,7 @@ def wrap_raw_event(event):
 
 
 def get_event():
-    from fixtures import raw_event
+    from tests.fixtures import raw_event
     timestamp = datetime.utcnow()
     raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))

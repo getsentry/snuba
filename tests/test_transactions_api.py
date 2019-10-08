@@ -9,7 +9,7 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer
 
-from base import BaseApiTest
+from tests.base import BaseApiTest
 
 
 class TestTransactionsApi(BaseApiTest):
