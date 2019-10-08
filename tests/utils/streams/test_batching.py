@@ -40,13 +40,13 @@ class TestConsumer(object):
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, f'{i}'.encode('utf-8')) for i in [1, 2, 3]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
         batching_consumer._shutdown()
 
-        assert worker.processed == [1, 2, 3]
-        assert worker.flushed == [[1, 2]]
+        assert worker.processed == [b'1', b'2', b'3']
+        assert worker.flushed == [[b'1', b'2']]
         assert consumer.commit_calls == 1
         assert consumer.close_calls == 1
 
@@ -74,24 +74,24 @@ class TestConsumer(object):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [1, 2, 3]]
+        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, f'{i}'.encode('utf-8')) for i in [1, 2, 3]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [4, 5, 6]]
+        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, f'{i}'.encode('utf-8')) for i in [4, 5, 6]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, i) for i in [7, 8, 9]]
+        consumer.items = [FakeConfluentKafkaMessage('topic', 0, i, f'{i}'.encode('utf-8')) for i in [7, 8, 9]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         batching_consumer._shutdown()
 
-        assert worker.processed == [1, 2, 3, 4, 5, 6, 7, 8, 9]
-        assert worker.flushed == [[1, 2, 3, 4, 5, 6]]
+        assert worker.processed == [b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9']
+        assert worker.flushed == [[b'1', b'2', b'3', b'4', b'5', b'6']]
         assert consumer.commit_calls == 1
         assert consumer.close_calls == 1
 

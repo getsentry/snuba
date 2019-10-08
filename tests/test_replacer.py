@@ -179,7 +179,7 @@ class TestReplacer(BaseEventsTest):
                 'project_id': project_id,
                 'group_ids': [1],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-            }))
+            })).encode('utf-8'),
         )
 
         processed = self.replacer.process_message(message)
@@ -206,7 +206,7 @@ class TestReplacer(BaseEventsTest):
                 'new_group_id': 2,
                 'previous_group_ids': [1],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-            })),
+            })).encode('utf-8'),
         )
 
         processed = self.replacer.process_message(message)
@@ -235,7 +235,7 @@ class TestReplacer(BaseEventsTest):
                 'new_group_id': 2,
                 'hashes': ['a' * 32],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-            })),
+            })).encode('utf-8'),
         )
 
         processed = self.replacer.process_message(message)
@@ -272,7 +272,7 @@ class TestReplacer(BaseEventsTest):
                 'project_id': project_id,
                 'tag': 'browser.name',
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-            })),
+            })).encode('utf-8'),
         )
 
         processed = self.replacer.process_message(message)

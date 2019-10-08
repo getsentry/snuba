@@ -54,7 +54,7 @@ class TestStrictConsumer:
         kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
 
-        msg = build_confluent_kafka_message(0, 0, "ABCABC", False)
+        msg = build_confluent_kafka_message(0, 0, b"ABCABC", False)
         kafka_consumer.items = [
             msg,
             build_confluent_kafka_message(0, 0, None, True),
@@ -75,9 +75,9 @@ class TestStrictConsumer:
         error = MagicMock()
         error.code.return_value = KafkaError._PARTITION_EOF
         kafka_consumer.items = [
-            build_confluent_kafka_message(0, 0, "ABCABC", False),
-            build_confluent_kafka_message(1, 0, "ABCABC", False),
-            build_confluent_kafka_message(2, 0, "ABCABC", False),
+            build_confluent_kafka_message(0, 0, b"ABCABC", False),
+            build_confluent_kafka_message(1, 0, b"ABCABC", False),
+            build_confluent_kafka_message(2, 0, b"ABCABC", False),
             build_confluent_kafka_message(0, 0, None, True),
         ]
 

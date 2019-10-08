@@ -47,7 +47,7 @@ class TestBootstrapState:
             build_confluent_kafka_message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "tables": ["someone_else"], "product":"snuba", "event":"snapshot-init"}',
+                b'{"snapshot-id":"abc123", "tables": ["someone_else"], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
             build_confluent_kafka_message(0, 0, None, True),
@@ -72,7 +72,7 @@ class TestBootstrapState:
             build_confluent_kafka_message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "tables": ["sentry_groupedmessage"], "product":"snuba", "event":"snapshot-init"}',
+                b'{"snapshot-id":"abc123", "tables": ["sentry_groupedmessage"], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
             build_confluent_kafka_message(0, 0, None, True),
@@ -97,22 +97,22 @@ class TestBootstrapState:
             build_confluent_kafka_message(
                 0,
                 0,
-                '{"snapshot-id":"abc123", "product":"somewhere-else", "tables": [], "event":"snapshot-init"}',
+                b'{"snapshot-id":"abc123", "product":"somewhere-else", "tables": [], "event":"snapshot-init"}',
                 False,
             ),
             build_confluent_kafka_message(
                 1,
                 0,
-                '{"snapshot-id":"abc123", "product":"snuba", "tables": ["sentry_groupedmessage"], "event":"snapshot-init"}',
+                b'{"snapshot-id":"abc123", "product":"snuba", "tables": ["sentry_groupedmessage"], "event":"snapshot-init"}',
                 False,
             ),
             build_confluent_kafka_message(
                 2,
                 0,
                 (
-                    '{"snapshot-id":"abc123", "event":"snapshot-loaded",'
-                    '"transaction-info": {"xmin":123, "xmax":124, "xip-list": []}'
-                    '}'
+                    b'{"snapshot-id":"abc123", "event":"snapshot-loaded",'
+                    b'"transaction-info": {"xmin":123, "xmax":124, "xip-list": []}'
+                    b'}'
                 ),
                 False,
             ),
