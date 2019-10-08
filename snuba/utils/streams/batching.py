@@ -2,14 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import (
-    Any,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Sequence,
-    Tuple,
-)
+from typing import Any, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
 from confluent_kafka import (
     OFFSET_BEGINNING,
@@ -77,15 +70,17 @@ def build_confluent_kafka_consumer(
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
 ) -> Consumer:
-    return Consumer({
-        "enable.auto.commit": False,
-        "bootstrap.servers": ",".join(bootstrap_servers),
-        "group.id": group_id,
-        "default.topic.config": {"auto.offset.reset": auto_offset_reset},
-        # overridden to reduce memory usage when there's a large backlog
-        "queued.max.messages.kbytes": queued_max_messages_kbytes,
-        "queued.min.messages": queued_min_messages,
-    })
+    return Consumer(
+        {
+            "enable.auto.commit": False,
+            "bootstrap.servers": ",".join(bootstrap_servers),
+            "group.id": group_id,
+            "default.topic.config": {"auto.offset.reset": auto_offset_reset},
+            # overridden to reduce memory usage when there's a large backlog
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
+        }
+    )
 
 
 class BatchingKafkaConsumer:
