@@ -1,6 +1,9 @@
 import time
 from datetime import datetime
+from typing import Any, MutableSequence, Sequence, Optional
 from unittest.mock import patch
+
+from confluent_kafka import Message
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
@@ -8,21 +11,20 @@ from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, FakeConfl
 
 
 class FakeWorker(AbstractBatchWorker):
-    def __init__(self, *args, **kwargs):
-        super(FakeWorker, self).__init__(*args, **kwargs)
-        self.processed = []
-        self.flushed = []
+    def __init__(self) -> None:
+        self.processed: MutableSequence[Optional[Any]] = []
+        self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message):
+    def process_message(self, message: Message) -> Optional[Any]:
         self.processed.append(message.value())
         return message.value()
 
-    def flush_batch(self, batch):
+    def flush_batch(self, batch: Sequence[Any]) -> None:
         self.flushed.append(batch)
 
 
 class TestConsumer(object):
-    def test_batch_size(self):
+    def test_batch_size(self) -> None:
         consumer = FakeConfluentKafkaConsumer()
         worker = FakeWorker()
         producer = FakeConfluentKafkaProducer()
@@ -55,7 +57,7 @@ class TestConsumer(object):
         assert commit_message.value() == '{}'.format(2 + 1).encode('utf-8')  # offsets are last processed message offset + 1
 
     @patch('time.time')
-    def test_batch_time(self, mock_time):
+    def test_batch_time(self, mock_time: Any) -> None:
         consumer = FakeConfluentKafkaConsumer()
         worker = FakeWorker()
         producer = FakeConfluentKafkaProducer()
