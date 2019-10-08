@@ -1,3 +1,4 @@
+from typing import Optional
 from unittest.mock import MagicMock
 
 from confluent_kafka import TopicPartition, KafkaError
@@ -82,10 +83,11 @@ class FakeConfluentKafkaConsumer(object):
         return meta
 
 
-def build_confluent_kafka_message(offset, partition, value, eof=False) -> FakeConfluentKafkaMessage:
+def build_confluent_kafka_message(offset: int, partition: int, value: Optional[bytes], eof: bool = False) -> FakeConfluentKafkaMessage:
     if eof:
         error = MagicMock()
         error.code.return_value = KafkaError._PARTITION_EOF
+        assert value is None
     else:
         error = None
 
