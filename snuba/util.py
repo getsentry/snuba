@@ -10,6 +10,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
+from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS, POSITIVE_OPERATORS
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -147,7 +148,7 @@ def is_function(column_expr, depth=0):
         return None
 
 
-def column_expr(dataset, column_name, body, alias=None, aggregate=None):
+def column_expr(dataset, column_name, body, parsing_context: ParsingContext, alias=None, aggregate=None):
     """
     Certain special column names expand into more complex expressions. Return
     a 2-tuple of:
@@ -160,22 +161,22 @@ def column_expr(dataset, column_name, body, alias=None, aggregate=None):
     column_name = column_name or ''
 
     if is_function(column_name, 0):
-        return complex_column_expr(dataset, column_name, body)
+        return complex_column_expr(dataset, column_name, body, parsing_context)
     elif isinstance(column_name, (list, tuple)) and aggregate:
-        return complex_column_expr(dataset, [aggregate, column_name, alias], body)
+        return complex_column_expr(dataset, [aggregate, column_name, alias], body, parsing_context)
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
-        expr = dataset.column_expr(column_name, body)
+        expr = dataset.column_expr(column_name, body, parsing_context)
 
     if aggregate:
         expr = function_expr(aggregate, expr)
 
     alias = escape_alias(alias or column_name)
-    return alias_expr(expr, alias, body)
+    return alias_expr(expr, alias, parsing_context)
 
 
-def complex_column_expr(dataset, expr, body, depth=0):
+def complex_column_expr(dataset, expr, body, parsing_context: ParsingContext, depth=0):
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
         raise ValueError('complex_column_expr was given an expr %s that is not a function at depth %d.' % (expr, depth))
@@ -186,25 +187,25 @@ def complex_column_expr(dataset, expr, body, depth=0):
     while i < len(args):
         next_2 = args[i:i + 2]
         if is_function(next_2, depth + 1):
-            out.append(complex_column_expr(dataset, next_2, body, depth + 1))
+            out.append(complex_column_expr(dataset, next_2, body, parsing_context, depth + 1))
             i += 2
         else:
             nxt = args[i]
             if is_function(nxt, depth + 1):  # Embedded function
-                out.append(complex_column_expr(dataset, nxt, body, depth + 1))
+                out.append(complex_column_expr(dataset, nxt, body, parsing_context, depth + 1))
             elif isinstance(nxt, str):
-                out.append(column_expr(dataset, nxt, body))
+                out.append(column_expr(dataset, nxt, body, parsing_context))
             else:
                 out.append(escape_literal(nxt))
             i += 1
 
     ret = function_expr(name, ', '.join(out))
     if alias:
-        ret = alias_expr(ret, alias, body)
+        ret = alias_expr(ret, alias, parsing_context)
     return ret
 
 
-def alias_expr(expr, alias, body):
+def alias_expr(expr: str, alias: str, parsing_context: ParsingContext):
     """
     Return the correct expression to use in the final SQL. Keeps a cache of
     the previously created expressions and aliases, so it knows when it can
@@ -215,14 +216,13 @@ def alias_expr(expr, alias, body):
        it can be reused later and return `expr AS alias`
     3. If the expression has been aliased before, return the alias
     """
-    alias_cache = body.setdefault('alias_cache', [])
 
     if expr == alias:
         return expr
-    elif alias in alias_cache:
+    elif parsing_context.is_alias_present(alias):
         return alias
     else:
-        alias_cache.append(alias)
+        parsing_context.add_alias(alias)
         return u'({} AS {})'.format(expr, alias)
 
 
@@ -285,7 +285,7 @@ def tuplify(nested):
     return nested
 
 
-def conditions_expr(dataset, conditions, body, depth=0):
+def conditions_expr(dataset, conditions, body, parsing_context: ParsingContext, depth=0):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
     query.  The expression is constructed by ANDing groups of OR expressions.
@@ -299,7 +299,7 @@ def conditions_expr(dataset, conditions, body, depth=0):
 
     if depth == 0:
         # dedupe conditions at top level, but keep them in order
-        sub = OrderedDict((conditions_expr(dataset, cond, body, depth + 1), None) for cond in conditions)
+        sub = OrderedDict((conditions_expr(dataset, cond, body, parsing_context, depth + 1), None) for cond in conditions)
         return u' AND '.join(s for s in sub.keys() if s)
     elif is_condition(conditions):
         lhs, op, lit = dataset.process_condition(conditions)
@@ -330,17 +330,17 @@ def conditions_expr(dataset, conditions, body, depth=0):
                 any_or_all,
                 op,
                 escape_literal(lit),
-                column_expr(dataset, lhs, body)
+                column_expr(dataset, lhs, body, parsing_context)
             )
         else:
             return u'{} {} {}'.format(
-                column_expr(dataset, lhs, body),
+                column_expr(dataset, lhs, body, parsing_context),
                 op,
                 escape_literal(lit)
             )
 
     elif depth == 1:
-        sub = (conditions_expr(dataset, cond, body, depth + 1) for cond in conditions)
+        sub = (conditions_expr(dataset, cond, body, parsing_context, depth + 1) for cond in conditions)
         sub = [s for s in sub if s]
         res = u' OR '.join(sub)
         return u'({})'.format(res) if len(sub) > 1 else res
