@@ -8,6 +8,7 @@ from typing import Any, MutableMapping, NamedTuple
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
 from snuba.request import Request
+from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded, PROJECT_RATE_LIMIT_NAME
 from snuba.util import (
     all_referenced_columns,
     create_metrics,
@@ -38,23 +39,11 @@ def raw_query(
     """
     from snuba.clickhouse.native import NativeDriverReader
 
-    project_ids = to_list(request.extensions['project']['project'])
-    project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
     stats = stats or {}
-    grl, gcl, prl, pcl, use_cache, use_deduper, uc_max = state.get_configs([
-        ('global_per_second_limit', None),
-        ('global_concurrent_limit', 1000),
-        ('project_per_second_limit', 1000),
-        ('project_concurrent_limit', 1000),
+    use_cache, use_deduper, uc_max = state.get_configs([
         ('use_cache', 0),
         ('use_deduper', 1),
         ('uncompressed_cache_max_cols', 5),
-    ])
-
-    # Specific projects can have their rate limits overridden
-    prl, pcl = state.get_configs([
-        ('project_per_second_limit_{}'.format(project_id), prl),
-        ('project_concurrent_limit_{}'.format(project_id), pcl),
     ])
 
     all_confs = state.get_all_configs()
@@ -89,84 +78,74 @@ def raw_query(
         if result:
             status = 200
         else:
-            with state.rate_limit('global', grl, gcl) as (g_allowed, g_rate, g_concurr):
-                metrics.gauge('query.global_concurrent', g_concurr)
-                stats.update({'global_rate': g_rate, 'global_concurrent': g_concurr})
-
-                with state.rate_limit(project_id, prl, pcl) as (p_allowed, p_rate, p_concurr):
-                    stats.update({'project_rate': p_rate, 'project_concurrent': p_concurr})
+            try:
+                with RateLimitAggregator(request.settings.get_rate_limit_params()) as rate_limit_stats_container:
+                    stats.update(rate_limit_stats_container.to_dict())
                     timer.mark('rate_limit')
 
-                    if g_allowed and p_allowed:
+                    project_rate_limit_stats = rate_limit_stats_container.get_stats(PROJECT_RATE_LIMIT_NAME)
 
-                        # Experiment, reduce max threads by 1 for each extra concurrent query
-                        # that a project has running beyond the first one
-                        if 'max_threads' in query_settings and p_concurr > 1:
-                            maxt = query_settings['max_threads']
-                            query_settings['max_threads'] = max(1, maxt - p_concurr + 1)
+                    if 'max_threads' in query_settings and \
+                            project_rate_limit_stats is not None and \
+                            project_rate_limit_stats.concurrent > 1:
+                        maxt = query_settings['max_threads']
+                        query_settings['max_threads'] = max(1, maxt - project_rate_limit_stats.concurrent + 1)
 
-                        # Force query to use the first shard replica, which
-                        # should have synchronously received any cluster writes
-                        # before this query is run.
-                        consistent = request.settings.consistent
-                        stats['consistent'] = consistent
-                        if consistent:
-                            query_settings['load_balancing'] = 'in_order'
-                            query_settings['max_threads'] = 1
+                    # Force query to use the first shard replica, which
+                    # should have synchronously received any cluster writes
+                    # before this query is run.
+                    consistent = request.settings.get_consistent()
+                    stats['consistent'] = consistent
+                    if consistent:
+                        query_settings['load_balancing'] = 'in_order'
+                        query_settings['max_threads'] = 1
 
-                        try:
-                            result = NativeDriverReader(client).execute(
-                                sql,
-                                query_settings,
-                                # All queries should already be deduplicated at this point
-                                # But the query_id will let us know if they aren't
-                                query_id=query_id if use_deduper else None,
-                                with_totals=request.query.has_totals(),
-                            )
-                            status = 200
+                    try:
+                        result = NativeDriverReader(client).execute(
+                            sql,
+                            query_settings,
+                            # All queries should already be deduplicated at this point
+                            # But the query_id will let us know if they aren't
+                            query_id=query_id if use_deduper else None,
+                            with_totals=request.query.has_totals(),
+                        )
+                        status = 200
 
-                            logger.debug(sql)
-                            timer.mark('execute')
-                            stats.update({
-                                'result_rows': len(result['data']),
-                                'result_cols': len(result['meta']),
-                            })
+                        logger.debug(sql)
+                        timer.mark('execute')
+                        stats.update({
+                            'result_rows': len(result['data']),
+                            'result_cols': len(result['meta']),
+                        })
 
-                            if use_cache:
-                                state.set_result(query_id, result)
-                                timer.mark('cache_set')
+                        if use_cache:
+                            state.set_result(query_id, result)
+                            timer.mark('cache_set')
 
-                        except BaseException as ex:
-                            error = str(ex)
-                            status = 500
-                            logger.exception("Error running query: %s\n%s", sql, error)
-                            if isinstance(ex, ClickHouseError):
-                                result = {'error': {
-                                    'type': 'clickhouse',
-                                    'code': ex.code,
-                                    'message': error,
-                                }}
-                            else:
-                                result = {'error': {
-                                    'type': 'unknown',
-                                    'message': error,
-                                }}
+                    except BaseException as ex:
+                        error = str(ex)
+                        status = 500
+                        logger.exception("Error running query: %s\n%s", sql, error)
+                        if isinstance(ex, ClickHouseError):
+                            result = {'error': {
+                                'type': 'clickhouse',
+                                'code': ex.code,
+                                'message': error,
+                            }}
+                        else:
+                            result = {'error': {
+                                'type': 'unknown',
+                                'message': error,
+                            }}
 
-                    else:
-                        status = 429
-                        Reason = namedtuple('reason', 'scope name val limit')
-                        reasons = [
-                            Reason('global', 'concurrent', g_concurr, gcl),
-                            Reason('global', 'per-second', g_rate, grl),
-                            Reason('project', 'concurrent', p_concurr, pcl),
-                            Reason('project', 'per-second', p_rate, prl)
-                        ]
-                        reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
-                        result = {'error': {
-                            'type': 'ratelimit',
-                            'message': 'rate limit exceeded',
-                            'detail': reason and '{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}'.format(r=reason)
-                        }}
+            except RateLimitExceeded as ex:
+                error = str(ex)
+                status = 429
+                result = {'error': {
+                    'type': 'ratelimit',
+                    'message': 'rate limit exceeded',
+                    'detail': error
+                }}
 
     stats.update(query_settings)
 
@@ -194,7 +173,7 @@ def raw_query(
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.settings.debug:
+    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result['stats'] = stats
         result['sql'] = sql
 
