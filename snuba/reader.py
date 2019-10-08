@@ -31,14 +31,14 @@ if TYPE_CHECKING:
 else:
     Result = MutableMapping[str, Any]
 
-TQueryType = TypeVar("TQueryType")
+TQuery = TypeVar("TQuery")
 
 
-class Reader(ABC, Generic[TQueryType]):
+class Reader(ABC, Generic[TQuery]):
     @abstractmethod
     def execute(
         self,
-        query: TQueryType,
+        query: TQuery,
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,
