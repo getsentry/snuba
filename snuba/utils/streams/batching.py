@@ -9,13 +9,13 @@ from confluent_kafka import (
     OFFSET_END,
     OFFSET_INVALID,
     OFFSET_STORED,
-    Consumer,
     KafkaError,
     KafkaException,
     Producer,
-    TopicPartition,
 )
+from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import Message as ConfluentMessage
+from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 
@@ -72,8 +72,8 @@ def build_confluent_kafka_consumer(
     auto_offset_reset: str = "error",
     queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
     queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-) -> Consumer:
-    return Consumer(
+) -> ConfluentConsumer:
+    return ConfluentConsumer(
         {
             "enable.auto.commit": False,
             "bootstrap.servers": ",".join(bootstrap_servers),
@@ -129,7 +129,7 @@ class BatchingKafkaConsumer:
 
     def __init__(
         self,
-        consumer: Consumer,
+        consumer: ConfluentConsumer,
         topic: str,
         worker: AbstractBatchWorker[ConfluentMessage],
         max_batch_size: int,
@@ -166,12 +166,12 @@ class BatchingKafkaConsumer:
         self.commit_log_topic = commit_log_topic
 
         def on_partitions_assigned(
-            consumer: Consumer, partitions: Sequence[TopicPartition]
+            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
             logger.info("New partitions assigned: %r", partitions)
 
         def on_partitions_revoked(
-            consumer: Consumer, partitions: Sequence[TopicPartition]
+            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Partitions revoked: %r", partitions)
