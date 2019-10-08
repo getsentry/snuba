@@ -132,7 +132,7 @@ class BatchingKafkaConsumer:
     def __init__(
         self,
         consumer: Consumer,
-        topic: Sequence[str],
+        topic: str,
         worker: AbstractBatchWorker,
         max_batch_size: int,
         max_batch_time: int,
