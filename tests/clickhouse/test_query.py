@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 from unittest.mock import patch
 
 from snuba.clickhouse.query import ClickhouseQuery

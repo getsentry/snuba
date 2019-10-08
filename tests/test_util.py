@@ -2,7 +2,7 @@ from copy import deepcopy
 from datetime import date, datetime
 import pytest
 
-from base import BaseTest
+from tests.base import BaseTest
 
 from snuba.datasets.factory import get_dataset
 from snuba import state

@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 
 from clickhouse_driver import errors
 from unittest.mock import patch, call

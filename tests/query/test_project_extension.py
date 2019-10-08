@@ -1,7 +1,7 @@
 import pytest
 from typing import Sequence
 
-from base import BaseTest
+from tests.base import BaseTest
 from snuba import replacer, state
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
 from snuba.query.query import Query, Condition
@@ -99,7 +99,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
         raw_data = {'project': 2}
-        
+
         self.extension = ProjectExtension(
             processor=ProjectWithGroupsProcessor()
         )
