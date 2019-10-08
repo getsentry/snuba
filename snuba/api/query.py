@@ -86,8 +86,8 @@ def raw_query(
                     project_rate_limit_stats = rate_limit_stats_container.get_stats(PROJECT_RATE_LIMIT_NAME)
 
                     if 'max_threads' in query_settings and \
-                            project_rate_limit_stats is not None \
-                            and project_rate_limit_stats.concurrent > 1:
+                            project_rate_limit_stats is not None and \
+                            project_rate_limit_stats.concurrent > 1:
                         maxt = query_settings['max_threads']
                         query_settings['max_threads'] = max(1, maxt - project_rate_limit_stats.concurrent + 1)
 
@@ -173,7 +173,7 @@ def raw_query(
 
     result['timing'] = timer
 
-    if settings.STATS_IN_RESPONSE or request.settings.debug:
+    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result['stats'] = stats
         result['sql'] = sql
 

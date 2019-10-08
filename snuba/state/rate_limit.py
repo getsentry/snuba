@@ -1,10 +1,11 @@
-from collections import namedtuple
+from collections import namedtuple, ChainMap
 from contextlib import contextmanager, AbstractContextManager, ExitStack
 from dataclasses import dataclass
 import logging
 import time
 from types import TracebackType
 from typing import (
+    ChainMap as TypingChainMap,
     Iterator,
     Mapping,
     MutableMapping,
@@ -56,30 +57,27 @@ class RateLimitStatsContainer:
     A container to collect stats for all the rate limits that have been run.
     """
     def __init__(self) -> None:
-        self.stats: MutableMapping[str, RateLimitStats] = {}
+        self.__stats: MutableMapping[str, RateLimitStats] = {}
 
     def add_stats(self, rate_limit_name: str, rate_limit_stats: RateLimitStats) -> None:
-        new_stats = {rate_limit_name: rate_limit_stats}
-        self.stats.update(new_stats)
+        self.__stats[rate_limit_name] = rate_limit_stats
 
     def get_stats(self, rate_limit_name: str) -> Optional[RateLimitStats]:
-        return self.stats.get(rate_limit_name)
+        return self.__stats.get(rate_limit_name)
 
-    def to_dict(self) -> Mapping[str, float]:
+    def __format_single_dict(self, name: str, stats: RateLimitStats) -> Mapping[str, float]:
+        return {
+            f'{name}_rate': stats.rate,
+            f'{name}_concurrent': stats.concurrent,
+        }
+
+    def to_dict(self) -> TypingChainMap[str, float]:
         """
         Converts the internal representation into a mapping so that it can be added to
         the stats that are returned in the response body
         """
-        grouped_stats: MutableMapping[str, float] = {}
-        for name, stats in self.stats.items():
-            single_rate_limit_stat = {
-                '{}_rate'.format(name): stats.rate,
-                '{}_concurrent'.format(name): stats.concurrent,
-            }
-
-            grouped_stats.update(single_rate_limit_stat)
-
-        return grouped_stats
+        grouped_stats = [self.__format_single_dict(name, rate_limit) for name, rate_limit in self.__stats.items()]
+        return ChainMap(*grouped_stats)
 
 
 @contextmanager
