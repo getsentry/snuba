@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 import uuid
 
-from base import BaseTest
+from tests.base import BaseTest
 from snuba import state
 from snuba.state.rate_limit import (
     rate_limit,

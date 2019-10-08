@@ -1,5 +1,5 @@
 from collections import ChainMap
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 from functools import partial
 import random
 import simplejson as json

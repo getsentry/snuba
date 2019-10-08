@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 
 from snuba.query.parsing import ParsingContext
 from snuba.util import (

@@ -2,7 +2,7 @@ import pytest
 
 from typing import Iterable
 
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 from snuba.clickhouse.http import ClickHouseError, HTTPBatchWriter
 from snuba.datasets.factory import enforce_table_writer
 from snuba import settings
