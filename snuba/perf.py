@@ -12,7 +12,7 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 logger = logging.getLogger('snuba.perf')
 
 
-class FakeKafkaMessage(object):
+class FakeConfluentKafkaMessage(object):
     def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
         self._topic = topic
         self._partition = partition
@@ -49,11 +49,11 @@ class FakeKafkaMessage(object):
 
 
 def get_messages(events_file):
-    "Create a FakeKafkaMessage for each JSON event in the file."
+    "Create a fake Kafka message for each JSON event in the file."
     messages = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
-        messages.append(FakeKafkaMessage('events', 1, 0, raw_event))
+        messages.append(FakeConfluentKafkaMessage('events', 1, 0, raw_event))
     return messages
 
 

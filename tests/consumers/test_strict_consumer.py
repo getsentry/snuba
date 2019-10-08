@@ -4,31 +4,11 @@ from confluent_kafka import KafkaError
 from unittest.mock import patch
 from unittest.mock import MagicMock
 
-
-from base import FakeKafkaConsumer, message
-
 from snuba.consumers.strict_consumer import CommitDecision, NoPartitionAssigned, StrictConsumer
-from snuba.perf import FakeKafkaMessage
+from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, build_confluent_kafka_message
 
 
 class TestStrictConsumer:
-
-    def __message(self, offset, partition, value, eof=False) -> FakeKafkaMessage:
-        if eof:
-            error = MagicMock()
-            error.code.return_value = KafkaError._PARTITION_EOF
-        else:
-            error = None
-
-        return FakeKafkaMessage(
-            topic="my_topic",
-            partition=partition,
-            offset=offset,
-            value=value,
-            key=None,
-            headers=None,
-            error=error,
-        )
 
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
@@ -44,9 +24,9 @@ class TestStrictConsumer:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
@@ -58,7 +38,7 @@ class TestStrictConsumer:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_failure(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
 
         on_message = MagicMock()
@@ -71,13 +51,13 @@ class TestStrictConsumer:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_one_message(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
 
-        msg = message(0, 0, "ABCABC", False)
+        msg = build_confluent_kafka_message(0, 0, "ABCABC", False)
         kafka_consumer.items = [
             msg,
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
 
         on_message = MagicMock()
@@ -90,15 +70,15 @@ class TestStrictConsumer:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_commits(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
         error = MagicMock()
         error.code.return_value = KafkaError._PARTITION_EOF
         kafka_consumer.items = [
-            message(0, 0, "ABCABC", False),
-            message(1, 0, "ABCABC", False),
-            message(2, 0, "ABCABC", False),
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, "ABCABC", False),
+            build_confluent_kafka_message(1, 0, "ABCABC", False),
+            build_confluent_kafka_message(2, 0, "ABCABC", False),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
 
         on_message = MagicMock()

@@ -159,9 +159,6 @@ class ReplacerWorker(AbstractBatchWorker):
             self.metrics.timing('replacements.count', count)
             self.metrics.timing('replacements.duration', duration)
 
-    def shutdown(self) -> None:
-        pass
-
 
 def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     group_ids = message['group_ids']
