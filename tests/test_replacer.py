@@ -4,12 +4,12 @@ from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from base import BaseEventsTest, FakeKafkaMessage
-
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from tests.base import BaseEventsTest
+from tests.backends.confluent_kafka import build_confluent_kafka_message
 
 
 class TestReplacer(BaseEventsTest):
@@ -26,7 +26,7 @@ class TestReplacer(BaseEventsTest):
         self.project_id = 1
 
     def _wrap(self, msg):
-        return FakeKafkaMessage('topic', 0, 0, json.dumps(msg).encode('utf-8'))
+        return build_confluent_kafka_message(0, 0, json.dumps(msg).encode('utf-8'))
 
     def _issue_count(self, project_id, group_id=None):
         args = {
@@ -172,21 +172,17 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((2, 'end_delete_groups', {
-                    'project_id': project_id,
-                    'group_ids': [1],
-                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                }))
+        message = build_confluent_kafka_message(
+            42,
+            1,
+            json.dumps((2, 'end_delete_groups', {
+                'project_id': project_id,
+                'group_ids': [1],
+                'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+            }))
+        )
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        processed = self.replacer.process_message(FakeMessage())
+        processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == []
@@ -202,22 +198,18 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((2, 'end_merge', {
-                    'project_id': project_id,
-                    'new_group_id': 2,
-                    'previous_group_ids': [1],
-                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                }))
+        message = build_confluent_kafka_message(
+            42,
+            1,
+            json.dumps((2, 'end_merge', {
+                'project_id': project_id,
+                'new_group_id': 2,
+                'previous_group_ids': [1],
+                'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+            })),
+        )
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        processed = self.replacer.process_message(FakeMessage())
+        processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(1) == [{'count': 1, 'issue': 2}]
@@ -234,23 +226,19 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((2, 'end_unmerge', {
-                    'project_id': project_id,
-                    'previous_group_id': 1,
-                    'new_group_id': 2,
-                    'hashes': ['a' * 32],
-                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                }))
+        message = build_confluent_kafka_message(
+            42,
+            1,
+            json.dumps((2, 'end_unmerge', {
+                'project_id': project_id,
+                'previous_group_id': 1,
+                'new_group_id': 2,
+                'hashes': ['a' * 32],
+                'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+            })),
+        )
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        processed = self.replacer.process_message(FakeMessage())
+        processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
         assert self._issue_count(self.project_id) == [{'count': 1, 'issue': 2}]
@@ -277,21 +265,17 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((2, 'end_delete_tag', {
-                    'project_id': project_id,
-                    'tag': 'browser.name',
-                    'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                }))
+        message = build_confluent_kafka_message(
+            42,
+            1,
+            json.dumps((2, 'end_delete_tag', {
+                'project_id': project_id,
+                'tag': 'browser.name',
+                'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+            })),
+        )
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        processed = self.replacer.process_message(FakeMessage())
+        processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
         assert _issue_count() == []
