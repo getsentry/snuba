@@ -42,11 +42,7 @@ class ClickhouseQuery:
 
         if query.get_sample():
             sample_rate = query.get_sample()
-<<<<<<< HEAD
-        elif request.settings.turbo:
-=======
-        elif self.__request.settings.get_turbo():
->>>>>>> master
+        elif request.settings.get_turbo():
             sample_rate = settings.TURBO_SAMPLE_RATE
         else:
             sample_rate = None
