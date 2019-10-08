@@ -75,6 +75,7 @@ def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_top
             topic=control_topic or dataset.get_default_control_topic(),
             bootstrap_servers=bootstrap_server,
             group_id=consumer_group,
+            dataset=dataset,
         )
 
         def handler(signum, frame):
