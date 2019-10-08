@@ -111,7 +111,6 @@ class FakeWorker(AbstractBatchWorker):
         super(FakeWorker, self).__init__(*args, **kwargs)
         self.processed = []
         self.flushed = []
-        self.shutdown_calls = 0
 
     def process_message(self, message):
         self.processed.append(message.value())
@@ -119,9 +118,6 @@ class FakeWorker(AbstractBatchWorker):
 
     def flush_batch(self, batch):
         self.flushed.append(batch)
-
-    def shutdown(self):
-        self.shutdown_calls += 1
 
 
 class TestConsumer(object):
@@ -145,7 +141,6 @@ class TestConsumer(object):
 
         assert consumer.worker.processed == [1, 2, 3]
         assert consumer.worker.flushed == [[1, 2]]
-        assert consumer.worker.shutdown_calls == 1
         assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
 
@@ -188,7 +183,6 @@ class TestConsumer(object):
 
         assert consumer.worker.processed == [1, 2, 3, 4, 5, 6, 7, 8, 9]
         assert consumer.worker.flushed == [[1, 2, 3, 4, 5, 6]]
-        assert consumer.worker.shutdown_calls == 1
         assert consumer.consumer.commit_calls == 1
         assert consumer.consumer.close_calls == 1
 
@@ -197,33 +191,3 @@ class TestConsumer(object):
         assert commit_message.topic() == 'commits'
         assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
         assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
-
-    def test_dead_letter_topic(self):
-        class FailingFakeWorker(FakeWorker):
-            def process_message(*args, **kwargs):
-                1 / 0
-
-        producer = FakeKafkaProducer()
-        consumer = FakeBatchingKafkaConsumer(
-            'topic',
-            worker=FailingFakeWorker(),
-            max_batch_size=100,
-            max_batch_time=2000,
-            bootstrap_servers=None,
-            group_id='group',
-            producer=producer,
-            dead_letter_topic='dlt',
-            metrics=DummyMetricsBackend(strict=True),
-        )
-
-        message = FakeKafkaMessage('topic', partition=1, offset=2, key='key', value='value')
-        consumer.consumer.items = [message]
-        consumer._run_once()
-
-        assert len(producer.messages) == 1
-        produced_message = producer.messages[0]
-
-        assert ('dlt', message.key(), message.value()) \
-            == (produced_message.topic(), produced_message.key(), produced_message.value())
-
-        assert produced_message.headers() == {'partition': '1', 'offset': '2', 'topic': 'topic'}
