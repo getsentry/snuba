@@ -19,7 +19,7 @@ class TestClickhouseQuery(BaseEventsTest):
 
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
-        assert 'SAMPLE 0.1' in clickhouse_query.format()
+        assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
 
     def test_provided_sample_should_be_used_with_turbo(self):
         query = Query({
@@ -32,7 +32,7 @@ class TestClickhouseQuery(BaseEventsTest):
         request = Request(query=query, settings=request_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
-        assert 'SAMPLE 0.1' in clickhouse_query.format()
+        assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
 
     @patch("snuba.settings.TURBO_SAMPLE_RATE", 0.2)
     def test_when_sample_is_not_provided_with_turbo(self):
@@ -46,7 +46,7 @@ class TestClickhouseQuery(BaseEventsTest):
         request = Request(query=query, settings=request_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
-        assert "SAMPLE 0.2" in clickhouse_query.format()
+        assert "SAMPLE 0.2" in clickhouse_query.format_sql()
 
     def test_when_sample_is_not_provided_without_turbo(self):
         query = Query({
@@ -59,4 +59,4 @@ class TestClickhouseQuery(BaseEventsTest):
         request = Request(query=query, settings=request_settings, extensions={})
         clickhouse_query = ClickhouseQuery(dataset=self.dataset, request=request, prewhere_conditions=[])
 
-        assert 'SAMPLE' not in clickhouse_query.format()
+        assert 'SAMPLE' not in clickhouse_query.format_sql()
