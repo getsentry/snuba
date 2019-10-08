@@ -20,6 +20,7 @@ from snuba.util import (
 logger = logging.getLogger('snuba.query')
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.api')
 
+
 class QueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
     result: MutableMapping[str, MutableMapping[str, Any]]
