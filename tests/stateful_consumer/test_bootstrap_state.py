@@ -1,11 +1,10 @@
 from unittest.mock import patch
 
-from base import FakeKafkaConsumer, message
-
 from snuba.datasets.factory import get_dataset
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
+from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, build_confluent_kafka_message
 
 
 class TestBootstrapState:
@@ -24,9 +23,9 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_empty_topic(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
@@ -43,15 +42,15 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_snapshot_for_other_table(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
-            message(
+            build_confluent_kafka_message(
                 0,
                 0,
                 '{"snapshot-id":"abc123", "tables": ["someone_else"], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
@@ -68,15 +67,15 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_init_snapshot(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
-            message(
+            build_confluent_kafka_message(
                 0,
                 0,
                 '{"snapshot-id":"abc123", "tables": ["sentry_groupedmessage"], "product":"snuba", "event":"snapshot-init"}',
                 False,
             ),
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
@@ -93,21 +92,21 @@ class TestBootstrapState:
 
     @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
     def test_snapshot_loaded(self, create_consumer) -> None:
-        kafka_consumer = FakeKafkaConsumer()
+        kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
-            message(
+            build_confluent_kafka_message(
                 0,
                 0,
                 '{"snapshot-id":"abc123", "product":"somewhere-else", "tables": [], "event":"snapshot-init"}',
                 False,
             ),
-            message(
+            build_confluent_kafka_message(
                 1,
                 0,
                 '{"snapshot-id":"abc123", "product":"snuba", "tables": ["sentry_groupedmessage"], "event":"snapshot-init"}',
                 False,
             ),
-            message(
+            build_confluent_kafka_message(
                 2,
                 0,
                 (
@@ -117,7 +116,7 @@ class TestBootstrapState:
                 ),
                 False,
             ),
-            message(0, 0, None, True),
+            build_confluent_kafka_message(0, 0, None, True),
         ]
         create_consumer.return_value = kafka_consumer
 
