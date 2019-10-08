@@ -148,7 +148,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
     def execute(
         self,
         query: ClickhouseQuery,
-        # TODO: move Clickhouse specific arguments (below) into ClickhouseQuery
+        # TODO: move Clickhouse specific arguments into ClickhouseQuery
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,
