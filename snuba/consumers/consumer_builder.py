@@ -7,7 +7,8 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer, build_confluent_kafka_consumer
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.utils.streams.kafka import build_confluent_kafka_consumer
 
 
 class ConsumerBuilder:

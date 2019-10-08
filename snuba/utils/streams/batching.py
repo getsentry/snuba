@@ -2,7 +2,15 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Generic, MutableMapping, MutableSequence, Optional, Sequence, Tuple, TypeVar
+from typing import (
+    Any,
+    Generic,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 from confluent_kafka import (
     OFFSET_BEGINNING,
@@ -13,21 +21,15 @@ from confluent_kafka import (
     KafkaException,
     Producer,
 )
-from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import Message as ConfluentMessage
-from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.kafka import KafkaConsumer, KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger("batching-kafka-consumer")
 
-
-DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
-DEFAULT_QUEUED_MIN_MESSAGES = 10000
-
-
-TMessage = TypeVar('TMessage')
+TMessage = TypeVar("TMessage")
 
 
 class AbstractBatchWorker(ABC, Generic[TMessage]):
@@ -66,26 +68,6 @@ class Offsets:
     hi: int
 
 
-def build_confluent_kafka_consumer(
-    bootstrap_servers: Sequence[str],
-    group_id: str,
-    auto_offset_reset: str = "error",
-    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
-) -> ConfluentConsumer:
-    return ConfluentConsumer(
-        {
-            "enable.auto.commit": False,
-            "bootstrap.servers": ",".join(bootstrap_servers),
-            "group.id": group_id,
-            "default.topic.config": {"auto.offset.reset": auto_offset_reset},
-            # overridden to reduce memory usage when there's a large backlog
-            "queued.max.messages.kbytes": queued_max_messages_kbytes,
-            "queued.min.messages": queued_min_messages,
-        }
-    )
-
-
 class BatchingKafkaConsumer:
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
@@ -118,20 +100,11 @@ class BatchingKafkaConsumer:
         [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
     )
 
-    # Set of error codes that can be returned by ``consumer.poll`` calls which
-    # are generally able to be recovered from after a series of retries.
-    RECOVERABLE_ERRORS = frozenset(
-        [
-            KafkaError._PARTITION_EOF,
-            KafkaError._TRANSPORT,  # Local: Broker transport failure
-        ]
-    )
-
     def __init__(
         self,
-        consumer: ConfluentConsumer,
+        consumer: KafkaConsumer,
         topic: str,
-        worker: AbstractBatchWorker[ConfluentMessage],
+        worker: AbstractBatchWorker[KafkaMessage],
         max_batch_size: int,
         max_batch_time: int,
         group_id: str,
@@ -152,9 +125,7 @@ class BatchingKafkaConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[Any] = []
-        self.__batch_offsets: MutableMapping[
-            Tuple[str, int], Offsets
-        ] = {}  # (topic, partition) = Offsets
+        self.__batch_offsets: MutableMapping[TopicPartition, Offsets] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -165,14 +136,10 @@ class BatchingKafkaConsumer:
         self.producer = producer
         self.commit_log_topic = commit_log_topic
 
-        def on_partitions_assigned(
-            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
-        ) -> None:
+        def on_partitions_assigned(partitions: Sequence[TopicPartition]) -> None:
             logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(
-            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
-        ) -> None:
+        def on_partitions_revoked(partitions: Sequence[TopicPartition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
@@ -196,15 +163,12 @@ class BatchingKafkaConsumer:
         if self.producer:
             self.producer.poll(0.0)
 
+        # TODO: This needs to handle recoverable errors (end of partition,
+        # transport errors, etc.)
         msg = self.consumer.poll(timeout=1.0)
 
         if msg is None:
             return
-        if msg.error():
-            if msg.error().code() in self.RECOVERABLE_ERRORS:
-                return
-            else:
-                raise Exception(msg.error())
 
         self._handle_message(msg)
 
@@ -215,7 +179,7 @@ class BatchingKafkaConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: ConfluentMessage) -> None:
+    def _handle_message(self, msg: KafkaMessage) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -231,13 +195,10 @@ class BatchingKafkaConsumer:
         self.__batch_processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
-        topic_partition_key = (msg.topic(), msg.partition())
-        if topic_partition_key in self.__batch_offsets:
-            self.__batch_offsets[topic_partition_key].hi = msg.offset()
+        if msg.stream in self.__batch_offsets:
+            self.__batch_offsets[msg.stream].hi = msg.offset
         else:
-            self.__batch_offsets[topic_partition_key] = Offsets(
-                msg.offset(), msg.offset()
-            )
+            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.offset)
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
@@ -314,7 +275,7 @@ class BatchingKafkaConsumer:
         retries = 3
         while True:
             try:
-                offsets = self.consumer.commit(asynchronous=False)
+                offsets = self.consumer.commit()
                 logger.debug("Committed offsets: %s", offsets)
                 break  # success
             except KafkaException as e:
@@ -333,29 +294,28 @@ class BatchingKafkaConsumer:
                     raise
 
         if self.commit_log_topic:
-            for item in offsets:
-                if item.offset in self.LOGICAL_OFFSETS:
+            for stream, offset in offsets.items():
+                # XXX: This is an abstraction leak from the Kafka consumer.
+                if offset in self.LOGICAL_OFFSETS:
                     logger.debug(
-                        "Skipped publishing logical offset (%r) to commit log for %s/%s",
-                        item.offset,
-                        item.topic,
-                        item.partition,
+                        "Skipped publishing logical offset (%r) to commit log for %s",
+                        offset,
+                        stream,
                     )
                     continue
-                elif item.offset < 0:
+                elif offset < 0:
                     logger.warning(
-                        "Found unexpected negative offset (%r) after commit for %s/%s",
-                        item.offset,
-                        item.topic,
-                        item.partition,
+                        "Found unexpected negative offset (%r) after commit for %s",
+                        offset,
+                        stream,
                     )
 
                 assert self.producer is not None  # XXX: Hack to ensure non-Optional
                 self.producer.produce(
                     self.commit_log_topic,
                     key="{}:{}:{}".format(
-                        item.topic, item.partition, self.group_id
+                        stream.topic, stream.partition, self.group_id
                     ).encode("utf-8"),
-                    value="{}".format(item.offset).encode("utf-8"),
+                    value="{}".format(offset).encode("utf-8"),
                     on_delivery=self._commit_message_delivery_callback,
                 )
