@@ -13,14 +13,14 @@ from typing import (
 )
 
 from confluent_kafka import (
+    OFFSET_BEGINNING,
+    OFFSET_END,
+    OFFSET_INVALID,
+    OFFSET_STORED,
     Consumer,
     KafkaError,
     KafkaException,
     Message,
-    OFFSET_BEGINNING,
-    OFFSET_END,
-    OFFSET_STORED,
-    OFFSET_INVALID,
     Producer,
     TopicPartition,
 )
