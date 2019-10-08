@@ -2,15 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import (
-    Any,
-    MutableMapping,
-    MutableSequence,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, MutableMapping, MutableSequence, Optional, Sequence, Tuple
 
 from confluent_kafka import (
     OFFSET_BEGINNING,
@@ -71,6 +63,26 @@ class Offsets:
     hi: int
 
 
+def build_confluent_kafka_consumer(
+    bootstrap_servers: Sequence[str],
+    group_id: str,
+    auto_offset_reset: str = "error",
+    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
+    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+) -> Consumer:
+    return Consumer(
+        {
+            "enable.auto.commit": False,
+            "bootstrap.servers": ",".join(bootstrap_servers),
+            "group.id": group_id,
+            "default.topic.config": {"auto.offset.reset": auto_offset_reset},
+            # overridden to reduce memory usage when there's a large backlog
+            "queued.max.messages.kbytes": queued_max_messages_kbytes,
+            "queued.min.messages": queued_min_messages,
+        }
+    )
+
+
 class BatchingKafkaConsumer:
     """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
     loops. For this reason it uses inversion of control: the user provides an implementation
@@ -114,19 +126,18 @@ class BatchingKafkaConsumer:
 
     def __init__(
         self,
-        topics: Union[str, Sequence[str]],
+        consumer: Consumer,
+        topic: str,
         worker: AbstractBatchWorker,
         max_batch_size: int,
         max_batch_time: int,
-        bootstrap_servers: Sequence[str],
         group_id: str,
         metrics: MetricsBackend,
         producer: Optional[Producer] = None,
         commit_log_topic: Optional[str] = None,
-        auto_offset_reset: str = "error",
-        queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-        queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
     ) -> None:
+        self.consumer = consumer
+
         assert isinstance(worker, AbstractBatchWorker)
         self.worker = worker
 
@@ -148,39 +159,8 @@ class BatchingKafkaConsumer:
         # new messages)
         self.__batch_processing_time_ms: float = 0.0
 
-        self.consumer = self.create_consumer(
-            [topics] if isinstance(topics, str) else topics,
-            bootstrap_servers,
-            group_id,
-            auto_offset_reset,
-            queued_max_messages_kbytes,
-            queued_min_messages,
-        )
-
         self.producer = producer
         self.commit_log_topic = commit_log_topic
-
-    def create_consumer(
-        self,
-        topics: Sequence[str],
-        bootstrap_servers: Sequence[str],
-        group_id: str,
-        auto_offset_reset: str,
-        queued_max_messages_kbytes: int,
-        queued_min_messages: int,
-    ) -> Consumer:
-
-        consumer_config = {
-            "enable.auto.commit": False,
-            "bootstrap.servers": ",".join(bootstrap_servers),
-            "group.id": group_id,
-            "default.topic.config": {"auto.offset.reset": auto_offset_reset},
-            # overridden to reduce memory usage when there's a large backlog
-            "queued.max.messages.kbytes": queued_max_messages_kbytes,
-            "queued.min.messages": queued_min_messages,
-        }
-
-        consumer = Consumer(consumer_config)
 
         def on_partitions_assigned(
             consumer: Consumer, partitions: Sequence[TopicPartition]
@@ -194,11 +174,9 @@ class BatchingKafkaConsumer:
             logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
 
-        consumer.subscribe(
-            topics, on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
+        self.consumer.subscribe(
+            [topic], on_assign=on_partitions_assigned, on_revoke=on_partitions_revoked
         )
-
-        return consumer
 
     def run(self) -> None:
         "The main run loop, see class docstring for more information."

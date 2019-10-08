@@ -1,4 +1,4 @@
-from confluent_kafka import Consumer, Producer
+from confluent_kafka import Producer
 from typing import Sequence
 
 from snuba import settings, util
@@ -7,7 +7,7 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer, build_confluent_kafka_consumer
 
 
 class ConsumerBuilder:
@@ -76,20 +76,23 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def __build_consumer(self, worker: AbstractBatchWorker) -> Consumer:
+    def __build_consumer(self, worker: AbstractBatchWorker) -> BatchingKafkaConsumer:
         return BatchingKafkaConsumer(
+            build_confluent_kafka_consumer(
+                bootstrap_servers=self.bootstrap_servers,
+                group_id=self.group_id,
+                auto_offset_reset=self.auto_offset_reset,
+                queued_max_messages_kbytes=self.queued_max_messages_kbytes,
+                queued_min_messages=self.queued_min_messages,
+            ),
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
             metrics=self.metrics,
-            bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             producer=self.producer,
             commit_log_topic=self.commit_log_topic,
-            auto_offset_reset=self.auto_offset_reset,
-            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
-            queued_min_messages=self.queued_min_messages,
         )
 
     def build_base_consumer(self) -> BatchingKafkaConsumer:
