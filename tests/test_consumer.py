@@ -7,7 +7,7 @@ from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from tests.base import BaseEventsTest
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer, build_confluent_kafka_message
 
 
 class TestConsumer(BaseEventsTest):
@@ -17,20 +17,15 @@ class TestConsumer(BaseEventsTest):
     def test_offsets(self):
         event = self.event
 
-        class FakeMessage(object):
-            def value(self):
-                # event doesn't really matter
-                return json.dumps((0, 'insert', event))
-
-            def offset(self):
-                return 123
-
-            def partition(self):
-                return 456
+        message = build_confluent_kafka_message(
+            123,
+            456,
+            json.dumps((0, 'insert', event))  # event doesn't really matter
+        )
 
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
         test_worker = ConsumerWorker(self.dataset, FakeConfluentKafkaProducer(), replacement_topic.topic_name, self.metrics)
-        batch = [test_worker.process_message(FakeMessage())]
+        batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
 
         assert self.clickhouse.execute(
@@ -48,17 +43,9 @@ class TestConsumer(BaseEventsTest):
         event['data']['datetime'] = old_timestamp_str
         event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((0, 'insert', event))
+        message = build_confluent_kafka_message(42, 1, json.dumps((0, 'insert', event)))
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        assert test_worker.process_message(FakeMessage()) is None
+        assert test_worker.process_message(message) is None
 
     def test_produce_replacement_messages(self):
         producer = FakeConfluentKafkaProducer()
