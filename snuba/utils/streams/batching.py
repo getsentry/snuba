@@ -2,7 +2,7 @@ import logging
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, MutableMapping, MutableSequence, Optional, Sequence, Tuple
+from typing import Any, Generic, MutableMapping, MutableSequence, Optional, Sequence, Tuple, TypeVar
 
 from confluent_kafka import (
     OFFSET_BEGINNING,
@@ -12,10 +12,10 @@ from confluent_kafka import (
     Consumer,
     KafkaError,
     KafkaException,
-    Message,
     Producer,
     TopicPartition,
 )
+from confluent_kafka import Message as ConfluentMessage
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 
@@ -27,13 +27,16 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 
 
-class AbstractBatchWorker(ABC):
+TMessage = TypeVar('TMessage')
+
+
+class AbstractBatchWorker(ABC, Generic[TMessage]):
     """The `BatchingKafkaConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: Message) -> Optional[Any]:
+    def process_message(self, message: TMessage) -> Optional[Any]:
         """Called with each (raw) Kafka message, allowing the worker to do
         incremental (preferablly local!) work on events. The object returned
         is put into the batch maintained by the `BatchingKafkaConsumer`.
@@ -128,7 +131,7 @@ class BatchingKafkaConsumer:
         self,
         consumer: Consumer,
         topic: str,
-        worker: AbstractBatchWorker,
+        worker: AbstractBatchWorker[ConfluentMessage],
         max_batch_size: int,
         max_batch_time: int,
         group_id: str,
@@ -212,7 +215,7 @@ class BatchingKafkaConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message) -> None:
+    def _handle_message(self, msg: ConfluentMessage) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -302,7 +305,7 @@ class BatchingKafkaConsumer:
         self._reset_batch()
 
     def _commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: Message
+        self, error: Optional[KafkaError], message: ConfluentMessage
     ) -> None:
         if error is not None:
             raise Exception(error.str())

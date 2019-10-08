@@ -3,19 +3,17 @@ from datetime import datetime
 from typing import Any, MutableSequence, Sequence, Optional
 from unittest.mock import patch
 
-from confluent_kafka import Message
-
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
 
 
-class FakeWorker(AbstractBatchWorker):
+class FakeWorker(AbstractBatchWorker[FakeConfluentKafkaMessage]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message: Message) -> Optional[Any]:
+    def process_message(self, message: FakeConfluentKafkaMessage) -> Optional[Any]:
         self.processed.append(message.value())
         return message.value()
 
@@ -26,7 +24,7 @@ class FakeWorker(AbstractBatchWorker):
 class TestConsumer(object):
     def test_batch_size(self) -> None:
         consumer = FakeConfluentKafkaConsumer()
-        worker = FakeWorker()
+        worker = FakeWorker()  # XXX: This does not satisfy the type constraint!
         producer = FakeConfluentKafkaProducer()
         batching_consumer = BatchingKafkaConsumer(
             consumer,
@@ -59,7 +57,7 @@ class TestConsumer(object):
     @patch('time.time')
     def test_batch_time(self, mock_time: Any) -> None:
         consumer = FakeConfluentKafkaConsumer()
-        worker = FakeWorker()
+        worker = FakeWorker()  # XXX: This does not satisfy the type constraint!
         producer = FakeConfluentKafkaProducer()
         batching_consumer = BatchingKafkaConsumer(
             consumer,

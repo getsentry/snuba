@@ -4,6 +4,8 @@ import simplejson as json
 
 from typing import Any, Mapping, Optional, Sequence
 
+from confluent_kafka import Message as ConfluentMessage
+
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
     ProcessedMessage,
@@ -24,7 +26,7 @@ class InvalidActionType(Exception):
     pass
 
 
-class ConsumerWorker(AbstractBatchWorker):
+class ConsumerWorker(AbstractBatchWorker[ConfluentMessage]):
     def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
         self.__dataset = dataset
         self.producer = producer
@@ -35,7 +37,7 @@ class ConsumerWorker(AbstractBatchWorker):
             'insert_distributed_sync': 1,
         })
 
-    def process_message(self, message) -> Optional[ProcessedMessage]:
+    def process_message(self, message: ConfluentMessage) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.

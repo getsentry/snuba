@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
-from confluent_kafka import Message
+from confluent_kafka import Message as ConfluentMessage
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.native import ClickhousePool
@@ -99,7 +99,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker):
+class ReplacerWorker(AbstractBatchWorker[ConfluentMessage]):
     def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -107,7 +107,7 @@ class ReplacerWorker(AbstractBatchWorker):
         self.__all_column_names = [col.escaped for col in enforce_table_writer(dataset).get_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
-    def process_message(self, message: Message) -> Optional[Replacement]:
+    def process_message(self, message: ConfluentMessage) -> Optional[Replacement]:
         message = json.loads(message.value())
         version = message[0]
 
