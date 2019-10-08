@@ -154,8 +154,8 @@ class Query:
         during the query column processing. That processing is
         going to move to a place where this object is being built.
         But in order to do that we need first to decouple it from
-        the query body, thus we need to move the granulairyt out of
-        the body even if it does not realyl belong here.
+        the query body, thus we need to move the granularity out of
+        the body even if it does not really belong here.
         """
         self.__body["granularity"] = granularity
 
