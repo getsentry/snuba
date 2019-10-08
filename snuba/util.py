@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
 from itertools import chain
-from typing import Any, NamedTuple, Optional, OrderedDict, Sequence
+from typing import Any, NamedTuple, Optional, OrderedDict, MutableSequence
 import logging
 import numbers
 import re
@@ -243,7 +243,7 @@ def all_referenced_columns(query: Query):
     """
     Return the set of all columns that are used by a query.
     """
-    col_exprs: Sequence[Any] = []
+    col_exprs: MutableSequence[Any] = []
 
     if query.get_arrayjoin():
         col_exprs.extend(to_list(query.get_arrayjoin()))
