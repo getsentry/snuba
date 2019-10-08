@@ -5,12 +5,12 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid1
 
-from base import FakeConfluentKafkaProducer, message as build_msg
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer, build_confluent_kafka_message
 
 
 INSERT_MSG = (
@@ -99,6 +99,6 @@ class TestSnapshotWorker:
         )
 
         ret = worker.process_message(
-            build_msg(1, 0, message)
+            build_confluent_kafka_message(1, 0, message)
         )
         assert ret == expected

@@ -2,15 +2,12 @@ import calendar
 from datetime import datetime, timedelta
 import simplejson as json
 
-from base import (
-    BaseEventsTest,
-    FakeConfluentKafkaProducer,
-)
-
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from tests.base import BaseEventsTest
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 class TestConsumer(BaseEventsTest):

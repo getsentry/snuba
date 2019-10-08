@@ -4,12 +4,12 @@ from datetime import datetime
 from functools import partial
 import simplejson as json
 
-from base import BaseEventsTest, FakeConfluentKafkaMessage
-
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from tests.base import BaseEventsTest
+from tests.backends.confluent_kafka import FakeConfluentKafkaMessage
 
 
 class TestReplacer(BaseEventsTest):

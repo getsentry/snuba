@@ -6,7 +6,7 @@ from confluent_kafka import TopicPartition
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from base import FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
+from tests.backends.confluent_kafka import FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
 
 
 class FakeKafkaConsumer(object):
