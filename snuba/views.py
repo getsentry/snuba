@@ -281,7 +281,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    if request.settings.turbo:
+    if request.settings.get_turbo():
         request.query.set_final(False)
 
     prewhere_conditions = []
