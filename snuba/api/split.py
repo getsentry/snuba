@@ -30,13 +30,12 @@ def split_query(query_func):
         if common_conditions:
             # TODO: Move all_referenced_columns into query and remove this dependency.
             # In order to do this we need to break a circular dependency first
-            total_col_count = len(util.all_referenced_columns(request.query.get_body()))
+            total_col_count = len(util.all_referenced_columns(request.query))
             column_split_spec = dataset.get_split_query_spec()
             if column_split_spec:
-                min_col_count = len(util.all_referenced_columns({
-                    **request.query.get_body(),
-                    'selected_columns': column_split_spec.get_min_columns()
-                }))
+                copied_query = copy.deepcopy(request.query)
+                copied_query.set_selected_columns(column_split_spec.get_min_columns())
+                min_col_count = len(util.all_referenced_columns(copied_query))
             else:
                 min_col_count = None
 
