@@ -2,8 +2,6 @@ import time
 from datetime import datetime
 from unittest.mock import patch
 
-from confluent_kafka import TopicPartition
-
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
