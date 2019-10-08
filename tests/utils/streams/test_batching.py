@@ -6,41 +6,12 @@ from confluent_kafka import TopicPartition
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from tests.backends.confluent_kafka import FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
-
-
-class FakeKafkaConsumer(object):
-    def __init__(self):
-        self.items = []
-        self.commit_calls = 0
-        self.close_calls = 0
-        self.positions = {}
-
-    def poll(self, *args, **kwargs):
-        try:
-            message = self.items.pop(0)
-        except IndexError:
-            return None
-
-        self.positions[(message.topic(), message.partition())] = message.offset() + 1
-
-        return message
-
-    def commit(self, *args, **kwargs):
-        self.commit_calls += 1
-        return [
-            TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in
-            self.positions.items()
-        ]
-
-    def close(self, *args, **kwargs):
-        self.close_calls += 1
+from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, FakeConfluentKafkaMessage, FakeConfluentKafkaProducer
 
 
 class FakeBatchingKafkaConsumer(BatchingKafkaConsumer):
     def create_consumer(self, *args, **kwargs):
-        return FakeKafkaConsumer()
+        return FakeConfluentKafkaConsumer()
 
 
 class FakeWorker(AbstractBatchWorker):
