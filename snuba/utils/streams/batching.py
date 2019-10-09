@@ -169,8 +169,6 @@ class BatchingKafkaConsumer:
         if self.producer:
             self.producer.poll(0.0)
 
-        # TODO: This needs to handle recoverable errors (end of partition,
-        # transport errors, etc.)
         try:
             msg = self.consumer.poll(timeout=1.0)
         except self.__recoverable_errors:
