@@ -120,7 +120,7 @@ DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 
 
-def build_confluent_kafka_consumer(
+def build_kafka_consumer(
     bootstrap_servers: Sequence[str],
     group_id: str,
     auto_offset_reset: str = "error",
