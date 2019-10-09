@@ -16,6 +16,10 @@ class TopicPartition(NamedTuple):
 KafkaMessage = Message[TopicPartition, int, bytes]
 
 
+class TransportError(ConsumerError):
+    pass
+
+
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__consumer = ConfluentConsumer(configuration)
@@ -57,10 +61,13 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         error: Optional[KafkaError] = message.error()
         if error is not None:
-            if error.code() == KafkaError._PARTITION_EOF:
+            code = error.code()
+            if code == KafkaError._PARTITION_EOF:
                 raise EndOfStream(TopicPartition(message.topic(), message.partition()))
+            elif code == KafkaError._TRANSPORT:
+                raise TransportError(str(error))
             else:
-                raise ConsumerError  # TODO: Be more specific about the error raised here.
+                raise ConsumerError(str(error))
 
         return KafkaMessage(
             TopicPartition(message.topic(), message.partition()),
