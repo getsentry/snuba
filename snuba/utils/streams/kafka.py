@@ -46,7 +46,7 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         if on_revoke is not None:
             kwargs["on_revoke"] = self.__wrap_assignment_callback(on_revoke)
 
-        self.__consumer.poll(topics, **kwargs)
+        self.__consumer.subscribe(topics, **kwargs)
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
         message: Optional[ConfluentMessage] = self.__consumer.poll(
