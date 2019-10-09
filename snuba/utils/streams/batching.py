@@ -19,7 +19,6 @@ from confluent_kafka import (
     OFFSET_INVALID,
     OFFSET_STORED,
     KafkaError,
-    KafkaException,
     Producer,
 )
 from confluent_kafka import Message as ConfluentMessage
@@ -279,26 +278,8 @@ class BatchingKafkaConsumer:
             raise Exception(error.str())
 
     def _commit(self) -> None:
-        retries = 3
-        while True:
-            try:
-                offsets = self.consumer.commit()
-                logger.debug("Committed offsets: %s", offsets)
-                break  # success
-            except KafkaException as e:
-                if e.args[0].code() in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
-                    KafkaError._WAIT_COORD,
-                ):
-                    logger.warning("Commit failed: %s (%d retries)", str(e), retries)
-                    if retries <= 0:
-                        raise
-                    retries -= 1
-                    time.sleep(1)
-                    continue
-                else:
-                    raise
+        offsets = self.consumer.commit()
+        logger.debug("Committed offsets: %s", offsets)
 
         if self.commit_log_topic:
             for stream, offset in offsets.items():

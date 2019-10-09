@@ -1,11 +1,16 @@
+import logging
+import time
 from typing import Any, Callable, Mapping, NamedTuple, Optional, Sequence
 
 from confluent_kafka import Consumer as ConfluentConsumer
-from confluent_kafka import KafkaError
+from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.streams.abstract import Consumer, ConsumerError, EndOfStream, Message
+
+
+logger = logging.getLogger(__name__)
 
 
 class TopicPartition(NamedTuple):
@@ -76,9 +81,30 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         )
 
     def commit(self) -> Mapping[TopicPartition, int]:
-        result: Sequence[ConfluentTopicPartition] = self.__consumer.commit(
-            asynchronous=False
-        )
+        result: Optional[Sequence[ConfluentTopicPartition]] = None
+
+        retries_remaining = 3
+        while result is None:
+            try:
+                result = self.__consumer.commit(asynchronous=False)
+                assert result is not None
+            except KafkaException as e:
+                if e.args[0].code() in (
+                    KafkaError.REQUEST_TIMED_OUT,
+                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError._WAIT_COORD,
+                ):
+                    logger.warning(
+                        "Commit failed: %s (%d retries remaining)",
+                        str(e),
+                        retries_remaining,
+                    )
+                    if not retries_remaining:
+                        raise
+
+                    retries_remaining -= 1
+                    time.sleep(1)
+
         return {
             TopicPartition(value.topic, value.partition): value.offset
             for value in result
