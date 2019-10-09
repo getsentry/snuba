@@ -108,5 +108,6 @@ def build_confluent_kafka_consumer(
             # overridden to reduce memory usage when there's a large backlog
             "queued.max.messages.kbytes": queued_max_messages_kbytes,
             "queued.min.messages": queued_min_messages,
+            "enable.partition.eof": False,
         }
     )

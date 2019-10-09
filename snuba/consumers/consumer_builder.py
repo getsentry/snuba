@@ -8,7 +8,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.utils.streams.kafka import build_confluent_kafka_consumer
+from snuba.utils.streams.kafka import TransportError, build_confluent_kafka_consumer
 
 
 class ConsumerBuilder:
@@ -94,6 +94,7 @@ class ConsumerBuilder:
             group_id=self.group_id,
             producer=self.producer,
             commit_log_topic=self.commit_log_topic,
+            recoverable_errors=[TransportError],
         )
 
     def build_base_consumer(self) -> BatchingKafkaConsumer:
