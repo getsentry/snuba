@@ -8,7 +8,44 @@ from confluent_kafka.admin import (
     TopicMetadata,
 )
 
-from snuba.perf import FakeConfluentKafkaMessage
+
+class FakeConfluentKafkaMessage(object):
+    def __init__(self, topic: str, partition: int, offset, value: Optional[bytes], key=None, headers=None, error=None) -> None:
+        if value is not None:
+            assert isinstance(value, bytes)
+
+        self._topic = topic
+        self._partition = partition
+        self._offset = offset
+        self._value = value
+        self._key = key
+        self._headers = {
+            str(k): str(v) if v else None
+            for k, v in headers.items()
+        } if headers else None
+        self._headers = headers
+        self._error = error
+
+    def topic(self):
+        return self._topic
+
+    def partition(self):
+        return self._partition
+
+    def offset(self):
+        return self._offset
+
+    def value(self) -> Optional[bytes]:
+        return self._value
+
+    def key(self):
+        return self._key
+
+    def headers(self):
+        return self._headers
+
+    def error(self):
+        return self._error
 
 
 class FakeConfluentKafkaProducer(object):
