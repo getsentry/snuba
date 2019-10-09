@@ -6,7 +6,7 @@ from typing import Iterator
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
-from snuba.utils.streams.abstract import Message
+from snuba.utils.streams.abstract import EndOfStream, Message
 from snuba.utils.streams.kafka import KafkaConsumer, TopicPartition
 
 
@@ -37,7 +37,7 @@ def test_consumer(topic: str) -> None:
             "auto.offset.reset": "latest",
             "enable.auto.commit": "false",
             "enable.auto.offset.store": "true",
-            "enable.partition.eof": "false",
+            "enable.partition.eof": "true",
             "group.id": "test",
             "session.timeout.ms": 10000,
         }
@@ -50,8 +50,13 @@ def test_consumer(topic: str) -> None:
     assignment_callback = mock.MagicMock()
     consumer.subscribe([topic], on_assign=assignment_callback)
 
-    message = consumer.poll(10.0)  # XXX: getting the subcription is slow
-    assert message is None
+    try:
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+    else:
+        raise AssertionError('expected EndOfStream error')
+
     assert assignment_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
 
     producer = ConfluentProducer(configuration)

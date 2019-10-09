@@ -17,6 +17,15 @@ class Message(Generic[TStream, TOffset, TValue]):
     value: TValue
 
 
+class ConsumerError(Exception):
+    pass
+
+
+class EndOfStream(ConsumerError, Generic[TStream]):
+    def __init__(self, stream: TStream):
+        self.stream = stream
+
+
 class Consumer(ABC, Generic[TStream, TOffset, TValue]):
     @abstractmethod
     def subscribe(

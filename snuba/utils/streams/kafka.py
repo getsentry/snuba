@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.streams.abstract import Consumer, Message
+from snuba.utils.streams.abstract import Consumer, ConsumerError, EndOfStream, Message
 
 
 class TopicPartition(NamedTuple):
@@ -57,8 +57,10 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         error: Optional[KafkaError] = message.error()
         if error is not None:
-            # TODO: This should be improved.
-            raise Exception(error)
+            if error.code() == KafkaError._PARTITION_EOF:
+                raise EndOfStream(TopicPartition(message.topic(), message.partition()))
+            else:
+                raise ConsumerError  # TODO: Be more specific about the error raised here.
 
         return KafkaMessage(
             TopicPartition(message.topic(), message.partition()),
