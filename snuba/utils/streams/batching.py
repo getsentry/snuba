@@ -9,6 +9,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Type,
     TypeVar,
 )
 
@@ -24,6 +25,7 @@ from confluent_kafka import (
 from confluent_kafka import Message as ConfluentMessage
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.abstract import ConsumerError
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaMessage, TopicPartition
 
 
@@ -111,6 +113,7 @@ class BatchingKafkaConsumer:
         metrics: MetricsBackend,
         producer: Optional[Producer] = None,
         commit_log_topic: Optional[str] = None,
+        recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.consumer = consumer
 
@@ -135,6 +138,9 @@ class BatchingKafkaConsumer:
 
         self.producer = producer
         self.commit_log_topic = commit_log_topic
+
+        # The types passed to the `except` clause must be a tuple, not a Sequence.
+        self.__recoverable_errors = tuple(recoverable_errors or [])
 
         def on_partitions_assigned(partitions: Sequence[TopicPartition]) -> None:
             logger.info("New partitions assigned: %r", partitions)
@@ -165,7 +171,10 @@ class BatchingKafkaConsumer:
 
         # TODO: This needs to handle recoverable errors (end of partition,
         # transport errors, etc.)
-        msg = self.consumer.poll(timeout=1.0)
+        try:
+            msg = self.consumer.poll(timeout=1.0)
+        except self.__recoverable_errors:
+            return
 
         if msg is None:
             return
