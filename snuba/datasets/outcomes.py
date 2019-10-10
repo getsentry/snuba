@@ -167,4 +167,4 @@ class OutcomesDataset(TimeSeriesDataset):
         }
 
     def get_prewhere_keys(self) -> Sequence[str]:
-        return ['org_id', 'project_id']
+        return ['project_id', 'org_id']
