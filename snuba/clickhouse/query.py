@@ -24,11 +24,6 @@ class ClickhouseQuery:
         settings: RequestSettings,
         prewhere_conditions: Sequence[str],
     ) -> None:
-        source = dataset \
-            .get_dataset_schemas() \
-            .get_read_schema() \
-            .get_data_source()
-
         parsing_context = ParsingContext()
 
         aggregate_exprs = [column_expr(dataset, col, query, parsing_context, alias, agg) for (agg, col, alias) in query.get_aggregations()]
@@ -38,7 +33,7 @@ class ClickhouseQuery:
         selected_cols = [column_expr(dataset, util.tuplify(colname), query, parsing_context) for colname in column_names]
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
-        from_clause = u'FROM {}'.format(source)
+        from_clause = u'FROM {}'.format(query.get_from_clause().format())
 
         if query.get_final():
             from_clause = u'{} FINAL'.format(from_clause)

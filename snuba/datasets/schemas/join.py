@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import ChainMap
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping, NamedTuple, Sequence
 
 
 from snuba.clickhouse.columns import QualifiedColumnSet
-from snuba.datasets.schemas import Schema
+from snuba.datasets.schemas import Schema, RelationalSource
 
 
 class JoinType(Enum):
@@ -40,7 +41,7 @@ class JoinCondition:
             f"{self.right.table_alias}.{self.right.column}"
 
 
-class JoinedSource(ABC):
+class JoinedSource(RelationalSource, ABC):
     """
     Represent an abstract node in the Join Structure tree. It can be
     a schema that will have an alias or another join structure.
@@ -57,6 +58,9 @@ class JoinedSource(ABC):
         """
         raise NotImplementedError
 
+    def format(self) -> str:
+        return str(self)
+
 
 @dataclass(frozen=True)
 class SchemaJoinedSource(JoinedSource):
@@ -68,31 +72,13 @@ class SchemaJoinedSource(JoinedSource):
     schema: Schema
 
     def __str__(self) -> str:
-        return f"{self.schema.get_data_source()} {self.alias}"
+        return f"{self.schema.get_data_source().format()} {self.alias}"
 
     def get_schemas(self) -> Mapping[str, Schema]:
         return {self.alias: self.schema}
 
-
-@dataclass(frozen=True)
-class SubJoinSource(JoinedSource):
-    """
-    Represents a sub expression in the join clause, which is a join on its own.
-    """
-    structure: JoinStructure
-
-    def __str__(self) -> str:
-        return f"{self.structure.get_data_source()}"
-
-    def get_schemas(self) -> Mapping[str, Schema]:
-        left = self.structure.left_source.get_schemas()
-        right = self.structure.right_source.get_schemas()
-        overlapping_aliases = left.keys() & right.keys()
-        for alias in overlapping_aliases:
-            # Ensures none defines the same alias twice in the join referring
-            # to different tables.
-            assert left[alias] == right[alias]
-        return ChainMap(left, right)
+    def copy(self) -> SchemaJoinedSource:
+        return SchemaJoinedSource(self.alias, self.schema)
 
 
 @dataclass(frozen=True)
@@ -111,9 +97,40 @@ class JoinStructure:
     mapping: Sequence[JoinCondition]
     join_type: JoinType
 
-    def get_data_source(self) -> str:
+    def format_data_source(self) -> str:
         on_clause = " AND ".join([str(m) for m in self.mapping])
         return f"{self.left_source} {self.join_type.value} JOIN {self.right_source} ON {on_clause}"
+
+
+@dataclass(frozen=True)
+class SubJoinSource(JoinedSource):
+    """
+    Represents a sub expression in the join clause, which is a join on its own.
+    """
+    structure: JoinStructure
+
+    def __str__(self) -> str:
+        return f"{self.structure.format_data_source()}"
+
+    def get_schemas(self) -> Mapping[str, Schema]:
+        left = self.structure.left_source.get_schemas()
+        right = self.structure.right_source.get_schemas()
+        overlapping_aliases = left.keys() & right.keys()
+        for alias in overlapping_aliases:
+            # Ensures none defines the same alias twice in the join referring
+            # to different tables.
+            assert left[alias] == right[alias]
+        return ChainMap(left, right)
+
+    def copy(self) -> SubJoinSource:
+        return SubJoinSource(
+            JoinStructure(
+                self.structure.left_source.copy(),
+                self.structure.left_source.copy(),
+                deepcopy(self.structure.mapping),
+                self.structure.join_type,
+            )
+        )
 
 
 class JoinedSchema(Schema):
@@ -129,7 +146,7 @@ class JoinedSchema(Schema):
         super().__init__(
             columns=self.__get_columns(join_root),
         )
-        self.__join_structure = join_root
+        self.__source = SubJoinSource(join_root)
 
     def __get_columns(self, structure: JoinStructure) -> QualifiedColumnSet:
         """
@@ -140,5 +157,5 @@ class JoinedSchema(Schema):
         column_sets = {alias: schema.get_columns() for alias, schema in schemas.items()}
         return QualifiedColumnSet(column_sets)
 
-    def get_data_source(self) -> str:
-        return self.__join_structure.get_data_source()
+    def get_data_source(self) -> RelationalSource:
+        return self.__source

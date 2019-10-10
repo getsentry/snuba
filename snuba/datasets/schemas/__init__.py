@@ -1,7 +1,27 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Mapping, List
 
 from snuba.clickhouse.columns import ColumnSet
+
+
+class RelationalSource(ABC):
+    """
+    Represent an abstract view over a relational datasource, which
+    can represent a table or a join.
+    """
+
+    @abstractmethod
+    def copy(self) -> RelationalSource:
+        raise NotImplementedError
+
+    @abstractmethod
+    def format(self) -> str:
+        # Not using the __str__ method because this is moving towards a more
+        # abstract method that will receive a FormatStrategy (clickhouse specific)
+        # that would do the actual formatting work
+        raise NotImplementedError
 
 
 class Schema(ABC):
@@ -24,16 +44,12 @@ class Schema(ABC):
         self.__columns = columns
 
     @abstractmethod
-    def get_data_source(self) -> str:
+    def get_data_source(self) -> RelationalSource:
         """
         Builds and returns the content of the FROM clause Clickhouse
         needs in order to execute a query on this schema.
         This can be a simple table or a view for simple dataset
         or the join clause for joined datasets.
-
-        TODO: Once we have a Snuba Query abstraction (PR 456) this
-        will change to return something more abstract than a string
-        so the query can manipulate it.
         """
         raise NotImplementedError
 

@@ -12,6 +12,7 @@ from typing import (
     Union,
 )
 
+from snuba.datasets.schemas import RelationalSource
 
 Condition = Union[
     Tuple[Any, Any, Any],
@@ -46,7 +47,7 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: MutableMapping[str, Any]):
+    def __init__(self, body: MutableMapping[str, Any], from_clause: RelationalSource):
         """
         Expects an already parsed query body.
         """
@@ -54,6 +55,10 @@ class Query:
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
+        self.__from_clause = from_clause.copy()
+
+    def get_from_clause(self) -> RelationalSource:
+        return self.__from_clause
 
     def __extend_sequence(self,
         field: str,
