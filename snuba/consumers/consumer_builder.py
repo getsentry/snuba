@@ -8,7 +8,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.utils.streams.kafka import KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer
+from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer_configuration
 
 
 class ConsumerBuilder:
@@ -80,7 +80,7 @@ class ConsumerBuilder:
         self.queued_min_messages = queued_min_messages
 
     def __build_consumer(self, worker: AbstractBatchWorker[KafkaMessage]) -> BatchingKafkaConsumer:
-        consumer = build_kafka_consumer(
+        configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             auto_offset_reset=self.auto_offset_reset,
@@ -88,14 +88,11 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        if self.commit_log_topic is not None:
-            # XXX: This does not type check correctly, since
-            # ``KafkaConsumerWithCommitLog`` isn't a subtype of
-            # ``KafkaConsumer``. This would be relatively easy to fix, but the
-            # implementation of ``KafkaConsumerWithCommitLog`` is likely to
-            # change anyway.
+        if self.commit_log_topic is None:
+            consumer = KafkaConsumer(configuration)
+        else:
             consumer = KafkaConsumerWithCommitLog(
-                consumer,
+                configuration,
                 self.producer,
                 self.commit_log_topic,
             )
