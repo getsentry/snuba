@@ -3,6 +3,7 @@ import datetime
 from typing import Sequence
 
 from snuba import state
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Query, Condition
 from snuba.request.request_settings import RequestSettings
@@ -61,9 +62,12 @@ def test_query_extension_processing(
         timestamp_column='timestamp',
     )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({
-        "conditions": []
-    })
+    query = Query(
+        {
+            "conditions": []
+        },
+        TableSource("my_table"),
+    )
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
