@@ -24,7 +24,7 @@ class TestOutcomesApi(BaseApiTest):
             outcome: int,
             time_since_base: timedelta
     ) -> None:
-        events = []
+        outcomes = []
         for _ in range(num_events):
             processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message({
                 "project_id": project_id,
@@ -36,9 +36,9 @@ class TestOutcomesApi(BaseApiTest):
                 "outcome": outcome,
             }, None)
 
-            events.extend(processed.data)
+            outcomes.extend(processed.data)
 
-        self.write_processed_events(events)
+        self.write_processed_events(outcomes)
 
     def format_time(self, time: datetime) -> str:
         return time.replace(tzinfo=pytz.utc).isoformat()

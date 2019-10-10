@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Sequence
 import uuid
 
 from snuba.clickhouse.columns import (
@@ -165,3 +165,6 @@ class OutcomesDataset(TimeSeriesDataset):
                 timestamp_column='timestamp',
             ),
         }
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['org_id', 'project_id']
