@@ -16,16 +16,16 @@ class TestOutcomesApi(BaseApiTest):
         self.skew = timedelta(minutes=self.skew_minutes)
         self.base_time = datetime.utcnow().replace(minute=0, second=0, microsecond=0) - self.skew
 
-    def generate_events(
+    def generate_outcomes(
             self,
             org_id: int,
             project_id: int,
-            num_events: int,
+            num_outcomes: int,
             outcome: int,
             time_since_base: timedelta
     ) -> None:
         outcomes = []
-        for _ in range(num_events):
+        for _ in range(num_outcomes):
             processed = enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_message({
                 "project_id": project_id,
                 "event_id": uuid.uuid4().hex,
@@ -44,20 +44,20 @@ class TestOutcomesApi(BaseApiTest):
         return time.replace(tzinfo=pytz.utc).isoformat()
 
     def test_happy_path_querying(self):
-        # the events we are going to query; multiple project over multiple times
-        self.generate_events(org_id=1, project_id=1, num_events=5, outcome=0, time_since_base=timedelta(minutes=1))
-        self.generate_events(org_id=1, project_id=1, num_events=5, outcome=0, time_since_base=timedelta(minutes=30))
-        self.generate_events(org_id=1, project_id=2, num_events=10, outcome=0, time_since_base=timedelta(minutes=30))
-        self.generate_events(org_id=1, project_id=1, num_events=10, outcome=0, time_since_base=timedelta(minutes=61))
+        # the outcomes we are going to query; multiple project over multiple times
+        self.generate_outcomes(org_id=1, project_id=1, num_outcomes=5, outcome=0, time_since_base=timedelta(minutes=1))
+        self.generate_outcomes(org_id=1, project_id=1, num_outcomes=5, outcome=0, time_since_base=timedelta(minutes=30))
+        self.generate_outcomes(org_id=1, project_id=2, num_outcomes=10, outcome=0, time_since_base=timedelta(minutes=30))
+        self.generate_outcomes(org_id=1, project_id=1, num_outcomes=10, outcome=0, time_since_base=timedelta(minutes=61))
 
-        # events for a different outcome
-        self.generate_events(org_id=1, project_id=1, num_events=1, outcome=1, time_since_base=timedelta(minutes=1))
+        # outcomes for a different outcome
+        self.generate_outcomes(org_id=1, project_id=1, num_outcomes=1, outcome=1, time_since_base=timedelta(minutes=1))
 
-        # events outside the time range we are going to request
-        self.generate_events(
+        # outcomes outside the time range we are going to request
+        self.generate_outcomes(
             org_id=1,
             project_id=1,
-            num_events=1,
+            num_outcomes=1,
             outcome=0,
             time_since_base=timedelta(minutes=(self.skew_minutes + 60))
         )
