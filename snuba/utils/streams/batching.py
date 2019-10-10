@@ -24,8 +24,8 @@ from confluent_kafka import (
 from confluent_kafka import Message as ConfluentMessage
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.abstract import ConsumerError
-from snuba.utils.streams.kafka import KafkaConsumer, KafkaMessage, TopicPartition
+from snuba.utils.streams.abstract import Consumer, ConsumerError, Message
+from snuba.utils.streams.kafka import TopicPartition
 
 
 logger = logging.getLogger("batching-kafka-consumer")
@@ -103,9 +103,9 @@ class BatchingKafkaConsumer:
 
     def __init__(
         self,
-        consumer: KafkaConsumer,
+        consumer: Consumer[TopicPartition, int, bytes],
         topic: str,
-        worker: AbstractBatchWorker[KafkaMessage],
+        worker: AbstractBatchWorker[Message[TopicPartition, int, bytes]],
         max_batch_size: int,
         max_batch_time: int,
         group_id: str,
@@ -185,7 +185,7 @@ class BatchingKafkaConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: KafkaMessage) -> None:
+    def _handle_message(self, msg: Message[TopicPartition, int, bytes]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
