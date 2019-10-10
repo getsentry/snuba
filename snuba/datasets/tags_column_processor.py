@@ -3,11 +3,11 @@ from typing import Any, Mapping, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.columns import all_referenced_columns
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
     alias_expr,
-    all_referenced_columns,
     escape_literal,
     escape_col,
     qualified_column,

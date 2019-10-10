@@ -2,12 +2,10 @@ from copy import deepcopy
 
 from tests.base import BaseEventsTest
 
+from snuba.query.columns import column_expr
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
-from snuba.util import (
-    column_expr,
-    tuplify,
-)
+from snuba.util import tuplify
 
 
 class TestEventsDataset(BaseEventsTest):

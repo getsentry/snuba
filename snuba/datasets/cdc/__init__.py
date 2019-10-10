@@ -1,4 +1,4 @@
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 
 
