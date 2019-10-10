@@ -2,13 +2,14 @@ import logging
 import time
 from typing import Any, Callable, Mapping, NamedTuple, Optional, Sequence
 
+from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka import Message as ConfluentMessage
+from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.streams.abstract import Consumer, ConsumerError, EndOfStream, Message
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class TransportError(ConsumerError):
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     def __init__(self, configuration: Mapping[str, Any]) -> None:
+        self.configuration = configuration  # XXX: Reconsider this?
         self.__consumer = ConfluentConsumer(configuration)
 
     def __wrap_assignment_callback(
@@ -139,3 +141,77 @@ def build_kafka_consumer(
             "enable.partition.eof": False,
         }
     )
+
+
+class KafkaConsumerWithCommitLog(Consumer[TopicPartition, int, bytes]):
+
+    # Set of logical (not literal) offsets to not publish to the commit log.
+    # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
+    LOGICAL_OFFSETS = frozenset(
+        [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
+    )
+
+    def __init__(
+        self,
+        consumer: KafkaConsumer,
+        producer: ConfluentProducer,
+        commit_log_topic: str,
+    ) -> None:
+        self.__consumer = consumer
+        self.__producer = producer
+        self.__commit_log_topic = commit_log_topic
+
+    def subscribe(
+        self,
+        topics: Sequence[str],
+        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+    ) -> None:
+        self.__consumer.subscribe(topics, on_assign, on_revoke)
+
+    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+        self.__producer.poll(0.0)
+        return self.__consumer.poll(timeout)
+
+    def __commit_message_delivery_callback(
+        self, error: Optional[KafkaError], message: ConfluentMessage
+    ) -> None:
+        if error is not None:
+            raise Exception(error.str())
+
+    def commit(self) -> Mapping[TopicPartition, int]:
+        offsets = self.__consumer.commit()
+
+        if self.__commit_log_topic:
+            for stream, offset in offsets.items():
+                # XXX: This is an abstraction leak from the Kafka consumer.
+                if offset in self.LOGICAL_OFFSETS:
+                    logger.debug(
+                        "Skipped publishing logical offset (%r) to commit log for %s",
+                        offset,
+                        stream,
+                    )
+                    continue
+                elif offset < 0:
+                    logger.warning(
+                        "Found unexpected negative offset (%r) after commit for %s",
+                        offset,
+                        stream,
+                    )
+
+                self.__producer.produce(
+                    self.__commit_log_topic,
+                    key="{}:{}:{}".format(
+                        stream.topic,
+                        stream.partition,
+                        self.__consumer.configuration["group_id"],
+                    ).encode("utf-8"),
+                    value="{}".format(offset).encode("utf-8"),
+                    on_delivery=self.__commit_message_delivery_callback,
+                )
+
+        return offsets
+
+    def close(self) -> None:
+        self.__producer.flush()
+        self.__consumer.close()
