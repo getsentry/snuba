@@ -90,9 +90,6 @@ def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
-        group_id=consumer_group,
-        producer=None,
-        commit_log_topic=None,
         recoverable_errors=[TransportError],
     )
 
