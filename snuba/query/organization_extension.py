@@ -5,15 +5,15 @@ from snuba.request.request_settings import RequestSettings
 
 
 ORGANIZATION_EXTENSION_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        'organization': {
-            'type': 'integer',
-            'minimum': 1,
+    "type": "object",
+    "properties": {
+        "organization": {
+            "type": "integer",
+            "minimum": 1,
         },
     },
-    'required': ['organization'],
-    'additionalProperties': False,
+    "required": ["organization"],
+    "additionalProperties": False,
 }
 
 
@@ -28,8 +28,8 @@ class OrganizationExtensionProcessor(ExtensionQueryProcessor):
             extension_data: ExtensionData,
             request_settings: RequestSettings,
     ) -> None:
-        organization_id = extension_data['organization']
-        query.add_conditions([('org_id', '=', organization_id)])
+        organization_id = extension_data["organization"]
+        query.add_conditions([("org_id", "=", organization_id)])
 
 
 class OrganizationExtension(QueryExtension):
