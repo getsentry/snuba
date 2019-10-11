@@ -3,7 +3,7 @@ import re
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
-from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (

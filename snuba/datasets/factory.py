@@ -1,7 +1,7 @@
 from typing import Callable, MutableMapping, Set, Sequence
 
 from snuba import settings
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.table_storage import TableWriter
 
 

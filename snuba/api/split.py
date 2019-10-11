@@ -3,8 +3,9 @@ from datetime import timedelta
 import math
 
 from snuba import state, util
-from snuba.datasets import ColumnSplitSpec
+from snuba.datasets.dataset import ColumnSplitSpec
 from snuba.api.query import QueryResult
+from snuba.query.columns import all_referenced_columns
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -30,12 +31,12 @@ def split_query(query_func):
         if common_conditions:
             # TODO: Move all_referenced_columns into query and remove this dependency.
             # In order to do this we need to break a circular dependency first
-            total_col_count = len(util.all_referenced_columns(request.query))
+            total_col_count = len(all_referenced_columns(request.query))
             column_split_spec = dataset.get_split_query_spec()
             if column_split_spec:
                 copied_query = copy.deepcopy(request.query)
                 copied_query.set_selected_columns(column_split_spec.get_min_columns())
-                min_col_count = len(util.all_referenced_columns(copied_query))
+                min_col_count = len(all_referenced_columns(copied_query))
             else:
                 min_col_count = None
 

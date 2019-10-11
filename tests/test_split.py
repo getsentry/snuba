@@ -3,7 +3,7 @@ from typing import Any, Mapping
 
 from snuba import state
 from snuba.api.split import split_query
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
 from snuba.api.query import QueryResult
