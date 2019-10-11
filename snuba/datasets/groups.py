@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -34,17 +35,22 @@ class Groups(TimeSeriesDataset):
 
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
+        groupedmessage_source = self.__grouped_message \
+            .get_dataset_schemas() \
+            .get_read_schema() \
+            .get_data_source()
+        assert isinstance(groupedmessage_source, TableSource)
+
         self.__events = get_dataset("events")
+        events_source = self.__events \
+            .get_dataset_schemas() \
+            .get_read_schema() \
+            .get_data_source()
+        assert isinstance(events_source, TableSource)
 
         join_structure = JoinClause(
-            left_node=TableJoinNode(
-                self.GROUPS_ALIAS,
-                self.__grouped_message.get_dataset_schemas().get_read_schema(),
-            ),
-            right_node=TableJoinNode(
-                self.EVENTS_ALIAS,
-                self.__events.get_dataset_schemas().get_read_schema(),
-            ),
+            left_node=TableJoinNode(self.GROUPS_ALIAS, groupedmessage_source),
+            right_node=TableJoinNode(self.EVENTS_ALIAS, events_source),
             mapping=[
                 JoinCondition(
                     left=JoinConditionExpression(

@@ -27,7 +27,7 @@ table1 = MergeTreeSchema(
     dist_table_name="table1",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 table2 = MergeTreeSchema(
     columns=ColumnSet([
@@ -41,7 +41,7 @@ table2 = MergeTreeSchema(
     dist_table_name="table2",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 table3 = MergeTreeSchema(
     columns=ColumnSet([
@@ -55,7 +55,7 @@ table3 = MergeTreeSchema(
     dist_table_name="table3",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 
 simple_join_structure = JoinClause(

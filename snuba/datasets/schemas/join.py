@@ -7,9 +7,9 @@ from enum import Enum
 from typing import Mapping, NamedTuple, Sequence
 
 
-from snuba.clickhouse.columns import QualifiedColumnSet
+from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.schemas import Schema, RelationalSource
-from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.schemas.tables import TableSource
 
 
 class JoinType(Enum):
@@ -50,7 +50,7 @@ class JoinNode(RelationalSource, ABC):
     """
 
     @abstractmethod
-    def get_schemas(self) -> Mapping[str, Schema]:
+    def get_tables(self) -> Mapping[str, TableSource]:
         """
         Returns the mapping between alias and schema in the joined expression.
         This is called when navigating the join tree to build a comprehensive
@@ -69,13 +69,16 @@ class TableJoinNode(JoinNode):
     It can be a table or a view.
     """
     alias: str
-    schema: TableSchema
+    table: TableSource
 
     def __str__(self) -> str:
-        return f"{self.schema.get_data_source().format()} {self.alias}"
+        return f"{self.table.format()} {self.alias}"
 
-    def get_schemas(self) -> Mapping[str, Schema]:
-        return {self.alias: self.schema}
+    def get_tables(self) -> Mapping[str, TableSource]:
+        return {self.alias: self.table}
+
+    def get_columns(self) -> ColumnSet:
+        raise self.table.get_columns()
 
 
 @dataclass(frozen=True)
@@ -98,15 +101,24 @@ class JoinClause(JoinNode):
         on_clause = " AND ".join([str(m) for m in self.mapping])
         return f"{self.left_node} {self.join_type.value} JOIN {self.right_node} ON {on_clause}"
 
-    def get_schemas(self) -> Mapping[str, Schema]:
-        left = self.left_node.get_schemas()
-        right = self.right_node.get_schemas()
+    def get_tables(self) -> Mapping[str, TableSource]:
+        left = self.left_node.get_tables()
+        right = self.right_node.get_tables()
         overlapping_aliases = left.keys() & right.keys()
         for alias in overlapping_aliases:
             # Ensures none defines the same alias twice in the join referring
             # to different tables.
             assert left[alias] == right[alias]
         return ChainMap(left, right)
+
+    def get_columns(self) -> QualifiedColumnSet:
+        """
+        Extracts all the columns recursively from the joined schemas and
+        builds a column set that preserves the structure.
+        """
+        tables = self.get_tables()
+        column_sets = {alias: table.get_columns() for alias, table in tables.items()}
+        return QualifiedColumnSet(column_sets)
 
 
 class JoinedSchema(Schema):
@@ -119,19 +131,7 @@ class JoinedSchema(Schema):
     def __init__(self,
         join_root: JoinNode,
     ) -> None:
-        super().__init__(
-            columns=self.__get_columns(join_root),
-        )
         self.__source = join_root
-
-    def __get_columns(self, structure: JoinNode) -> QualifiedColumnSet:
-        """
-        Extracts all the columns recursively from the joined schemas and
-        builds a column set that preserves the structure.
-        """
-        schemas = structure.get_schemas()
-        column_sets = {alias: schema.get_columns() for alias, schema in schemas.items()}
-        return QualifiedColumnSet(column_sets)
 
     def get_data_source(self) -> RelationalSource:
         return self.__source

@@ -8,15 +8,26 @@ from snuba.clickhouse.columns import ColumnSet
 
 class RelationalSource(ABC):
     """
-    Represent an abstract view over a relational datasource, which
-    can represent a table or a join.
+    Anabstract representation of the relationship between entities in a schema.
+    This is the object we use to build the FROM clause in a query and that
+    It can represent a table, a view or a join between multiple tables.
+
+    This implies our data model is defined in a relational way. Should we move
+    away from this assumption, this will change.
     """
 
     @abstractmethod
     def format(self) -> str:
+        """
+        Builds the SQL representation of the data source.
+        """
         # Not using the __str__ method because this is moving towards a more
         # abstract method that will receive a FormatStrategy (clickhouse specific)
         # that would do the actual formatting work
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_columns(self) -> ColumnSet:
         raise NotImplementedError
 
 
@@ -33,24 +44,16 @@ class Schema(ABC):
     class will break up into snuba schema and clickhouse schema.
     """
 
-    def __init__(
-        self,
-        columns: ColumnSet,
-    ) -> None:
-        self.__columns = columns
-
     @abstractmethod
     def get_data_source(self) -> RelationalSource:
         """
-        Builds and returns the content of the FROM clause Clickhouse
-        needs in order to execute a query on this schema.
-        This can be a simple table or a view for simple dataset
-        or the join clause for joined datasets.
+        Returns an object that represent the tables and the relationship between
+        tables in this Schema.
         """
         raise NotImplementedError
 
     def get_columns(self) -> ColumnSet:
-        return self.__columns
+        return self.get_data_source().get_columns()
 
     def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
         """
@@ -59,11 +62,11 @@ class Schema(ABC):
         errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
-            if column_name not in self.__columns:
+            if column_name not in self.get_columns():
                 errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
                 continue
 
-            expected_type = self.__columns[column_name].type.for_schema()
+            expected_type = self.get_columns()[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (

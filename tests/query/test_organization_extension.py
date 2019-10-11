@@ -1,6 +1,7 @@
 import pytest
 from jsonschema.exceptions import ValidationError
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.query import Query
@@ -17,7 +18,7 @@ def test_organization_extension_query_processing_happy_path():
         {
             "conditions": []
         },
-        TableSource("my_table")
+        TableSource("my_table", ColumnSet([]))
     )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 

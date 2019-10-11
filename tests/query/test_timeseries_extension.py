@@ -3,6 +3,7 @@ import datetime
 from typing import Sequence
 
 from snuba import state
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Query, Condition
@@ -66,7 +67,7 @@ def test_query_extension_processing(
         {
             "conditions": []
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)

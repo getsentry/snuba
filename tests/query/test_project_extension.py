@@ -3,6 +3,7 @@ from typing import Sequence
 
 from tests.base import BaseTest
 from snuba import replacer, state
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
 from snuba.query.query import Query, Condition
@@ -39,7 +40,7 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
         {
             "conditions": []
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
@@ -60,7 +61,7 @@ def test_project_extension_query_adds_rate_limits():
         {
             "conditions": []
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
@@ -89,7 +90,7 @@ def test_project_extension_project_rate_limits_are_overridden():
         {
             "conditions": []
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     state.set_config('project_per_second_limit_2', 5)
@@ -118,7 +119,7 @@ class TestProjectExtensionWithGroups(BaseTest):
             {
                 "conditions": []
             },
-            TableSource("my_table"),
+            TableSource("my_table", ColumnSet([])),
         )
 
     def test_with_turbo(self):

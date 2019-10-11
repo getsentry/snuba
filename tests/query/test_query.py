@@ -1,9 +1,10 @@
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.query import Query
 
 
 def test_empty_query():
-    query = Query({}, TableSource("my_table"))
+    query = Query({}, TableSource("my_table", ColumnSet([])))
 
     assert query.get_selected_columns() is None
     assert query.get_aggregations() is None
@@ -38,7 +39,7 @@ def test_full_query():
             "totals": True,
             "granularity": 60,
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
 
     assert query.get_selected_columns() == ["c1", "c2", "c3"]
@@ -74,7 +75,7 @@ def test_edit_query():
             "offset": 50,
             "totals": True,
         },
-        TableSource("my_table"),
+        TableSource("my_table", ColumnSet([])),
     )
 
     query.set_selected_columns(["c4"])
