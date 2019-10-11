@@ -8,8 +8,8 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 from tests.base import BaseEventsTest
-from tests.backends.confluent_kafka import build_confluent_kafka_message
 
 
 class TestReplacer(BaseEventsTest):
@@ -25,8 +25,12 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg):
-        return build_confluent_kafka_message(0, 0, json.dumps(msg).encode('utf-8'))
+    def _wrap(self, msg: str) -> KafkaMessage:
+        return KafkaMessage(
+            TopicPartition('replacements', 0),
+            0,
+            json.dumps(msg).encode('utf-8'),
+        )
 
     def _issue_count(self, project_id, group_id=None):
         args = {
@@ -172,9 +176,9 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = build_confluent_kafka_message(
+        message = KafkaMessage(
+            TopicPartition('replacements', 1),
             42,
-            1,
             json.dumps((2, 'end_delete_groups', {
                 'project_id': project_id,
                 'group_ids': [1],
@@ -198,9 +202,9 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = build_confluent_kafka_message(
+        message = KafkaMessage(
+            TopicPartition('replacements', 1),
             42,
-            1,
             json.dumps((2, 'end_merge', {
                 'project_id': project_id,
                 'new_group_id': 2,
@@ -226,9 +230,9 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = build_confluent_kafka_message(
+        message = KafkaMessage(
+            TopicPartition('replacements', 1),
             42,
-            1,
             json.dumps((2, 'end_unmerge', {
                 'project_id': project_id,
                 'previous_group_id': 1,
@@ -265,9 +269,9 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message = build_confluent_kafka_message(
+        message = KafkaMessage(
+            TopicPartition('replacements', 1),
             42,
-            1,
             json.dumps((2, 'end_delete_tag', {
                 'project_id': project_id,
                 'tag': 'browser.name',

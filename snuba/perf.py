@@ -4,52 +4,13 @@ import os
 import tempfile
 import time
 from itertools import chain
-from typing import Optional
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.perf')
-
-
-class FakeConfluentKafkaMessage(object):
-    def __init__(self, topic: str, partition: int, offset, value: Optional[bytes], key=None, headers=None, error=None) -> None:
-        if value is not None:
-            assert isinstance(value, bytes)
-
-        self._topic = topic
-        self._partition = partition
-        self._offset = offset
-        self._value = value
-        self._key = key
-        self._headers = {
-            str(k): str(v) if v else None
-            for k, v in headers.items()
-        } if headers else None
-        self._headers = headers
-        self._error = error
-
-    def topic(self):
-        return self._topic
-
-    def partition(self):
-        return self._partition
-
-    def offset(self):
-        return self._offset
-
-    def value(self) -> Optional[bytes]:
-        return self._value
-
-    def key(self):
-        return self._key
-
-    def headers(self):
-        return self._headers
-
-    def error(self):
-        return self._error
 
 
 def get_messages(events_file):
@@ -57,7 +18,13 @@ def get_messages(events_file):
     messages = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
-        messages.append(FakeConfluentKafkaMessage('events', 1, 0, raw_event.encode('utf-8')))
+        messages.append(
+            KafkaMessage(
+                TopicPartition('events', 1),
+                0,
+                raw_event.encode('utf-8')
+            ),
+        )
     return messages
 
 
