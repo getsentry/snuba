@@ -8,10 +8,10 @@ from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
-    JoinStructure,
+    JoinClause,
     JoinType,
-    SchemaJoinedSource,
-    SubJoinSource,
+    TableJoinNode,
+    JoinClause,
 )
 
 
@@ -58,9 +58,9 @@ table3 = MergeTreeSchema(
 )
 
 
-simple_join_structure = JoinStructure(
-    SchemaJoinedSource("t1", table1),
-    SchemaJoinedSource("t2", table2),
+simple_join_structure = JoinClause(
+    TableJoinNode("t1", table1),
+    TableJoinNode("t2", table2),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -74,21 +74,19 @@ simple_join_structure = JoinStructure(
     JoinType.INNER
 )
 
-complex_join_structure = JoinStructure(
-    SubJoinSource(
-        JoinStructure(
-            SchemaJoinedSource("t1", table1),
-            SchemaJoinedSource("t2", table2),
-            [
-                JoinCondition(
-                    left=JoinConditionExpression(table_alias="t1", column="c1"),
-                    right=JoinConditionExpression(table_alias="t2", column="c2"),
-                ),
-            ],
-            JoinType.FULL
-        ),
+complex_join_structure = JoinClause(
+    JoinClause(
+        TableJoinNode("t1", table1),
+        TableJoinNode("t2", table2),
+        [
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="t1", column="c1"),
+                right=JoinConditionExpression(table_alias="t2", column="c2"),
+            ),
+        ],
+        JoinType.FULL
     ),
-    SchemaJoinedSource("t3", table3),
+    TableJoinNode("t3", table3),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),

@@ -13,10 +13,6 @@ class RelationalSource(ABC):
     """
 
     @abstractmethod
-    def copy(self) -> RelationalSource:
-        raise NotImplementedError
-
-    @abstractmethod
     def format(self) -> str:
         # Not using the __str__ method because this is moving towards a more
         # abstract method that will receive a FormatStrategy (clickhouse specific)

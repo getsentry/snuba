@@ -55,7 +55,7 @@ class Query:
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
-        self.__from_clause = from_clause.copy()
+        self.__from_clause = from_clause
 
     def get_from_clause(self) -> RelationalSource:
         return self.__from_clause

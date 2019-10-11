@@ -13,9 +13,6 @@ class TableSource(RelationalSource):
     def __init__(self, table_name: str) -> None:
         self.__table_name = table_name
 
-    def copy(self) -> TableSource:
-        return TableSource(self.__table_name)
-
     def format(self) -> str:
         return self.__table_name
 
