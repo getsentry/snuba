@@ -71,6 +71,7 @@ class TestOutcomesApi(BaseApiTest):
             'from_date': from_date,
             'selected_columns': [],
             'to_date': to_date,
+            'organization': 1,
             'conditions': [['outcome', '=', 0], ['project_id', 'IN', [1, 2]]],
             'groupby': ['project_id', 'time']
         }))
