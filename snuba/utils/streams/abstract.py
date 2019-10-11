@@ -19,7 +19,7 @@ TOffset = TypeVar("TOffset")
 
 # The ``TValue`` is the type of data represented by the messages in this
 # stream. This can be a bytes object or a string, but is generally more useful
-# or this type to have more structure: a dataclass or some other object
+# for this type to have more structure: a dataclass or some other object
 # representation (after deserialization of the raw bytes) is generally more
 # appropriate.
 TValue = TypeVar("TValue")
