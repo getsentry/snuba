@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable, Generic, Mapping, Optional, Sequence, TypeVar
 
 
@@ -30,7 +31,8 @@ class Message(Generic[TStream, TOffset, TValue]):
     """
     Represents a single message within a stream.
     """
-    __slots__ = ['stream', 'offset', 'value']
+
+    __slots__ = ["stream", "offset", "value"]
 
     stream: TStream
     offset: TOffset
@@ -53,6 +55,29 @@ class EndOfStream(ConsumerError, Generic[TStream]):
 
     def __init__(self, stream: TStream):
         self.stream = stream
+
+
+class StreamPosition(Enum):
+    # Equivalent to ``SEEK_SET``. The offset is relative to the start of the
+    # stream (which may no longer be available.) The offset value should be
+    # zero or positive to ensure the resulting offset is non-negative.
+    SET = 0
+
+    # Not equivalent to any ``SEEK_*`` value. The offset is relative to the
+    # earliest available message in the stream. The offset value should be zero
+    # or positive, as a negative value would index into a point in the stream
+    # where data has already been evicted. If the stream does not have a
+    # retention period or fixed capacity, this is equivalent to ``SET``.
+    BEG = 1
+
+    # Equivalent to ``SEEK_CUR``. The offset is relative to the current stream
+    # position. The offset value may be positive (fast forward) or negative
+    # (rewind).
+    CUR = 2
+
+    # Equivalent to ``SEEK_END``. The offset is relative to the end of the
+    # stream. The offset value should be zero or negative.
+    END = 3
 
 
 class Consumer(ABC, Generic[TStream, TOffset, TValue]):
@@ -126,7 +151,46 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
-    def commit(self) -> Mapping[TStream, TOffset]:
+    def tell(self) -> Mapping[TStream, TOffset]:
+        """
+        Return the offsets for all currently assigned streams.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def seek(
+        self,
+        offsets: Mapping[TStream, TOffset],
+        whence: StreamPosition = StreamPosition.SET,
+    ) -> Mapping[TStream, TOffset]:
+        """
+        Update the offsets for the provided streams. Offsets are interpreted
+        relative to the position indicated by ``whence``, as with
+        ``IOBase.seek``. The return value contains the new absolute positions
+        for each stream.
+        """
+        # TODO: What exception will this throw if the consumer attempts to set
+        # an offset on an invalid (unowned) stream?
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_staged_offsets(self) -> Mapping[TStream, Optional[TOffset]]:
+        """
+        Return the offsets staged for commit for all currently assigned streams.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def set_staged_offsets(self, offsets: Mapping[TStream, Optional[TOffset]]) -> None:
+        """
+        Update the offsets staged for commit for the provided streams.
+        """
+        # TODO: What exception will this throw if the consumer attempts to set
+        # an offset on an invalid (unowned) stream?
+        raise NotImplementedError
+
+    @abstractmethod
+    def commit_offsets(self) -> Mapping[TStream, TOffset]:
         """
         Commit staged offsets for all streams that this consumer is assigned
         to. The return value of this method is a mapping of streams with
