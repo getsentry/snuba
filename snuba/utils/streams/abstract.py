@@ -105,11 +105,21 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         Calling this method may also invoke subscription state change
         callbacks.
 
-        If the backend supports it, this method may raise a ``EndOfStream``
-        error if there are no messages available to be consumed (and the
-        backend is configured to do so.) This may also raise
-        ``ConsumerError`` or one of it's subclasses, the meaning of which are
-        implementation-dependent.
+        This method may raise ``ConsumerError`` or one of it's
+        subclasses, the specific meaning of which are backend implementation
+        specific.
+
+        This method may also raise an ``EndOfStream`` error (a subtype of
+        ``ConsumerError``) when the consumer has reached the end of a stream
+        that it is subscribed to and no additional messages are available.
+        The ``stream`` attribute of the raised exception specifies the end
+        which stream has been reached. (Since this consumer is multiplexing a
+        set of streams, this exception does not mean that *all* of the
+        streams that the consumer is subscribed to do not have any messages,
+        just that it has reached the end of one of them. This also does not
+        mean that additional messages won't be available in future poll
+        calls.) Not every backend implementation supports this feature or is
+        configured to raise in this scenario.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
