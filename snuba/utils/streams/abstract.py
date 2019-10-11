@@ -25,11 +25,12 @@ TOffset = TypeVar("TOffset")
 TValue = TypeVar("TValue")
 
 
-@dataclass
+@dataclass(frozen=True)
 class Message(Generic[TStream, TOffset, TValue]):
     """
     Represents a single message within a stream.
     """
+    __slots__ = ['stream', 'offset', 'value']
 
     stream: TStream
     offset: TOffset
