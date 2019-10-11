@@ -10,9 +10,9 @@ from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
     JoinedSchema,
-    JoinStructure,
+    JoinClause,
     JoinType,
-    SchemaJoinedSource,
+    TableJoinNode,
 )
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.extensions import QueryExtension
@@ -36,12 +36,12 @@ class Groups(TimeSeriesDataset):
         self.__grouped_message = get_dataset("groupedmessage")
         self.__events = get_dataset("events")
 
-        join_structure = JoinStructure(
-            left_source=SchemaJoinedSource(
+        join_structure = JoinClause(
+            left_node=TableJoinNode(
                 self.GROUPS_ALIAS,
                 self.__grouped_message.get_dataset_schemas().get_read_schema(),
             ),
-            right_source=SchemaJoinedSource(
+            right_node=TableJoinNode(
                 self.EVENTS_ALIAS,
                 self.__events.get_dataset_schemas().get_read_schema(),
             ),
