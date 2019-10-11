@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor

@@ -16,7 +16,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.writer import BatchWriter
-from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema

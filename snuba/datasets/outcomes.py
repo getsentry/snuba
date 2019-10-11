@@ -11,7 +11,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.datasets import TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.processor import _ensure_valid_date, MessageProcessor, ProcessorAction, ProcessedMessage, _unicodify
 from snuba.datasets.schemas.tables import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema

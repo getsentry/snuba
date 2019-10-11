@@ -9,7 +9,7 @@ import simplejson as json
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client

@@ -2,13 +2,10 @@ from copy import deepcopy
 
 from snuba.datasets.factory import get_dataset
 from snuba import state
+from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
-from snuba.util import (
-    column_expr,
-    conditions_expr,
-    tuplify,
-)
+from snuba.util import tuplify
 
 
 def test_simple_column_expr():
