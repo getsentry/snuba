@@ -1,6 +1,14 @@
 import logging
 import time
-from typing import Any, Callable, Mapping, NamedTuple, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+)
 
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka import Consumer as ConfluentConsumer
@@ -27,6 +35,15 @@ class TransportError(ConsumerError):
 
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
+
+    # Set of logical offsets that do not correspond to actual log positions.
+    # These offsets should be considered an implementation detail of the Kafka
+    # consumer and not used publically.
+    # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
+    LOGICAL_OFFSETS = frozenset(
+        [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
+    )
+
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__consumer = ConfluentConsumer(configuration)
 
@@ -108,10 +125,20 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                 retries_remaining -= 1
                 time.sleep(1)
 
-        return {
-            TopicPartition(value.topic, value.partition): value.offset
-            for value in result
-        }
+        offsets: MutableMapping[TopicPartition, int] = {}
+
+        for value in result:
+            # The Confluent Kafka Consumer will include logical offsets in the
+            # sequence of ``TopicPartition`` objects returned by ``commit``.
+            # These are an implementation detail of the Kafka Consumer, so we
+            # don't expose them here.
+            if value.offset in self.LOGICAL_OFFSETS:
+                continue
+
+            assert value.offset >= 0, "expected non-negative offset"
+            offsets[TopicPartition(value.topic, value.partition)] = value.offset
+
+        return offsets
 
     def close(self) -> None:
         self.__consumer.close()
@@ -141,13 +168,6 @@ def build_kafka_consumer_configuration(
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):
-
-    # Set of logical (not literal) offsets to not publish to the commit log.
-    # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
-    LOGICAL_OFFSETS = frozenset(
-        [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
-    )
-
     def __init__(
         self,
         configuration: Mapping[str, Any],
@@ -172,31 +192,15 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
     def commit(self) -> Mapping[TopicPartition, int]:
         offsets = super().commit()
 
-        if self.__commit_log_topic:
-            for stream, offset in offsets.items():
-                # XXX: This is an abstraction leak from the Kafka consumer.
-                if offset in self.LOGICAL_OFFSETS:
-                    logger.debug(
-                        "Skipped publishing logical offset (%r) to commit log for %s",
-                        offset,
-                        stream,
-                    )
-                    continue
-                elif offset < 0:
-                    logger.warning(
-                        "Found unexpected negative offset (%r) after commit for %s",
-                        offset,
-                        stream,
-                    )
-
-                self.__producer.produce(
-                    self.__commit_log_topic,
-                    key="{}:{}:{}".format(
-                        stream.topic, stream.partition, self.__group_id
-                    ).encode("utf-8"),
-                    value="{}".format(offset).encode("utf-8"),
-                    on_delivery=self.__commit_message_delivery_callback,
-                )
+        for stream, offset in offsets.items():
+            self.__producer.produce(
+                self.__commit_log_topic,
+                key="{}:{}:{}".format(
+                    stream.topic, stream.partition, self.__group_id
+                ).encode("utf-8"),
+                value="{}".format(offset).encode("utf-8"),
+                on_delivery=self.__commit_message_delivery_callback,
+            )
 
         return offsets
 
