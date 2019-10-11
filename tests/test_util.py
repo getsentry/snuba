@@ -6,13 +6,15 @@ from tests.base import BaseTest
 
 from snuba.datasets.factory import get_dataset
 from snuba import state
-from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
-from snuba.util import (
+from snuba.query.columns import (
     all_referenced_columns,
     column_expr,
     complex_column_expr,
     conditions_expr,
+)
+from snuba.query.parsing import ParsingContext
+from snuba.query.query import Query
+from snuba.util import (
     escape_alias,
     escape_col,
     escape_literal,

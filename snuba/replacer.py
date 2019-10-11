@@ -6,17 +6,17 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
-from confluent_kafka import Message
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
 
 from . import settings
 
@@ -99,7 +99,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker):
+class ReplacerWorker(AbstractBatchWorker[KafkaMessage]):
     def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -107,8 +107,8 @@ class ReplacerWorker(AbstractBatchWorker):
         self.__all_column_names = [col.escaped for col in enforce_table_writer(dataset).get_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
-    def process_message(self, message: Message) -> Optional[Replacement]:
-        message = json.loads(message.value())
+    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
+        message = json.loads(message.value)
         version = message[0]
 
         if version == 2:

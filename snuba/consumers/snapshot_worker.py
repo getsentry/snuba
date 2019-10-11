@@ -5,7 +5,7 @@ from typing import Any, Optional, Mapping, Set
 
 from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.snapshots import SnapshotId
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 
