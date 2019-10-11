@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import Mapping, Optional, Sequence
 import uuid
 
 from snuba.clickhouse.columns import (
@@ -11,11 +11,13 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.datasets import Dataset
+from snuba.datasets import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.processor import _ensure_valid_date, MessageProcessor, ProcessorAction, ProcessedMessage, _unicodify
 from snuba.datasets.schemas.tables import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.query.extensions import QueryExtension
+from snuba.query.timeseries import TimeSeriesExtension
 from snuba import settings
 
 
@@ -47,9 +49,9 @@ class OutcomesProcessor(MessageProcessor):
         )
 
 
-class OutcomesDataset(Dataset):
+class OutcomesDataset(TimeSeriesDataset):
     """
-    Tracks event ingesiton outcomes in Sentry.
+    Tracks event ingestion outcomes in Sentry.
     """
 
     def __init__(self):
@@ -149,4 +151,20 @@ class OutcomesDataset(Dataset):
         super().__init__(
             dataset_schemas=dataset_schemas,
             table_writer=table_writer,
+            time_group_columns={
+                'time': 'timestamp',
+            },
+            time_parse_columns=('timestamp',)
         )
+
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        return {
+            'timeseries': TimeSeriesExtension(
+                default_granularity=3600,
+                default_window=timedelta(days=7),
+                timestamp_column='timestamp',
+            ),
+        }
+
+    def get_prewhere_keys(self) -> Sequence[str]:
+        return ['project_id', 'org_id']
