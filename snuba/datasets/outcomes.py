@@ -17,6 +17,7 @@ from snuba.processor import _ensure_valid_date, MessageProcessor, ProcessorActio
 from snuba.datasets.schemas.tables import MergeTreeSchema, SummingMergeTreeSchema, MaterializedViewSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
+from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba import settings
 
@@ -164,6 +165,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 default_window=timedelta(days=7),
                 timestamp_column='timestamp',
             ),
+            'organization': OrganizationExtension(),
         }
 
     def get_prewhere_keys(self) -> Sequence[str]:

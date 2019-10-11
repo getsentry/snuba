@@ -41,7 +41,8 @@ def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.streams.batching import BatchingKafkaConsumer, build_confluent_kafka_consumer
+    from snuba.utils.streams.batching import BatchingKafkaConsumer
+    from snuba.utils.streams.kafka import TransportError, build_kafka_consumer
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset)
@@ -77,7 +78,7 @@ def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse
     )
 
     replacer = BatchingKafkaConsumer(
-        build_confluent_kafka_consumer(
+        build_kafka_consumer(
             bootstrap_servers=bootstrap_server,
             group_id=consumer_group,
             auto_offset_reset=auto_offset_reset,
@@ -92,6 +93,7 @@ def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse
         group_id=consumer_group,
         producer=None,
         commit_log_topic=None,
+        recoverable_errors=[TransportError],
     )
 
     def handler(signum, frame):

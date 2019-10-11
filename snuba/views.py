@@ -23,13 +23,13 @@ from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.perf import FakeConfluentKafkaMessage
 from snuba.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.api')
@@ -434,7 +434,11 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message = FakeConfluentKafkaMessage('topic', 0, 0, http_request.data)
+        message = KafkaMessage(
+            TopicPartition('topic', 0),
+            0,
+            http_request.data,
+        )
 
         type_ = record[1]
         metrics = DummyMetricsBackend()
