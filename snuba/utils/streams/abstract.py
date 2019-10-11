@@ -117,6 +117,13 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
+    def assignment(self) -> Sequence[TStream]:
+        """
+        Return all of the currently assigned streams.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def poll(
         self, timeout: Optional[float] = None
     ) -> Optional[Message[TStream, TOffset, TValue]]:
@@ -148,6 +155,26 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def pause(self, stream: TStream) -> None:
+        """
+        Pause consumption of a stream.
+        """
+        # TODO: What exception will this throw if the consumer attempts to
+        # pause an unowned stream?
+        # TODO: What happens on rebalance if this stream is revoked?
+        raise NotImplementedError
+
+    @abstractmethod
+    def resume(self, stream: TStream) -> None:
+        """
+        Resume consumption of a stream.
+        """
+        # TODO: What exception will this throw if the consumer attempts to
+        # pause an unowned stream?
+        # TODO: What happens on rebalance if this stream is revoked?
         raise NotImplementedError
 
     @abstractmethod
