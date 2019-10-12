@@ -131,4 +131,4 @@ class JoinedSchema(Schema):
         return QualifiedColumnSet(column_sets)
 
     def get_data_source(self) -> str:
-        return self.__join_structure.get_data_source()
+        return str(self.__source)
