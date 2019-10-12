@@ -58,7 +58,7 @@ class JoinNode(RelationalSource, ABC):
         """
         raise NotImplementedError
 
-    def format(self) -> str:
+    def format_from(self) -> str:
         return str(self)
 
 
@@ -72,7 +72,7 @@ class TableJoinNode(JoinNode):
     table: TableSource
 
     def __str__(self) -> str:
-        return f"{self.table.format()} {self.alias}"
+        return f"{self.table.format_from()} {self.alias}"
 
     def get_tables(self) -> Mapping[str, TableSource]:
         return {self.alias: self.table}

@@ -10,11 +10,16 @@ from snuba.util import local_dataset_mode
 
 
 class TableSource(RelationalSource):
+    """
+    Relational datasource that represents a single table or view in the
+    datamodel.
+    """
+
     def __init__(self, table_name: str, columns: ColumnSet) -> None:
         self.__table_name = table_name
         self.__columns = columns
 
-    def format(self) -> str:
+    def format_from(self) -> str:
         return self.__table_name
 
     def get_columns(self) -> ColumnSet:

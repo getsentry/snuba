@@ -198,8 +198,8 @@ def parse_request_body(http_request):
 
 
 def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     try:
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         request = schema.validate(body, source)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error

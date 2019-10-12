@@ -47,7 +47,7 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: MutableMapping[str, Any], from_clause: RelationalSource):
+    def __init__(self, body: MutableMapping[str, Any], data_source: RelationalSource):
         """
         Expects an already parsed query body.
         """
@@ -55,10 +55,13 @@ class Query:
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
-        self.__from_clause = from_clause
+        self.__data_source = data_source
 
-    def get_from_clause(self) -> RelationalSource:
-        return self.__from_clause
+    def get_data_source(self) -> RelationalSource:
+        return self.__data_source
+
+    def set_data_source(self, data_source: RelationalSource) -> None:
+        self.__data_source = data_source
 
     def __extend_sequence(self,
         field: str,

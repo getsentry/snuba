@@ -8,18 +8,22 @@ from snuba.clickhouse.columns import ColumnSet
 
 class RelationalSource(ABC):
     """
-    Anabstract representation of the relationship between entities in a schema.
-    This is the object we use to build the FROM clause in a query and that
-    It can represent a table, a view or a join between multiple tables.
+    Abstract representation of the datamodel in the schema. This includes the
+    list of the tables that compose this datamodel with their columns as well as
+    their relationships expressed as relational joins.
+
+    This class and its subclasses are the go-to place to inspect the structure
+    of the datamodel, either during query or when writing.
 
     This implies our data model is defined in a relational way. Should we move
     away from this assumption, this will change.
     """
 
     @abstractmethod
-    def format(self) -> str:
+    def format_from(self) -> str:
         """
-        Builds the SQL representation of the data source.
+        Builds the SQL representation of the data source for the FROM clause
+        when querying.
         """
         # Not using the __str__ method because this is moving towards a more
         # abstract method that will receive a FormatStrategy (clickhouse specific)
@@ -37,7 +41,8 @@ class Schema(ABC):
     It provides a set of columns and a where clause to build the query.
     Concretely this can represent a table, a view or a group of
     joined tables.
-    This level of abstraction only provides read primitives.
+    This level of abstraction only provides read primitives. Subclasses provide
+    a way to write and the DDL to build the datamodel on Clickhouse
 
     As of now we do not have a strict separation between a Snuba abstract
     schema and a Clickhouse concrete schema. When this will exist, this
