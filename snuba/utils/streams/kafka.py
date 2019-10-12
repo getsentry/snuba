@@ -2,12 +2,19 @@ import logging
 import time
 from typing import Any, Callable, Mapping, NamedTuple, Optional, Sequence
 
+from confluent_kafka import OFFSET_INVALID
 from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.streams.abstract import Consumer, ConsumerError, EndOfStream, Message
+from snuba.utils.streams.abstract import (
+    Consumer,
+    ConsumerError,
+    EndOfStream,
+    Message,
+    StreamPosition,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -28,18 +35,10 @@ class TransportError(ConsumerError):
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         self.__consumer = ConfluentConsumer(configuration)
-
-    def __wrap_assignment_callback(
-        self, callback: Callable[[Sequence[TopicPartition]], None]
-    ) -> Callable[[ConfluentConsumer, Sequence[ConfluentTopicPartition]], None]:
-        def wrapper(
-            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
-        ) -> None:
-            callback(
-                [TopicPartition(value.topic, value.partition) for value in partitions]
-            )
-
-        return wrapper
+        self.__auto_offset_reset = configuration[
+            "auto.offset.reset"
+        ]  # TODO: This needs a default, aliasing, etc.
+        self.__offsets = {}
 
     def subscribe(
         self,
@@ -47,15 +46,59 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
-        kwargs = {}
+        def assignment_callback(consumer, partitions):
+            offsets = {}
 
-        if on_assign is not None:
-            kwargs["on_assign"] = self.__wrap_assignment_callback(on_assign)
+            for i in self.__consumer.committed(partitions):
+                stream = TopicPartition(i.topic, i.partition)
+                assert stream not in self.__offsets
 
-        if on_revoke is not None:
-            kwargs["on_revoke"] = self.__wrap_assignment_callback(on_revoke)
+                if i.offset > -1:
+                    offsets[stream] = i.offset
+                elif i.offset == OFFSET_INVALID:
+                    low, high = self.__consumer.get_watermark_offsets(
+                        i
+                    )  # TODO: Arguments?
+                    if self.__auto_offset_reset == "earliest":
+                        offsets[stream] = low
+                    elif self.__auto_offset_reset == "latest":
+                        offsets[stream] = high
+                    else:
+                        raise NotImplementedError  # TODO
+                else:
+                    raise Exception("Unexpected offset received")
 
-        self.__consumer.subscribe(topics, **kwargs)
+            self.__offsets.update(offsets)
+
+            self.__consumer.assign(
+                [
+                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
+                    for stream, offset in self.__offsets.items()
+                ]
+            )
+
+            if on_assign is not None:
+                on_assign(list(offsets.keys()))
+
+        def revocation_callback(consumer, partitions):
+            streams = [
+                TopicPartition(value.topic, value.partition) for value in partitions
+            ]
+
+            try:
+                if on_revoke is not None:
+                    on_revoke(streams)
+            finally:
+                # Finish cleaning up.
+                for stream in streams:
+                    del self.__offsets[stream]
+
+        self.__consumer.subscribe(
+            topics, on_assign=assignment_callback, on_revoke=revocation_callback
+        )
+
+    def unsubscribe(self) -> None:
+        self.__consumer.unsubscribe()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
         message: Optional[ConfluentMessage] = self.__consumer.poll(
@@ -74,13 +117,33 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             else:
                 raise ConsumerError(str(error))
 
-        return KafkaMessage(
-            TopicPartition(message.topic(), message.partition()),
-            message.offset(),
-            message.value(),
-        )
+        stream = TopicPartition(message.topic(), message.partition())
+        self.__offsets[stream] = message.offset() + 1
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+        return KafkaMessage(stream, message.offset(), message.value())
+
+    def tell(self) -> Mapping[TopicPartition, int]:
+        return self.__offsets
+
+    def seek(
+        self,
+        offsets: Mapping[TopicPartition, int],
+        whence: StreamPosition = StreamPosition.SET,
+    ) -> Mapping[TopicPartition, int]:
+        # TODO: This method needs to use ``assign`` instead of ``seek`` if
+        # called from an assignment callback. (What happens if the offsets only
+        # affect a subset of the assignment?)
+        # TODO: How should this method deal with calls during the revocation
+        # callback?
+        assert StreamPosition.SET  # TODO
+        for stream, offset in offsets.items():
+            self.__offsets[stream] = offset
+            self.__consumer.seek(
+                ConfluentTopicPartition(stream.topic, stream.partition, offset)
+            )
+        return offsets
+
+    def commit_offsets(self) -> Mapping[TopicPartition, int]:
         result: Optional[Sequence[ConfluentTopicPartition]] = None
 
         retries_remaining = 3

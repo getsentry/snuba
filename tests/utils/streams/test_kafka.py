@@ -1,8 +1,7 @@
 import pytest
 import uuid
 import time
-from unittest import mock
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -43,12 +42,27 @@ def test_consumer(topic: str) -> None:
         }
     )
 
+    def assignment_callback(streams: Sequence[TopicPartition]):
+        assignment_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]
+        assert consumer.tell() == {
+            TopicPartition(topic, 0): 0,
+        }
+
+    def revocation_callback(streams: Sequence[TopicPartition]):
+        revocation_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]  # wut
+        assert consumer.tell() == {
+            TopicPartition(topic, 0): 1,
+        }
+
+    assignment_callback.called = False
+    revocation_callback.called = False
+
     # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
     # use to wait for assignment, but we'd need to be very careful to avoid
     # edge cases here. It's probably not worth the complexity for now.
-    # XXX: There has got to be a better way to do this...
-    assignment_callback = mock.MagicMock()
-    consumer.subscribe([topic], on_assign=assignment_callback)
+    consumer.subscribe([topic], on_assign=assignment_callback, on_revoke=revocation_callback)
 
     try:
         consumer.poll(10.0)  # XXX: getting the subcription is slow
@@ -57,7 +71,11 @@ def test_consumer(topic: str) -> None:
     else:
         raise AssertionError('expected EndOfStream error')
 
-    assert assignment_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
+    assert assignment_callback.called is True
+
+    assert consumer.tell() == {
+        TopicPartition(topic, 0): 0,
+    }
 
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
@@ -67,13 +85,43 @@ def test_consumer(topic: str) -> None:
     message = consumer.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 0
     assert message.value == value
+
+    assert consumer.tell() == {
+        TopicPartition(topic, 0): 1,
+    }
 
     start = time.time()
     assert consumer.poll(0.0) is None
     assert time.time() - start < 0.001  # consumer should not block
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+    assert consumer.commit_offsets() == {TopicPartition(topic, 0): message.offset + 1}
+
+    try:
+        consumer.poll(1.0)
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+    else:
+        raise AssertionError('expected EndOfStream error')
+
+    assert consumer.seek({
+        TopicPartition(topic, 0): 0,
+    }) == consumer.tell()
+
+    message = consumer.poll(1.0)
+    assert isinstance(message, Message)
+    assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 0
+    assert message.value == value
+
+    consumer.unsubscribe()
+
+    assert consumer.poll(1.0) is None
+
+    assert revocation_callback.called is True
+
+    assert consumer.tell() == {}
 
     consumer.close()
 
@@ -84,7 +132,7 @@ def test_consumer(topic: str) -> None:
         consumer.poll()
 
     with pytest.raises(RuntimeError):
-        consumer.commit()
+        consumer.commit_offsets()
 
     with pytest.raises(RuntimeError):
         consumer.close()

@@ -117,10 +117,7 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
-    def assignment(self) -> Sequence[TStream]:
-        """
-        Return all of the currently assigned streams.
-        """
+    def unsubscribe(self) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -157,25 +154,25 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def pause(self, stream: TStream) -> None:
-        """
-        Pause consumption of a stream.
-        """
-        # TODO: What exception will this throw if the consumer attempts to
-        # pause an unowned stream?
-        # TODO: What happens on rebalance if this stream is revoked?
-        raise NotImplementedError
+    # @abstractmethod
+    # def pause(self, stream: TStream) -> None:
+    #     """
+    #     Pause consumption of a stream.
+    #     """
+    #     # TODO: What exception will this throw if the consumer attempts to
+    #     # pause an unowned stream?
+    #     # TODO: What happens on rebalance if this stream is revoked?
+    #     raise NotImplementedError
 
-    @abstractmethod
-    def resume(self, stream: TStream) -> None:
-        """
-        Resume consumption of a stream.
-        """
-        # TODO: What exception will this throw if the consumer attempts to
-        # pause an unowned stream?
-        # TODO: What happens on rebalance if this stream is revoked?
-        raise NotImplementedError
+    # @abstractmethod
+    # def resume(self, stream: TStream) -> None:
+    #     """
+    #     Resume consumption of a stream.
+    #     """
+    #     # TODO: What exception will this throw if the consumer attempts to
+    #     # pause an unowned stream?
+    #     # TODO: What happens on rebalance if this stream is revoked?
+    #     raise NotImplementedError
 
     @abstractmethod
     def tell(self) -> Mapping[TStream, TOffset]:
@@ -200,21 +197,21 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         # an offset on an invalid (unowned) stream?
         raise NotImplementedError
 
-    @abstractmethod
-    def get_staged_offsets(self) -> Mapping[TStream, Optional[TOffset]]:
-        """
-        Return the offsets staged for commit for all currently assigned streams.
-        """
-        raise NotImplementedError
+    # @abstractmethod
+    # def get_staged_offsets(self) -> Mapping[TStream, Optional[TOffset]]:
+    #     """
+    #     Return the offsets staged for commit for all currently assigned streams.
+    #     """
+    #     raise NotImplementedError
 
-    @abstractmethod
-    def set_staged_offsets(self, offsets: Mapping[TStream, Optional[TOffset]]) -> None:
-        """
-        Update the offsets staged for commit for the provided streams.
-        """
-        # TODO: What exception will this throw if the consumer attempts to set
-        # an offset on an invalid (unowned) stream?
-        raise NotImplementedError
+    # @abstractmethod
+    # def set_staged_offsets(self, offsets: Mapping[TStream, Optional[TOffset]]) -> None:
+    #     """
+    #     Update the offsets staged for commit for the provided streams.
+    #     """
+    #     # TODO: What exception will this throw if the consumer attempts to set
+    #     # an offset on an invalid (unowned) stream?
+    #     raise NotImplementedError
 
     @abstractmethod
     def commit_offsets(self) -> Mapping[TStream, TOffset]:
