@@ -19,7 +19,7 @@ def test_empty_query():
     assert query.get_offset() == 0
     assert query.has_totals() is False
 
-    assert query.get_from_clause().format() == "my_table"
+    assert query.get_data_source().format_from() == "my_table"
 
 
 def test_full_query():
@@ -56,7 +56,7 @@ def test_full_query():
     assert query.has_totals() is True
     assert query.get_granularity() == 60
 
-    assert query.get_from_clause().format() == "my_table"
+    assert query.get_data_source().format_from() == "my_table"
 
 
 def test_edit_query():

@@ -135,7 +135,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaMessage]):
         for replacement in batch:
             query_args = {
                 **replacement.query_args,
-                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source().format(),
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from(),
                 'dist_write_table_name': enforce_table_writer(self.dataset).get_schema().get_table_name(),
             }
             count = self.clickhouse.execute_robust(replacement.count_query_template % query_args)[0][0]

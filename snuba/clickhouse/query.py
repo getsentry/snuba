@@ -33,7 +33,7 @@ class ClickhouseQuery:
         selected_cols = [column_expr(dataset, util.tuplify(colname), query, parsing_context) for colname in column_names]
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
-        from_clause = u'FROM {}'.format(query.get_from_clause().format_from())
+        from_clause = u'FROM {}'.format(query.get_data_source().format_from())
 
         if query.get_final():
             from_clause = u'{} FINAL'.format(from_clause)
