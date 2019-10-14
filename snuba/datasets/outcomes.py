@@ -29,7 +29,7 @@ READ_DIST_TABLE_NAME = 'outcomes_hourly_dist'
 
 
 class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
+    def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
         v_uuid = value.get('event_id')
         message = {
