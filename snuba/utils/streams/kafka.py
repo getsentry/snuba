@@ -89,7 +89,10 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         if error is not None:
             code = error.code()
             if code == KafkaError._PARTITION_EOF:
-                raise EndOfStream(TopicPartition(message.topic(), message.partition()))
+                raise EndOfStream(
+                    TopicPartition(message.topic(), message.partition()),
+                    message.offset(),
+                )
             elif code == KafkaError._TRANSPORT:
                 raise TransportError(str(error))
             else:
