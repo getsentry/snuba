@@ -110,9 +110,6 @@ def test_commit_log_consumer(topic: str) -> None:
             "enable.partition.eof": "true",
             "group.id": "test",
             "session.timeout.ms": 10000,
-            "default.topic.config": {  # XXX: Need to upgrade confluent-kafka
-                "auto.offset.reset": "earliest",
-            }
         },
         commit_log_producer,
         'commit-log',

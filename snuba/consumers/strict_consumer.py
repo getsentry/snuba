@@ -68,9 +68,6 @@ class StrictConsumer:
             'group.id': group_id,
             'enable.partition.eof': 'true',
             'auto.offset.reset': initial_auto_offset_reset,
-            'default.topic.config': {
-                'auto.offset.reset': initial_auto_offset_reset,
-            },
         }
 
         self.__consumer = self._create_consumer(consumer_config)
