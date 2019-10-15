@@ -93,6 +93,15 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
+    def unsubscribe(self) -> None:
+        """
+        Unsubscribe from streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def poll(
         self, timeout: Optional[float] = None
     ) -> Optional[Message[TStream, TOffset, TValue]]:
