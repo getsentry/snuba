@@ -7,7 +7,6 @@ A service providing fast event searching, filtering and aggregation on arbitrary
 Add/change the following lines in `~/.sentry/sentry.conf.py`:
 
     SENTRY_SEARCH = 'sentry.search.snuba.SnubaSearchBackend'
-    SENTRY_TAGSTORE = 'sentry.tagstore.snuba.SnubaCompatibilityTagStorage'
     SENTRY_TSDB = 'sentry.tsdb.redissnuba.RedisSnubaTSDB'
     SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
 
