@@ -13,19 +13,9 @@ from typing import (
     TypeVar,
 )
 
-from confluent_kafka import (
-    OFFSET_BEGINNING,
-    OFFSET_END,
-    OFFSET_INVALID,
-    OFFSET_STORED,
-    KafkaError,
-    Producer,
-)
-from confluent_kafka import Message as ConfluentMessage
-
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.abstract import ConsumerError
-from snuba.utils.streams.kafka import KafkaConsumer, KafkaMessage, TopicPartition
+from snuba.utils.streams.abstract import Consumer, ConsumerError, Message
+from snuba.utils.streams.kafka import TopicPartition
 
 
 logger = logging.getLogger("batching-kafka-consumer")
@@ -95,23 +85,14 @@ class BatchingKafkaConsumer:
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
-    # Set of logical (not literal) offsets to not publish to the commit log.
-    # https://github.com/confluentinc/confluent-kafka-python/blob/443177e1c83d9b66ce30f5eb8775e062453a738b/tests/test_enums.py#L22-L25
-    LOGICAL_OFFSETS = frozenset(
-        [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
-    )
-
     def __init__(
         self,
-        consumer: KafkaConsumer,
+        consumer: Consumer[TopicPartition, int, bytes],
         topic: str,
-        worker: AbstractBatchWorker[KafkaMessage],
+        worker: AbstractBatchWorker[Message[TopicPartition, int, bytes]],
         max_batch_size: int,
         max_batch_time: int,
-        group_id: str,
         metrics: MetricsBackend,
-        producer: Optional[Producer] = None,
-        commit_log_topic: Optional[str] = None,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
     ) -> None:
         self.consumer = consumer
@@ -122,7 +103,6 @@ class BatchingKafkaConsumer:
         self.max_batch_size = max_batch_size
         self.max_batch_time = max_batch_time  # in milliseconds
         self.__metrics = metrics
-        self.group_id = group_id
 
         self.shutdown = False
 
@@ -134,9 +114,6 @@ class BatchingKafkaConsumer:
         # the messages in this batch (does not included time spent waiting for
         # new messages)
         self.__batch_processing_time_ms: float = 0.0
-
-        self.producer = producer
-        self.commit_log_topic = commit_log_topic
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
@@ -165,9 +142,6 @@ class BatchingKafkaConsumer:
     def _run_once(self) -> None:
         self._flush()
 
-        if self.producer:
-            self.producer.poll(0.0)
-
         try:
             msg = self.consumer.poll(timeout=1.0)
         except self.__recoverable_errors:
@@ -185,7 +159,7 @@ class BatchingKafkaConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: KafkaMessage) -> None:
+    def _handle_message(self, msg: Message[TopicPartition, int, bytes]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -271,39 +245,6 @@ class BatchingKafkaConsumer:
 
         self._reset_batch()
 
-    def _commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
-
     def _commit(self) -> None:
         offsets = self.consumer.commit()
         logger.debug("Committed offsets: %s", offsets)
-
-        if self.commit_log_topic:
-            for stream, offset in offsets.items():
-                # XXX: This is an abstraction leak from the Kafka consumer.
-                if offset in self.LOGICAL_OFFSETS:
-                    logger.debug(
-                        "Skipped publishing logical offset (%r) to commit log for %s",
-                        offset,
-                        stream,
-                    )
-                    continue
-                elif offset < 0:
-                    logger.warning(
-                        "Found unexpected negative offset (%r) after commit for %s",
-                        offset,
-                        stream,
-                    )
-
-                assert self.producer is not None  # XXX: Hack to ensure non-Optional
-                self.producer.produce(
-                    self.commit_log_topic,
-                    key="{}:{}:{}".format(
-                        stream.topic, stream.partition, self.group_id
-                    ).encode("utf-8"),
-                    value="{}".format(offset).encode("utf-8"),
-                    on_delivery=self._commit_message_delivery_callback,
-                )
