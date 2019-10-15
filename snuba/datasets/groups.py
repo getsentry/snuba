@@ -39,18 +39,24 @@ class Groups(TimeSeriesDataset):
             .get_dataset_schemas() \
             .get_read_schema() \
             .get_data_source()
-        assert isinstance(groupedmessage_source, TableSource)
 
         self.__events = get_dataset("events")
         events_source = self.__events \
             .get_dataset_schemas() \
             .get_read_schema() \
             .get_data_source()
-        assert isinstance(events_source, TableSource)
 
         join_structure = JoinClause(
-            left_node=TableJoinNode(self.GROUPS_ALIAS, groupedmessage_source),
-            right_node=TableJoinNode(self.EVENTS_ALIAS, events_source),
+            left_node=TableJoinNode(
+                self.GROUPS_ALIAS,
+                groupedmessage_source.format_from(),
+                groupedmessage_source.get_columns(),
+            ),
+            right_node=TableJoinNode(
+                self.EVENTS_ALIAS,
+                events_source.format_from(),
+                events_source.get_columns(),
+            ),
             mapping=[
                 JoinCondition(
                     left=JoinConditionExpression(
@@ -112,7 +118,7 @@ class Groups(TimeSeriesDataset):
             else:
                 # This is probably an error condition. To keep consistency with the behavior
                 # in existing datasets, we let Clickhouse figure it out.
-                return super().column_expr(simple_column_name, query, table_alias)
+                return super().column_expr(simple_column_name, query, parsing_context, table_alias)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

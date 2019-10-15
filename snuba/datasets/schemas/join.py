@@ -58,27 +58,22 @@ class JoinNode(RelationalSource, ABC):
         """
         raise NotImplementedError
 
-    def format_from(self) -> str:
-        return str(self)
 
-
-@dataclass(frozen=True)
-class TableJoinNode(JoinNode):
+class TableJoinNode(TableSource, JoinNode):
     """
     Represent one qualified data source in the JOIN expression.
     It can be a table or a view.
     """
-    alias: str
-    table: TableSource
 
-    def __str__(self) -> str:
-        return f"{self.table.format_from()} {self.alias}"
+    def __init__(self, alias: str, table_name: str, columns: ColumnSet) -> None:
+        super().__init__(table_name, columns)
+        self.__alias = alias
+
+    def format_from(self) -> str:
+        return f"{super().format_from()} {self.__alias}"
 
     def get_tables(self) -> Mapping[str, TableSource]:
-        return {self.alias: self.table}
-
-    def get_columns(self) -> ColumnSet:
-        raise self.table.get_columns()
+        return {self.__alias: self}
 
 
 @dataclass(frozen=True)
@@ -97,9 +92,9 @@ class JoinClause(JoinNode):
     mapping: Sequence[JoinCondition]
     join_type: JoinType
 
-    def __str__(self) -> str:
+    def format_from(self) -> str:
         on_clause = " AND ".join([str(m) for m in self.mapping])
-        return f"{self.left_node} {self.join_type.value} JOIN {self.right_node} ON {on_clause}"
+        return f"{self.left_node.format_from()} {self.join_type.value} JOIN {self.right_node.format_from()} ON {on_clause}"
 
     def get_tables(self) -> Mapping[str, TableSource]:
         left = self.left_node.get_tables()

@@ -59,8 +59,8 @@ table3 = MergeTreeSchema(
 
 
 simple_join_structure = JoinClause(
-    TableJoinNode("t1", table1),
-    TableJoinNode("t2", table2),
+    TableJoinNode("t1", table1.format_from(), table1.get_columns()),
+    TableJoinNode("t2", table2.format_from(), table2.get_columns()),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -76,8 +76,8 @@ simple_join_structure = JoinClause(
 
 complex_join_structure = JoinClause(
     JoinClause(
-        TableJoinNode("t1", table1),
-        TableJoinNode("t2", table2),
+        TableJoinNode("t1", table1.format_from(), table1.get_columns()),
+        TableJoinNode("t2", table2.format_from(), table2.get_columns()),
         [
             JoinCondition(
                 left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -86,7 +86,7 @@ complex_join_structure = JoinClause(
         ],
         JoinType.FULL
     ),
-    TableJoinNode("t3", table3),
+    TableJoinNode("t3", table3.format_from(), table3.get_columns()),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),
