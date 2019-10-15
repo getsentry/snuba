@@ -1,8 +1,8 @@
-from mypy_extensions import TypedDict
+from dataclasses import dataclass
 from typing import Any, Mapping
 
 from snuba.query.extensions import QueryExtension
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.query_processor import QueryExtensionProcessor
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
@@ -20,11 +20,12 @@ ORGANIZATION_EXTENSION_SCHEMA = {
 }
 
 
-class OrganizationExtensionPayload(TypedDict):
+@dataclass(frozen=True)
+class OrganizationExtensionPayload:
     organization: int
 
 
-class OrganizationExtensionProcessor(QueryProcessor[OrganizationExtensionPayload]):
+class OrganizationExtensionProcessor(QueryExtensionProcessor[OrganizationExtensionPayload]):
     """
     Extension processor for datasets that require an organization ID to be given in the request.
     """
@@ -35,7 +36,7 @@ class OrganizationExtensionProcessor(QueryProcessor[OrganizationExtensionPayload
             extension_data: OrganizationExtensionPayload,
             request_settings: RequestSettings,
     ) -> None:
-        organization_id = extension_data["organization"]
+        organization_id = extension_data.organization
         query.add_conditions([("org_id", "=", organization_id)])
 
 
@@ -46,8 +47,7 @@ class OrganizationExtension(QueryExtension):
             processor=OrganizationExtensionProcessor(),
         )
 
-    @classmethod
-    def parse_payload(cls, payload: Mapping[str, Any]) -> OrganizationExtensionPayload:
+    def _parse_payload(cls, payload: Mapping[str, Any]) -> OrganizationExtensionPayload:
         return OrganizationExtensionPayload(
             organization=payload["organization"]
         )

@@ -7,7 +7,7 @@ from snuba.request.request_settings import RequestSettings
 TQueryProcessContext = TypeVar("TQueryProcessContext")
 
 
-class QueryProcessor(ABC, Generic[TQueryProcessContext]):
+class QueryExtensionProcessor(ABC, Generic[TQueryProcessContext]):
     """
     Base class for all query processors. Whatever extends this
     class is supposed to provide one method that takes a query
@@ -31,7 +31,7 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
         raise NotImplementedError
 
 
-class DummyExtensionProcessor(QueryProcessor[Any]):
+class DummyExtensionProcessor(QueryExtensionProcessor[Any]):
 
     def process_query(self, query: Query, extension_data: Any) -> None:
         pass

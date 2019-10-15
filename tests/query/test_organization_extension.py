@@ -11,13 +11,12 @@ def test_organization_extension_query_processing_happy_path():
     extension = OrganizationExtension()
     raw_data = {"organization": 2}
 
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         "conditions": []
     })
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, request_settings)
+    extension.validate(raw_data).process_query(query, request_settings)
 
     assert query.get_conditions() == [("org_id", "=", 2)]
 

@@ -33,13 +33,12 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
     extension = ProjectExtension(
         processor=ProjectExtensionProcessor()
     )
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         "conditions": []
     })
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, request_settings)
+    extension.validate(raw_data).process_query(query, request_settings)
 
     assert query.get_conditions() == expected_conditions
 
@@ -51,14 +50,13 @@ def test_project_extension_query_adds_rate_limits():
     raw_data = {
         'project': [2, 3]
     }
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         'conditions': []
     })
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
     num_rate_limits_before_processing = len(request_settings.get_rate_limit_params())
-    extension.get_processor().process_query(query, valid_data, request_settings)
+    extension.validate(raw_data).process_query(query, request_settings)
 
     rate_limits = request_settings.get_rate_limit_params()
     # make sure a rate limit was added by the processing
@@ -77,7 +75,6 @@ def test_project_extension_project_rate_limits_are_overridden():
     raw_data = {
         'project': [2, 3]
     }
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         'conditions': []
     })
@@ -85,7 +82,7 @@ def test_project_extension_project_rate_limits_are_overridden():
     state.set_config('project_per_second_limit_2', 5)
     state.set_config('project_concurrent_limit_2', 10)
 
-    extension.get_processor().process_query(query, valid_data, request_settings)
+    extension.validate(raw_data).process_query(query, request_settings)
 
     rate_limits = request_settings.get_rate_limit_params()
     most_recent_rate_limit = rate_limits[-1]
@@ -98,12 +95,12 @@ def test_project_extension_project_rate_limits_are_overridden():
 class TestProjectExtensionWithGroups(BaseTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
-        raw_data = {'project': 2}
+        self.raw_data = {'project': 2}
 
         self.extension = ProjectExtension(
             processor=ProjectWithGroupsProcessor()
         )
-        self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
+
         self.query = Query({
             "conditions": []
         })
@@ -111,7 +108,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_with_turbo(self):
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+        self.extension.validate(self.raw_data).process_query(self.query, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
 
@@ -119,7 +116,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         replacer.set_project_needs_final(2)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+        self.extension.validate(self.raw_data).process_query(self.query, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert self.query.get_final()
@@ -127,7 +124,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_without_turbo_without_projects_needing_final(self):
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+        self.extension.validate(self.raw_data).process_query(self.query, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert not self.query.get_final()
@@ -137,7 +134,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         state.set_config('max_group_ids_exclude', 5)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+        self.extension.validate(self.raw_data).process_query(self.query, request_settings)
 
         expected = [
             ('project_id', 'IN', [2]),
@@ -151,7 +148,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         state.set_config('max_group_ids_exclude', 2)
         replacer.set_project_exclude_groups(2, [100, 101, 102])
 
-        self.extension.get_processor().process_query(self.query, self.valid_data, request_settings)
+        self.extension.validate(self.raw_data).process_query(self.query, request_settings)
 
         assert self.query.get_conditions() == [('project_id', 'IN', [2])]
         assert self.query.get_final()

@@ -23,7 +23,7 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.request import Request
+from snuba.request.request import Request
 from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
@@ -271,14 +271,11 @@ def dataset_query(dataset, body, timer):
 
 @split_query
 def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'].get_payload())
 
-    extensions = dataset.get_extensions()
-
-    for name, extension in extensions.items():
-        extension.get_processor().process_query(
+    for name, extension_data in request.extensions.items():
+        extension_data.process_query(
             request.query,
-            request.extensions[name],
             request.settings
         )
     request.query.add_conditions(dataset.default_conditions())

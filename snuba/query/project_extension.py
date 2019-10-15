@@ -1,9 +1,9 @@
-from mypy_extensions import TypedDict
+from dataclasses import dataclass
 from typing import Any, Mapping, Sequence, Union
 
 from snuba import settings, util
 from snuba.query.extensions import QueryExtension
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.query_processor import QueryExtensionProcessor
 from snuba.query.query import Query
 from snuba.replacer import get_projects_query_flags
 from snuba.request.request_settings import RequestSettings
@@ -31,11 +31,12 @@ PROJECT_EXTENSION_SCHEMA = {
 }
 
 
-class ProjectExtensionPayload(TypedDict):
+@dataclass(frozen=True)
+class ProjectExtensionPayload:
     project: Union[int, Sequence[int]]
 
 
-class ProjectExtensionProcessor(QueryProcessor[ProjectExtensionPayload]):
+class ProjectExtensionProcessor(QueryExtensionProcessor[ProjectExtensionPayload]):
     """
     Extension processor for datasets that require a project ID to be given in the request.
 
@@ -77,7 +78,7 @@ class ProjectExtensionProcessor(QueryProcessor[ProjectExtensionPayload]):
             extension_data: ProjectExtensionPayload,
             request_settings: RequestSettings,
     ) -> None:
-        project_ids = util.to_list(extension_data["project"])
+        project_ids = util.to_list(extension_data.project)
 
         if project_ids:
             query.add_conditions([('project_id', 'IN', project_ids)])
@@ -121,8 +122,7 @@ class ProjectExtension(QueryExtension):
             processor=processor,
         )
 
-    @classmethod
-    def parse_payload(cls, payload: Mapping[str, Any]) -> ProjectExtensionPayload:
+    def _parse_payload(cls, payload: Mapping[str, Any]) -> ProjectExtensionPayload:
         return ProjectExtensionPayload(
             project=payload["project"]
         )

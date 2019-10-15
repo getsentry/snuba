@@ -38,6 +38,7 @@ test_data = [
         {
             "from_date": "2019-09-19T10:05:30,1234",
             "to_date": "2019-09-19T12:00:34,4567",
+            "granularity": 60,
         },
         [
             ("timestamp", ">=", "2019-09-19T10:05:30"),
@@ -60,13 +61,12 @@ def test_query_extension_processing(
         default_window=datetime.timedelta(days=5),
         timestamp_column='timestamp',
     )
-    valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({
         "conditions": []
     })
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-    extension.get_processor().process_query(query, valid_data, request_settings)
+    extension.validate(raw_data).process_query(query, request_settings)
     assert query.get_conditions() == expected_conditions
     assert query.get_granularity() == expected_granularity

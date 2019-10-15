@@ -6,7 +6,7 @@ from snuba import state, util
 from snuba.datasets.dataset import ColumnSplitSpec
 from snuba.api.query import QueryResult
 from snuba.query.columns import all_referenced_columns
-from snuba.request import Request
+from snuba.request.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -73,8 +73,8 @@ def split_query(query_func):
         limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
 
-        to_date = util.parse_datetime(request.extensions['timeseries']['to_date'], date_align)
-        from_date = util.parse_datetime(request.extensions['timeseries']['from_date'], date_align)
+        to_date = util.parse_datetime(request.extensions['timeseries'].get_raw_data()['to_date'], date_align)
+        from_date = util.parse_datetime(request.extensions['timeseries'].get_raw_data()['from_date'], date_align)
 
         overall_result = None
         split_end = to_date
@@ -82,8 +82,9 @@ def split_query(query_func):
         total_results = 0
         status = 0
         while split_start < split_end and total_results < limit:
-            request.extensions['timeseries']['from_date'] = split_start.isoformat()
-            request.extensions['timeseries']['to_date'] = split_end.isoformat()
+            print(request.body)
+            request.extensions['timeseries'].get_raw_data()['from_date'] = split_start.isoformat()
+            request.extensions['timeseries'].get_raw_data()['to_date'] = split_end.isoformat()
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
             request.query.set_offset(0)
@@ -161,14 +162,14 @@ def split_query(query_func):
             request.query.set_limit(len(event_ids))
 
             project_ids = list(set([event[column_split_spec.project_column] for event in query_result.result['data']]))
-            request.extensions['project']['project'] = project_ids
+            request.extensions['project'].get_raw_data()['project'] = project_ids
 
             timestamp_field = column_split_spec.timestamp_column
             timestamps = [event[timestamp_field] for event in query_result.result['data']]
-            request.extensions['timeseries']['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
+            request.extensions['timeseries'].get_raw_data()['from_date'] = util.parse_datetime(min(timestamps)).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
-            request.extensions['timeseries']['to_date'] = (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat()
+            request.extensions['timeseries'].get_raw_data()['to_date'] = (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat()
 
         return query_func(dataset, request, *args, **kwargs)
 

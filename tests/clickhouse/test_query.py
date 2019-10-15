@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query import Query
-from snuba.request import Request, RequestSettings
+from snuba.request.request import Request, RequestSettings
 
 
 class TestClickhouseQuery(BaseEventsTest):

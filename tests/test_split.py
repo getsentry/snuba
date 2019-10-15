@@ -1,3 +1,4 @@
+from datetime import timedelta
 import pytest
 from typing import Any, Mapping
 
@@ -7,8 +8,10 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
 from snuba.api.query import QueryResult
-from snuba.request import Request
+from snuba.request.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.utils.metrics.timer import Timer
 
 
@@ -118,12 +121,16 @@ def test_col_split(
         query,
         RequestSettings(False, False, False),
         {
-            "project": {"project": 1},
-            "timeseries": {
+            "project": ProjectExtension(ProjectWithGroupsProcessor()).validate({"project": 1}),
+            "timeseries": TimeSeriesExtension(
+                default_granularity=3600,
+                default_window=timedelta(days=5),
+                timestamp_column='timestamp',
+            ).validate({
                 "from_date": "2019-09-19T10:00:00",
                 "to_date": "2019-09-19T12:00:00",
                 "granularity": 3600,
-            }
+            }),
         },
     )
 
