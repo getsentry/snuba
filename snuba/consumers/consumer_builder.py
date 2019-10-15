@@ -8,7 +8,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
-from snuba.utils.streams.kafka import KafkaMessage, TransportError, build_kafka_consumer
+from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer_configuration
 
 
 class ConsumerBuilder:
@@ -56,6 +56,8 @@ class ConsumerBuilder:
             else None
         self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
 
+        # XXX: This can result in a producer being built in cases where it's
+        # not actually required.
         self.producer = Producer({
             'bootstrap.servers': ','.join(self.bootstrap_servers),
             'partitioner': 'consistent',
@@ -78,22 +80,30 @@ class ConsumerBuilder:
         self.queued_min_messages = queued_min_messages
 
     def __build_consumer(self, worker: AbstractBatchWorker[KafkaMessage]) -> BatchingKafkaConsumer:
+        configuration = build_kafka_consumer_configuration(
+            bootstrap_servers=self.bootstrap_servers,
+            group_id=self.group_id,
+            auto_offset_reset=self.auto_offset_reset,
+            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
+            queued_min_messages=self.queued_min_messages,
+        )
+
+        if self.commit_log_topic is None:
+            consumer = KafkaConsumer(configuration)
+        else:
+            consumer = KafkaConsumerWithCommitLog(
+                configuration,
+                self.producer,
+                self.commit_log_topic,
+            )
+
         return BatchingKafkaConsumer(
-            build_kafka_consumer(
-                bootstrap_servers=self.bootstrap_servers,
-                group_id=self.group_id,
-                auto_offset_reset=self.auto_offset_reset,
-                queued_max_messages_kbytes=self.queued_max_messages_kbytes,
-                queued_min_messages=self.queued_min_messages,
-            ),
+            consumer,
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
             metrics=self.metrics,
-            group_id=self.group_id,
-            producer=self.producer,
-            commit_log_topic=self.commit_log_topic,
             recoverable_errors=[TransportError],
         )
 

@@ -6,7 +6,8 @@ from typing import Iterator
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 from snuba.utils.streams.abstract import EndOfStream, Message
-from snuba.utils.streams.kafka import KafkaConsumer, TopicPartition
+from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, TopicPartition
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 configuration = {"bootstrap.servers": "127.0.0.1"}
@@ -91,5 +92,45 @@ def test_consumer(topic: str) -> None:
     with pytest.raises(RuntimeError):
         consumer.commit()
 
-    with pytest.raises(RuntimeError):
-        consumer.close()
+    consumer.close()
+
+
+def test_commit_log_consumer(topic: str) -> None:
+    # XXX: This would be better as an integration test (or at least a test
+    # against an abstract Producer interface) instead of against a test against
+    # a mock.
+    commit_log_producer = FakeConfluentKafkaProducer()
+
+    consumer = KafkaConsumerWithCommitLog(
+        {
+            **configuration,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test",
+            "session.timeout.ms": 10000,
+            "default.topic.config": {  # XXX: Need to upgrade confluent-kafka
+                "auto.offset.reset": "earliest",
+            }
+        },
+        commit_log_producer,
+        'commit-log',
+    )
+
+    consumer.subscribe([topic])
+
+    producer = ConfluentProducer(configuration)
+    producer.produce(topic)
+    assert producer.flush(5.0) is 0
+
+    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+    assert isinstance(message, Message)
+
+    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+
+    assert len(commit_log_producer.messages) == 1
+    commit_message = commit_log_producer.messages[0]
+    assert commit_message.topic() == 'commit-log'
+    assert commit_message.key() == '{}:{}:{}'.format(topic, 0, 'test').encode('utf-8')
+    assert commit_message.value() == '{}'.format(message.offset + 1).encode('utf-8')  # offsets are last processed message offset + 1
