@@ -140,8 +140,11 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         return offsets
 
-    def close(self) -> None:
-        self.__consumer.close()
+    def close(self, timeout: Optional[float] = None) -> None:
+        try:
+            self.__consumer.close()
+        except RuntimeError:
+            pass
 
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
@@ -204,6 +207,8 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
 
         return offsets
 
-    def close(self) -> None:
-        self.__producer.flush()
+    def close(self, timeout: Optional[float] = None) -> None:
         super().close()
+        messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
+        if messages > 0:
+            raise TimeoutError(f"{messages} commit log messages pending delivery")

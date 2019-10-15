@@ -87,8 +87,7 @@ def test_consumer(topic: str) -> None:
     with pytest.raises(RuntimeError):
         consumer.commit()
 
-    with pytest.raises(RuntimeError):
-        consumer.close()
+    consumer.close()
 
 
 def test_commit_log_consumer(topic: str) -> None:

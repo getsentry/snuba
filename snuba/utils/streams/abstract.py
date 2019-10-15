@@ -138,12 +138,13 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
-    def close(self) -> None:
+    def close(self, timeout: Optional[float] = None) -> None:
         """
         Close the consumer. This stops consuming messages, *may* commit
         staged offsets (depending on the implementation), and ends its
         subscription.
 
-        Raises a ``RuntimeError`` if called on a closed consumer.
+        Raises a ``TimeoutError`` if the consumer is unable to be closed
+        before the timeout is reached.
         """
         raise NotImplementedError
