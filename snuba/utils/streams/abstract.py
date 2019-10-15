@@ -47,13 +47,16 @@ class ConsumerError(Exception):
     """
 
 
-class EndOfStream(ConsumerError, Generic[TStream]):
+class EndOfStream(ConsumerError, Generic[TStream, TOffset]):
     """
     Raised when there are no more messages to consume from the stream.
     """
 
-    def __init__(self, stream: TStream):
+    def __init__(self, stream: TStream, offset: TOffset):
+        # The stream that the consumer has reached the end of.
         self.stream = stream
+        # The next unconsumed offset (where there is currently no message.)
+        self.offset = offset
 
 
 class Consumer(ABC, Generic[TStream, TOffset, TValue]):

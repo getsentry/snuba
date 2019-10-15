@@ -1,6 +1,5 @@
 import pytest
 import uuid
-import time
 from unittest import mock
 from typing import Iterator
 
@@ -55,6 +54,7 @@ def test_consumer(topic: str) -> None:
         consumer.poll(10.0)  # XXX: getting the subcription is slow
     except EndOfStream as error:
         assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 0
     else:
         raise AssertionError('expected EndOfStream error')
 
@@ -68,11 +68,16 @@ def test_consumer(topic: str) -> None:
     message = consumer.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 0
     assert message.value == value
 
-    start = time.time()
-    assert consumer.poll(0.0) is None
-    assert time.time() - start < 0.001  # consumer should not block
+    try:
+        assert consumer.poll(1.0) is None
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 1
+    else:
+        raise AssertionError('expected EndOfStream error')
 
     assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
 
