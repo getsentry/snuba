@@ -1,6 +1,5 @@
 import pytest
 import uuid
-import time
 from unittest import mock
 from typing import Iterator
 
