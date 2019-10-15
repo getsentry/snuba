@@ -11,7 +11,6 @@ from snuba.datasets.schemas.join import (
     JoinClause,
     JoinType,
     TableJoinNode,
-    JoinClause,
 )
 
 
