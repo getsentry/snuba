@@ -1,13 +1,14 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from confluent_kafka import Consumer, Producer
+from confluent_kafka import Producer
 from typing import Sequence
 
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.utils.streams.kafka import KafkaMessage, TransportError, build_kafka_consumer
 
 
 class ConsumerBuilder:
@@ -44,9 +45,16 @@ class ConsumerBuilder:
         else:
             self.bootstrap_servers = bootstrap_servers
 
-        self.raw_topic = raw_topic or self.dataset.get_default_topic()
-        self.replacements_topic = replacements_topic or self.dataset.get_default_replacement_topic()
-        self.commit_log_topic = commit_log_topic or self.dataset.get_default_commit_log_topic()
+        stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
+        self.raw_topic = raw_topic or stream_loader.get_default_topic_spec().topic_name
+        default_replacement_topic_name = stream_loader.get_replacement_topic_spec().topic_name \
+            if stream_loader.get_replacement_topic_spec() \
+            else None
+        self.replacements_topic = replacements_topic or default_replacement_topic_name
+        default_commit_log_topic_name = stream_loader.get_commit_log_topic_spec().topic_name \
+            if stream_loader.get_commit_log_topic_spec() \
+            else None
+        self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
 
         self.producer = Producer({
             'bootstrap.servers': ','.join(self.bootstrap_servers),
@@ -56,10 +64,10 @@ class ConsumerBuilder:
 
         self.metrics = util.create_metrics(
             dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-            tags=[
-                "group:%s" % group_id,
-                "dataset:%s" % self.dataset_name,
-            ]
+            tags={
+                "group": group_id,
+                "dataset": self.dataset_name,
+            }
         )
 
         self.max_batch_size = max_batch_size
@@ -69,20 +77,24 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def __build_consumer(self, worker: AbstractBatchWorker) -> Consumer:
+    def __build_consumer(self, worker: AbstractBatchWorker[KafkaMessage]) -> BatchingKafkaConsumer:
         return BatchingKafkaConsumer(
+            build_kafka_consumer(
+                bootstrap_servers=self.bootstrap_servers,
+                group_id=self.group_id,
+                auto_offset_reset=self.auto_offset_reset,
+                queued_max_messages_kbytes=self.queued_max_messages_kbytes,
+                queued_min_messages=self.queued_min_messages,
+            ),
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
             metrics=self.metrics,
-            bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
             producer=self.producer,
             commit_log_topic=self.commit_log_topic,
-            auto_offset_reset=self.auto_offset_reset,
-            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
-            queued_min_messages=self.queued_min_messages,
+            recoverable_errors=[TransportError],
         )
 
     def build_base_consumer(self) -> BatchingKafkaConsumer:
@@ -111,7 +123,7 @@ class ConsumerBuilder:
             producer=self.producer,
             snapshot_id=snapshot_id,
             transaction_data=transaction_data,
-            replacements_topic=self.replacements_topic,
             metrics=self.metrics,
+            replacements_topic=self.replacements_topic,
         )
         return self.__build_consumer(worker)

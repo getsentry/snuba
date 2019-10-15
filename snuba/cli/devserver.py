@@ -24,7 +24,7 @@ def devserver(bootstrap, workers):
     daemons = [
         ('api', [
             'uwsgi', '--master', '--manage-script-name',
-            '--wsgi-file', 'snuba/api.py',
+            '--wsgi-file', 'snuba/views.py',
             '--http', '0.0.0.0:1218',
             '--http-keepalive', '--need-app', '--die-on-term',
         ]),
@@ -34,6 +34,7 @@ def devserver(bootstrap, workers):
         os.execvp(daemons[0][1][0], daemons[0][1])
 
     daemons += [
+        ('transaction-consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug', '--dataset=transactions', '--consumer-group=transactions_group']),
         ('consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug']),
         ('replacer', ['snuba', 'replacer', '--auto-offset-reset=latest', '--log-level=debug']),
     ]

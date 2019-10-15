@@ -35,8 +35,8 @@ class Query:
     Represents a parsed query we can edit during query processing.
 
     This is the bare minimum abstraction to avoid depending on a mutable
-    Mapping around the code base. Fully untagling the query representation
-    from the code depnding on it wil ltake a lot of PRs, but at least we
+    Mapping around the code base. Fully untangling the query representation
+    from the code depending on it wil take a lot of PRs, but at least we
     have a basic abstraction to move functionalities to.
     It is also the base to split the Clickhouse specific query into
     an abstract Snuba query and a concrete Clickhouse query, but
@@ -53,6 +53,7 @@ class Query:
         # TODO: make the parser produce this data structure directly
         # in order not to expose the internal representation.
         self.__body = body
+        self.__final = False
 
     def __extend_sequence(self,
         field: str,
@@ -142,6 +143,27 @@ class Query:
 
     def has_totals(self) -> bool:
         return self.__body.get("totals", False)
+
+    def get_final(self) -> bool:
+        return self.__final
+
+    def set_final(self, final: bool) -> None:
+        self.__final = final
+
+    def set_granularity(self, granularity: int) -> None:
+        """
+        Temporary method to move the management of granularity
+        out of the body. This is the only usage left of the body
+        during the query column processing. That processing is
+        going to move to a place where this object is being built.
+        But in order to do that we need first to decouple it from
+        the query body, thus we need to move the granularity out of
+        the body even if it does not really belong here.
+        """
+        self.__body["granularity"] = granularity
+
+    def get_granularity(self) -> Optional[int]:
+        return self.__body.get("granularity")
 
     @deprecated(
         details="Do not access the internal query representation "

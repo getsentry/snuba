@@ -2,7 +2,7 @@ import pytz
 import simplejson as json
 from datetime import datetime
 
-from base import BaseDatasetTest
+from tests.base import BaseDatasetTest
 from snuba.clickhouse.native import ClickhousePool
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
@@ -102,8 +102,8 @@ class TestGroupedMessage(BaseDatasetTest):
 
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
-        assert ret[1] == self.PROCESSED
-        self.write_processed_records(ret[1])
+        assert ret.data == [self.PROCESSED]
+        self.write_processed_records(ret.data)
         cp = ClickhousePool()
         ret = cp.execute("SELECT * FROM test_groupedmessage_local;")
         assert ret[0] == (
@@ -120,11 +120,11 @@ class TestGroupedMessage(BaseDatasetTest):
 
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
-        assert ret[1] == self.PROCESSED
+        assert ret.data == [self.PROCESSED]
 
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
-        assert ret[1] == self.DELETED
+        assert ret.data == [self.DELETED]
 
     def test_bulk_load(self):
         row = GroupedMessageRow.from_bulk({

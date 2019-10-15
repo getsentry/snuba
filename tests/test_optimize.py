@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 
 from datetime import datetime, timedelta
 

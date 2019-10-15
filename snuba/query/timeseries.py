@@ -7,6 +7,7 @@ from snuba.util import parse_datetime
 from snuba.query.extensions import QueryExtension
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.query import Query
+from snuba.request.request_settings import RequestSettings
 from snuba.schemas import get_time_series_extension_properties
 
 
@@ -36,8 +37,14 @@ class TimeSeriesExtensionProcessor(QueryProcessor[TimeSeriesExtensionPayload]):
 
         return (from_date, to_date)
 
-    def process_query(self, query: Query, extension_data: TimeSeriesExtensionPayload) -> None:
+    def process_query(
+            self,
+            query: Query,
+            extension_data: TimeSeriesExtensionPayload,
+            request_settings: RequestSettings,
+    ) -> None:
         from_date, to_date = self.get_time_limit(extension_data)
+        query.set_granularity(extension_data["granularity"])
         query.add_conditions([
             (self.__timestamp_column, '>=', from_date.isoformat()),
             (self.__timestamp_column, '<', to_date.isoformat()),

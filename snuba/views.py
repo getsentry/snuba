@@ -1,7 +1,7 @@
 import logging
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from typing import Any, Mapping, Tuple
@@ -15,16 +15,21 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.api.query import QueryResult, raw_query
+from snuba.api.split import split_query
+from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.timeseries import TimeSeriesExtension, TimeSeriesExtensionProcessor
-from snuba.replacer import get_projects_query_flags
-from snuba.split import split_query
-from snuba.datasets.factory import InvalidDatasetError, get_dataset, get_enabled_dataset_names
+from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.request import Request, RequestSchema
+from snuba.request import Request
+from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
-from snuba.util import local_dataset_mode, Timer
+from snuba.util import local_dataset_mode
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.metrics.timer import Timer
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.api')
@@ -192,19 +197,15 @@ def parse_request_body(http_request):
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(
-    body,
-    schema: RequestSchema,
-    timer,
-) -> Tuple[Request, Mapping[str, Mapping[str, Any]]]:
+def validate_request_content(body, schema: RequestSchema, timer) -> Request:
     try:
-        request, extensions = schema.validate(body)
+        request = schema.validate(body)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error
 
     timer.mark('validate_schema')
 
-    return (request, extensions)
+    return request
 
 
 @application.route('/query', methods=['GET', 'POST'])
@@ -245,11 +246,9 @@ def dataset_query(dataset, body, timer):
     ensure_table_exists(dataset)
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
-    request, extensions = validate_request_content(body, schema, timer)
-    result, status = parse_and_run_query(
+    query_result = parse_and_run_query(
         dataset,
-        request,
-        extensions,
+        validate_request_content(body, schema, timer),
         timer,
     )
 
@@ -262,55 +261,30 @@ def dataset_query(dataset, body, timer):
 
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=json_default),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 
 
 @split_query
-def parse_and_run_query(
-    dataset,
-    request: Request,
-    extension_payloads: Mapping[str, Mapping[str, Any]],
-    timer,
-):
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
-        TimeSeriesExtension.parse_payload(extension_payloads['timeseries'])
-    )
+def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
+
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
-            extension.parse_payload(extension_payloads[name]),
+            request.extensions[name],
+            request.settings
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    # NOTE: we rely entirely on the schema to make sure that regular snuba
-    # queries are required to send a project_id filter. Some other special
-    # internal query types do not require a project_id filter.
-    project_ids = util.to_list(extension_payloads['project']['project'])
-    if project_ids:
-        request.query.add_conditions([('project_id', 'IN', project_ids)])
-
-    turbo = extension_payloads['performance'].get('turbo', False)
-    if not turbo:
-        final, exclude_group_ids = get_projects_query_flags(project_ids)
-        if not final and exclude_group_ids:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = state.get_config('max_group_ids_exclude', settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE)
-            if len(exclude_group_ids) > max_group_ids_exclude:
-                final = True
-            else:
-                request.query.add_conditions([(['assumeNotNull', ['group_id']], 'NOT IN', exclude_group_ids)])
-    else:
-        final = False
-        if request.query.get_sample() is None:
-            request.query.set_sample(settings.TURBO_SAMPLE_RATE)
+    if request.settings.get_turbo():
+        request.query.set_final(False)
 
     prewhere_conditions = []
     # Add any condition to PREWHERE if:
@@ -336,19 +310,18 @@ def parse_and_run_query(
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions, final).format()
+    query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
     timer.mark('prepare_query')
 
     stats = {
         'clickhouse_table': source,
-        'final': final,
+        'final': request.query.get_final(),
         'referrer': http_request.referrer,
         'num_days': (to_date - from_date).days,
-        'num_projects': len(project_ids),
         'sample': request.query.get_sample(),
     }
 
-    return util.raw_query(request, sql, clickhouse_ro, timer, stats)
+    return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -361,6 +334,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
+            SETTINGS_SCHEMA,
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
@@ -378,13 +352,13 @@ def sdk_distribution(*, timer: Timer):
     dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, request, timer)
+    query_result = parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 
@@ -429,18 +403,22 @@ if application.debug or application.testing:
 
     @application.route('/tests/<dataset_name>/insert', methods=['POST'])
     def write(dataset_name):
-        from snuba.processor import MessageProcessor
+        from snuba.processor import ProcessorAction
 
         dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
         for message in json.loads(http_request.data):
-            action, row = dataset.get_processor().process_message(message)
-            assert action is MessageProcessor.INSERT
-            rows.append(row)
+            processed_message = enforce_table_writer(dataset) \
+                .get_stream_loader() \
+                .get_processor() \
+                .process_message(message)
+            if processed_message:
+                assert processed_message.action is ProcessorAction.INSERT
+                rows.extend(processed_message.data)
 
-        dataset.get_writer().write(rows)
+        enforce_table_writer(dataset).get_writer().write(rows)
 
         return ('ok', 200, {'Content-Type': 'text/plain'})
 
@@ -454,28 +432,20 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        class Message(object):
-            def __init__(self, value):
-                self._value = value
-
-            def value(self):
-                return self._value
-
-            def partition(self):
-                return None
-
-            def offset(self):
-                return None
-
-        message = Message(http_request.data)
+        message = KafkaMessage(
+            TopicPartition('topic', 0),
+            0,
+            http_request.data,
+        )
 
         type_ = record[1]
+        metrics = DummyMetricsBackend()
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, dataset)
+            worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:

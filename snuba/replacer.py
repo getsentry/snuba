@@ -1,16 +1,24 @@
 import logging
 import time
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Mapping, Optional, Sequence
+
 import simplejson as json
 
-from batching_kafka_consumer import AbstractBatchWorker
-
-from . import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
+from snuba.clickhouse.native import ClickhousePool
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
+
+from . import settings
 
 
 logger = logging.getLogger('snuba.replacer')
@@ -83,16 +91,24 @@ def get_projects_query_flags(project_ids):
     return (needs_final, exclude_groups)
 
 
-class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dataset, metrics=None):
+@dataclass(frozen=True)
+class Replacement:
+    count_query_template: str
+    insert_query_template: str
+    query_args: Mapping[str, Any]
+    query_time_flags: Any
+
+
+class ReplacerWorker(AbstractBatchWorker[KafkaMessage]):
+    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics
-        self.__all_column_names = [col.escaped for col in dataset.get_dataset_schemas().get_write_schema_enforce().get_columns()]
+        self.__all_column_names = [col.escaped for col in enforce_table_writer(dataset).get_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
-    def process_message(self, message):
-        message = json.loads(message.value())
+    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
+        message = json.loads(message.value)
         version = message[0]
 
         if version == 2:
@@ -115,38 +131,36 @@ class ReplacerWorker(AbstractBatchWorker):
 
         return processed
 
-    def flush_batch(self, batch):
-        for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({
+    def flush_batch(self, batch: Sequence[Replacement]) -> None:
+        for replacement in batch:
+            query_args = {
+                **replacement.query_args,
                 'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source(),
-                'dist_write_table_name': self.dataset.get_dataset_schemas().get_write_schema_enforce().get_table_name(),
-            })
-            count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
+                'dist_write_table_name': enforce_table_writer(self.dataset).get_schema().get_table_name(),
+            }
+            count = self.clickhouse.execute_robust(replacement.count_query_template % query_args)[0][0]
             if count == 0:
                 continue
 
             # query_time_flags == (type, project_id, [...data...])
-            flag_type, project_id = query_time_flags[:2]
+            flag_type, project_id = replacement.query_time_flags[:2]
             if flag_type == NEEDS_FINAL:
                 set_project_needs_final(project_id)
             elif flag_type == EXCLUDE_GROUPS:
-                group_ids = query_time_flags[2]
+                group_ids = replacement.query_time_flags[2]
                 set_project_exclude_groups(project_id, group_ids)
 
             t = time.time()
-            logger.debug("Executing replace query: %s" % (insert_query_template % query_args))
-            self.clickhouse.execute_robust(insert_query_template % query_args)
+            query = replacement.insert_query_template % query_args
+            logger.debug("Executing replace query: %s" % query)
+            self.clickhouse.execute_robust(query)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
-            if self.metrics:
-                self.metrics.timing('replacements.count', count)
-                self.metrics.timing('replacements.duration', duration)
-
-    def shutdown(self):
-        pass
+            self.metrics.timing('replacements.count', count)
+            self.metrics.timing('replacements.duration', duration)
 
 
-def process_delete_groups(message, required_columns):
+def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     group_ids = message['group_ids']
     if not group_ids:
         return None
@@ -183,13 +197,13 @@ def process_delete_groups(message, required_columns):
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
 
 
-def process_merge(message, all_column_names):
+def process_merge(message, all_column_names) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     txn = message.get('transaction_id')
@@ -235,10 +249,10 @@ def process_merge(message, all_column_names):
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_unmerge(message, all_column_names):
+def process_unmerge(message, all_column_names) -> Optional[Replacement]:
     hashes = message['hashes']
     if not hashes:
         return None
@@ -277,10 +291,10 @@ def process_unmerge(message, all_column_names):
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message, dataset):
+def process_delete_tag(message, dataset) -> Optional[Replacement]:
     tag = message['tag']
     if not tag:
         return None
@@ -340,4 +354,4 @@ def process_delete_tag(message, dataset):
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)

@@ -18,6 +18,8 @@ steps:
     name: outcomes-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: loadbalancer-outcomes-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cdc-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba

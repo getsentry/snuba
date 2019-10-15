@@ -4,6 +4,7 @@ Simple schema migration tool. Only intended for local development environment.
 
 import logging
 
+from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.schemas.tables import TableSchema
 
 logger = logging.getLogger('snuba.migrate')
@@ -37,7 +38,9 @@ def _run_schema(conn, schema):
 
 
 def run(conn, dataset):
-    schemas = [dataset.get_dataset_schemas().get_read_schema(), dataset.get_dataset_schemas().get_write_schema_enforce()]
+    schemas = [dataset.get_dataset_schemas().get_read_schema()]
+    if dataset.get_table_writer():
+        schemas.append(dataset.get_table_writer().get_schema())
 
     for schema in schemas:
         _run_schema(conn, schema)
