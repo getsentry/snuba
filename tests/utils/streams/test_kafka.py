@@ -36,7 +36,7 @@ def test_consumer(topic: str) -> None:
         return KafkaConsumer(
             {
                 **configuration,
-                "auto.offset.reset": "latest",
+                "auto.offset.reset": "earliest",
                 "enable.auto.commit": "false",
                 "enable.auto.offset.store": "true",
                 "enable.partition.eof": "true",
@@ -44,6 +44,12 @@ def test_consumer(topic: str) -> None:
                 "session.timeout.ms": 10000,
             }
         )
+
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    for i in range(2):
+        producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
 
     consumer = build_consumer()
 
@@ -55,23 +61,10 @@ def test_consumer(topic: str) -> None:
     revocation_callback = mock.MagicMock()
     consumer.subscribe([topic], on_assign=assignment_callback, on_revoke=revocation_callback)
 
-    try:
-        consumer.poll(10.0)  # XXX: getting the subcription is slow
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
-        assert error.offset == 0
-    else:
-        raise AssertionError('expected EndOfStream error')
+    message = consumer.poll(10.0)  # XXX: getting the subcription is slow
 
     assert assignment_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
 
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    for i in range(2):
-        producer.produce(topic, value=value)
-    assert producer.flush(5.0) is 0
-
-    message = consumer.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
     assert message.offset == 0
