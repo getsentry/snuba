@@ -4,24 +4,17 @@ from typing import Any, Generic, Mapping, TypeVar
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
-ExtensionData = Mapping[str, Any]
 
-TQueryProcessContext = TypeVar("TQueryProcessContext")
-
-
-class QueryProcessor(ABC, Generic[TQueryProcessContext]):
+class QueryProcessor(ABC):
     """
-    Base class for all query processors. Whatever extends this
-    class is supposed to provide one method that takes a query
-    object of type Query that represent the parsed query to
-    process, a context (which depends on the processor) and
-    updates it.
+    A transformation applied to a Query. This depends on the query structure and
+    on the request settings. No additional context is provided.
+    This transformation mutates the Query class in place.
     """
 
     @abstractmethod
     def process_query(self,
         query: Query,
-        context_data: TQueryProcessContext,
         request_settings: RequestSettings,
     ) -> None:
         # TODO: Now the query is moved around through the Request object, which
@@ -33,12 +26,18 @@ class QueryProcessor(ABC, Generic[TQueryProcessContext]):
         raise NotImplementedError
 
 
-class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
+ExtensionData = Mapping[str, Any]
+
+
+class ExtensionQueryProcessor:
     """
-    Common parent class for all the extension processors. The only
-    contribution of this class is to resolve the generic context to
-    extension data. So subclasses of this one can be used to process
-    query extensions.
+    Common parent class for all the extension processors.
+    Extension processors are provided by the QueryExtensions for a dataset,
+    they are fed with the raw extension data and can make changes to query
+    and settings.
+
+    Extension processors are executed very early in the query parsing phase,
+    this happens right after schema validation.
     """
 
     @abstractmethod
@@ -48,14 +47,3 @@ class ExtensionQueryProcessor(QueryProcessor[ExtensionData]):
             request_settings: RequestSettings,
     ) -> None:
         raise NotImplementedError
-
-
-class DummyExtensionProcessor(ExtensionQueryProcessor):
-
-    def process_query(
-            self,
-            query: Query,
-            extension_data: ExtensionData,
-            request_settings: RequestSettings,
-    ) -> None:
-        pass
