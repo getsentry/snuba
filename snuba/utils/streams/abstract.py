@@ -30,7 +30,8 @@ class Message(Generic[TStream, TOffset, TValue]):
     """
     Represents a single message within a stream.
     """
-    __slots__ = ['stream', 'offset', 'value']
+
+    __slots__ = ["stream", "offset", "value"]
 
     stream: TStream
     offset: TOffset
@@ -46,13 +47,16 @@ class ConsumerError(Exception):
     """
 
 
-class EndOfStream(ConsumerError, Generic[TStream]):
+class EndOfStream(ConsumerError, Generic[TStream, TOffset]):
     """
     Raised when there are no more messages to consume from the stream.
     """
 
-    def __init__(self, stream: TStream):
+    def __init__(self, stream: TStream, offset: TOffset):
+        # The stream that the consumer has reached the end of.
         self.stream = stream
+        # The next unconsumed offset (where there is currently no message.)
+        self.offset = offset
 
 
 class Consumer(ABC, Generic[TStream, TOffset, TValue]):
@@ -86,6 +90,15 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         immediately: instead, the ``on_assign`` and ``on_revoke`` callbacks
         are called when the subscription state changes with the updated
         assignment for this consumer.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def unsubscribe(self) -> None:
+        """
+        Unsubscribe from streams.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
@@ -137,12 +150,13 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
-    def close(self) -> None:
+    def close(self, timeout: Optional[float] = None) -> None:
         """
         Close the consumer. This stops consuming messages, *may* commit
         staged offsets (depending on the implementation), and ends its
         subscription.
 
-        Raises a ``RuntimeError`` if called on a closed consumer.
+        Raises a ``TimeoutError`` if the consumer is unable to be closed
+        before the timeout is reached.
         """
         raise NotImplementedError

@@ -7,7 +7,6 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.abstract import Consumer
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
 from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
@@ -23,6 +22,9 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
+        pass  # XXX: This is a bit of a smell.
+
+    def unsubscribe(self) -> None:
         pass  # XXX: This is a bit of a smell.
 
     def poll(
@@ -62,16 +64,12 @@ class TestConsumer(object):
     def test_batch_size(self) -> None:
         consumer = FakeKafkaConsumer()
         worker = FakeWorker()
-        producer = FakeConfluentKafkaProducer()
         batching_consumer = BatchingKafkaConsumer(
             consumer,
             'topic',
             worker=worker,
             max_batch_size=2,
             max_batch_time=100,
-            group_id='group',
-            commit_log_topic='commits',
-            producer=producer,
             metrics=DummyMetricsBackend(strict=True),
         )
 
@@ -85,26 +83,16 @@ class TestConsumer(object):
         assert consumer.commit_calls == 1
         assert consumer.close_calls == 1
 
-        assert len(producer.messages) == 1
-        commit_message = producer.messages[0]
-        assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(2 + 1).encode('utf-8')  # offsets are last processed message offset + 1
-
     @patch('time.time')
     def test_batch_time(self, mock_time: Any) -> None:
         consumer = FakeKafkaConsumer()
         worker = FakeWorker()
-        producer = FakeConfluentKafkaProducer()
         batching_consumer = BatchingKafkaConsumer(
             consumer,
             'topic',
             worker=worker,
             max_batch_size=100,
             max_batch_time=2000,
-            group_id='group',
-            commit_log_topic='commits',
-            producer=producer,
             metrics=DummyMetricsBackend(strict=True),
         )
 
@@ -129,9 +117,3 @@ class TestConsumer(object):
         assert worker.flushed == [[b'1', b'2', b'3', b'4', b'5', b'6']]
         assert consumer.commit_calls == 1
         assert consumer.close_calls == 1
-
-        assert len(producer.messages) == 1
-        commit_message = producer.messages[0]
-        assert commit_message.topic() == 'commits'
-        assert commit_message.key() == '{}:{}:{}'.format('topic', 0, 'group').encode('utf-8')
-        assert commit_message.value() == '{}'.format(6 + 1).encode('utf-8')  # offsets are last processed message offset + 1
