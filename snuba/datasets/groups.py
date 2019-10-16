@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -18,8 +17,11 @@ from snuba.datasets.schemas.join import (
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
+from snuba.query.processors.default import DefaultConditionsProcessor
 from snuba.query.query import Condition, Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 class Groups(TimeSeriesDataset):
@@ -91,11 +93,6 @@ class Groups(TimeSeriesDataset):
             time_parse_columns=['events.timestamp'],
         )
 
-    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
-        events_conditions = self.__events.default_conditions(self.EVENTS_ALIAS)
-        groups_conditions = self.__grouped_message.default_conditions(self.GROUPS_ALIAS)
-        return events_conditions + groups_conditions
-
     def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
@@ -143,3 +140,19 @@ class Groups(TimeSeriesDataset):
         # TODO: revisit how to build the prewhere clause on join
         # queries.
         return []
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            SimpleJoinOptimizer(),
+            DefaultConditionsProcessor(
+                basic_conditions=[],
+                aliased_conditions={
+                    self.EVENTS_ALIAS: self.__events.default_conditions(
+                        self.EVENTS_ALIAS,
+                    ),
+                    self.GROUPS_ALIAS: self.__grouped_message.default_conditions(
+                        self.GROUPS_ALIAS,
+                    ),
+                }
+            )
+        ]
