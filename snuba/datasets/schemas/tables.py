@@ -1,10 +1,29 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Callable, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas import Schema
+from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.util import local_dataset_mode
+
+
+class TableSource(RelationalSource):
+    """
+    Relational datasource that represents a single table or view in the
+    datamodel.
+    """
+
+    def __init__(self, table_name: str, columns: ColumnSet) -> None:
+        self.__table_name = table_name
+        self.__columns = columns
+
+    def format_from(self) -> str:
+        return self.__table_name
+
+    def get_columns(self) -> ColumnSet:
+        return self.__columns
 
 
 class TableSchema(Schema, ABC):
@@ -25,19 +44,20 @@ class TableSchema(Schema, ABC):
         dist_table_name: str,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ):
-        super().__init__(
-            columns=columns,
-        )
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
+        self.__table_source = TableSource(
+            self.get_table_name(),
+            columns,
+        )
 
-    def get_data_source(self) -> str:
+    def get_data_source(self) -> TableSource:
         """
         In this abstraction the from clause is just the same
         table we refer to for writes.
         """
-        return self.get_table_name()
+        return self.__table_source
 
     def _make_test_table(self, table_name: str) -> str:
         return table_name if not settings.TESTING else "%s%s" % (self.TEST_TABLE_PREFIX, table_name)

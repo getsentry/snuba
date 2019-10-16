@@ -3,6 +3,8 @@ from typing import Sequence
 
 from tests.base import BaseTest
 from snuba import replacer, state
+from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
 from snuba.query.query import Query, Condition
 from snuba.request.request_settings import RequestSettings
@@ -34,9 +36,12 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
         processor=ProjectExtensionProcessor()
     )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({
-        "conditions": []
-    })
+    query = Query(
+        {
+            "conditions": []
+        },
+        TableSource("my_table", ColumnSet([])),
+    )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
     extension.get_processor().process_query(query, valid_data, request_settings)
@@ -52,9 +57,12 @@ def test_project_extension_query_adds_rate_limits():
         'project': [2, 3]
     }
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({
-        'conditions': []
-    })
+    query = Query(
+        {
+            "conditions": []
+        },
+        TableSource("my_table", ColumnSet([])),
+    )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
     num_rate_limits_before_processing = len(request_settings.get_rate_limit_params())
@@ -78,9 +86,12 @@ def test_project_extension_project_rate_limits_are_overridden():
         'project': [2, 3]
     }
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({
-        'conditions': []
-    })
+    query = Query(
+        {
+            "conditions": []
+        },
+        TableSource("my_table", ColumnSet([])),
+    )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     state.set_config('project_per_second_limit_2', 5)
     state.set_config('project_concurrent_limit_2', 10)
@@ -104,9 +115,12 @@ class TestProjectExtensionWithGroups(BaseTest):
             processor=ProjectWithGroupsProcessor()
         )
         self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
-        self.query = Query({
-            "conditions": []
-        })
+        self.query = Query(
+            {
+                "conditions": []
+            },
+            TableSource("my_table", ColumnSet([])),
+        )
 
     def test_with_turbo(self):
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -34,16 +35,27 @@ class Groups(TimeSeriesDataset):
 
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
+        groupedmessage_source = self.__grouped_message \
+            .get_dataset_schemas() \
+            .get_read_schema() \
+            .get_data_source()
+
         self.__events = get_dataset("events")
+        events_source = self.__events \
+            .get_dataset_schemas() \
+            .get_read_schema() \
+            .get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
+                groupedmessage_source.format_from(),
+                groupedmessage_source.get_columns(),
                 self.GROUPS_ALIAS,
-                self.__grouped_message.get_dataset_schemas().get_read_schema(),
             ),
             right_node=TableJoinNode(
+                events_source.format_from(),
+                events_source.get_columns(),
                 self.EVENTS_ALIAS,
-                self.__events.get_dataset_schemas().get_read_schema(),
             ),
             mapping=[
                 JoinCondition(
@@ -106,7 +118,7 @@ class Groups(TimeSeriesDataset):
             else:
                 # This is probably an error condition. To keep consistency with the behavior
                 # in existing datasets, we let Clickhouse figure it out.
-                return super().column_expr(simple_column_name, query, table_alias)
+                return super().column_expr(simple_column_name, query, parsing_context, table_alias)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

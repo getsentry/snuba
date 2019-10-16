@@ -33,10 +33,6 @@ SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 SAFE_ALIAS_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
-class InvalidConditionException(Exception):
-    pass
-
-
 def local_dataset_mode():
     return settings.DATASET_MODE == "local"
 
