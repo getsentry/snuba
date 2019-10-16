@@ -75,6 +75,9 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         self.__consumer.subscribe(topics, **kwargs)
 
+    def unsubscribe(self) -> None:
+        self.__consumer.unsubscribe()
+
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
         message: Optional[ConfluentMessage] = self.__consumer.poll(
             *[timeout] if timeout is not None else []
