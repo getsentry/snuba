@@ -33,7 +33,7 @@ project_extension_test_data = [
 @pytest.mark.parametrize("raw_data, expected_conditions", project_extension_test_data)
 def test_project_extension_query_processing(raw_data: dict, expected_conditions: Sequence[Condition]):
     extension = ProjectExtension(
-        processor=ProjectExtensionProcessor()
+        processor=ProjectExtensionProcessor(project_column="project_id")
     )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query(
@@ -51,7 +51,7 @@ def test_project_extension_query_processing(raw_data: dict, expected_conditions:
 
 def test_project_extension_query_adds_rate_limits():
     extension = ProjectExtension(
-        processor=ProjectExtensionProcessor()
+        processor=ProjectExtensionProcessor(project_column="project_id")
     )
     raw_data = {
         'project': [2, 3]
@@ -80,7 +80,7 @@ def test_project_extension_query_adds_rate_limits():
 
 def test_project_extension_project_rate_limits_are_overridden():
     extension = ProjectExtension(
-        processor=ProjectExtensionProcessor()
+        processor=ProjectExtensionProcessor(project_column="project_id")
     )
     raw_data = {
         'project': [2, 3]
@@ -112,7 +112,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         raw_data = {'project': 2}
 
         self.extension = ProjectExtension(
-            processor=ProjectWithGroupsProcessor()
+            processor=ProjectWithGroupsProcessor(project_column="project_id")
         )
         self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
         self.query = Query(

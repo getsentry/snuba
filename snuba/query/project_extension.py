@@ -37,6 +37,9 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
     It extracts the project IDs from the query and adds project specific rate limits.
     """
 
+    def __init__(self, project_column: str) -> None:
+        self.__project_column = project_column
+
     def _get_rate_limit_params(self, project_ids: Sequence[int]) -> RateLimitParameters:
         project_id = project_ids[0] if project_ids else 0  # TODO rate limit on every project in the list?
 
@@ -75,7 +78,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         project_ids = util.to_list(extension_data['project'])
 
         if project_ids:
-            query.add_conditions([('project_id', 'IN', project_ids)])
+            query.add_conditions([(self.__project_column, 'IN', project_ids)])
 
         request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 
