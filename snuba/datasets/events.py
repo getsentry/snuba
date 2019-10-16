@@ -328,7 +328,7 @@ class EventsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'project': ProjectExtension(
-                processor=ProjectWithGroupsProcessor()
+                processor=ProjectWithGroupsProcessor(project_column="project_id")
             ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
