@@ -5,6 +5,7 @@ from typing import (
     Callable,
     Mapping,
     MutableMapping,
+    MutableSequence,
     NamedTuple,
     Optional,
     Sequence,
@@ -35,6 +36,27 @@ class TransportError(ConsumerError):
 
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
+    """
+    The behavior of the of this consumer differs slightly from the Confluent
+    consumer during rebalancing operations. Whenever a partition is assigned
+    to this consumer, offsets are *always* automatically reset to the
+    committed offset for that partition (or if no offsets have been committed
+    for that partition, the offset is reset in accordance with the
+    ``auto.offset.reset`` configuration value.) This causes partitions that
+    are maintained across a rebalance to have the same offset management
+    behavior as a partition that is moved from one consumer to another. To
+    prevent uncommitted messages from being consumed multiple times,
+    ``commit`` should be called in the partition revocation callback.
+
+    The behavior of ``auto.offset.reset`` also differs slightly from the
+    Confluent consumer as well: offsets are only reset during the assignment
+    callback. Any other circumstances that would otherwise lead to preemptive
+    offset reset (e.g. the consumer tries to read a message that is before
+    the earliest offset, or the consumer attempts to read a message that is
+    after the latest offset) will cause an exception to be thrown, rather
+    than resetting the offset (which could lead to chunks messages being
+    replayed or skipped, depending on the circumstances.)
+    """
 
     # Set of logical offsets that do not correspond to actual log positions.
     # These offsets should be considered an implementation detail of the Kafka
@@ -45,19 +67,36 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     )
 
     def __init__(self, configuration: Mapping[str, Any]) -> None:
-        self.__consumer = ConfluentConsumer(configuration)
+        auto_offset_reset = configuration.get("auto.offset.reset", "largest")
+        if auto_offset_reset in {"smallest", "earliest", "beginning"}:
+            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_earliest
+        elif auto_offset_reset in {"largest", "latest", "end"}:
+            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_latest
+        elif auto_offset_reset == "error":
+            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_error
+        else:
+            raise ValueError("invalid value for 'auto.offset.reset' configuration")
 
-    def __wrap_assignment_callback(
-        self, callback: Callable[[Sequence[TopicPartition]], None]
-    ) -> Callable[[ConfluentConsumer, Sequence[ConfluentTopicPartition]], None]:
-        def wrapper(
-            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
-        ) -> None:
-            callback(
-                [TopicPartition(value.topic, value.partition) for value in partitions]
-            )
+        self.__consumer = ConfluentConsumer(
+            {**configuration, "auto.offset.reset": "error"}
+        )
 
-        return wrapper
+    def __resolve_partition_offset_earliest(
+        self, partition: ConfluentTopicPartition
+    ) -> ConfluentTopicPartition:
+        low, high = self.__consumer.get_watermark_offsets(partition)
+        return ConfluentTopicPartition(partition.topic, partition.partition, low)
+
+    def __resolve_partition_offset_latest(
+        self, partition: ConfluentTopicPartition
+    ) -> ConfluentTopicPartition:
+        low, high = self.__consumer.get_watermark_offsets(partition)
+        return ConfluentTopicPartition(partition.topic, partition.partition, high)
+
+    def __resolve_partition_offset_error(
+        self, partition: ConfluentTopicPartition
+    ) -> ConfluentTopicPartition:
+        raise ConsumerError
 
     def subscribe(
         self,
@@ -65,15 +104,33 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
-        kwargs = {}
+        def assignment_callback(
+            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
+        ) -> None:
+            assignment: MutableSequence[ConfluentTopicPartition] = []
 
-        if on_assign is not None:
-            kwargs["on_assign"] = self.__wrap_assignment_callback(on_assign)
+            for partition in self.__consumer.committed(partitions):
+                if partition.offset >= 0:
+                    assignment.append(partition)
+                elif partition.offset == OFFSET_INVALID:
+                    assignment.append(self.__resolve_partition_starting_offset(partition))
+                else:
+                    raise ValueError("received unexpected offset")
 
-        if on_revoke is not None:
-            kwargs["on_revoke"] = self.__wrap_assignment_callback(on_revoke)
+            self.__consumer.assign(assignment)
 
-        self.__consumer.subscribe(topics, **kwargs)
+            if on_assign is not None:
+                on_assign([TopicPartition(i.topic, i.partition) for i in partitions])
+
+        def revocation_callback(
+            consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
+        ) -> None:
+            if on_revoke is not None:
+                on_revoke([TopicPartition(i.topic, i.partition) for i in partitions])
+
+        self.__consumer.subscribe(
+            topics, on_assign=assignment_callback, on_revoke=revocation_callback
+        )
 
     def unsubscribe(self) -> None:
         self.__consumer.unsubscribe()
@@ -138,6 +195,8 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             # sequence of ``TopicPartition`` objects returned by ``commit``.
             # These are an implementation detail of the Kafka Consumer, so we
             # don't expose them here.
+            # NOTE: These should no longer be seen now that we are forcing
+            # offsets to be set as part of the assignment callback.
             if value.offset in self.LOGICAL_OFFSETS:
                 continue
 
