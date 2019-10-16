@@ -1,11 +1,11 @@
 import pytest
 import uuid
 from unittest import mock
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
-from snuba.utils.streams.abstract import EndOfStream, Message
+from snuba.utils.streams.abstract import ConsumerError, EndOfStream, Message
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, TopicPartition
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -101,6 +101,87 @@ def test_consumer(topic: str) -> None:
 
     with pytest.raises(RuntimeError):
         consumer.commit()
+
+    consumer.close()
+
+
+def test_auto_offset_reset_earliest(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-earliest",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    message = consumer.poll(10.0)
+    assert isinstance(message, Message)
+    assert message.offset == 0
+
+    consumer.close()
+
+
+def test_auto_offset_reset_latest(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "latest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-latest",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    try:
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 1
+    else:
+        raise AssertionError('expected EndOfStream error')
+
+    consumer.close()
+
+
+def test_auto_offset_reset_error(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "error",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-error",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    with pytest.raises(ConsumerError):
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
 
     consumer.close()
 
