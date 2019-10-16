@@ -82,7 +82,6 @@ def split_query(query_func):
         total_results = 0
         status = 0
         while split_start < split_end and total_results < limit:
-            print(request.body)
             request.extensions['timeseries'].get_raw_data()['from_date'] = split_start.isoformat()
             request.extensions['timeseries'].get_raw_data()['to_date'] = split_end.isoformat()
             # Because its paged, we have to ask for (limit+offset) results
