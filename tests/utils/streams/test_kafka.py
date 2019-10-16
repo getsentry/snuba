@@ -1,7 +1,7 @@
 import pytest
 import uuid
 from unittest import mock
-from typing import Iterator, Sequence
+from typing import Iterator
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -31,17 +31,21 @@ def topic() -> Iterator[str]:
 
 
 def test_consumer(topic: str) -> None:
-    consumer = KafkaConsumer(
-        {
-            **configuration,
-            "auto.offset.reset": "latest",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
-            "enable.partition.eof": "true",
-            "group.id": "test",
-            "session.timeout.ms": 10000,
-        }
-    )
+
+    def build_consumer() -> KafkaConsumer:
+        return KafkaConsumer(
+            {
+                **configuration,
+                "auto.offset.reset": "latest",
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "true",
+                "enable.partition.eof": "true",
+                "group.id": "test",
+                "session.timeout.ms": 10000,
+            }
+        )
+
+    consumer = build_consumer()
 
     # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
     # use to wait for assignment, but we'd need to be very careful to avoid
@@ -63,7 +67,8 @@ def test_consumer(topic: str) -> None:
 
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic, value=value)
+    for i in range(2):
+        producer.produce(topic, value=value)
     assert producer.flush(5.0) is 0
 
     message = consumer.poll(1.0)
@@ -71,14 +76,6 @@ def test_consumer(topic: str) -> None:
     assert message.stream == TopicPartition(topic, 0)
     assert message.offset == 0
     assert message.value == value
-
-    try:
-        assert consumer.poll(1.0) is None
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
-        assert error.offset == 1
-    else:
-        raise AssertionError('expected EndOfStream error')
 
     assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
 
@@ -101,6 +98,26 @@ def test_consumer(topic: str) -> None:
 
     with pytest.raises(RuntimeError):
         consumer.commit()
+
+    consumer.close()
+
+    consumer = build_consumer()
+
+    consumer.subscribe([topic])
+
+    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+    assert isinstance(message, Message)
+    assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 1
+    assert message.value == value
+
+    try:
+        assert consumer.poll(1.0) is None
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 2
+    else:
+        raise AssertionError('expected EndOfStream error')
 
     consumer.close()
 
