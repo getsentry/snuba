@@ -5,6 +5,7 @@ from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Condition, Query
+from snuba.query.query_processor import QueryProcessor
 from snuba.util import escape_col, parse_datetime, qualified_column
 
 
@@ -113,6 +114,14 @@ class Dataset(object):
         Return the parameters to perform the column split of the query.
         """
         return None
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        """
+        Returns a series of transformation functions (in the form of QueryProcessor objects)
+        that should be applied to queries for this dataset after parsing and before running
+        the query itself.
+        """
+        return []
 
 
 class TimeSeriesDataset(Dataset):

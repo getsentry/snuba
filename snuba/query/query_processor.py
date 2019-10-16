@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Mapping, TypeVar
+from typing import Any, Mapping
 
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings

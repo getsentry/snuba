@@ -308,6 +308,9 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
+    for processor in dataset.get_query_processors():
+        processor.process_query(request.query, request.settings)
+
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
