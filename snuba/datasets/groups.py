@@ -48,14 +48,14 @@ class Groups(TimeSeriesDataset):
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
-                self.GROUPS_ALIAS,
                 groupedmessage_source.format_from(),
                 groupedmessage_source.get_columns(),
+                self.GROUPS_ALIAS,
             ),
             right_node=TableJoinNode(
-                self.EVENTS_ALIAS,
                 events_source.format_from(),
                 events_source.get_columns(),
+                self.EVENTS_ALIAS,
             ),
             mapping=[
                 JoinCondition(

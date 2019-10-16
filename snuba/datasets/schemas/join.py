@@ -65,7 +65,7 @@ class TableJoinNode(TableSource, JoinNode):
     It can be a table or a view.
     """
 
-    def __init__(self, alias: str, table_name: str, columns: ColumnSet) -> None:
+    def __init__(self, table_name: str, columns: ColumnSet, alias: str) -> None:
         super().__init__(table_name, columns)
         self.__alias = alias
 
