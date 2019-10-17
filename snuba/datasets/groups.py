@@ -59,7 +59,13 @@ class Groups(TimeSeriesDataset):
                 events_source.format_from(),
                 events_source.get_columns(),
                 self.EVENTS_ALIAS,
-                        column="project_id"),
+            ),
+            mapping=[
+                JoinCondition(
+                    left=JoinConditionExpression(
+                        table_alias=self.GROUPS_ALIAS,
+                        column="project_id"
+                    ),
                     right=JoinConditionExpression(
                         table_alias=self.EVENTS_ALIAS,
                         column="project_id"),
