@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Optional
 
-import ipaddress
 import uuid
 
 from snuba.processor import (
@@ -58,6 +57,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             event,
             datetime.fromtimestamp(data['timestamp']),
         )
+        if not data.get('contexts', {}).get('trace'):
+            return None
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
