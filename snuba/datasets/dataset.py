@@ -118,8 +118,10 @@ class Dataset(object):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
-        that should be applied to queries for this dataset after parsing and before running
+        that are applied to queries for this dataset after parsing and before running
         the query itself.
+        These are applied in sequence in the same order as they are defined and are supposed
+        to be stateless.
         """
         return []
 
