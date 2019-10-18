@@ -8,7 +8,6 @@ import re
 import simplejson as json
 import time
 import uuid
-from collections.abc import Mapping as MappingCollection
 from functools import partial
 from typing import Any, Iterator, Mapping, Optional, Sequence
 
@@ -207,7 +206,7 @@ def get_config_changes() -> Sequence[Any]:
 
 
 def safe_dumps_default(value: Any) -> Any:
-    if isinstance(value, MappingCollection):
+    if isinstance(value, Mapping):
         return {**value}
     raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
 
