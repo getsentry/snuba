@@ -7,8 +7,8 @@ from snuba.request.request_settings import RequestSettings
 
 class SimpleJoinOptimizer(QueryProcessor):
     """
-    Simplest possible join optimizer. It removes non referenced tables if
-    only one of them is referenced thus we do not need a join.
+    Simplest possible join optimizer. It turns a join expression into a single
+    table expression if only one table is referenced in the query.
     At this stage this is basically a proof of concept, we can build
     a more sophisticated optimizaiton based on this.
 
