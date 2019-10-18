@@ -15,11 +15,15 @@ steps:
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: replacer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: transactions-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: outcomes-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: loadbalancer-outcomes-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: cdc-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cdc-groupassignee-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba
