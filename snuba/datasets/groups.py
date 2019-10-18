@@ -19,7 +19,8 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
+from snuba.query.types import Condition
 
 
 class Groups(TimeSeriesDataset):

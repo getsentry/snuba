@@ -6,7 +6,8 @@ from snuba import replacer, state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor, ProjectWithGroupsProcessor
-from snuba.query.query import Query, Condition
+from snuba.query.query import Query
+from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.schemas import validate_jsonschema
 

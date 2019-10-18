@@ -18,7 +18,8 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
+from snuba.query.types import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
