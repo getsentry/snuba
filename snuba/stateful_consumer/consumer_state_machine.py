@@ -21,13 +21,11 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
         self,
         consumer_builder: ConsumerBuilder,
         topic: str,
-        bootstrap_servers: Sequence[str],
         group_id: str,
         dataset: CdcDataset,
     ) -> None:
         self.__consumer_builder = consumer_builder
         self.__topic = topic
-        self.__bootstrap_servers = bootstrap_servers
         self.__group_id = group_id
         self.__dataset = dataset
 
@@ -63,7 +61,7 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
         elif state_class == BootstrapState:
             return BootstrapState(
                 topic=self.__topic,
-                bootstrap_servers=self.__bootstrap_servers,
+                bootstrap_servers=self.__consumer_builder.bootstrap_servers,
                 group_id=self.__group_id,
                 dataset=self.__dataset,
             )
