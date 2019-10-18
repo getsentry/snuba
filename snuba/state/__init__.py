@@ -8,9 +8,9 @@ import re
 import simplejson as json
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping as MappingCollection
 from functools import partial
-from typing import Any
+from typing import Any, Iterator, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.redis import redis_client as rds
@@ -37,13 +37,13 @@ max_query_duration_s = 60
 rate_lookback_s = 60
 
 
-def get_concurrent(bucket):
+def get_concurrent(bucket: str) -> Any:
     now = time.time()
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     return rds.zcount(bucket, '({:f}'.format(now), '+inf')
 
 
-def get_rates(bucket, rollup=60):
+def get_rates(bucket: str, rollup: int=60) -> Sequence[Any]:
     now = int(time.time())
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
@@ -54,7 +54,7 @@ def get_rates(bucket, rollup=60):
 
 
 @contextmanager
-def deduper(query_id):
+def deduper(query_id: Optional[str]) -> Iterator[bool]:
     """
     A simple redis distributed lock on a query_id to prevent multiple
     concurrent queries running with the same id. Blocks subsequent
@@ -95,7 +95,7 @@ class memoize():
     Simple expiring memoizer for functions with no args.
     """
 
-    def __init__(self, timeout=1):
+    def __init__(self, timeout: int=1) -> None:
         self.timeout = timeout
         self.saved = None
         self.at = 0
@@ -109,7 +109,7 @@ class memoize():
         return wrapper
 
 
-def numeric(value):
+def numeric(value: Optional[Any]) -> Optional[Any]:
     try:
         return int(value)
     except ValueError:
@@ -122,7 +122,7 @@ def numeric(value):
 ABTEST_RE = re.compile('(?:(-?\d+\.?\d*)(?:\:(\d+))?\/?)')
 
 
-def abtest(value):
+def abtest(value: Optional[Any]) -> Optional[Any]:
     """
     Recognizes a value that consists of a '/'-separated sequence of
     value:weight tuples. Value is numeric. Weight is an optional integer and
@@ -145,7 +145,7 @@ def abtest(value):
         return value
 
 
-def set_config(key, value, user=None):
+def set_config(key: str, value: Optional[Any], user: Optional[str]=None) -> None:
     if value is not None:
         value = u'{}'.format(value).encode('utf-8')
 
@@ -167,26 +167,26 @@ def set_config(key, value, user=None):
         logger.exception(ex)
 
 
-def set_configs(values, user=None):
+def set_configs(values: Mapping[str, Optional[Any]], user: Optional[str]=None) -> None:
     for k, v in values.items():
         set_config(k, v, user=user)
 
 
-def get_config(key, default=None):
+def get_config(key: str, default: Optional[Any]=None) -> Optional[Any]:
     return get_all_configs().get(key, default)
 
 
-def get_configs(key_defaults):
+def get_configs(key_defaults: Mapping[str, Optional[Any]]) -> Sequence[Optional[Any]]:
     all_confs = get_all_configs()
     return [all_confs.get(k, d) for k, d in key_defaults]
 
 
-def get_all_configs():
+def get_all_configs() -> Mapping[str, Optional[Any]]:
     return {k: abtest(v) for k, v in get_raw_configs().items()}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_raw_configs():
+def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
         return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in all_configs.items() if v is not None}
@@ -195,11 +195,11 @@ def get_raw_configs():
         return {}
 
 
-def delete_config(key, user=None):
+def delete_config(key: str, user: Optional[Any]=None) -> None:
     return set_config(key, None, user=user)
 
 
-def get_config_changes():
+def get_config_changes() -> Sequence[Any]:
     return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
@@ -207,7 +207,7 @@ def get_config_changes():
 
 
 def safe_dumps_default(value: Any) -> Any:
-    if isinstance(value, Mapping):
+    if isinstance(value, MappingCollection):
         return {**value}
     raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
 
@@ -215,7 +215,7 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def record_query(data):
+def record_query(data: Mapping[str, Optional[Any]]) -> None:
     global kfk
     max_redis_queries = 200
     try:
@@ -238,7 +238,7 @@ def record_query(data):
         logger.exception('Could not record query due to error: %r', ex)
 
 
-def get_queries():
+def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     try:
         queries = []
         for q in rds.lrange(queries_list, 0, -1):
@@ -252,13 +252,13 @@ def get_queries():
     return queries
 
 
-def get_result(query_id):
+def get_result(query_id: str) -> Any:
     key = '{}{}'.format(query_cache_prefix, query_id)
     result = rds.get(key)
     return result and json.loads(result)
 
 
-def set_result(query_id, result):
+def set_result(query_id: str, result: Mapping[str, Optional[Any]]) -> Any:
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
     return rds.set(key, json.dumps(result), ex=timeout)
