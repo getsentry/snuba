@@ -1,15 +1,21 @@
-import re
-
 from snuba.datasets.schemas.join import JoinClause
-from snuba.query.columns import all_referenced_columns
+from snuba.query.columns import all_referenced_columns, QUALIFIED_COLUMN_REGEX
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
-QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$")
-
 
 class SimpleJoinOptimizer(QueryProcessor):
+    """
+    Simplest possible join optimizer. It removes non referenced tables if
+    only one of them is referenced thus we do not need a join.
+    At this stage this is basically a proof of concept, we can build
+    a more sophisticated optimizaiton based on this.
+
+    TODO: Optimize a join between multiple tables by minimizing the number
+    of tables joined together when more than one is referenced in the query.
+    """
+
     def process_query(self,
         query: Query,
         request_settings: RequestSettings,
@@ -21,13 +27,14 @@ class SimpleJoinOptimizer(QueryProcessor):
         referenced_columns = all_referenced_columns(query)
         referenced_aliases = set()
         for qualified_column in referenced_columns:
+            # This will be much better when we will represent columns
+            # with a more structured data type than strings.
             match = QUALIFIED_COLUMN_REGEX.match(qualified_column)
             if match:
                 table_alias = match[1]
                 referenced_aliases.add(table_alias)
 
         if len(referenced_aliases) != 1:
-            # Assume we need a join we cannot collapse this as a table
             # If len(referenced_aliases) is 0 we should never get here.
             return
 

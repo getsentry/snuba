@@ -19,7 +19,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
-from snuba.query.processors.default import DefaultConditionsProcessor
+from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.query import Condition, Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -33,8 +33,6 @@ class Groups(TimeSeriesDataset):
 
     EVENTS_ALIAS = "events"
     GROUPS_ALIAS = "groups"
-
-    QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$")
 
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
@@ -95,6 +93,11 @@ class Groups(TimeSeriesDataset):
             time_parse_columns=['events.timestamp'],
         )
 
+    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
+        events_conditions = self.__events.default_conditions(self.EVENTS_ALIAS)
+        groups_conditions = self.__grouped_message.default_conditions(self.GROUPS_ALIAS)
+        return events_conditions + groups_conditions
+
     def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
@@ -102,7 +105,7 @@ class Groups(TimeSeriesDataset):
         assert table_alias == "", \
             "Groups dataset cannot be referenced with table aliases. Alias provided {table_alias}"
 
-        match = self.QUALIFIED_COLUMN_REGEX.match(column_name)
+        match = QUALIFIED_COLUMN_REGEX.match(column_name)
         if not match:
             # anything that is not prefixed with a table alias is simply
             # escaped and returned. It could be a literal.
@@ -146,15 +149,4 @@ class Groups(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             SimpleJoinOptimizer(),
-            DefaultConditionsProcessor(
-                basic_conditions=[],
-                aliased_conditions={
-                    self.EVENTS_ALIAS: self.__events.default_conditions(
-                        self.EVENTS_ALIAS,
-                    ),
-                    self.GROUPS_ALIAS: self.__grouped_message.default_conditions(
-                        self.GROUPS_ALIAS,
-                    ),
-                }
-            )
         ]
