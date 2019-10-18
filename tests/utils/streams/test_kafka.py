@@ -48,7 +48,8 @@ def test_consumer(topic: str) -> None:
     # edge cases here. It's probably not worth the complexity for now.
     # XXX: There has got to be a better way to do this...
     assignment_callback = mock.MagicMock()
-    consumer.subscribe([topic], on_assign=assignment_callback)
+    revocation_callback = mock.MagicMock()
+    consumer.subscribe([topic], on_assign=assignment_callback, on_revoke=revocation_callback)
 
     try:
         consumer.poll(10.0)  # XXX: getting the subcription is slow
@@ -81,10 +82,19 @@ def test_consumer(topic: str) -> None:
 
     assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
 
+    consumer.unsubscribe()
+
+    assert consumer.poll(1.0) is None
+
+    assert revocation_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
+
     consumer.close()
 
     with pytest.raises(RuntimeError):
         consumer.subscribe([topic])
+
+    with pytest.raises(RuntimeError):
+        consumer.unsubscribe()
 
     with pytest.raises(RuntimeError):
         consumer.poll()
@@ -110,9 +120,6 @@ def test_commit_log_consumer(topic: str) -> None:
             "enable.partition.eof": "true",
             "group.id": "test",
             "session.timeout.ms": 10000,
-            "default.topic.config": {  # XXX: Need to upgrade confluent-kafka
-                "auto.offset.reset": "earliest",
-            }
         },
         commit_log_producer,
         'commit-log',

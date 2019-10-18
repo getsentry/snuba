@@ -10,12 +10,13 @@ from snuba.util import tuplify
 
 def test_simple_column_expr():
     dataset = get_dataset("groups")
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     state.set_config('use_escape_alias', 1)
 
     body = {
         'granularity': 86400
     }
-    query = Query(body)
+    query = Query(body, source)
     assert column_expr(dataset, "events.event_id", deepcopy(query), ParsingContext()) \
         == "(events.event_id AS `events.event_id`)"
 
@@ -43,7 +44,7 @@ def test_simple_column_expr():
         'groupby': ['events.tags_key', 'events.tags_value']
     }
     parsing_context = ParsingContext()
-    assert column_expr(dataset, 'events.tags_key', Query(tag_group_body), parsing_context) == (
+    assert column_expr(dataset, 'events.tags_key', Query(tag_group_body, source), parsing_context) == (
         '(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) '
         'AS all_tags))[1] AS `events.tags_key`)'
     )
@@ -79,10 +80,11 @@ def test_simple_column_expr():
 def test_alias_in_alias():
     state.set_config('use_escape_alias', 1)
     dataset = get_dataset("groups")
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     body = {
         'groupby': ['events.tags_key', 'events.tags_value']
     }
-    query = Query(body)
+    query = Query(body, source)
     parsing_context = ParsingContext()
     assert column_expr(dataset, 'events.tags_key', query, parsing_context) == (
         '(((arrayJoin(arrayMap((x,y) -> [x,y], events.tags.key, events.tags.value)) '
@@ -99,24 +101,26 @@ def test_alias_in_alias():
 
 def test_conditions_expr():
     dataset = get_dataset("groups")
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     state.set_config('use_escape_alias', 1)
     conditions = [['events.a', '=', 1]]
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == '(events.a AS `events.a`) = 1'
+    query = Query({}, source)
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) == '(events.a AS `events.a`) = 1'
 
     conditions = [[['events.a', '=', 1], ['groups.b', '=', 2]], [['events.c', '=', 3], ['groups.d', '=', 4]]]
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == ('((events.a AS `events.a`) = 1 OR (groups.b AS `groups.b`) = 2)'
         ' AND ((events.c AS `events.c`) = 3 OR (groups.d AS `groups.d`) = 4)'
         )
 
     # Test column expansion
     conditions = [[['events.tags[foo]', '=', 1], ['groups.b', '=', 2]]]
-    expanded = column_expr(dataset, 'events.tags[foo]', Query({}), ParsingContext())
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    expanded = column_expr(dataset, 'events.tags[foo]', deepcopy(query), ParsingContext())
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == '({} = 1 OR (groups.b AS `groups.b`) = 2)'.format(expanded)
 
     # Test using alias if column has already been expanded in SELECT clause
-    reuse_query = Query({})
+    reuse_query = deepcopy(query)
     parsing_context = ParsingContext()
     conditions = [[['events.tags[foo]', '=', 1], ['groups.b', '=', 2]]]
     column_expr(dataset, 'events.tags[foo]', reuse_query, parsing_context)  # Expand it once so the next time is aliased
@@ -125,29 +129,30 @@ def test_conditions_expr():
 
     # Test special output format of LIKE
     conditions = [['events.primary_hash', 'LIKE', '%foo%']]
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == '(events.primary_hash AS `events.primary_hash`) LIKE \'%foo%\''
 
     conditions = tuplify([[['notEmpty', ['arrayElement', ['events.exception_stacks.type', 1]]], '=', 1]])
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == 'notEmpty(arrayElement((events.exception_stacks.type AS `events.exception_stacks.type`), 1)) = 1'
 
     conditions = tuplify([[['notEmpty', ['events.tags[sentry:user]']], '=', 1]])
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == 'notEmpty(`events.tags[sentry:user]`) = 1'
 
     conditions = tuplify([[['notEmpty', ['events.tags_key']], '=', 1]])
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == 'notEmpty((arrayJoin(events.tags.key) AS `events.tags_key`)) = 1'
 
     # Test scalar condition on array column is expanded as an iterator.
     conditions = [['events.exception_frames.filename', 'LIKE', '%foo%']]
-    assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) \
+    assert conditions_expr(dataset, conditions, deepcopy(query), ParsingContext()) \
         == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), (events.exception_frames.filename AS `events.exception_frames.filename`))'
 
 
 def test_duplicate_expression_alias():
     dataset = get_dataset("groups")
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     state.set_config('use_escape_alias', 1)
 
     body = {
@@ -156,7 +161,7 @@ def test_duplicate_expression_alias():
             ['uniq', 'events.environment', 'dupe_alias'],
         ]
     }
-    query = Query(body)
+    query = Query(body, source)
     # In the case where 2 different expressions are aliased
     # to the same thing, one ends up overwriting the other.
     # This may not be ideal as it may mask bugs in query conditions

@@ -75,6 +75,9 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         self.__consumer.subscribe(topics, **kwargs)
 
+    def unsubscribe(self) -> None:
+        self.__consumer.unsubscribe()
+
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
         message: Optional[ConfluentMessage] = self.__consumer.poll(
             *[timeout] if timeout is not None else []
@@ -165,7 +168,7 @@ def build_kafka_consumer_configuration(
         "enable.auto.commit": False,
         "bootstrap.servers": ",".join(bootstrap_servers),
         "group.id": group_id,
-        "default.topic.config": {"auto.offset.reset": auto_offset_reset},
+        "auto.offset.reset": auto_offset_reset,
         # overridden to reduce memory usage when there's a large backlog
         "queued.max.messages.kbytes": queued_max_messages_kbytes,
         "queued.min.messages": queued_min_messages,

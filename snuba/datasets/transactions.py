@@ -160,7 +160,7 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'project': ProjectExtension(
-                processor=ProjectExtensionProcessor()
+                processor=ProjectExtensionProcessor(project_column="project_id")
             ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,

@@ -24,6 +24,9 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
     ) -> None:
         pass  # XXX: This is a bit of a smell.
 
+    def unsubscribe(self) -> None:
+        pass  # XXX: This is a bit of a smell.
+
     def poll(
         self, timeout: Optional[float] = None
     ) -> Optional[KafkaMessage]:

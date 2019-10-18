@@ -1,7 +1,38 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Mapping, List
 
 from snuba.clickhouse.columns import ColumnSet
+
+
+class RelationalSource(ABC):
+    """
+    Abstract representation of the datamodel in the schema. This includes the
+    list of the tables that compose this datamodel with their columns as well as
+    their relationships expressed as relational joins.
+
+    This class and its subclasses are the go-to place to inspect the structure
+    of the datamodel, either during query or when writing.
+
+    This implies our data model is defined in a relational way. Should we move
+    away from this assumption, this will change.
+    """
+
+    @abstractmethod
+    def format_from(self) -> str:
+        """
+        Builds the SQL representation of the data source for the FROM clause
+        when querying.
+        """
+        # Not using the __str__ method because this is moving towards a more
+        # abstract method that will receive a FormatStrategy (clickhouse specific)
+        # that would do the actual formatting work
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_columns(self) -> ColumnSet:
+        raise NotImplementedError
 
 
 class Schema(ABC):
@@ -10,35 +41,24 @@ class Schema(ABC):
     It provides a set of columns and a where clause to build the query.
     Concretely this can represent a table, a view or a group of
     joined tables.
-    This level of abstraction only provides read primitives.
+    This level of abstraction only provides read primitives. Subclasses provide
+    a way to write and the DDL to build the datamodel on Clickhouse
 
     As of now we do not have a strict separation between a Snuba abstract
     schema and a Clickhouse concrete schema. When this will exist, this
     class will break up into snuba schema and clickhouse schema.
     """
 
-    def __init__(
-        self,
-        columns: ColumnSet,
-    ) -> None:
-        self.__columns = columns
-
     @abstractmethod
-    def get_data_source(self) -> str:
+    def get_data_source(self) -> RelationalSource:
         """
-        Builds and returns the content of the FROM clause Clickhouse
-        needs in order to execute a query on this schema.
-        This can be a simple table or a view for simple dataset
-        or the join clause for joined datasets.
-
-        TODO: Once we have a Snuba Query abstraction (PR 456) this
-        will change to return something more abstract than a string
-        so the query can manipulate it.
+        Returns an object that represent the tables and the relationship between
+        tables in this Schema.
         """
         raise NotImplementedError
 
     def get_columns(self) -> ColumnSet:
-        return self.__columns
+        return self.get_data_source().get_columns()
 
     def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
         """
@@ -47,11 +67,11 @@ class Schema(ABC):
         errors: List[str] = []
 
         for column_name, column_type in expected_columns.items():
-            if column_name not in self.__columns:
+            if column_name not in self.get_columns():
                 errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
                 continue
 
-            expected_type = self.__columns[column_name].type.for_schema()
+            expected_type = self.get_columns()[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (

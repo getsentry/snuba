@@ -57,34 +57,35 @@ class TestUtil(BaseTest):
     def test_conditions_expr(self, dataset):
         state.set_config('use_escape_alias', 1)
         conditions = [['a', '=', 1]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'a = 1'
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'a = 1'
 
         conditions = [[['a', '=', 1]]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'a = 1'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'a = 1'
 
         conditions = [['a', '=', 1], ['b', '=', 2]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'a = 1 AND b = 2'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'a = 1 AND b = 2'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == '(a = 1 OR b = 2)'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == '(a = 1 OR b = 2)'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], ['c', '=', 3]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == '(a = 1 OR b = 2) AND c = 3'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == '(a = 1 OR b = 2) AND c = 3'
 
         conditions = [[['a', '=', 1], ['b', '=', 2]], [['c', '=', 3], ['d', '=', 4]]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == '(a = 1 OR b = 2) AND (c = 3 OR d = 4)'
 
         # Malformed condition input
         conditions = [[['a', '=', 1], []]]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'a = 1'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'a = 1'
 
         # Test column expansion
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
-        expanded = column_expr(dataset, 'tags[foo]', Query({}), ParsingContext())
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == '({} = 1 OR b = 2)'.format(expanded)
+        expanded = column_expr(dataset, 'tags[foo]', Query({}, source), ParsingContext())
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == '({} = 1 OR b = 2)'.format(expanded)
 
         # Test using alias if column has already been expanded in SELECT clause
-        reuse_query = Query({})
+        reuse_query = Query({}, source)
         parsing_context = ParsingContext()
         conditions = [[['tags[foo]', '=', 1], ['b', '=', 2]]]
         column_expr(dataset, 'tags[foo]', reuse_query, parsing_context)  # Expand it once so the next time is aliased
@@ -92,16 +93,16 @@ class TestUtil(BaseTest):
 
         # Test special output format of LIKE
         conditions = [['primary_hash', 'LIKE', '%foo%']]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'primary_hash LIKE \'%foo%\''
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'primary_hash LIKE \'%foo%\''
 
         conditions = tuplify([[['notEmpty', ['arrayElement', ['exception_stacks.type', 1]]], '=', 1]])
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'notEmpty(arrayElement((exception_stacks.type AS `exception_stacks.type`), 1)) = 1'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'notEmpty(arrayElement((exception_stacks.type AS `exception_stacks.type`), 1)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags[sentry:user]']], '=', 1]])
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 1'
 
         conditions = tuplify([[['notEmpty', ['tags_key']], '=', 1]])
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'notEmpty((arrayJoin(tags.key) AS tags_key)) = 1'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'notEmpty((arrayJoin(tags.key) AS tags_key)) = 1'
 
         conditions = tuplify([
             [
@@ -111,16 +112,16 @@ class TestUtil(BaseTest):
                 [['notEmpty', ['tags[sentry:user]']], '=', 'joe'], [['notEmpty', ['tags[sentry:user]']], '=', 'bob']
             ],
         ])
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == \
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == \
             """(notEmpty((tags.value[indexOf(tags.key, 'sentry:environment')] AS `tags[sentry:environment]`)) = 'dev' OR notEmpty(`tags[sentry:environment]`) = 'prod') AND (notEmpty((`sentry:user` AS `tags[sentry:user]`)) = 'joe' OR notEmpty(`tags[sentry:user]`) = 'bob')"""
 
         # Test scalar condition on array column is expanded as an iterator.
         conditions = [['exception_frames.filename', 'LIKE', '%foo%']]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'arrayExists(x -> assumeNotNull(x LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
 
         # Test negative scalar condition on array column is expanded as an all() type iterator.
         conditions = [['exception_frames.filename', 'NOT LIKE', '%foo%']]
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == 'arrayAll(x -> assumeNotNull(x NOT LIKE \'%foo%\'), (exception_frames.filename AS `exception_frames.filename`))'
 
         # Test that a duplicate IN condition is deduplicated even if
         # the lists are in different orders.[
@@ -128,7 +129,7 @@ class TestUtil(BaseTest):
             ['platform', 'IN', ['a', 'b', 'c']],
             ['platform', 'IN', ['c', 'b', 'a']]
         ])
-        assert conditions_expr(dataset, conditions, Query({}), ParsingContext()) == "platform IN ('a', 'b', 'c')"
+        assert conditions_expr(dataset, conditions, Query({}, source), ParsingContext()) == "platform IN ('a', 'b', 'c')"
 
     @pytest.mark.parametrize('dataset', DATASETS)
     def test_duplicate_expression_alias(self, dataset):
@@ -139,26 +140,29 @@ class TestUtil(BaseTest):
             ]
         }
         parsing_context = ParsingContext()
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         # In the case where 2 different expressions are aliased
         # to the same thing, one ends up overwriting the other.
         # This may not be ideal as it may mask bugs in query conditions
         exprs = [
-            column_expr(dataset, col, Query(body), parsing_context, alias, agg)
+            column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
             for (agg, col, alias) in body['aggregations']
         ]
         assert exprs == ['(topK(3)(logger) AS dupe_alias)', 'dupe_alias']
 
     @pytest.mark.parametrize('dataset', DATASETS)
     def test_nested_aggregate_legacy_format(self, dataset):
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         priority = ['toUInt64(plus(multiply(log(times_seen), 600), last_seen))', '', 'priority']
-        assert column_expr(dataset, '', Query({'aggregations': [priority]}), ParsingContext(), priority[2], priority[0]) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
+        assert column_expr(dataset, '', Query({'aggregations': [priority]}, source), ParsingContext(), priority[2], priority[0]) == '(toUInt64(plus(multiply(log(times_seen), 600), last_seen)) AS priority)'
 
         top_k = ['topK(3)', 'logger', 'top_3']
-        assert column_expr(dataset, top_k[1], Query({'aggregations': [top_k]}), ParsingContext(), top_k[2], top_k[0]) == '(topK(3)(logger) AS top_3)'
+        assert column_expr(dataset, top_k[1], Query({'aggregations': [top_k]}, source), ParsingContext(), top_k[2], top_k[0]) == '(topK(3)(logger) AS top_3)'
 
     @pytest.mark.parametrize('dataset', DATASETS)
     def test_complex_conditions_expr(self, dataset):
-        query = Query({})
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        query = Query({}, source)
 
         assert complex_column_expr(dataset, tuplify(['count', []]), deepcopy(query), ParsingContext()) == 'count()'
         assert complex_column_expr(dataset, tuplify(['notEmpty', ['foo']]), deepcopy(query), ParsingContext()) == 'notEmpty(foo)'
@@ -206,13 +210,15 @@ class TestUtil(BaseTest):
 
     def test_referenced_columns(self):
         # a = 1 AND b = 1
+        dataset = get_dataset('events')
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         body = {
             'conditions': [
                 ['a', '=', '1'],
                 ['b', '=', '1'],
             ]
         }
-        query = Query(body)
+        query = Query(body, source)
         assert all_referenced_columns(query) == set(['a', 'b'])
 
         # a = 1 AND (b = 1 OR c = 1)
@@ -225,7 +231,7 @@ class TestUtil(BaseTest):
                 ],
             ]
         }
-        query = Query(body)
+        query = Query(body, source)
         assert all_referenced_columns(query) == set(['a', 'b', 'c'])
 
         # a = 1 AND (b = 1 OR foo(c) = 1)
@@ -238,7 +244,7 @@ class TestUtil(BaseTest):
                 ],
             ]
         }
-        query = Query(body)
+        query = Query(body, source)
         assert all_referenced_columns(query) == set(['a', 'b', 'c'])
 
         # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
@@ -251,7 +257,7 @@ class TestUtil(BaseTest):
                 ],
             ]
         }
-        query = Query(body)
+        query = Query(body, source)
         assert all_referenced_columns(query) == set(['a', 'b', 'c', 'd'])
 
         # Other fields, including expressions in selected columns
@@ -268,5 +274,5 @@ class TestUtil(BaseTest):
                 ['uniq', 'tags_value', 'values_seen']
             ]
         }
-        query = Query(body)
+        query = Query(body, source)
         assert all_referenced_columns(query) == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])

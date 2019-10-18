@@ -1,8 +1,10 @@
+from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.query import Query
 
 
 def test_empty_query():
-    query = Query({})
+    query = Query({}, TableSource("my_table", ColumnSet([])))
 
     assert query.get_selected_columns() is None
     assert query.get_aggregations() is None
@@ -17,23 +19,28 @@ def test_empty_query():
     assert query.get_offset() == 0
     assert query.has_totals() is False
 
+    assert query.get_data_source().format_from() == "my_table"
+
 
 def test_full_query():
-    query = Query({
-        "selected_columns": ["c1", "c2", "c3"],
-        "conditions": [["c1", "=", "a"]],
-        "arrayjoin": "tags",
-        "having": [["c4", "=", "c"]],
-        "groupby": ["project_id"],
-        "aggregations": [["count()", "", "count"]],
-        "orderby": "event_id",
-        "limitby": (100, "environment"),
-        "sample": 10,
-        "limit": 100,
-        "offset": 50,
-        "totals": True,
-        "granularity": 60,
-    })
+    query = Query(
+        {
+            "selected_columns": ["c1", "c2", "c3"],
+            "conditions": [["c1", "=", "a"]],
+            "arrayjoin": "tags",
+            "having": [["c4", "=", "c"]],
+            "groupby": ["project_id"],
+            "aggregations": [["count()", "", "count"]],
+            "orderby": "event_id",
+            "limitby": (100, "environment"),
+            "sample": 10,
+            "limit": 100,
+            "offset": 50,
+            "totals": True,
+            "granularity": 60,
+        },
+        TableSource("my_table", ColumnSet([])),
+    )
 
     assert query.get_selected_columns() == ["c1", "c2", "c3"]
     assert query.get_aggregations() == [["count()", "", "count"]]
@@ -49,22 +56,27 @@ def test_full_query():
     assert query.has_totals() is True
     assert query.get_granularity() == 60
 
+    assert query.get_data_source().format_from() == "my_table"
+
 
 def test_edit_query():
-    query = Query({
-        "selected_columns": ["c1", "c2", "c3"],
-        "conditions": [["c1", "=", "a"]],
-        "arrayjoin": "tags",
-        "having": [["c4", "=", "c"]],
-        "groupby": ["project_id"],
-        "aggregations": [["count()", "", "count"]],
-        "orderby": "event_id",
-        "limitby": (100, "environment"),
-        "sample": 10,
-        "limit": 100,
-        "offset": 50,
-        "totals": True,
-    })
+    query = Query(
+        {
+            "selected_columns": ["c1", "c2", "c3"],
+            "conditions": [["c1", "=", "a"]],
+            "arrayjoin": "tags",
+            "having": [["c4", "=", "c"]],
+            "groupby": ["project_id"],
+            "aggregations": [["count()", "", "count"]],
+            "orderby": "event_id",
+            "limitby": (100, "environment"),
+            "sample": 10,
+            "limit": 100,
+            "offset": 50,
+            "totals": True,
+        },
+        TableSource("my_table", ColumnSet([])),
+    )
 
     query.set_selected_columns(["c4"])
     assert query.get_selected_columns() == ["c4"]

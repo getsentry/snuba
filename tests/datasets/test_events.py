@@ -11,9 +11,13 @@ from snuba.util import tuplify
 class TestEventsDataset(BaseEventsTest):
 
     def test_column_expr(self):
-        query = Query({
-            'granularity': 86400
-        })
+        source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        query = Query(
+            {
+                'granularity': 86400
+            },
+            source,
+        )
         # Single tag expression
         assert column_expr(self.dataset, 'tags[foo]', deepcopy(query), ParsingContext()) ==\
             "(tags.value[indexOf(tags.key, \'foo\')] AS `tags[foo]`)"
@@ -35,7 +39,7 @@ class TestEventsDataset(BaseEventsTest):
         tag_group_body = {
             'groupby': ['tags_key', 'tags_value']
         }
-        assert column_expr(self.dataset, 'tags_key', Query(tag_group_body), ParsingContext()) == (
+        assert column_expr(self.dataset, 'tags_key', Query(tag_group_body, source), ParsingContext()) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
             'AS all_tags))[1] AS tags_key)'
         )
@@ -81,9 +85,13 @@ class TestEventsDataset(BaseEventsTest):
         assert column_expr(self.dataset, 'tags[environment]', deepcopy(query), ParsingContext(), alias='unique_envs', aggregate='uniq') == "(ifNull(uniq(environment), 0) AS unique_envs)"
 
     def test_alias_in_alias(self):
-        query = Query({
-            'groupby': ['tags_key', 'tags_value']
-        })
+        source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        query = Query(
+            {
+                'groupby': ['tags_key', 'tags_value']
+            },
+            source,
+        )
         context = ParsingContext()
         assert column_expr(self.dataset, 'tags_key', query, context) == (
             '(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) '
