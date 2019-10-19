@@ -95,7 +95,7 @@ class StrictConsumer:
             if self.__on_partitions_revoked:
                 self.__on_partitions_revoked(consumer, partitions)
 
-        logger.debug("Subscribing strict consuemr to topic %s", topic)
+        logger.debug("Subscribing strict consuemr to topic %s on broker %r", topic, bootstrap_servers)
         self.__consumer.subscribe(
             [topic],
             on_assign=_on_partitions_assigned,
