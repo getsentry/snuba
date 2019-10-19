@@ -37,7 +37,7 @@ class TransportError(ConsumerError):
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     """
-    The behavior of the of this consumer differs slightly from the Confluent
+    The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
     to this consumer, offsets are *always* automatically reset to the
     committed offset for that partition (or if no offsets have been committed
