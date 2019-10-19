@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping, List
+from typing import Mapping, List, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
+from snuba.query.types import Condition
 
 
 class RelationalSource(ABC):
@@ -32,6 +33,10 @@ class RelationalSource(ABC):
 
     @abstractmethod
     def get_columns(self) -> ColumnSet:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
         raise NotImplementedError
 
 

@@ -58,6 +58,7 @@ class GroupAssigneeDataset(CdcDataset):
             columns=columns,
             local_table_name='groupassignee_local',
             dist_table_name='groupassignee_dist',
+            mandatory_conditions=[],
             order_by='(project_id, group_id)',
             partition_by=None,
             version_column='offset',

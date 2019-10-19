@@ -210,6 +210,7 @@ class EventsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
+            mandatory_conditions=[],
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',

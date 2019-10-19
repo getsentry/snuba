@@ -63,6 +63,7 @@ class GroupedMessageDataset(CdcDataset):
             columns=columns,
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
+            mandatory_conditions=[],
             order_by='(project_id, id)',
             partition_by=None,
             version_column='offset',
