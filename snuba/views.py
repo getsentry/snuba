@@ -275,13 +275,14 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
-
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
             request.settings
         )
+
+    request.query.add_conditions(dataset.default_conditions())
 
     if request.settings.get_turbo():
         request.query.set_final(False)

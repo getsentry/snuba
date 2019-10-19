@@ -37,6 +37,12 @@ class RelationalSource(ABC):
 
     @abstractmethod
     def get_mandatory_conditions(self) -> Sequence[Condition]:
+        """
+        Returns the mandatory conditions to apply on Clickhouse when
+        querying this RelationalSource, if any.
+        These conditions are supposed to be only meant to keep the data
+        model consistent (like excluding rows that were tombstoned).
+        """
         raise NotImplementedError
 
 
