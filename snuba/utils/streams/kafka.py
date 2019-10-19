@@ -49,13 +49,19 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     ``commit`` should be called in the partition revocation callback.
 
     The behavior of ``auto.offset.reset`` also differs slightly from the
-    Confluent consumer as well: offsets are only reset during the assignment
-    callback. Any other circumstances that would otherwise lead to preemptive
-    offset reset (e.g. the consumer tries to read a message that is before
-    the earliest offset, or the consumer attempts to read a message that is
-    after the latest offset) will cause an exception to be thrown, rather
-    than resetting the offset (which could lead to chunks messages being
-    replayed or skipped, depending on the circumstances.)
+    Confluent consumer as well: offsets are only reset during initial
+    assignment or subsequent rebalancing operations. Any other circumstances
+    that would otherwise lead to preemptive offset reset (e.g. the consumer
+    tries to read a message that is before the earliest offset, or the
+    consumer attempts to read a message that is after the latest offset) will
+    cause an exception to be thrown, rather than resetting the offset, as
+    this could lead to chunks messages being replayed or skipped, depending
+    on the circumstances. This also means that if the committed offset is no
+    longer available (such as when reading older messages from the log and
+    those messages expire, or reading newer messages from the log and the
+    leader crashes and partition ownership fails over to an out-of-date
+    replica), the consumer will fail-stop rather than reset to the value of
+    ``auto.offset.reset``.
     """
 
     # Set of logical offsets that do not correspond to actual log positions.
@@ -77,6 +83,8 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         else:
             raise ValueError("invalid value for 'auto.offset.reset' configuration")
 
+        # NOTE: Offsets are explicitly managed as part of the assignment
+        # callback, so preemptively resetting offsets is not enabled.
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
