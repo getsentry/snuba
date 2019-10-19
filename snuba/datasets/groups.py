@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -20,7 +19,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.query import Query
-from snuba.query.types import Condition
+from snuba.util import qualified_column
 
 
 class Groups(TimeSeriesDataset):
@@ -51,13 +50,20 @@ class Groups(TimeSeriesDataset):
             left_node=TableJoinNode(
                 table_name=groupedmessage_source.format_from(),
                 columns=groupedmessage_source.get_columns(),
-                mandatory_conditions=[],
+                mandatory_conditions=[
+                    # TODO: This will be replaced as soon as expressions won't be strings
+                    # thus we will be able to easily add an alias to a column in an
+                    # expression.
+                    (qualified_column('record_deleted', self.GROUPS_ALIAS), '=', 0)
+                ],
                 alias=self.GROUPS_ALIAS,
             ),
             right_node=TableJoinNode(
                 table_name=events_source.format_from(),
                 columns=events_source.get_columns(),
-                mandatory_conditions=[],
+                mandatory_conditions=[
+                    (qualified_column('deleted', self.EVENTS_ALIAS), '=', 0)
+                ],
                 alias=self.EVENTS_ALIAS,
             ),
             mapping=[
@@ -93,11 +99,6 @@ class Groups(TimeSeriesDataset):
             },
             time_parse_columns=['events.timestamp'],
         )
-
-    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
-        events_conditions = self.__events.default_conditions(self.EVENTS_ALIAS)
-        groups_conditions = self.__grouped_message.default_conditions(self.GROUPS_ALIAS)
-        return events_conditions + groups_conditions
 
     def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         # Eventually joined dataset should not be represented by the same abstraction

@@ -63,7 +63,7 @@ class GroupedMessageDataset(CdcDataset):
             columns=columns,
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
-            mandatory_conditions=[],
+            mandatory_conditions=[('record_deleted', '=', 0)],
             order_by='(project_id, id)',
             partition_by=None,
             version_column='offset',
@@ -88,11 +88,6 @@ class GroupedMessageDataset(CdcDataset):
             default_control_topic="cdc_control",
             postgres_table=self.POSTGRES_TABLE,
         )
-
-    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
-        return [
-            (qualified_column('record_deleted', table_alias), '=', 0),
-        ]
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ['project_id']
