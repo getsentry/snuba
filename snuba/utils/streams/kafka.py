@@ -1,5 +1,6 @@
 import logging
 import time
+from enum import Enum
 from typing import (
     Any,
     Callable,
@@ -33,6 +34,14 @@ KafkaMessage = Message[TopicPartition, int, bytes]
 
 class TransportError(ConsumerError):
     pass
+
+
+KafkaConsumerState = Enum("KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED"])
+
+
+class InvalidState(RuntimeError):
+    def __init__(self, state: KafkaConsumerState):
+        self.__state = state
 
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
@@ -75,11 +84,17 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     def __init__(self, configuration: Mapping[str, Any]) -> None:
         auto_offset_reset = configuration.get("auto.offset.reset", "largest")
         if auto_offset_reset in {"smallest", "earliest", "beginning"}:
-            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_earliest
+            self.__resolve_partition_starting_offset = (
+                self.__resolve_partition_offset_earliest
+            )
         elif auto_offset_reset in {"largest", "latest", "end"}:
-            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_latest
+            self.__resolve_partition_starting_offset = (
+                self.__resolve_partition_offset_latest
+            )
         elif auto_offset_reset == "error":
-            self.__resolve_partition_starting_offset = self.__resolve_partition_offset_error
+            self.__resolve_partition_starting_offset = (
+                self.__resolve_partition_offset_error
+            )
         else:
             raise ValueError("invalid value for 'auto.offset.reset' configuration")
 
@@ -88,6 +103,8 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
+
+        self.__state = KafkaConsumerState.CONSUMING
 
     def __resolve_partition_offset_earliest(
         self, partition: ConfluentTopicPartition
@@ -104,7 +121,7 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     def __resolve_partition_offset_error(
         self, partition: ConfluentTopicPartition
     ) -> ConfluentTopicPartition:
-        raise ConsumerError
+        raise ConsumerError("unable to resolve partition offsets")
 
     def subscribe(
         self,
@@ -112,20 +129,28 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
         def assignment_callback(
             consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
             assignment: MutableSequence[ConfluentTopicPartition] = []
 
-            for partition in self.__consumer.committed(partitions):
-                if partition.offset >= 0:
-                    assignment.append(partition)
-                elif partition.offset == OFFSET_INVALID:
-                    assignment.append(self.__resolve_partition_starting_offset(partition))
-                else:
-                    raise ValueError("received unexpected offset")
-
-            self.__consumer.assign(assignment)
+            try:
+                for partition in self.__consumer.committed(partitions):
+                    if partition.offset >= 0:
+                        assignment.append(partition)
+                    elif partition.offset == OFFSET_INVALID:
+                        assignment.append(
+                            self.__resolve_partition_starting_offset(partition)
+                        )
+                    else:
+                        raise ValueError("received unexpected offset")
+                self.__consumer.assign(assignment)
+            except Exception:
+                self.__state = KafkaConsumerState.ERROR
+                raise
 
             if on_assign is not None:
                 on_assign([TopicPartition(i.topic, i.partition) for i in partitions])
@@ -141,9 +166,15 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         )
 
     def unsubscribe(self) -> None:
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
         self.__consumer.unsubscribe()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
         message: Optional[ConfluentMessage] = self.__consumer.poll(
             *[timeout] if timeout is not None else []
         )
@@ -170,6 +201,9 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         )
 
     def commit(self) -> Mapping[TopicPartition, int]:
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
         result: Optional[Sequence[ConfluentTopicPartition]] = None
 
         retries_remaining = 3
@@ -218,6 +252,8 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             self.__consumer.close()
         except RuntimeError:
             pass
+
+        self.__state = KafkaConsumerState.CLOSED
 
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
