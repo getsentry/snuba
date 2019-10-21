@@ -59,9 +59,10 @@ def transform_columns(result: Result) -> Result:
     for col in result["meta"]:
         if DATETIME_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
-                row[col["name"]] = (
-                    row[col["name"]].replace(tzinfo=tz.tzutc()).isoformat()
-                )
+                if row[col["name"]] is not None:  # The column value can be null/None at times.
+                    row[col["name"]] = (
+                        row[col["name"]].replace(tzinfo=tz.tzutc()).isoformat()
+                    )
         elif DATE_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
                 row[col["name"]] = (
