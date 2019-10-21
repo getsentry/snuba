@@ -2,7 +2,18 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
-from typing import NamedTuple, Optional
+from typing import (
+    Any,
+    Iterator,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Pattern,
+    Sequence,
+    Tuple,
+    Union,
+)
 import logging
 import numbers
 import re
@@ -33,15 +44,11 @@ SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
 SAFE_ALIAS_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
 
 
-class InvalidConditionException(Exception):
-    pass
-
-
-def local_dataset_mode():
+def local_dataset_mode() -> bool:
     return settings.DATASET_MODE == "local"
 
 
-def to_list(value):
+def to_list(value: Any) -> List[Any]:
     return value if isinstance(value, list) else [value]
 
 
@@ -53,7 +60,7 @@ def qualified_column(column_name: str, alias: str="") -> str:
     return column_name if not alias else f"{alias}.{column_name}"
 
 
-def escape_expression(expr: Optional[str], regex) -> Optional[str]:
+def escape_expression(expr: Optional[str], regex: Pattern[str]) -> Optional[str]:
     if not expr:
         return expr
     elif regex.match(expr):
@@ -68,20 +75,20 @@ def escape_expression(expr: Optional[str], regex) -> Optional[str]:
         return u'{}`{}`'.format(*NEGATE_RE.match(col).groups())
 
 
-def escape_alias(alias) -> str:
+def escape_alias(alias: Optional[str]) -> Optional[str]:
     return escape_expression(alias, SAFE_ALIAS_RE)
 
 
-def escape_col(col) -> str:
+def escape_col(col: Optional[str]) -> Optional[str]:
     return escape_expression(col, SAFE_COL_RE)
 
 
-def parse_datetime(value, alignment=1):
+def parse_datetime(value: str, alignment: int=1) -> datetime:
     dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
     return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
 
 
-def function_expr(fn, args_expr=''):
+def function_expr(fn: str, args_expr: str='') -> str:
     """
     Generate an expression for a given function name and an already-evaluated
     args expression. This is a place to define convenience functions that evaluate
@@ -113,7 +120,8 @@ def function_expr(fn, args_expr=''):
     return u'{}({})'.format(fn, args_expr)
 
 
-def is_function(column_expr, depth=0):
+# TODO: Fix the type of Tuple concatenation when mypy supports it.
+def is_function(column_expr: Any, depth: int=0) -> Optional[Tuple[Any, ...]]:
     """
     Returns a 3-tuple of (name, args, alias) if column_expr is a function,
     otherwise None.
@@ -147,7 +155,7 @@ def is_function(column_expr, depth=0):
         return None
 
 
-def alias_expr(expr: str, alias: str, parsing_context: ParsingContext):
+def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
     """
     Return the correct expression to use in the final SQL. Keeps a cache of
     the previously created expressions and aliases, so it knows when it can
@@ -168,7 +176,7 @@ def alias_expr(expr: str, alias: str, parsing_context: ParsingContext):
         return u'({} AS {})'.format(expr, alias)
 
 
-def is_condition(cond_or_list):
+def is_condition(cond_or_list: Sequence[Any]) -> bool:
     return (
         # A condition is:
         # a 3-tuple
@@ -180,7 +188,7 @@ def is_condition(cond_or_list):
     )
 
 
-def columns_in_expr(expr):
+def columns_in_expr(expr: Any) -> Sequence[str]:
     """
     Get the set of columns that are referenced by a single column expression.
     Either it is a simple string with the column name, or a nested function
@@ -198,18 +206,18 @@ def columns_in_expr(expr):
     return cols
 
 
-def tuplify(nested):
+def tuplify(nested: Any) -> Any:
     if isinstance(nested, (list, tuple)):
         return tuple(tuplify(child) for child in nested)
     return nested
 
 
-def escape_string(str):
+def escape_string(str: str) -> str:
     str = ESCAPE_STRING_RE.sub(r"\\\1", str)
     return u"'{}'".format(str)
 
 
-def escape_literal(value):
+def escape_literal(value: Optional[Union[str, datetime, date, List[Any], Tuple[Any], numbers.Number]]) -> str:
     """
     Escape a literal value for use in a SQL clause.
     """
@@ -256,14 +264,14 @@ def decode_part_str(part_str: str) -> Part:
     return Part(date, int(retention_days))
 
 
-def force_bytes(s):
+def force_bytes(s: Any) -> Any:
     if isinstance(s, bytes):
         return s
     return s.encode('utf-8', 'replace')
 
 
 @contextmanager
-def settings_override(overrides):
+def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
     previous = {}
     for k, v in overrides.items():
         previous[k] = getattr(settings, k, None)

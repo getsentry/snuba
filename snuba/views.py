@@ -20,6 +20,7 @@ from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
@@ -196,9 +197,10 @@ def parse_request_body(http_request):
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(body, schema: RequestSchema, timer) -> Request:
+def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     try:
-        request = schema.validate(body)
+        request = schema.validate(body, source)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error
 
@@ -247,7 +249,7 @@ def dataset_query(dataset, body, timer):
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
     query_result = parse_and_run_query(
         dataset,
-        validate_request_content(body, schema, timer),
+        validate_request_content(body, schema, timer, dataset),
         timer,
     )
 
@@ -306,7 +308,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
@@ -329,6 +331,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
+    dataset = get_dataset('events')
     request = validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
@@ -337,6 +340,7 @@ def sdk_distribution(*, timer: Timer):
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
+        dataset,
     )
 
     request.query.set_aggregations([
@@ -348,7 +352,6 @@ def sdk_distribution(*, timer: Timer):
         'project': [],
     }
 
-    dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
     query_result = parse_and_run_query(dataset, request, timer)

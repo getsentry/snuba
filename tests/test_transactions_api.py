@@ -176,3 +176,40 @@ class TestTransactionsApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data['data']) > 1, data
+
+    def test_event_id(self):
+        skew = timedelta(minutes=180)
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'transactions',
+            'project': 1,
+            'selected_columns': [
+                'event_id',
+                'project_id',
+            ],
+            'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
+            'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
+        }))
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+
+        assert len(data['data']) == 180
+        first_event_id = data['data'][0]['event_id']
+        assert len(first_event_id) == 32
+
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'transactions',
+            'project': 1,
+            'selected_columns': [
+                'event_id',
+                'project_id',
+            ],
+            'conditions': [['event_id', '=', first_event_id]],
+            'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
+            'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
+        }))
+
+        data = json.loads(response.data)
+        assert response.status_code == 200
+        assert len(data['data']) == 1
+        assert data['data'][0]['event_id'] == first_event_id

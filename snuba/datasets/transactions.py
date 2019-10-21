@@ -160,7 +160,7 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'project': ProjectExtension(
-                processor=ProjectExtensionProcessor()
+                processor=ProjectExtensionProcessor(project_column="project_id")
             ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
@@ -175,6 +175,8 @@ class TransactionsDataset(TimeSeriesDataset):
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
+        if column_name == 'event_id':
+            return 'replaceAll(toString(event_id), \'-\', \'\')'
         processed_column = self.__tags_processor.process_column_expression(column_name, query, parsing_context, table_alias)
         if processed_column:
             # If processed_column is None, this was not a tag/context expression

@@ -20,4 +20,4 @@ test_data = [
 
 @pytest.mark.parametrize("structure, expected", test_data)
 def test_join_source(structure, expected):
-    assert str(structure) == expected
+    assert structure.format_from() == expected

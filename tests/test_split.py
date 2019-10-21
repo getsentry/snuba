@@ -25,14 +25,18 @@ test_data_no_split = [
 
 @pytest.mark.parametrize("dataset_name", test_data_no_split)
 def test_no_split(dataset_name: str):
-    query = Query({
-        "selected_columns": ["event_id"],
-        "conditions": [""],
-        "orderby": "event_id",
-        "sample": 10,
-        "limit": 100,
-        "offset": 50,
-    })
+    events = get_dataset(dataset_name)
+    query = Query(
+        {
+            "selected_columns": ["event_id"],
+            "conditions": [""],
+            "orderby": "event_id",
+            "sample": 10,
+            "limit": 100,
+            "offset": 50,
+        },
+        events.get_dataset_schemas().get_read_schema().get_data_source()
+    )
 
     @split_query
     def do_query(dataset: Dataset, request: Request, timer: Timer):
@@ -44,7 +48,6 @@ def test_no_split(dataset_name: str):
         {},
     )
 
-    events = get_dataset(dataset_name)
     do_query(events, request, None)
 
 
@@ -105,14 +108,18 @@ def test_col_split(
         else:
             raise ValueError(f"Unexpected selected columns: {selected_cols}")
 
-    query = Query({
-        "selected_columns": list(second_query_data[0].keys()),
-        "conditions": [""],
-        "orderby": "events.event_id",
-        "sample": 10,
-        "limit": 100,
-        "offset": 50,
-    })
+    events = get_dataset(dataset_name)
+    query = Query(
+        {
+            "selected_columns": list(second_query_data[0].keys()),
+            "conditions": [""],
+            "orderby": "events.event_id",
+            "sample": 10,
+            "limit": 100,
+            "offset": 50,
+        },
+        events.get_dataset_schemas().get_read_schema().get_data_source(),
+    )
 
     request = Request(
         query,
@@ -127,5 +134,4 @@ def test_col_split(
         },
     )
 
-    events = get_dataset(dataset_name)
     do_query(events, request, None)
