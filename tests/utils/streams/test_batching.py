@@ -39,6 +39,12 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
         return message
 
+    def tell(self) -> Mapping[TopicPartition, int]:
+        return self.__positions
+
+    def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+        raise NotImplementedError  # XXX: This is a bit more of a smell.
+
     def commit(self) -> Mapping[TopicPartition, int]:
         self.commit_calls += 1
         return self.positions
