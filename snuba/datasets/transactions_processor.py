@@ -68,14 +68,13 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["span_id"] = int(transaction_ctx["span_id"], 16)
             processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
             processed["transaction_name"] = _unicodify(data["transaction"])
+            processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
+                data["start_timestamp"],
+            )
         except KeyError:
             # all these fields are required but we saw some events go through here
             # in the past.  For now bail.
             return
-
-        processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
-            data["start_timestamp"],
-        )
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
             data["timestamp"],
         )
