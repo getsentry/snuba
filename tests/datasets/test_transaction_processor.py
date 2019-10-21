@@ -1,4 +1,4 @@
-from base import BaseTest
+from tests.base import BaseTest
 
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
@@ -164,6 +164,60 @@ class TransactionEvent:
 
 
 class TestTransactionsProcessor(BaseTest):
+
+    def test_skip_non_transactions(self):
+        message = TransactionEvent(
+            event_id='e5e062bf2e1d4afd96fd2f90b6770431',
+            trace_id='7400045b25c443b885914600aa83ad04',
+            span_id='8841662216cc598b',
+            transaction_name='/organizations/:orgId/issues/',
+            op='navigation',
+            start_timestamp=1565303393.917,
+            timestamp=1565303392.918,
+            platform='python',
+            dist='',
+            user_name='me',
+            user_id='myself',
+            user_email='me@myself.com',
+            ipv4='127.0.0.1',
+            ipv6=None,
+            environment='prod',
+            release='34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
+        )
+        payload = message.serialize()
+        # Force an invalid event
+        payload[2]['data']['type'] = 'error'
+
+        meta = KafkaMessageMetadata(offset=1, partition=2)
+        processor = TransactionsMessageProcessor()
+        assert processor.process_message(payload, meta) is None
+
+    def test_missing_trace_context(self):
+        message = TransactionEvent(
+            event_id='e5e062bf2e1d4afd96fd2f90b6770431',
+            trace_id='7400045b25c443b885914600aa83ad04',
+            span_id='8841662216cc598b',
+            transaction_name='/organizations/:orgId/issues/',
+            op='navigation',
+            start_timestamp=1565303393.917,
+            timestamp=1565303392.918,
+            platform='python',
+            dist='',
+            user_name='me',
+            user_id='myself',
+            user_email='me@myself.com',
+            ipv4='127.0.0.1',
+            ipv6=None,
+            environment='prod',
+            release='34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
+        )
+        payload = message.serialize()
+        # Force an invalid event
+        del payload[2]['data']['contexts']
+
+        meta = KafkaMessageMetadata(offset=1, partition=2)
+        processor = TransactionsMessageProcessor()
+        assert processor.process_message(payload, meta) is None
 
     def test_base_process(self):
         message = TransactionEvent(

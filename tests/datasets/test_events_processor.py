@@ -3,7 +3,7 @@ import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer

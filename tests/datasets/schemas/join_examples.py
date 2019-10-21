@@ -8,10 +8,9 @@ from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
-    JoinStructure,
+    JoinClause,
     JoinType,
-    SchemaJoinedSource,
-    SubJoinSource,
+    TableJoinNode,
 )
 
 
@@ -27,7 +26,7 @@ table1 = MergeTreeSchema(
     dist_table_name="table1",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 table2 = MergeTreeSchema(
     columns=ColumnSet([
@@ -41,7 +40,7 @@ table2 = MergeTreeSchema(
     dist_table_name="table2",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 table3 = MergeTreeSchema(
     columns=ColumnSet([
@@ -55,12 +54,12 @@ table3 = MergeTreeSchema(
     dist_table_name="table3",
     order_by="",
     partition_by="",
-)
+).get_data_source()
 
 
-simple_join_structure = JoinStructure(
-    SchemaJoinedSource("t1", table1),
-    SchemaJoinedSource("t2", table2),
+simple_join_structure = JoinClause(
+    TableJoinNode(table1.format_from(), table1.get_columns(), "t1"),
+    TableJoinNode(table2.format_from(), table2.get_columns(), "t2"),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),
@@ -74,21 +73,19 @@ simple_join_structure = JoinStructure(
     JoinType.INNER
 )
 
-complex_join_structure = JoinStructure(
-    SubJoinSource(
-        JoinStructure(
-            SchemaJoinedSource("t1", table1),
-            SchemaJoinedSource("t2", table2),
-            [
-                JoinCondition(
-                    left=JoinConditionExpression(table_alias="t1", column="c1"),
-                    right=JoinConditionExpression(table_alias="t2", column="c2"),
-                ),
-            ],
-            JoinType.FULL
-        ),
+complex_join_structure = JoinClause(
+    JoinClause(
+        TableJoinNode(table1.format_from(), table1.get_columns(), "t1"),
+        TableJoinNode(table2.format_from(), table2.get_columns(), "t2"),
+        [
+            JoinCondition(
+                left=JoinConditionExpression(table_alias="t1", column="c1"),
+                right=JoinConditionExpression(table_alias="t2", column="c2"),
+            ),
+        ],
+        JoinType.FULL
     ),
-    SchemaJoinedSource("t3", table3),
+    TableJoinNode(table3.format_from(), table3.get_columns(), "t3"),
     [
         JoinCondition(
             left=JoinConditionExpression(table_alias="t1", column="c1"),

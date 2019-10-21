@@ -16,13 +16,15 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.writer import BatchWriter
-from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
+from snuba.query.parsing import ParsingContext
+from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 
@@ -158,7 +160,7 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'project': ProjectExtension(
-                processor=ProjectExtensionProcessor()
+                processor=ProjectExtensionProcessor(project_column="project_id")
             ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
@@ -167,17 +169,19 @@ class TransactionsDataset(TimeSeriesDataset):
             ),
         }
 
-    def column_expr(self, column_name, body, table_alias: str=""):
+    def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
         # TODO remove these casts when clickhouse-driver is >= 0.0.19
         if column_name == 'ip_address_v4':
             return 'IPv4NumToString(ip_address_v4)'
         if column_name == 'ip_address_v6':
             return 'IPv6NumToString(ip_address_v6)'
-        processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
+        if column_name == 'event_id':
+            return 'replaceAll(toString(event_id), \'-\', \'\')'
+        processed_column = self.__tags_processor.process_column_expression(column_name, query, parsing_context, table_alias)
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column
-        return super().column_expr(column_name, body)
+        return super().column_expr(column_name, query, parsing_context)
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(

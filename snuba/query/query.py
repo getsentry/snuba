@@ -12,6 +12,7 @@ from typing import (
     Union,
 )
 
+from snuba.datasets.schemas import RelationalSource
 
 Condition = Union[
     Tuple[Any, Any, Any],
@@ -46,7 +47,7 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: MutableMapping[str, Any]):
+    def __init__(self, body: MutableMapping[str, Any], data_source: RelationalSource):
         """
         Expects an already parsed query body.
         """
@@ -54,6 +55,13 @@ class Query:
         # in order not to expose the internal representation.
         self.__body = body
         self.__final = False
+        self.__data_source = data_source
+
+    def get_data_source(self) -> RelationalSource:
+        return self.__data_source
+
+    def set_data_source(self, data_source: RelationalSource) -> None:
+        self.__data_source = data_source
 
     def __extend_sequence(self,
         field: str,
@@ -144,8 +152,23 @@ class Query:
     def get_final(self) -> bool:
         return self.__final
 
-    def set_final(self, final) -> None:
+    def set_final(self, final: bool) -> None:
         self.__final = final
+
+    def set_granularity(self, granularity: int) -> None:
+        """
+        Temporary method to move the management of granularity
+        out of the body. This is the only usage left of the body
+        during the query column processing. That processing is
+        going to move to a place where this object is being built.
+        But in order to do that we need first to decouple it from
+        the query body, thus we need to move the granularity out of
+        the body even if it does not really belong here.
+        """
+        self.__body["granularity"] = granularity
+
+    def get_granularity(self) -> Optional[int]:
+        return self.__body.get("granularity")
 
     @deprecated(
         details="Do not access the internal query representation "

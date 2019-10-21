@@ -1,5 +1,4 @@
-from batching_kafka_consumer import AbstractBatchWorker, BatchingKafkaConsumer
-from confluent_kafka import Consumer, Producer
+from confluent_kafka import Producer
 from typing import Sequence
 
 from snuba import settings, util
@@ -8,6 +7,8 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer_configuration
 
 
 class ConsumerBuilder:
@@ -55,6 +56,8 @@ class ConsumerBuilder:
             else None
         self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
 
+        # XXX: This can result in a producer being built in cases where it's
+        # not actually required.
         self.producer = Producer({
             'bootstrap.servers': ','.join(self.bootstrap_servers),
             'partitioner': 'consistent',
@@ -63,10 +66,10 @@ class ConsumerBuilder:
 
         self.metrics = util.create_metrics(
             dogstatsd_host, dogstatsd_port, 'snuba.consumer',
-            tags=[
-                "group:%s" % group_id,
-                "dataset:%s" % self.dataset_name,
-            ]
+            tags={
+                "group": group_id,
+                "dataset": self.dataset_name,
+            }
         )
 
         self.max_batch_size = max_batch_size
@@ -76,20 +79,32 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def __build_consumer(self, worker: AbstractBatchWorker) -> Consumer:
+    def __build_consumer(self, worker: AbstractBatchWorker[KafkaMessage]) -> BatchingKafkaConsumer:
+        configuration = build_kafka_consumer_configuration(
+            bootstrap_servers=self.bootstrap_servers,
+            group_id=self.group_id,
+            auto_offset_reset=self.auto_offset_reset,
+            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
+            queued_min_messages=self.queued_min_messages,
+        )
+
+        if self.commit_log_topic is None:
+            consumer = KafkaConsumer(configuration)
+        else:
+            consumer = KafkaConsumerWithCommitLog(
+                configuration,
+                self.producer,
+                self.commit_log_topic,
+            )
+
         return BatchingKafkaConsumer(
+            consumer,
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
             metrics=self.metrics,
-            bootstrap_servers=self.bootstrap_servers,
-            group_id=self.group_id,
-            producer=self.producer,
-            commit_log_topic=self.commit_log_topic,
-            auto_offset_reset=self.auto_offset_reset,
-            queued_max_messages_kbytes=self.queued_max_messages_kbytes,
-            queued_min_messages=self.queued_min_messages,
+            recoverable_errors=[TransportError],
         )
 
     def build_base_consumer(self) -> BatchingKafkaConsumer:
@@ -118,7 +133,7 @@ class ConsumerBuilder:
             producer=self.producer,
             snapshot_id=snapshot_id,
             transaction_data=transaction_data,
-            replacements_topic=self.replacements_topic,
             metrics=self.metrics,
+            replacements_topic=self.replacements_topic,
         )
         return self.__build_consumer(worker)

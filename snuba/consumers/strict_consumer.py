@@ -68,9 +68,6 @@ class StrictConsumer:
             'group.id': group_id,
             'enable.partition.eof': 'true',
             'auto.offset.reset': initial_auto_offset_reset,
-            'default.topic.config': {
-                'auto.offset.reset': initial_auto_offset_reset,
-            },
         }
 
         self.__consumer = self._create_consumer(consumer_config)
@@ -98,6 +95,7 @@ class StrictConsumer:
             if self.__on_partitions_revoked:
                 self.__on_partitions_revoked(consumer, partitions)
 
+        logger.debug("Subscribing strict consuemr to topic %s on broker %r", topic, bootstrap_servers)
         self.__consumer.subscribe(
             [topic],
             on_assign=_on_partitions_assigned,
@@ -108,16 +106,19 @@ class StrictConsumer:
         return Consumer(config)
 
     def run(self) -> None:
+        logger.debug("Running Strict Consumer")
         partitions_metadata = self.__consumer \
             .list_topics(self.__topic) \
             .topics[self.__topic] \
             .partitions
 
+        logger.debug("Partitions metadata received %r", partitions_metadata)
         assert len(partitions_metadata) == 1, \
             f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
 
         watermarks: Mapping[Tuple[int, str], int] = {}
 
+        logger.debug("Starting Strict Consumer event loop")
         while not self.__shutdown:
             message = self.__consumer.poll(timeout=self.__assign_timeout)
             self.__consuming = True
@@ -134,6 +135,7 @@ class StrictConsumer:
                 else:
                     raise message.error()
 
+            logger.debug("Processing message %r", message)
             commit_decision = self.__on_message(message)
             if commit_decision == CommitDecision.COMMIT_THIS:
                 self.__consumer.commit(asynchronous=False)

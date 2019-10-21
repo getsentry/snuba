@@ -12,14 +12,15 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.query import Condition
+from snuba.query.query import Condition, Query
 from snuba.query.extensions import QueryExtension
+from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
@@ -263,8 +264,8 @@ class EventsDataset(TimeSeriesDataset):
             timestamp_column="timestamp",
         )
 
-    def column_expr(self, column_name, body, table_alias: str=""):
-        processed_column = self.__tags_processor.process_column_expression(column_name, body, table_alias)
+    def column_expr(self, column_name, query: Query, parsing_context: ParsingContext, table_alias: str=""):
+        processed_column = self.__tags_processor.process_column_expression(column_name, query, parsing_context, table_alias)
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column
@@ -278,7 +279,7 @@ class EventsDataset(TimeSeriesDataset):
             message = qualified_column('message', table_alias)
             return f"coalesce({search_message}, {message})"
         else:
-            return super().column_expr(column_name, body, table_alias)
+            return super().column_expr(column_name, query, parsing_context, table_alias)
 
     def get_promoted_tag_columns(self):
         return self.__promoted_tag_columns
@@ -327,7 +328,7 @@ class EventsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             'project': ProjectExtension(
-                processor=ProjectWithGroupsProcessor()
+                processor=ProjectWithGroupsProcessor(project_column="project_id")
             ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,

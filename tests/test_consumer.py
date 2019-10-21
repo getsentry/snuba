@@ -2,34 +2,31 @@ import calendar
 from datetime import datetime, timedelta
 import simplejson as json
 
-from base import (
-    BaseEventsTest,
-    FakeKafkaProducer,
-)
-
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
+from tests.base import BaseEventsTest
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 class TestConsumer(BaseEventsTest):
+
+    metrics = DummyMetricsBackend()
+
     def test_offsets(self):
         event = self.event
 
-        class FakeMessage(object):
-            def value(self):
-                # event doesn't really matter
-                return json.dumps((0, 'insert', event))
-
-            def offset(self):
-                return 123
-
-            def partition(self):
-                return 456
+        message = KafkaMessage(
+            TopicPartition('events', 456),
+            123,
+            json.dumps((0, 'insert', event)).encode('utf-8')  # event doesn't really matter
+        )
 
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name)
-        batch = [test_worker.process_message(FakeMessage())]
+        test_worker = ConsumerWorker(self.dataset, FakeConfluentKafkaProducer(), replacement_topic.topic_name, self.metrics)
+        batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
 
         assert self.clickhouse.execute(
@@ -38,7 +35,7 @@ class TestConsumer(BaseEventsTest):
 
     def test_skip_too_old(self):
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
-        test_worker = ConsumerWorker(self.dataset, FakeKafkaProducer(), replacement_topic.topic_name)
+        test_worker = ConsumerWorker(self.dataset, FakeConfluentKafkaProducer(), replacement_topic.topic_name, self.metrics)
 
         event = self.event
         old_timestamp = datetime.utcnow() - timedelta(days=300)
@@ -47,22 +44,18 @@ class TestConsumer(BaseEventsTest):
         event['data']['datetime'] = old_timestamp_str
         event['data']['received'] = int(calendar.timegm(old_timestamp.timetuple()))
 
-        class FakeMessage(object):
-            def value(self):
-                return json.dumps((0, 'insert', event))
+        message = KafkaMessage(
+            TopicPartition('events', 1),
+            42,
+            json.dumps((0, 'insert', event)).encode('utf-8'),
+        )
 
-            def partition(self):
-                return 1
-
-            def offset(self):
-                return 42
-
-        assert test_worker.process_message(FakeMessage()) is None
+        assert test_worker.process_message(message) is None
 
     def test_produce_replacement_messages(self):
-        producer = FakeKafkaProducer()
+        producer = FakeConfluentKafkaProducer()
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
-        test_worker = ConsumerWorker(self.dataset, producer, replacement_topic.topic_name)
+        test_worker = ConsumerWorker(self.dataset, producer, replacement_topic.topic_name, self.metrics)
 
         test_worker.flush_batch([
             ProcessedMessage(

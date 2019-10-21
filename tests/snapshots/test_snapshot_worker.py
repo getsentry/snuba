@@ -5,11 +5,13 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid1
 
-from base import FakeKafkaProducer, message as build_msg
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 INSERT_MSG = (
@@ -77,7 +79,7 @@ class TestSnapshotWorker:
     @pytest.mark.parametrize("message, expected", test_data)
     def test_send_message(
         self,
-        message: bytes,
+        message: str,
         expected: Optional[ProcessedMessage],
     ) -> None:
         dataset = get_dataset("groupedmessage")
@@ -90,14 +92,18 @@ class TestSnapshotWorker:
 
         worker = SnapshotAwareWorker(
             dataset=dataset,
-            producer=FakeKafkaProducer(),
+            producer=FakeConfluentKafkaProducer(),
             snapshot_id=str(snapshot_id),
             transaction_data=transact_data,
             replacements_topic=None,
-            metrics=None
+            metrics=DummyMetricsBackend(strict=True),
         )
 
         ret = worker.process_message(
-            build_msg(1, 0, message)
+            KafkaMessage(
+                TopicPartition('topic', 0),
+                1,
+                message.encode('utf-8'),
+            )
         )
         assert ret == expected

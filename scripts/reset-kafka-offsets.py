@@ -21,9 +21,7 @@ consumer_config = {
     'enable.auto.commit': False,
     'bootstrap.servers': '127.0.0.1:9093',
     'group.id': group_id,
-    'default.topic.config': {
-        'auto.offset.reset': 'error',
-    },
+    'auto.offset.reset': 'error',
 }
 
 consumer = Consumer(consumer_config)

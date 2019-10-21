@@ -4,12 +4,15 @@ import simplejson as json
 
 from typing import Any, Mapping, Optional, Sequence
 
-from batching_kafka_consumer import AbstractBatchWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
+
 
 logger = logging.getLogger('snuba.consumer')
 
@@ -23,8 +26,8 @@ class InvalidActionType(Exception):
     pass
 
 
-class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, dataset, producer, replacements_topic, metrics=None):
+class ConsumerWorker(AbstractBatchWorker[KafkaMessage]):
+    def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
@@ -34,12 +37,12 @@ class ConsumerWorker(AbstractBatchWorker):
             'insert_distributed_sync': 1,
         })
 
-    def process_message(self, message) -> Optional[ProcessedMessage]:
+    def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
-        value = json.loads(message.value())
-        metadata = KafkaMessageMetadata(offset=message.offset(), partition=message.partition())
+        value = json.loads(message.value)
+        metadata = KafkaMessageMetadata(offset=message.offset, partition=message.stream.partition)
         processed = self._process_message_impl(value, metadata)
         if processed is None:
             return None
@@ -79,8 +82,7 @@ class ConsumerWorker(AbstractBatchWorker):
         if inserts:
             self.__writer.write(inserts)
 
-            if self.metrics:
-                self.metrics.timing('inserts', len(inserts))
+            self.metrics.timing('inserts', len(inserts))
 
         if replacements:
             for key, replacement in replacements:
@@ -92,6 +94,3 @@ class ConsumerWorker(AbstractBatchWorker):
                 )
 
             self.producer.flush()
-
-    def shutdown(self):
-        pass

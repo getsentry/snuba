@@ -1,4 +1,4 @@
-from base import BaseEventsTest
+from tests.base import BaseEventsTest
 
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba import perf

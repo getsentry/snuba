@@ -4,7 +4,16 @@ import itertools
 import re
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Mapping, MutableMapping, Optional, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    TypeVar,
+)
 
 from dateutil.tz import tz
 
@@ -22,12 +31,14 @@ if TYPE_CHECKING:
 else:
     Result = MutableMapping[str, Any]
 
+TQuery = TypeVar("TQuery")
 
-class Reader(ABC):
+
+class Reader(ABC, Generic[TQuery]):
     @abstractmethod
     def execute(
         self,
-        query: str,
+        query: TQuery,
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,

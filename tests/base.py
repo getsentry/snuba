@@ -1,21 +1,12 @@
 import calendar
 from hashlib import md5
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
 import uuid
-
-from confluent_kafka import TopicPartition, KafkaError
-from confluent_kafka.admin import (
-    ClusterMetadata,
-    PartitionMetadata,
-    TopicMetadata,
-)
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
-from snuba.perf import FakeKafkaMessage
 
 
 def wrap_raw_event(event):
@@ -37,83 +28,11 @@ def wrap_raw_event(event):
 
 
 def get_event():
-    from fixtures import raw_event
+    from tests.fixtures import raw_event
     timestamp = datetime.utcnow()
     raw_event['datetime'] = (timestamp - timedelta(seconds=2)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     raw_event['received'] = int(calendar.timegm((timestamp - timedelta(seconds=1)).timetuple()))
     return wrap_raw_event(raw_event)
-
-
-class FakeKafkaProducer(object):
-    def __init__(self):
-        self.messages = []
-        self._callbacks = []
-
-    def poll(self, *args, **kwargs):
-        while self._callbacks:
-            callback, message = self._callbacks.pop()
-            callback(None, message)
-        return 0
-
-    def flush(self):
-        return self.poll()
-
-    def produce(self, topic, value, key=None, headers=None, on_delivery=None):
-        message = FakeKafkaMessage(
-            topic=topic,
-            partition=None,  # XXX: the partition is unknown (depends on librdkafka)
-            offset=None,  # XXX: the offset is unknown (depends on state)
-            key=key,
-            value=value,
-            headers=headers,
-        )
-        self.messages.append(message)
-        if on_delivery is not None:
-            self._callbacks.append((on_delivery, message))
-
-
-class FakeKafkaConsumer(object):
-    def __init__(self):
-        self.items = []
-        self.commit_calls = 0
-        self.close_calls = 0
-        self.positions = {}
-
-    def poll(self, *args, **kwargs):
-        try:
-            message = self.items.pop(0)
-        except IndexError:
-            return None
-
-        self.positions[(message.topic(), message.partition())] = message.offset() + 1
-
-        return message
-
-    def commit(self, *args, **kwargs):
-        self.commit_calls += 1
-        return [
-            TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in
-            self.positions.items()
-        ]
-
-    def close(self, *args, **kwargs):
-        self.close_calls += 1
-
-    def subscribe(self, *args, **kwargs):
-        pass
-
-    def list_topics(self, topic):
-        meta = ClusterMetadata()
-        topic_meta = TopicMetadata()
-        topic_meta.topic = topic
-        topic_meta.partitions = {
-            0: PartitionMetadata()
-        }
-        meta.topics = {
-            topic: topic_meta
-        }
-        return meta
 
 
 class BaseTest(object):
@@ -213,25 +132,7 @@ class BaseEventsTest(BaseDatasetTest):
 class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method, dataset_name='events'):
         super().setup_method(test_method, dataset_name)
-        from snuba.api import application
+        from snuba.views import application
         assert application.testing is True
         application.config['PROPAGATE_EXCEPTIONS'] = False
         self.app = application.test_client()
-
-
-def message(offset, partition, value, eof=False) -> FakeKafkaMessage:
-    if eof:
-        error = MagicMock()
-        error.code.return_value = KafkaError._PARTITION_EOF
-    else:
-        error = None
-
-    return FakeKafkaMessage(
-        topic="topic",
-        partition=partition,
-        offset=offset,
-        value=value,
-        key=None,
-        headers=None,
-        error=error,
-    )

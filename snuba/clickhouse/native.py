@@ -7,6 +7,7 @@ from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -22,14 +23,12 @@ class ClickhousePool(object):
                  send_receive_timeout=300,
                  max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
                  client_settings={},
-                 metrics=None,
                  ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
         self.send_receive_timeout = send_receive_timeout
         self.client_settings = client_settings
-        self.metrics = metrics
 
         self.pool = queue.LifoQueue(max_pool_size)
 
@@ -92,17 +91,12 @@ class ClickhousePool(object):
                 if attempts_remaining <= 0:
                     raise
 
-                if self.metrics:
-                    self.metrics.increment('clickhouse.network-error')
-
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
                 logger.warning("Write to ClickHouse failed: %s (retrying)", str(e))
                 if e.code == errors.ErrorCodes.TOO_MANY_SIMULTANEOUS_QUERIES:
                     # Try forever if the server is overloaded.
-                    if self.metrics:
-                        self.metrics.increment('clickhouse.too-many-queries')
                     time.sleep(1)
                     continue
                 else:
@@ -128,7 +122,7 @@ class ClickhousePool(object):
             pass
 
 
-class NativeDriverReader(Reader):
+class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client):
         self.__client = client
 
@@ -153,7 +147,8 @@ class NativeDriverReader(Reader):
 
     def execute(
         self,
-        query: str,
+        query: ClickhouseQuery,
+        # TODO: move Clickhouse specific arguments into ClickhouseQuery
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,
@@ -165,9 +160,10 @@ class NativeDriverReader(Reader):
         if query_id is not None:
             kwargs["query_id"] = query_id
 
+        sql = query.format_sql()
         return self.__transform_result(
             self.__client.execute(
-                query, with_column_types=True, settings=settings, **kwargs
+                sql, with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
         )

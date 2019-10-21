@@ -6,16 +6,17 @@ from datetime import datetime
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
-from batching_kafka_consumer import AbstractBatchWorker
-from confluent_kafka import Message
 
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets import Dataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
 
 from . import settings
 
@@ -98,16 +99,16 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics=None) -> None:
+class ReplacerWorker(AbstractBatchWorker[KafkaMessage]):
+    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics
         self.__all_column_names = [col.escaped for col in enforce_table_writer(dataset).get_schema().get_columns()]
         self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
 
-    def process_message(self, message: Message) -> Optional[Replacement]:
-        message = json.loads(message.value())
+    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
+        message = json.loads(message.value)
         version = message[0]
 
         if version == 2:
@@ -134,7 +135,7 @@ class ReplacerWorker(AbstractBatchWorker):
         for replacement in batch:
             query_args = {
                 **replacement.query_args,
-                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source(),
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from(),
                 'dist_write_table_name': enforce_table_writer(self.dataset).get_schema().get_table_name(),
             }
             count = self.clickhouse.execute_robust(replacement.count_query_template % query_args)[0][0]
@@ -155,12 +156,8 @@ class ReplacerWorker(AbstractBatchWorker):
             self.clickhouse.execute_robust(query)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
-            if self.metrics:
-                self.metrics.timing('replacements.count', count)
-                self.metrics.timing('replacements.duration', duration)
-
-    def shutdown(self) -> None:
-        pass
+            self.metrics.timing('replacements.count', count)
+            self.metrics.timing('replacements.duration', duration)
 
 
 def process_delete_groups(message, required_columns) -> Optional[Replacement]:

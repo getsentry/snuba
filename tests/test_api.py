@@ -15,7 +15,7 @@ from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
-from base import BaseApiTest
+from tests.base import BaseApiTest
 
 
 class TestApi(BaseApiTest):
@@ -1114,7 +1114,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
         expected_uuid = uuid.uuid1()
 
-        with patch('snuba.api.uuid1') as uuid4:
+        with patch('snuba.views.uuid1') as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post('/subscriptions')
 

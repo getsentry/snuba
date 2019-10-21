@@ -14,16 +14,22 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
+from snuba.api.query import QueryResult, raw_query
+from snuba.api.split import split_query
 from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.split import split_query
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import InvalidDatasetError, enforce_table_writer, get_dataset, get_enabled_dataset_names
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.request import Request, RequestSchema
+from snuba.request import Request
+from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
-from snuba.util import local_dataset_mode, Timer
+from snuba.util import local_dataset_mode
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.metrics.timer import Timer
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.api')
@@ -191,9 +197,10 @@ def parse_request_body(http_request):
         raise BadRequest(str(error)) from error
 
 
-def validate_request_content(body, schema: RequestSchema, timer) -> Request:
+def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     try:
-        request = schema.validate(body)
+        request = schema.validate(body, source)
     except jsonschema.ValidationError as error:
         raise BadRequest(str(error)) from error
 
@@ -240,9 +247,9 @@ def dataset_query(dataset, body, timer):
     ensure_table_exists(dataset)
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
-    result, status = parse_and_run_query(
+    query_result = parse_and_run_query(
         dataset,
-        validate_request_content(body, schema, timer),
+        validate_request_content(body, schema, timer, dataset),
         timer,
     )
 
@@ -255,16 +262,16 @@ def dataset_query(dataset, body, timer):
 
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=json_default),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 
 
 @split_query
-def parse_and_run_query(dataset, request: Request, timer):
+def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
@@ -277,7 +284,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         )
     request.query.add_conditions(dataset.default_conditions())
 
-    if request.settings.turbo:
+    if request.settings.get_turbo():
         request.query.set_final(False)
 
     prewhere_conditions = []
@@ -301,10 +308,10 @@ def parse_and_run_query(dataset, request: Request, timer):
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
-    sql = ClickhouseQuery(dataset, request, prewhere_conditions).format()
+    query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
     timer.mark('prepare_query')
 
     stats = {
@@ -315,7 +322,7 @@ def parse_and_run_query(dataset, request: Request, timer):
         'sample': request.query.get_sample(),
     }
 
-    return util.raw_query(request, sql, clickhouse_ro, timer, stats)
+    return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -324,6 +331,7 @@ def parse_and_run_query(dataset, request: Request, timer):
 @application.route('/internal/sdk-stats', methods=['POST'])
 @util.time_request('sdk-stats')
 def sdk_distribution(*, timer: Timer):
+    dataset = get_dataset('events')
     request = validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
@@ -332,6 +340,7 @@ def sdk_distribution(*, timer: Timer):
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
+        dataset,
     )
 
     request.query.set_aggregations([
@@ -343,16 +352,15 @@ def sdk_distribution(*, timer: Timer):
         'project': [],
     }
 
-    dataset = get_dataset('events')
     ensure_table_exists(dataset)
 
-    result, status = parse_and_run_query(dataset, request, timer)
+    query_result = parse_and_run_query(dataset, request, timer)
     return (
         json.dumps(
-            result,
+            query_result.result,
             for_json=True,
             default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj),
-        status,
+        query_result.status,
         {'Content-Type': 'application/json'}
     )
 
@@ -426,28 +434,20 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        class Message(object):
-            def __init__(self, value):
-                self._value = value
-
-            def value(self):
-                return self._value
-
-            def partition(self):
-                return None
-
-            def offset(self):
-                return None
-
-        message = Message(http_request.data)
+        message = KafkaMessage(
+            TopicPartition('topic', 0),
+            0,
+            http_request.data,
+        )
 
         type_ = record[1]
+        metrics = DummyMetricsBackend()
         if type_ == 'insert':
             from snuba.consumer import ConsumerWorker
-            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None)
+            worker = ConsumerWorker(dataset, producer=None, replacements_topic=None, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            worker = ReplacerWorker(clickhouse_rw, dataset)
+            worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:

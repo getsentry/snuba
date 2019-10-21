@@ -8,7 +8,7 @@ from typing import Optional, Sequence
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
-from snuba.snapshots.bulk_load import BulkLoader
+from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BatchWriter
 
 
