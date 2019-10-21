@@ -36,7 +36,9 @@ class TransportError(ConsumerError):
     pass
 
 
-KafkaConsumerState = Enum("KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED"])
+KafkaConsumerState = Enum(
+    "KafkaConsumerState", ["CONSUMING", "ERROR", "CLOSED", "ASSIGNING", "REVOKING"]
+)
 
 
 class InvalidState(RuntimeError):
@@ -104,6 +106,8 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             {**configuration, "auto.offset.reset": "error"}
         )
 
+        self.__offsets: MutableMapping[TopicPartition, int] = {}
+
         self.__state = KafkaConsumerState.CONSUMING
 
     def __resolve_partition_offset_earliest(
@@ -135,9 +139,11 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         def assignment_callback(
             consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
-            assignment: MutableSequence[ConfluentTopicPartition] = []
+            self.__state = KafkaConsumerState.ASSIGNING
 
             try:
+                assignment: MutableSequence[ConfluentTopicPartition] = []
+
                 for partition in self.__consumer.committed(partitions):
                     if partition.offset >= 0:
                         assignment.append(partition)
@@ -147,19 +153,33 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                         )
                     else:
                         raise ValueError("received unexpected offset")
-                self.__consumer.assign(assignment)
+
+                offsets: MutableMapping[TopicPartition, int] = {
+                    TopicPartition(i.topic, i.partition): i.offset for i in assignment
+                }
+                self.__seek(offsets)
             except Exception:
                 self.__state = KafkaConsumerState.ERROR
                 raise
 
-            if on_assign is not None:
-                on_assign([TopicPartition(i.topic, i.partition) for i in partitions])
+            try:
+                if on_assign is not None:
+                    on_assign(list(offsets.keys()))
+            finally:
+                self.__state = KafkaConsumerState.CONSUMING
 
         def revocation_callback(
             consumer: ConfluentConsumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
-            if on_revoke is not None:
-                on_revoke([TopicPartition(i.topic, i.partition) for i in partitions])
+            self.__state = KafkaConsumerState.REVOKING
+
+            streams = [TopicPartition(i.topic, i.partition) for i in partitions]
+
+            try:
+                if on_revoke is not None:
+                    on_revoke(streams)
+            finally:
+                self.__state = KafkaConsumerState.CONSUMING
 
         self.__consumer.subscribe(
             topics, on_assign=assignment_callback, on_revoke=revocation_callback
@@ -194,14 +214,52 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             else:
                 raise ConsumerError(str(error))
 
-        return KafkaMessage(
+        result = KafkaMessage(
             TopicPartition(message.topic(), message.partition()),
             message.offset(),
             message.value(),
         )
 
+        self.__offsets[result.stream] = result.offset + 1
+
+        return result
+
+    def tell(self) -> Mapping[TopicPartition, int]:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        return self.__offsets
+
+    def __seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+        if self.__state is KafkaConsumerState.ASSIGNING:
+            # Trying to use ``seek`` while in an assignment callback will yield
+            # throw an "Erroneous state" error, so seeking actually happens via
+            # assignment in the callback.
+            self.__consumer.assign(
+                [
+                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
+                    for stream, offset in offsets.items()
+                ]
+            )
+            self.__offsets.update(offsets)
+        else:
+            for stream, offset in offsets.items():
+                self.__consumer.seek(
+                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
+                )
+                self.__offsets[stream] = offset
+
+    def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        if offsets.keys() - self.__offsets.keys():
+            raise ConsumerError("cannot seek on unassigned streams")
+
+        self.__seek(offsets)
+
     def commit(self) -> Mapping[TopicPartition, int]:
-        if self.__state is not KafkaConsumerState.CONSUMING:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
         result: Optional[Sequence[ConfluentTopicPartition]] = None

@@ -1,7 +1,7 @@
 import pytest
 import uuid
 from unittest import mock
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -53,18 +53,45 @@ def test_consumer(topic: str) -> None:
 
     consumer = build_consumer()
 
+    def assignment_callback(streams: Sequence[TopicPartition]):
+        assignment_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]
+        assert consumer.tell() == {TopicPartition(topic, 0): 0}
+
+        consumer.seek({TopicPartition(topic, 0): 1})
+
+        with pytest.raises(ConsumerError):
+            consumer.seek({TopicPartition(topic, 1): 0})
+
+    def revocation_callback(streams: Sequence[TopicPartition]):
+        revocation_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]
+        assert consumer.tell() == {TopicPartition(topic, 0): 1}
+
+        # Not sure why you'd want to do this, but it shouldn't error.
+        consumer.seek({TopicPartition(topic, 0): 0})
+
     # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
     # use to wait for assignment, but we'd need to be very careful to avoid
     # edge cases here. It's probably not worth the complexity for now.
-    # XXX: There has got to be a better way to do this...
-    assignment_callback = mock.MagicMock()
-    revocation_callback = mock.MagicMock()
     consumer.subscribe([topic], on_assign=assignment_callback, on_revoke=revocation_callback)
 
     message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+    assert isinstance(message, Message)
+    assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 1
+    assert message.value == value
 
-    assert assignment_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
+    assert consumer.tell() == {TopicPartition(topic, 0): 2}
+    assert getattr(assignment_callback, 'called', False)
 
+    consumer.seek({TopicPartition(topic, 0): 0})
+    assert consumer.tell() == {TopicPartition(topic, 0): 0}
+
+    with pytest.raises(ConsumerError):
+        consumer.seek({TopicPartition(topic, 1): 0})
+
+    message = consumer.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
     assert message.offset == 0
@@ -76,8 +103,6 @@ def test_consumer(topic: str) -> None:
 
     assert consumer.poll(1.0) is None
 
-    assert revocation_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
-
     consumer.close()
 
     with pytest.raises(RuntimeError):
@@ -88,6 +113,12 @@ def test_consumer(topic: str) -> None:
 
     with pytest.raises(RuntimeError):
         consumer.poll()
+
+    with pytest.raises(RuntimeError):
+        consumer.tell()
+
+    with pytest.raises(RuntimeError):
+        consumer.seek({TopicPartition(topic, 0): 0})
 
     with pytest.raises(RuntimeError):
         consumer.commit()

@@ -139,6 +139,24 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
+    def tell(self) -> Mapping[TStream, TOffset]:
+        """
+        Return the read offsets for all assigned streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def seek(self, offsets: Mapping[TStream, TOffset]) -> None:
+        """
+        Change the read offsets for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def commit(self) -> Mapping[TStream, TOffset]:
         """
         Commit staged offsets for all streams that this consumer is assigned
