@@ -71,7 +71,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
-        except KeyError:
+        except BaseException:
             # all these fields are required but we saw some events go through here
             # in the past.  For now bail.
             return
