@@ -62,11 +62,16 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         transaction_ctx = data["contexts"]["trace"]
         trace_id = transaction_ctx["trace_id"]
-        processed["event_id"] = str(uuid.UUID(processed["event_id"]))
-        processed["trace_id"] = str(uuid.UUID(trace_id))
-        processed["span_id"] = int(transaction_ctx["span_id"], 16)
-        processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
-        processed["transaction_name"] = _unicodify(data["transaction"])
+        try:
+            processed["event_id"] = str(uuid.UUID(processed["event_id"]))
+            processed["trace_id"] = str(uuid.UUID(trace_id))
+            processed["span_id"] = int(transaction_ctx["span_id"], 16)
+            processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
+            processed["transaction_name"] = _unicodify(data["transaction"])
+        except KeyError:
+            # all these fields are required but we saw some events go through here
+            # in the past.  For now bail.
+            return
 
         processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
             data["start_timestamp"],
