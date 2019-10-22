@@ -4,8 +4,7 @@ from abc import ABC, abstractmethod
 from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
-from itertools import chain
-from typing import Mapping, NamedTuple, Sequence
+from typing import List, Mapping, NamedTuple, Optional, Sequence
 
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
@@ -70,7 +69,7 @@ class TableJoinNode(TableSource, JoinNode):
     def __init__(self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Sequence[Condition],
+        mandatory_conditions: Optional[Sequence[Condition]],
         alias: str,
     ) -> None:
         super().__init__(table_name, columns, mandatory_conditions)
@@ -124,8 +123,10 @@ class JoinClause(JoinNode):
 
     def get_mandatory_conditions(self) -> Sequence[Condition]:
         tables = self.get_tables()
-        conditions = [table.get_mandatory_conditions() for alias, table in tables.items()]
-        return chain(*conditions)
+        all_conditions: List[Condition] = []
+        for _, table in tables.items():
+            all_conditions.extend(table.get_mandatory_conditions())
+        return all_conditions
 
 
 class JoinedSchema(Schema):

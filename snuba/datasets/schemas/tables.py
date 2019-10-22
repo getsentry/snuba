@@ -19,11 +19,11 @@ class TableSource(RelationalSource):
     def __init__(self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Sequence[Condition],
+        mandatory_conditions: Optional[Sequence[Condition]],
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
-        self.__mandatory_conditions = mandatory_conditions
+        self.__mandatory_conditions = mandatory_conditions or []
 
     def format_from(self) -> str:
         return self.__table_name
@@ -51,7 +51,7 @@ class TableSchema(Schema, ABC):
         *,
         local_table_name: str,
         dist_table_name: str,
-        mandatory_conditions: Sequence[Condition]=None,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ):
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
@@ -60,7 +60,7 @@ class TableSchema(Schema, ABC):
         self.__table_source = TableSource(
             self.get_table_name(),
             columns,
-            mandatory_conditions or [],
+            mandatory_conditions,
         )
 
     def get_data_source(self) -> TableSource:
@@ -121,7 +121,7 @@ class MergeTreeSchema(WritableTableSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
-        mandatory_conditions: Sequence[Condition]=None,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: Optional[str],
         sample_expr: Optional[str]=None,
@@ -190,7 +190,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
-        mandatory_conditions: Sequence[Condition]=None,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: str,
         version_column: str,
@@ -228,7 +228,7 @@ class MaterializedViewSchema(TableSchema):
             *,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
-            mandatory_conditions: Sequence[Condition]=None,
+            mandatory_conditions: Optional[Sequence[Condition]]=None,
             query: str,
             local_source_table_name: str,
             local_destination_table_name: str,
