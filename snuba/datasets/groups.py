@@ -1,10 +1,7 @@
-import re
-
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
@@ -16,10 +13,10 @@ from snuba.datasets.schemas.join import (
     TableJoinNode,
 )
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
-from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.query import Condition, Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension

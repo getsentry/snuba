@@ -32,12 +32,6 @@ test_data = [
         ["t2.t2c2"],
         "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4"
     ),
-    (
-        ["t1c1"],
-        [],
-        [],
-        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4"
-    ),
 ]
 
 

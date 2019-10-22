@@ -10,7 +10,7 @@ class SimpleJoinOptimizer(QueryProcessor):
     Simplest possible join optimizer. It turns a join expression into a single
     table expression if only one table is referenced in the query.
     At this stage this is basically a proof of concept, we can build
-    a more sophisticated optimizaiton based on this.
+    a more sophisticated optimization based on this.
 
     TODO: Optimize a join between multiple tables by minimizing the number
     of tables joined together when more than one is referenced in the query.
@@ -31,11 +31,13 @@ class SimpleJoinOptimizer(QueryProcessor):
             # with a more structured data type than strings.
             match = QUALIFIED_COLUMN_REGEX.match(qualified_column)
             if match:
+                # match[1] is the first parenthesized group in the regex, thus
+                # the table alias.
                 table_alias = match[1]
                 referenced_aliases.add(table_alias)
 
-        if len(referenced_aliases) != 1:
-            # If len(referenced_aliases) is 0 we should never get here.
+        assert len(referenced_aliases) > 0, "Trying to otpimize a join query without aliases"
+        if len(referenced_aliases) > 1:
             return
 
         from_tables = from_clause.get_tables()
