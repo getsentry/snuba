@@ -26,7 +26,7 @@ class InvalidActionType(Exception):
     pass
 
 
-class ConsumerWorker(AbstractBatchWorker[KafkaMessage]):
+class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
     def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
         self.__dataset = dataset
         self.producer = producer
