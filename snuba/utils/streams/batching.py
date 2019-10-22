@@ -3,7 +3,6 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
-    Any,
     Generic,
     MutableMapping,
     MutableSequence,
@@ -112,7 +111,7 @@ class BatchingConsumer:
 
         self.shutdown = False
 
-        self.__batch_results: MutableSequence[Any] = []
+        self.__batch_results: MutableSequence[TResult] = []
         self.__batch_offsets: MutableMapping[TStream, Offsets[TOffset]] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
