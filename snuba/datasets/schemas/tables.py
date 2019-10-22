@@ -19,7 +19,7 @@ class TableSource(RelationalSource):
     def __init__(self,
         table_name: str,
         columns: ColumnSet,
-        mandatory_conditions: Optional[Sequence[Condition]],
+        mandatory_conditions: Optional[Sequence[Condition]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns

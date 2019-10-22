@@ -68,7 +68,7 @@ def test_query_extension_processing(
         {
             "conditions": []
         },
-        TableSource("my_table", ColumnSet([]), []),
+        TableSource("my_table", ColumnSet([])),
     )
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
