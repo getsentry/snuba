@@ -13,11 +13,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-
-Condition = Union[
-    Tuple[Any, Any, Any],
-    Sequence[Any],
-]
+from snuba.query.types import Condition
 
 Aggregation = Union[
     Tuple[Any, Any, Any],

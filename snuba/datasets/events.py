@@ -18,7 +18,8 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
+from snuba.query.types import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
@@ -209,6 +210,7 @@ class EventsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
+            mandatory_conditions=[('deleted', '=', 0)],
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
@@ -251,11 +253,6 @@ class EventsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
-
-    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
-        return [
-            (qualified_column('deleted', table_alias), '=', 0),
-        ]
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(
