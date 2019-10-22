@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.abstract import Consumer
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingKafkaConsumer
+from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
 from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
@@ -53,7 +53,7 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[KafkaMessage]):
+class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
@@ -70,7 +70,7 @@ class TestConsumer(object):
     def test_batch_size(self) -> None:
         consumer = FakeKafkaConsumer()
         worker = FakeWorker()
-        batching_consumer = BatchingKafkaConsumer(
+        batching_consumer = BatchingConsumer(
             consumer,
             'topic',
             worker=worker,
@@ -93,7 +93,7 @@ class TestConsumer(object):
     def test_batch_time(self, mock_time: Any) -> None:
         consumer = FakeKafkaConsumer()
         worker = FakeWorker()
-        batching_consumer = BatchingKafkaConsumer(
+        batching_consumer = BatchingConsumer(
             consumer,
             'topic',
             worker=worker,
