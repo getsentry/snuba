@@ -18,7 +18,7 @@ def test_organization_extension_query_processing_happy_path():
         {
             "conditions": []
         },
-        TableSource("my_table", ColumnSet([]), [])
+        TableSource("my_table", ColumnSet([]))
     )
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 

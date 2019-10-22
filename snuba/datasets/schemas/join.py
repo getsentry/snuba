@@ -124,7 +124,7 @@ class JoinClause(JoinNode):
     def get_mandatory_conditions(self) -> Sequence[Condition]:
         tables = self.get_tables()
         all_conditions: List[Condition] = []
-        for _, table in tables.items():
+        for table in tables.values():
             all_conditions.extend(table.get_mandatory_conditions())
         return all_conditions
 
