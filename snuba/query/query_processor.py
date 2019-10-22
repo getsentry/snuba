@@ -9,11 +9,11 @@ class QueryProcessor(ABC):
     """
     A transformation applied to a Query. This depends on the query structure and
     on the request settings. No additional context is provided.
-    This transformation mutates the Query class in place.
+    This transformation mutates the Query object in place.
 
     These processors tweak the query and are developed independently from each other,
     thus they have to be fully independent.
-    When developing a processor for a dataset, it would be a smell to implicitly
+    When developing a processor for a dataset, it would be a bad idea to implicitly
     depend on the result of a previous one. Each processor should always check its
     own preconditions instead.
 
