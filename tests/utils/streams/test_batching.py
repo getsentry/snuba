@@ -47,7 +47,7 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[KafkaMessage]):
+class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
