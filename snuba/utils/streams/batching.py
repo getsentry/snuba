@@ -14,25 +14,31 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.abstract import Consumer, ConsumerError, Message
-from snuba.utils.streams.kafka import TopicPartition
+from snuba.utils.streams.abstract import (
+    Consumer,
+    ConsumerError,
+    Message,
+    TStream,
+    TOffset,
+    TValue,
+)
 
 
-logger = logging.getLogger("batching-kafka-consumer")
+logger = logging.getLogger(__name__)
 
 TMessage = TypeVar("TMessage")
 
 
 class AbstractBatchWorker(ABC, Generic[TMessage]):
-    """The `BatchingKafkaConsumer` requires an instance of this class to
+    """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
     def process_message(self, message: TMessage) -> Optional[Any]:
-        """Called with each (raw) Kafka message, allowing the worker to do
-        incremental (preferablly local!) work on events. The object returned
-        is put into the batch maintained by the `BatchingKafkaConsumer`.
+        """Called with each raw message, allowing the worker to do
+        incremental (preferably local!) work on events. The object returned
+        is put into the batch maintained by the `BatchingConsumer`.
 
         If this method returns `None` it is not added to the batch.
 
@@ -45,51 +51,49 @@ class AbstractBatchWorker(ABC, Generic[TMessage]):
     def flush_batch(self, batch: Sequence[Any]) -> None:
         """Called with a list of pre-processed (by `process_message`) objects.
         The worker should write the batch of processed messages into whatever
-        store(s) it is maintaining. Afterwards the Kafka offsets are committed.
+        store(s) it is maintaining. Afterwards the offsets are committed by
+        the consumer.
 
-        A simple example would be writing the batch to another Kafka topic.
+        A simple example would be writing the batch to another stream.
         """
         pass
 
 
 @dataclass
-class Offsets:
+class Offsets(Generic[TOffset]):
     __slots__ = ["lo", "hi"]
-    lo: int
-    hi: int
+    lo: TOffset
+    hi: TOffset
 
 
-class BatchingKafkaConsumer:
-    """The `BatchingKafkaConsumer` is an abstraction over most Kafka consumer's main event
-    loops. For this reason it uses inversion of control: the user provides an implementation
-    for the `AbstractBatchWorker` and then the `BatchingKafkaConsumer` handles the rest.
+class BatchingConsumer:
+    """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
+    loop. For this reason it uses inversion of control: the user provides an implementation
+    for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
 
-    Main differences from the default KafkaConsumer are as follows:
     * Messages are processed locally (e.g. not written to an external datastore!) as they are
-      read from Kafka, then added to an in-memory batch
+      read from the consumer, then added to an in-memory batch
     * Batches are flushed based on the batch size or time sent since the first message
       in the batch was recieved (e.g. "500 items or 1000ms")
-    * Kafka offsets are not automatically committed! If they were, offsets might be committed
+    * Consumer offsets are not automatically committed! If they were, offsets might be committed
       for messages that are still sitting in an in-memory batch, or they might *not* be committed
       when messages are sent to an external datastore right before the consumer process dies
     * Instead, when a batch of items is flushed they are written to the external datastore and
-      then Kafka offsets are immediately committed (in the same thread/loop)
+      then consumer offsets are immediately committed (in the same thread/loop)
     * Users need only provide an implementation of what it means to process a raw message
       and flush a batch of events
-    * Supports an optional "dead letter topic" where messages that raise an exception during
-      `process_message` are sent so as not to block the pipeline.
 
     NOTE: This does not eliminate the possibility of duplicates if the consumer process
-    crashes between writing to its backend and commiting Kafka offsets. This should eliminate
+    crashes between writing to its backend and commiting offsets. This should eliminate
     the possibility of *losing* data though. An "exactly once" consumer would need to store
     offsets in the external datastore and reconcile them on any partition rebalance.
     """
 
     def __init__(
         self,
-        consumer: Consumer[TopicPartition, int, bytes],
+        consumer: Consumer[TStream, TOffset, TValue],
         topic: str,
-        worker: AbstractBatchWorker[Message[TopicPartition, int, bytes]],
+        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue]],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -107,7 +111,7 @@ class BatchingKafkaConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[Any] = []
-        self.__batch_offsets: MutableMapping[TopicPartition, Offsets] = {}
+        self.__batch_offsets: MutableMapping[TStream, Offsets[TOffset]] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -118,12 +122,12 @@ class BatchingKafkaConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(partitions: Sequence[TopicPartition]) -> None:
-            logger.info("New partitions assigned: %r", partitions)
+        def on_partitions_assigned(streams: Sequence[TStream]) -> None:
+            logger.info("New streams assigned: %r", streams)
 
-        def on_partitions_revoked(partitions: Sequence[TopicPartition]) -> None:
+        def on_partitions_revoked(streams: Sequence[TStream]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Partitions revoked: %r", partitions)
+            logger.info("Streams revoked: %r", streams)
             self._flush(force=True)
 
         self.consumer.subscribe(
@@ -153,13 +157,13 @@ class BatchingKafkaConsumer:
         self._handle_message(msg)
 
     def signal_shutdown(self) -> None:
-        """Tells the `BatchingKafkaConsumer` to shutdown on the next run loop iteration.
+        """Tells the batching consumer to shutdown on the next run loop iteration.
         Typically called from a signal handler."""
         logger.debug("Shutdown signalled")
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message[TopicPartition, int, bytes]) -> None:
+    def _handle_message(self, msg: Message[TStream, TOffset, TValue]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -200,9 +204,9 @@ class BatchingKafkaConsumer:
         self.__batch_processing_time_ms = 0.0
 
     def _flush(self, force: bool = False) -> None:
-        """Decides whether the `BatchingKafkaConsumer` should flush because of either
+        """Decides whether the batching consumer should flush because of either
         batch size or time. If so, delegate to the worker, clear the current batch,
-        and commit offsets to Kafka."""
+        and commit offsets."""
         if not self.__batch_messages_processed_count > 0:
             return  # No messages were processed, so there's nothing to do.
 
@@ -237,11 +241,11 @@ class BatchingKafkaConsumer:
                 "batch.flush.normalized", flush_duration / batch_results_length
             )
 
-        logger.debug("Committing Kafka offsets")
+        logger.debug("Committing offsets")
         commit_start = time.time()
         self._commit()
         commit_duration = (time.time() - commit_start) * 1000
-        logger.debug("Kafka offset commit took %dms", commit_duration)
+        logger.debug("Offset commit took %dms", commit_duration)
 
         self._reset_batch()
 
