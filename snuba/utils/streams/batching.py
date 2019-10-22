@@ -28,14 +28,16 @@ logger = logging.getLogger(__name__)
 
 TMessage = TypeVar("TMessage")
 
+TResult = TypeVar("TResult")
 
-class AbstractBatchWorker(ABC, Generic[TMessage]):
+
+class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: TMessage) -> Optional[Any]:
+    def process_message(self, message: TMessage) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -48,7 +50,7 @@ class AbstractBatchWorker(ABC, Generic[TMessage]):
         pass
 
     @abstractmethod
-    def flush_batch(self, batch: Sequence[Any]) -> None:
+    def flush_batch(self, batch: Sequence[TResult]) -> None:
         """Called with a list of pre-processed (by `process_message`) objects.
         The worker should write the batch of processed messages into whatever
         store(s) it is maintaining. Afterwards the offsets are committed by
@@ -93,7 +95,7 @@ class BatchingConsumer:
         self,
         consumer: Consumer[TStream, TOffset, TValue],
         topic: str,
-        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue]],
+        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue], TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,

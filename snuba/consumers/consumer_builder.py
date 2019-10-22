@@ -7,7 +7,7 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
-from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
+from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer_configuration
 
 
@@ -79,7 +79,7 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
-    def __build_consumer(self, worker: AbstractBatchWorker[KafkaMessage]) -> BatchingConsumer:
+    def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,

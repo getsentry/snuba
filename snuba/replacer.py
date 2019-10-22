@@ -99,7 +99,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker[KafkaMessage]):
+class ReplacerWorker(AbstractBatchWorker[KafkaMessage, Replacement]):
     def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
