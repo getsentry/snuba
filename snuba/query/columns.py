@@ -11,6 +11,7 @@ from snuba.util import (
     escape_alias,
     escape_literal,
     function_expr,
+    is_alias_column_expr,
     is_condition,
     is_function,
     QUOTED_LITERAL_RE,
@@ -42,6 +43,9 @@ def column_expr(dataset, column_name, query: Query, parsing_context: ParsingCont
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
+        # Handle column alias
+        if is_alias_column_expr(column_name):
+            (column_name, _, alias) = column_name
         expr = dataset.column_expr(column_name, query, parsing_context)
 
     if aggregate:

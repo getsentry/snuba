@@ -155,6 +155,23 @@ def is_function(column_expr: Any, depth: int=0) -> Optional[Tuple[Any, ...]]:
         return None
 
 
+def is_alias_column_expr(column_expr: Any) -> bool:
+    """
+    Returns True if column_expr is an alias column expression, otherwise False.
+
+    An alias column expression is a 3-tuple of (column_name, None, alias)
+    """
+    if (
+        isinstance(column_expr, (list, tuple))
+        and len(column_expr) == 3
+        and isinstance(column_expr[0], str)
+        and column_expr[1] is None
+        and isinstance(column_expr[2], str)
+    ):
+        return True
+    return False
+
+
 def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
     """
     Return the correct expression to use in the final SQL. Keeps a cache of
@@ -200,9 +217,11 @@ def columns_in_expr(expr: Any) -> Sequence[str]:
     if isinstance(expr, str):
         cols.append(expr.lstrip('-'))
     elif (isinstance(expr, (list, tuple)) and len(expr) >= 2
-          and isinstance(expr[1], (list, tuple))):
+            and isinstance(expr[1], (list, tuple))):
         for func_arg in expr[1]:
             cols.extend(columns_in_expr(func_arg))
+    elif is_alias_column_expr(expr):
+        cols.append(expr[0])
     return cols
 
 
