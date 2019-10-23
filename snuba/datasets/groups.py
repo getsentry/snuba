@@ -1,5 +1,3 @@
-import re
-
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
@@ -15,10 +13,13 @@ from snuba.datasets.schemas.join import (
     TableJoinNode,
 )
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
@@ -30,8 +31,6 @@ class Groups(TimeSeriesDataset):
 
     EVENTS_ALIAS = "events"
     GROUPS_ALIAS = "groups"
-
-    QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$")
 
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
@@ -70,7 +69,8 @@ class Groups(TimeSeriesDataset):
                 JoinCondition(
                     left=JoinConditionExpression(
                         table_alias=self.GROUPS_ALIAS,
-                        column="project_id"),
+                        column="project_id"
+                    ),
                     right=JoinConditionExpression(
                         table_alias=self.EVENTS_ALIAS,
                         column="project_id"),
@@ -107,7 +107,7 @@ class Groups(TimeSeriesDataset):
         assert table_alias == "", \
             "Groups dataset cannot be referenced with table aliases. Alias provided {table_alias}"
 
-        match = self.QUALIFIED_COLUMN_REGEX.match(column_name)
+        match = QUALIFIED_COLUMN_REGEX.match(column_name)
         if not match:
             # anything that is not prefixed with a table alias is simply
             # escaped and returned. It could be a literal.
@@ -147,3 +147,8 @@ class Groups(TimeSeriesDataset):
         # TODO: revisit how to build the prewhere clause on join
         # queries.
         return []
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            SimpleJoinOptimizer(),
+        ]
