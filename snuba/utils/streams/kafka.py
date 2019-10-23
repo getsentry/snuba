@@ -179,6 +179,16 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                 if on_revoke is not None:
                     on_revoke(streams)
             finally:
+                for stream in streams:
+                    try:
+                        self.__offsets.pop(stream)
+                    except KeyError:
+                        # If there was an error during assignment, this stream
+                        # may have never been added to the offsets mapping.
+                        logger.warning(
+                            "failed to delete offset for unknown stream: %r", stream
+                        )
+
                 self.__state = KafkaConsumerState.CONSUMING
 
         self.__consumer.subscribe(
