@@ -242,9 +242,9 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
 
     def __seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         if self.__state is KafkaConsumerState.ASSIGNING:
-            # Trying to use ``seek`` while in an assignment callback will yield
-            # throw an "Erroneous state" error, so seeking actually happens via
-            # assignment in the callback.
+            # Calling ``seek`` on the Confluent consumer from an assignment
+            # callback will throw an "Erroneous state" error. Instead,
+            # partition offsets have to be initialized by calling ``assign``.
             self.__consumer.assign(
                 [
                     ConfluentTopicPartition(stream.topic, stream.partition, offset)
