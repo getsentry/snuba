@@ -275,13 +275,13 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(request.extensions['timeseries'])
 
     extensions = dataset.get_extensions()
-
     for name, extension in extensions.items():
         extension.get_processor().process_query(
             request.query,
             request.extensions[name],
             request.settings
         )
+
     request.query.add_conditions(dataset.default_conditions())
 
     if request.settings.get_turbo():
@@ -311,7 +311,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from()
+    relational_source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    request.query.add_conditions(relational_source.get_mandatory_conditions())
+
+    source = relational_source.format_from()
     # TODO: consider moving the performance logic and the pre_where generation into
     # ClickhouseQuery since they are Clickhouse specific
     query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
