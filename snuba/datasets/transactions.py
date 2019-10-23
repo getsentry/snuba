@@ -75,10 +75,7 @@ class TransactionsDataset(TimeSeriesDataset):
             ('start_ms', UInt(16)),
             ('finish_ts', DateTime()),
             ('finish_ms', UInt(16)),
-            ('duration', Materialized(
-                UInt(32),
-                '((finish_ts - start_ts) * 1000) + (finish_ms - start_ms)',
-            )),
+            ('duration', UInt(32)),
             ('platform', LowCardinality(String())),
             ('environment', Nullable(String())),
             ('release', Nullable(String())),
