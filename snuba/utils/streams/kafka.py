@@ -251,13 +251,13 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                     for stream, offset in offsets.items()
                 ]
             )
-            self.__offsets.update(offsets)
         else:
             for stream, offset in offsets.items():
                 self.__consumer.seek(
                     ConfluentTopicPartition(stream.topic, stream.partition, offset)
                 )
-                self.__offsets[stream] = offset
+
+        self.__offsets.update(offsets)
 
     def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
