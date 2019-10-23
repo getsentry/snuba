@@ -308,7 +308,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
             list(filter(lambda cond: cond not in prewhere_conditions, request.query.get_conditions()))
         )
 
-    relational_source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    for processor in dataset.get_query_processors():
+        processor.process_query(request.query, request.settings)
+
+    relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
     source = relational_source.format_from()
