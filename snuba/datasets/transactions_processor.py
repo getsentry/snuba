@@ -77,7 +77,7 @@ class TransactionsMessageProcessor(MessageProcessor):
                 data["start_timestamp"],
             )
             if data["timestamp"] - data["start_timestamp"] < 0:
-                # Seems we ahve some negative durations in the DB
+                # Seems we have some negative durations in the DB
                 metrics.increment('negative_duration')
         except Exception:
             # all these fields are required but we saw some events go through here
@@ -87,8 +87,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             data["timestamp"],
         )
 
-        duration = processed["finish_ts"] - processed["start_ts"]
-        processed['duration'] = int(duration.total_seconds() * 1000)
+        duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
+        processed['duration'] = int(duration_secs * 1000) if duration_secs > 0 else 0
 
         processed['platform'] = _unicodify(event['platform'])
 
