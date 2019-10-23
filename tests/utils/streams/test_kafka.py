@@ -1,6 +1,5 @@
 import pytest
 import uuid
-from unittest import mock
 from typing import Iterator, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
@@ -102,6 +101,11 @@ def test_consumer(topic: str) -> None:
     consumer.unsubscribe()
 
     assert consumer.poll(1.0) is None
+
+    assert consumer.tell() == {}
+
+    with pytest.raises(ConsumerError):
+        consumer.seek({TopicPartition(topic, 0): 0})
 
     consumer.close()
 
