@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -27,7 +27,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.util import qualified_column
 
 
-def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
+def events_migrations(clickhouse_table: str, current_schema: Mapping[str, Tuple[str, str]]) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
     if 'group_id' not in current_schema:

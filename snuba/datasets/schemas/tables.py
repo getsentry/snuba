@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
@@ -52,7 +52,7 @@ class TableSchema(Schema, ABC):
         local_table_name: str,
         dist_table_name: str,
         mandatory_conditions: Optional[Sequence[Condition]]=None,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, Tuple[str, str]]], Sequence[str]]]=None,
     ):
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
         self.__local_table_name = local_table_name
@@ -126,7 +126,7 @@ class MergeTreeSchema(WritableTableSchema):
         partition_by: Optional[str],
         sample_expr: Optional[str]=None,
         settings: Optional[Mapping[str, str]]=None,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, Tuple[str, str]]], Sequence[str]]]=None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
@@ -196,7 +196,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         version_column: str,
         sample_expr: Optional[str]=None,
         settings: Optional[Mapping[str, str]]=None,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, Tuple[str, str]]], Sequence[str]]]=None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
@@ -234,7 +234,7 @@ class MaterializedViewSchema(TableSchema):
             local_destination_table_name: str,
             dist_source_table_name: str,
             dist_destination_table_name: str,
-            migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]] = None) -> None:
+            migration_function: Optional[Callable[[str, Mapping[str, Tuple[str, str]]], Sequence[str]]] = None) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,

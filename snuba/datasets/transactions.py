@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -58,6 +58,14 @@ class TransactionsTableWriter(TableWriter):
         )
 
 
+def transactions_migrations(clickhouse_table: str, current_schema: Mapping[str, Tuple[str, str]]) -> Sequence[str]:
+    ret = []
+    duration_col = current_schema.get("duration")
+    if duration_col and duration_col[1] == "MATERIALIZED":
+        ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
+    return ret
+
+
 class TransactionsDataset(TimeSeriesDataset):
     def __init__(self):
         columns = ColumnSet([
@@ -112,6 +120,7 @@ class TransactionsDataset(TimeSeriesDataset):
             partition_by='(retention_days, toMonday(start_ts))',
             version_column='deleted',
             sample_expr=None,
+            migration_function=transactions_migrations,
         )
 
         dataset_schemas = DatasetSchemas(

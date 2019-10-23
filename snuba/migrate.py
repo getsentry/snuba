@@ -15,7 +15,7 @@ def _run_schema(conn, schema):
         return
     clickhouse_table = schema.get_local_table_name()
     get_schema = lambda: {
-        column_name: column_type
+        column_name: (column_type, default_type)
         for column_name, column_type, default_type, default_expr
         in [cols[:4] for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)]
     }
@@ -29,9 +29,10 @@ def _run_schema(conn, schema):
 
     # Refresh after alters
     local_schema = get_schema()
+    refreshed_schema = {col: col_desc[0] for col, col_desc in local_schema.items()}
 
     # Warn user about any *other* schema diffs
-    differences = schema.get_column_differences(local_schema)
+    differences = schema.get_column_differences(refreshed_schema)
 
     for difference in differences:
         logger.warn(difference)
