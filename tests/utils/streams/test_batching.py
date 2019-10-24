@@ -14,7 +14,8 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         self.items: MutableSequence[KafkaMessage] = []
         self.commit_calls = 0
         self.close_calls = 0
-        self.positions: MutableMapping[TopicPartition, int] = {}
+        self.__working_offsets: MutableMapping[TopicPartition, int] = {}
+        self.__staged_offsets: MutableMapping[TopicPartition, int] = {}
 
     def subscribe(
         self,
@@ -35,19 +36,24 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         except IndexError:
             return None
 
-        self.positions[message.stream] = message.get_next_offset()
+        self.__working_offsets[message.stream] = message.get_next_offset()
 
         return message
 
     def tell(self) -> Mapping[TopicPartition, int]:
-        return self.__positions
+        return self.__working_offsets
 
     def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         raise NotImplementedError  # XXX: This is a bit more of a smell.
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def stage_offsets(self, offsets: Mapping[TopicPartition, int]) -> None:
+        self.__staged_offsets.update(offsets)
+
+    def commit_offsets(self) -> Mapping[TopicPartition, int]:
         self.commit_calls += 1
-        return self.positions
+        offsets = {**self.__staged_offsets}
+        self.__staged_offsets.clear()
+        return offsets
 
     def close(self) -> None:
         self.close_calls += 1

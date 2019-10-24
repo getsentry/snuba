@@ -175,6 +175,9 @@ class BatchingConsumer:
         if result is not None:
             self.__batch_results.append(result)
 
+        # XXX: abstraction leak/invalid type
+        self.consumer.stage_offsets({msg.stream: msg.offset + 1})
+
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
         self.__batch_processing_time_ms += duration
@@ -251,5 +254,5 @@ class BatchingConsumer:
         self._reset_batch()
 
     def _commit(self) -> None:
-        offsets = self.consumer.commit()
+        offsets = self.consumer.commit_offsets()
         logger.debug("Committed offsets: %s", offsets)
