@@ -1,5 +1,4 @@
 import logging
-import time
 from enum import Enum
 from typing import (
     Any,
@@ -10,11 +9,12 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
+    Union,
 )
 
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka import Consumer as ConfluentConsumer
-from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
@@ -49,6 +49,10 @@ KafkaConsumerState = Enum(
 class InvalidState(RuntimeError):
     def __init__(self, state: KafkaConsumerState):
         self.__state = state
+
+
+def as_kafka_configuration_boolean(value: Union[str, int, bool]) -> bool:
+    return value in {"true", "t", "1", 1, True}
 
 
 class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
@@ -89,6 +93,15 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
     )
 
     def __init__(self, configuration: Mapping[str, Any]) -> None:
+        if as_kafka_configuration_boolean(
+            configuration.get("enable.auto.commit", "true")
+        ):
+            raise ValueError("invalid value for 'enable.auto.commit' configuration")
+
+        self.__auto_offset_store = as_kafka_configuration_boolean(
+            configuration.get("enable.auto.offset.store", "true")
+        )
+
         auto_offset_reset = configuration.get("auto.offset.reset", "largest")
         if auto_offset_reset in {"smallest", "earliest", "beginning"}:
             self.__resolve_partition_starting_offset = (
@@ -108,10 +121,17 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         # NOTE: Offsets are explicitly managed as part of the assignment
         # callback, so preemptively resetting offsets is not enabled.
         self.__consumer = ConfluentConsumer(
-            {**configuration, "auto.offset.reset": "error"}
+            {
+                **configuration,
+                "auto.offset.reset": "error",
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "false",
+            }
         )
 
-        self.__offsets: MutableMapping[TopicPartition, int] = {}
+        self.__working_offsets: MutableMapping[TopicPartition, int] = {}
+
+        self.__staged_offsets: MutableMapping[TopicPartition, int] = {}
 
         self.__state = KafkaConsumerState.CONSUMING
 
@@ -185,8 +205,11 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                     on_revoke(streams)
             finally:
                 for stream in streams:
+                    if stream in self.__staged_offsets:
+                        del self.__staged_offsets[stream]
+
                     try:
-                        self.__offsets.pop(stream)
+                        self.__working_offsets.pop(stream)
                     except KeyError:
                         # If there was an error during assignment, this stream
                         # may have never been added to the offsets mapping.
@@ -235,7 +258,10 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             message.value(),
         )
 
-        self.__offsets[result.stream] = result.get_next_offset()
+        self.__working_offsets[result.stream] = result.get_next_offset()
+
+        if self.__auto_offset_store:
+            self.__staged_offsets[result.stream] = result.get_next_offset()
 
         return result
 
@@ -243,7 +269,7 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
-        return self.__offsets
+        return self.__working_offsets
 
     def __seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         if self.__state is KafkaConsumerState.ASSIGNING:
@@ -262,61 +288,41 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
                     ConfluentTopicPartition(stream.topic, stream.partition, offset)
                 )
 
-        self.__offsets.update(offsets)
+        self.__working_offsets.update(offsets)
 
     def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
-        if offsets.keys() - self.__offsets.keys():
+        if offsets.keys() - self.__working_offsets.keys():
             raise ConsumerError("cannot seek on unassigned streams")
 
         self.__seek(offsets)
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def stage_offsets(self, offsets: Mapping[TopicPartition, int]) -> None:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
-        result: Optional[Sequence[ConfluentTopicPartition]] = None
+        if offsets.keys() - self.__working_offsets.keys():
+            raise ConsumerError("cannot stage offsets for unassigned streams")
 
-        retries_remaining = 3
-        while result is None:
-            try:
-                result = self.__consumer.commit(asynchronous=False)
-                assert result is not None
-            except KafkaException as e:
-                if not e.args[0].code() in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
-                    KafkaError._WAIT_COORD,
-                ):
-                    raise
+        self.__staged_offsets.update(offsets)
 
-                if not retries_remaining:
-                    raise
+    def commit_offsets(self) -> Mapping[TopicPartition, int]:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
 
-                logger.warning(
-                    "Commit failed: %s (%d retries remaining)",
-                    str(e),
-                    retries_remaining,
-                )
-                retries_remaining -= 1
-                time.sleep(1)
+        offsets = {**self.__staged_offsets}
 
-        offsets: MutableMapping[TopicPartition, int] = {}
-
-        for value in result:
-            # The Confluent Kafka Consumer will include logical offsets in the
-            # sequence of ``TopicPartition`` objects returned by ``commit``.
-            # These are an implementation detail of the Kafka Consumer, so we
-            # don't expose them here.
-            # NOTE: These should no longer be seen now that we are forcing
-            # offsets to be set as part of the assignment callback.
-            if value.offset in self.LOGICAL_OFFSETS:
-                continue
-
-            assert value.offset >= 0, "expected non-negative offset"
-            offsets[TopicPartition(value.topic, value.partition)] = value.offset
+        if offsets:
+            self.__consumer.commit(
+                offsets=[
+                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
+                    for stream, offset in offsets.items()
+                ],
+                asynchronous=False,
+            )
+            self.__staged_offsets.clear()
 
         return offsets
 
@@ -374,8 +380,8 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         if error is not None:
             raise Exception(error.str())
 
-    def commit(self) -> Mapping[TopicPartition, int]:
-        offsets = super().commit()
+    def commit_offsets(self) -> Mapping[TopicPartition, int]:
+        offsets = super().commit_offsets()
 
         for stream, offset in offsets.items():
             self.__producer.produce(

@@ -96,7 +96,9 @@ def test_consumer(topic: str) -> None:
     assert message.offset == 0
     assert message.value == value
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
+    assert consumer.commit_offsets() == {TopicPartition(topic, 0): message.get_next_offset()}
+
+    assert consumer.commit_offsets() == {}
 
     consumer.unsubscribe()
 
@@ -125,7 +127,7 @@ def test_consumer(topic: str) -> None:
         consumer.seek({TopicPartition(topic, 0): 0})
 
     with pytest.raises(RuntimeError):
-        consumer.commit()
+        consumer.commit_offsets()
 
     consumer.close()
 
@@ -260,7 +262,7 @@ def test_commit_log_consumer(topic: str) -> None:
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
+    assert consumer.commit_offsets() == {TopicPartition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]

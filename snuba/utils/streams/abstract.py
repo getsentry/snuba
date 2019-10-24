@@ -72,6 +72,24 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
     An abstract class that provides methods to consume messages from a
     multiplexed collection of streams.
 
+    Streams support sequential access, as well as random access by offsets.
+    The specific data types of offsets are implementation dependent, but
+    offset values should represent a totally-ordered, monotonic sequence.
+    Offsets are often numeric, such as indexes into sequences or byte offsets
+    into a file.
+
+    There are three types of offsets: working offsets, staged offsets, and
+    committed offsets. Working offsets are used to track a high watermark of
+    the messages that this consumer has read (but not necessarily taken
+    action for, such as writing to a database) within a specific stream.
+    Working offsets are local to the consumer process. Staged offsets are
+    also local to the consumer process, and are used to track a high
+    watermark of the messages that this consumer *has* taken action for
+    (again, such as writing to a database.) Committed offsets are managed by
+    an external (implementation dependent) arbiter, and are used as the
+    starting point for a consumer when it is assigned a stream during the
+    subscription process.
+
     This interface is heavily "inspired" by the Confluent Kafka Consumer
     implementation, but only exposes a limited set of the available methods
     and several method signatures and/or return values differ -- these
@@ -149,7 +167,7 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
     @abstractmethod
     def tell(self) -> Mapping[TStream, TOffset]:
         """
-        Return the read offsets for all assigned streams.
+        Return the working offsets for all assigned streams.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
@@ -158,18 +176,26 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
     @abstractmethod
     def seek(self, offsets: Mapping[TStream, TOffset]) -> None:
         """
-        Change the read offsets for the provided streams.
+        Change the working offsets for the provided streams.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def commit(self) -> Mapping[TStream, TOffset]:
+    def stage_offsets(self, offsets: Mapping[TStream, TOffset]) -> None:
         """
-        Commit staged offsets for all streams that this consumer is assigned
-        to. The return value of this method is a mapping of streams with
-        their committed offsets as values.
+        Stage offsets for the next commit.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def commit_offsets(self) -> Mapping[TStream, TOffset]:
+        """
+        Commit staged offsets. The return value of this method is a mapping
+        of streams with their committed offsets as values.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
