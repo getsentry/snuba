@@ -4,7 +4,9 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.types import Condition
 from snuba.util import escape_col, parse_datetime, qualified_column
 
 
@@ -113,6 +115,15 @@ class Dataset(object):
         Return the parameters to perform the column split of the query.
         """
         return None
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        """
+        Returns a series of transformation functions (in the form of QueryProcessor objects)
+        that are applied to queries after parsing and before running them on Clickhouse.
+        These are applied in sequence in the same order as they are defined and are supposed
+        to be stateless.
+        """
+        return []
 
 
 class TimeSeriesDataset(Dataset):

@@ -6,6 +6,7 @@ from typing import Callable, Mapping, Optional, Sequence
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import RelationalSource, Schema
+from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
 
 
@@ -15,15 +16,23 @@ class TableSource(RelationalSource):
     datamodel.
     """
 
-    def __init__(self, table_name: str, columns: ColumnSet) -> None:
+    def __init__(self,
+        table_name: str,
+        columns: ColumnSet,
+        mandatory_conditions: Optional[Sequence[Condition]] = None,
+    ) -> None:
         self.__table_name = table_name
         self.__columns = columns
+        self.__mandatory_conditions = mandatory_conditions or []
 
     def format_from(self) -> str:
         return self.__table_name
 
     def get_columns(self) -> ColumnSet:
         return self.__columns
+
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
+        return self.__mandatory_conditions
 
 
 class TableSchema(Schema, ABC):
@@ -42,6 +51,7 @@ class TableSchema(Schema, ABC):
         *,
         local_table_name: str,
         dist_table_name: str,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
     ):
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
@@ -50,6 +60,7 @@ class TableSchema(Schema, ABC):
         self.__table_source = TableSource(
             self.get_table_name(),
             columns,
+            mandatory_conditions,
         )
 
     def get_data_source(self) -> TableSource:
@@ -110,6 +121,7 @@ class MergeTreeSchema(WritableTableSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: Optional[str],
         sample_expr: Optional[str]=None,
@@ -120,6 +132,7 @@ class MergeTreeSchema(WritableTableSchema):
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            mandatory_conditions=mandatory_conditions,
             migration_function=migration_function)
         self.__order_by = order_by
         self.__partition_by = partition_by
@@ -177,6 +190,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: str,
         version_column: str,
@@ -188,6 +202,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            mandatory_conditions=mandatory_conditions,
             order_by=order_by,
             partition_by=partition_by,
             sample_expr=sample_expr,
@@ -213,6 +228,7 @@ class MaterializedViewSchema(TableSchema):
             *,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
+            mandatory_conditions: Optional[Sequence[Condition]]=None,
             query: str,
             local_source_table_name: str,
             local_destination_table_name: str,
@@ -223,6 +239,7 @@ class MaterializedViewSchema(TableSchema):
             columns=columns,
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
+            mandatory_conditions=mandatory_conditions,
             migration_function=migration_function,
         )
 

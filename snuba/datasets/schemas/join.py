@@ -4,12 +4,13 @@ from abc import ABC, abstractmethod
 from collections import ChainMap
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping, NamedTuple, Sequence
+from typing import List, Mapping, NamedTuple, Optional, Sequence
 
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query.types import Condition
 
 
 class JoinType(Enum):
@@ -65,8 +66,13 @@ class TableJoinNode(TableSource, JoinNode):
     It can be a table or a view.
     """
 
-    def __init__(self, table_name: str, columns: ColumnSet, alias: str) -> None:
-        super().__init__(table_name, columns)
+    def __init__(self,
+        table_name: str,
+        columns: ColumnSet,
+        mandatory_conditions: Optional[Sequence[Condition]],
+        alias: str,
+    ) -> None:
+        super().__init__(table_name, columns, mandatory_conditions)
         self.__alias = alias
 
     def format_from(self) -> str:
@@ -114,6 +120,13 @@ class JoinClause(JoinNode):
         tables = self.get_tables()
         column_sets = {alias: table.get_columns() for alias, table in tables.items()}
         return QualifiedColumnSet(column_sets)
+
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
+        tables = self.get_tables()
+        all_conditions: List[Condition] = []
+        for table in tables.values():
+            all_conditions.extend(table.get_mandatory_conditions())
+        return all_conditions
 
 
 class JoinedSchema(Schema):
