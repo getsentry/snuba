@@ -31,11 +31,12 @@ class Message(Generic[TStream, TOffset, TValue]):
     Represents a single message within a stream.
     """
 
-    __slots__ = ["stream", "offset", "value"]
+    __slots__ = ["stream", "offset", "value", "next_offset"]
 
     stream: TStream
     offset: TOffset
     value: TValue
+    next_offset: TOffset
 
 
 class ConsumerError(Exception):

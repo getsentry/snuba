@@ -228,9 +228,10 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             TopicPartition(message.topic(), message.partition()),
             message.offset(),
             message.value(),
+            next_offset=message.offset() + 1,
         )
 
-        self.__offsets[result.stream] = result.offset + 1
+        self.__offsets[result.stream] = result.next_offset
 
         return result
 

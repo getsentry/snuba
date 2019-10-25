@@ -30,6 +30,7 @@ class TestReplacer(BaseEventsTest):
             TopicPartition('replacements', 0),
             0,
             json.dumps(msg).encode('utf-8'),
+            1,
         )
 
     def _issue_count(self, project_id, group_id=None):
@@ -184,6 +185,7 @@ class TestReplacer(BaseEventsTest):
                 'group_ids': [1],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
             })).encode('utf-8'),
+            42 + 1,
         )
 
         processed = self.replacer.process_message(message)
@@ -211,6 +213,7 @@ class TestReplacer(BaseEventsTest):
                 'previous_group_ids': [1],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
             })).encode('utf-8'),
+            42 + 1,
         )
 
         processed = self.replacer.process_message(message)
@@ -240,6 +243,7 @@ class TestReplacer(BaseEventsTest):
                 'hashes': ['a' * 32],
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
             })).encode('utf-8'),
+            42 + 1,
         )
 
         processed = self.replacer.process_message(message)
@@ -277,6 +281,7 @@ class TestReplacer(BaseEventsTest):
                 'tag': 'browser.name',
                 'datetime': timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
             })).encode('utf-8'),
+            42 + 1,
         )
 
         processed = self.replacer.process_message(message)

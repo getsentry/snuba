@@ -21,7 +21,8 @@ class TestConsumer(BaseEventsTest):
         message = KafkaMessage(
             TopicPartition('events', 456),
             123,
-            json.dumps((0, 'insert', event)).encode('utf-8')  # event doesn't really matter
+            json.dumps((0, 'insert', event)).encode('utf-8'),  # event doesn't really matter
+            123 + 1,
         )
 
         replacement_topic = enforce_table_writer(self.dataset).get_stream_loader().get_replacement_topic_spec()
@@ -48,6 +49,7 @@ class TestConsumer(BaseEventsTest):
             TopicPartition('events', 1),
             42,
             json.dumps((0, 'insert', event)).encode('utf-8'),
+            42 + 1,
         )
 
         assert test_worker.process_message(message) is None
