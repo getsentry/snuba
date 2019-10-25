@@ -36,7 +36,7 @@ class KafkaMessage(Message[TopicPartition, int, bytes]):
         offset: int,
         value: bytes,
         next_offset: Optional[int] = None,
-    ):
+    ) -> None:
         super().__init__(
             stream,
             offset,
