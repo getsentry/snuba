@@ -17,13 +17,12 @@ def get_messages(events_file):
     "Create a fake Kafka message for each JSON event in the file."
     messages = []
     raw_events = open(events_file).readlines()
-    for i, raw_event in enumerate(raw_events):
+    for raw_event in raw_events:
         messages.append(
             KafkaMessage(
                 TopicPartition('events', 1),
-                i,
-                raw_event.encode('utf-8'),
-                i + 1,
+                0,
+                raw_event.encode('utf-8')
             ),
         )
     return messages

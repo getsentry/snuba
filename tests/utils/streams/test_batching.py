@@ -79,7 +79,7 @@ class TestConsumer(object):
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8'), i + 1) for i in [1, 2, 3]]
+        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8')) for i in [1, 2, 3]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
         batching_consumer._shutdown()
@@ -103,17 +103,17 @@ class TestConsumer(object):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8'), i + 1) for i in [1, 2, 3]]
+        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8')) for i in [1, 2, 3]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8'), i + 1) for i in [4, 5, 6]]
+        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8')) for i in [4, 5, 6]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8'), i + 1) for i in [7, 8, 9]]
+        consumer.items = [KafkaMessage(TopicPartition('topic', 0), i, f'{i}'.encode('utf-8')) for i in [7, 8, 9]]
         for x in range(len(consumer.items)):
             batching_consumer._run_once()
 

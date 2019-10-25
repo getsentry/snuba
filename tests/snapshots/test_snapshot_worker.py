@@ -104,7 +104,6 @@ class TestSnapshotWorker:
                 TopicPartition('topic', 0),
                 1,
                 message.encode('utf-8'),
-                2,
             )
         )
         assert ret == expected

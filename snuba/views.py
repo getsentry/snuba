@@ -444,7 +444,6 @@ if application.debug or application.testing:
             TopicPartition('topic', 0),
             0,
             http_request.data,
-            1,
         )
 
         type_ = record[1]
