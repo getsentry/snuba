@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -16,7 +16,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.query import Query
 from snuba.query.types import Condition
@@ -27,7 +27,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.util import qualified_column
 
 
-def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
+def events_migrations(clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
     if 'group_id' not in current_schema:
