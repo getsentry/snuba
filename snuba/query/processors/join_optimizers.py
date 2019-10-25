@@ -24,7 +24,7 @@ class SimpleJoinOptimizer(QueryProcessor):
         if not isinstance(from_clause, JoinClause):
             return
 
-        referenced_columns = query.all_referenced_columns()
+        referenced_columns = query.get_all_referenced_columns()
         referenced_aliases = set()
         for qualified_column in referenced_columns:
             # This will be much better when we will represent columns

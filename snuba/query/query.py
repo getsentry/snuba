@@ -179,7 +179,7 @@ class Query:
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
 
-    def all_referenced_columns(self) -> Sequence[Any]:
+    def get_all_referenced_columns(self) -> Sequence[Any]:
         """
         Return the set of all columns that are used by a query.
         """

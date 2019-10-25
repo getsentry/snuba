@@ -28,14 +28,12 @@ def split_query(query_func):
         common_conditions = use_split and limit and not request.query.get_groupby()
 
         if common_conditions:
-            # TODO: Move all_referenced_columns into query and remove this dependency.
-            # In order to do this we need to break a circular dependency first
-            total_col_count = len(request.query.all_referenced_columns())
+            total_col_count = len(request.query.get_all_referenced_columns())
             column_split_spec = dataset.get_split_query_spec()
             if column_split_spec:
                 copied_query = copy.deepcopy(request.query)
                 copied_query.set_selected_columns(column_split_spec.get_min_columns())
-                min_col_count = len(copied_query.all_referenced_columns())
+                min_col_count = len(copied_query.get_all_referenced_columns())
             else:
                 min_col_count = None
 

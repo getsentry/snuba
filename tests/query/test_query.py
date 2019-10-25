@@ -117,7 +117,7 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.all_referenced_columns() == set(['a', 'b'])
+    assert query.get_all_referenced_columns() == set(['a', 'b'])
 
     # a = 1 AND (b = 1 OR c = 1)
     body = {
@@ -130,7 +130,7 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.all_referenced_columns() == set(['a', 'b', 'c'])
+    assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
 
     # a = 1 AND (b = 1 OR foo(c) = 1)
     body = {
@@ -143,7 +143,7 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.all_referenced_columns() == set(['a', 'b', 'c'])
+    assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
 
     # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
     body = {
@@ -156,7 +156,7 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.all_referenced_columns() == set(['a', 'b', 'c', 'd'])
+    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd'])
 
     # Other fields, including expressions in selected columns
     body = {
@@ -173,4 +173,4 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.all_referenced_columns() == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])
+    assert query.get_all_referenced_columns() == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])

@@ -129,7 +129,7 @@ class TagColumnProcessor:
 
         qualified_key = qualified_column("tags_key", table_alias)
         qualified_value = qualified_column("tags_value", table_alias)
-        cols_used = query.all_referenced_columns() & set([qualified_key, qualified_value])
+        cols_used = query.get_all_referenced_columns() & set([qualified_key, qualified_value])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.

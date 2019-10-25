@@ -55,7 +55,7 @@ def raw_query(
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(request.query.all_referenced_columns()) > uc_max:
+    if len(request.query.get_all_referenced_columns()) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 
