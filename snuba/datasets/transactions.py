@@ -19,7 +19,7 @@ from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
@@ -58,10 +58,10 @@ class TransactionsTableWriter(TableWriter):
         )
 
 
-def transactions_migrations(clickhouse_table: str, current_schema: Mapping[str, Tuple[str, str]]) -> Sequence[str]:
+def transactions_migrations(clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]) -> Sequence[str]:
     ret = []
     duration_col = current_schema.get("duration")
-    if duration_col and duration_col[1] == "MATERIALIZED":
+    if duration_col and duration_col.default_type == "MATERIALIZED":
         ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
     return ret
 
