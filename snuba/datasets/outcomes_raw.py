@@ -57,9 +57,6 @@ class OutcomesRawDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            'project': ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
-            ),
             'timeseries': TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=7),
