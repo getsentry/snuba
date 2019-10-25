@@ -63,8 +63,8 @@ class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
 @dataclass
 class Offsets(Generic[TOffset]):
     __slots__ = ["lo", "hi"]
-    lo: TOffset
-    hi: TOffset
+    lo: TOffset  # inclusive
+    hi: TOffset  # exclusive
 
 
 class BatchingConsumer:
@@ -183,9 +183,9 @@ class BatchingConsumer:
         self.__metrics.timing("process_message", duration)
 
         if msg.stream in self.__batch_offsets:
-            self.__batch_offsets[msg.stream].hi = msg.offset
+            self.__batch_offsets[msg.stream].hi = msg.next_offset
         else:
-            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.next_offset)
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
