@@ -1,5 +1,5 @@
 from snuba.datasets.schemas.join import JoinClause
-from snuba.query.columns import all_referenced_columns, QUALIFIED_COLUMN_REGEX
+from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -24,7 +24,7 @@ class SimpleJoinOptimizer(QueryProcessor):
         if not isinstance(from_clause, JoinClause):
             return
 
-        referenced_columns = all_referenced_columns(query)
+        referenced_columns = query.all_referenced_columns()
         referenced_aliases = set()
         for qualified_column in referenced_columns:
             # This will be much better when we will represent columns

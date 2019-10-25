@@ -8,7 +8,6 @@ from typing import Any, MutableMapping, NamedTuple
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.query.columns import all_referenced_columns
 from snuba.request import Request
 from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded, PROJECT_RATE_LIMIT_NAME
 from snuba.util import (
@@ -56,7 +55,7 @@ def raw_query(
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(all_referenced_columns(request.query)) > uc_max:
+    if len(request.query.all_referenced_columns()) > uc_max:
         query_settings['use_uncompressed_cache'] = 0
         use_cache = 0
 

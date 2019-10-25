@@ -1,4 +1,5 @@
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.query import Query
 
@@ -103,3 +104,73 @@ def test_edit_query():
 
     query.set_granularity(7200)
     assert query.get_granularity() == 7200
+
+
+def test_referenced_columns():
+    # a = 1 AND b = 1
+    dataset = get_dataset('events')
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    body = {
+        'conditions': [
+            ['a', '=', '1'],
+            ['b', '=', '1'],
+        ]
+    }
+    query = Query(body, source)
+    assert query.all_referenced_columns() == set(['a', 'b'])
+
+    # a = 1 AND (b = 1 OR c = 1)
+    body = {
+        'conditions': [
+            ['a', '=', '1'],
+            [
+                ['b', '=', '1'],
+                ['c', '=', '1'],
+            ],
+        ]
+    }
+    query = Query(body, source)
+    assert query.all_referenced_columns() == set(['a', 'b', 'c'])
+
+    # a = 1 AND (b = 1 OR foo(c) = 1)
+    body = {
+        'conditions': [
+            ['a', '=', '1'],
+            [
+                ['b', '=', '1'],
+                [['foo', ['c']], '=', '1'],
+            ],
+        ]
+    }
+    query = Query(body, source)
+    assert query.all_referenced_columns() == set(['a', 'b', 'c'])
+
+    # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
+    body = {
+        'conditions': [
+            ['a', '=', '1'],
+            [
+                ['b', '=', '1'],
+                [['foo', ['c', ['bar', ['d']]]], '=', '1'],
+            ],
+        ]
+    }
+    query = Query(body, source)
+    assert query.all_referenced_columns() == set(['a', 'b', 'c', 'd'])
+
+    # Other fields, including expressions in selected columns
+    body = {
+        'arrayjoin': 'tags_key',
+        'groupby': ['time', 'issue'],
+        'orderby': '-time',
+        'selected_columns': [
+            'issue',
+            'time',
+            ['foo', ['c', ['bar', ['d']]]]  # foo(c, bar(d))
+        ],
+        'aggregations': [
+            ['uniq', 'tags_value', 'values_seen']
+        ]
+    }
+    query = Query(body, source)
+    assert query.all_referenced_columns() == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])

@@ -7,7 +7,6 @@ from tests.base import BaseTest
 from snuba.datasets.factory import get_dataset
 from snuba import state
 from snuba.query.columns import (
-    all_referenced_columns,
     column_expr,
     complex_column_expr,
     conditions_expr,
@@ -207,72 +206,3 @@ class TestUtil(BaseTest):
         # Or nested functions
         with pytest.raises(AssertionError):
             assert complex_column_expr(dataset, tuplify([r"safe", ['dang`erous', ['message']]]), deepcopy(query), ParsingContext())
-
-    def test_referenced_columns(self):
-        # a = 1 AND b = 1
-        dataset = get_dataset('events')
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-        body = {
-            'conditions': [
-                ['a', '=', '1'],
-                ['b', '=', '1'],
-            ]
-        }
-        query = Query(body, source)
-        assert all_referenced_columns(query) == set(['a', 'b'])
-
-        # a = 1 AND (b = 1 OR c = 1)
-        body = {
-            'conditions': [
-                ['a', '=', '1'],
-                [
-                    ['b', '=', '1'],
-                    ['c', '=', '1'],
-                ],
-            ]
-        }
-        query = Query(body, source)
-        assert all_referenced_columns(query) == set(['a', 'b', 'c'])
-
-        # a = 1 AND (b = 1 OR foo(c) = 1)
-        body = {
-            'conditions': [
-                ['a', '=', '1'],
-                [
-                    ['b', '=', '1'],
-                    [['foo', ['c']], '=', '1'],
-                ],
-            ]
-        }
-        query = Query(body, source)
-        assert all_referenced_columns(query) == set(['a', 'b', 'c'])
-
-        # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
-        body = {
-            'conditions': [
-                ['a', '=', '1'],
-                [
-                    ['b', '=', '1'],
-                    [['foo', ['c', ['bar', ['d']]]], '=', '1'],
-                ],
-            ]
-        }
-        query = Query(body, source)
-        assert all_referenced_columns(query) == set(['a', 'b', 'c', 'd'])
-
-        # Other fields, including expressions in selected columns
-        body = {
-            'arrayjoin': 'tags_key',
-            'groupby': ['time', 'issue'],
-            'orderby': '-time',
-            'selected_columns': [
-                'issue',
-                'time',
-                ['foo', ['c', ['bar', ['d']]]]  # foo(c, bar(d))
-            ],
-            'aggregations': [
-                ['uniq', 'tags_value', 'values_seen']
-            ]
-        }
-        query = Query(body, source)
-        assert all_referenced_columns(query) == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])
