@@ -175,8 +175,7 @@ class BatchingConsumer:
         if result is not None:
             self.__batch_results.append(result)
 
-        # XXX: abstraction leak/invalid type
-        self.consumer.stage_offsets({msg.stream: msg.offset + 1})
+        self.consumer.stage_offsets({msg.stream: msg.next_offset})
 
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
