@@ -88,7 +88,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
 
         duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
-        processed['duration'] = int(duration_secs * 1000) if duration_secs > 0 else 0
+        processed['duration'] = max(int(duration_secs * 1000), 0)
 
         processed['platform'] = _unicodify(event['platform'])
 
