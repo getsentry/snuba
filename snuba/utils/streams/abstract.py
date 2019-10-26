@@ -25,18 +25,25 @@ TOffset = TypeVar("TOffset")
 TValue = TypeVar("TValue")
 
 
-@dataclass(frozen=True)
-class Message(Generic[TStream, TOffset, TValue]):
+class Message(ABC, Generic[TStream, TOffset, TValue]):
     """
     Represents a single message within a stream.
     """
 
-    __slots__ = ["stream", "offset", "value", "next_offset"]
+    def __init__(self, stream: TStream, offset: TOffset, value: TValue) -> None:
+        self.stream = stream
+        self.offset = offset
+        self.value = value
 
-    stream: TStream
-    offset: TOffset
-    value: TValue
-    next_offset: TOffset
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(stream={self.stream!r}, offset={self.offset!r})"
+
+    @abstractmethod
+    def get_next_offset(self) -> TOffset:
+        """
+        Return the offset of the next message in this stream.
+        """
+        raise NotImplementedError
 
 
 class ConsumerError(Exception):

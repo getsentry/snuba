@@ -30,19 +30,11 @@ class TopicPartition(NamedTuple):
 
 
 class KafkaMessage(Message[TopicPartition, int, bytes]):
-    def __init__(
-        self,
-        stream: TopicPartition,
-        offset: int,
-        value: bytes,
-        next_offset: Optional[int] = None,
-    ) -> None:
-        super().__init__(
-            stream,
-            offset,
-            value,
-            next_offset if next_offset is not None else offset + 1,
-        )
+
+    __slots__ = ["stream", "offset", "value"]
+
+    def get_next_offset(self) -> int:
+        return self.offset + 1
 
 
 class TransportError(ConsumerError):
@@ -241,10 +233,9 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             TopicPartition(message.topic(), message.partition()),
             message.offset(),
             message.value(),
-            next_offset=message.offset() + 1,
         )
 
-        self.__offsets[result.stream] = result.next_offset
+        self.__offsets[result.stream] = result.get_next_offset()
 
         return result
 
