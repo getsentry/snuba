@@ -15,12 +15,12 @@ services:
       - "1"
       - "--http-keepalive"
     environment: &snuba_env
-      CLICKHOUSE_SERVER: 'clickhouse:9000'
+      CLICKHOUSE_HOST: 'clickhouse'
       REDIS_HOST: 'redis'
       # Uncomment this to run sentry's snuba testsuite
       #SNUBA_SETTINGS: test
   clickhouse:
-    image: yandex/clickhouse-server:18.14.9
+    image: yandex/clickhouse-server:19.4
     ports:
       - "9000:9000"
       - "9009:9009"

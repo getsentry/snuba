@@ -1,14 +1,34 @@
-deploy:
-  services:
-    - name: snuba-api
-      healthcheck: sleep 30 && curl -I '127.0.0.1:11218/health?thorough=true'
-      chef_roles:
-        - snuba-api
-    - name: snuba-consumer
-      percent: 1.0
-      chef_roles:
-        - snuba-consumer
-    - name: snuba-replacer
-      percent: 1.0
-      chef_roles:
-        - snuba-consumer
+# sentry:
+#   organization: sentry
+#   project: snuba
+#   repository: getsentry/snuba
+
+steps:
+- kind: KubernetesDeployment
+  selector:
+    label_selector: service=snuba
+  containers:
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: api
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: replacer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: transactions-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: outcomes-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: loadbalancer-outcomes-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cdc-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cdc-groupassignee-consumer
+- kind: KubernetesCronJob
+  selector:
+    label_selector: service=snuba
+  containers:
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: cleanup
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: optimize

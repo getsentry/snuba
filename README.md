@@ -7,7 +7,6 @@ A service providing fast event searching, filtering and aggregation on arbitrary
 Add/change the following lines in `~/.sentry/sentry.conf.py`:
 
     SENTRY_SEARCH = 'sentry.search.snuba.SnubaSearchBackend'
-    SENTRY_TAGSTORE = 'sentry.tagstore.snuba.SnubaCompatibilityTagStorage'
     SENTRY_TSDB = 'sentry.tsdb.redissnuba.RedisSnubaTSDB'
     SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
 
@@ -19,13 +18,13 @@ Access raw clickhouse client (similar to psql):
 
     docker exec -it sentry_clickhouse clickhouse-client
 
-Data is written into the table `dev`: `select count() from dev;`
+Data is written into the table `sentry_local`: `select count() from sentry_local;`
 
 ## Requirements (Only required if you are developing against Snuba)
 
 Snuba assumes:
 
-1. A Clickhouse server endpoint at `CLICKHOUSE_SERVER` (default `localhost:9000`).
+1. A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`).
 2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
    `6379`
 
@@ -33,6 +32,8 @@ Snuba assumes:
 
     mkvirtualenv snuba
     workon snuba
+    make install-python-dependencies
+    make install-librdkafka
 
     # Run API server
     snuba api
@@ -50,18 +51,15 @@ Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 
 Settings are found in `settings.py`
 
-- `CLICKHOUSE_SERVER` : The endpoint for the clickhouse service.
-- `CLICKHOUSE_TABLE` : The clickhouse table name.
+- `CLICKHOUSE_HOST` : The hostname for the clickhouse service.
 - `REDIS_HOST` : The host redis is running on.
+- `DATASET_MODE` : If "local" runs Clickhouse local tables instead of distributed ones.
 
 ## Tests
 
     pip install -e .
-
-    export CLICKHOUSE_SERVER=127.0.0.1:9000
-
     make test
-    
+
 ## Testing Against Sentry
 
 ```
@@ -69,14 +67,14 @@ workon snuba
 git checkout your-snuba-branch
 snuba api
 ```
-And then in another terminal 
+And then in another terminal
 ```
 workon sentry
 git checkout master
 git pull
 sentry devservices up --exclude=snuba
 ```
-This will get the most recent version of Sentry on master, and bring up all snuba's dependencies. 
+This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 
 You will want to run the following Sentry tests:
 ```

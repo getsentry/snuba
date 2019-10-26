@@ -1,25 +1,47 @@
 import logging
+from typing import Any, Iterable, List, Mapping
 
-from snuba.clickhouse import ALL_COLUMNS, Array
+logger = logging.getLogger("snuba.writer")
 
-
-logger = logging.getLogger('snuba.writer')
-
-
-def row_from_processed_event(event, columns=ALL_COLUMNS):
-    values = []
-    for col in columns:
-        value = event.get(col.flattened, None)
-        if value is None and isinstance(col.type, Array):
-            value = []
-        values.append(value)
-
-    return values
+WriterTableRow = Mapping[str, Any]
 
 
-def write_rows(connection, table, rows, types_check=False, columns=ALL_COLUMNS):
-    connection.execute_robust("""
-        INSERT INTO %(table)s (%(colnames)s) VALUES""" % {
-        'colnames': ", ".join(col.escaped for col in columns),
-        'table': table,
-    }, rows, types_check=types_check)
+class BatchWriter(object):
+    def __init__(self, schema):
+        raise NotImplementedError
+
+    def write(self, rows: Iterable[WriterTableRow]):
+        raise NotImplementedError
+
+
+class BufferedWriterWrapper:
+    """
+    This is a wrapper that adds a buffer around a BatchWriter.
+    When consuming data from Kafka, the buffering logic is performed by the
+    batching consumer.
+    This is for the use cases that are not Kafka related.
+
+    This is not thread safe. Don't try to do parallel flush hoping in the GIL.
+    """
+
+    def __init__(self, writer: BatchWriter, buffer_size: int):
+        self.__writer = writer
+        self.__buffer_size = buffer_size
+        self.__buffer: List[WriterTableRow] = []
+
+    def __flush(self) -> None:
+        logger.debug("Flushing buffer with %d elements", len(self.__buffer))
+        self.__writer.write(self.__buffer)
+        self.__buffer = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if self.__buffer:
+            self.__flush()
+
+    def write(self, row: WriterTableRow):
+        self.__buffer.append(row)
+        if len(self.__buffer) >= self.__buffer_size:
+            self.__flush()

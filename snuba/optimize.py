@@ -1,4 +1,5 @@
 from datetime import timedelta
+from typing import Sequence
 import logging
 
 from snuba import util
@@ -13,7 +14,7 @@ def run_optimize(clickhouse, database, table, before=None):
     return len(parts)
 
 
-def get_partitions_to_optimize(clickhouse, database, table, before=None):
+def get_partitions_to_optimize(clickhouse, database, table, before=None) -> Sequence[util.Part]:
     engine = clickhouse.execute("""
         SELECT engine
         FROM system.tables
@@ -69,7 +70,7 @@ def get_partitions_to_optimize(clickhouse, database, table, before=None):
     parts = [util.decode_part_str(part) for part, count in active_parts]
 
     if before:
-        parts = filter(lambda p: (p[0] + timedelta(days=6 - p[0].weekday())) < before, parts)
+        parts = [p for p in parts if (p[0] + timedelta(days=6 - p[0].weekday())) < before]
 
     return parts
 

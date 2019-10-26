@@ -1,40 +1,25 @@
-from base import BaseTest
+from tests.base import BaseEventsTest
 
-from clickhouse_driver import Client, errors
-from mock import patch, call, Mock
+from clickhouse_driver import errors
+from unittest.mock import patch, call
 
-from snuba.clickhouse import (
-    ALL_COLUMNS,
-    Array, ColumnSet, Nested, Nullable, String, UInt,
-    escape_col,
-    ClickhousePool
-)
+from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
+from snuba.datasets.factory import enforce_table_writer
+from snuba.clickhouse.native import ClickhousePool
 
 
-class TestClickhouse(BaseTest):
-    def test_escape_col(self):
-        assert escape_col(None) is None
-        assert escape_col('') == ''
-        assert escape_col('foo') == 'foo'
-        assert escape_col('foo.bar') == 'foo.bar'
-        assert escape_col('foo:bar') == '`foo:bar`'
-
-        # Even though backtick characters in columns should be
-        # disallowed by the query schema, make sure we dont allow
-        # injection anyway.
-        assert escape_col("`") == r"`\``"
-        assert escape_col("production`; --") == "`production\`; --`"
-
+class TestClickhouse(BaseEventsTest):
     def test_flattened(self):
-        assert ALL_COLUMNS['group_id'].type == UInt(64)
-        assert ALL_COLUMNS['group_id'].name == 'group_id'
-        assert ALL_COLUMNS['group_id'].base_name is None
-        assert ALL_COLUMNS['group_id'].flattened == 'group_id'
+        columns = enforce_table_writer(self.dataset).get_schema().get_columns()
+        assert columns['group_id'].type == UInt(64)
+        assert columns['group_id'].name == 'group_id'
+        assert columns['group_id'].base_name is None
+        assert columns['group_id'].flattened == 'group_id'
 
-        assert ALL_COLUMNS['exception_frames.in_app'].type == Array(Nullable(UInt(8)))
-        assert ALL_COLUMNS['exception_frames.in_app'].name == 'in_app'
-        assert ALL_COLUMNS['exception_frames.in_app'].base_name == 'exception_frames'
-        assert ALL_COLUMNS['exception_frames.in_app'].flattened == 'exception_frames.in_app'
+        assert columns['exception_frames.in_app'].type == Array(Nullable(UInt(8)))
+        assert columns['exception_frames.in_app'].name == 'in_app'
+        assert columns['exception_frames.in_app'].base_name == 'exception_frames'
+        assert columns['exception_frames.in_app'].flattened == 'exception_frames.in_app'
 
     def test_schema(self):
         cols = ColumnSet([
@@ -48,8 +33,7 @@ class TestClickhouse(BaseTest):
         assert cols['foo'].type == UInt(8)
         assert cols['bar.qux:mux'].type == Array(String())
 
-
-    @patch('snuba.clickhouse.Client')
+    @patch('snuba.clickhouse.native.Client')
     def test_reconnect(self, FakeClient):
         # If the connection NetworkErrors a first time, make sure we call it a second time.
         FakeClient.return_value.execute.side_effect = [errors.NetworkError, '{"data": "to my face"}']

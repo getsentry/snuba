@@ -1,6 +1,6 @@
-from base import BaseTest
+from collections import ChainMap
+from tests.base import BaseEventsTest
 from functools import partial
-from mock import patch
 import random
 import simplejson as json
 from threading import Thread
@@ -8,72 +8,16 @@ import time
 import uuid
 
 from snuba import state
+from snuba.state import safe_dumps
 
 
-class TestState(BaseTest):
+class TestState(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
-        from snuba.api import application
+        from snuba.views import application
         assert application.testing == True
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
-
-    def test_concurrent_limit(self):
-        # No concurrent limit
-        with state.rate_limit('foo', concurrent_limit=None) as (allowed, _, _):
-            assert allowed
-
-        # 0 concurrent limit
-        with state.rate_limit('foo', concurrent_limit=0) as (allowed, _, _):
-            assert not allowed
-
-        # Concurrent limit 1 with consecutive  queries
-        with state.rate_limit('foo', concurrent_limit=1) as (allowed, _, _):
-            assert allowed
-        with state.rate_limit('foo', concurrent_limit=1) as (allowed, _, _):
-            assert allowed
-
-        # Concurrent limit with concurrent queries
-        with state.rate_limit('foo', concurrent_limit=1) as (allowed1, _, _):
-            with state.rate_limit('foo', concurrent_limit=1) as (allowed2, _, _):
-                assert allowed1
-                assert not allowed2
-
-        # Concurrent with different buckets
-        with state.rate_limit('foo', concurrent_limit=1) as (foo_allowed, _, _):
-            with state.rate_limit('bar', concurrent_limit=1) as (bar_allowed, _, _):
-                assert foo_allowed
-                assert bar_allowed
-
-    def test_per_second_limit(self):
-        bucket = uuid.uuid4()
-        # Create 30 queries at time 0, should all be allowed
-        with patch.object(state.time, 'time', lambda: 0):
-            for _ in range(30):
-                with state.rate_limit(bucket, per_second_limit=1) as (allowed, _, _):
-                    assert allowed
-
-        # Create another 30 queries at time 30, should also be allowed
-        with patch.object(state.time, 'time', lambda: 30):
-            for _ in range(30):
-                with state.rate_limit(bucket, per_second_limit=1) as (allowed, _, _):
-                    assert allowed
-
-        with patch.object(state.time, 'time', lambda: 60):
-            # 1 more query should be allowed at T60 because it does not make the previous
-            # rate exceed 1/sec until it has finished.
-            with state.rate_limit(bucket, per_second_limit=1) as (allowed, _, _):
-                assert allowed
-
-            # But the next one should not be allowed
-            with state.rate_limit(bucket, per_second_limit=1) as (allowed, _, _):
-                assert not allowed
-
-        # Another query at time 61 should be allowed because the first 30 queries
-        # have fallen out of the lookback window
-        with patch.object(state.time, 'time', lambda: 61):
-            with state.rate_limit(bucket, per_second_limit=1) as (allowed, _, _):
-                assert allowed
 
     def test_config(self):
         state.set_config('foo', 1)
@@ -167,3 +111,13 @@ class TestState(BaseTest):
         assert state.abtest('1000/2000:5') in (1000, 2000)
         assert state.abtest('1000/2000:0') == 1000
         assert state.abtest('1.5:1/-1.5:1') in (1.5, -1.5)
+
+
+def test_safe_dumps():
+    assert safe_dumps(
+        ChainMap({'a': 1}, {'b': 2}),
+        sort_keys=True,
+    ) == safe_dumps(
+        {'a': 1, 'b': 2},
+        sort_keys=True,
+    )

@@ -1,77 +1,50 @@
 import cProfile
 import logging
-import six
+import os
+import tempfile
 import time
 from itertools import chain
 
 from snuba.util import settings_override
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.perf')
 
 
-class FakeKafkaMessage(object):
-    def __init__(self, topic, partition, offset, value, key=None, headers=None, error=None):
-        self._topic = topic
-        self._partition = partition
-        self._offset = offset
-        self._value = value
-        self._key = key
-        self._headers = {
-            six.text_type(k): six.text_type(v) if v else None
-            for k, v in six.iteritems(headers)
-        } if headers else None
-        self._headers = headers
-        self._error = error
-
-    def topic(self):
-        return self._topic
-
-    def partition(self):
-        return self._partition
-
-    def offset(self):
-        return self._offset
-
-    def value(self):
-        return self._value
-
-    def key(self):
-        return self._key
-
-    def headers(self):
-        return self._headers
-
-    def error(self):
-        return self._error
-
-
 def get_messages(events_file):
-    "Create a FakeKafkaMessage for each JSON event in the file."
+    "Create a fake Kafka message for each JSON event in the file."
     messages = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
-        messages.append(FakeKafkaMessage('events', 1, 0, raw_event))
+        messages.append(
+            KafkaMessage(
+                TopicPartition('events', 1),
+                0,
+                raw_event.encode('utf-8')
+            ),
+        )
     return messages
 
 
-def run(events_file, clickhouse, table_name, repeat=1,
+def run(events_file, dataset, repeat=1,
         profile_process=False, profile_write=False):
-    from snuba.clickhouse import get_table_definition, get_test_engine
-    from snuba.consumer import ConsumerWorker
+    """
+    Measures the write performance of a dataset
+    """
 
-    clickhouse.execute(
-        get_table_definition(
-            name=table_name,
-            engine=get_test_engine(),
-        )
-    )
+    from snuba.consumer import ConsumerWorker
+    from snuba.clickhouse.native import ClickhousePool
+
+    for statement in dataset.get_dataset_schemas().get_create_statements():
+        ClickhousePool().execute(statement)
 
     consumer = ConsumerWorker(
-        clickhouse=clickhouse,
-        dist_table_name=table_name,
+        dataset=dataset,
         producer=None,
         replacements_topic=None,
+        metrics=DummyMetricsBackend(),
     )
 
     messages = get_messages(events_file)
@@ -90,12 +63,24 @@ def run(events_file, clickhouse, table_name, repeat=1,
 
     time_start = time.time()
     if profile_process:
-        cProfile.runctx('process()', globals(), locals(), sort='cumulative')
+        filename = tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(events_file) + '.process.',
+            suffix='.pstats',
+            delete=False,
+        ).name
+        cProfile.runctx('process()', globals(), locals(), filename=filename)
+        logger.info('Profile Data: %s', filename)
     else:
         process()
     time_write = time.time()
     if profile_write:
-        cProfile.runctx('write()', globals(), locals(), sort='cumulative')
+        filename = tempfile.NamedTemporaryFile(
+            prefix=os.path.basename(events_file) + '.write.',
+            suffix='.pstats',
+            delete=False,
+        ).name
+        cProfile.runctx('write()', globals(), locals(), filename=filename)
+        logger.info('Profile Data: %s', filename)
     else:
         write()
     time_finish = time.time()
@@ -107,7 +92,7 @@ def run(events_file, clickhouse, table_name, repeat=1,
     time_total = (time_finish - time_start) * 1000
     num_events = len(processed)
 
-    logger.info("Number of events: %s" % six.text_type(num_events).rjust(10, ' '))
+    logger.info("Number of events: %s" % str(num_events).rjust(10, ' '))
     logger.info("Total:            %sms" % format_time(time_total))
     logger.info("Total process:    %sms" % format_time(time_to_process))
     logger.info("Total write:      %sms" % format_time(time_to_write))

@@ -1,26 +1,28 @@
 import logging
-import six
 import time
 from collections import deque
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Mapping, Optional, Sequence
+
 import simplejson as json
 
-from batching_kafka_consumer import AbstractBatchWorker
+from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clickhouse.native import ClickhousePool
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
+from snuba.redis import redis_client
+from snuba.util import escape_col, escape_string
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
 
 from . import settings
-from snuba.clickhouse import ALL_COLUMNS, REQUIRED_COLUMNS, PROMOTED_TAGS, TAG_COLUMN_MAP, escape_col
-from snuba.processor import _hashify, InvalidMessageType, InvalidMessageVersion
-from snuba.redis import redis_client
-from snuba.util import escape_string
 
 
 logger = logging.getLogger('snuba.replacer')
 
-
-CLICKHOUSE_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-REQUIRED_COLUMN_NAMES = [col.escaped for col in REQUIRED_COLUMNS]
-ALL_COLUMN_NAMES = [col.escaped for col in ALL_COLUMNS]
 
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
@@ -89,14 +91,24 @@ def get_projects_query_flags(project_ids):
     return (needs_final, exclude_groups)
 
 
-class ReplacerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, metrics=None):
-        self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
-        self.metrics = metrics
+@dataclass(frozen=True)
+class Replacement:
+    count_query_template: str
+    insert_query_template: str
+    query_args: Mapping[str, Any]
+    query_time_flags: Any
 
-    def process_message(self, message):
-        message = json.loads(message.value())
+
+class ReplacerWorker(AbstractBatchWorker[KafkaMessage, Replacement]):
+    def __init__(self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend) -> None:
+        self.clickhouse = clickhouse
+        self.dataset = dataset
+        self.metrics = metrics
+        self.__all_column_names = [col.escaped for col in enforce_table_writer(dataset).get_schema().get_columns()]
+        self.__required_columns = [col.escaped for col in dataset.get_required_columns()]
+
+    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
+        message = json.loads(message.value)
         version = message[0]
 
         if version == 2:
@@ -105,13 +117,13 @@ class ReplacerWorker(AbstractBatchWorker):
             if type_ in ('start_delete_groups', 'start_merge', 'start_unmerge', 'start_delete_tag'):
                 return None
             elif type_ == 'end_delete_groups':
-                processed = process_delete_groups(event)
+                processed = process_delete_groups(event, self.__required_columns)
             elif type_ == 'end_merge':
-                processed = process_merge(event)
+                processed = process_merge(event, self.__all_column_names)
             elif type_ == 'end_unmerge':
-                processed = process_unmerge(event)
+                processed = process_unmerge(event, self.__all_column_names)
             elif type_ == 'end_delete_tag':
-                processed = process_delete_tag(event)
+                processed = process_delete_tag(event, self.dataset)
             else:
                 raise InvalidMessageType("Invalid message type: {}".format(type_))
         else:
@@ -119,42 +131,43 @@ class ReplacerWorker(AbstractBatchWorker):
 
         return processed
 
-    def flush_batch(self, batch):
-        for count_query_template, insert_query_template, query_args, query_time_flags in batch:
-            query_args.update({'dist_table_name': self.dist_table_name})
-            count = self.clickhouse.execute_robust(count_query_template % query_args)[0][0]
+    def flush_batch(self, batch: Sequence[Replacement]) -> None:
+        for replacement in batch:
+            query_args = {
+                **replacement.query_args,
+                'dist_read_table_name': self.dataset.get_dataset_schemas().get_read_schema().get_data_source().format_from(),
+                'dist_write_table_name': enforce_table_writer(self.dataset).get_schema().get_table_name(),
+            }
+            count = self.clickhouse.execute_robust(replacement.count_query_template % query_args)[0][0]
             if count == 0:
                 continue
 
             # query_time_flags == (type, project_id, [...data...])
-            flag_type, project_id = query_time_flags[:2]
+            flag_type, project_id = replacement.query_time_flags[:2]
             if flag_type == NEEDS_FINAL:
                 set_project_needs_final(project_id)
             elif flag_type == EXCLUDE_GROUPS:
-                group_ids = query_time_flags[2]
+                group_ids = replacement.query_time_flags[2]
                 set_project_exclude_groups(project_id, group_ids)
 
             t = time.time()
-            logger.debug("Executing replace query: %s" % (insert_query_template % query_args))
-            self.clickhouse.execute_robust(insert_query_template % query_args)
+            query = replacement.insert_query_template % query_args
+            logger.debug("Executing replace query: %s" % query)
+            self.clickhouse.execute_robust(query)
             duration = int((time.time() - t) * 1000)
             logger.info("Replacing %s rows took %sms" % (count, duration))
-            if self.metrics:
-                self.metrics.timing('replacements.count', count)
-                self.metrics.timing('replacements.duration', duration)
-
-    def shutdown(self):
-        pass
+            self.metrics.timing('replacements.count', count)
+            self.metrics.timing('replacements.duration', duration)
 
 
-def process_delete_groups(message):
+def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     group_ids = message['group_ids']
     if not group_ids:
         return None
 
-    assert all(isinstance(gid, six.integer_types) for gid in group_ids)
+    assert all(isinstance(gid, int) for gid in group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'deleted' else '1', REQUIRED_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'deleted' else '1', required_columns)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -165,32 +178,32 @@ def process_delete_groups(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(required_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(required_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
-        'required_columns': ', '.join(REQUIRED_COLUMN_NAMES),
+        'required_columns': ', '.join(required_columns),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'group_ids': ", ".join(str(gid) for gid in group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], group_ids)
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
 SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
 
 
-def process_merge(message):
+def process_merge(message, all_column_names) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     txn = message.get('transaction_id')
@@ -204,9 +217,9 @@ def process_merge(message):
     if not previous_group_ids:
         return None
 
-    assert all(isinstance(gid, six.integer_types) for gid in previous_group_ids)
+    assert all(isinstance(gid, int) for gid in previous_group_ids)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -217,36 +230,36 @@ def process_merge(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'previous_group_ids': ", ".join(str(gid) for gid in previous_group_ids),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (EXCLUDE_GROUPS, message['project_id'], previous_group_ids)
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_unmerge(message):
+def process_unmerge(message, all_column_names) -> Optional[Replacement]:
     hashes = message['hashes']
     if not hashes:
         return None
 
-    assert all(isinstance(h, six.string_types) for h in hashes)
+    assert all(isinstance(h, str) for h in hashes)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), ALL_COLUMN_NAMES)
+    select_columns = map(lambda i: i if i != 'group_id' else str(message['new_group_id']), all_column_names)
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -258,38 +271,38 @@ def process_unmerge(message):
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'previous_group_id': message['previous_group_id'],
         'project_id': message['project_id'],
         'hashes': ", ".join("'%s'" % _hashify(h) for h in hashes),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)
 
 
-def process_delete_tag(message):
+def process_delete_tag(message, dataset) -> Optional[Replacement]:
     tag = message['tag']
     if not tag:
         return None
 
-    assert isinstance(tag, six.string_types)
+    assert isinstance(tag, str)
     timestamp = datetime.strptime(message['datetime'], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = TAG_COLUMN_MAP['tags'].get(tag, tag)
-    is_promoted = tag in PROMOTED_TAGS['tags']
+    tag_column_name = dataset.get_tag_column_map()['tags'].get(tag, tag)
+    is_promoted = tag in dataset.get_promoted_tags()['tags']
 
     where = """\
         WHERE project_id = %(project_id)s
@@ -303,13 +316,14 @@ def process_delete_tag(message):
         where += "AND has(`tags.key`, %(tag_str)s)"
 
     insert_query_template = """\
-        INSERT INTO %(dist_table_name)s (%(all_columns)s)
+        INSERT INTO %(dist_write_table_name)s (%(all_columns)s)
         SELECT %(select_columns)s
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     select_columns = []
-    for col in ALL_COLUMNS:
+    all_columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
+    for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
             select_columns.append('NULL')
         elif col.flattened == 'tags.key':
@@ -323,20 +337,21 @@ def process_delete_tag(message):
         else:
             select_columns.append(col.escaped)
 
+    all_column_names = [col.escaped for col in all_columns]
     query_args = {
-        'all_columns': ', '.join(ALL_COLUMN_NAMES),
+        'all_columns': ', '.join(all_column_names),
         'select_columns': ', '.join(select_columns),
         'project_id': message['project_id'],
         'tag_str': escape_string(tag),
         'tag_column': escape_col(tag_column_name),
-        'timestamp': timestamp.strftime(CLICKHOUSE_DATETIME_FORMAT),
+        'timestamp': timestamp.strftime(DATETIME_FORMAT),
     }
 
     count_query_template = """\
         SELECT count()
-        FROM %(dist_table_name)s FINAL
+        FROM %(dist_read_table_name)s FINAL
     """ + where
 
     query_time_flags = (NEEDS_FINAL, message['project_id'])
 
-    return (count_query_template, insert_query_template, query_args, query_time_flags)
+    return Replacement(count_query_template, insert_query_template, query_args, query_time_flags)

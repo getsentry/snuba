@@ -1,86 +1,96 @@
+import collections
 import logging
 import simplejson as json
-import six
 
-from batching_kafka_consumer import AbstractBatchWorker
+from typing import Any, Mapping, Optional, Sequence
 
-from . import processor
-from .writer import row_from_processed_event, write_rows
+from snuba.datasets.factory import enforce_table_writer
+from snuba.processor import (
+    ProcessedMessage,
+    ProcessorAction,
+)
+from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaMessage
 
 
 logger = logging.getLogger('snuba.consumer')
+
+KafkaMessageMetadata = collections.namedtuple(
+    'KafkaMessageMetadata',
+    'offset partition'
+)
 
 
 class InvalidActionType(Exception):
     pass
 
 
-class ConsumerWorker(AbstractBatchWorker):
-    def __init__(self, clickhouse, dist_table_name, producer, replacements_topic, metrics=None):
-        self.clickhouse = clickhouse
-        self.dist_table_name = dist_table_name
+class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
+    def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
+        self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
+        self.__writer = enforce_table_writer(dataset).get_writer({
+            'load_balancing': 'in_order',
+            'insert_distributed_sync': 1,
+        })
 
-    def process_message(self, message):
-        value = json.loads(message.value())
-
-        processed = processor.process_message(value)
+    def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
+        # TODO: consider moving this inside the processor so we can do a quick
+        # processing of messages we want to filter out without fully parsing the
+        # json.
+        value = json.loads(message.value)
+        metadata = KafkaMessageMetadata(offset=message.offset, partition=message.stream.partition)
+        processed = self._process_message_impl(value, metadata)
         if processed is None:
             return None
 
-        action_type, processed_message = processed
+        if processed.action not in set(
+            [ProcessorAction.INSERT, ProcessorAction.REPLACE]
+        ):
+            raise InvalidActionType("Invalid action type: {}".format(processed.action))
 
-        if action_type == processor.INSERT:
-            processed_message['offset'] = message.offset()
-            processed_message['partition'] = message.partition()
+        return processed
 
-            result = row_from_processed_event(processed_message)
-        elif action_type == processor.REPLACE:
-            result = processed_message
-        else:
-            raise InvalidActionType("Invalid action type: {}".format(action_type))
-
-        return (action_type, result)
+    def _process_message_impl(
+        self,
+        value: Mapping[str, Any],
+        metadata: KafkaMessageMetadata,
+    ) -> Optional[ProcessedMessage]:
+        processor = enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
+        return processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:
             # errors are KafkaError objects and inherit from BaseException
             raise error
 
-    def flush_batch(self, batch):
+    def flush_batch(self, batch: Sequence[ProcessedMessage]):
         """First write out all new INSERTs as a single batch, then reproduce any
         event replacements such as deletions, merges and unmerges."""
         inserts = []
         replacements = []
 
-        for action_type, data in batch:
-            if action_type == processor.INSERT:
-                inserts.append(data)
-            elif action_type == processor.REPLACE:
-                replacements.append(data)
+        for message in batch:
+            if message.action == ProcessorAction.INSERT:
+                inserts.extend(message.data)
+            elif message.action == ProcessorAction.REPLACE:
+                replacements.extend(message.data)
 
         if inserts:
-            write_rows(
-                self.clickhouse,
-                self.dist_table_name,
-                inserts
-            )
+            self.__writer.write(inserts)
 
-            if self.metrics:
-                self.metrics.timing('inserts', len(inserts))
+            self.metrics.timing('inserts', len(inserts))
 
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic,
-                    key=six.text_type(key).encode('utf-8'),
+                    key=str(key).encode('utf-8'),
                     value=json.dumps(replacement).encode('utf-8'),
                     on_delivery=self.delivery_callback,
                 )
 
             self.producer.flush()
-
-    def shutdown(self):
-        pass

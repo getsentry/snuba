@@ -1,27 +1,40 @@
-from datetime import datetime, timedelta
-import jsonschema
 import copy
-import six
+from datetime import datetime, timedelta
+from typing import Any, Mapping
 
-CONDITION_OPERATORS = ['>', '<', '>=', '<=', '=', '!=', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL', 'LIKE', 'NOT LIKE']
-POSITIVE_OPERATORS = ['>', '<', '>=', '<=', '=', 'IN', 'IS NULL', 'LIKE']
-SDK_STATS_SCHEMA = {
+import jsonschema
+
+
+def get_time_series_extension_properties(default_granularity: int, default_window: timedelta):
+    return {
+        'type': 'object',
+        'properties': {
+            'from_date': {
+                'type': 'string',
+                'format': 'date-time',
+                'default': lambda: (datetime.utcnow().replace(microsecond=0) - default_window).isoformat()
+            },
+            'to_date': {
+                'type': 'string',
+                'format': 'date-time',
+                'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
+            },
+            'granularity': {
+                'type': 'number',
+                'default': default_granularity,
+                'minimum': 1,
+            },
+        },
+        'additionalProperties': False,
+    }
+
+
+Schema = Mapping[str, Any]  # placeholder for JSON schema
+
+
+SDK_STATS_BASE_SCHEMA = {
     'type': 'object',
     'properties': {
-        'from_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=1)).isoformat()
-        },
-        'to_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
-        },
-        'granularity': {
-            'type': 'number',
-            'default': 86400,  # SDK stats query defaults to 1-day bucketing
-        },
         'groupby': {
             'type': 'array',
             'items': {
@@ -34,270 +47,24 @@ SDK_STATS_SCHEMA = {
     'additionalProperties': False,
 }
 
-QUERY_SCHEMA = {
-    'type': 'object',
-    'properties': {
-        # A condition is a 3-tuple of (column, operator, literal)
-        # `conditions` is an array of conditions, or an array of arrays of conditions.
-        # Conditions at the the top level are ANDed together.
-        # Conditions at the second level are ORed together.
-        # eg: [(a, =, 1), (b, =, 2)] => "a = 1 AND b = 2"
-        # eg: [(a, =, 1), [(b, =, 2), (c, =, 3)]] => "a = 1 AND (b = 2 OR c = 3)"
-        'conditions': {
-            'type': 'array',
-            'items': {
-                'anyOf': [
-                    {'$ref': '#/definitions/condition'},
-                    {
-                        'type': 'array',
-                        'items': {'$ref': '#/definitions/condition'},
-                    },
-                ],
-            },
-            'default': [],
-        },
-        'having': {
-            'type': 'array',
-            # HAVING looks just like a condition
-            'items': {'$ref': '#/definitions/condition'},
-            'default': [],
-        },
-        'from_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: (datetime.utcnow().replace(microsecond=0) - timedelta(days=5)).isoformat()
-        },
-        'to_date': {
-            'type': 'string',
-            'format': 'date-time',
-            'default': lambda: datetime.utcnow().replace(microsecond=0).isoformat()
-        },
-        'granularity': {
-            'type': 'number',
-            'default': 3600,
-        },
-        'use_group_id_column': {
-            # TODO this flag is deprecated and is ignored by the code.
-            # Remove it when clients are no longer sending it.
-            'type': ['boolean', 'number'],
-            'default': True
-        },
-        'issues': {
-            'type': 'array',
-            'items': {
-                'type': 'array',
-                'minItems': 3,
-                'maxItems': 3,
-                'items': [
-                    {'type': 'number'},
-                    {'type': 'number'},
-                    {
-                        'type': 'array',
-                        'items': {
-                            'anyOf': [
-                                {'$ref': '#/definitions/fingerprint_hash'},
-                                {'$ref': '#/definitions/fingerprint_hash_with_tombstone'},
-                            ],
-                        },
-                        'minItems': 1,
-                    },
-                ],
-            },
-            'default': [],
-        },
-        'project': {
-            'anyOf': [
-                {'type': 'number'},
-                {
-                    'type': 'array',
-                    'items': {'type': 'number'},
-                    'minItems': 1,
-                },
-            ]
-        },
-        'groupby': {
-            'anyOf': [
-                {'$ref': '#/definitions/column_name'},
-                {'$ref': '#/definitions/column_list'},
-                {'type': 'array', 'maxItems': 0},
-            ],
-            'default': [],
-        },
-        'totals': {
-            'type': 'boolean',
-            'default': False
-        },
-        'aggregations': {
-            'type': 'array',
-            'items': {
-                'type': 'array',
-                'items': [
-                    {
-                        # Aggregation function
-                        # TODO this should eventually become more restrictive again.
-                        'type': 'string',
-                    }, {
-                        # Aggregate column
-                        'anyOf': [
-                            {'$ref': '#/definitions/column_name'},
-                            {'enum': ['']},
-                            {'type': 'null'},
-                        ],
-                    }, {
-                        # Alias
-                        'type': ['string', 'null'],
-                    },
-                ],
-                'minItems': 3,
-                'maxItems': 3,
-            },
-            'default': [],
-        },
-        'arrayjoin': {
-            '$ref': '#/definitions/column_name',
-        },
-        'orderby': {
-            'anyOf': [
-                {'$ref': '#/definitions/column_name'},
-                {'$ref': '#/definitions/nested_expr'},
-                {
-                    'type': 'array',
-                    'items': {
-                        'anyOf': [
-                            {'$ref': '#/definitions/column_name'},
-                            {'$ref': '#/definitions/nested_expr'},
-                        ],
-                    }
-                }
-            ]
-        },
-        'limitby': {
-            'type': 'array',
-            'items': [
-                {'type': 'number'},
-                {'$ref': '#/definitions/column_name'},
-            ]
-        },
-        'limit': {
-            'type': 'number',
-            'default': 1000,
-            'maximum': 10000,
-        },
-        'offset': {
-            'type': 'number',
-        },
-        'selected_columns': {
-            'anyOf': [
-                {'$ref': '#/definitions/column_name'},
-                {'$ref': '#/definitions/column_list'},
-                {'type': 'array', 'minItems': 0, 'maxItems': 0},
-            ],
-            'default': [],
-        },
-        'sample': {
-            'type': 'number',
-            'min': 0,
-        },
-        # Never add FINAL to queries, enable sampling
-        'turbo': {
-            'type': 'boolean',
-            'default': False,
-        },
-        # Force queries to hit the first shard replica, ensuring the query
-        # sees data that was written before the query. This burdens the
-        # first replica, so should only be used when absolutely necessary.
-        'consistent': {
-            'type': 'boolean',
-            'default': False,
-        },
-        'debug': {
-            'type': 'boolean',
-        }
-    },
-    # Need to select down to the project level for customer isolation and performance
-    'required': ['project'],
-    'dependencies': {
-        'offset': ['limit'],
-        'totals': ['groupby']
-    },
-    'additionalProperties': False,
-
-    'definitions': {
-        'fingerprint_hash': {
-            'type': 'string',
-            'minLength': 32,
-            'maxLength': 32,
-            'pattern': '^[0-9a-f]{32}$',
-        },
-        'fingerprint_hash_with_tombstone': {
-            'type': 'array',
-            'items': [
-                {'$ref': '#/definitions/fingerprint_hash'},
-                {
-                    'anyOf': [
-                        {'type': 'null'},
-                        {'pattern': r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$'},
-                    ]
-                },
-            ],
-        },
-        'column_name': {
-            'type': 'string',
-            'anyOf': [
-                # Special computed column created from `issues` definition
-                {'enum': ['issue', '-issue']},
-                {'pattern': '^-?[a-zA-Z0-9_.]+$', },
-                {'pattern': r'^-?tags\[[a-zA-Z0-9_.:-]+\]$', },
-            ],
-        },
-        'column_list': {
-            'type': 'array',
-            'items': {
-                'anyOf': [
-                    {'$ref': '#/definitions/column_name'},
-                    {'$ref': '#/definitions/nested_expr'},
-                ]
-            },
-            'minItems': 1,
-        },
-        # TODO: can the complex nested expr actually be encoded here?
-        'nested_expr': {'type': 'array'},
-        'condition': {
-            'type': 'array',
-            'items': [
-                {
-                    'anyOf': [
-                        {'$ref': '#/definitions/column_name'},
-                        {'$ref': '#/definitions/nested_expr'},
-                    ],
-                }, {
-                    # Operator
-                    'type': 'string',
-                    # TODO  enforce literal = NULL for unary operators
-                    'enum': CONDITION_OPERATORS,
-                }, {
-                    # Literal
-                    'anyOf': [
-                        {'type': ['string', 'number', 'null']},
-                        {
-                            'type': 'array',
-                            'items': {'type': ['string', 'number']}
-                        },
-                    ],
-                },
-            ],
-            'minItems': 3,
-            'maxItems': 3,
-        }
-    }
+SDK_STATS_EXTENSIONS_SCHEMA = {
+    'timeseries': get_time_series_extension_properties(
+        default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
+        default_window=timedelta(days=1),
+    ),
 }
 
 
-def validate(value, schema, set_defaults=True):
+def validate_jsonschema(value, schema, set_defaults=True):
+    """
+    Validates a value against the provided schema, returning the validated
+    value if the value conforms to the schema, otherwise raising a
+    ``jsonschema.ValidationError``.
+    """
     orig = jsonschema.Draft6Validator.VALIDATORS['properties']
 
     def validate_and_default(validator, properties, instance, schema):
-        for property, subschema in six.iteritems(properties):
+        for property, subschema in properties.items():
             if 'default' in subschema:
                 if callable(subschema['default']):
                     instance.setdefault(property, subschema['default']())
@@ -306,6 +73,12 @@ def validate(value, schema, set_defaults=True):
 
         for error in orig(validator, properties, instance, schema):
             yield error
+
+    # Using schema defaults during validation will cause the input value to be
+    # mutated, so to be on the safe side we create a deep copy of that value to
+    # avoid unwanted side effects for the calling function.
+    if set_defaults:
+        value = copy.deepcopy(value)
 
     validator_cls = jsonschema.validators.extend(
         jsonschema.Draft4Validator,
@@ -318,20 +91,4 @@ def validate(value, schema, set_defaults=True):
         format_checker=jsonschema.FormatChecker()
     ).validate(value, schema)
 
-
-def generate(schema):
-    """
-    Generate a (not necessarily valid) object that can be used as a template
-    from the provided schema
-    """
-    typ = schema.get('type')
-    if 'default' in schema:
-        default = schema['default']
-        return default() if callable(default) else default
-    elif typ == 'object':
-        return {prop: generate(subschema) for prop, subschema in six.iteritems(schema.get('properties', {}))}
-    elif typ == 'array':
-        return []
-    elif typ == 'string':
-        return ""
-    return None
+    return value

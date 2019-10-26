@@ -19,6 +19,8 @@ import click
 import sys
 
 from snuba import settings
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -28,22 +30,20 @@ from snuba import settings
               default=False, help='Whether or not to profile processing.')
 @click.option('--profile-write/--no-profile-write',
               default=False, help='Whether or not to profile writing.')
-@click.option('--clickhouse-server', default=settings.CLICKHOUSE_SERVER,
-              help='Clickhouse server to run perf against.')
-@click.option('--table-name', default='perf', help='Table name to use for inserts.')
+@click.option('--dataset', default='events', type=click.Choice(DATASET_NAMES),
+              help='The dataset to consume/run replacements for (currently only events supported)')
 @click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, profile_process, profile_write, clickhouse_server, table_name, log_level):
-    from snuba.clickhouse import ClickhousePool
+def perf(events_file, repeat, profile_process, profile_write, dataset, log_level):
     from snuba.perf import run, logger
 
     logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
-    if settings.CLICKHOUSE_TABLE != 'dev':
-        logger.error("The migration tool is only intended for local development environment.")
+    dataset = get_dataset(dataset)
+    if not local_dataset_mode():
+        logger.error("The perf tool is only intended for local dataset environment.")
         sys.exit(1)
 
-    clickhouse = ClickhousePool(clickhouse_server.split(':')[0], port=int(clickhouse_server.split(':')[1]))
     run(
-        events_file, clickhouse, table_name,
+        events_file, dataset,
         repeat=repeat, profile_process=profile_process, profile_write=profile_write
     )

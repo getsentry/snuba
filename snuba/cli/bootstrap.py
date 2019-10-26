@@ -1,6 +1,7 @@
 import click
 
 from snuba import settings
+from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
 
 
 @click.command()
@@ -36,7 +37,20 @@ def bootstrap(bootstrap_server, kafka, force):
                     raise
                 time.sleep(1)
 
-        topics = [NewTopic(o.pop('topic'), **o) for o in settings.KAFKA_TOPICS.values()]
+        topics = []
+        for name in DATASET_NAMES:
+            dataset = get_dataset(name)
+            table_writer = dataset.get_table_writer()
+            if table_writer:
+                stream_loader = table_writer.get_stream_loader()
+                for topic_spec in stream_loader.get_all_topic_specs():
+                    topics.append(
+                        NewTopic(
+                            topic_spec.topic_name,
+                            num_partitions=topic_spec.partitions_number,
+                            replication_factor=topic_spec.replication_factor,
+                        )
+                    )
 
         for topic, future in client.create_topics(topics).items():
             try:
@@ -45,7 +59,7 @@ def bootstrap(bootstrap_server, kafka, force):
             except Exception as e:
                 print("Failed to create topic %s: %s" % (topic, e))
 
-    from snuba.clickhouse import ClickhousePool, get_table_definition, get_test_engine
+    from snuba.clickhouse.native import ClickhousePool
 
     attempts = 0
     while True:
@@ -61,9 +75,10 @@ def bootstrap(bootstrap_server, kafka, force):
 
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
-    ClickhousePool().execute(
-        get_table_definition(
-            settings.DEFAULT_LOCAL_TABLE,
-            get_test_engine(),
-        )
-    )
+
+    # Create the tables for every dataset.
+    for name in DATASET_NAMES:
+        dataset = get_dataset(name)
+
+        for statement in dataset.get_dataset_schemas().get_create_statements():
+            ClickhousePool().execute(statement)

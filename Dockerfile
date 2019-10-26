@@ -1,11 +1,12 @@
-FROM python:2-slim
+FROM python:3.7-slim
 
 RUN groupadd -r snuba && useradd -r -g snuba snuba
 
 RUN mkdir -p /usr/src/snuba
 WORKDIR /usr/src/snuba
 
-ENV PIP_DISABLE_PIP_VERSION_CHECK=on \
+ENV PIP_NO_CACHE_DIR=off \
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
     PYTHONDONTWRITEBYTECODE=1
 
 # these are required all the way through, and removing them will cause bad things
@@ -38,7 +39,7 @@ RUN set -ex; \
         wget \
     '; \
     apt-get update; \
-    apt-get install -y --no-install-recommends libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
+    apt-get install -y --no-install-recommends multiarch-support libtinfo5 libexpat1 libffi6 liblz4-1 libpcre3 $buildDeps; \
     rm -rf /var/lib/apt/lists/*; \
     \
     wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/$GOSU_VERSION/gosu-$(dpkg --print-architecture)"; \
@@ -65,27 +66,9 @@ RUN set -ex; \
     PREFIX=/usr make install; \
     rm -r /usr/src/librdkafka; \
     \
-# Install PyPy at /pypy, for running the consumer code. Note that PyPy is built
-# against libssl1.0.0, so this is required for using the SSL module, which is
-# required to bootstrap pip. Since this is a short term stopgap it seemed better
-# than building PyPy ourselves.
-    cd ; \
-    wget https://bitbucket.org/pypy/pypy/downloads/pypy2-v6.0.0-linux64.tar.bz2; \
-    [ "$(sha256sum pypy2-v6.0.0-linux64.tar.bz2)" = '6cbf942ba7c90f504d8d6a2e45d4244e3bf146c8722d64e9410b85eac6b5af67  pypy2-v6.0.0-linux64.tar.bz2' ]; \
-    tar xf pypy2-v6.0.0-linux64.tar.bz2; \
-    rm -rf pypy2-v6.0.0-linux64.tar.bz2; \
-    mv pypy2-v6.0.0-linux64 /pypy; \
-    wget http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    DEBIAN_FRONTEND=noninteractive dpkg -i libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    rm -rf libssl1.0.0_1.0.1t-1+deb8u11_amd64.deb; \
-    wget https://bootstrap.pypa.io/get-pip.py; \
-    /pypy/bin/pypy get-pip.py; \
-    rm -rf get-pip.py; \
-    \
     apt-get purge -y --auto-remove $buildDeps
 
-COPY snuba ./snuba/
-COPY setup.py Makefile README.md MANIFEST.in ./
+COPY . /usr/src/snuba
 
 RUN chown -R snuba:snuba /usr/src/snuba/
 
@@ -98,23 +81,34 @@ RUN set -ex; \
         liblz4-dev \
         libpcre3-dev \
         make \
+        wget \
     '; \
     apt-get update; \
     apt-get install -y $buildDeps --no-install-recommends; \
     rm -rf /var/lib/apt/lists/*; \
     \
     make install-python-dependencies; \
+    mkdir /tmp/uwsgi-dogstatsd; \
+    wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
+        | tar -xvz -C /tmp/uwsgi-dogstatsd --strip-components=1; \
+    uwsgi --build-plugin /tmp/uwsgi-dogstatsd; \
+    rm -rf /tmp/uwsgi-dogstatsd .uwsgi_plugins_builder; \
+    mkdir -p /var/lib/uwsgi; \
+    mv dogstatsd_plugin.so /var/lib/uwsgi/; \
+    uwsgi --need-plugin=/var/lib/uwsgi/dogstatsd --help > /dev/null; \
     snuba --help; \
-    PATH=/pypy/bin:$PATH make install-python-dependencies; \
-    /pypy/bin/snuba --help; \
     \
-    rm -rf ~/.cache/pip; \
     apt-get purge -y --auto-remove $buildDeps
 
-ENV CLICKHOUSE_SERVER clickhouse-server:9000
-ENV FLASK_DEBUG 0
 ARG SNUBA_VERSION_SHA
-ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA
+ENV SNUBA_RELEASE=$SNUBA_VERSION_SHA \
+    FLASK_DEBUG=0 \
+    PYTHONUNBUFFERED=1 \
+    UWSGI_ENABLE_METRICS=true \
+    UWSGI_NEED_PLUGIN=/var/lib/uwsgi/dogstatsd \
+    UWSGI_STATS_PUSH=dogstatsd:127.0.0.1:8126 \
+    UWSGI_DOGSTATSD_EXTRA_TAGS=service:snuba
+
 
 EXPOSE 1218
 

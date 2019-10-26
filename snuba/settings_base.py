@@ -7,10 +7,16 @@ DEBUG = True
 
 PORT = 1218
 
+DEFAULT_DATASET_NAME = 'events'
+DISABLED_DATASETS = {}
+DATASET_MODE = 'local'
+
 # Clickhouse Options
-CLICKHOUSE_SERVER = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000')
-CLICKHOUSE_CLUSTER = None
-CLICKHOUSE_TABLE = 'dev'
+# TODO: Warn about using `CLICKHOUSE_SERVER`, users should use the new settings instead.
+[default_clickhouse_host, default_clickhouse_port] = os.environ.get('CLICKHOUSE_SERVER', 'localhost:9000').split(':', 1)
+CLICKHOUSE_HOST = os.environ.get('CLICKHOUSE_HOST', default_clickhouse_host)
+CLICKHOUSE_PORT = int(os.environ.get('CLICKHOUSE_PORT', default_clickhouse_port))
+CLICKHOUSE_HTTP_PORT = int(os.environ.get('CLICKHOUSE_HTTP_PORT', 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
 # Dogstatsd Options
@@ -19,6 +25,7 @@ DOGSTATSD_PORT = 8125
 
 # Redis Options
 USE_REDIS_CLUSTER = False
+REDIS_CLUSTER_STARTUP_NODES = None
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
 REDIS_PORT = 6379
 REDIS_DB = 1
@@ -35,52 +42,24 @@ SENTRY_DSN = None
 
 # Snuba Options
 
-# Convenience columns that evaluate to a bucketed time, the
-# bucketing depends on the granularity parameter.
-TIME_GROUP_COLUMNS = {
-    'time': 'timestamp',
-    'rtime': 'received'
-}
+SNAPSHOT_LOAD_PRODUCT = 'snuba'
+
+SNAPSHOT_CONTROL_TOPIC_INIT_TIMEOUT = 30
+BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
-DEFAULT_BROKERS = ['localhost:9093']
+DEFAULT_BROKERS = ['localhost:9092']
+DEFAULT_DATASET_BROKERS = {}
+
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
-DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
-DEFAULT_QUEUED_MIN_MESSAGES = 20000
+DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 10000
+DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
-KAFKA_TOPICS = {
-    'raw-events': {
-        'topic': 'events',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'replacements': {
-        'topic': 'event-replacements',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-    'commit-log': {
-        'topic': 'snuba-commit-log',
-        'replication_factor': 1,
-        'num_partitions': 1,
-    },
-}
 
-# project_id and timestamp are included for queries, event_id is included for ReplacingMergeTree
-DEFAULT_SAMPLE_EXPR = 'cityHash64(toString(event_id))'
-DEFAULT_ORDER_BY = '(project_id, toStartOfDay(timestamp), %s)' % DEFAULT_SAMPLE_EXPR
-DEFAULT_PARTITION_BY = '(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))'
-DEFAULT_VERSION_COLUMN = 'deleted'
-DEFAULT_SHARDING_KEY = 'cityHash64(toString(event_id))'
-DEFAULT_LOCAL_TABLE = 'sentry_local'
-DEFAULT_DIST_TABLE = 'sentry_dist'
 DEFAULT_RETENTION_DAYS = 90
-
 RETENTION_OVERRIDES = {}
 
-# the list of keys that will upgrade from a WHERE condition to a PREWHERE
-PREWHERE_KEYS = ['project_id']
 MAX_PREWHERE_CONDITIONS = 1
 
 STATS_IN_RESPONSE = False

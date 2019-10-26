@@ -6,9 +6,10 @@ import logging
 import random
 import re
 import simplejson as json
-import six
 import time
 import uuid
+from functools import partial
+from typing import Any, Iterator, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.redis import redis_client as rds
@@ -35,83 +36,13 @@ max_query_duration_s = 60
 rate_lookback_s = 60
 
 
-@contextmanager
-def rate_limit(bucket, per_second_limit=None, concurrent_limit=None):
-    """
-    A context manager for rate limiting that allows for limiting based on
-    on a rolling-window per-second rate as well as the number of requests
-    concurrently running.
-
-    Uses a single redis sorted set per rate-limiting bucket to track both the
-    concurrency and rate, the score is the query timestamp. Queries are thrown
-    ahead in time when they start so we can count them as concurrent, and
-    thrown back to their start time once they finish so we can count them
-    towards the historical rate.
-
-               time >>----->
-    +-----------------------------+--------------------------------+
-    | historical query window     | currently executing queries    |
-    +-----------------------------+--------------------------------+
-                                  ^
-                                 now
-    """
-    bucket = '{}{}'.format(ratelimit_prefix, bucket)
-    query_id = uuid.uuid4()
-    now = time.time()
-    bypass_rate_limit, rate_history_s = get_configs([
-        ('bypass_rate_limit', 0),
-        ('rate_history_sec', 3600)
-    ])
-
-    if bypass_rate_limit == 1:
-        yield (True, 0, 0)
-        return
-
-    pipe = rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
-    pipe.zadd(bucket, now + max_query_duration_s, query_id)  # add query
-    if per_second_limit is None:
-        pipe.exists("nosuchkey") # no-op if we don't need per-second
-    else:
-        pipe.zcount(bucket, now - rate_lookback_s, now)  # get historical
-    if concurrent_limit is None:
-        pipe.exists("nosuchkey")  # no-op if we don't need concurrent
-    else:
-        pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
-
-    try:
-        _, _, historical, concurrent = pipe.execute()
-        historical = int(historical)
-        concurrent = int(concurrent)
-    except Exception as ex:
-        logger.exception(ex)
-        yield (True, 0, 0)  # fail open if redis is having issues
-        return
-
-    per_second = historical / float(rate_lookback_s)
-    allowed = (per_second_limit is None or per_second <= per_second_limit) and\
-        (concurrent_limit is None or concurrent <= concurrent_limit)
-    try:
-        yield (allowed, per_second, concurrent)
-    finally:
-        try:
-            if allowed:
-                # return the query to its start time
-                rds.zincrby(bucket, query_id, -float(max_query_duration_s))
-            else:
-                rds.zrem(bucket, query_id)  # not allowed / not counted
-        except Exception as ex:
-            logger.exception(ex)
-            pass
-
-
-def get_concurrent(bucket):
+def get_concurrent(bucket: str) -> Any:
     now = time.time()
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     return rds.zcount(bucket, '({:f}'.format(now), '+inf')
 
 
-def get_rates(bucket, rollup=60):
+def get_rates(bucket: str, rollup: int=60) -> Sequence[Any]:
     now = int(time.time())
     bucket = '{}{}'.format(ratelimit_prefix, bucket)
     pipe = rds.pipeline(transaction=False)
@@ -122,7 +53,7 @@ def get_rates(bucket, rollup=60):
 
 
 @contextmanager
-def deduper(query_id):
+def deduper(query_id: Optional[str]) -> Iterator[bool]:
     """
     A simple redis distributed lock on a query_id to prevent multiple
     concurrent queries running with the same id. Blocks subsequent
@@ -163,7 +94,7 @@ class memoize():
     Simple expiring memoizer for functions with no args.
     """
 
-    def __init__(self, timeout=1):
+    def __init__(self, timeout: int=1) -> None:
         self.timeout = timeout
         self.saved = None
         self.at = 0
@@ -177,7 +108,7 @@ class memoize():
         return wrapper
 
 
-def numeric(value):
+def numeric(value: Optional[Any]) -> Optional[Any]:
     try:
         return int(value)
     except ValueError:
@@ -190,7 +121,7 @@ def numeric(value):
 ABTEST_RE = re.compile('(?:(-?\d+\.?\d*)(?:\:(\d+))?\/?)')
 
 
-def abtest(value):
+def abtest(value: Optional[Any]) -> Optional[Any]:
     """
     Recognizes a value that consists of a '/'-separated sequence of
     value:weight tuples. Value is numeric. Weight is an optional integer and
@@ -200,7 +131,7 @@ def abtest(value):
     1000:1/2000:1 => returns 1000 or 2000 with equal weight
     1000:2/2000:1 => returns 1000 twice as often as 2000
     """
-    if isinstance(value, six.string_types) and ABTEST_RE.match(value):
+    if isinstance(value, str) and ABTEST_RE.match(value):
         values = ABTEST_RE.findall(value)
         total_weight = sum(int(weight or 1) for (_, weight) in values)
         r = random.randint(1, total_weight)
@@ -213,7 +144,7 @@ def abtest(value):
         return value
 
 
-def set_config(key, value, user=None):
+def set_config(key: str, value: Optional[Any], user: Optional[str]=None) -> None:
     if value is not None:
         value = u'{}'.format(value).encode('utf-8')
 
@@ -235,73 +166,78 @@ def set_config(key, value, user=None):
         logger.exception(ex)
 
 
-def set_configs(values, user=None):
-    for k, v in six.iteritems(values):
+def set_configs(values: Mapping[str, Optional[Any]], user: Optional[str]=None) -> None:
+    for k, v in values.items():
         set_config(k, v, user=user)
 
 
-def get_config(key, default=None):
+def get_config(key: str, default: Optional[Any]=None) -> Optional[Any]:
     return get_all_configs().get(key, default)
 
 
-def get_configs(key_defaults):
+def get_configs(key_defaults: Mapping[str, Optional[Any]]) -> Sequence[Optional[Any]]:
     all_confs = get_all_configs()
     return [all_confs.get(k, d) for k, d in key_defaults]
 
 
-def get_all_configs():
-    return {k: abtest(v) for k, v in six.iteritems(get_raw_configs())}
+def get_all_configs() -> Mapping[str, Optional[Any]]:
+    return {k: abtest(v) for k, v in get_raw_configs().items()}
 
 
 @memoize(settings.CONFIG_MEMOIZE_TIMEOUT)
-def get_raw_configs():
+def get_raw_configs() -> Mapping[str, Optional[Any]]:
     try:
         all_configs = rds.hgetall(config_hash)
-        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in six.iteritems(all_configs) if v is not None}
+        return {k.decode('utf-8'): numeric(v.decode('utf-8')) for k, v in all_configs.items() if v is not None}
     except Exception as ex:
         logger.exception(ex)
         return {}
 
 
-def delete_config(key, user=None):
+def delete_config(key: str, user: Optional[Any]=None) -> None:
     return set_config(key, None, user=user)
 
 
-def get_config_changes():
-    return map(
-        json.loads,
-        rds.lrange(config_changes_list, 0, -1),
-    )
+def get_config_changes() -> Sequence[Any]:
+    return [json.loads(change) for change in rds.lrange(config_changes_list, 0, -1)]
 
 
 # Query Recording
 
-def record_query(data):
+
+def safe_dumps_default(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {**value}
+    raise TypeError(f'Cannot convert object of type {type(value).__name__} to JSON-safe type')
+
+
+safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
+
+
+def record_query(data: Mapping[str, Optional[Any]]) -> None:
     global kfk
     max_redis_queries = 200
-    data = json.dumps(data, for_json=True)
     try:
+        data = safe_dumps(data)
         rds.pipeline(transaction=False)\
             .lpush(queries_list, data)\
             .ltrim(queries_list, 0, max_redis_queries - 1)\
             .execute()
 
-        if settings.RECORD_QUERIES:
-            if kfk is None:
-                kfk = Producer({
-                    'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
-                })
+        if kfk is None:
+            kfk = Producer({
+                'bootstrap.servers': ','.join(settings.DEFAULT_BROKERS)
+            })
 
-            kfk.produce(
-                settings.QUERIES_TOPIC,
-                data.encode('utf-8'),
-            )
+        kfk.produce(
+            settings.QUERIES_TOPIC,
+            data.encode('utf-8'),
+        )
     except Exception as ex:
-        logger.exception(ex)
-        pass
+        logger.exception('Could not record query due to error: %r', ex)
 
 
-def get_queries():
+def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
     try:
         queries = []
         for q in rds.lrange(queries_list, 0, -1):
@@ -315,13 +251,13 @@ def get_queries():
     return queries
 
 
-def get_result(query_id):
+def get_result(query_id: str) -> Any:
     key = '{}{}'.format(query_cache_prefix, query_id)
     result = rds.get(key)
     return result and json.loads(result)
 
 
-def set_result(query_id, result):
+def set_result(query_id: str, result: Mapping[str, Optional[Any]]) -> Any:
     timeout = get_config('cache_expiry_sec', 1)
     key = '{}{}'.format(query_cache_prefix, query_id)
     return rds.set(key, json.dumps(result), ex=timeout)

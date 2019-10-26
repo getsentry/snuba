@@ -2,29 +2,25 @@
 import calendar
 from datetime import datetime, timedelta
 from dateutil.parser import parse as parse_datetime
-from dateutil.tz import tz
 from functools import partial
+from unittest.mock import patch
 import pytest
 import pytz
 from sentry_sdk import Hub, Client
 import simplejson as json
-import six
 import time
 import uuid
 
-from snuba import processor, settings, state
+from snuba import settings, state
+from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.redis import redis_client
 
-from base import BaseTest
+from tests.base import BaseApiTest
 
 
-class TestApi(BaseTest):
-    def setup_method(self, test_method):
-        super(TestApi, self).setup_method(test_method)
-        from snuba.api import application
-        assert application.testing is True
-        application.config['PROPAGATE_EXCEPTIONS'] = False
-
-        self.app = application.test_client()
+class TestApi(BaseApiTest):
+    def setup_method(self, test_method, dataset_name='events'):
+        super().setup_method(test_method, dataset_name)
         self.app.post = partial(self.app.post, headers={'referer': 'test'})
 
         # values for test data
@@ -59,7 +55,7 @@ class TestApi(BaseTest):
             for p in self.project_ids:
                 # project N sends an event every Nth minute
                 if tock % p == 0:
-                    events.append(processor.process_insert({
+                    events.append(enforce_table_writer(self.dataset).get_stream_loader().get_processor().process_insert({
                         'project_id': p,
                         'event_id': uuid.uuid4().hex,
                         'deleted': 0,
@@ -76,7 +72,7 @@ class TestApi(BaseTest):
                             'tags': {
                                 # Sentry
                                 'environment': self.environments[(tock * p) % len(self.environments)],
-                                'sentry:release': six.text_type(tick),
+                                'sentry:release': str(tick),
                                 'sentry:dist': 'dist1',
                                 'os.name': 'windows',
                                 'os.rooted': 1,
@@ -98,7 +94,16 @@ class TestApi(BaseTest):
                             }
                         }
                     }))
-        self.write_processed_events(events)
+        self.write_processed_records(events)
+
+    def redis_db_size(self):
+        # dbsize could be an integer for a single node cluster or a dictionary
+        # with one key value pair per node for a multi node cluster
+        dbsize = redis_client.dbsize()
+        if isinstance(dbsize, dict):
+            return sum(dbsize.values())
+        else:
+            return dbsize
 
     def test_count(self):
         """
@@ -175,7 +180,6 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [],
             'groupby': 'issue',
         })).data)
         assert 'error' not in result
@@ -257,7 +261,7 @@ class TestApi(BaseTest):
             'groupby': 'issue',
             'conditions': [[], ['issue', 'IN', self.group_ids[:5]]]
         })).data)
-        assert set([d['issue'] for d in result['data']]) == set([self.group_ids[0], self.group_ids[4]])
+        assert set([d['issue'] for d in result['data']]) == set([self.group_ids[4]])
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
@@ -339,6 +343,34 @@ class TestApi(BaseTest):
         })).data)
         assert len(result['data']) == 0
 
+        # Test null group_id
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': ['group_id'],
+            'groupby': ['group_id'],
+            'aggregations': [['count()', '', 'count']],
+            'debug': True,
+            'conditions': [
+                ['group_id', 'IS NULL', None],
+            ],
+        })).data)
+        assert len(result['data']) == 1
+        res = result['data'][0]
+        assert res['group_id'] is None
+        assert res['count'] > 0
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'dataset': 'events',
+            'project': [1, 2, 3],
+            'selected_columns': [["isNull", ["group_id"], "null_group_id"]],
+            'groupby': ['group_id'],
+            'debug': True,
+            'conditions': [
+                ['group_id', 'IS NULL', None],
+            ],
+        })).data)
+        assert result['data'][0]['null_group_id'] == 1
+
     def test_escaping(self):
         # Escape single quotes so we don't get Bobby Tables'd
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -369,7 +401,10 @@ class TestApi(BaseTest):
 
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
-        settings.PREWHERE_KEYS = ['message']
+        prewhere_keys = get_dataset('events').get_prewhere_keys()
+
+        # Before we run our test, make sure the column exists in our prewhere keys
+        assert 'message' in prewhere_keys
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
@@ -377,10 +412,12 @@ class TestApi(BaseTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0" in result['sql']
 
         # Choose the highest priority one
-        settings.PREWHERE_KEYS = ['project_id', 'message']
+
+        # Before we run our test, make sure that we have our priorities in the test right.
+        assert prewhere_keys.index('message') < prewhere_keys.index('project_id')
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'selected_columns': ['event_id'],
@@ -388,7 +425,7 @@ class TestApi(BaseTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1)" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message" in result['sql']
 
         # Allow 2 conditions in prewhere clause
         settings.MAX_PREWHERE_CONDITIONS = 2
@@ -399,7 +436,23 @@ class TestApi(BaseTest):
             'limit': 1,
             'debug': True
         })).data)
-        assert "PREWHERE project_id IN (1) AND positionCaseInsensitive(message, 'abc') != 0" in result['sql']
+        assert "PREWHERE positionCaseInsensitive((coalesce(search_message, message) AS message), 'abc') != 0 AND project_id IN (1)" in result['sql']
+
+    def test_prewhere_conditions_dont_show_up_in_where_conditions(self):
+        settings.MAX_PREWHERE_CONDITIONS = 1
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'selected_columns': ['event_id'],
+            'conditions': [
+                ['http_method', '=', 'GET']
+            ],
+            'limit': 1,
+            'debug': True
+        })).data)
+
+        # make sure the conditions is in PREWHERE and nowhere else
+        assert "PREWHERE project_id IN (1)" in result['sql']
+        assert result['sql'].count('project_id IN (1)') == 1
 
     def test_aggregate(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -408,7 +461,6 @@ class TestApi(BaseTest):
             'aggregations': [['topK(4)', 'issue', 'aggregate']],
         })).data)
         assert sorted(result['data'][0]['aggregate']) == [
-            self.group_ids[0],
             self.group_ids[3],
             self.group_ids[6],
             self.group_ids[9],
@@ -416,20 +468,18 @@ class TestApi(BaseTest):
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'project_id',
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
-        assert result['data'][0]['aggregate'] == 4
+        assert result['data'][0]['aggregate'] == 3
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 3,
-            'issues': [(i, 3, [j]) for i, j in enumerate(self.hashes)],
             'groupby': ['project_id', 'time'],
             'aggregations': [['uniq', 'issue', 'aggregate']],
         })).data)
         assert len(result['data']) == 3  # time buckets
-        assert all(d['aggregate'] == 4 for d in result['data'])
+        assert all(d['aggregate'] == 3 for d in result['data'])
 
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': self.project_ids,
@@ -448,6 +498,16 @@ class TestApi(BaseTest):
             assert data[idx]['platforms'] == self.minutes // pid
             assert len(data[idx]['top_platforms']) == 1
             assert data[idx]['top_platforms'][0] in self.platforms
+
+    def test_aggregate_with_multiple_arguments(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 3,
+            'groupby': 'project_id',
+            'aggregations': [['argMax', ['event_id', 'timestamp'], 'latest_event']],
+        })).data)
+        assert len(result['data']) == 1
+        assert 'latest_event' in result['data'][0]
+        assert 'project_id' in result['data'][0]
 
     def test_having_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
@@ -538,12 +598,10 @@ class TestApi(BaseTest):
     def test_column_expansion(self):
         # If there is a condition on an already SELECTed column, then use the
         # column alias instead of the full column expression again.
-        issues = [(i, 2, [j]) for i, j in enumerate(self.hashes)]
         response = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
             'granularity': 3600,
             'groupby': 'issue',
-            'issues': issues,
             'conditions': [
                 ['issue', '=', 0],
                 ['issue', '=', 1],
@@ -643,7 +701,6 @@ class TestApi(BaseTest):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 1,
             'granularity': 3600,
-            'issues': [(i, 1, [j]) for i, j in enumerate(self.hashes)],
             'groupby': 'issue',
         })).data)
 
@@ -684,7 +741,7 @@ class TestApi(BaseTest):
         }
         result1 = json.loads(self.app.post('/query', data=json.dumps(query)).data)
 
-        self.write_processed_events([{
+        self.write_processed_records([{
             'event_id': '9' * 32,
             'project_id': 1,
             'group_id': 1,
@@ -773,7 +830,7 @@ class TestApi(BaseTest):
                 'received': time.mktime(self.base_time.timetuple()),
             }
         })
-        response = self.app.post('/tests/eventstream', data=json.dumps(event))
+        response = self.app.post('/tests/events/eventstream', data=json.dumps(event))
         assert response.status_code == 200
 
         query = {
@@ -795,15 +852,20 @@ class TestApi(BaseTest):
             'group_ids': [group_id],
             'datetime': (self.base_time + timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
         })
-        response = self.app.post('/tests/eventstream', data=json.dumps(event))
+        response = self.app.post('/tests/events/eventstream', data=json.dumps(event))
         assert response.status_code == 200
 
         result = json.loads(self.app.post('/query', data=json.dumps(query)).data)
         assert result['data'] == []
 
-        assert self.app.post('/tests/drop').status_code == 200
+        # make sure redis has _something_ before we go about dropping all the keys in it
+        assert self.redis_db_size() > 0
 
-        assert settings.CLICKHOUSE_TABLE not in self.clickhouse.execute("SHOW TABLES")
+        assert self.app.post('/tests/events/drop').status_code == 200
+        dataset = get_dataset('events')
+        table = dataset.get_table_writer().get_schema().get_table_name()
+        assert table not in self.clickhouse.execute("SHOW TABLES")
+        assert self.redis_db_size() == 0
 
     @pytest.mark.xfail
     def test_row_stats(self):
@@ -834,7 +896,7 @@ class TestApi(BaseTest):
 
     def test_split_query(self):
         state.set_config('use_split', 1)
-        state.set_config('split_step', 3600) # first batch will be 1 hour
+        state.set_config('split_step', 3600)  # first batch will be 1 hour
         try:
 
             # Test getting the last 150 events, should happen in 2 batches
@@ -920,6 +982,89 @@ class TestApi(BaseTest):
             })).data)
             assert result['data'] == []
 
+            # Test splitting query by columns - non timestamp sort
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=59)).isoformat(),
+                'orderby': 'tags[sentry:release]',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            # Alphabetical sort
+            assert [d['tags[sentry:release]'] for d in result['data']] == ['0', '1', '10', '11', '12']
+
+            # Test splitting query by columns - timestamp sort
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=59)).isoformat(),
+                'orderby': 'timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            assert [d['tags[sentry:release]'] for d in result['data']] == list(map(str, range(0, 5)))
+
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': (self.base_time - timedelta(days=100)).isoformat(),
+                'to_date': (self.base_time - timedelta(days=99)).isoformat(),
+                'orderby': 'timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'limit': 5,
+            })).data)
+            assert len(result['data']) == 0
+
+            # Test offset
+            result = json.loads(self.app.post('/query', data=json.dumps({
+                'project': 1,
+                'from_date': self.base_time.isoformat(),
+                'to_date': (self.base_time + timedelta(minutes=self.minutes)).isoformat(),
+                'orderby': '-timestamp',
+                'selected_columns': [
+                    'event_id',
+                    'timestamp',
+                    'tags[sentry:release]',
+                    'tags[one]',
+                    'tags[two]',
+                    'tags[three]',
+                    'tags[four]',
+                    'tags[five]',
+                ],
+                'offset': 170,
+                'limit': 170,
+            })).data)
+
+            assert len(result['data']) == 10
+            assert [e['tags[sentry:release]'] for e in result['data']] == list(map(str, reversed(range(0, 10))))
+
         finally:
             state.set_config('use_split', 0)
 
@@ -935,18 +1080,64 @@ class TestApi(BaseTest):
     def test_message_is_search_message(self):
         # all messages contain 'message'
         response = json.loads(self.app.post('/query', data=json.dumps({
-            'project': [1,2,3],
+            'project': [1, 2, 3],
             'conditions': [['message', 'LIKE', '%message%']],
             'groupby': 'project_id',
             'debug': True,
         })).data)
-        assert sorted(r['project_id'] for r in response['data']) == [1,2,3]
+        assert sorted(r['project_id'] for r in response['data']) == [1, 2, 3]
 
         # only project 3 has a search_message with 'long search' in it
         response = json.loads(self.app.post('/query', data=json.dumps({
-            'project': [1,2,3],
+            'project': [1, 2, 3],
             'conditions': [['message', 'LIKE', '%long search%']],
             'groupby': 'project_id',
             'debug': True,
         })).data)
         assert sorted(r['project_id'] for r in response['data']) == [3]
+
+    def test_gracefully_handle_multiple_conditions_on_same_column(self):
+        response = self.app.post('/query', data=json.dumps({
+            'project': [2],
+            'selected_columns': ['timestamp'],
+            'conditions': [
+                ['issue', 'IN', [2, 1]],
+                [['isNull', ['issue']], '=', 1]
+            ],
+            'debug': True,
+        }))
+
+        assert response.status_code == 200
+
+    def test_mandatory_conditions(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': 'issue',
+        })).data)
+        assert 'deleted = 0' in result['sql']
+
+
+class TestCreateSubscriptionApi(BaseApiTest):
+    def test(self):
+        expected_uuid = uuid.uuid1()
+
+        with patch('snuba.views.uuid1') as uuid4:
+            uuid4.return_value = expected_uuid
+            resp = self.app.post('/subscriptions')
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        assert data == {'subscription_id': expected_uuid.hex}
+
+
+class TestRenewSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.post('/subscriptions/{}/renew'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202
+
+
+class TestDeleteSubscriptionApi(BaseApiTest):
+    def test(self):
+        resp = self.app.delete('/subscriptions/{}'.format(uuid.uuid4().hex))
+        assert resp.status_code == 202

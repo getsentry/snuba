@@ -1,40 +1,81 @@
-from base import BaseTest
+import pytest
 
-from snuba.clickhouse import ColumnSet, ALL_COLUMNS, METADATA_COLUMNS
-from snuba.processor import process_message
-from snuba.writer import row_from_processed_event
+from typing import Iterable
+
+from tests.base import BaseEventsTest
+from snuba.clickhouse.http import ClickHouseError, HTTPBatchWriter
+from snuba.datasets.factory import enforce_table_writer
+from snuba import settings
+from snuba.writer import WriterTableRow
 
 
-class TestWriter(BaseTest):
-    def test(self):
-        self.write_raw_events(self.event)
+class FakeHTTPWriter(HTTPBatchWriter):
+    def chunk(self, rows: Iterable[WriterTableRow]) -> Iterable[bytes]:
+        return self._prepare_chunks(rows)
 
-        res = self.clickhouse.execute("SELECT count() FROM %s" % self.table)
 
-        assert res[0][0] == 1
+class TestHTTPBatchWriter(BaseEventsTest):
+    def test_error_handling(self):
+        try:
+            enforce_table_writer(self.dataset).get_writer(table_name="invalid").write([{"x": "y"}])
+        except ClickHouseError as error:
+            assert error.code == 60
+            assert error.type == 'DB::Exception'
+        else:
+            assert False, "expected error"
 
-    def test_columns_match_schema(self):
-        _, processed = process_message(self.event)
-        row = row_from_processed_event(processed)
+        try:
+            enforce_table_writer(self.dataset).get_writer().write([{"timestamp": "invalid"}])
+        except ClickHouseError as error:
+            assert error.code == 41
+            assert error.type == 'DB::Exception'
+        else:
+            assert False, "expected error"
 
-        # verify that the 'count of columns from event' + 'count of columns from metadata'
-        # equals the 'count of columns' in the processed row tuple
-        # note that the content is verified in processor tests
-        assert (len(processed) + len(METADATA_COLUMNS)) == len(row)
+    test_data = [
+        (
+            1,
+            [b"a", b"b", b"c"],
+            [b"a", b"b", b"c"],
+        ),
+        (
+            0,
+            [b"a", b"b", b"c"],
+            [b"abc"],
+        ),
+        (
+            2,
+            [b"a", b"b", b"c"],
+            [b"ab", b"c"],
+        ),
+        (
+            2,
+            [b"a", b"b", b"c", b"d"],
+            [b"ab", b"cd"],
+        ),
+        (
+            100000,
+            [b"a", b"b", b"c"],
+            [b"abc"],
+        ),
+        (
+            5,
+            [],
+            [],
+        )
+    ]
 
-    def test_unknown_columns(self):
-        """Fields in a processed events are ignored if they don't have
-        a corresponding Clickhouse column declared."""
-
-        _, processed = process_message(self.event)
-
-        assert 'sdk_name' in processed
-        sdk_name = processed['sdk_name']
-
-        columns_copy = ColumnSet([col for col in ALL_COLUMNS.columns if not col.name == 'sdk_name'])
-        assert len(columns_copy) == (len(ALL_COLUMNS) - 1)
-
-        row = row_from_processed_event(processed, columns_copy)
-
-        assert len(row) == len(columns_copy)
-        assert sdk_name not in row
+    @pytest.mark.parametrize("chunk_size, input, expected_chunks", test_data)
+    def test_chunks(self, chunk_size, input, expected_chunks):
+        writer = FakeHTTPWriter(
+            None,
+            settings.CLICKHOUSE_HOST,
+            settings.CLICKHOUSE_HTTP_PORT,
+            lambda a: a,
+            None,
+            "mysterious_inexistent_table",
+            chunk_size
+        )
+        chunks = writer.chunk(input)
+        for chunk, expected in zip(chunks, expected_chunks):
+            assert chunk == expected

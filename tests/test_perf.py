@@ -1,12 +1,16 @@
-from base import BaseTest
+from tests.base import BaseEventsTest
 
+from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba import perf
 
 
-class TestPerf(BaseTest):
+class TestPerf(BaseEventsTest):
     def test(self):
-        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % self.table)[0][0] == 0
+        dataset = get_dataset('events')
+        table = dataset.get_table_writer().get_schema().get_local_table_name()
 
-        perf.run('tests/perf-event.json', self.clickhouse, self.table)
+        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 0
 
-        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % self.table)[0][0] == 1
+        perf.run('tests/perf-event.json', dataset)
+
+        assert self.clickhouse.execute("SELECT COUNT() FROM %s" % table)[0][0] == 1
