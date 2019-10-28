@@ -175,7 +175,7 @@ class BatchingConsumer:
         if result is not None:
             self.__batch_results.append(result)
 
-        self.consumer.stage_offsets({msg.stream: msg.next_offset})
+        self.consumer.stage_offsets({msg.stream: msg.get_next_offset()})
 
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
@@ -183,9 +183,9 @@ class BatchingConsumer:
         self.__metrics.timing("process_message", duration)
 
         if msg.stream in self.__batch_offsets:
-            self.__batch_offsets[msg.stream].hi = msg.next_offset
+            self.__batch_offsets[msg.stream].hi = msg.get_next_offset()
         else:
-            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.next_offset)
+            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.get_next_offset())
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
