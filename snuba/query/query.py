@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from deprecation import deprecated
+from itertools import chain
 from typing import (
     Any,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Sequence,
     Tuple,
@@ -13,11 +15,12 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-
-Condition = Union[
-    Tuple[Any, Any, Any],
-    Sequence[Any],
-]
+from snuba.query.types import Condition
+from snuba.util import (
+    columns_in_expr,
+    is_condition,
+    to_list
+)
 
 Aggregation = Union[
     Tuple[Any, Any, Any],
@@ -175,3 +178,29 @@ class Query:
         "use the specific accessor methods instead.")
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
+
+    def get_all_referenced_columns(self) -> Sequence[Any]:
+        """
+        Return the set of all columns that are used by a query.
+        """
+        col_exprs: MutableSequence[Any] = []
+
+        if self.get_arrayjoin():
+            col_exprs.extend(to_list(self.get_arrayjoin()))
+        if self.get_groupby():
+            col_exprs.extend(to_list(self.get_groupby()))
+        if self.get_orderby():
+            col_exprs.extend(to_list(self.get_orderby()))
+        if self.get_selected_columns():
+            col_exprs.extend(to_list(self.get_selected_columns()))
+
+        # Conditions need flattening as they can be nested as AND/OR
+        if self.get_conditions():
+            flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in self.get_conditions()]))
+            col_exprs.extend([c[0] for c in flat_conditions])
+
+        if self.get_aggregations():
+            col_exprs.extend([a[1] for a in self.get_aggregations()])
+
+        # Return the set of all columns referenced in any expression
+        return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))

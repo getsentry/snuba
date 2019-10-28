@@ -58,16 +58,16 @@ table3 = MergeTreeSchema(
 
 
 simple_join_structure = JoinClause(
-    TableJoinNode(table1.format_from(), table1.get_columns(), "t1"),
-    TableJoinNode(table2.format_from(), table2.get_columns(), "t2"),
+    TableJoinNode(table1.format_from(), table1.get_columns(), [], "t1"),
+    TableJoinNode(table2.format_from(), table2.get_columns(), [], "t2"),
     [
         JoinCondition(
-            left=JoinConditionExpression(table_alias="t1", column="c1"),
-            right=JoinConditionExpression(table_alias="t2", column="c2"),
+            left=JoinConditionExpression(table_alias="t1", column="t1c1"),
+            right=JoinConditionExpression(table_alias="t2", column="t2c2"),
         ),
         JoinCondition(
-            left=JoinConditionExpression(table_alias="t1", column="c3"),
-            right=JoinConditionExpression(table_alias="t2", column="c4"),
+            left=JoinConditionExpression(table_alias="t1", column="t1c3"),
+            right=JoinConditionExpression(table_alias="t2", column="t2c4"),
         )
     ],
     JoinType.INNER
@@ -75,21 +75,21 @@ simple_join_structure = JoinClause(
 
 complex_join_structure = JoinClause(
     JoinClause(
-        TableJoinNode(table1.format_from(), table1.get_columns(), "t1"),
-        TableJoinNode(table2.format_from(), table2.get_columns(), "t2"),
+        TableJoinNode(table1.format_from(), table1.get_columns(), [], "t1"),
+        TableJoinNode(table2.format_from(), table2.get_columns(), [], "t2"),
         [
             JoinCondition(
-                left=JoinConditionExpression(table_alias="t1", column="c1"),
-                right=JoinConditionExpression(table_alias="t2", column="c2"),
+                left=JoinConditionExpression(table_alias="t1", column="t1c1"),
+                right=JoinConditionExpression(table_alias="t2", column="t2c2"),
             ),
         ],
         JoinType.FULL
     ),
-    TableJoinNode(table3.format_from(), table3.get_columns(), "t3"),
+    TableJoinNode(table3.format_from(), table3.get_columns(), [], "t3"),
     [
         JoinCondition(
-            left=JoinConditionExpression(table_alias="t1", column="c1"),
-            right=JoinConditionExpression(table_alias="t3", column="c3"),
+            left=JoinConditionExpression(table_alias="t1", column="t1c1"),
+            right=JoinConditionExpression(table_alias="t3", column="t3c3"),
         ),
     ],
     JoinType.INNER

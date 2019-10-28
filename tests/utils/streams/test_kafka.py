@@ -1,11 +1,10 @@
 import pytest
 import uuid
-from unittest import mock
-from typing import Iterator
+from typing import Iterator, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
-from snuba.utils.streams.abstract import EndOfStream, Message
+from snuba.utils.streams.abstract import ConsumerError, EndOfStream, Message
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, TopicPartition
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -31,40 +30,65 @@ def topic() -> Iterator[str]:
 
 
 def test_consumer(topic: str) -> None:
-    consumer = KafkaConsumer(
-        {
-            **configuration,
-            "auto.offset.reset": "latest",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
-            "enable.partition.eof": "true",
-            "group.id": "test",
-            "session.timeout.ms": 10000,
-        }
-    )
+
+    def build_consumer() -> KafkaConsumer:
+        return KafkaConsumer(
+            {
+                **configuration,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "true",
+                "enable.partition.eof": "true",
+                "group.id": "test",
+                "session.timeout.ms": 10000,
+            }
+        )
+
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    for i in range(2):
+        producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = build_consumer()
+
+    def assignment_callback(streams: Sequence[TopicPartition]):
+        assignment_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]
+        assert consumer.tell() == {TopicPartition(topic, 0): 0}
+
+        consumer.seek({TopicPartition(topic, 0): 1})
+
+        with pytest.raises(ConsumerError):
+            consumer.seek({TopicPartition(topic, 1): 0})
+
+    def revocation_callback(streams: Sequence[TopicPartition]):
+        revocation_callback.called = True
+        assert streams == [TopicPartition(topic, 0)]
+        assert consumer.tell() == {TopicPartition(topic, 0): 1}
+
+        # Not sure why you'd want to do this, but it shouldn't error.
+        consumer.seek({TopicPartition(topic, 0): 0})
 
     # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
     # use to wait for assignment, but we'd need to be very careful to avoid
     # edge cases here. It's probably not worth the complexity for now.
-    # XXX: There has got to be a better way to do this...
-    assignment_callback = mock.MagicMock()
-    revocation_callback = mock.MagicMock()
     consumer.subscribe([topic], on_assign=assignment_callback, on_revoke=revocation_callback)
 
-    try:
-        consumer.poll(10.0)  # XXX: getting the subcription is slow
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
-        assert error.offset == 0
-    else:
-        raise AssertionError('expected EndOfStream error')
+    message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+    assert isinstance(message, Message)
+    assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 1
+    assert message.value == value
 
-    assert assignment_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
+    assert consumer.tell() == {TopicPartition(topic, 0): 2}
+    assert getattr(assignment_callback, 'called', False)
 
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic, value=value)
-    assert producer.flush(5.0) is 0
+    consumer.seek({TopicPartition(topic, 0): 0})
+    assert consumer.tell() == {TopicPartition(topic, 0): 0}
+
+    with pytest.raises(ConsumerError):
+        consumer.seek({TopicPartition(topic, 1): 0})
 
     message = consumer.poll(1.0)
     assert isinstance(message, Message)
@@ -72,21 +96,16 @@ def test_consumer(topic: str) -> None:
     assert message.offset == 0
     assert message.value == value
 
-    try:
-        assert consumer.poll(1.0) is None
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
-        assert error.offset == 1
-    else:
-        raise AssertionError('expected EndOfStream error')
-
-    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
 
     consumer.unsubscribe()
 
     assert consumer.poll(1.0) is None
 
-    assert revocation_callback.call_args_list == [mock.call([TopicPartition(topic, 0)])]
+    assert consumer.tell() == {}
+
+    with pytest.raises(ConsumerError):
+        consumer.seek({TopicPartition(topic, 0): 0})
 
     consumer.close()
 
@@ -100,7 +119,114 @@ def test_consumer(topic: str) -> None:
         consumer.poll()
 
     with pytest.raises(RuntimeError):
+        consumer.tell()
+
+    with pytest.raises(RuntimeError):
+        consumer.seek({TopicPartition(topic, 0): 0})
+
+    with pytest.raises(RuntimeError):
         consumer.commit()
+
+    consumer.close()
+
+    consumer = build_consumer()
+
+    consumer.subscribe([topic])
+
+    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+    assert isinstance(message, Message)
+    assert message.stream == TopicPartition(topic, 0)
+    assert message.offset == 1
+    assert message.value == value
+
+    try:
+        assert consumer.poll(1.0) is None
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 2
+    else:
+        raise AssertionError('expected EndOfStream error')
+
+    consumer.close()
+
+
+def test_auto_offset_reset_earliest(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-earliest",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    message = consumer.poll(10.0)
+    assert isinstance(message, Message)
+    assert message.offset == 0
+
+    consumer.close()
+
+
+def test_auto_offset_reset_latest(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "latest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-latest",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    try:
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
+    except EndOfStream as error:
+        assert error.stream == TopicPartition(topic, 0)
+        assert error.offset == 1
+    else:
+        raise AssertionError('expected EndOfStream error')
+
+    consumer.close()
+
+
+def test_auto_offset_reset_error(topic: str) -> None:
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    producer.produce(topic, value=value)
+    assert producer.flush(5.0) is 0
+
+    consumer = KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "error",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": "test-error",
+        }
+    )
+
+    consumer.subscribe([topic])
+
+    with pytest.raises(ConsumerError):
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
 
     consumer.close()
 
@@ -134,10 +260,10 @@ def test_commit_log_consumer(topic: str) -> None:
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]
     assert commit_message.topic() == 'commit-log'
     assert commit_message.key() == '{}:{}:{}'.format(topic, 0, 'test').encode('utf-8')
-    assert commit_message.value() == '{}'.format(message.offset + 1).encode('utf-8')  # offsets are last processed message offset + 1
+    assert commit_message.value() == '{}'.format(message.get_next_offset()).encode('utf-8')

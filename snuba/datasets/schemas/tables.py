@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import RelationalSource, Schema
+from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
 
 
@@ -15,15 +16,29 @@ class TableSource(RelationalSource):
     datamodel.
     """
 
-    def __init__(self, table_name: str, columns: ColumnSet) -> None:
+    def __init__(self,
+        table_name: str,
+        columns: ColumnSet,
+        mandatory_conditions: Optional[Sequence[Condition]] = None,
+    ) -> None:
         self.__table_name = table_name
         self.__columns = columns
+        self.__mandatory_conditions = mandatory_conditions or []
 
     def format_from(self) -> str:
         return self.__table_name
 
     def get_columns(self) -> ColumnSet:
         return self.__columns
+
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
+        return self.__mandatory_conditions
+
+
+class MigrationSchemaColumn(NamedTuple):
+    column_type: str
+    default_type: Optional[str]
+    default_expr: Optional[str]
 
 
 class TableSchema(Schema, ABC):
@@ -42,7 +57,8 @@ class TableSchema(Schema, ABC):
         *,
         local_table_name: str,
         dist_table_name: str,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]]=None,
     ):
         self.__migration_function = migration_function if migration_function else lambda table, schema: []
         self.__local_table_name = local_table_name
@@ -50,6 +66,7 @@ class TableSchema(Schema, ABC):
         self.__table_source = TableSource(
             self.get_table_name(),
             columns,
+            mandatory_conditions,
         )
 
     def get_data_source(self) -> TableSource:
@@ -89,7 +106,7 @@ class TableSchema(Schema, ABC):
 
     def get_migration_statements(
         self
-    ) -> Callable[[str, Mapping[str, str]], Sequence[str]]:
+    ) -> Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]:
         return self.__migration_function
 
 
@@ -110,16 +127,18 @@ class MergeTreeSchema(WritableTableSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: Optional[str],
         sample_expr: Optional[str]=None,
         settings: Optional[Mapping[str, str]]=None,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]]=None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            mandatory_conditions=mandatory_conditions,
             migration_function=migration_function)
         self.__order_by = order_by
         self.__partition_by = partition_by
@@ -177,17 +196,19 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         *,
         local_table_name: str,
         dist_table_name: str,
+        mandatory_conditions: Optional[Sequence[Condition]]=None,
         order_by: str,
         partition_by: str,
         version_column: str,
         sample_expr: Optional[str]=None,
         settings: Optional[Mapping[str, str]]=None,
-        migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]]=None,
+        migration_function: Optional[Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]]=None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
             local_table_name=local_table_name,
             dist_table_name=dist_table_name,
+            mandatory_conditions=mandatory_conditions,
             order_by=order_by,
             partition_by=partition_by,
             sample_expr=sample_expr,
@@ -213,16 +234,18 @@ class MaterializedViewSchema(TableSchema):
             *,
             local_materialized_view_name: str,
             dist_materialized_view_name: str,
+            mandatory_conditions: Optional[Sequence[Condition]]=None,
             query: str,
             local_source_table_name: str,
             local_destination_table_name: str,
             dist_source_table_name: str,
             dist_destination_table_name: str,
-            migration_function: Optional[Callable[[str, Mapping[str, str]], Sequence[str]]] = None) -> None:
+            migration_function: Optional[Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]] = None) -> None:
         super().__init__(
             columns=columns,
             local_table_name=local_materialized_view_name,
             dist_table_name=dist_materialized_view_name,
+            mandatory_conditions=mandatory_conditions,
             migration_function=migration_function,
         )
 

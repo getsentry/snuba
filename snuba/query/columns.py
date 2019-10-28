@@ -1,5 +1,6 @@
-from itertools import chain
-from typing import Any, OrderedDict, MutableSequence
+import re
+
+from typing import OrderedDict
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba.query.parsing import ParsingContext
@@ -7,15 +8,15 @@ from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import (
     alias_expr,
-    columns_in_expr,
     escape_alias,
     escape_literal,
     function_expr,
     is_condition,
     is_function,
     QUOTED_LITERAL_RE,
-    to_list,
 )
+
+QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$")
 
 
 class InvalidConditionException(Exception):
@@ -77,33 +78,6 @@ def complex_column_expr(dataset, expr, query: Query, parsing_context: ParsingCon
     if alias:
         ret = alias_expr(ret, alias, parsing_context)
     return ret
-
-
-def all_referenced_columns(query: Query):
-    """
-    Return the set of all columns that are used by a query.
-    """
-    col_exprs: MutableSequence[Any] = []
-
-    if query.get_arrayjoin():
-        col_exprs.extend(to_list(query.get_arrayjoin()))
-    if query.get_groupby():
-        col_exprs.extend(to_list(query.get_groupby()))
-    if query.get_orderby():
-        col_exprs.extend(to_list(query.get_orderby()))
-    if query.get_selected_columns():
-        col_exprs.extend(to_list(query.get_selected_columns()))
-
-    # Conditions need flattening as they can be nested as AND/OR
-    if query.get_conditions():
-        flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in query.get_conditions()]))
-        col_exprs.extend([c[0] for c in flat_conditions])
-
-    if query.get_aggregations():
-        col_exprs.extend([a[1] for a in query.get_aggregations()])
-
-    # Return the set of all columns referenced in any expression
-    return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
 
 def conditions_expr(dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0):

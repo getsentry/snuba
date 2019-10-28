@@ -25,17 +25,25 @@ TOffset = TypeVar("TOffset")
 TValue = TypeVar("TValue")
 
 
-@dataclass(frozen=True)
-class Message(Generic[TStream, TOffset, TValue]):
+class Message(ABC, Generic[TStream, TOffset, TValue]):
     """
     Represents a single message within a stream.
     """
 
-    __slots__ = ["stream", "offset", "value"]
+    def __init__(self, stream: TStream, offset: TOffset, value: TValue) -> None:
+        self.stream = stream
+        self.offset = offset
+        self.value = value
 
-    stream: TStream
-    offset: TOffset
-    value: TValue
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(stream={self.stream!r}, offset={self.offset!r})"
+
+    @abstractmethod
+    def get_next_offset(self) -> TOffset:
+        """
+        Return the offset of the next message in this stream.
+        """
+        raise NotImplementedError
 
 
 class ConsumerError(Exception):
@@ -133,6 +141,24 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         mean that additional messages won't be available in future poll
         calls.) Not every backend implementation supports this feature or is
         configured to raise in this scenario.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def tell(self) -> Mapping[TStream, TOffset]:
+        """
+        Return the read offsets for all assigned streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def seek(self, offsets: Mapping[TStream, TOffset]) -> None:
+        """
+        Change the read offsets for the provided streams.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
