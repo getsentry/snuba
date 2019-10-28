@@ -3,6 +3,7 @@ from typing import Optional
 
 import uuid
 
+from snuba import settings
 from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
@@ -19,6 +20,10 @@ from snuba.datasets.events_processor import (
     extract_extra_tags,
     extract_user,
 )
+from snuba.util import create_metrics
+
+
+metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, 'snuba.transactions.processor')
 
 
 class TransactionsMessageProcessor(MessageProcessor):
@@ -71,6 +76,9 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
+            if data["timestamp"] - data["start_timestamp"] < 0:
+                # Seems we have some negative durations in the DB
+                metrics.increment('negative_duration')
         except Exception:
             # all these fields are required but we saw some events go through here
             # in the past.  For now bail.
@@ -78,6 +86,9 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["finish_ts"], processed["finish_ms"] = self.__extract_timestamp(
             data["timestamp"],
         )
+
+        duration_secs = (processed["finish_ts"] - processed["start_ts"]).total_seconds()
+        processed['duration'] = max(int(duration_secs * 1000), 0)
 
         processed['platform'] = _unicodify(event['platform'])
 
