@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -19,7 +19,7 @@ from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
@@ -58,6 +58,14 @@ class TransactionsTableWriter(TableWriter):
         )
 
 
+def transactions_migrations(clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]) -> Sequence[str]:
+    ret = []
+    duration_col = current_schema.get("duration")
+    if duration_col and duration_col.default_type == "MATERIALIZED":
+        ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
+    return ret
+
+
 class TransactionsDataset(TimeSeriesDataset):
     def __init__(self):
         columns = ColumnSet([
@@ -75,10 +83,7 @@ class TransactionsDataset(TimeSeriesDataset):
             ('start_ms', UInt(16)),
             ('finish_ts', DateTime()),
             ('finish_ms', UInt(16)),
-            ('duration', Materialized(
-                UInt(32),
-                '((finish_ts - start_ts) * 1000) + (finish_ms - start_ms)',
-            )),
+            ('duration', UInt(32)),
             ('platform', LowCardinality(String())),
             ('environment', Nullable(String())),
             ('release', Nullable(String())),
@@ -115,6 +120,7 @@ class TransactionsDataset(TimeSeriesDataset):
             partition_by='(retention_days, toMonday(start_ts))',
             version_column='deleted',
             sample_expr=None,
+            migration_function=transactions_migrations,
         )
 
         dataset_schemas = DatasetSchemas(

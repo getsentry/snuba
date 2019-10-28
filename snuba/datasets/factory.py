@@ -13,6 +13,7 @@ DATASET_NAMES: Set[str] = {
     'groupedmessage',
     'transactions',
     'outcomes',
+    'outcomes_raw',
 }
 
 
@@ -32,6 +33,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
     from snuba.datasets.transactions import TransactionsDataset
     from snuba.datasets.outcomes import OutcomesDataset
+    from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.groups import Groups
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
@@ -41,6 +43,7 @@ def get_dataset(name: str) -> Dataset:
         'groups': Groups,
         'transactions': TransactionsDataset,
         'outcomes': OutcomesDataset,
+        'outcomes_raw': OutcomesRawDataset,
     }
 
     try:
