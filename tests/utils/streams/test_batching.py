@@ -35,7 +35,7 @@ class FakeKafkaConsumer(Consumer[TopicPartition, int, bytes]):
         except IndexError:
             return None
 
-        self.positions[message.stream] = message.offset + 1
+        self.positions[message.stream] = message.get_next_offset()
 
         return message
 

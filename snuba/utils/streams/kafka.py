@@ -29,7 +29,12 @@ class TopicPartition(NamedTuple):
     partition: int
 
 
-KafkaMessage = Message[TopicPartition, int, bytes]
+class KafkaMessage(Message[TopicPartition, int, bytes]):
+
+    __slots__ = ["stream", "offset", "value"]
+
+    def get_next_offset(self) -> int:
+        return self.offset + 1
 
 
 class TransportError(ConsumerError):
@@ -230,7 +235,7 @@ class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
             message.value(),
         )
 
-        self.__offsets[result.stream] = result.offset + 1
+        self.__offsets[result.stream] = result.get_next_offset()
 
         return result
 

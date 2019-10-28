@@ -96,7 +96,7 @@ def test_consumer(topic: str) -> None:
     assert message.offset == 0
     assert message.value == value
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
 
     consumer.unsubscribe()
 
@@ -260,10 +260,10 @@ def test_commit_log_consumer(topic: str) -> None:
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)
 
-    assert consumer.commit() == {TopicPartition(topic, 0): message.offset + 1}
+    assert consumer.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]
     assert commit_message.topic() == 'commit-log'
     assert commit_message.key() == '{}:{}:{}'.format(topic, 0, 'test').encode('utf-8')
-    assert commit_message.value() == '{}'.format(message.offset + 1).encode('utf-8')  # offsets are last processed message offset + 1
+    assert commit_message.value() == '{}'.format(message.get_next_offset()).encode('utf-8')
