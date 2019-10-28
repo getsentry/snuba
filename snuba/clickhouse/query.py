@@ -26,6 +26,11 @@ class ClickhouseQuery:
     ) -> None:
         parsing_context = ParsingContext()
 
+        if query.get_with():
+            with_clause = u'WITH {}'.format(', '.join([u'{} AS {}'.format(w[0], w[1]) for w in query.get_with()]))
+        else:
+            with_clause = None
+
         aggregate_exprs = [column_expr(dataset, col, query, parsing_context, alias, agg) for (agg, col, alias) in query.get_aggregations()]
         groupby = util.to_list(query.get_groupby())
         group_exprs = [column_expr(dataset, gb, query, parsing_context) for gb in groupby]
@@ -87,6 +92,7 @@ class ClickhouseQuery:
             limit_clause = 'LIMIT {}, {}'.format(query.get_offset(), query.get_limit())
 
         self.__formatted_query = ' '.join([c for c in [
+            with_clause,
             select_clause,
             from_clause,
             join_clause,
