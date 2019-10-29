@@ -148,13 +148,40 @@ class TestApi(BaseApiTest):
         response = self.app.post('/query', data=json.dumps({
             'dataset': 'discover',
             'project': self.project_id,
-            'aggregations': [['count()', '', 'event_count']],
+            'aggregations': [['count()', '', 'count']],
             'groupby': ['project_id', 'tags[foo]'],
             'conditions': [['type', '=', 'transaction']],
-            'orderby': 'event_count',
+            'orderby': 'count',
             'limit': 1000,
         }))
         data = json.loads(response.data)
 
         assert response.status_code == 200
         assert data['data'] == [{'count': 1, 'tags[foo]': 'baz', 'project_id': 1}]
+
+    def test_handles_columns_from_other_dataset(self):
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'aggregations': [['count()', '', 'count']],
+            'conditions': [['type', '=', 'transaction'], ['group_id', '=', 2]],
+            'groupby': ['type', 'transaction'],
+            'limit': 1000,
+        }))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['data'] == [{'count': 0, 'transaction': None, 'type': 'transaction'}]
+
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'aggregations': [['uniq', ['trace_id'], 'uniq_trace_id']],
+            'conditions': [['type', '!=', 'transaction']],
+            'groupby': 'type',
+            'limit': 1000,
+        }))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['data'] == [{'type': 'error', 'uniq_trace_id': 0}]
