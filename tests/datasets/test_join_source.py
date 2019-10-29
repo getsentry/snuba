@@ -8,12 +8,12 @@ from tests.datasets.schemas.join_examples import (
 test_data = [
     (
         simple_join_structure,
-        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.c1 = t2.c2 AND t1.c3 = t2.c4"
+        "test_table1 t1 INNER JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 AND t1.t1c3 = t2.t2c4"
     ),
     (
         complex_join_structure,
-        "test_table1 t1 FULL JOIN test_table2 t2 ON t1.c1 = t2.c2 "
-        "INNER JOIN test_table3 t3 ON t1.c1 = t3.c3"
+        "test_table1 t1 FULL JOIN test_table2 t2 ON t1.t1c1 = t2.t2c2 "
+        "INNER JOIN test_table3 t3 ON t1.t1c1 = t3.t3c3"
     )
 ]
 

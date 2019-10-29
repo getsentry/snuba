@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -16,9 +16,10 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
+from snuba.query.types import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.timeseries import TimeSeriesExtension
@@ -26,7 +27,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.util import qualified_column
 
 
-def events_migrations(clickhouse_table: str, current_schema: Mapping[str, str]) -> Sequence[str]:
+def events_migrations(clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
     if 'group_id' not in current_schema:
@@ -209,6 +210,7 @@ class EventsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
+            mandatory_conditions=[('deleted', '=', 0)],
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
@@ -251,11 +253,6 @@ class EventsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
-
-    def default_conditions(self, table_alias: str="") -> Sequence[Condition]:
-        return [
-            (qualified_column('deleted', table_alias), '=', 0),
-        ]
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(

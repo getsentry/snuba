@@ -1130,6 +1130,14 @@ class TestApi(BaseApiTest):
 
         assert response.status_code == 200
 
+    def test_mandatory_conditions(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': 1,
+            'granularity': 3600,
+            'groupby': 'issue',
+        })).data)
+        assert 'deleted = 0' in result['sql']
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
