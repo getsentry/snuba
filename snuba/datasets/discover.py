@@ -1,7 +1,6 @@
 from abc import ABC
 from datetime import timedelta
-from itertools import chain
-from typing import Any, Mapping, MutableSequence, Sequence
+from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
