@@ -186,3 +186,9 @@ class Consumer(ABC, Generic[TStream, TOffset, TValue]):
         before the timeout is reached.
         """
         raise NotImplementedError
+
+
+class Producer(ABC, Generic[TStream, TValue]):
+    @abstractmethod
+    def produce(self, stream: TStream, message: TValue) -> None:
+        raise NotImplementedError
