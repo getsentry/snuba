@@ -202,6 +202,7 @@ class Query:
             col_exprs.extend(to_list(self.get_selected_columns()))
 
         # Conditions need flattening as they can be nested as AND/OR
+        self.__add_flat_conditions(col_exprs)
         if self.get_conditions():
             flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in self.get_conditions()]))
             col_exprs.extend([c[0] for c in flat_conditions])
@@ -210,4 +211,17 @@ class Query:
             col_exprs.extend([a[1] for a in self.get_aggregations()])
 
         # Return the set of all columns referenced in any expression
+        return self.__get_referenced_columns(col_exprs)
+
+    def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
+        col_exprs: MutableSequence[Any] = []
+        self.__add_flat_conditions(col_exprs)
+        return self.__get_referenced_columns(col_exprs)
+
+    def __add_flat_conditions(self, col_exprs: MutableSequence[Any]):
+        if self.get_conditions():
+            flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in self.get_conditions()]))
+            col_exprs.extend([c[0] for c in flat_conditions])
+
+    def __get_referenced_columns(self, col_exprs: MutableSequence[Any]):
         return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))

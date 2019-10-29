@@ -14,7 +14,7 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.util import columns_in_expr, is_condition
+from snuba.util import is_condition
 
 
 EVENTS = 'events'
@@ -38,19 +38,6 @@ EVENTS_ONLY_COLUMNS = [
 ]
 
 
-# Based on query.get_all_referenced_columns()
-def get_condition_columns(query: Query) -> Sequence[Any]:
-    col_exprs: MutableSequence[Any] = []
-    # Conditions need flattening as they can be nested as AND/OR
-    if query.get_conditions():
-        flat_conditions = list(
-            chain(*[[c] if is_condition(c) else c for c in query.get_conditions()]))
-        col_exprs.extend([c[0] for c in flat_conditions])
-
-    # Return the set of all columns referenced in any expression
-    return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
-
-
 def detect_dataset(query: Query) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
@@ -69,7 +56,7 @@ def detect_dataset(query: Query) -> str:
 
     # If there is a condition that references a transactions only field, just switch
     # to the transactions dataset
-    if [col for col in TRANSACTIONS_ONLY_COLUMNS if col in get_condition_columns(query)]:
+    if [col for col in TRANSACTIONS_ONLY_COLUMNS if col in query.get_columns_referenced_in_conditions()]:
         return TRANSACTIONS
 
     # Use events by default
