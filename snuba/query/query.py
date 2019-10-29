@@ -220,7 +220,12 @@ class Query:
         # Return the set of all columns referenced in any expression
         return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
-    def __replace_col_in_expression(self, expression: Any, old_column: str, new_column: str) -> Any:
+    def __replace_col_in_expression(
+        self,
+        expression: Any,
+        old_column: str,
+        new_column: str,
+    ) -> Any:
         """
         Returns a copy of the expression with old_column replaced by new_column.
         This does not modify anything in place since expressions can be either
@@ -230,30 +235,32 @@ class Query:
         This does not support all possible columns format (like string representations
         of funciton expresison "count(col1)"). But it is consistent with the behavior
         of get_all_referenced_columns in that it won't replace something that is not
-        returned by that function and it will replace all the columns rteturned by that
+        returned by that function and it will replace all the columns reteturned by that
         function.
         """
         if isinstance(expression, str):
             match = ORDERED_COL.match(expression)
-            if match[1] == old_column:
+            if match and match[1] == old_column:
                 return expression.replace(old_column, new_column)
-            else:
-                return expression
         elif (isinstance(expression, (list, tuple)) and len(expression) >= 2
                 and isinstance(expression[1], (list, tuple))):
-            ret = [expression[0]]
             params = [
                 self.__replace_col_in_expression(param, old_column, new_column)
                 for param in expression[1]
             ]
-            ret.append(params)
+            ret = [expression[0], params]
             if len(expression) == 3:
                 # Alias for the column
                 ret.append(expression[2])
             return ret
         return expression
 
-    def __replace_col_in_condition(self, condition: Condition, old_column: str, new_column: str) -> Condition:
+    def __replace_col_in_condition(
+        self,
+        condition: Condition,
+        old_column: str,
+        new_column: str,
+    ) -> Condition:
         """
         Replaces a column in a structured condition. This is a level above replace_col_in_expression
         since conditions are in the form [expression, operator, literal] (which is not fully correct
@@ -268,10 +275,12 @@ class Query:
                 condition[2]
             ]
         elif isinstance(condition, (tuple, list)):
+            # nested condition
             return [
                 self.__replace_col_in_condition(cond, old_column, new_column) for cond in condition
             ]
         else:
+            # Don't know what this is
             return condition
 
     def __replace_col_in_list(
@@ -287,14 +296,14 @@ class Query:
 
     def replace_column(self, old_column: str, new_column: str) -> None:
         """
-        Replace a column in all fields of the query. The Query object is mutated in place
+        Replaces a column in all fields of the query. The Query object is mutated in place
         while the internal fields are replaced.
 
         This behaves consistently with get_all_referenced_columns (which does not really
         behave correctly since it is missing a few fields that can contain columns). Will
         fix both when adding a better column abstraction.
 
-        In the current implementation we can only replaced a column identified by a string
+        In the current implementation we can only replace a column identified by a string
         with another column identified by a string. This does not support replacing a
         column with a complex expression.
         """
@@ -303,8 +312,8 @@ class Query:
             self.set_selected_columns(self.__replace_col_in_list(
                 self.get_selected_columns(),
                 old_column,
-                new_column),
-            )
+                new_column,
+            ))
 
         if self.get_arrayjoin():
             self.set_arrayjoin(
@@ -329,10 +338,11 @@ class Query:
             self.set_aggregations([
                 [
                     aggr[0],
-                    self.__replace_col_in_expression(aggr[1], old_column, new_column),
+                    self.__replace_col_in_list(aggr[1], old_column, new_column),
                     aggr[2],
                 ] for aggr in to_list(self.get_aggregations())
             ])
+
         if self.get_conditions():
             self.set_conditions(
                 self.__replace_col_in_condition(
