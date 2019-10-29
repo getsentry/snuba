@@ -76,11 +76,12 @@ def transform_columns(result: Result) -> Result:
                     )
         elif DATE_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
-                row[col["name"]] = (
-                    datetime(*(row[col["name"]].timetuple()[:6]))
-                    .replace(tzinfo=tz.tzutc())
-                    .isoformat()
-                )
+                if row[col["name"]] is not None:  # The column value can be null/None at times.
+                    row[col["name"]] = (
+                        datetime(*(row[col["name"]].timetuple()[:6]))
+                        .replace(tzinfo=tz.tzutc())
+                        .isoformat()
+                    )
         elif UUID_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
                 row[col["name"]] = str(row[col["name"]])

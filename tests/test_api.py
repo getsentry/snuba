@@ -254,6 +254,27 @@ class TestApi(BaseApiTest):
         })).data)
         assert 'LIMIT 100 BY environment' in result['sql']
 
+        # Stress nullable totals column, making sure we get results as expected
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'project': self.project_ids,
+            'groupby': ['project_id', 'received'],  # Having received here will cause a Nullable(DateTime) column in TOTALS with the value null/None - triggering the situation we want to make sure works.
+            'totals': True,
+            'aggregations': [['count()', '', 'count']],
+            'orderby': '-count',
+            'limit': 1,
+        })).data)
+        assert 'WITH TOTALS' in result['sql']
+
+        assert len(result['data']) == 1
+        assert result['totals']
+        # project row
+        assert result['data'][0]['project_id'] == 1
+        assert result['data'][0]['count'] == 1
+
+        # totals row
+        assert result['totals']['project_id'] == 0  # totals row is zero or empty for non-aggregate cols
+        assert result['totals']['count'] == 180 + 90 + 60
+
     def test_conditions(self):
         result = json.loads(self.app.post('/query', data=json.dumps({
             'project': 2,
