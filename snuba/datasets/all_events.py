@@ -27,7 +27,7 @@ TRANSACTIONS_ONLY_COLUMNS = [
     'transaction_op',
     'start_ts',
     'start_ms',
-    'finish__ts',
+    'finish_ts',
     'finish_ms',
     'duration',
 ]
@@ -127,8 +127,6 @@ class AllEventsDataset(TimeSeriesDataset):
     Currently does this by switching between events and transactions tables
     depending on the conditions in the provided query.
     """
-    EVENTS_ALIAS = 'events'
-    TRANSACTIONS_ALIAS = 'transactions'
 
     def __init__(self) -> None:
         super().__init__(
