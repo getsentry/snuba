@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 from deprecation import deprecated
 from itertools import chain
@@ -32,6 +33,8 @@ Groupby = Sequence[Any]
 Limitby = Tuple[int, str]
 
 TElement = TypeVar("TElement")
+
+ORDERED_COL = re.compile(r"^-?([a-zA-Z_][a-zA-Z0-9_\.]*)$")
 
 
 class Query:
@@ -95,6 +98,12 @@ class Query:
     def get_groupby(self) -> Optional[Sequence[Groupby]]:
         return self.__body.get("groupby")
 
+    def set_groupby(
+        self,
+        groupby: Sequence[Aggregation],
+    ) -> None:
+        self.__body["groupby"] = groupby
+
     def add_groupby(
         self,
         groupby: Sequence[Groupby],
@@ -130,6 +139,12 @@ class Query:
 
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
+
+    def set_orderby(
+        self,
+        orderby: Sequence[Any]
+    ) -> None:
+        self.__body["orderby"] = orderby
 
     def get_limitby(self) -> Optional[Limitby]:
         return self.__body.get("limitby")
@@ -204,3 +219,125 @@ class Query:
 
         # Return the set of all columns referenced in any expression
         return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
+
+    def __replace_col_in_expression(self, expression: Any, old_column: str, new_column: str) -> Any:
+        """
+        Returns a copy of the expression with old_column replaced by new_column.
+        This does not modify anything in place since expressions can be either
+        mutable (lists) or immutable (strings and tuples), so the only way to be
+        consistent in the result is always to return a brand new expression.
+
+        This does not support all possible columns format (like string representations
+        of funciton expresison "count(col1)"). But it is consistent with the behavior
+        of get_all_referenced_columns in that it won't replace something that is not
+        returned by that function and it will replace all the columns rteturned by that
+        function.
+        """
+        if isinstance(expression, str):
+            match = ORDERED_COL.match(expression)
+            if match[1] == old_column:
+                return expression.replace(old_column, new_column)
+            else:
+                return expression
+        elif (isinstance(expression, (list, tuple)) and len(expression) >= 2
+                and isinstance(expression[1], (list, tuple))):
+            ret = [expression[0]]
+            params = [
+                self.__replace_col_in_expression(param, old_column, new_column)
+                for param in expression[1]
+            ]
+            ret.append(params)
+            if len(expression) == 3:
+                # Alias for the column
+                ret.append(expression[2])
+            return ret
+        return expression
+
+    def __replace_col_in_condition(self, condition: Condition, old_column: str, new_column: str) -> Condition:
+        """
+        Replaces a column in a structured condition. This is a level above replace_col_in_expression
+        since conditions are in the form [expression, operator, literal] (which is not fully correct
+        since the right side of the condition should be an expression as well but this constraint is
+        imposed by the query schema and get_all_referenced_columns behaves accordingly).
+        Conditions can also be nested.
+        """
+        if is_condition(condition):
+            return [
+                self.__replace_col_in_expression(condition[0], old_column, new_column),
+                condition[1],
+                condition[2]
+            ]
+        elif isinstance(condition, (tuple, list)):
+            return [
+                self.__replace_col_in_condition(cond, old_column, new_column) for cond in condition
+            ]
+        else:
+            return condition
+
+    def __replace_col_in_list(
+        self,
+        expressions: Any,
+        old_column: str,
+        new_column: str,
+    ) -> Sequence[Any]:
+        return [
+            self.__replace_col_in_expression(expr, old_column, new_column)
+            for expr in to_list(expressions)
+        ]
+
+    def replace_column(self, old_column: str, new_column: str) -> None:
+        """
+        Replace a column in all fields of the query. The Query object is mutated in place
+        while the internal fields are replaced.
+
+        This behaves consistently with get_all_referenced_columns (which does not really
+        behave correctly since it is missing a few fields that can contain columns). Will
+        fix both when adding a better column abstraction.
+
+        In the current implementation we can only replaced a column identified by a string
+        with another column identified by a string. This does not support replacing a
+        column with a complex expression.
+        """
+
+        if self.get_selected_columns():
+            self.set_selected_columns(self.__replace_col_in_list(
+                self.get_selected_columns(),
+                old_column,
+                new_column),
+            )
+
+        if self.get_arrayjoin():
+            self.set_arrayjoin(
+                self.__replace_col_in_expression(self.get_arrayjoin(), old_column, new_column)
+            )
+
+        if self.get_groupby():
+            self.set_groupby(self.__replace_col_in_list(
+                self.get_groupby(),
+                old_column,
+                new_column,
+            ))
+
+        if self.get_orderby():
+            self.set_orderby(self.__replace_col_in_list(
+                self.get_orderby(),
+                old_column,
+                new_column,
+            ))
+
+        if self.get_aggregations():
+            self.set_aggregations([
+                [
+                    aggr[0],
+                    self.__replace_col_in_expression(aggr[1], old_column, new_column),
+                    aggr[2],
+                ] for aggr in to_list(self.get_aggregations())
+            ])
+        if self.get_conditions():
+            self.set_conditions(
+                self.__replace_col_in_condition(
+                    to_list(self.get_conditions()),
+                    old_column,
+                    new_column,
+                )
+            )
