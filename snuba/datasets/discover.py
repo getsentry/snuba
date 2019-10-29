@@ -2,10 +2,11 @@ from abc import ABC
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas import Schema, RelationalSource
+from snuba.datasets.schemas import Schema
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -14,7 +15,6 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-
 
 EVENTS = 'events'
 TRANSACTIONS = 'transactions'
@@ -93,15 +93,15 @@ class DiscoverProcessor(QueryProcessor):
 
 
 class DiscoverSchema(Schema, ABC):
-    def get_data_source(self) -> RelationalSource:
+    def get_data_source(self):
         """
         This is a placeholder, we switch out the data source in the processor
         depending on the detected dataset
         """
-        return get_dataset(EVENTS) \
-            .get_dataset_schemas() \
-            .get_read_schema() \
-            .get_data_source()
+        return None
+
+    def get_columns(self) -> ColumnSet:
+        return []
 
 
 class DiscoverDataset(TimeSeriesDataset):
