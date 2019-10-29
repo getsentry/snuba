@@ -98,7 +98,7 @@ class TestApi(BaseApiTest):
 
         self.write_processed_events(processed.data)
 
-    def test_type_condition(self):
+    def test_raw_data(self):
         response = self.app.post('/query', data=json.dumps({
             'dataset': 'discover',
             'project': self.project_id,
@@ -129,3 +129,32 @@ class TestApi(BaseApiTest):
             'tags[foo]': 'baz',
             'group_id': None,
         }
+
+    def test_aggregations(self):
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'aggregations': [['count', None, 'count']],
+            'groupby': ['project_id', 'tags[custom_tag]'],
+            'conditions': [['type', '!=', 'transaction']],
+            'orderby': 'count',
+            'limit': 1000,
+        }))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['data'] == [{'count': 1, 'tags[custom_tag]': 'custom_value', 'project_id': 1}]
+
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'aggregations': [['count()', '', 'event_count']],
+            'groupby': ['project_id', 'tags[foo]'],
+            'conditions': [['type', '=', 'transaction']],
+            'orderby': 'event_count',
+            'limit': 1000,
+        }))
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data['data'] == [{'count': 1, 'tags[foo]': 'baz', 'project_id': 1}]
