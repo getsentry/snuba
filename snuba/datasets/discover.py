@@ -76,7 +76,7 @@ def detect_dataset(query: Query) -> str:
     return EVENTS
 
 
-class AllEventsProcessor(QueryProcessor):
+class DiscoverProcessor(QueryProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         """
         Switches the data source from the default (Events) to the transactions
@@ -106,7 +106,7 @@ class AllEventsProcessor(QueryProcessor):
         query.set_with(with_columns)
 
 
-class AllEventsSchema(Schema, ABC):
+class DiscoverSchema(Schema, ABC):
     def get_data_source(self) -> RelationalSource:
         """
         This is a placeholder, we switch out the data source in the processor
@@ -118,7 +118,7 @@ class AllEventsSchema(Schema, ABC):
             .get_data_source()
 
 
-class AllEventsDataset(TimeSeriesDataset):
+class DiscoverDataset(TimeSeriesDataset):
     """
     Experimental dataset for Discover
     that coerces the columns of Events and Transactions into the same format
@@ -131,7 +131,7 @@ class AllEventsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         super().__init__(
             dataset_schemas=DatasetSchemas(
-                read_schema=AllEventsSchema(),
+                read_schema=DiscoverSchema(),
                 write_schema=None,
             ),
             time_group_columns={
@@ -142,7 +142,7 @@ class AllEventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            AllEventsProcessor(),
+            DiscoverProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

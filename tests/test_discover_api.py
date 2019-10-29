@@ -93,7 +93,7 @@ class TestApi(BaseApiTest):
 
     def test_type_condition(self):
         response = self.app.post('/query', data=json.dumps({
-            'dataset': 'all_events',
+            'dataset': 'discover',
             'project': self.project_id,
             'selected_columns': ['type', 'tags[custom_tag]'],
             'conditions': [['type', '!=', 'transaction']],
@@ -107,7 +107,7 @@ class TestApi(BaseApiTest):
         assert data['data'][0] == {'type': 'error', 'tags[custom_tag]': 'custom_value'}
 
         response = self.app.post('/query', data=json.dumps({
-            'dataset': 'all_events',
+            'dataset': 'discover',
             'project': 1,
             'selected_columns': ['type', 'tags[foo]', 'group_id'],
             'conditions': [['type', '=', 'transaction']],

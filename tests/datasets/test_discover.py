@@ -5,11 +5,11 @@ from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
 
-class TestAllEvents(BaseDatasetTest):
+class TestDiscover(BaseDatasetTest):
     def setup_method(self, test_method):
         super().setup_method(
             test_method,
-            'all_events',
+            'discover',
         )
         self.events_source = get_dataset('events') \
             .get_dataset_schemas() \
@@ -95,7 +95,7 @@ class TestAllEvents(BaseDatasetTest):
             ('NULL', 'transaction_op'),
             ('NULL', 'start_ts'),
             ('NULL', 'start_ms'),
-            ('NULL', 'finish__ts'),
+            ('NULL', 'finish_ts'),
             ('NULL', 'finish_ms'),
             ('NULL', 'duration'),
         ]
