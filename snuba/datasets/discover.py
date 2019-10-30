@@ -78,19 +78,6 @@ class DiscoverProcessor(QueryProcessor):
             .get_data_source()
         query.set_data_source(source)
 
-        if detected_dataset == TRANSACTIONS:
-            with_columns = [
-                ("'transaction'", 'type'),
-                ('finish_ts', 'timestamp'),
-                ('user_name', 'username'),
-                ('user_email', 'email'),
-            ] + [('NULL', col) for col in EVENTS_ONLY_COLUMNS]
-
-        else:
-            with_columns = [('NULL', col) for col in TRANSACTIONS_ONLY_COLUMNS]
-
-        query.set_with(with_columns)
-
 
 class DiscoverSchema(Schema, ABC):
     def get_data_source(self):
@@ -145,5 +132,17 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def column_expr(self, column_name, query: Query, parsing_context: ParsingContext):
         detected_dataset = detect_dataset(query)
+
+        if detected_dataset == TRANSACTIONS:
+            if column_name == 'type':
+                return "'transaction'"
+            if column_name == 'timestamp':
+                return 'finish_ts'
+            if column_name in EVENTS_ONLY_COLUMNS:
+                return 'NULL'
+        else:
+            if column_name in TRANSACTIONS_ONLY_COLUMNS:
+                return 'NULL'
+
         return get_dataset(detected_dataset) \
             .column_expr(column_name, query, parsing_context)

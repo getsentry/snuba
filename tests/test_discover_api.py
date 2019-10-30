@@ -134,7 +134,7 @@ class TestApi(BaseApiTest):
         response = self.app.post('/query', data=json.dumps({
             'dataset': 'discover',
             'project': self.project_id,
-            'aggregations': [['count', None, 'count']],
+            'aggregations': [['count()', None, 'count']],
             'groupby': ['project_id', 'tags[custom_tag]'],
             'conditions': [['type', '!=', 'transaction']],
             'orderby': 'count',
@@ -163,7 +163,10 @@ class TestApi(BaseApiTest):
         response = self.app.post('/query', data=json.dumps({
             'dataset': 'discover',
             'project': self.project_id,
-            'aggregations': [['count()', '', 'count']],
+            'aggregations': [
+                ['count()', '', 'count'],
+                ['uniq(group_id)', '', 'uniq_group_id']
+            ],
             'conditions': [['type', '=', 'transaction'], ['group_id', '=', 2]],
             'groupby': ['type', 'transaction'],
             'limit': 1000,
@@ -171,7 +174,14 @@ class TestApi(BaseApiTest):
         data = json.loads(response.data)
 
         assert response.status_code == 200
-        assert data['data'] == [{'count': 0, 'transaction': None, 'type': 'transaction'}]
+        assert data['data'] == [
+            {
+                'count': 0,
+                'transaction': None,
+                'type': 'transaction',
+                'uniq_group_id': None
+            }
+        ]
 
         response = self.app.post('/query', data=json.dumps({
             'dataset': 'discover',
@@ -185,3 +195,14 @@ class TestApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data['data'] == [{'type': 'error', 'uniq_trace_id': 0}]
+
+    def test_having(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'groupby': 'primary_hash',
+            'conditions': [['type', '!=', 'transaction']],
+            'having': [['times_seen', '=', 1]],
+            'aggregations': [['count()', '', 'times_seen']],
+        })).data)
+        assert len(result['data']) == 1

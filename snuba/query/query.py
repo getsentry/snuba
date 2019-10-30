@@ -59,7 +59,6 @@ class Query:
         self.__body = body
         self.__final = False
         self.__data_source = data_source
-        self.__with = None
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
@@ -173,12 +172,6 @@ class Query:
 
     def get_granularity(self) -> Optional[int]:
         return self.__body.get("granularity")
-
-    def get_with(self) -> Sequence[Tuple[str, str]]:
-        return self.__with
-
-    def set_with(self, _with: Sequence[Tuple[str, str]]) -> None:
-        self.__with = _with
 
     @deprecated(
         details="Do not access the internal query representation "
