@@ -27,7 +27,7 @@ test_data = [
             "conditions": [["c1", "=", "a"]],
             "arrayjoin": "c1",
             "groupby": "c1",
-            "aggregations": [["count()", ["c1"], "c1"]],
+            "aggregations": [["myAggregate()", "c1", "c1"]],
             "orderby": ["-c1"],
         },
         "c1",
@@ -37,7 +37,7 @@ test_data = [
             "conditions": [["c4", "=", "a"]],
             "arrayjoin": "c4",
             "groupby": ["c4"],
-            "aggregations": [["count()", ["c4"], "c1"]],
+            "aggregations": [["myAggregate()", "c4", "c1"]],
             "orderby": ["-c4"],
         },
     ),
@@ -101,6 +101,31 @@ test_data = [
                     [[[[[["replaced", "=", "c"]]], []]]],
                 ],
             ],
+        },
+    ),
+    (
+        # Test aggregate with complex expression
+        {
+            "aggregations": [[
+                "myAggregate()",
+                [
+                    "function",
+                    ["column", "another_column"]
+                ],
+                "c1"
+            ]],
+        },
+        "column",
+        "replaced",
+        {
+            "aggregations": [[
+                "myAggregate()",
+                [
+                    "function",
+                    ["replaced", "another_column"]
+                ],
+                "c1"
+            ]],
         },
     )
 ]
