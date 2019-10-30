@@ -3,6 +3,7 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
+    Array,
     ColumnSet,
     DateTime,
     FixedString,
@@ -85,7 +86,22 @@ class DiscoverSchema(Schema, ABC):
         return None
 
     def get_columns(self) -> ColumnSet:
-        common = ColumnSet([])  # TODO: Fill out
+        common = ColumnSet([
+            ('event_id', FixedString(32)),
+            ('project_id', UInt(64)),
+            ('timestamp', DateTime()),
+            ('deleted', UInt(8)),
+            ('retention_days', UInt(16)),
+            ('platform', Nullable(String())),
+            ('sentry:release', Nullable(String())),
+            ('sentry:dist', Nullable(String())),
+            ('sentry:user', Nullable(String())),
+            # User
+            ('user_id', Nullable(String())),
+            ('username', Nullable(String())),
+            ('email', Nullable(String())),
+            ('ip_address', Nullable(String())),
+        ])
 
         return common + self.get_events_only_columns() + self.get_transactions_only_columns()
 
@@ -93,14 +109,31 @@ class DiscoverSchema(Schema, ABC):
         return ColumnSet([
             ('group_id', Nullable(UInt(64))),
             ('primary_hash', Nullable(FixedString(32))),
+            ('type', Nullable(String())),
+            # Promoted tags
+            ('level', Nullable(String())),
+            ('logger', Nullable(String()))
+            ('server_name', Nullable(String())),  # future name: device_id?
+            ('transaction', Nullable(String()))
+            ('site', Nullable(String())),
+            ('url', Nullable(String())),
+
             ('message', Nullable(String())),
             ('search_message', Nullable(String())),
             ('title', Nullable(String())),
             ('location', Nullable(String())),
             ('transaction', Nullable(String())),
             ('culprit', Nullable(String())),
-            ('site', Nullable(String())),
-            ('url', Nullable(String())),
+            ('received', Nullable(DateTime())),
+            ('geo_country_code', Nullable(String())),
+            ('geo_region', Nullable(String())),
+            ('geo_city', Nullable(String())),
+            ('sdk_name', Nullable(String())),
+            ('sdk_integrations', Nullable(Array(String()))),
+            ('sdk_version', Nullable(String())),
+            ('version', Nullable(String())),
+            ('http_method', Nullable(String())),
+            ('http_referer', Nullable(String())),
             ('exception_stacks', Nested([
                 ('type', Nullable(String())),
                 ('value', Nullable(String())),
@@ -116,7 +149,11 @@ class DiscoverSchema(Schema, ABC):
                 ('in_app', Nullable(UInt(8))),
                 ('colno', Nullable(UInt(32))),
                 ('lineno', Nullable(UInt(32))),
-                ('stack_level', UInt(16)),
+                ('stack_level', Nullable(UInt(16))),
+            ])),
+            ('modules', Nested([
+                ('name', String()),
+                ('version', String()),
             ])),
         ])
 
@@ -151,10 +188,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 read_schema=DiscoverSchema(),
                 write_schema=None,
             ),
-            time_group_columns={
-                'time': 'timestamp',
-            },
-            time_parse_columns=['timestamp'],
+            time_group_columns={},
+            time_parse_columns=['timestamp', 'start_ts', 'finish_ts'],
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
@@ -188,6 +223,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 return 'dist'
             if column_name == 'sentry:user':
                 return 'user'
+            if column_name == 'username':
+                return 'user_name'
+            if column_name == 'email':
+                return 'user_email'
             if self.get_dataset_schemas() \
                     .get_read_schema() \
                     .get_events_only_columns() \
