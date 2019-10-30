@@ -165,7 +165,8 @@ class TestApi(BaseApiTest):
             'project': self.project_id,
             'aggregations': [
                 ['count()', '', 'count'],
-                ['uniq(group_id)', '', 'uniq_group_id']
+                ['uniq', ['group_id'], 'uniq_group_id'],
+                ['uniq', ['exception_stacks.type'], 'uniq_ex_stacks']
             ],
             'conditions': [['type', '=', 'transaction'], ['group_id', '=', 2]],
             'groupby': ['type', 'transaction'],
@@ -176,10 +177,11 @@ class TestApi(BaseApiTest):
         assert response.status_code == 200
         assert data['data'] == [
             {
-                'count': 0,
-                'transaction': None,
                 'type': 'transaction',
-                'uniq_group_id': None
+                'transaction': None,
+                'count': 0,
+                'uniq_group_id': 0,
+                'uniq_ex_stacks': 0
             }
         ]
 
