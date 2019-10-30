@@ -1,8 +1,8 @@
 from itertools import groupby
 from typing import Optional, Mapping, MutableSequence, Tuple, TYPE_CHECKING
 
+from snuba.utils.clock import Clock, SystemClock
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.metrics.clock import Clock, SystemClock
 from snuba.utils.metrics.types import Tags
 
 if TYPE_CHECKING:
