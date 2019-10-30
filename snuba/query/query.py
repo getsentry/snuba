@@ -1,5 +1,4 @@
 from __future__ import annotations
-import re
 
 from deprecation import deprecated
 from itertools import chain
@@ -18,6 +17,7 @@ from typing import (
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.types import Condition
 from snuba.util import (
+    SAFE_COL_RE,
     columns_in_expr,
     is_condition,
     to_list
@@ -33,8 +33,6 @@ Groupby = Sequence[Any]
 Limitby = Tuple[int, str]
 
 TElement = TypeVar("TElement")
-
-ORDERED_COL = re.compile(r"^-?([a-zA-Z_][a-zA-Z0-9_\.]*)$")
 
 
 class Query:
@@ -197,6 +195,15 @@ class Query:
     def get_all_referenced_columns(self) -> Sequence[Any]:
         """
         Return the set of all columns that are used by a query.
+
+        TODO: This does not actually return all columns referenced in the query since
+        there are some corner cases left out:
+        - HAVING clause. This is not considered here.
+        - functions expressed in the form f(column) in aggregations.
+
+        Will fix both when adding a better column abstraction.
+        Also the replace_column method behave consistently with this one. Any change to
+        this method should be reflected there.
         """
         col_exprs: MutableSequence[Any] = []
 
@@ -233,13 +240,13 @@ class Query:
         consistent in the result is always to return a brand new expression.
 
         This does not support all possible columns format (like string representations
-        of funciton expresison "count(col1)"). But it is consistent with the behavior
+        of function expresison "count(col1)"). But it is consistent with the behavior
         of get_all_referenced_columns in that it won't replace something that is not
-        returned by that function and it will replace all the columns reteturned by that
+        returned by that function and it will replace all the columns returned by that
         function.
         """
         if isinstance(expression, str):
-            match = ORDERED_COL.match(expression)
+            match = SAFE_COL_RE.match(expression)
             if match and match[1] == old_column:
                 return expression.replace(old_column, new_column)
         elif (isinstance(expression, (list, tuple)) and len(expression) >= 2
@@ -306,6 +313,9 @@ class Query:
         In the current implementation we can only replace a column identified by a string
         with another column identified by a string. This does not support replacing a
         column with a complex expression.
+        Columns represented as strings include expresions like "tags[a]" or "f(column)"
+        This method will replace them as well if requested, but that would not be a good
+        idea since such columns are processed by column_expr later in the flow.
         """
 
         if self.get_selected_columns():
