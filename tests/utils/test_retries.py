@@ -2,10 +2,6 @@ from snuba.utils.clock import TestingClock
 from snuba.utils.retries import BasicRetryPolicy, RetryException, constant_delay
 
 
-class CustomException(Exception):
-    pass
-
-
 def test_basic_retry_policy_no_delay():
 
     value = object()
@@ -15,6 +11,9 @@ def test_basic_retry_policy_no_delay():
         return value
 
     good_function.call_count = 0
+
+    class CustomException(Exception):
+        pass
 
     def flaky_function():
         flaky_function.call_count += 1
@@ -62,6 +61,9 @@ def test_basic_retry_policy_with_delay():
 
     good_function.call_count = 0
 
+    class CustomException(Exception):
+        pass
+
     def flaky_function():
         flaky_function.call_count += 1
         if flaky_function.call_count % 2 == 0:
@@ -98,3 +100,33 @@ def test_basic_retry_policy_with_delay():
         assert isinstance(e.__cause__, CustomException)
         assert bad_function.call_count == 3
         assert clock.time() == 2  # two retries
+
+
+def test_basic_retry_policy_with_supression():
+    class ExpectedError(Exception):
+        pass
+
+    class UnexpectedError(Exception):
+        pass
+
+    def function():
+        function.call_count += 1
+        if function.call_count % 2 == 0:
+            raise UnexpectedError()
+        else:
+            raise ExpectedError()
+
+    function.call_count = 0
+
+    def suppression_test(exception: Exception) -> bool:
+        return isinstance(exception, ExpectedError)
+
+    clock = TestingClock()
+    policy = BasicRetryPolicy(
+        3, constant_delay(1), suppression_test=suppression_test, clock=clock
+    )
+    try:
+        policy.call(function)
+    except UnexpectedError as e:
+        assert function.call_count == 2
+        assert clock.time() == 1

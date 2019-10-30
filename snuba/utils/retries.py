@@ -10,6 +10,7 @@ T = TypeVar("T")
 def constant_delay(delay: float) -> Callable[[int], float]:
     def f(attempts: int) -> float:
         return delay
+
     return f
 
 
@@ -33,10 +34,12 @@ class BasicRetryPolicy(RetryPolicy):
         self,
         attempts: int,
         delay_function: Optional[Callable[[int], float]] = None,
+        suppression_test: Optional[Callable[[Exception], bool]] = None,
         clock: Clock = SystemClock(),
     ) -> None:
         self.__attempts = attempts
         self.__delay_function = delay_function
+        self.__suppression_test = suppression_test
         self.__clock = clock
 
     def call(self, callable: Callable[[], T]) -> T:
@@ -44,10 +47,15 @@ class BasicRetryPolicy(RetryPolicy):
             try:
                 return callable()
             except Exception as exception:
+                if self.__suppression_test is not None and not self.__suppression_test(
+                    exception
+                ):
+                    raise
+
                 if i == self.__attempts:
                     raise RetryException() from exception
 
             if self.__delay_function is not None:
                 self.__clock.sleep(self.__delay_function(i))
 
-        raise RetryException
+        raise Exception("unexpected fallthrough")
