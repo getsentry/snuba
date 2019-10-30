@@ -27,43 +27,6 @@ from snuba.util import is_condition
 
 EVENTS = 'events'
 TRANSACTIONS = 'transactions'
-# TODO: replace with get_transaction_only_columns()
-TRANSACTIONS_ONLY_COLUMNS = [
-    'trace_id',
-    'span_id',
-    'transaction_name',
-    'transaction_hash',
-    'transaction_op',
-    'start_ts',
-    'start_ms',
-    'finish_ts',
-    'finish_ms',
-    'duration',
-]
-
-EVENTS_ONLY_COLUMNS = [
-    'group_id',
-    'primary_hash',
-    'message',
-    'search_message',
-    'title',
-    'location',
-    'transaction',
-    'culprit',
-    'exception_stacks.type',
-    'exception_stacks.value',
-    'exception_stacks.mechanism_type',
-    'exception_stacks.mechanism_handled',
-    'exception_frames.abs_path',
-    'exception_frames.filename',
-    'exception_frames.package',
-    'exception_frames.module',
-    'exception_frames.function',
-    'exception_frames.in_app',
-    'exception_frames.colno',
-    'exception_frames.lineno',
-    'exception_frames.stack_level',
-]
 
 
 def detect_dataset(query: Query) -> str:
@@ -84,7 +47,12 @@ def detect_dataset(query: Query) -> str:
 
     # If there is a condition that references a transactions only field, just switch
     # to the transactions dataset
-    if [col for col in TRANSACTIONS_ONLY_COLUMNS if col in query.get_columns_referenced_in_conditions()]:
+    transaction_column_set = get_dataset('discover') \
+        .get_dataset_schemas() \
+        .get_read_schema() \
+        .get_transactions_only_columns()
+
+    if [col for col in query.get_columns_referenced_in_conditions() if transaction_column_set.get(col)]:
         return TRANSACTIONS
 
     # Use events by default
@@ -220,10 +188,16 @@ class DiscoverDataset(TimeSeriesDataset):
                 return 'dist'
             if column_name == 'sentry:user':
                 return 'user'
-            if column_name in EVENTS_ONLY_COLUMNS:
+            if self.get_dataset_schemas() \
+                    .get_read_schema() \
+                    .get_events_only_columns() \
+                    .get(column_name):
                 return 'NULL'
         else:
-            if column_name in TRANSACTIONS_ONLY_COLUMNS:
+            if self.get_dataset_schemas() \
+                    .get_read_schema() \
+                    .get_transactions_only_columns() \
+                    .get(column_name):
                 return 'NULL'
 
         return get_dataset(detected_dataset) \
