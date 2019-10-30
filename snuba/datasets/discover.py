@@ -2,7 +2,16 @@ from abc import ABC
 from datetime import timedelta
 from typing import Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import (
+    ColumnSet,
+    DateTime,
+    FixedString,
+    Nested,
+    Nullable,
+    String,
+    UInt,
+    UUID,
+)
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
@@ -18,6 +27,7 @@ from snuba.util import is_condition
 
 EVENTS = 'events'
 TRANSACTIONS = 'transactions'
+# TODO: replace with get_transaction_only_columns()
 TRANSACTIONS_ONLY_COLUMNS = [
     'trace_id',
     'span_id',
@@ -33,7 +43,26 @@ TRANSACTIONS_ONLY_COLUMNS = [
 
 EVENTS_ONLY_COLUMNS = [
     'group_id',
+    'primary_hash',
+    'message',
+    'search_message',
+    'title',
+    'location',
     'transaction',
+    'culprit',
+    'exception_stacks.type',
+    'exception_stacks.value',
+    'exception_stacks.mechanism_type',
+    'exception_stacks.mechanism_handled',
+    'exception_frames.abs_path',
+    'exception_frames.filename',
+    'exception_frames.package',
+    'exception_frames.module',
+    'exception_frames.function',
+    'exception_frames.in_app',
+    'exception_frames.colno',
+    'exception_frames.lineno',
+    'exception_frames.stack_level',
 ]
 
 
@@ -88,7 +117,54 @@ class DiscoverSchema(Schema, ABC):
         return None
 
     def get_columns(self) -> ColumnSet:
-        return []
+        common = ColumnSet([])  # TODO: Fill out
+
+        return common + self.get_events_only_columns() + self.get_transactions_only_columns()
+
+    def get_events_only_columns(self) -> ColumnSet:
+        return ColumnSet([
+            ('group_id', Nullable(UInt(64))),
+            ('primary_hash', Nullable(FixedString(32))),
+            ('message', Nullable(String())),
+            ('search_message', Nullable(String())),
+            ('title', Nullable(String())),
+            ('location', Nullable(String())),
+            ('transaction', Nullable(String())),
+            ('culprit', Nullable(String())),
+            ('site', Nullable(String())),
+            ('url', Nullable(String())),
+            ('exception_stacks', Nested([
+                ('type', Nullable(String())),
+                ('value', Nullable(String())),
+                ('mechanism_type', Nullable(String())),
+                ('mechanism_handled', Nullable(UInt(8))),
+            ])),
+            ('exception_frames', Nested([
+                ('abs_path', Nullable(String())),
+                ('filename', Nullable(String())),
+                ('package', Nullable(String())),
+                ('module', Nullable(String())),
+                ('function', Nullable(String())),
+                ('in_app', Nullable(UInt(8))),
+                ('colno', Nullable(UInt(32))),
+                ('lineno', Nullable(UInt(32))),
+                ('stack_level', UInt(16)),
+            ])),
+        ])
+
+    def get_transactions_only_columns(self) -> ColumnSet:
+        return ColumnSet([
+            ('trace_id', Nullable(UUID())),
+            ('span_id', Nullable(UInt(64))),
+            ('transaction_name', String()),
+            ('transaction_hash', Nullable(UInt(64))),
+            ('transaction_op', Nullable(String())),
+            ('start_ts', Nullable(DateTime())),
+            ('start_ms', Nullable(UInt(16))),
+            ('finish_ts', Nullable(DateTime())),
+            ('finish_ms', Nullable(UInt(16))),
+            ('duration', Nullable(UInt(32))),
+        ])
 
 
 class DiscoverDataset(TimeSeriesDataset):
@@ -138,6 +214,12 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "'transaction'"
             if column_name == 'timestamp':
                 return 'finish_ts'
+            if column_name == 'sentry:release':
+                return 'release'
+            if column_name == 'sentry:dist':
+                return 'dist'
+            if column_name == 'sentry:user':
+                return 'user'
             if column_name in EVENTS_ONLY_COLUMNS:
                 return 'NULL'
         else:
