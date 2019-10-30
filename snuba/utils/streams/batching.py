@@ -12,7 +12,10 @@ from typing import (
     TypeVar,
 )
 
+from confluent_kafka import KafkaException, KafkaError
+
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.retries import RetryPolicy, BasicRetryPolicy, constant_delay
 from snuba.utils.streams.abstract import (
     Consumer,
     ConsumerError,
@@ -99,6 +102,17 @@ class BatchingConsumer:
         max_batch_time: int,
         metrics: MetricsBackend,
         recoverable_errors: Optional[Sequence[Type[ConsumerError]]] = None,
+        commit_retry_policy: RetryPolicy = BasicRetryPolicy(
+            4,
+            constant_delay(1),
+            lambda e: isinstance(e, KafkaException)
+            and e.args[0].code()
+            in (
+                KafkaError.REQUEST_TIMED_OUT,
+                KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                KafkaError._WAIT_COORD,
+            ),
+        ),
     ) -> None:
         self.consumer = consumer
 
@@ -122,6 +136,8 @@ class BatchingConsumer:
 
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
+
+        self.__commit_retry_policy = commit_retry_policy
 
         def on_partitions_assigned(streams: Sequence[TStream]) -> None:
             logger.info("New streams assigned: %r", streams)
@@ -251,5 +267,5 @@ class BatchingConsumer:
         self._reset_batch()
 
     def _commit(self) -> None:
-        offsets = self.consumer.commit()
+        offsets = self.__commit_retry_policy.call(self.consumer.commit)
         logger.debug("Committed offsets: %s", offsets)
