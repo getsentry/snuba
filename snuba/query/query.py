@@ -338,7 +338,10 @@ class Query:
             self.set_aggregations([
                 [
                     aggr[0],
-                    self.__replace_col_in_expression(aggr[1], old_column, new_column),
+                    self.__replace_col_in_expression(aggr[1], old_column, new_column)
+                    if not isinstance(aggr[1], (list, tuple))
+                    # This can be an expresison or a list of expressions
+                    else self.__replace_col_in_list(aggr[1], old_column, new_column),
                     aggr[2],
                 ] for aggr in to_list(self.get_aggregations())
             ])

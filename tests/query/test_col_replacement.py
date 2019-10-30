@@ -106,26 +106,44 @@ test_data = [
     (
         # Test aggregate with complex expression
         {
-            "aggregations": [[
-                "myAggregate()",
+            "aggregations": [
                 [
-                    "function",
-                    ["column", "another_column"]
+                    "myAggregate()",
+                    [[
+                        "function",
+                        ["column", "another_column"]
+                    ]],
+                    "c1"
                 ],
-                "c1"
-            ]],
+                [
+                    "myAggregate()",
+                    [
+                        "column", "another_column", "column"
+                    ],
+                    "c1"
+                ],
+            ],
         },
         "column",
         "replaced",
         {
-            "aggregations": [[
-                "myAggregate()",
+            "aggregations": [
                 [
-                    "function",
-                    ["replaced", "another_column"]
+                    "myAggregate()",
+                    [[
+                        "function",
+                        ["replaced", "another_column"]
+                    ]],
+                    "c1"
                 ],
-                "c1"
-            ]],
+                [
+                    "myAggregate()",
+                    [
+                        "replaced", "another_column", "replaced"
+                    ],
+                    "c1"
+                ],
+            ],
         },
     )
 ]
