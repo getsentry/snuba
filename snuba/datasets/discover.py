@@ -112,9 +112,9 @@ class DiscoverSchema(Schema, ABC):
             ('type', Nullable(String())),
             # Promoted tags
             ('level', Nullable(String())),
-            ('logger', Nullable(String()))
-            ('server_name', Nullable(String())),  # future name: device_id?
-            ('transaction', Nullable(String()))
+            ('logger', Nullable(String())),
+            ('server_name', Nullable(String())),
+            ('transaction', Nullable(String())),
             ('site', Nullable(String())),
             ('url', Nullable(String())),
 
@@ -122,7 +122,6 @@ class DiscoverSchema(Schema, ABC):
             ('search_message', Nullable(String())),
             ('title', Nullable(String())),
             ('location', Nullable(String())),
-            ('transaction', Nullable(String())),
             ('culprit', Nullable(String())),
             ('received', Nullable(DateTime())),
             ('geo_country_code', Nullable(String())),
