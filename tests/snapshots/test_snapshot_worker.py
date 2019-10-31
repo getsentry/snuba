@@ -10,7 +10,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 

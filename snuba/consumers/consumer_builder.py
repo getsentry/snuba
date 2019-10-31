@@ -8,7 +8,8 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.kafka import KafkaConsumer, KafkaConsumerWithCommitLog, KafkaMessage, TransportError, build_kafka_consumer_configuration
+from snuba.utils.streams.consumers.consumer import Consumer
+from snuba.utils.streams.consumers.backends.kafka import KafkaConsumerBackend, KafkaConsumerBackendWithCommitLog, TransportError, build_kafka_consumer_configuration
 
 
 class ConsumerBuilder:
@@ -89,16 +90,16 @@ class ConsumerBuilder:
         )
 
         if self.commit_log_topic is None:
-            consumer = KafkaConsumer(configuration)
+            backend = KafkaConsumerBackend(configuration)
         else:
-            consumer = KafkaConsumerWithCommitLog(
+            backend = KafkaConsumerBackendWithCommitLog(
                 configuration,
                 self.producer,
                 self.commit_log_topic,
             )
 
         return BatchingConsumer(
-            consumer,
+            Consumer(backend),
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
