@@ -1,7 +1,8 @@
-from typing import Mapping
+import math
+from typing import Iterator, Mapping, Tuple
 from uuid import UUID
 
-from snuba.subscriptions.types import Subscription
+from snuba.subscriptions.types import Interval, Subscription, Timestamp
 
 
 class Scheduler:
@@ -13,3 +14,13 @@ class Scheduler:
 
     def delete(self, key: UUID) -> None:
         raise NotImplementedError
+
+    def find(
+        self, interval: Interval[Timestamp]
+    ) -> Iterator[Tuple[Timestamp, Tuple[UUID, Subscription]]]:
+        for uuid, subscription in self.__subscriptions.items():
+            for i in range(
+                math.ceil(interval.lower / subscription.frequency),
+                math.floor(interval.upper / subscription.frequency),
+            ):
+                yield i * subscription.frequency, (uuid, subscription)
