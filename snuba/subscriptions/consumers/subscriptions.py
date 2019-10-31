@@ -3,74 +3,39 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from typing import MutableMapping, MutableSet, Iterator, Tuple, Union
+from typing import MutableMapping, Union
 from uuid import UUID
 
-from snuba.utils.streams.abstract import EndOfStream, Producer, TStream
+from snuba.utils.streams.abstract import EndOfStream
 from snuba.subscriptions.protocol import (
     SubscriptionDeleteRequest,
     SubscriptionMessage,
-    SubscriptionRenewalRequest,
-    SubscriptionRenewalResponse,
     SubscriptionUpdateRequest,
 )
-from snuba.subscriptions.types import Interval, Subscription, Timestamp
+from snuba.subscriptions.types import Subscription
 
 logger = logging.getLogger(__name__)
 
 
-class InvalidState(RuntimeError):
-    pass
-
-
-class SubscriptionConsumerState(ABC):
+class SubscriptionMessageProcessorState(ABC):
     @abstractmethod
-    def handle(self, future: Future[SubscriptionMessage]) -> SubscriptionConsumerState:
-        raise NotImplementedError
-
-    @abstractmethod
-    def find(
-        self, interval: Interval[Timestamp]
-    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
-        """
-        Find all subscriptions that need to be evaluated during the specified
-        interval.
-        """
+    def handle(
+        self, future: Future[SubscriptionMessage]
+    ) -> SubscriptionMessageProcessorState:
         raise NotImplementedError
 
 
-class InitializingState(SubscriptionConsumerState):
-    def __init__(
-        self, stream: TStream, producer: Producer[TStream, SubscriptionMessage]
-    ) -> None:
-        self.__stream = stream
-        self.__producer = producer
-
+class Initializing(SubscriptionMessageProcessorState):
+    def __init__(self) -> None:
         self.__subscriptions: MutableMapping[UUID, Subscription] = {}
-        self.__renewals: MutableSet[UUID] = set()
 
     def handle(
         self, future: Future[SubscriptionMessage]
-    ) -> Union[InitializingState, StreamingState]:
+    ) -> Union[Initializing, Streaming]:
         try:
             message: SubscriptionMessage = future.result()
         except EndOfStream:
-            for uuid in self.__renewals:
-                try:
-                    subscription = self.__subscriptions[uuid]
-                except KeyError:
-                    logger.warning(
-                        "Unable to fulfill subscription renewal request for %r, no subscription exists.",
-                        uuid,
-                    )
-                else:
-                    self.__producer.produce(
-                        self.__stream, SubscriptionUpdateRequest(uuid, subscription)
-                    )
-                self.__producer.produce(
-                    self.__stream, SubscriptionRenewalResponse(uuid)
-                )
-            return StreamingState(self.__stream, self.__producer)
+            return Streaming()
 
         if isinstance(message, SubscriptionUpdateRequest):
             self.__subscriptions[message.uuid] = message.subscription
@@ -82,34 +47,17 @@ class InitializingState(SubscriptionConsumerState):
                     "Unable to fulfill subscription deletion request for %r, no subscription exists.",
                     message.uuid,
                 )
-        elif isinstance(message, SubscriptionRenewalRequest):
-            self.__renewals.add(message.uuid)
-        elif isinstance(message, SubscriptionRenewalResponse):
-            try:
-                self.__renewals.remove(message.uuid)
-            except KeyError:
-                pass
         else:
             raise TypeError
 
         return self
 
-    def find(
-        self, interval: Interval[Timestamp]
-    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
-        raise InvalidState
 
-
-class StreamingState(SubscriptionConsumerState):
-    def __init__(
-        self, stream: TStream, producer: Producer[TStream, SubscriptionMessage]
-    ) -> None:
-        self.__stream = stream
-        self.__producer = producer
-
+class Streaming(SubscriptionMessageProcessorState):
+    def __init__(self) -> None:
         self.__subscriptions: MutableMapping[UUID, Subscription] = {}
 
-    def handle(self, future: Future[SubscriptionMessage]) -> StreamingState:
+    def handle(self, future: Future[SubscriptionMessage]) -> Streaming:
         try:
             message = future.result()
         except EndOfStream:
@@ -125,26 +73,7 @@ class StreamingState(SubscriptionConsumerState):
                     "Unable to fulfill subscription deletion request for %r, no subscription exists.",
                     message.uuid,
                 )
-        elif isinstance(message, SubscriptionRenewalRequest):
-            try:
-                subscription = self.__subscriptions[message.uuid]
-            except KeyError:
-                logger.warning(
-                    "Unable to fulfill subscription renewal request for %r, no subscription exists.",
-                    message.uuid,
-                )
-            else:
-                self.__producer.produce(
-                    self.__stream, SubscriptionUpdateRequest(message.uuid, subscription)
-                )
-        elif isinstance(message, SubscriptionRenewalResponse):
-            pass
         else:
             raise TypeError
 
         return self
-
-    def find(
-        self, interval: Interval[Timestamp]
-    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
-        raise NotImplementedError  # TODO

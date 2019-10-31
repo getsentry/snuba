@@ -16,19 +16,4 @@ class SubscriptionDeleteRequest:
     uuid: UUID
 
 
-@dataclass(frozen=True)
-class SubscriptionRenewalRequest:
-    uuid: UUID
-
-
-@dataclass(frozen=True)
-class SubscriptionRenewalResponse:
-    uuid: UUID
-
-
-SubscriptionMessage = Union[
-    SubscriptionUpdateRequest,
-    SubscriptionDeleteRequest,
-    SubscriptionRenewalRequest,
-    SubscriptionRenewalResponse,
-]
+SubscriptionMessage = Union[SubscriptionUpdateRequest, SubscriptionDeleteRequest]
