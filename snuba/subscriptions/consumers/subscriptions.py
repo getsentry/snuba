@@ -3,35 +3,18 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from typing import (
-    Generic,
-    MutableMapping,
-    MutableSet,
-    Optional,
-    Iterator,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import MutableMapping, MutableSet, Iterator, Tuple, Union
 from uuid import UUID
 
-from snuba.utils.streams.abstract import (
-    Consumer,
-    EndOfStream,
-    Producer,
-    TOffset,
-    TStream,
-)
-from snuba.subscriptions.types import (
-    Interval,
-    Subscription,
+from snuba.utils.streams.abstract import EndOfStream, Producer, TStream
+from snuba.subscriptions.protocol import (
     SubscriptionDeleteRequest,
     SubscriptionMessage,
     SubscriptionRenewalRequest,
     SubscriptionRenewalResponse,
     SubscriptionUpdateRequest,
-    Timestamp,
 )
+from snuba.subscriptions.types import Interval, Subscription, Timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -165,49 +148,3 @@ class StreamingState(SubscriptionConsumerState):
         self, interval: Interval[Timestamp]
     ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
         raise NotImplementedError  # TODO
-
-
-class SubscriptionConsumer(Generic[TStream]):
-    def __init__(
-        self,
-        consumer: Consumer[TStream, TOffset, SubscriptionMessage],
-        producer: Producer[TStream, SubscriptionMessage],
-    ) -> None:
-        self.__consumer = consumer
-        self.__producer = producer
-        self.__streams: MutableMapping[TStream, SubscriptionConsumerState] = {}
-
-    def assign(self, streams: Sequence[TStream]) -> None:
-        # XXX: This is a naive implementation that assumes ``assign`` is only
-        # called once and will likely need to be modified for real-world use.
-
-        # TODO: This need to include the initial offset.
-        self.__consumer.assign(streams)
-
-        for stream in streams:
-            self.__streams[stream] = InitializingState(stream, self.__producer)
-
-    def poll(self, timeout: Optional[float] = None) -> None:
-        future: Future[SubscriptionMessage]
-
-        try:
-            message = self.__consumer.poll(timeout)
-        except Exception as error:
-            future = Future()
-            future.set_exception(error)
-            if isinstance(error, EndOfStream):
-                self.__streams[error.stream] = self.__streams[error.stream].handle(
-                    future
-                )
-        else:
-            if message is not None:
-                future = Future()
-                future.set_result(message.value)
-                self.__streams[message.stream] = self.__streams[message.stream].handle(
-                    future
-                )
-
-    def find(
-        self, stream: TStream, interval: Interval[Timestamp]
-    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
-        return self.__streams[stream].find(interval)
