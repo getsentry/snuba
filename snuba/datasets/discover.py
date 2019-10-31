@@ -176,12 +176,9 @@ class DiscoverSchema(Schema, ABC):
 
 class DiscoverDataset(TimeSeriesDataset):
     """
-    Experimental dataset for Discover
-    that coerces the columns of Events and Transactions into the same format
-    and sends a query to either one.
-
-    Currently does this by switching between events and transactions tables
-    depending on the conditions in the provided query.
+    Experimental dataset for Discover that maps the columns of Events and
+    Transactions into a standard format and sends a query to one of the 2 tables
+    depending on the conditions detected.
     """
 
     def __init__(self) -> None:
