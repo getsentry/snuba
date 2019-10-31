@@ -7,7 +7,9 @@ from snuba.utils.streams.consumers.types import Message, TStream, TOffset, TValu
 class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
     """
     An abstract class that provides methods to consume messages from a
-    multiplexed collection of streams.
+    multiplexed collection of streams. This class is not intended to be used
+    directly. Instead, it is intended to be wrapped by a ``Consumer``
+    instance.
 
     This interface is heavily "inspired" by the Confluent Kafka Consumer
     implementation, but only exposes a limited set of the available methods

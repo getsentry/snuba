@@ -6,8 +6,9 @@ from snuba.utils.streams.consumers.types import Message, TStream, TOffset, TValu
 
 class Consumer(Generic[TStream, TOffset, TValue]):
     """
-    An abstract class that provides methods to consume messages from a
-    multiplexed collection of streams.
+    This class provides an interface for consuming messages from a
+    multiplexed collection of streams. The specific implementation of how
+    messages are consumed is delegated to the backend implementation.
 
     This interface is heavily "inspired" by the Confluent Kafka Consumer
     implementation, but only exposes a limited set of the available methods
