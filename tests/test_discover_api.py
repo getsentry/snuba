@@ -169,7 +169,7 @@ class TestDiscoverApi(BaseApiTest):
                 ['uniq', ['exception_stacks.type'], 'uniq_ex_stacks']
             ],
             'conditions': [['type', '=', 'transaction'], ['group_id', '=', 2]],
-            'groupby': ['type', 'transaction'],
+            'groupby': ['type'],
             'limit': 1000,
         }))
         data = json.loads(response.data)
@@ -178,7 +178,6 @@ class TestDiscoverApi(BaseApiTest):
         assert data['data'] == [
             {
                 'type': 'transaction',
-                'transaction': None,
                 'count': 0,
                 'uniq_group_id': 0,
                 'uniq_ex_stacks': 0
