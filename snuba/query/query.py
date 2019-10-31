@@ -60,7 +60,18 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: MutableMapping[str, Any], data_source: RelationalSource):
+    def __init__(self,
+        body: MutableMapping[str, Any],  # Temporary
+        data_source: RelationalSource,
+        # New data model to replace the one based on the dictionary
+        selected_columns: Optional[Sequence[Expression]] = None,
+        aggregations: Optional[Sequence[NodeAggregation]] = None,
+        array_join: Optional[Column] = None,
+        conditions: Sequence[NodeCondition] = None,
+        groupby: Sequence[Expression] = None,
+        having: Sequence[NodeCondition] = None,
+        order_by: Sequence[Expression] = None,
+    ):
         """
         Expects an already parsed query body.
         """
@@ -71,13 +82,13 @@ class Query:
         self.__data_source = data_source
 
         # New data model
-        self.__selected_columns: Sequence[Expression] = []
-        self.__aggregations: Sequence[NodeAggregation] = []
-        self.__array_join: Optional[Column] = None
-        self.__conditions: Sequence[NodeCondition] = []
-        self.__groupby: Sequence[Expression] = []
-        self.__having: Sequence[NodeCondition] = []
-        self.__orderby: Sequence[Expression] = []
+        self.__selected_columns: Sequence[Expression] = selected_columns or []
+        self.__aggregations: Sequence[NodeAggregation] = aggregations or []
+        self.__array_join = array_join
+        self.__conditions: Sequence[NodeCondition] = conditions or []
+        self.__groupby: Sequence[Expression] = groupby or []
+        self.__having: Sequence[NodeCondition] = having or []
+        self.__order_by: Sequence[Expression] = order_by or []
 
     def repalce_nodes(self, closure: Callable[[Node], Node]) -> None:
         raise NotImplementedError

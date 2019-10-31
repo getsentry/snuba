@@ -81,6 +81,7 @@ class Expression(ABC, AliasedNode):
     """
     Abstract representation of something that can be evaluated in isolation.
     """
+    pass
 
 
 class Column(Expression):
