@@ -2,74 +2,57 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from concurrent.futures import Future
-from typing import Generic, MutableMapping, MutableSet, Optional, Sequence, Union
+from typing import (
+    Generic,
+    MutableMapping,
+    MutableSet,
+    Optional,
+    Iterator,
+    Sequence,
+    Tuple,
+    Union,
+)
 from uuid import UUID
 
 from snuba.utils.streams.abstract import (
     Consumer,
     EndOfStream,
-    Message,
     Producer,
     TOffset,
     TStream,
 )
-
+from snuba.subscriptions.types import (
+    Interval,
+    Subscription,
+    SubscriptionDeleteRequest,
+    SubscriptionMessage,
+    SubscriptionRenewalRequest,
+    SubscriptionRenewalResponse,
+    SubscriptionUpdateRequest,
+    Timestamp,
+)
 
 logger = logging.getLogger(__name__)
 
 
-Timestamp = int
-
-
-@dataclass(frozen=True)
-class Subscription:
-    __slots__ = ["frequency"]
-
-    frequency: int
-
-
-@dataclass(frozen=True)
-class SubscriptionUpdateRequest:
-    __slots__ = ["uuid", "subscription"]
-
-    uuid: UUID
-    subscription: Subscription
-
-
-@dataclass(frozen=True)
-class SubscriptionDeleteRequest:
-    __slots__ = ["uuid"]
-
-    uuid: UUID
-
-
-@dataclass(frozen=True)
-class SubscriptionRenewalRequest:
-    __slots__ = ["uuid"]
-
-    uuid: UUID
-
-
-@dataclass(frozen=True)
-class SubscriptionRenewalResponse:
-    __slots__ = ["uuid"]
-
-    uuid: UUID
-
-
-SubscriptionMessage = Union[
-    SubscriptionUpdateRequest,
-    SubscriptionDeleteRequest,
-    SubscriptionRenewalRequest,
-    SubscriptionRenewalResponse,
-]
+class InvalidState(RuntimeError):
+    pass
 
 
 class SubscriptionConsumerState(ABC):
     @abstractmethod
     def handle(self, future: Future[SubscriptionMessage]) -> SubscriptionConsumerState:
+        raise NotImplementedError
+
+    @abstractmethod
+    def find(
+        self, interval: Interval[Timestamp]
+    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
+        """
+        Find all subscriptions that need to be evaluated during the specified
+        interval.
+        """
         raise NotImplementedError
 
 
@@ -128,6 +111,11 @@ class InitializingState(SubscriptionConsumerState):
 
         return self
 
+    def find(
+        self, interval: Interval[Timestamp]
+    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
+        raise InvalidState
+
 
 class StreamingState(SubscriptionConsumerState):
     def __init__(
@@ -173,6 +161,11 @@ class StreamingState(SubscriptionConsumerState):
 
         return self
 
+    def find(
+        self, interval: Interval[Timestamp]
+    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
+        raise NotImplementedError  # TODO
+
 
 class SubscriptionConsumer(Generic[TStream]):
     def __init__(
@@ -203,9 +196,18 @@ class SubscriptionConsumer(Generic[TStream]):
             future = Future()
             future.set_exception(error)
             if isinstance(error, EndOfStream):
-                self.__streams[error.stream].handle(future)
+                self.__streams[error.stream] = self.__streams[error.stream].handle(
+                    future
+                )
         else:
             if message is not None:
                 future = Future()
                 future.set_result(message.value)
-                self.__streams[message.stream].handle(future)
+                self.__streams[message.stream] = self.__streams[message.stream].handle(
+                    future
+                )
+
+    def find(
+        self, stream: TStream, interval: Interval[Timestamp]
+    ) -> Iterator[Tuple[Interval[Timestamp], Iterator[Subscription]]]:
+        return self.__streams[stream].find(interval)
