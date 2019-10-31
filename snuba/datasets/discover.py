@@ -92,9 +92,11 @@ class DiscoverSchema(Schema, ABC):
             ('deleted', UInt(8)),
             ('retention_days', UInt(16)),
             ('platform', Nullable(String())),
+            ('environment', Nullable(String())),
             ('sentry:release', Nullable(String())),
             ('sentry:dist', Nullable(String())),
             ('sentry:user', Nullable(String())),
+            ('transaction', Nullable(String())),
             # User
             ('user_id', Nullable(String())),
             ('username', Nullable(String())),
@@ -113,7 +115,6 @@ class DiscoverSchema(Schema, ABC):
             ('level', Nullable(String())),
             ('logger', Nullable(String())),
             ('server_name', Nullable(String())),
-            ('transaction', Nullable(String())),
             ('site', Nullable(String())),
             ('url', Nullable(String())),
 
