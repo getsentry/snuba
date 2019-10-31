@@ -120,7 +120,7 @@ class DiscoverSchema(Schema, ABC):
         return ColumnSet([
             ('group_id', Nullable(UInt(64))),
             ('primary_hash', Nullable(FixedString(32))),
-            ('type', String()),
+            ('type', Nullable(String())),
             # Promoted tags
             ('level', Nullable(String())),
             ('logger', Nullable(String())),
