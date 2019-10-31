@@ -7,7 +7,6 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     FixedString,
-    Nested,
     Nullable,
     String,
     UInt,
@@ -154,7 +153,6 @@ class DiscoverSchema(Schema, ABC):
         return ColumnSet([
             ('trace_id', Nullable(UUID())),
             ('span_id', Nullable(UInt(64))),
-            ('transaction_name', String()),
             ('transaction_hash', Nullable(UInt(64))),
             ('transaction_op', Nullable(String())),
             ('start_ts', Nullable(DateTime())),
@@ -220,6 +218,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 return 'user_name'
             if column_name == 'email':
                 return 'user_email'
+            if column_name == 'transaction':
+                return 'transaction_name'
             if self.get_dataset_schemas() \
                     .get_read_schema() \
                     .get_events_only_columns() \
