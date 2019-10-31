@@ -10,7 +10,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 from tests.base import BaseApiTest, get_event
 
 
-class TestApi(BaseApiTest):
+class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         # Setup both tables
         super().setup_method(test_method, 'events')
@@ -206,5 +206,24 @@ class TestApi(BaseApiTest):
             'conditions': [['type', '!=', 'transaction']],
             'having': [['times_seen', '=', 1]],
             'aggregations': [['count()', '', 'times_seen']],
+        })).data)
+        assert len(result['data']) == 1
+
+    def test_time(self):
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'selected_columns': ['project_id'],
+            'groupby': ['time', 'project_id'],
+            'conditions': [['type', '!=', 'transaction']],
+        })).data)
+        assert len(result['data']) == 1
+
+        result = json.loads(self.app.post('/query', data=json.dumps({
+            'dataset': 'discover',
+            'project': self.project_id,
+            'selected_columns': ['project_id'],
+            'groupby': ['bucketed_end', 'project_id'],
+            'conditions': [['type', '=', 'transaction']],
         })).data)
         assert len(result['data']) == 1

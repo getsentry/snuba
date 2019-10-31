@@ -190,7 +190,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 read_schema=DiscoverSchema(),
                 write_schema=None,
             ),
-            time_group_columns={},
+            time_group_columns={
+                'time': 'timestamp',
+                'bucketed_end': 'finish_ts'
+            },
             time_parse_columns=['timestamp', 'start_ts', 'finish_ts'],
         )
 
