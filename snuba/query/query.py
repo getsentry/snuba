@@ -4,6 +4,8 @@ from deprecation import deprecated
 from itertools import chain
 from typing import (
     Any,
+    Callable,
+    Iterable,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -16,6 +18,13 @@ from typing import (
 
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.types import Condition
+from snuba.query.nodes import (
+    Column,
+    Condition as NodeCondition,
+    Expression,
+    Node,
+    Aggregation as NodeAggregation
+)
 from snuba.util import (
     SAFE_COL_RE,
     columns_in_expr,
@@ -60,6 +69,24 @@ class Query:
         self.__body = body
         self.__final = False
         self.__data_source = data_source
+
+        # New data model
+        self.__selected_columns: Sequence[Expression] = []
+        self.__aggregations: Sequence[NodeAggregation] = []
+        self.__array_join: Optional[Column] = None
+        self.__conditions: Sequence[NodeCondition] = []
+        self.__groupby: Sequence[Expression] = []
+        self.__having: Sequence[NodeCondition] = []
+        self.__orderby: Sequence[Expression] = []
+
+    def repalce_nodes(self, closure: Callable[[Node], Node]) -> None:
+        raise NotImplementedError
+
+    def filter_nodes(self, closure: Callable[[Node], bool]) -> None:
+        raise NotImplementedError
+
+    def iterate(self) -> Iterable[Node]:
+        raise NotImplementedError
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
