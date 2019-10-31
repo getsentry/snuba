@@ -17,14 +17,10 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
+from snuba.query.conditions import Condition as NodeCondition
+from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression
 from snuba.query.types import Condition
-from snuba.query.nodes import (
-    Column,
-    Condition as NodeCondition,
-    Expression,
-    Node,
-    Aggregation as NodeAggregation
-)
+from snuba.query.nodes import Node
 from snuba.util import (
     SAFE_COL_RE,
     columns_in_expr,
@@ -56,6 +52,22 @@ class Query:
     an abstract Snuba query and a concrete Clickhouse query, but
     that cannot come in this PR since it also requires a proper
     schema split in the dataset to happen.
+
+    NEW DATA MODEL:
+    The query is represented as a tree. Nodes are ethrogeneous, depending
+    on the subtree. The Query is the root, the first level of nodes are
+    collections: selected_columns, aggregations, conditions, etc.
+
+    There are three ways to interact with this structure:
+    - read only iteration: this traverses the full tree and executes a
+      callback for every node no matter which type the node is.
+    - map/filter without context. This is supposed to be the most common
+      manipulation technique, it is used to remove or replace specific nodes
+      across the entire query. Example, replacing a column or resolving a tag.
+      These operations do not require to know where the Node is within the
+      query.
+    - Full access to all nodes starting from the root for any other type
+      of manipulation.
     """
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
@@ -67,10 +79,10 @@ class Query:
         selected_columns: Optional[Sequence[Expression]] = None,
         aggregations: Optional[Sequence[NodeAggregation]] = None,
         array_join: Optional[Column] = None,
-        conditions: Sequence[NodeCondition] = None,
-        groupby: Sequence[Expression] = None,
-        having: Sequence[NodeCondition] = None,
-        order_by: Sequence[Expression] = None,
+        conditions: Optional[Sequence[NodeCondition]] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Sequence[NodeCondition]] = None,
+        order_by: Optional[Sequence[Expression]] = None,
     ):
         """
         Expects an already parsed query body.
@@ -90,13 +102,27 @@ class Query:
         self.__having: Sequence[NodeCondition] = having or []
         self.__order_by: Sequence[Expression] = order_by or []
 
-    def repalce_nodes(self, closure: Callable[[Node], Node]) -> None:
+    def repalce_expression(self, closure: Callable[[Expression], Expression]) -> None:
+        """
+        Traverses the Query tree and call the closure provided for each expression.
+        The expression is replaced with the value returned by the closure.
+        This mutates the Query in place.
+        """
         raise NotImplementedError
 
-    def filter_nodes(self, closure: Callable[[Node], bool]) -> None:
+    def repalce_condition(self, closure: Callable[[Condition], Condition]) -> None:
+        """
+        Traverses all conditions found in the query (in the conditions and having sections)
+        It calls the closure for every condition aand replaces the condition
+        with the return value of the closure
+        """
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:
+        """
+        Returns an Iterable that traverses every node in the Query tree.
+        No guarantee is provided on the traversing algorithm.
+        """
         raise NotImplementedError
 
     def get_data_source(self) -> RelationalSource:
