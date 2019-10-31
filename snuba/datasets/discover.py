@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     FixedString,
+    Nested,
     Nullable,
     String,
     UInt,
@@ -102,6 +103,15 @@ class DiscoverSchema(Schema, ABC):
             ('username', Nullable(String())),
             ('email', Nullable(String())),
             ('ip_address', Nullable(String())),
+            # Other tags and context
+            ('tags', Nested([
+                ('key', String()),
+                ('value', String()),
+            ])),
+            ('contexts', Nested([
+                ('key', String()),
+                ('value', String()),
+            ])),
         ])
 
         return common + self.get_events_only_columns() + self.get_transactions_only_columns()
