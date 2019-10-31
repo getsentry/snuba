@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from typing import MutableMapping, Union
+from typing import Mapping, MutableMapping, Union
 from uuid import UUID
 
 from snuba.utils.streams.abstract import EndOfStream
@@ -12,6 +12,7 @@ from snuba.subscriptions.protocol import (
     SubscriptionMessage,
     SubscriptionUpdateRequest,
 )
+from snuba.subscriptions.scheduler import Scheduler
 from snuba.subscriptions.types import Subscription
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class Initializing(SubscriptionMessageProcessorState):
         try:
             message: SubscriptionMessage = future.result()
         except EndOfStream:
-            return Streaming()
+            return Streaming(self.__subscriptions)
 
         if isinstance(message, SubscriptionUpdateRequest):
             self.__subscriptions[message.uuid] = message.subscription
@@ -54,8 +55,8 @@ class Initializing(SubscriptionMessageProcessorState):
 
 
 class Streaming(SubscriptionMessageProcessorState):
-    def __init__(self) -> None:
-        self.__subscriptions: MutableMapping[UUID, Subscription] = {}
+    def __init__(self, subscriptions: Mapping[UUID, Subscription]) -> None:
+        self.__scheduler = Scheduler(subscriptions)
 
     def handle(self, future: Future[SubscriptionMessage]) -> Streaming:
         try:
@@ -64,10 +65,10 @@ class Streaming(SubscriptionMessageProcessorState):
             return self
 
         if isinstance(message, SubscriptionUpdateRequest):
-            self.__subscriptions[message.uuid] = message.subscription
+            self.__scheduler.set(message.uuid, message.subscription)
         elif isinstance(message, SubscriptionDeleteRequest):
             try:
-                del self.__subscriptions[message.uuid]
+                self.__scheduler.delete(message.uuid)
             except KeyError:
                 logger.debug(
                     "Unable to fulfill subscription deletion request for %r, no subscription exists.",
