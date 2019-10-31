@@ -37,7 +37,7 @@ SAFE_FUNCTION_RE = re.compile(r'-?[a-zA-Z_][a-zA-Z0-9_]*$')
 TOPK_FUNCTION_RE = re.compile(r'^top([1-9]\d*)$')
 ESCAPE_COL_RE = re.compile(r"([`\\])")
 NEGATE_RE = re.compile(r'^(-?)(.*)$')
-SAFE_COL_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_\.]*$')
+SAFE_COL_RE = re.compile(r'^-?([a-zA-Z_][a-zA-Z0-9_\.]*)$')
 # Alias escaping is different than column names when we introduce table aliases.
 # Using the column escaping function would consider "." safe, which is not for
 # an alias.
