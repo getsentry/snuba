@@ -46,22 +46,28 @@ class Column(Expression):
         raise NotImplementedError
 
     def map(self, closure: Callable[[Expression], Expression]) -> Expression:
-        raise NotImplementedError
+        return closure(self)
 
     def filter(self, closure: Callable[[Expression], bool]) -> bool:
-        raise NotImplementedError
+        return closure(self)
 
     def iterate(self) -> Iterable[Expression]:
-        raise NotImplementedError
+        yield self
 
     def __init__(self,
+        alias: Optional[str],
         column_name: str,
         table_name: Optional[str],
-        alias: Optional[str],
     ) -> None:
         super().__init__(alias=alias)
         self.__column_name = column_name
         self.__table_name = table_name
+
+    def get_column_name(self) -> str:
+        return self.__column_name
+
+    def get_table_name(self) -> Optional[str]:
+        return self.__table_name
 
 
 class FunctionCall(Expression):
@@ -70,9 +76,9 @@ class FunctionCall(Expression):
     """
 
     def __init__(self,
+        alias: Optional[str],
         function_name: str,
         parameters: Sequence[Expression],
-        alias: Optional[str],
     ) -> None:
         super().__init__(alias=alias)
         self.__function_name = function_name
@@ -82,13 +88,35 @@ class FunctionCall(Expression):
         raise NotImplementedError
 
     def map(self, closure: Callable[[Expression], Expression]) -> Expression:
-        raise NotImplementedError
+        """
+        For functions map first processes itself. parameters are processed only
+        if mapping itself does not yield a change. If calling map on self return
+        a different object (so asking for a replacement) iterating over the previous
+        list of parameters may make no sense.
+        """
+        mapped_function = closure(self)
+        if mapped_function == self:
+            self.__parameters = map(closure, self.__parameters)
+        return mapped_function
 
     def filter(self, closure: Callable[[Expression], bool]) -> bool:
-        raise NotImplementedError
+        """
+        Removing parameters from a function probably makes no sense, so
+        we do not call filter over the parameters.
+        """
+        return closure(self)
 
     def iterate(self) -> Iterable[Expression]:
-        raise NotImplementedError
+        yield self
+        for p in self.__parameters:
+            for element in p.iterate():
+                yield element
+
+    def get_function_name(self) -> str:
+        return self.__function_name
+
+    def get_parameters(self) -> Sequence[Expression]:
+        return self.__parameters
 
 
 class Aggregation(AliasedNode):
