@@ -2,6 +2,8 @@ import os
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
+# test3
+
 TESTING = False
 DEBUG = True
 
