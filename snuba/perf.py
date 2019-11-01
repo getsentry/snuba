@@ -7,7 +7,7 @@ from itertools import chain
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger('snuba.perf')
