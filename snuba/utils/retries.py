@@ -19,17 +19,50 @@ class RetryException(Exception):
 
 
 class RetryPolicy(ABC):
+    """
+    The retry policy defines an interface for invoking a callable until it
+    passes some sort of test -- typically, that it evaluates without throwing
+    an exception.
+    """
+
     @abstractmethod
     def call(self, callable: Callable[[], T]) -> T:
         raise NotImplementedError
 
 
 class NoRetryPolicy(RetryPolicy):
+    """
+    The no retry policy implements the retry policy interface, but does not
+    retry. (This is equivalent to a basic retry policy with a limit of a
+    single attempt.)
+    """
+
     def call(self, callable: Callable[[], T]) -> T:
         return callable()
 
 
 class BasicRetryPolicy(RetryPolicy):
+    """
+    The basic retry policy attempts to invoke the provided callable up to a
+    specific number of attempts. If the callable cannot be successfully
+    invoked in the defined number of attempts, a ``RetryException`` will be
+    raised.
+
+    The amount of time between retries can be controlled by providing a delay
+    function: if no delay function is provided, the callable will be retried
+    immediately.
+
+    By default, all exceptions that inherit from ``Exception`` (not including
+    ``BaseException``) are caught and supressed, leading to a retry attempt.
+    If the callable should only be retried under a limited set of
+    circumstances, a suppression test function can be provided, which
+    recieves the exception instance as its sole argument. If the suppression
+    test returns ``True``, the exception will be suppressed and the callable
+    will be retried (as long as the number of attempts remaining permits.) If
+    the suppression test returns ``False``, the exception will be raised
+    immediately.
+    """
+
     def __init__(
         self,
         attempts: int,
