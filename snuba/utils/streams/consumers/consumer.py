@@ -10,15 +10,6 @@ class Consumer(Generic[TStream, TOffset, TValue]):
     multiplexed collection of streams. The specific implementation of how
     messages are consumed is delegated to the backend implementation.
 
-    This interface is heavily "inspired" by the Confluent Kafka Consumer
-    implementation, but only exposes a limited set of the available methods
-    and several method signatures and/or return values differ -- these
-    changes are intended to improve the ease of use of the consumer, as well
-    as make development and testing more straightforward. Most code that uses
-    the Confluent driver can be modified to use this interface with minimal
-    changes, but it is not intended to be a drop-in replacement for the
-    Confluent implementation.
-
     All methods are blocking unless otherise noted in the documentation for
     that method.
     """
