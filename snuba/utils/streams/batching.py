@@ -13,8 +13,8 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.abstract import (
-    Consumer,
+from snuba.utils.streams.consumers.consumer import Consumer
+from snuba.utils.streams.consumers.types import (
     ConsumerError,
     Message,
     TStream,

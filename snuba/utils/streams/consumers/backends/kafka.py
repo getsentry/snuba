@@ -19,7 +19,9 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.streams.abstract import Consumer, ConsumerError, EndOfStream, Message
+from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
+from snuba.utils.streams.consumers.types import ConsumerError, EndOfStream, Message
+
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-class KafkaConsumer(Consumer[TopicPartition, int, bytes]):
+class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -352,7 +354,7 @@ def build_kafka_consumer_configuration(
     }
 
 
-class KafkaConsumerWithCommitLog(KafkaConsumer):
+class KafkaConsumerBackendWithCommitLog(KafkaConsumerBackend):
     def __init__(
         self,
         configuration: Mapping[str, Any],
