@@ -49,7 +49,10 @@ class CompositeCondition(Condition, ABC):
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:
-        raise NotImplementedError
+        yield self
+        for c in self.__sub_conditions:
+            for e in c.iterate():
+                yield e
 
 
 class AndCondition(CompositeCondition):
@@ -95,4 +98,8 @@ class BasicCondition(Condition):
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:
-        raise NotImplementedError
+        yield self
+        for l in self.__lhs.iterate():
+            yield l
+        for r in self.__rhs.iterate():
+            yield r
