@@ -191,20 +191,22 @@ def health():
 
 
 def parse_request_body(http_request):
-    try:
-        return json.loads(http_request.data)
-    except json.errors.JSONDecodeError as error:
-        raise BadRequest(str(error)) from error
+    with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+        try:
+            return json.loads(http_request.data)
+        except json.errors.JSONDecodeError as error:
+            raise BadRequest(str(error)) from error
 
 
 def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-    try:
-        request = schema.validate(body, source)
-    except jsonschema.ValidationError as error:
-        raise BadRequest(str(error)) from error
+    with sentry_sdk.start_span(description="validate_request_content", op="validate"):
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        try:
+            request = schema.validate(body, source)
+        except jsonschema.ValidationError as error:
+            raise BadRequest(str(error)) from error
 
-    timer.mark('validate_schema')
+        timer.mark('validate_schema')
 
     return request
 
@@ -328,7 +330,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         'sample': request.query.get_sample(),
     }
 
-    return raw_query(request, query, clickhouse_ro, timer, stats)
+    with sentry_sdk.start_span(description="raw_query", op="db") as span:
+        span.set_tag("table", stats["clickhouse_table"])
+        span.set_tag("num_days", stats["num_days"])
+        return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
