@@ -1,6 +1,6 @@
 import os
 
-# test
+# test 2
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
