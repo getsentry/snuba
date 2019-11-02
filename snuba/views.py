@@ -317,9 +317,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
     source = relational_source.format_from()
-    # TODO: consider moving the performance logic and the pre_where generation into
-    # ClickhouseQuery since they are Clickhouse specific
-    query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
+    with sentry_sdk.start_span(description="create query", op="db"):
+        # TODO: consider moving the performance logic and the pre_where generation into
+        # ClickhouseQuery since they are Clickhouse specific
+        query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
     timer.mark('prepare_query')
 
     stats = {
@@ -331,8 +332,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     }
 
     with sentry_sdk.start_span(description="raw_query", op="db") as span:
+        span.set_tag("dataset", dataset.__class__.__name__)
         span.set_tag("table", stats["clickhouse_table"])
-        span.set_tag("num_days", stats["num_days"])
+        span.set_tag("query", query.format_sql())
+
         return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
