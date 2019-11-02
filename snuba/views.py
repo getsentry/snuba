@@ -317,7 +317,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
     source = relational_source.format_from()
-    with sentry_sdk.start_span(description="create query", op="db"):
+    with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: consider moving the performance logic and the pre_where generation into
         # ClickhouseQuery since they are Clickhouse specific
         query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
