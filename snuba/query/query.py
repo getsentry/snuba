@@ -54,9 +54,9 @@ class Query:
     schema split in the dataset to happen.
 
     NEW DATA MODEL:
-    The query is represented as a tree. Nodes are ethrogeneous, depending
-    on the subtree. The Query is the root, the first level of nodes are
-    collections: selected_columns, aggregations, conditions, etc.
+    The query is represented as a tree. Nodes are of etherogeneous type,
+    depending on the subtree. The Query is the root, the first level of
+    nodes are collections: selected_columns, aggregations, conditions, etc.
 
     There are three ways to interact with this structure:
     - read only iteration: this traverses the full tree and executes a
