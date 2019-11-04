@@ -16,7 +16,7 @@ from snuba.redis import redis_client
 from snuba.util import escape_col, escape_string
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.kafka import KafkaMessage
+from snuba.utils.streams.consumers.backends.kafka import KafkaMessage
 
 from . import settings
 
