@@ -16,13 +16,14 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas import Schema
+from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
@@ -30,7 +31,7 @@ EVENTS = 'events'
 TRANSACTIONS = 'transactions'
 
 
-def detect_dataset(query: Query) -> str:
+def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" dataset. This is going to be wrong in some cases.
@@ -48,19 +49,36 @@ def detect_dataset(query: Query) -> str:
 
     # If there is a condition that references a transactions only field, just switch
     # to the transactions dataset
-    transaction_column_set = get_dataset('discover') \
-        .get_dataset_schemas() \
-        .get_read_schema() \
-        .get_transactions_only_columns()
-
-    if [col for col in query.get_columns_referenced_in_conditions() if transaction_column_set.get(col)]:
+    if [col for col in query.get_columns_referenced_in_conditions() if transactions_columns.get(col)]:
         return TRANSACTIONS
 
     # Use events by default
     return EVENTS
 
 
+class DiscoverSource(RelationalSource):
+    """
+    Placeholder data source for Discover to be swapped out for either events or
+    transactions depending on the query received.
+    """
+
+    def __init__(self, columns: ColumnSet) -> None:
+        self.__columns = columns
+
+    def format_from(self) -> str:
+        return ""
+
+    def get_columns(self) -> ColumnSet:
+        return self.__columns
+
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
+        return []
+
+
 class DiscoverProcessor(QueryProcessor):
+    def __init__(self, transactions_columns) -> None:
+        self.__transactions_columns = transactions_columns
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         """
         Switches the data source from the default (Events) to the transactions
@@ -68,7 +86,7 @@ class DiscoverProcessor(QueryProcessor):
         Sets all the other columns to none
 
         """
-        detected_dataset = detect_dataset(query)
+        detected_dataset = detect_dataset(query, self.__transactions_columns)
 
         source = get_dataset(detected_dataset) \
             .get_dataset_schemas() \
@@ -78,15 +96,31 @@ class DiscoverProcessor(QueryProcessor):
 
 
 class DiscoverSchema(Schema, ABC):
-    def get_data_source(self):
+    def __init__(self, *, common_columns, events_columns, transactions_columns):
+        self.__common_columns = common_columns
+        self.__events_columns = events_columns
+        self.__transactions_columns = transactions_columns
+
+    def get_data_source(self) -> DiscoverSource:
         """
         This is a placeholder, we switch out the data source in the processor
         depending on the detected dataset
         """
-        return None
+        return DiscoverSource(self.get_columns())
 
     def get_columns(self) -> ColumnSet:
-        common = ColumnSet([
+        return self.__common_columns + self.__events_columns + self.__transactions_columns
+
+
+class DiscoverDataset(TimeSeriesDataset):
+    """
+    Experimental dataset for Discover that maps the columns of Events and
+    Transactions into a standard format and sends a query to one of the 2 tables
+    depending on the conditions detected.
+    """
+
+    def __init__(self) -> None:
+        self.__common_columns = ColumnSet([
             ('event_id', FixedString(32)),
             ('project_id', UInt(64)),
             ('timestamp', DateTime()),
@@ -112,10 +146,7 @@ class DiscoverSchema(Schema, ABC):
             ])),
         ])
 
-        return common + self.get_events_only_columns() + self.get_transactions_only_columns()
-
-    def get_events_only_columns(self) -> ColumnSet:
-        return ColumnSet([
+        self.__events_columns = ColumnSet([
             ('group_id', Nullable(UInt(64))),
             ('primary_hash', Nullable(FixedString(32))),
             ('type', Nullable(String())),
@@ -158,8 +189,7 @@ class DiscoverSchema(Schema, ABC):
             ('modules.version', String()),
         ])
 
-    def get_transactions_only_columns(self) -> ColumnSet:
-        return ColumnSet([
+        self.__transactions_columns = ColumnSet([
             ('trace_id', Nullable(UUID())),
             ('span_id', Nullable(UInt(64))),
             ('transaction_hash', Nullable(UInt(64))),
@@ -171,18 +201,13 @@ class DiscoverSchema(Schema, ABC):
             ('duration', Nullable(UInt(32))),
         ])
 
-
-class DiscoverDataset(TimeSeriesDataset):
-    """
-    Experimental dataset for Discover that maps the columns of Events and
-    Transactions into a standard format and sends a query to one of the 2 tables
-    depending on the conditions detected.
-    """
-
-    def __init__(self) -> None:
         super().__init__(
             dataset_schemas=DatasetSchemas(
-                read_schema=DiscoverSchema(),
+                read_schema=DiscoverSchema(
+                    common_columns=self.__common_columns,
+                    events_columns=self.__events_columns,
+                    transactions_columns=self.__transactions_columns,
+                ),
                 write_schema=None,
             ),
             time_group_columns={
@@ -194,7 +219,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            DiscoverProcessor(),
+            DiscoverProcessor(self.__transactions_columns),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -210,7 +235,7 @@ class DiscoverDataset(TimeSeriesDataset):
         }
 
     def column_expr(self, column_name, query: Query, parsing_context: ParsingContext):
-        detected_dataset = detect_dataset(query)
+        detected_dataset = detect_dataset(query, self.__transactions_columns)
 
         if detected_dataset == TRANSACTIONS:
             if column_name == 'type':
@@ -229,16 +254,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 return 'user_email'
             if column_name == 'transaction':
                 return 'transaction_name'
-            if self.get_dataset_schemas() \
-                    .get_read_schema() \
-                    .get_events_only_columns() \
-                    .get(column_name):
+            if self.__events_columns.get(column_name):
                 return 'NULL'
         else:
-            if self.get_dataset_schemas() \
-                    .get_read_schema() \
-                    .get_transactions_only_columns() \
-                    .get(column_name):
+            if self.__transactions_columns.get(column_name):
                 return 'NULL'
 
         return get_dataset(detected_dataset) \
