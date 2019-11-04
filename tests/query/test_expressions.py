@@ -57,18 +57,3 @@ def test_mapping_complex_expression() -> None:
     expected = [f, f3]
 
     assert iterate == expected
-
-
-def test_filter() -> None:
-    column1 = Column("a1", "c1", "t1")
-    column2 = Column("a2", "c2", "t2")
-    column3 = Column("a3", "c3", "t3")
-
-    selected = [column1, column2, column3]
-
-    def filter_col(e: Expression) -> bool:
-        a = not (isinstance(e, Column) and e.get_column_name() == "c2")
-        return a
-
-    ret = list(filter(lambda e: e.filter(filter_col), selected))
-    assert ret == [column1, column3]

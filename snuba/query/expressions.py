@@ -10,6 +10,8 @@ class Expression(AliasedNode, ABC):
     """
     Abstract representation of a Query node that can be evaluated as a column.
     This can be a simple column or a nested expression, but not a condition.
+
+    TODO: Support a filter method
     """
     @abstractmethod
     def map(self, closure: Callable[[Expression], Expression]) -> Expression:
@@ -25,17 +27,6 @@ class Expression(AliasedNode, ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def filter(self, closure: Callable[[Expression], bool]) -> bool:
-        """
-        Applies the provided function to this object (and potentially to its
-        children when present) and removes the children where the function returns
-        False. If this function returns false, the parent Node will remove this Node.
-
-        It is up to the subclasses to guarantee the expression remains valid.
-        """
-        raise NotImplementedError
-
 
 class Column(Expression):
     """
@@ -46,9 +37,6 @@ class Column(Expression):
         raise NotImplementedError
 
     def map(self, closure: Callable[[Expression], Expression]) -> Expression:
-        return closure(self)
-
-    def filter(self, closure: Callable[[Expression], bool]) -> bool:
         return closure(self)
 
     def iterate(self) -> Iterable[Expression]:
@@ -99,13 +87,6 @@ class FunctionCall(Expression):
             self.__parameters = map(closure, self.__parameters)
         return mapped_function
 
-    def filter(self, closure: Callable[[Expression], bool]) -> bool:
-        """
-        Removing parameters from a function probably makes no sense, so
-        we do not call filter over the parameters.
-        """
-        return closure(self)
-
     def iterate(self) -> Iterable[Expression]:
         yield self
         for p in self.__parameters:
@@ -142,9 +123,6 @@ class Aggregation(AliasedNode):
         raise NotImplementedError
 
     def map(self, closure: Callable[[Aggregation], Aggregation]) -> Aggregation:
-        raise NotImplementedError
-
-    def filter(self, closure: Callable[[Aggregation], bool]) -> bool:
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:

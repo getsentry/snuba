@@ -30,6 +30,8 @@ class Condition(FormattableNode):
     """
     Represents a condition node in the query. This can be a simple infix
     notation query or a complex query built by a nested boolean condition.
+
+    TODO: Support a filter method
     """
     pass
 
@@ -43,9 +45,6 @@ class CompositeCondition(Condition, ABC):
         self.__sub_conditions = sub_conditions
 
     def map(self, closure: Callable[[Condition], Condition]) -> Condition:
-        raise NotImplementedError
-
-    def filter(self, closure: Callable[[Condition], bool]) -> bool:
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:
@@ -92,9 +91,6 @@ class BasicCondition(Condition):
         raise NotImplementedError
 
     def map(self, closure: Callable[[Condition], Condition]) -> Condition:
-        raise NotImplementedError
-
-    def filter(self, closure: Callable[[Condition], bool]) -> bool:
         raise NotImplementedError
 
     def iterate(self) -> Iterable[Node]:
