@@ -11,7 +11,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.kafka import KafkaMessage
+from snuba.utils.streams.consumers.backends.kafka import KafkaMessage
 
 
 logger = logging.getLogger('snuba.consumer')

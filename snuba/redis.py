@@ -37,11 +37,13 @@ if settings.USE_REDIS_CLUSTER:
     redis_client = RetryingStrictRedisCluster(
         startup_nodes=startup_nodes,
         socket_keepalive=True,
+        password=settings.REDIS_PASSWORD,
     )
 else:
     redis_client = StrictRedis(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
+        password=settings.REDIS_PASSWORD,
         db=settings.REDIS_DB,
         socket_keepalive=True,
     )
