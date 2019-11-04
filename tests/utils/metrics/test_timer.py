@@ -1,4 +1,4 @@
-from snuba.utils.metrics.clock import TestingClock
+from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 from tests.backends.metrics import TestingMetricsBackend, Timing
 
