@@ -118,6 +118,8 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(['a', 'b'])
+    assert query.get_columns_referenced_in_conditions() == set(['a', 'b'])
+    assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR c = 1)
     body = {
@@ -131,6 +133,8 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
+    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c'])
+    assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR foo(c) = 1)
     body = {
@@ -144,6 +148,8 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
+    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c'])
+    assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
     body = {
@@ -157,6 +163,8 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd'])
+    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c', 'd'])
+    assert query.get_columns_referenced_in_having() == set([])
 
     # Other fields, including expressions in selected columns
     body = {
@@ -174,3 +182,19 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])
+    assert query.get_columns_referenced_in_conditions() == set([])
+    assert query.get_columns_referenced_in_having() == set([])
+
+    body = {
+        'conditions': [['a', '=', '1']],
+        'having': [
+            ['b', '=', '1'],
+            [
+                ['c', '=', '1'],
+                [['foo', ['d', ['bar', ['e']]]], '=', '1'],
+            ],
+        ]
+    }
+    query = Query(body, source)
+    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd', 'e'])
+    assert query.get_columns_referenced_in_having() == set(['b', 'c', 'd', 'e'])
