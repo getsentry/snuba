@@ -90,8 +90,6 @@ class DiscoverSchema(Schema, ABC):
             ('event_id', FixedString(32)),
             ('project_id', UInt(64)),
             ('timestamp', DateTime()),
-            ('deleted', UInt(8)),
-            ('retention_days', UInt(16)),
             ('platform', Nullable(String())),
             ('environment', Nullable(String())),
             ('sentry:release', Nullable(String())),
