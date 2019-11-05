@@ -129,6 +129,12 @@ def test_consumer_backend(topic: str) -> None:
         backend.seek({TopicPartition(topic, 0): 0})
 
     with pytest.raises(RuntimeError):
+        backend.pause([TopicPartition(topic, 0)])
+
+    with pytest.raises(RuntimeError):
+        backend.resume([TopicPartition(topic, 0)])
+
+    with pytest.raises(RuntimeError):
         backend.commit()
 
     backend.close()
