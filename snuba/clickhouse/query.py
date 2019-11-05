@@ -27,10 +27,12 @@ class ClickhouseQuery:
         parsing_context = ParsingContext()
 
         aggregate_exprs = [column_expr(dataset, col, query, parsing_context, alias, agg) for (agg, col, alias) in query.get_aggregations()]
-        groupby = util.to_list(query.get_groupby())
-        group_exprs = [column_expr(dataset, gb, query, parsing_context) for gb in groupby]
         column_names = query.get_selected_columns() or []
         selected_cols = [column_expr(dataset, util.tuplify(colname), query, parsing_context) for colname in column_names]
+        groupby = util.to_list(query.get_groupby())
+        # Add groupby to SELECT clause unless it's a column alias
+        column_aliases = set([col[2] for col in column_names if util.is_alias_column_expr(col)])
+        group_exprs = [column_expr(dataset, gb, query, parsing_context) for gb in groupby if gb not in column_aliases]
         select_clause = u'SELECT {}'.format(', '.join(group_exprs + aggregate_exprs + selected_cols))
 
         from_clause = u'FROM {}'.format(query.get_data_source().format_from())

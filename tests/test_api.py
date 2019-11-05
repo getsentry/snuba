@@ -1138,6 +1138,32 @@ class TestApi(BaseApiTest):
         })).data)
         assert 'deleted = 0' in result['sql']
 
+    def test_aliased_columns(self):
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': [('event_id', None, 'id'), ('project_id', None, 'project.id')],
+        })).data)
+        assert [col['name'] for col in response['meta']] == ['id', 'project.id']
+
+        # Orderby works
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': [('event_id', None, 'id'), ('project_id', None, 'project.id')],
+            'orderby': '-id',
+        })).data)
+        event_ids = [col['id'] for col in response['data']]
+        assert event_ids == sorted(event_ids, reverse=True)
+
+        # Groupby works
+        response = json.loads(self.app.post('/query', data=json.dumps({
+            'project': [1, 2, 3],
+            'selected_columns': [
+                ['issue', None, 'better_id'],
+            ],
+            'groupby': 'better_id',
+        })).data)
+        assert len(response['data']) == 12
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
