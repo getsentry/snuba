@@ -1,6 +1,5 @@
-from abc import ABC
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -17,6 +16,7 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -56,57 +56,65 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
     return EVENTS
 
 
-class DiscoverSource(RelationalSource):
-    """
-    Placeholder data source for Discover to be swapped out for either events or
-    transactions depending on the query received.
-    """
+class DiscoverTableSource:
+    def __init__(self):
+        self.__table_source = None
 
-    def __init__(self, columns: ColumnSet) -> None:
+    def get_table_source(self) -> Optional[TableSource]:
+        return self.__table_source
+
+    def set_table_source(self, dataset_name: str) -> None:
+        self.__table_source = get_dataset(dataset_name) \
+            .get_dataset_schemas() \
+            .get_read_schema() \
+            .get_data_source()
+
+
+class DiscoverSource(RelationalSource):
+    def __init__(self, columns: ColumnSet, discover_table_source: DiscoverTableSource) -> None:
         self.__columns = columns
+        self.__discover_table_source = discover_table_source
 
     def format_from(self) -> str:
+        table_source = self.__discover_table_source.get_table_source()
+        if table_source:
+            return table_source.format_from()
         return ""
 
     def get_columns(self) -> ColumnSet:
         return self.__columns
 
     def get_mandatory_conditions(self) -> Sequence[Condition]:
+        table_source = self.__discover_table_source.get_table_source()
+        if table_source:
+            return table_source.get_mandatory_conditions()
         return []
 
 
 class DiscoverProcessor(QueryProcessor):
-    def __init__(self, transactions_columns) -> None:
+    """
+    Switches the table source to either Events or Transactions, depending on
+    the detected dataset.
+    """
+
+    def __init__(self, table_source: DiscoverTableSource, transactions_columns: ColumnSet) -> None:
+        self.__table_source = table_source
         self.__transactions_columns = transactions_columns
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        """
-        Switches the data source from the default (Events) to the transactions
-        table if a transaction specific column is detected.
-        Sets all the other columns to none
-
-        """
         detected_dataset = detect_dataset(query, self.__transactions_columns)
-
-        source = get_dataset(detected_dataset) \
-            .get_dataset_schemas() \
-            .get_read_schema() \
-            .get_data_source()
-        query.set_data_source(source)
+        self.__table_source.set_table_source(detected_dataset)
 
 
-class DiscoverSchema(Schema, ABC):
-    def __init__(self, *, common_columns, events_columns, transactions_columns):
+class DiscoverSchema(Schema):
+    def __init__(self, table_source, common_columns, events_columns, transactions_columns) -> None:
         self.__common_columns = common_columns
         self.__events_columns = events_columns
         self.__transactions_columns = transactions_columns
+        self.__data_source = DiscoverSource(self.get_columns(), table_source)
 
     def get_data_source(self) -> DiscoverSource:
-        """
-        This is a placeholder, we switch out the data source in the processor
-        depending on the detected dataset
-        """
-        return DiscoverSource(self.get_columns())
+        return self.__data_source
 
     def get_columns(self) -> ColumnSet:
         return self.__common_columns + self.__events_columns + self.__transactions_columns
@@ -201,9 +209,12 @@ class DiscoverDataset(TimeSeriesDataset):
             ('duration', Nullable(UInt(32))),
         ])
 
+        self.__table_source = DiscoverTableSource()
+
         super().__init__(
             dataset_schemas=DatasetSchemas(
                 read_schema=DiscoverSchema(
+                    table_source=self.__table_source,
                     common_columns=self.__common_columns,
                     events_columns=self.__events_columns,
                     transactions_columns=self.__transactions_columns,
@@ -219,7 +230,10 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            DiscoverProcessor(self.__transactions_columns),
+            DiscoverProcessor(
+                self.__table_source,
+                self.__transactions_columns
+            ),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
