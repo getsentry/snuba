@@ -1,30 +1,55 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Callable, Iterable, Optional, Sequence
+from abc import ABC
+from typing import Callable, Iterable, Optional, Iterator
 
-from snuba.query.nodes import AliasedNode, Node
+from snuba.query.collections import NodeContainer
+from snuba.query.nodes import AliasedNode
 
 
 class Expression(AliasedNode, ABC):
     """
-    Abstract representation of a Query node that can be evaluated as a column.
+    Abstract representation of a Query node that can be evaluated to a single value.
     This can be a simple column or a nested expression, but not a condition.
-
-    TODO: Support a filter method
     """
-    @abstractmethod
-    def map(self, closure: Callable[[Expression], Expression]) -> Expression:
-        """
-        Applies the provided function to this object (and potentially to its
-        children when present) and returns the Expression, the callsite should
-        replace this one with.
+    pass
 
-        The closure takes in an Expression and returns an Expression to replace it
-        like for a map function over collections.
 
-        Some specific corner case are defined in the subclasses.
-        """
+class ExpressionContainer(NodeContainer[Expression]):
+    """
+    Container able to iterate and map expression in place.
+    This class exists to be able to preserve the NodeContainer[Expression]
+    type at runtime.
+    """
+
+    def _map_children(self,
+        children: Iterable[Expression],
+        closure: Callable[[Expression], Expression],
+    ) -> Iterable[Expression]:
+        def process_child(param: Expression) -> Expression:
+            r = closure(param)
+            if r == param and isinstance(r, ExpressionContainer):
+                # The expression was not replaced by the closure, which
+                # means it was unchanged. This means we need to traverse
+                # its children.
+                r.map(closure)
+            return r
+
+        return map(process_child, children)
+
+    def _iterate_over_children(self,
+        children: Iterable[Expression],
+    ) -> Iterator[Expression]:
+        for child in children:
+            if isinstance(child, ExpressionContainer):
+                for sub in child:
+                    yield sub
+            else:
+                yield child
+
+
+class Null(Expression):
+    def _format_impl(self) -> str:
         raise NotImplementedError
 
 
@@ -35,12 +60,6 @@ class Column(Expression):
 
     def _format_impl(self) -> str:
         raise NotImplementedError
-
-    def map(self, closure: Callable[[Expression], Expression]) -> Expression:
-        return closure(self)
-
-    def iterate(self) -> Iterable[Expression]:
-        yield self
 
     def __init__(self,
         alias: Optional[str],
@@ -58,7 +77,7 @@ class Column(Expression):
         return self.__table_name
 
 
-class FunctionCall(Expression):
+class FunctionCall(Expression, ExpressionContainer):
     """
     Represents an expression that resolves to a function call on Clickhouse
     """
@@ -66,41 +85,39 @@ class FunctionCall(Expression):
     def __init__(self,
         alias: Optional[str],
         function_name: str,
-        parameters: Sequence[Expression],
+        parameters: Iterable[Expression],
     ) -> None:
         super().__init__(alias=alias)
         self.__function_name = function_name
-        self.__parameters = parameters
+        self.__parameters: Iterable[Expression] = parameters
 
     def _format_impl(self) -> str:
         raise NotImplementedError
 
-    def map(self, closure: Callable[[Expression], Expression]) -> Expression:
+    def map(self, closure: Callable[[Expression], Expression]) -> None:
         """
-        For functions map first processes itself. parameters are processed only
-        if mapping itself does not yield a change. If calling map on self return
-        a different object (so asking for a replacement) iterating over the previous
-        list of parameters may make no sense.
+        The children of a FunctionCall are the parameters of the function.
+        Thus map runs the closure on the parameters, not on the function
+        itself.
         """
-        mapped_function = closure(self)
-        if mapped_function == self:
-            self.__parameters = map(closure, self.__parameters)
-        return mapped_function
+        self.__parameters = self._map_children(self.__parameters, closure)
 
-    def iterate(self) -> Iterable[Expression]:
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a prefix order.
+        """
         yield self
-        for p in self.__parameters:
-            for element in p.iterate():
-                yield element
+        for e in self._iterate_over_children(self.__parameters):
+            yield e
 
     def get_function_name(self) -> str:
         return self.__function_name
 
-    def get_parameters(self) -> Sequence[Expression]:
+    def get_parameters(self) -> Iterable[Expression]:
         return self.__parameters
 
 
-class Aggregation(AliasedNode):
+class Aggregation(AliasedNode, ExpressionContainer):
     """
     Represents an aggregation function to be applied to an expression in the
     current query.
@@ -112,7 +129,7 @@ class Aggregation(AliasedNode):
     def __init__(
         self,
         function_name: str,
-        parameters: Sequence[Expression],
+        parameters: Iterable[Expression],
         alias: Optional[str],
     ) -> None:
         super().__init__(alias=alias)
@@ -122,8 +139,17 @@ class Aggregation(AliasedNode):
     def _format_impl(self) -> str:
         raise NotImplementedError
 
-    def map(self, closure: Callable[[Aggregation], Aggregation]) -> Aggregation:
-        raise NotImplementedError
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverses the subtrees represented by the parameters of the
+        aggregation.
+        """
+        for e in self._iterate_over_children(self.__parameters):
+            yield e
 
-    def iterate(self) -> Iterable[Node]:
-        raise NotImplementedError
+    def map(self, closure: Callable[[Expression], Expression]) -> None:
+        """
+        The children of an aggregation are the parameters of the aggregation
+        function. This runs the mapping closure over them.
+        """
+        self.__parameters = self._map_children(self.__parameters, closure)

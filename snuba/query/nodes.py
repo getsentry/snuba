@@ -1,29 +1,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Iterable, Optional
+from typing import Optional
 
 
 class Node(ABC):
     """
-    A Node in the Query tree. This can be a leaf (like a column) or an inteermediate
-    composite node (like a nested expression).
-    This class exists with the sole purpose of having a common abstraction when
-    iterating over all the nodes of the query.
+    A node in the Query AST. This can be a leaf or an intermediate node.
+    The tree contains different types of nodes depending on the level and
+    on the subtree (example: conditions have a different type than expressions).
 
-    Remark: the elements on the first level of nodes (column list, conditions, etc)
-    are not represented through this class yet, their children are instead represented
-    as Nodes. This is to reduce the complexty.
-    This may be revisited when working on formatting.
+    The root of the tree is not a Node itself yet (since it is the Query object).
+    Representing theroot as a node itself does not seem very useful right now
+    since we never traverse the full tree. We could revisit that later.
     """
-    @abstractmethod
-    def iterate(self) -> Iterable[Node]:
-        """
-        Returns an iterable that will iterate over all the children of this Node.
-        This can be used, for example, to iterate over the entire query to get
-        the list of referenced columns.
-        """
-        raise NotImplementedError
+    pass
 
 
 class FormattableNode(Node, ABC):
