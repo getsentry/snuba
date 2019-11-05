@@ -95,6 +95,24 @@ class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
         raise NotImplementedError
 
     @abstractmethod
+    def pause(self, streams: Sequence[TStream]) -> None:
+        """
+        Pause the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def resume(self, streams: Sequence[TStream]) -> None:
+        """
+        Resume the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def commit(self) -> Mapping[TStream, TOffset]:
         """
         Commit staged offsets for all streams that this consumer is assigned

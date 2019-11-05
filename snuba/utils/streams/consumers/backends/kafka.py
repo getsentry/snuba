@@ -275,6 +275,38 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
         self.__seek(offsets)
 
+    def pause(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.pause(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
+
+        # XXX: Seeking to a specific partition offset and immediately pausing
+        # that partition causes the seek to be ignored for some reason.
+        self.seek(
+            {
+                stream: offset
+                for stream, offset in self.__offsets.items()
+                if stream in streams
+            }
+        )
+
+    def resume(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.resume(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
+
     def commit(self) -> Mapping[TopicPartition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
