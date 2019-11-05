@@ -267,9 +267,6 @@ class TestApi(BaseApiTest):
 
         assert len(result['data']) == 1
         assert result['totals']
-        # project row
-        assert result['data'][0]['project_id'] == 1
-        assert result['data'][0]['count'] == 1
 
         # totals row
         assert result['totals']['project_id'] == 0  # totals row is zero or empty for non-aggregate cols
