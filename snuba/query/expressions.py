@@ -10,7 +10,7 @@ from snuba.query.nodes import AliasedNode
 class Expression(AliasedNode, ABC):
     """
     Abstract representation of a Query node that can be evaluated to a single value.
-    This can be a simple column or a nested expression, but not a condition.
+    This can be a simple column, NULL or a nested expression, but not a condition.
     """
     pass
 
@@ -50,6 +50,7 @@ class ExpressionContainer(NodeContainer[Expression]):
 
 class Null(Expression):
     def _format_impl(self) -> str:
+        # TODO: Implement this
         raise NotImplementedError
 
 
@@ -71,6 +72,7 @@ class Column(Expression):
         return f"{self.__table_name}.{self.__column_name} as {self._get_alias()}"
 
     def _format_impl(self) -> str:
+        # TODO: Implement this
         raise NotImplementedError
 
     def get_column_name(self) -> str:
@@ -98,6 +100,7 @@ class FunctionCall(Expression, ExpressionContainer):
         return f"{self.__function_name}({list(self.__parameters)}) as {self._get_alias()}"
 
     def _format_impl(self) -> str:
+        # TODO: Implement this
         raise NotImplementedError
 
     def map(self, closure: Callable[[Expression], Expression]) -> None:
@@ -143,6 +146,7 @@ class Aggregation(AliasedNode, ExpressionContainer):
         self.__parameters = parameters
 
     def _format_impl(self) -> str:
+        # TODO: Implement this
         raise NotImplementedError
 
     def __iter__(self) -> Iterator[Expression]:

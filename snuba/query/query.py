@@ -95,6 +95,7 @@ class Query:
         self.__data_source = data_source
 
         # New data model
+        # TODO: Provide a better typing for this.
         self.__selected_columns: Sequence[Expression] = selected_columns or []
         self.__aggregations: Sequence[NodeAggregation] = aggregations or []
         self.__array_join = array_join
@@ -104,9 +105,20 @@ class Query:
         self.__order_by: Sequence[Expression] = order_by or []
 
     def get_all_expressions(self) -> ExpressionContainer:
+        """
+        Returns an expression container that iterates over all the expressions
+        in the query no matter which level of nesting they are at.
+        The ExpressionContainer can be used to traverse the expressions in the
+        tree or to replace expressions with the map method
+        """
+        # TODO: Implement this
         raise NotImplementedError
 
     def get_all_conditions(self) -> ConditionContainer:
+        """
+        Same as get_all_expressions, but it returns conditions
+        """
+        # TODO: Implement this
         raise NotImplementedError
 
     def get_data_source(self) -> RelationalSource:
