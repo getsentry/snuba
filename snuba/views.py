@@ -199,10 +199,11 @@ def parse_request_body(http_request):
 
 
 def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
-    with sentry_sdk.start_span(description="validate_request_content", op="validate"):
+    with sentry_sdk.start_span(description="validate_request_content", op="validate") as span:
         source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         try:
             request = schema.validate(body, source)
+            span.set_data("snuba_query", request.body)
         except jsonschema.ValidationError as error:
             raise BadRequest(str(error)) from error
 
