@@ -331,11 +331,9 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         'sample': request.query.get_sample(),
     }
 
-    with sentry_sdk.start_span(description="raw_query", op="db") as span:
+    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
         span.set_tag("dataset", dataset.__class__.__name__)
         span.set_tag("table", stats["clickhouse_table"])
-        span.set_tag("query", query.format_sql())
-
         return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
