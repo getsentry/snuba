@@ -79,7 +79,7 @@ class DiscoverSource(RelationalSource):
         table_source = self.__discover_table_source.get_table_source()
         if table_source:
             return table_source.format_from()
-        return ""
+        raise InvalidDataset
 
     def get_columns(self) -> ColumnSet:
         return self.__columns
@@ -276,3 +276,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         return get_dataset(detected_dataset) \
             .column_expr(column_name, query, parsing_context)
+
+
+class InvalidDataset(Exception):
+    pass
