@@ -198,7 +198,6 @@ class Query:
 
         TODO: This does not actually return all columns referenced in the query since
         there are some corner cases left out:
-        - HAVING clause. This is not considered here.
         - functions expressed in the form f(column) in aggregations.
 
         Will fix both when adding a better column abstraction.
@@ -217,14 +216,31 @@ class Query:
             col_exprs.extend(to_list(self.get_selected_columns()))
 
         # Conditions need flattening as they can be nested as AND/OR
-        if self.get_conditions():
-            flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in self.get_conditions()]))
-            col_exprs.extend([c[0] for c in flat_conditions])
+        self.__add_flat_conditions(col_exprs, self.get_conditions())
+        self.__add_flat_conditions(col_exprs, self.get_having())
 
         if self.get_aggregations():
             col_exprs.extend([a[1] for a in self.get_aggregations()])
 
         # Return the set of all columns referenced in any expression
+        return self.__get_referenced_columns(col_exprs)
+
+    def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
+        col_exprs: MutableSequence[Any] = []
+        self.__add_flat_conditions(col_exprs, self.get_conditions())
+        return self.__get_referenced_columns(col_exprs)
+
+    def get_columns_referenced_in_having(self) -> Sequence[Any]:
+        col_exprs: MutableSequence[Any] = []
+        self.__add_flat_conditions(col_exprs, self.get_having())
+        return self.__get_referenced_columns(col_exprs)
+
+    def __add_flat_conditions(self, col_exprs: MutableSequence[Any], conditions=Optional[Sequence[Condition]]) -> None:
+        if conditions:
+            flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+            col_exprs.extend([c[0] for c in flat_conditions])
+
+    def __get_referenced_columns(self, col_exprs: MutableSequence[Any]) -> Sequence[Any]:
         return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
     def __replace_col_in_expression(
