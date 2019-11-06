@@ -14,13 +14,6 @@ def get_dataset_source(dataset_name):
         .get_data_source()
 
 
-def process_query(query):
-    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-
-    for processor in get_dataset("discover").get_query_processors():
-        processor.process_query(query, request_settings)
-
-
 test_data = [
     (
         [["type", "=", "transaction"]],
@@ -50,5 +43,9 @@ class TestDiscover(BaseDatasetTest):
             },
             get_dataset_source("discover")
         )
-        process_query(query)
+
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+        for processor in get_dataset("discover").get_query_processors():
+            processor.process_query(query, request_settings)
+
         assert query.get_data_source().format_from() == get_dataset_source(expected_dataset).format_from()
