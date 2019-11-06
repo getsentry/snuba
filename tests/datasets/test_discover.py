@@ -1,64 +1,54 @@
+import pytest
+from typing import Sequence
 from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.query import Query
+from snuba.query.query import Condition, Query
 from snuba.request.request_settings import RequestSettings
 
 
+def get_dataset_source(dataset_name):
+    return get_dataset(dataset_name) \
+        .get_dataset_schemas() \
+        .get_read_schema() \
+        .get_data_source()
+
+
+def process_query(query):
+    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+
+    for processor in get_dataset("discover").get_query_processors():
+        processor.process_query(query, request_settings)
+
+
+test_data = [
+    (
+        [["type", "=", "transaction"]],
+        "transactions",
+    ),
+    (
+        [["type", "!=", "transaction"]],
+        "events",
+    ),
+    (
+        [],
+        "events",
+    ),
+    (
+        [["duration", "=", 0]],
+        "transactions",
+    ),
+]
+
+
 class TestDiscover(BaseDatasetTest):
-    def setup_method(self, test_method):
-        super().setup_method(
-            test_method,
-            'discover',
-        )
-        self.events_source = get_dataset('events') \
-            .get_dataset_schemas() \
-            .get_read_schema() \
-            .get_data_source()
-        self.transactions_source = get_dataset('transactions') \
-            .get_dataset_schemas() \
-            .get_read_schema() \
-            .get_data_source()
-
-    def process_query(self, query):
-        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-
-        for processor in self.dataset.get_query_processors():
-            processor.process_query(query, request_settings)
-
-    def test_data_source(self):
+    @pytest.mark.parametrize("conditions, expected_dataset", test_data)
+    def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
         query = Query(
             {
-                'conditions': [['type', '=', 'transaction']],
+                "conditions": conditions,
             },
-            self.events_source
+            get_dataset_source("discover")
         )
-        self.process_query(query)
-        assert query.get_data_source() == self.transactions_source
-
-        query = Query(
-            {
-                'conditions': [['type', '!=', 'transaction']],
-            },
-            self.events_source
-        )
-        self.process_query(query)
-        assert query.get_data_source() == self.events_source
-
-        query = Query(
-            {
-                'conditions': [],
-            },
-            self.events_source
-        )
-        self.process_query(query)
-        assert query.get_data_source() == self.events_source
-
-        query = Query(
-            {
-                'conditions': [['duration', '=', 0]],
-            },
-            self.events_source
-        )
-        self.process_query(query)
-        assert query.get_data_source() == self.transactions_source
+        process_query(query)
+        assert query.get_data_source().format_from() == get_dataset_source(expected_dataset).format_from()
