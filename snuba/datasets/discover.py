@@ -255,7 +255,13 @@ class DiscoverDataset(TimeSeriesDataset):
             ),
         }
 
-    def column_expr(self, column_name, query: Query, parsing_context: ParsingContext):
+    def column_expr(
+        self,
+        column_name,
+        query: Query,
+        parsing_context: ParsingContext,
+        table_alias: str = "",
+    ):
         detected_dataset = detect_dataset(query, self.__transactions_columns)
 
         if detected_dataset == TRANSACTIONS:
