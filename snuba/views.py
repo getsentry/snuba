@@ -333,8 +333,8 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     }
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
-        span.set_tag("dataset", dataset.__class__.__name__)
-        span.set_tag("table", stats["clickhouse_table"])
+        span.set_tag("dataset", type(dataset).__name__)
+        span.set_tag("table", source)
         return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
