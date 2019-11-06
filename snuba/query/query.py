@@ -4,8 +4,6 @@ from deprecation import deprecated
 from itertools import chain
 from typing import (
     Any,
-    Callable,
-    Iterable,
     Mapping,
     MutableMapping,
     MutableSequence,

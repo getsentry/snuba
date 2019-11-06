@@ -58,9 +58,6 @@ class Column(Expression):
     Represent a column in the schema of the dataset.
     """
 
-    def _format_impl(self) -> str:
-        raise NotImplementedError
-
     def __init__(self,
         alias: Optional[str],
         column_name: str,
@@ -69,6 +66,12 @@ class Column(Expression):
         super().__init__(alias=alias)
         self.__column_name = column_name
         self.__table_name = table_name
+
+    def __repr__(self) -> str:
+        return f"{self.__table_name}.{self.__column_name} as {self._get_alias()}"
+
+    def _format_impl(self) -> str:
+        raise NotImplementedError
 
     def get_column_name(self) -> str:
         return self.__column_name
@@ -90,6 +93,9 @@ class FunctionCall(Expression, ExpressionContainer):
         super().__init__(alias=alias)
         self.__function_name = function_name
         self.__parameters: Iterable[Expression] = parameters
+
+    def __repr__(self) -> str:
+        return f"{self.__function_name}({list(self.__parameters)}) as {self._get_alias()}"
 
     def _format_impl(self) -> str:
         raise NotImplementedError
@@ -128,9 +134,9 @@ class Aggregation(AliasedNode, ExpressionContainer):
 
     def __init__(
         self,
+        alias: Optional[str],
         function_name: str,
         parameters: Iterable[Expression],
-        alias: Optional[str],
     ) -> None:
         super().__init__(alias=alias)
         self.__function_name = function_name

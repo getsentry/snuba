@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Callable, Iterator, Sequence, Union
+from typing import Callable, Iterator, Sequence
 
 from snuba.query.collections import NodeContainer
 from snuba.query.nodes import FormattableNode

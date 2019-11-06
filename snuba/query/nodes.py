@@ -42,6 +42,9 @@ class AliasedNode(Node, ABC):
     def __init__(self, alias: Optional[str]):
         self.__alias = alias
 
+    def _get_alias(self) -> Optional[str]:
+        return self.__alias
+
     @abstractmethod
     def _format_impl(self) -> str:
         """
