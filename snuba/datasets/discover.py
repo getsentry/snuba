@@ -99,7 +99,7 @@ class DiscoverSource(RelationalSource):
         return []
 
 
-class DiscoverProcessor(QueryProcessor):
+class DatasetSelector(QueryProcessor):
     """
     Switches the table source to either Events or Transactions, depending on
     the detected dataset.
@@ -159,8 +159,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("email", Nullable(String())),
                 ("ip_address", Nullable(String())),
                 # Other tags and context
-                ("tags", Nested([("key", String()), ("value", String()),])),
-                ("contexts", Nested([("key", String()), ("value", String()),])),
+                ("tags", Nested([("key", String()), ("value", String()), ])),
+                ("contexts", Nested([("key", String()), ("value", String()), ])),
             ]
         )
 
@@ -240,7 +240,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            DiscoverProcessor(self.__table_source, self.__transactions_columns),
+            DatasetSelector(self.__table_source, self.__transactions_columns),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
