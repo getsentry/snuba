@@ -6,8 +6,8 @@ from enum import Enum
 from typing import Callable, Iterator, Sequence
 
 from snuba.query.collections import NodeContainer
-from snuba.query.nodes import FormattableNode
 from snuba.query.expressions import Expression, ExpressionContainer
+from snuba.query.nodes import FormattableNode
 
 
 class Operator(Enum):
@@ -63,25 +63,21 @@ class CompositeConditionWrapper(ExpressionContainer):
         self.__condition = condition
 
     def __iter__(self) -> Iterator[Expression]:
-        for condition in self.__condition.get_conditions():
+        for condition in self.__condition.sub_conditions:
             for c in condition.get_expressions():
                 yield c
 
-    def map(self, closure: Callable[[Expression], Expression]) -> None:
-        for condition in self.__condition.get_conditions():
-            condition.get_expressions().map(closure)
+    def map(self, func: Callable[[Expression], Expression]) -> None:
+        for condition in self.__condition.sub_conditions:
+            condition.get_expressions().map(func)
 
 
+@dataclass
 class CompositeCondition(Condition, ConditionContainer, ABC):
     """
     Represents a sequence of conditions joined with a boolean operator.
     """
-
-    def __init__(self, sub_conditions: Sequence[Condition]):
-        self.__sub_conditions = sub_conditions
-
-    def get_conditions(self) -> Sequence[Condition]:
-        return self.__sub_conditions
+    sub_conditions: Sequence[Condition]
 
     def get_expressions(self) -> ExpressionContainer:
         return CompositeConditionWrapper(self)
@@ -94,7 +90,7 @@ class CompositeCondition(Condition, ConditionContainer, ABC):
         else:
             yield c
 
-    def map(self, closure: Callable[[Condition], Condition]) -> None:
+    def map(self, func: Callable[[Condition], Condition]) -> None:
         """
         This method is not terribly useful, will revisit whether we
         actually need it.
@@ -135,13 +131,13 @@ class BasicConditionWrapper(ExpressionContainer):
         for e in self._iterate_over_children(expressions):
             yield e
 
-    def map(self, closure: Callable[[Expression], Expression]) -> None:
+    def map(self, func: Callable[[Expression], Expression]) -> None:
         self.__condition.lhs, self.__condition.rhs = self._map_children(
             [
                 self.__condition.lhs,
                 self.__condition.rhs
             ],
-            closure,
+            func,
         )
 
 

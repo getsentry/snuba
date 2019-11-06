@@ -63,7 +63,7 @@ def test_mapping_complex_expression() -> None:
     f1 = FunctionCall("a1", "f", [c1, f2])
 
     # Only the external function is going to be replaced since, when map returns a new
-    # column, we expect the closure to have takern care of its own children.
+    # column, we expect the func to have takern care of its own children.
     f1.map(replace_expr)
     iterate = list(f1)
     expected = [f1, c1, f2, f4, f5]

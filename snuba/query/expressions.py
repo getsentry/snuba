@@ -4,8 +4,8 @@ from abc import ABC
 from dataclasses import dataclass
 from typing import Callable, Iterable, Optional, Iterator
 
-from snuba.query.collections import NodeContainer
 from snuba.query.nodes import AliasedNode
+from snuba.query.collections import NodeContainer
 
 
 class Expression(AliasedNode, ABC):
@@ -18,35 +18,41 @@ class Expression(AliasedNode, ABC):
 
 class ExpressionContainer(NodeContainer[Expression]):
     """
-    Container able to iterate and map expression in place.
-    This class exists to be able to preserve the NodeContainer[Expression]
-    type at runtime.
+    Container able to iterate over expressions and to map them in place.
+    Expressions are trees themselves, so iteration and mapping through this
+    container is actually a tree traversal.
     """
-
-    def _map_children(self,
-        children: Iterable[Expression],
-        closure: Callable[[Expression], Expression],
-    ) -> Iterable[Expression]:
-        def process_child(param: Expression) -> Expression:
-            r = closure(param)
-            if r == param and isinstance(r, ExpressionContainer):
-                # The expression was not replaced by the closure, which
-                # means it was unchanged. This means we need to traverse
-                # its children.
-                r.map(closure)
-            return r
-
-        return map(process_child, children)
 
     def _iterate_over_children(self,
         children: Iterable[Expression],
     ) -> Iterator[Expression]:
+        """
+        Traverses the children of a tree node.
+        """
         for child in children:
             if isinstance(child, ExpressionContainer):
                 for sub in child:
                     yield sub
             else:
                 yield child
+
+    def _map_children(self,
+        children: Iterable[Expression],
+        func: Callable[[Expression], Expression],
+    ) -> Iterable[Expression]:
+        """
+        Maps the children of a tree node.
+        """
+        def process_child(param: Expression) -> Expression:
+            r = func(param)
+            if r == param and isinstance(r, ExpressionContainer):
+                # The expression was not replaced by the function, which
+                # means it was unchanged. This means we need to traverse
+                # its children.
+                r.map(func)
+            return r
+
+        return map(process_child, children)
 
 
 class Null(Expression):
@@ -80,13 +86,12 @@ class FunctionCall(Expression, ExpressionContainer):
         # TODO: Implement this
         raise NotImplementedError
 
-    def map(self, closure: Callable[[Expression], Expression]) -> None:
+    def map(self, func: Callable[[Expression], Expression]) -> None:
         """
         The children of a FunctionCall are the parameters of the function.
-        Thus map runs the closure on the parameters, not on the function
-        itself.
+        Thus map runs func on the parameters, not on the function itself.
         """
-        self.parameters = self._map_children(self.parameters, closure)
+        self.parameters = self._map_children(self.parameters, func)
 
     def __iter__(self) -> Iterator[Expression]:
         """
@@ -121,9 +126,9 @@ class Aggregation(AliasedNode, ExpressionContainer):
         for e in self._iterate_over_children(self.parameters):
             yield e
 
-    def map(self, closure: Callable[[Expression], Expression]) -> None:
+    def map(self, func: Callable[[Expression], Expression]) -> None:
         """
         The children of an aggregation are the parameters of the aggregation
-        function. This runs the mapping closure over them.
+        function. This runs the mapping function over them.
         """
-        self.parameters = self._map_children(self.parameters, closure)
+        self.parameters = self._map_children(self.parameters, func)

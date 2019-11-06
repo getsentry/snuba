@@ -12,7 +12,7 @@ class Node(ABC):
     on the subtree (example: conditions have a different type than expressions).
 
     The root of the tree is not a Node itself yet (since it is the Query object).
-    Representing theroot as a node itself does not seem very useful right now
+    Representing the root as a node itself does not seem very useful right now
     since we never traverse the full tree. We could revisit that later.
     """
     pass
@@ -36,7 +36,7 @@ class FormattableNode(Node, ABC):
 
 
 @dataclass
-class AliasedNode(Node, ABC):
+class AliasedNode(FormattableNode, ABC):
     """
     Abstract representation of a node that can be given an alias in a query.
     """

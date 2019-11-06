@@ -64,7 +64,7 @@ class Query:
       This is achieved through the NodeContainer interface.
 
     - replace specific nodes. NodeContainer provides a map methods that
-      allows the callsite to apply a closure to all nodes of a specific
+      allows the callsite to apply a func to all nodes of a specific
       type. This is useful for replacing expressions across the query.
 
     - direct access to the root and explore specific parts of the tree
