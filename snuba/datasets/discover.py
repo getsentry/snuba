@@ -106,14 +106,17 @@ class DatasetSelector(QueryProcessor):
     """
 
     def __init__(
-        self, table_source: DiscoverTableSource, transactions_columns: ColumnSet
+        self, discover_source: RelationalSource, transactions_columns: ColumnSet
     ) -> None:
-        self.__table_source = table_source
+        self.__discover_source = discover_source
         self.__transactions_columns = transactions_columns
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         detected_dataset = detect_dataset(query, self.__transactions_columns)
-        self.__table_source.set_table_source(detected_dataset)
+        table_source = DiscoverTableSource()
+        table_source.set_table_source(detected_dataset)
+        data_source = DiscoverSource(self.__discover_source.get_columns(), table_source)
+        query.set_data_source(data_source)
 
 
 class DiscoverSchema(Schema):
@@ -239,8 +242,10 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
+        discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
+
         return [
-            DatasetSelector(self.__table_source, self.__transactions_columns),
+            DatasetSelector(discover_source, self.__transactions_columns),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
