@@ -22,7 +22,7 @@ def test_mapping_column_list() -> None:
     """
 
     def replace_col(e: Expression) -> Expression:
-        if isinstance(e, Column) and e.get_column_name() == "c2":
+        if isinstance(e, Column) and e.column_name == "c2":
             return FunctionCall("a1", "f", [e])
         return e
 
@@ -39,8 +39,8 @@ def test_mapping_column_list() -> None:
     assert new_selected_cols[2] == column3
     f = new_selected_cols[1]
     assert isinstance(f, FunctionCall)
-    assert f.get_function_name() == "f"
-    assert f.get_parameters() == [column2]
+    assert f.function_name == "f"
+    assert f.parameters == [column2]
 
 
 def test_mapping_complex_expression() -> None:
@@ -54,7 +54,7 @@ def test_mapping_complex_expression() -> None:
     f3 = FunctionCall("a3", "f", [])
 
     def replace_expr(e: Expression) -> Expression:
-        if isinstance(e, FunctionCall) and e.get_function_name() == "f":
+        if isinstance(e, FunctionCall) and e.function_name == "f":
             return f4
         return e
 
@@ -84,7 +84,7 @@ def test_aggregations() -> None:
 
     column4 = Column("a4", "c4", "t2")
     aggregation.map(
-        lambda e: column4 if isinstance(e, Column) and e.get_column_name() == "c1" else e
+        lambda e: column4 if isinstance(e, Column) and e.column_name == "c1" else e
     )
     expected = [function_2, column3, function_1, column4, column2]
     assert list(aggregation) == expected

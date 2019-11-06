@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -34,16 +35,12 @@ class FormattableNode(Node, ABC):
         raise NotImplementedError
 
 
+@dataclass
 class AliasedNode(Node, ABC):
     """
     Abstract representation of a node that can be given an alias in a query.
     """
-
-    def __init__(self, alias: Optional[str]):
-        self.__alias = alias
-
-    def _get_alias(self) -> Optional[str]:
-        return self.__alias
+    alias: Optional[str]
 
     @abstractmethod
     def _format_impl(self) -> str:

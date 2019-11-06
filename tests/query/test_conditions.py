@@ -29,7 +29,7 @@ def test_map_expressions_in_basic_condition() -> None:
     c3 = Column("a3", "c3", "t1")
 
     def replace_col(e: Expression) -> Expression:
-        if isinstance(e, Column) and e.get_column_name() == "c1":
+        if isinstance(e, Column) and e.column_name == "c1":
             c3
         return e
 
@@ -73,7 +73,7 @@ def test_nested_simple_condition() -> None:
     cX = Column("a1", "cX", "t1")
 
     def replace_col(e: Expression) -> Expression:
-        if isinstance(e, Column) and e.get_column_name() == "c2":
+        if isinstance(e, Column) and e.column_name == "c2":
             return cX
         return e
 

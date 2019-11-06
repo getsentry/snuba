@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Iterator, Sequence
 
@@ -130,48 +131,28 @@ class BasicConditionWrapper(ExpressionContainer):
         self.__condition = condition
 
     def __iter__(self) -> Iterator[Expression]:
-        expressions = [self.__condition.get_lhs(), self.__condition.get_rhs()]
+        expressions = [self.__condition.lhs, self.__condition.rhs]
         for e in self._iterate_over_children(expressions):
             yield e
 
     def map(self, closure: Callable[[Expression], Expression]) -> None:
-        lhs, rhs = self._map_children(
+        self.__condition.lhs, self.__condition.rhs = self._map_children(
             [
-                self.__condition.get_lhs(),
-                self.__condition.get_rhs()
+                self.__condition.lhs,
+                self.__condition.rhs
             ],
             closure,
         )
-        self.__condition.set_lhs(lhs)
-        self.__condition.set_rhs(rhs)
 
 
+@dataclass
 class BasicCondition(Condition):
     """
     Represents a condition in the form `expression` `operator` `expression`
     """
-
-    def __init__(
-        self,
-        lhs: Expression,
-        operator: Operator,
-        rhs: Expression,
-    ) -> None:
-        self.__lhs = lhs
-        self.__operator = operator
-        self.__rhs = rhs
-
-    def get_lhs(self) -> Expression:
-        return self.__lhs
-
-    def set_lhs(self, lhs: Expression) -> None:
-        self.__lhs = lhs
-
-    def get_rhs(self) -> Expression:
-        return self.__rhs
-
-    def set_rhs(self, rhs: Expression) -> None:
-        self.__rhs = rhs
+    lhs: Expression
+    operator: Operator
+    rhs: Expression
 
     def format(self) -> str:
         raise NotImplementedError
