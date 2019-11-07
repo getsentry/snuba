@@ -30,25 +30,3 @@ class NodeContainer(Generic[TNode], Iterable[TNode], ABC):
         not produce a new container to replace the original one.
         """
         raise NotImplementedError
-
-
-class CompositeNodeContainer(Generic[TNode], NodeContainer[TNode]):
-    """
-    Container of containers. It can be used to iterate and map
-    over several containers of nodes of the same type.
-    """
-
-    def __init__(
-        self,
-        containers: Iterable[NodeContainer[TNode]],
-    ) -> None:
-        self.__containers = containers
-
-    def __iter__(self) -> Iterator[TNode]:
-        for c in self.__containers:
-            for element in c:
-                yield element
-
-    def map(self, func: Callable[[TNode], TNode]) -> None:
-        for c in self.__containers:
-            c.map(func)
