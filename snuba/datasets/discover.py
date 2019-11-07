@@ -16,7 +16,6 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -206,6 +205,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("span_id", Nullable(UInt(64))),
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
+                # TODO: Time columns below will need to be aligned more closely to the
+                # names in events once we figure out how timeseries queries will work
                 ("start_ts", Nullable(DateTime())),
                 ("start_ms", Nullable(UInt(16))),
                 ("finish_ts", Nullable(DateTime())),
