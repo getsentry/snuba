@@ -17,6 +17,13 @@ class NodeContainer(Generic[TNode], ABC):
 
     @abstractmethod
     def __iter__(self) -> Iterator[TNode]:
+        """
+        Used to iterate over the nodes in this container. The exact
+        semantics depends on the structure of the container (if the
+        container is linear this would work like iterating over a
+        sequence, if it is a tree, this would be a traversal).
+        See the implementations for more details.
+        """
         raise NotImplementedError
 
     @abstractmethod
