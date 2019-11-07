@@ -1,5 +1,5 @@
-from confluent_kafka import Producer
-from typing import Sequence
+from confluent_kafka import KafkaError, KafkaException, Producer
+from typing import Optional, Sequence
 
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
@@ -7,6 +7,7 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.consumers.consumer import Consumer
 from snuba.utils.streams.consumers.backends.kafka import KafkaConsumerBackend, KafkaConsumerBackendWithCommitLog, TransportError, build_kafka_consumer_configuration
@@ -34,7 +35,8 @@ class ConsumerBuilder:
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
         dogstatsd_host: str,
-        dogstatsd_port: int
+        dogstatsd_port: int,
+        commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.dataset = get_dataset(dataset_name)
         self.dataset_name = dataset_name
@@ -80,6 +82,21 @@ class ConsumerBuilder:
         self.queued_max_messages_kbytes = queued_max_messages_kbytes
         self.queued_min_messages = queued_min_messages
 
+        if commit_retry_policy is None:
+            commit_retry_policy = BasicRetryPolicy(
+                3,
+                constant_delay(1),
+                lambda e: isinstance(e, KafkaException)
+                and e.args[0].code()
+                in (
+                    KafkaError.REQUEST_TIMED_OUT,
+                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
+                    KafkaError._WAIT_COORD,
+                ),
+            )
+
+        self.__commit_retry_policy = commit_retry_policy
+
     def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
@@ -99,7 +116,10 @@ class ConsumerBuilder:
             )
 
         return BatchingConsumer(
-            Consumer(backend),
+            Consumer(
+                backend,
+                self.__commit_retry_policy,
+            ),
             self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,

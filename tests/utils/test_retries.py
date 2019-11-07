@@ -1,3 +1,5 @@
+import pytest
+
 from snuba.utils.clock import TestingClock
 from snuba.utils.retries import BasicRetryPolicy, RetryException, constant_delay
 
@@ -51,7 +53,8 @@ def test_basic_retry_policy_no_delay():
         assert clock.time() == 0
 
 
-def test_basic_retry_policy_with_delay():
+@pytest.mark.parametrize("delay", [1, constant_delay(1)])
+def test_basic_retry_policy_with_delay(delay):
 
     value = object()
 
@@ -80,19 +83,19 @@ def test_basic_retry_policy_with_delay():
     bad_function.call_count = 0
 
     clock = TestingClock()
-    policy = BasicRetryPolicy(3, constant_delay(1), clock=clock)
+    policy = BasicRetryPolicy(3, delay, clock=clock)
     assert policy.call(good_function) is value
     assert good_function.call_count == 1
     assert clock.time() == 0
 
     clock = TestingClock()
-    policy = BasicRetryPolicy(3, constant_delay(1), clock=clock)
+    policy = BasicRetryPolicy(3, delay, clock=clock)
     assert policy.call(flaky_function) is value
     assert flaky_function.call_count == 2
     assert clock.time() == 1  # one retry
 
     clock = TestingClock()
-    policy = BasicRetryPolicy(3, constant_delay(1), clock=clock)
+    policy = BasicRetryPolicy(3, delay, clock=clock)
     try:
         policy.call(bad_function)
     except Exception as e:
