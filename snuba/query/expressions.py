@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC
 from dataclasses import dataclass
 from typing import Callable, Iterable, Optional, Iterator
 
@@ -8,7 +7,7 @@ from snuba.query.nodes import AliasedNode
 from snuba.query.collections import NodeContainer
 
 
-class Expression(AliasedNode, ABC):
+class Expression(AliasedNode):
     """
     Abstract representation of a Query node that can be evaluated to a single value.
     This can be a simple column, NULL or a nested expression, but not a condition.

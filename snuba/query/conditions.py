@@ -7,7 +7,7 @@ from typing import Callable, Iterator, Sequence
 
 from snuba.query.collections import NodeContainer
 from snuba.query.expressions import Expression, ExpressionContainer
-from snuba.query.nodes import FormattableNode
+from snuba.query.nodes import Node
 
 
 class Operator(Enum):
@@ -24,7 +24,7 @@ class Operator(Enum):
     NOT_LIKE = "NOT LIKE"
 
 
-class Condition(FormattableNode, ABC):
+class Condition(Node):
     """
     Represents a condition node in the query. This can be a simple infix
     notation query or a complex query built by a nested boolean condition.
@@ -73,7 +73,7 @@ class CompositeConditionWrapper(ExpressionContainer):
 
 
 @dataclass
-class CompositeCondition(Condition, ConditionContainer, ABC):
+class CompositeCondition(Condition, ConditionContainer):
     """
     Represents a sequence of conditions joined with a boolean operator.
     """
@@ -83,7 +83,7 @@ class CompositeCondition(Condition, ConditionContainer, ABC):
         return CompositeConditionWrapper(self)
 
     def __iter__(self) -> Iterator[Condition]:
-        for c in self.__sub_conditions:
+        for c in self.sub_conditions:
             if isinstance(c, ConditionContainer):
                 for sub in c:
                     yield sub

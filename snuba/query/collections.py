@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Iterable, Iterator, TypeVar
+from typing import Callable, Generic, Iterator, TypeVar
 
 
 TNode = TypeVar("TNode")
 
 
-class NodeContainer(Generic[TNode], Iterable[TNode], ABC):
+class NodeContainer(Generic[TNode], ABC):
     """
     A container of nodes in the query.
     This is an Iterable so we can traverse the tree and it provides
     a map method to run a map on the content of the collection in
     place.
     """
+
+    @abstractmethod
+    def __iter__(self) -> Iterator[TNode]:
+        raise NotImplementedError
 
     @abstractmethod
     def map(self, func: Callable[[TNode], TNode]) -> None:

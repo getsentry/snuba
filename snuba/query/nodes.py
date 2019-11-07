@@ -15,14 +15,6 @@ class Node(ABC):
     Representing the root as a node itself does not seem very useful right now
     since we never traverse the full tree. We could revisit that later.
     """
-    pass
-
-
-class FormattableNode(Node, ABC):
-    """
-    A Node in the query tree that knows how to format itself for the clickhouse
-    query.
-    """
 
     @abstractmethod
     def format(self) -> str:
@@ -36,7 +28,7 @@ class FormattableNode(Node, ABC):
 
 
 @dataclass
-class AliasedNode(FormattableNode, ABC):
+class AliasedNode(Node):
     """
     Abstract representation of a node that can be given an alias in a query.
     """
