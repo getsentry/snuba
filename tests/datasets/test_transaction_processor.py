@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 from datetime import datetime
-
+import time
 import uuid
 
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
@@ -165,7 +165,6 @@ class TransactionEvent:
 
 
 class TestTransactionsProcessor(BaseTest):
-
     def test_skip_non_transactions(self):
         message = TransactionEvent(
             event_id='e5e062bf2e1d4afd96fd2f90b6770431',
@@ -173,8 +172,8 @@ class TestTransactionsProcessor(BaseTest):
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            start_timestamp=time.time() - 1,
+            timestamp=time.time(),
             platform='python',
             dist='',
             user_name='me',
@@ -200,8 +199,8 @@ class TestTransactionsProcessor(BaseTest):
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            start_timestamp=time.time() - 1,
+            timestamp=time.time(),
             platform='python',
             dist='',
             user_name='me',
@@ -227,8 +226,8 @@ class TestTransactionsProcessor(BaseTest):
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            start_timestamp=time.time() - 1,
+            timestamp=time.time(),
             platform='python',
             dist='',
             user_name='me',
