@@ -11,6 +11,9 @@ class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
     directly. Instead, it is intended to be wrapped by a ``Consumer``
     instance.
 
+    Backends that implement this abstract interface may or may not be thread
+    safe. (If in doubt, better to assume that they are not thread safe.)
+
     All methods are blocking unless otherise noted in the documentation for
     that method.
     """
