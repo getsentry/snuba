@@ -30,13 +30,13 @@ def test_map_expressions_in_basic_condition() -> None:
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c1":
-            c3
+            return c3
         return e
 
     condition = BasicCondition(f1, Operator.EQ, c2)
     condition.get_expressions().map(replace_col)
     ret = list(condition.get_expressions())
-    expected = [f1, c, c2]
+    expected = [f1, c3, c2]
 
     assert ret == expected
 
