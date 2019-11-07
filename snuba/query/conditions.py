@@ -45,8 +45,11 @@ class Condition(Node):
 
 class ConditionContainer(NodeContainer[Condition]):
     """
-    This class exists to be able to preserve the NodeContainer[Condition]
-    type at runtime.
+    This class exists because we need, in some cases, to check the type
+    of a container at runtime and to ensure a Node is a NodeContainer[Condition].
+    Since the parameters disappear at runtime, thus something like
+    isinstance(a, NodeContainer[Condition]) would not work, we need to make
+    NodeContainer[Condition] a class.
     """
     pass
 
