@@ -25,22 +25,3 @@ class Node(ABC):
         and the clickhouse formatter will provide the format.
         """
         raise NotImplementedError
-
-
-@dataclass
-class AliasedNode(Node):
-    """
-    Abstract representation of a node that can be given an alias in a query.
-    """
-    alias: Optional[str]
-
-    @abstractmethod
-    def _format_impl(self) -> str:
-        """
-        Template method for subclasses to provide their formatting logic.
-        """
-        raise NotImplementedError
-
-    def format(self) -> str:
-        # TODO: do something and call _format_impl
-        raise NotImplementedError

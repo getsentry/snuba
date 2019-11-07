@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterable, Optional, Iterator
+from typing import Callable, Iterable, Iterator, Optional, Sequence
 
-from snuba.query.nodes import AliasedNode
+from snuba.query.nodes import Node
 from snuba.query.collections import NodeContainer
 
 
-class Expression(AliasedNode):
+class Expression(Node):
     """
     Abstract representation of a Query node that can be evaluated to a single value.
     This can be a simple column, NULL or a nested expression, but not a condition.
@@ -36,9 +36,9 @@ class ExpressionContainer(NodeContainer[Expression]):
                 yield child
 
     def _transform_children(self,
-        children: Iterable[Expression],
+        children: Sequence[Expression],
         func: Callable[[Expression], Expression],
-    ) -> Iterable[Expression]:
+    ) -> Sequence[Expression]:
         """
         Maps the children of a tree node.
         """
@@ -51,12 +51,38 @@ class ExpressionContainer(NodeContainer[Expression]):
                 r.transform(func)
             return r
 
-        return map(process_child, children)
+        return list(map(process_child, children))
+
+
+@dataclass
+class AliasedExpression(Expression, ExpressionContainer):
+    """
+    Abstract representation of a node that can be given an alias in a query.
+    """
+    alias: Optional[str]
+    node: Expression
+
+    def format(self) -> str:
+        raise NotImplementedError
+
+    def transform(self, func: Callable[[Expression], Expression]) -> None:
+        """
+        The children of a FunctionCall are the parameters of the function.
+        Thus map runs func on the parameters, not on the function itself.
+        """
+        self.node = self._transform_children((self.node,), func)[0]
+
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a prefix order.
+        """
+        yield self
+        for e in self._iterate_over_children([self.node]):
+            yield e
 
 
 class Null(Expression):
-    def _format_impl(self) -> str:
-        # TODO: Implement this
+    def format(self) -> str:
         raise NotImplementedError
 
 
@@ -68,8 +94,7 @@ class Column(Expression):
     column_name: str
     table_name: Optional[str]
 
-    def _format_impl(self) -> str:
-        # TODO: Implement this
+    def format(self) -> str:
         raise NotImplementedError
 
 
@@ -79,10 +104,9 @@ class FunctionCall(Expression, ExpressionContainer):
     Represents an expression that resolves to a function call on Clickhouse
     """
     function_name: str
-    parameters: Iterable[Expression]
+    parameters: Sequence[Expression]
 
-    def _format_impl(self) -> str:
-        # TODO: Implement this
+    def format(self) -> str:
         raise NotImplementedError
 
     def transform(self, func: Callable[[Expression], Expression]) -> None:
@@ -102,7 +126,7 @@ class FunctionCall(Expression, ExpressionContainer):
 
 
 @dataclass
-class Aggregation(AliasedNode, ExpressionContainer):
+class Aggregation(Expression, ExpressionContainer):
     """
     Represents an aggregation function to be applied to an expression in the
     current query.
@@ -111,10 +135,9 @@ class Aggregation(AliasedNode, ExpressionContainer):
     processing still relies on aggregation being a first class concept.
     """
     function_name: str
-    parameters: Iterable[Expression]
+    parameters: Sequence[Expression]
 
-    def _format_impl(self) -> str:
-        # TODO: Implement this
+    def format(self) -> str:
         raise NotImplementedError
 
     def __iter__(self) -> Iterator[Expression]:
