@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from typing import Iterator, Sequence
+from typing import Iterator, Mapping, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -52,10 +52,9 @@ def test_consumer_backend(topic: str) -> None:
 
     backend = build_backend()
 
-    def assignment_callback(streams: Sequence[TopicPartition]):
+    def assignment_callback(streams: Mapping[TopicPartition, int]):
         assignment_callback.called = True
-        assert streams == [TopicPartition(topic, 0)]
-        assert backend.tell() == {TopicPartition(topic, 0): 0}
+        assert streams == {TopicPartition(topic, 0): 0}
 
         backend.seek({TopicPartition(topic, 0): 1})
 

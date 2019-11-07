@@ -20,7 +20,7 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
         pass  # XXX: This is a bit of a smell.

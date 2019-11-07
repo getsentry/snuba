@@ -29,7 +29,7 @@ class Consumer(Generic[TStream, TOffset, TValue]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TStream]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TStream, TOffset]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TStream]], None]] = None,
     ) -> None:
         """

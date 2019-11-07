@@ -136,7 +136,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
         if self.__state is not KafkaConsumerState.CONSUMING:
@@ -170,7 +170,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
             try:
                 if on_assign is not None:
-                    on_assign(list(offsets.keys()))
+                    on_assign(offsets)
             finally:
                 self.__state = KafkaConsumerState.CONSUMING
 
