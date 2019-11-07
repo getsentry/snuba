@@ -57,7 +57,9 @@ class ExpressionContainer(NodeContainer[Expression]):
 @dataclass
 class AliasedExpression(Expression, ExpressionContainer):
     """
-    Abstract representation of a node that can be given an alias in a query.
+    Wraps an expression and provides it an alias in the query.
+    This is an expression itself, thus it will appear when iterating
+    over the query.
     """
     alias: Optional[str]
     node: Expression
@@ -67,14 +69,13 @@ class AliasedExpression(Expression, ExpressionContainer):
 
     def transform(self, func: Callable[[Expression], Expression]) -> None:
         """
-        The children of a FunctionCall are the parameters of the function.
-        Thus map runs func on the parameters, not on the function itself.
+        Applies the transformation to the aliased node.
         """
         self.node = self._transform_children((self.node,), func)[0]
 
     def __iter__(self) -> Iterator[Expression]:
         """
-        Traverse the subtree in a prefix order.
+        Keeps traversing the wrapped node.
         """
         yield self
         for e in self._iterate_over_children([self.node]):
