@@ -60,12 +60,25 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
     return EVENTS
 
 
-class DiscoverTableSource:
-    def __init__(self):
-        self.__table_source = None
+class DiscoverSource(RelationalSource):
+    def __init__(
+        self, columns: ColumnSet, table_source: RelationalSource
+    ) -> None:
+        self.__columns = columns
+        self.__table_source = table_source
 
-    def get_table_source(self) -> Optional[TableSource]:
-        return self.__table_source
+    def format_from(self) -> str:
+        if self.__table_source:
+            return self.__table_source.format_from()
+        raise InvalidDataset
+
+    def get_columns(self) -> ColumnSet:
+        return self.__columns
+
+    def get_mandatory_conditions(self) -> Sequence[Condition]:
+        if self.__table_source:
+            return self.__table_source.get_mandatory_conditions()
+        return []
 
     def set_table_source(self, dataset_name: str) -> None:
         self.__table_source = (
@@ -74,29 +87,6 @@ class DiscoverTableSource:
             .get_read_schema()
             .get_data_source()
         )
-
-
-class DiscoverSource(RelationalSource):
-    def __init__(
-        self, columns: ColumnSet, discover_table_source: DiscoverTableSource
-    ) -> None:
-        self.__columns = columns
-        self.__discover_table_source = discover_table_source
-
-    def format_from(self) -> str:
-        table_source = self.__discover_table_source.get_table_source()
-        if table_source:
-            return table_source.format_from()
-        raise InvalidDataset
-
-    def get_columns(self) -> ColumnSet:
-        return self.__columns
-
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
-        table_source = self.__discover_table_source.get_table_source()
-        if table_source:
-            return table_source.get_mandatory_conditions()
-        return []
 
 
 class DatasetSelector(QueryProcessor):
@@ -113,10 +103,9 @@ class DatasetSelector(QueryProcessor):
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         detected_dataset = detect_dataset(query, self.__transactions_columns)
-        table_source = DiscoverTableSource()
-        table_source.set_table_source(detected_dataset)
-        data_source = DiscoverSource(self.__discover_source.get_columns(), table_source)
-        query.set_data_source(data_source)
+        source = query.get_data_source()
+        assert isinstance(source, DiscoverSource)
+        source.set_table_source(detected_dataset)
 
 
 class DiscoverSchema(Schema):
@@ -225,12 +214,10 @@ class DiscoverDataset(TimeSeriesDataset):
             ]
         )
 
-        self.__table_source = DiscoverTableSource()
-
         super().__init__(
             dataset_schemas=DatasetSchemas(
                 read_schema=DiscoverSchema(
-                    table_source=self.__table_source,
+                    table_source=None,
                     common_columns=self.__common_columns,
                     events_columns=self.__events_columns,
                     transactions_columns=self.__transactions_columns,
