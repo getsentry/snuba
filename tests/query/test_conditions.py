@@ -34,7 +34,7 @@ def test_map_expressions_in_basic_condition() -> None:
         return e
 
     condition = BasicCondition(f1, Operator.EQ, c2)
-    condition.get_expressions().map(replace_col)
+    condition.get_expressions().transform(replace_col)
     ret = list(condition.get_expressions())
     expected = [f1, c3, c2]
 
@@ -77,7 +77,7 @@ def test_nested_simple_condition() -> None:
             return cX
         return e
 
-    and1.get_expressions().map(replace_col)
+    and1.get_expressions().transform(replace_col)
     ret = list(and1.get_expressions())
     expected = [c1, cX, c3, cX, c5, cX, c7, cX]
     assert ret == expected

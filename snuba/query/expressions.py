@@ -35,7 +35,7 @@ class ExpressionContainer(NodeContainer[Expression]):
             else:
                 yield child
 
-    def _map_children(self,
+    def _transform_children(self,
         children: Iterable[Expression],
         func: Callable[[Expression], Expression],
     ) -> Iterable[Expression]:
@@ -48,7 +48,7 @@ class ExpressionContainer(NodeContainer[Expression]):
                 # The expression was not replaced by the function, which
                 # means it was unchanged. This means we need to traverse
                 # its children.
-                r.map(func)
+                r.transform(func)
             return r
 
         return map(process_child, children)
@@ -85,12 +85,12 @@ class FunctionCall(Expression, ExpressionContainer):
         # TODO: Implement this
         raise NotImplementedError
 
-    def map(self, func: Callable[[Expression], Expression]) -> None:
+    def transform(self, func: Callable[[Expression], Expression]) -> None:
         """
         The children of a FunctionCall are the parameters of the function.
         Thus map runs func on the parameters, not on the function itself.
         """
-        self.parameters = self._map_children(self.parameters, func)
+        self.parameters = self._transform_children(self.parameters, func)
 
     def __iter__(self) -> Iterator[Expression]:
         """
@@ -125,9 +125,9 @@ class Aggregation(AliasedNode, ExpressionContainer):
         for e in self._iterate_over_children(self.parameters):
             yield e
 
-    def map(self, func: Callable[[Expression], Expression]) -> None:
+    def transform(self, func: Callable[[Expression], Expression]) -> None:
         """
         The children of an aggregation are the parameters of the aggregation
         function. This runs the mapping function over them.
         """
-        self.parameters = self._map_children(self.parameters, func)
+        self.parameters = self._transform_children(self.parameters, func)

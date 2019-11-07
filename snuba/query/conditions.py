@@ -67,9 +67,9 @@ class CompositeConditionWrapper(ExpressionContainer):
             for c in condition.get_expressions():
                 yield c
 
-    def map(self, func: Callable[[Expression], Expression]) -> None:
+    def transform(self, func: Callable[[Expression], Expression]) -> None:
         for condition in self.__condition.sub_conditions:
-            condition.get_expressions().map(func)
+            condition.get_expressions().transform(func)
 
 
 @dataclass
@@ -90,7 +90,7 @@ class CompositeCondition(Condition, ConditionContainer):
         else:
             yield c
 
-    def map(self, func: Callable[[Condition], Condition]) -> None:
+    def transform(self, func: Callable[[Condition], Condition]) -> None:
         """
         This method is not terribly useful, will revisit whether we
         actually need it.
@@ -131,8 +131,8 @@ class BasicConditionWrapper(ExpressionContainer):
         for e in self._iterate_over_children(expressions):
             yield e
 
-    def map(self, func: Callable[[Expression], Expression]) -> None:
-        self.__condition.lhs, self.__condition.rhs = self._map_children(
+    def transform(self, func: Callable[[Expression], Expression]) -> None:
+        self.__condition.lhs, self.__condition.rhs = self._transform_children(
             [
                 self.__condition.lhs,
                 self.__condition.rhs

@@ -27,14 +27,14 @@ class NodeContainer(Generic[TNode], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def map(self, func: Callable[[TNode], TNode]) -> None:
+    def transform(self, func: Callable[[TNode], TNode]) -> None:
         """
-        Maps the content of the container in place.
-        Defining a map function that would return a node to replace
-        the mapped one in the tree is impractical since nodes may
-        represent either sequences (parameters of functions) or individual
-        nodes. This makes it very hard to provide a meaningful return
-        type for the map function.
+        Transforms the content of the container in place.
+        Defining a collection style map function that would return a
+        node to replace the mapped one in the tree is impractical since
+        nodes may represent either sequences (parameters of functions)
+        or individual nodes. This makes it very hard to provide a
+        meaningful return type for the map function.
 
         The solution is that we can call map only on containers and
         they will transparently apply map on their content, but will

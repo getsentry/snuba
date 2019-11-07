@@ -64,7 +64,7 @@ def test_mapping_complex_expression() -> None:
 
     # Only the external function is going to be replaced since, when map returns a new
     # column, we expect the func to have takern care of its own children.
-    f1.map(replace_expr)
+    f1.transform(replace_expr)
     iterate = list(f1)
     expected = [f1, c1, f2, f4, f5]
 
@@ -83,7 +83,7 @@ def test_aggregations() -> None:
     assert list(aggregation) == expected
 
     column4 = Column("a4", "c4", "t2")
-    aggregation.map(
+    aggregation.transform(
         lambda e: column4 if isinstance(e, Column) and e.column_name == "c1" else e
     )
     expected = [function_2, column3, function_1, column4, column2]
