@@ -54,6 +54,13 @@ class ExpressionContainer(NodeContainer[Expression]):
         return list(map(process_child, children))
 
 
+class Term(Expression):
+    """
+    An expression that can be referred through an alias in the query
+    """
+    pass
+
+
 @dataclass
 class AliasedExpression(Expression, ExpressionContainer):
     """
@@ -62,18 +69,18 @@ class AliasedExpression(Expression, ExpressionContainer):
     over the query.
     """
     alias: Optional[str]
-    node: Expression
+    node: Term
 
     def format(self) -> str:
         raise NotImplementedError
 
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
+    def transform(self, func: Callable[[Term], Term]) -> None:
         """
         Applies the transformation to the aliased node.
         """
         self.node = self._transform_children((self.node,), func)[0]
 
-    def __iter__(self) -> Iterator[Expression]:
+    def __iter__(self) -> Iterator[Term]:
         """
         Keeps traversing the wrapped node.
         """
@@ -88,7 +95,7 @@ class Null(Expression):
 
 
 @dataclass
-class Column(Expression):
+class Column(Term):
     """
     Represent a column in the schema of the dataset.
     """
@@ -100,7 +107,7 @@ class Column(Expression):
 
 
 @dataclass
-class FunctionCall(Expression, ExpressionContainer):
+class FunctionCall(Term, ExpressionContainer):
     """
     Represents an expression that resolves to a function call on Clickhouse
     """
@@ -127,7 +134,7 @@ class FunctionCall(Expression, ExpressionContainer):
 
 
 @dataclass
-class Aggregation(Expression, ExpressionContainer):
+class Aggregation(Term, ExpressionContainer):
     """
     Represents an aggregation function to be applied to an expression in the
     current query.
