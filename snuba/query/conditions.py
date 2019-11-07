@@ -28,17 +28,18 @@ class Condition(Node):
     """
     Represents a condition node in the query. This can be a simple infix
     notation query or a complex query built by a nested boolean condition.
-
+    This object can be used in WHERE and HAVING clauses, not in others.
     """
     @abstractmethod
     def get_expressions(self) -> ExpressionContainer:
         """
-        The Condition class provides access to expressions in the query.
-        Since the condition itself cannot be an ExpressionContainer because
-        composite conditions are already ConditionContainers, in order to
-        access the expressions in a condition, the get_expressions method
-        returns ann ExpressionContainer which is an abstract container
-        over a subset of the tree represented by the Condition.
+        The Condition class provides access to expressions in the query (the
+        operands of the condition).
+        The condition itself cannot be an ExpressionContainer because
+        composite conditions are already ConditionContainers and inheriting
+        from both would cause naming collision.
+        Thus We use this method to have access to an ExpressionContainer that
+        represent all the expressions referenced in this condition.
         """
         raise NotImplementedError
 

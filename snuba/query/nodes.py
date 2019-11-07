@@ -17,7 +17,7 @@ class Node(ABC):
     @abstractmethod
     def format(self) -> str:
         """
-        Turn this node into a string. for Clickhouse
+        Turn this node into a string for Clickhouse.
         TODO: provide a clickhouse formatter to this method so that, through
         a strategy pattern, this class will provide the content for the query
         and the clickhouse formatter will provide the format.

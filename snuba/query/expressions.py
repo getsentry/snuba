@@ -9,24 +9,31 @@ from snuba.query.collections import NodeContainer
 
 class Expression(Node):
     """
-    Abstract representation of a Query node that can be evaluated to a single value.
-    This can be a simple column, NULL or a nested expression, but not a condition.
+    Abstract representation of an expression that evaluate to a value and that can
+    be used in: select statements, arrayjoin, groupby, orderby and as leaf
+    expressions in conditions.
+    Conditions themselves are not inheriting from this so we cannto use them in the
+    fields above.
     """
     pass
 
 
 class ExpressionContainer(NodeContainer[Expression]):
     """
-    Container able to iterate over expressions and to map them in place.
-    Expressions are trees themselves, so iteration and mapping through this
-    container is actually a tree traversal.
+    Container able to iterate over expressions and to transform them in place.
+    This class exists for two reasons:
+    - in some place we check the type of an object through isinstance, and, since
+      the parameter of a generic disappears at runtime we cannot do something like
+      isinstance(a, NodeContainer[Expression])
+    - provide some common feature to transform and iterate over the children of
+      a hierarchical expression like a tree.
     """
 
     def _iterate_over_children(self,
         children: Iterable[Expression],
     ) -> Iterator[Expression]:
         """
-        Traverses the children of a tree node.
+        Traverses the children of a hierarchical container like a tree.
         """
         for child in children:
             if isinstance(child, ExpressionContainer):
@@ -40,7 +47,8 @@ class ExpressionContainer(NodeContainer[Expression]):
         func: Callable[[Expression], Expression],
     ) -> Sequence[Expression]:
         """
-        Maps the children of a tree node.
+        Transforms in place the children of a hierarchical node by applying
+        a mapping function.
         """
         def process_child(param: Expression) -> Expression:
             r = func(param)
@@ -56,7 +64,7 @@ class ExpressionContainer(NodeContainer[Expression]):
 
 class Term(Expression):
     """
-    An expression that can be referred through an alias in the query
+    An expression that can be referred via an alias in the query
     """
     pass
 
@@ -82,7 +90,7 @@ class AliasedExpression(Expression, ExpressionContainer):
 
     def __iter__(self) -> Iterator[Term]:
         """
-        Keeps traversing the wrapped node.
+        Traverses the wrapped node.
         """
         yield self
         for e in self._iterate_over_children([self.node]):
