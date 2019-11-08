@@ -100,6 +100,22 @@ class Consumer(Generic[TStream, TOffset, TValue]):
         """
         return self.__backend.seek(offsets)
 
+    def pause(self, streams: Sequence[TStream]) -> None:
+        """
+        Pause the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        return self.__backend.pause(streams)
+
+    def resume(self, streams: Sequence[TStream]) -> None:
+        """
+        Resume the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        return self.__backend.resume(streams)
+
     def commit(self) -> Mapping[TStream, TOffset]:
         """
         Commit staged offsets for all streams that this consumer is assigned
