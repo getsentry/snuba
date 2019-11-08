@@ -39,6 +39,15 @@ class Consumer(Generic[TStream, TOffset, TValue]):
         are called when the subscription state changes with the updated
         assignment for this consumer.
 
+        If provided, the ``on_assign`` callback is called with a mapping of
+        streams to their offsets (at this point, the working offset and the
+        committed offset are the same for each stream) on each subscription
+        change. Similarly, the ``on_revoke`` callback (if provided) is called
+        with a sequence of streams that are being removed from this
+        consumer's assignment. (This callback does not include the offsets,
+        as the working offset and committed offset may differ, in some cases
+        by substantial margin.)
+
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
         return self.__backend.subscribe(topics, on_assign, on_revoke)
