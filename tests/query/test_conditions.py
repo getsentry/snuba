@@ -12,8 +12,8 @@ def test_expressions_from_basic_condition() -> None:
     c2 = Column("c2", "t1")
 
     condition = BasicCondition(f1, Operator.EQ, c2)
-    ret = list(condition.get_expressions())
-    expected = [f1, c, c2]
+    ret = list(condition)
+    expected = [condition, f1, c, c2]
 
     assert ret == expected
 
@@ -31,8 +31,8 @@ def test_aliased_expressions_from_basic_condition() -> None:
     al2 = AliasedExpression("a", c2)
 
     condition = BasicCondition(al1, Operator.EQ, al2)
-    ret = list(condition.get_expressions())
-    expected = [al1, f1, c, al2, c2]
+    ret = list(condition)
+    expected = [condition, al1, f1, c, al2, c2]
 
     assert ret == expected
 
@@ -53,9 +53,9 @@ def test_map_expressions_in_basic_condition() -> None:
         return e
 
     condition = BasicCondition(f1, Operator.EQ, c2)
-    condition.get_expressions().transform(replace_col)
-    ret = list(condition.get_expressions())
-    expected = [f1, c3, c2]
+    condition.transform(replace_col)
+    ret = list(condition)
+    expected = [condition, f1, c3, c2]
 
     assert ret == expected
 
@@ -85,8 +85,8 @@ def test_nested_simple_condition() -> None:
     or2 = BooleanCondition(co4, BooleanOperator.OR, co5)
     and1 = BooleanCondition(or1, BooleanOperator.AND, or2)
 
-    ret = list(and1.get_expressions())
-    expected = [c1, c2, c3, c4, c5, c6, c7, c8]
+    ret = list(and1)
+    expected = [and1, or1, co1, c1, c2, co2, c3, c4, or2, co4, c5, c6, co5, c7, c8]
     assert ret == expected
 
     cX = Column("cX", "t1")
@@ -96,7 +96,7 @@ def test_nested_simple_condition() -> None:
             return cX
         return e
 
-    and1.get_expressions().transform(replace_col)
-    ret = list(and1.get_expressions())
-    expected = [c1, cX, c3, cX, c5, cX, c7, cX]
+    and1.transform(replace_col)
+    ret = list(and1)
+    expected = [and1, or1, co1, c1, cX, co2, c3, cX, or2, co4, c5, cX, co5, c7, cX]
     assert ret == expected
