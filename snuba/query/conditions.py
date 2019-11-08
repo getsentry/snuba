@@ -40,9 +40,9 @@ class BooleanCondition(Condition):
     """
     A boolean condition between two other conditions.
     """
-    lhs: Condition
+    lhs: Expression
     operator: BooleanOperator
-    rhs: Condition
+    rhs: Expression
 
     def format(self) -> str:
         raise NotImplementedError
@@ -62,7 +62,7 @@ class NotCondition(Condition):
     """
     A not condition
     """
-    condition: Condition
+    condition: Expression
 
     def format(self) -> str:
         raise NotImplementedError
