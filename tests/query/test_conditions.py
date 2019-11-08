@@ -1,4 +1,4 @@
-from snuba.query.conditions import BasicCondition, AndCondition, Operator, OrCondition
+from snuba.query.conditions import BasicCondition, BooleanCondition, BooleanOperator, Operator
 from snuba.query.expressions import AliasedExpression, FunctionCall, Column, Expression
 
 
@@ -73,7 +73,7 @@ def test_nested_simple_condition() -> None:
     c3 = Column("c1", "t1")
     c4 = Column("c2", "t1")
     co2 = BasicCondition(c3, Operator.EQ, c4)
-    or1 = OrCondition([co1, co2])
+    or1 = BooleanCondition(co1, BooleanOperator.OR, co2)
 
     c5 = Column("c1", "t1")
     c6 = Column("c2", "t1")
@@ -82,8 +82,8 @@ def test_nested_simple_condition() -> None:
     c7 = Column("c1", "t1")
     c8 = Column("c2", "t1")
     co5 = BasicCondition(c7, Operator.EQ, c8)
-    or2 = OrCondition([co4, co5])
-    and1 = AndCondition([or1, or2])
+    or2 = BooleanCondition(co4, BooleanOperator.OR, co5)
+    and1 = BooleanCondition(or1, BooleanOperator.AND, or2)
 
     ret = list(and1.get_expressions())
     expected = [c1, c2, c3, c4, c5, c6, c7, c8]

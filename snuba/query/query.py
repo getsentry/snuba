@@ -15,7 +15,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.conditions import AndCondition, ConditionContainer
+from snuba.query.conditions import Condition as BooleanCondition
 from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, ExpressionContainer
 from snuba.query.types import Condition
 from snuba.util import (
@@ -80,9 +80,9 @@ class Query:
         selected_columns: Optional[Sequence[Expression]] = None,
         aggregations: Optional[Sequence[NodeAggregation]] = None,
         array_join: Optional[Column] = None,
-        conditions: Optional[AndCondition] = None,
+        condition: Optional[BooleanCondition] = None,
         groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[AndCondition] = None,
+        having: Optional[BooleanCondition] = None,
         order_by: Optional[Sequence[Expression]] = None,
     ):
         """
@@ -99,9 +99,9 @@ class Query:
         self.__selected_columns: Sequence[Expression] = selected_columns or []
         self.__aggregations: Sequence[NodeAggregation] = aggregations or []
         self.__array_join = array_join
-        self.__conditions: Sequence[AndCondition] = conditions or []
+        self.__condition: Optional[BooleanCondition] = condition
         self.__groupby: Sequence[Expression] = groupby or []
-        self.__having: Sequence[AndCondition] = having or []
+        self.__having: Optional[BooleanCondition] = having
         self.__order_by: Sequence[Expression] = order_by or []
 
     def get_all_expressions(self) -> ExpressionContainer:
@@ -110,13 +110,6 @@ class Query:
         in the query no matter which level of nesting they are at.
         The ExpressionContainer can be used to traverse the expressions in the
         tree or to replace expressions with the map method
-        """
-        # TODO: Implement this
-        raise NotImplementedError
-
-    def get_all_conditions(self) -> ConditionContainer:
-        """
-        Same as get_all_expressions, but it returns conditions
         """
         # TODO: Implement this
         raise NotImplementedError
