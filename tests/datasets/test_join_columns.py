@@ -11,7 +11,6 @@ from snuba.util import tuplify
 def test_simple_column_expr():
     dataset = get_dataset("groups")
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-    state.set_config('use_escape_alias', 1)
 
     body = {
         'granularity': 86400
@@ -171,3 +170,27 @@ def test_duplicate_expression_alias():
         for (agg, col, alias) in body['aggregations']
     ]
     assert exprs == ['(topK(3)(events.logger) AS dupe_alias)', 'dupe_alias']
+
+
+def test_order_by(self):
+    state.set_config('process_alias_without_neg', 1)
+    dataset = get_dataset("groups")
+    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+    body = {}
+    query = Query(body, source)
+
+    assert column_expr(
+        self.dataset,
+        '-events.event_id',
+        deepcopy(query),
+        ParsingContext()
+    ) == "-(exception_stacks.type AS `expcetion_stacks.type`)"
+
+    context = ParsingContext()
+    context.add_alias("`events.event_id`")
+    assert column_expr(
+        self.dataset,
+        '-events.event_id',
+        deepcopy(query),
+        ParsingContext()
+    ) == "-`events.event_id`"
