@@ -31,3 +31,16 @@ def test_commit_retry_basic_policy() -> None:
 
     assert consumer.commit() is sentinel.COMMIT_RESULT
     assert backend.commit.call_count == 2
+
+
+def test_pause_resume() -> None:
+    backend = Mock(spec=ConsumerBackend)
+    consumer = Consumer(backend)
+
+    assert backend.pause.call_count == 0
+    consumer.pause(sentinel.STREAMS)
+    backend.pause.assert_called_once_with(sentinel.STREAMS)
+
+    assert backend.resume.call_count == 0
+    consumer.resume(sentinel.STREAMS)
+    backend.resume.assert_called_once_with(sentinel.STREAMS)

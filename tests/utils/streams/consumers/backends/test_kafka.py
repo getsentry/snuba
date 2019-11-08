@@ -89,6 +89,10 @@ def test_consumer_backend(topic: str) -> None:
     with pytest.raises(ConsumerError):
         backend.seek({TopicPartition(topic, 1): 0})
 
+    backend.pause([TopicPartition(topic, 0)])
+
+    backend.resume([TopicPartition(topic, 0)])
+
     message = backend.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
@@ -122,6 +126,12 @@ def test_consumer_backend(topic: str) -> None:
 
     with pytest.raises(RuntimeError):
         backend.seek({TopicPartition(topic, 0): 0})
+
+    with pytest.raises(RuntimeError):
+        backend.pause([TopicPartition(topic, 0)])
+
+    with pytest.raises(RuntimeError):
+        backend.resume([TopicPartition(topic, 0)])
 
     with pytest.raises(RuntimeError):
         backend.commit()
