@@ -11,7 +11,7 @@ def test_expressions_from_basic_condition() -> None:
     f1 = FunctionCall("f", [c])
     c2 = Column("c2", "t1")
 
-    condition = BasicCondition(f1, Operator.EQ, c2)
+    condition = BasicCondition(f1, c2, Operator.EQ)
     ret = list(condition)
     expected = [condition, f1, c, c2]
 
@@ -30,7 +30,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
     c2 = Column("c2", "t1")
     al2 = AliasedExpression("a", c2)
 
-    condition = BasicCondition(al1, Operator.EQ, al2)
+    condition = BasicCondition(al1, al2, Operator.EQ)
     ret = list(condition)
     expected = [condition, al1, f1, c, al2, c2]
 
@@ -52,7 +52,7 @@ def test_map_expressions_in_basic_condition() -> None:
             return c3
         return e
 
-    condition = BasicCondition(f1, Operator.EQ, c2)
+    condition = BasicCondition(f1, c2, Operator.EQ)
     condition.transform(replace_col)
     ret = list(condition)
     expected = [condition, f1, c3, c2]
@@ -68,22 +68,22 @@ def test_nested_simple_condition() -> None:
 
     c1 = Column("c1", "t1")
     c2 = Column("c2", "t1")
-    co1 = BasicCondition(c1, Operator.EQ, c2)
+    co1 = BasicCondition(c1, c2, Operator.EQ)
 
     c3 = Column("c1", "t1")
     c4 = Column("c2", "t1")
-    co2 = BasicCondition(c3, Operator.EQ, c4)
-    or1 = BooleanCondition(co1, BooleanOperator.OR, co2)
+    co2 = BasicCondition(c3, c4, Operator.EQ)
+    or1 = BooleanCondition(co1, co2, BooleanOperator.OR)
 
     c5 = Column("c1", "t1")
     c6 = Column("c2", "t1")
-    co4 = BasicCondition(c5, Operator.EQ, c6)
+    co4 = BasicCondition(c5, c6, Operator.EQ)
 
     c7 = Column("c1", "t1")
     c8 = Column("c2", "t1")
-    co5 = BasicCondition(c7, Operator.EQ, c8)
-    or2 = BooleanCondition(co4, BooleanOperator.OR, co5)
-    and1 = BooleanCondition(or1, BooleanOperator.AND, or2)
+    co5 = BasicCondition(c7, c8, Operator.EQ)
+    or2 = BooleanCondition(co4, co5, BooleanOperator.OR)
+    and1 = BooleanCondition(or1, or2, BooleanOperator.AND)
 
     ret = list(and1)
     expected = [and1, or1, co1, c1, c2, co2, c3, c4, or2, co4, c5, c6, co5, c7, c8]

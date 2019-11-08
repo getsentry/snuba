@@ -36,16 +36,9 @@ class Condition(Expression, ExpressionContainer):
 
 
 @dataclass
-class BooleanCondition(Condition):
-    """
-    A boolean condition between two other conditions.
-    """
+class BinaryCondition(Condition):
     lhs: Expression
-    operator: BooleanOperator
     rhs: Expression
-
-    def format(self) -> str:
-        raise NotImplementedError
 
     def transform(self, func: Callable[[Expression], Expression]) -> None:
         self.lhs = self._transform_children((self.lhs,), func)[0]
@@ -55,6 +48,17 @@ class BooleanCondition(Condition):
         yield self
         for e in self._iterate_over_children([self.lhs, self.rhs]):
             yield e
+
+
+@dataclass
+class BooleanCondition(BinaryCondition):
+    """
+    A boolean condition between two other conditions.
+    """
+    operator: BooleanOperator
+
+    def format(self) -> str:
+        raise NotImplementedError
 
 
 @dataclass
@@ -77,22 +81,11 @@ class NotCondition(Condition):
 
 
 @dataclass
-class BasicCondition(Condition):
+class BasicCondition(BinaryCondition):
     """
     Represents a condition in the form `expression` `operator` `expression`
     """
-    lhs: Expression
     operator: Operator
-    rhs: Expression
 
     def format(self) -> str:
         raise NotImplementedError
-
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        self.lhs = self._transform_children((self.lhs,), func)[0]
-        self.rhs = self._transform_children((self.rhs,), func)[0]
-
-    def __iter__(self) -> Iterator[Expression]:
-        yield self
-        for e in self._iterate_over_children([self.lhs, self.rhs]):
-            yield e
