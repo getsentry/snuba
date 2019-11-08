@@ -172,7 +172,7 @@ def test_duplicate_expression_alias():
     assert exprs == ['(topK(3)(events.logger) AS dupe_alias)', 'dupe_alias']
 
 
-def test_order_by(self):
+def test_order_by():
     state.set_config('process_alias_without_neg', 1)
     dataset = get_dataset("groups")
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
@@ -180,17 +180,17 @@ def test_order_by(self):
     query = Query(body, source)
 
     assert column_expr(
-        self.dataset,
+        dataset,
         '-events.event_id',
         deepcopy(query),
         ParsingContext()
-    ) == "-(exception_stacks.type AS `expcetion_stacks.type`)"
+    ) == "-(events.event_id AS `events.event_id`)"
 
     context = ParsingContext()
     context.add_alias("`events.event_id`")
     assert column_expr(
-        self.dataset,
+        dataset,
         '-events.event_id',
         deepcopy(query),
-        ParsingContext()
+        context,
     ) == "-`events.event_id`"
