@@ -3,6 +3,7 @@ from typing import Sequence
 from snuba import settings, util
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 
 
@@ -28,13 +29,16 @@ class PreWhereProcessor(QueryProcessor):
         query: Query,
         request_settings: RequestSettings,
     ) -> None:
-        prewhere_conditions = []
+        prewhere_conditions: Sequence[Condition] = []
         # Add any condition to PREWHERE if:
         # - It is a single top-level condition (not OR-nested), and
         # - Any of its referenced columns are in self.__prewhere_keys
+        conditions = query.get_conditions()
+        if not conditions:
+            return
         prewhere_candidates = [
             (util.columns_in_expr(cond[0]), cond)
-            for cond in query.get_conditions() if util.is_condition(cond) and
+            for cond in conditions if util.is_condition(cond) and
             any(col in self.__prewhere_keys for col in util.columns_in_expr(cond[0]))
         ]
         # Use the condition that has the highest priority (based on the
@@ -46,6 +50,6 @@ class PreWhereProcessor(QueryProcessor):
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][:settings.MAX_PREWHERE_CONDITIONS]
             query.set_conditions(
-                list(filter(lambda cond: cond not in prewhere_conditions, query.get_conditions()))
+                list(filter(lambda cond: cond not in prewhere_conditions, conditions))
             )
         query.set_prewhere(prewhere_conditions)
