@@ -11,6 +11,9 @@ class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
     directly. Instead, it is intended to be wrapped by a ``Consumer``
     instance.
 
+    Backends that implement this abstract interface may or may not be thread
+    safe. (If in doubt, better to assume that they are not thread safe.)
+
     All methods are blocking unless otherise noted in the documentation for
     that method.
     """
@@ -19,7 +22,7 @@ class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TStream]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TStream, TOffset]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TStream]], None]] = None,
     ) -> None:
         """
@@ -89,6 +92,24 @@ class ConsumerBackend(ABC, Generic[TStream, TOffset, TValue]):
     def seek(self, offsets: Mapping[TStream, TOffset]) -> None:
         """
         Change the read offsets for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def pause(self, streams: Sequence[TStream]) -> None:
+        """
+        Pause the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def resume(self, streams: Sequence[TStream]) -> None:
+        """
+        Resume the consumption of messages for the provided streams.
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """

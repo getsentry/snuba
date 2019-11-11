@@ -136,7 +136,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
         if self.__state is not KafkaConsumerState.CONSUMING:
@@ -170,7 +170,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
             try:
                 if on_assign is not None:
-                    on_assign(list(offsets.keys()))
+                    on_assign(offsets)
             finally:
                 self.__state = KafkaConsumerState.CONSUMING
 
@@ -273,6 +273,38 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
             raise ConsumerError("cannot seek on unassigned streams")
 
         self.__seek(offsets)
+
+    def pause(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.pause(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
+
+        # XXX: Seeking to a specific partition offset and immediately pausing
+        # that partition causes the seek to be ignored for some reason.
+        self.seek(
+            {
+                stream: offset
+                for stream, offset in self.__offsets.items()
+                if stream in streams
+            }
+        )
+
+    def resume(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.resume(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
 
     def commit(self) -> Mapping[TopicPartition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
