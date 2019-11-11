@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query import Query
-from snuba.request import Request, RequestSettings
+from snuba.request import RequestSettings
 
 
 class TestClickhouseQuery(BaseEventsTest):
@@ -24,7 +24,6 @@ class TestClickhouseQuery(BaseEventsTest):
             dataset=self.dataset,
             query=query,
             settings=request_settings,
-            prewhere_conditions=[],
         )
 
         assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
@@ -45,7 +44,6 @@ class TestClickhouseQuery(BaseEventsTest):
             dataset=self.dataset,
             query=query,
             settings=request_settings,
-            prewhere_conditions=[],
         )
 
         assert 'SAMPLE 0.1' in clickhouse_query.format_sql()
@@ -67,7 +65,6 @@ class TestClickhouseQuery(BaseEventsTest):
             dataset=self.dataset,
             query=query,
             settings=request_settings,
-            prewhere_conditions=[],
         )
 
         assert "SAMPLE 0.2" in clickhouse_query.format_sql()
@@ -88,7 +85,6 @@ class TestClickhouseQuery(BaseEventsTest):
             dataset=self.dataset,
             query=query,
             settings=request_settings,
-            prewhere_conditions=[],
         )
 
         assert 'SAMPLE' not in clickhouse_query.format_sql()

@@ -19,6 +19,7 @@ def test_empty_query():
     assert query.get_limit() is None
     assert query.get_offset() == 0
     assert query.has_totals() is False
+    assert query.get_prewhere() == []
 
     assert query.get_data_source().format_from() == "my_table"
 
@@ -104,6 +105,11 @@ def test_edit_query():
 
     query.set_granularity(7200)
     assert query.get_granularity() == 7200
+
+    query.set_prewhere([["pc6", "=", "10"]])
+    assert query.get_prewhere() == [
+        ["pc6", "=", "10"]
+    ]
 
 
 def test_referenced_columns():
@@ -196,5 +202,6 @@ def test_referenced_columns():
         ]
     }
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd', 'e'])
+    query.set_prewhere([["pc6", "=", "10"]])
+    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd', 'e', 'pc6'])
     assert query.get_columns_referenced_in_having() == set(['b', 'c', 'd', 'e'])
