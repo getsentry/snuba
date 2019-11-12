@@ -15,12 +15,10 @@ from snuba.writer import BufferedWriterWrapper
               help='Source of the dump. Depending on the dataset it may have different meaning.')
 @click.option('--dest-table',
               help='Clickhouse destination table.')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def bulk_load(dataset, dest_table, source, log_level):
+def bulk_load(dataset, dest_table, source):
     import sentry_sdk
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     logger = logging.getLogger('snuba.load-snapshot')
     logger.info("Start bulk load process for dataset %s, from source %s", dataset, source)

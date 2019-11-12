@@ -1,4 +1,3 @@
-import logging
 import signal
 
 import click
@@ -30,12 +29,11 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
               help='Maximum number of kilobytes per topic+partition in the local consumer queue.')
 @click.option('--queued-min-messages', default=settings.DEFAULT_QUEUED_MIN_MESSAGES, type=int,
               help='Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse_host, clickhouse_port, dataset,
              max_batch_size, max_batch_time_ms, auto_offset_reset, queued_max_messages_kbytes,
-             queued_min_messages, log_level, dogstatsd_host, dogstatsd_port):
+             queued_min_messages, dogstatsd_host, dogstatsd_port):
 
     import sentry_sdk
     from snuba import util
@@ -47,8 +45,6 @@ def replacer(*, replacements_topic, consumer_group, bootstrap_server, clickhouse
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset)
-
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     stream_loader = enforce_table_writer(dataset).get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()

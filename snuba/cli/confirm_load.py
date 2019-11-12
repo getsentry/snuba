@@ -20,8 +20,7 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
               help='The dataset to bulk load')
 @click.option('--source',
               help='Source of the dump. Depending on the dataset it may have different meaning.')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
+def confirm_load(control_topic, bootstrap_server, dataset, source):
     """
     Confirms the snapshot has been loaded by sending the
     snapshot-loaded message on the control topic.
@@ -29,7 +28,6 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
     import sentry_sdk
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     logger = logging.getLogger('snuba.loaded-snapshot')
     logger.info("Sending load completion message for dataset %s, from source %s", dataset, source)

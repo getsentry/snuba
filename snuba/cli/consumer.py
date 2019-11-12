@@ -1,4 +1,3 @@
-import logging
 import signal
 
 import click
@@ -35,19 +34,17 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
               help='Maximum number of kilobytes per topic+partition in the local consumer queue.')
 @click.option('--queued-min-messages', default=settings.DEFAULT_QUEUED_MIN_MESSAGES, type=int,
               help='Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
 @click.option('--dogstatsd-host', default=settings.DOGSTATSD_HOST, help='Host to send DogStatsD metrics to.')
 @click.option('--dogstatsd-port', default=settings.DOGSTATSD_PORT, type=int, help='Port to send DogStatsD metrics to.')
 @click.option('--stateful-consumer', default=False, type=bool, help='Runs a stateful consumer (that manages snapshots) instead of a basic one.')
 def consumer(raw_events_topic, replacements_topic, commit_log_topic, control_topic, consumer_group,
              bootstrap_server, dataset, max_batch_size, max_batch_time_ms,
-             auto_offset_reset, queued_max_messages_kbytes, queued_min_messages, log_level,
+             auto_offset_reset, queued_max_messages_kbytes, queued_min_messages,
              dogstatsd_host, dogstatsd_port, stateful_consumer):
 
     import sentry_sdk
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
 
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
     dataset_name = dataset
     dataset = get_dataset(dataset_name)
 

@@ -14,11 +14,9 @@ main `events` topic. Retrieving a sample file is left as an excercise for the
 reader, or you can use the `tests/perf-event.json` file with a high repeat count.
 """
 
-import logging
 import click
 import sys
 
-from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
 from snuba.util import local_dataset_mode
 
@@ -32,11 +30,8 @@ from snuba.util import local_dataset_mode
               default=False, help='Whether or not to profile writing.')
 @click.option('--dataset', default='events', type=click.Choice(DATASET_NAMES),
               help='The dataset to consume/run replacements for (currently only events supported)')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
-def perf(events_file, repeat, profile_process, profile_write, dataset, log_level):
+def perf(events_file, repeat, profile_process, profile_write, dataset):
     from snuba.perf import run, logger
-
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
 
     dataset = get_dataset(dataset)
     if not local_dataset_mode():
