@@ -6,15 +6,19 @@ import click
 @click.option('--workers/--no-workers', default=True)
 def devserver(bootstrap, workers):
     "Starts all Snuba processes for local development."
+    import logging
     import os
     import sys
     from subprocess import list2cmdline, call
     from honcho.manager import Manager
 
+    log_level = logging.getLevelName(logging.getLogger().getEffectiveLevel())
+    command = ['snuba', f'--log-level={log_level}']
+
     os.environ['PYTHONUNBUFFERED'] = '1'
 
     if bootstrap:
-        cmd = ['snuba', 'bootstrap', '--force']
+        cmd = command + ['bootstrap', '--force']
         if not workers:
             cmd.append('--no-kafka')
         returncode = call(cmd)
@@ -34,9 +38,9 @@ def devserver(bootstrap, workers):
         os.execvp(daemons[0][1][0], daemons[0][1])
 
     daemons += [
-        ('transaction-consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug', '--dataset=transactions', '--consumer-group=transactions_group']),
-        ('consumer', ['snuba', 'consumer', '--auto-offset-reset=latest', '--log-level=debug']),
-        ('replacer', ['snuba', 'replacer', '--auto-offset-reset=latest', '--log-level=debug']),
+        ('transaction-consumer', command + ['consumer', '--auto-offset-reset=latest', '--dataset=transactions', '--consumer-group=transactions_group']),
+        ('consumer', command + ['consumer', '--auto-offset-reset=latest']),
+        ('replacer', command + ['replacer', '--auto-offset-reset=latest']),
     ]
 
     manager = Manager()
