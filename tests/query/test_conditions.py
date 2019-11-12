@@ -1,4 +1,4 @@
-from snuba.query.conditions import BasicCondition, BooleanCondition, BooleanOperator, Operator
+from snuba.query.conditions import binary_condition, BooleanFunctions, ComparisonsFunctions
 from snuba.query.expressions import AliasedExpression, FunctionCall, Column, Expression
 
 
@@ -11,7 +11,7 @@ def test_expressions_from_basic_condition() -> None:
     f1 = FunctionCall("f", [c])
     c2 = Column("c2", "t1")
 
-    condition = BasicCondition(f1, c2, Operator.EQ)
+    condition = binary_condition(ComparisonsFunctions.EQ, f1, c2)
     ret = list(condition)
     expected = [condition, f1, c, c2]
 
@@ -30,7 +30,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
     c2 = Column("c2", "t1")
     al2 = AliasedExpression("a", c2)
 
-    condition = BasicCondition(al1, al2, Operator.EQ)
+    condition = binary_condition(ComparisonsFunctions.EQ, al1, al2)
     ret = list(condition)
     expected = [condition, al1, f1, c, al2, c2]
 
@@ -52,7 +52,7 @@ def test_map_expressions_in_basic_condition() -> None:
             return c3
         return e
 
-    condition = BasicCondition(f1, c2, Operator.EQ)
+    condition = binary_condition(ComparisonsFunctions.EQ, f1, c2)
     condition.transform(replace_col)
     ret = list(condition)
     expected = [condition, f1, c3, c2]
@@ -68,22 +68,22 @@ def test_nested_simple_condition() -> None:
 
     c1 = Column("c1", "t1")
     c2 = Column("c2", "t1")
-    co1 = BasicCondition(c1, c2, Operator.EQ)
+    co1 = binary_condition(ComparisonsFunctions.EQ, c1, c2)
 
     c3 = Column("c1", "t1")
     c4 = Column("c2", "t1")
-    co2 = BasicCondition(c3, c4, Operator.EQ)
-    or1 = BooleanCondition(co1, co2, BooleanOperator.OR)
+    co2 = binary_condition(ComparisonsFunctions.EQ, c3, c4)
+    or1 = binary_condition(BooleanFunctions.OR, co1, co2)
 
     c5 = Column("c1", "t1")
     c6 = Column("c2", "t1")
-    co4 = BasicCondition(c5, c6, Operator.EQ)
+    co4 = binary_condition(ComparisonsFunctions.EQ, c5, c6)
 
     c7 = Column("c1", "t1")
     c8 = Column("c2", "t1")
-    co5 = BasicCondition(c7, c8, Operator.EQ)
-    or2 = BooleanCondition(co4, co5, BooleanOperator.OR)
-    and1 = BooleanCondition(or1, or2, BooleanOperator.AND)
+    co5 = binary_condition(ComparisonsFunctions.EQ, c7, c8)
+    or2 = binary_condition(BooleanFunctions.OR, co4, co5)
+    and1 = binary_condition(BooleanFunctions.AND, or1, or2)
 
     ret = list(and1)
     expected = [and1, or1, co1, c1, c2, co2, c3, c4, or2, co4, c5, c6, co5, c7, c8]

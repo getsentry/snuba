@@ -15,7 +15,6 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.conditions import Condition as BooleanCondition
 from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, ExpressionContainer
 from snuba.query.types import Condition
 from snuba.util import (
@@ -80,9 +79,9 @@ class Query:
         selected_columns: Optional[Sequence[Expression]] = None,
         aggregations: Optional[Sequence[NodeAggregation]] = None,
         array_join: Optional[Column] = None,
-        condition: Optional[BooleanCondition] = None,
+        condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
-        having: Optional[BooleanCondition] = None,
+        having: Optional[Expression] = None,
         order_by: Optional[Sequence[Expression]] = None,
     ):
         """
@@ -99,9 +98,9 @@ class Query:
         self.__selected_columns: Sequence[Expression] = selected_columns or []
         self.__aggregations: Sequence[NodeAggregation] = aggregations or []
         self.__array_join = array_join
-        self.__condition: Optional[BooleanCondition] = condition
+        self.__condition: Optional[Expression] = condition
         self.__groupby: Sequence[Expression] = groupby or []
-        self.__having: Optional[BooleanCondition] = having
+        self.__having: Optional[Expression] = having
         self.__order_by: Sequence[Expression] = order_by or []
 
     def get_all_expressions(self) -> ExpressionContainer:

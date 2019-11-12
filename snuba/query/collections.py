@@ -11,8 +11,8 @@ class NodeContainer(Generic[TNode], ABC):
     """
     A container of nodes in the query.
     This is an Iterable so we can traverse the tree and it provides
-    a map method to run a map on the content of the collection in
-    place.
+    a transform method to manipulate the content by applying a mapping
+    function to all the elements contained.
     """
 
     @abstractmethod
@@ -36,8 +36,8 @@ class NodeContainer(Generic[TNode], ABC):
         or individual nodes. This makes it very hard to provide a
         meaningful return type for the map function.
 
-        The solution is that we can call map only on containers and
-        they will transparently apply map on their content, but will
-        not produce a new container to replace the original one.
+        The solution is that we can call transform only on containers and
+        they will transparently apply the mapping function on their content,
+        but will not produce a new container to replace the original one.
         """
         raise NotImplementedError

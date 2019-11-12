@@ -1,91 +1,31 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from enum import Enum
-from typing import Callable, Iterator
-
-from snuba.query.expressions import Expression, ExpressionContainer
+from snuba.query.expressions import Expression, FunctionCall
 
 
-class Operator(Enum):
-    GT = ">"
-    LT = "<"
-    GTE = ">="
-    LTE = "<="
-    EQ = "="
-    NEQ = "!="
-    IN = "IN"
-    NOT_IN = "NOT IN"
-    IS = "IS"
-    LIKE = "LIKE"
-    NOT_LIKE = "NOT LIKE"
-
-
-class BooleanOperator(Enum):
-    AND = "AND"
-    OR = "OR"
-
-
-class Condition(Expression, ExpressionContainer):
+class ComparisonsFunctions:
     """
-    Represents a condition node in the query. This can be a simple infix
-    notation query or a complex query built by a nested boolean condition.
-    This object can be used in WHERE and HAVING clauses.
+    Function names for comparison operations.
     """
-    pass
+    EQ = "equals"
+    NEQ = "notEquals"
+    LTE = "lessOrEquals"
+    GTE = "greaterOrEquals"
+    LT = "less"
+    GT = "greater"
+    IS_NULL = "isNull"
 
 
-@dataclass
-class BinaryCondition(Condition):
-    lhs: Expression
-    rhs: Expression
-
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        self.lhs = self._transform_children((self.lhs,), func)[0]
-        self.rhs = self._transform_children((self.rhs,), func)[0]
-
-    def __iter__(self) -> Iterator[Expression]:
-        yield self
-        for e in self._iterate_over_children([self.lhs, self.rhs]):
-            yield e
-
-
-@dataclass
-class BooleanCondition(BinaryCondition):
+class BooleanFunctions:
     """
-    A boolean condition between two other conditions.
+    Same as comparison functions but for boolean operators.
     """
-    operator: BooleanOperator
-
-    def format(self) -> str:
-        raise NotImplementedError
-
-
-@dataclass
-class NotCondition(Condition):
-    """
-    A not condition
-    """
-    condition: Expression
-
-    def format(self) -> str:
-        raise NotImplementedError
-
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        self.condition = self._transform_children((self.condition,), func)[0]
-
-    def __iter__(self) -> Iterator[Expression]:
-        yield self
-        for e in self._iterate_over_children([self.condition]):
-            yield e
+    NOT = "not"
+    AND = "and"
+    OR = "or"
 
 
-@dataclass
-class BasicCondition(BinaryCondition):
-    """
-    Represents a condition in the form `expression` `operator` `expression`
-    """
-    operator: Operator
+def binary_condition(function_name: str, lhs: Expression, rhs: Expression) -> FunctionCall:
+    return FunctionCall(function_name, [lhs, rhs])
 
-    def format(self) -> str:
-        raise NotImplementedError
+
+def unary_condition(function_name: str, operand: Expression) -> FunctionCall:
+    return FunctionCall(function_name, [operand])

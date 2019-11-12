@@ -11,7 +11,8 @@ class Expression(ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
     It also represents an expression that can be resolved to a value. This
-    includes column names, function calls and boolean conditions.
+    includes column names, function calls and boolean conditions (which are
+    function calls themselves in the AST).
 
     The root of the tree is not a Node itself yet (since it is the Query object).
     Representing the root as a node itself does not seem very useful right now
@@ -122,7 +123,12 @@ class Column(Expression):
 @dataclass
 class FunctionCall(Expression, ExpressionContainer):
     """
-    Represents an expression that resolves to a function call on Clickhouse
+    Represents an expression that resolves to a function call on Clickhouse.
+    This class also represent conditions. Since Clickhouse supports both the conventional
+    infix notation for condition and the functional one, we converge into one
+    representation only in the AST to make query processing easier.
+    A query processor would not have to care of processing both functional conditions
+    and infix conditions.
     """
     function_name: str
     parameters: Sequence[Expression]
