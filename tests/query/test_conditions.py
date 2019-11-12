@@ -1,4 +1,4 @@
-from snuba.query.conditions import binary_condition, BooleanFunctions, ComparisonsFunctions
+from snuba.query.conditions import binary_condition, BooleanFunctions, ConditionFunctions
 from snuba.query.expressions import AliasedExpression, FunctionCall, Column, Expression
 
 
@@ -11,7 +11,7 @@ def test_expressions_from_basic_condition() -> None:
     f1 = FunctionCall("f", [c])
     c2 = Column("c2", "t1")
 
-    condition = binary_condition(ComparisonsFunctions.EQ, f1, c2)
+    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
     expected = [condition, f1, c, c2]
 
@@ -30,7 +30,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
     c2 = Column("c2", "t1")
     al2 = AliasedExpression("a", c2)
 
-    condition = binary_condition(ComparisonsFunctions.EQ, al1, al2)
+    condition = binary_condition(ConditionFunctions.EQ, al1, al2)
     ret = list(condition)
     expected = [condition, al1, f1, c, al2, c2]
 
@@ -52,7 +52,7 @@ def test_map_expressions_in_basic_condition() -> None:
             return c3
         return e
 
-    condition = binary_condition(ComparisonsFunctions.EQ, f1, c2)
+    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
     condition.transform(replace_col)
     ret = list(condition)
     expected = [condition, f1, c3, c2]
@@ -68,20 +68,20 @@ def test_nested_simple_condition() -> None:
 
     c1 = Column("c1", "t1")
     c2 = Column("c2", "t1")
-    co1 = binary_condition(ComparisonsFunctions.EQ, c1, c2)
+    co1 = binary_condition(ConditionFunctions.EQ, c1, c2)
 
     c3 = Column("c1", "t1")
     c4 = Column("c2", "t1")
-    co2 = binary_condition(ComparisonsFunctions.EQ, c3, c4)
+    co2 = binary_condition(ConditionFunctions.EQ, c3, c4)
     or1 = binary_condition(BooleanFunctions.OR, co1, co2)
 
     c5 = Column("c1", "t1")
     c6 = Column("c2", "t1")
-    co4 = binary_condition(ComparisonsFunctions.EQ, c5, c6)
+    co4 = binary_condition(ConditionFunctions.EQ, c5, c6)
 
     c7 = Column("c1", "t1")
     c8 = Column("c2", "t1")
-    co5 = binary_condition(ComparisonsFunctions.EQ, c7, c8)
+    co5 = binary_condition(ConditionFunctions.EQ, c7, c8)
     or2 = binary_condition(BooleanFunctions.OR, co4, co5)
     and1 = binary_condition(BooleanFunctions.AND, or1, or2)
 

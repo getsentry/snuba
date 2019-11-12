@@ -1,7 +1,7 @@
 from snuba.query.expressions import Expression, FunctionCall
 
 
-class ComparisonsFunctions:
+class ConditionFunctions:
     """
     Function names for comparison operations.
     """
