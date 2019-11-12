@@ -129,6 +129,7 @@ class OutcomesDataset(TimeSeriesDataset):
         materialized_view = MaterializedViewSchema(
             local_materialized_view_name='outcomes_mv_hourly_local',
             dist_materialized_view_name='outcomes_mv_hourly_dist',
+            prewhere_candidates=['project_id', 'org_id'],
             columns=materialized_view_columns,
             query=query,
             local_source_table_name=WRITE_LOCAL_TABLE_NAME,
@@ -172,5 +173,5 @@ class OutcomesDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            PreWhereProcessor(['project_id', 'org_id'])
+            PreWhereProcessor(),
         ]

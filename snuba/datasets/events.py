@@ -212,6 +212,9 @@ class EventsDataset(TimeSeriesDataset):
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
             mandatory_conditions=[('deleted', '=', 0)],
+            prewhere_candidates=[
+                'event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id',
+            ],
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
@@ -337,7 +340,5 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            PreWhereProcessor(
-                ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
-            )
+            PreWhereProcessor()
         ]

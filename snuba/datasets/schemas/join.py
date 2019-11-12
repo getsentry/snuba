@@ -70,9 +70,10 @@ class TableJoinNode(TableSource, JoinNode):
         table_name: str,
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]],
+        prewhere_candidates: Optional[Sequence[str]],
         alias: str,
     ) -> None:
-        super().__init__(table_name, columns, mandatory_conditions)
+        super().__init__(table_name, columns, mandatory_conditions, prewhere_candidates)
         self.__alias = alias
 
     def format_from(self) -> str:
@@ -127,6 +128,13 @@ class JoinClause(JoinNode):
         for table in tables.values():
             all_conditions.extend(table.get_mandatory_conditions())
         return all_conditions
+
+    def get_prewhere_candiates(self) -> Sequence[str]:
+        """
+        The pre where condition can only come from the leftmost table in the
+        join.
+        """
+        return self.left_node.get_prewhere_candiates()
 
 
 class JoinedSchema(Schema):

@@ -45,6 +45,14 @@ class RelationalSource(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def get_prewhere_candiates(self) -> Sequence[str]:
+        """
+        Returns the list of keys that can be promoted to PREWHERE conditions
+        if found in the conditions field of the query.
+        """
+        raise NotImplementedError
+
 
 class Schema(ABC):
     """

@@ -55,6 +55,10 @@ class Groups(TimeSeriesDataset):
                     # expression.
                     (qualified_column('record_deleted', self.GROUPS_ALIAS), '=', 0)
                 ],
+                prewhere_candidates=[
+                    qualified_column(col, self.GROUPS_ALIAS)
+                    for col in groupedmessage_source.get_prewhere_candiates()
+                ],
                 alias=self.GROUPS_ALIAS,
             ),
             right_node=TableJoinNode(
@@ -62,6 +66,10 @@ class Groups(TimeSeriesDataset):
                 columns=events_source.get_columns(),
                 mandatory_conditions=[
                     (qualified_column('deleted', self.EVENTS_ALIAS), '=', 0)
+                ],
+                prewhere_candidates=[
+                    qualified_column(col, self.EVENTS_ALIAS)
+                    for col in events_source.get_prewhere_candiates()
                 ],
                 alias=self.EVENTS_ALIAS,
             ),

@@ -24,6 +24,8 @@ from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.prewhere import PreWhereProcessor
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
@@ -116,6 +118,7 @@ class TransactionsDataset(TimeSeriesDataset):
             local_table_name='transactions_local',
             dist_table_name='transactions_dist',
             mandatory_conditions=[],
+            prewhere_candidates=['event_id', 'project_id'],
             order_by='(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, trace_id, span_id)',
             partition_by='(retention_days, toMonday(start_ts))',
             version_column='deleted',
@@ -199,5 +202,7 @@ class TransactionsDataset(TimeSeriesDataset):
             timestamp_column="start_ts",
         )
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ['event_id', 'project_id']
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            PreWhereProcessor(),
+        ]

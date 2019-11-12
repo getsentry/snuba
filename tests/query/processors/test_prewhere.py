@@ -71,11 +71,11 @@ def test_prewhere(query_body, keys, new_conditions, prewhere_conditions) -> None
     settings.MAX_PREWHERE_CONDITIONS = 2
     query = Query(
         query_body,
-        TableSource("my_table", ColumnSet([])),
+        TableSource("my_table", ColumnSet([]), None, keys),
     )
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-    processor = PreWhereProcessor(keys)
+    processor = PreWhereProcessor()
     processor.process_query(query, request_settings)
 
     assert query.get_conditions() == new_conditions
