@@ -1,3 +1,5 @@
+from typing import Optional
+
 from snuba.query.expressions import Expression, FunctionCall
 
 
@@ -23,9 +25,9 @@ class BooleanFunctions:
     OR = "or"
 
 
-def binary_condition(function_name: str, lhs: Expression, rhs: Expression) -> FunctionCall:
-    return FunctionCall(function_name, [lhs, rhs])
+def binary_condition(alias: Optional[str], function_name: str, lhs: Expression, rhs: Expression) -> FunctionCall:
+    return FunctionCall(alias, function_name, [lhs, rhs])
 
 
-def unary_condition(function_name: str, operand: Expression) -> FunctionCall:
-    return FunctionCall(function_name, [operand])
+def unary_condition(alias: Optional[str], function_name: str, operand: Expression) -> FunctionCall:
+    return FunctionCall(alias, function_name, [operand])

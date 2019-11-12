@@ -7,6 +7,7 @@ from typing import Callable, Iterable, Iterator, Optional, Sequence
 from snuba.query.collections import NodeContainer
 
 
+@dataclass
 class Expression(ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
@@ -17,7 +18,11 @@ class Expression(ABC):
     The root of the tree is not a Node itself yet (since it is the Query object).
     Representing the root as a node itself does not seem very useful right now
     since we never traverse the full tree. We could revisit that later.
+
+    All expression can have an optional alias.
     """
+
+    alias: Optional[str]
 
     @abstractmethod
     def format(self) -> str:
@@ -73,34 +78,6 @@ class ExpressionContainer(NodeContainer[Expression]):
             return r
 
         return list(map(process_child, children))
-
-
-@dataclass
-class AliasedExpression(Expression, ExpressionContainer):
-    """
-    Wraps an expression and provides it an alias in the query.
-    This is an expression itself, thus it will appear when iterating
-    over the query.
-    """
-    alias: Optional[str]
-    node: Expression
-
-    def format(self) -> str:
-        raise NotImplementedError
-
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        """
-        Applies the transformation to the aliased node.
-        """
-        self.node = self._transform_children((self.node,), func)[0]
-
-    def __iter__(self) -> Iterator[Expression]:
-        """
-        Traverses the wrapped node.
-        """
-        yield self
-        for e in self._iterate_over_children([self.node]):
-            yield e
 
 
 class Null(Expression):

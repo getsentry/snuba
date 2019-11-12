@@ -1,5 +1,5 @@
 from snuba.query.conditions import binary_condition, BooleanFunctions, ConditionFunctions
-from snuba.query.expressions import AliasedExpression, FunctionCall, Column, Expression
+from snuba.query.expressions import FunctionCall, Column, Expression
 
 
 def test_expressions_from_basic_condition() -> None:
@@ -7,11 +7,11 @@ def test_expressions_from_basic_condition() -> None:
     Iterates over the expressions in a basic condition
     """
 
-    c = Column("c1", "t1")
-    f1 = FunctionCall("f", [c])
-    c2 = Column("c2", "t1")
+    c = Column(None, "c1", "t1")
+    f1 = FunctionCall(None, "f", [c])
+    c2 = Column(None, "c2", "t1")
 
-    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
+    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
     expected = [condition, f1, c, c2]
 
@@ -24,15 +24,13 @@ def test_aliased_expressions_from_basic_condition() -> None:
     are aliased
     """
 
-    c = Column("c1", "t1")
-    f1 = FunctionCall("f", [c])
-    al1 = AliasedExpression("a", f1)
-    c2 = Column("c2", "t1")
-    al2 = AliasedExpression("a", c2)
+    c = Column(None, "c1", "t1")
+    f1 = FunctionCall("a", "f", [c])
+    c2 = Column("a2", "c2", "t1")
 
-    condition = binary_condition(ConditionFunctions.EQ, al1, al2)
+    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
-    expected = [condition, al1, f1, c, al2, c2]
+    expected = [condition, f1, c, c2]
 
     assert ret == expected
 
@@ -41,18 +39,18 @@ def test_map_expressions_in_basic_condition() -> None:
     """
     Change the column name over the expressions in a basic condition
     """
-    c = Column("c1", "t1")
-    f1 = FunctionCall("f", [c])
-    c2 = Column("c2", "t1")
+    c = Column(None, "c1", "t1")
+    f1 = FunctionCall(None, "f", [c])
+    c2 = Column(None, "c2", "t1")
 
-    c3 = Column("c3", "t1")
+    c3 = Column(None, "c3", "t1")
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c1":
             return c3
         return e
 
-    condition = binary_condition(ConditionFunctions.EQ, f1, c2)
+    condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     condition.transform(replace_col)
     ret = list(condition)
     expected = [condition, f1, c3, c2]
@@ -66,30 +64,30 @@ def test_nested_simple_condition() -> None:
     (A=B OR A=B) AND (A=B OR A=B)
     """
 
-    c1 = Column("c1", "t1")
-    c2 = Column("c2", "t1")
-    co1 = binary_condition(ConditionFunctions.EQ, c1, c2)
+    c1 = Column(None, "c1", "t1")
+    c2 = Column(None, "c2", "t1")
+    co1 = binary_condition(None, ConditionFunctions.EQ, c1, c2)
 
-    c3 = Column("c1", "t1")
-    c4 = Column("c2", "t1")
-    co2 = binary_condition(ConditionFunctions.EQ, c3, c4)
-    or1 = binary_condition(BooleanFunctions.OR, co1, co2)
+    c3 = Column(None, "c1", "t1")
+    c4 = Column(None, "c2", "t1")
+    co2 = binary_condition(None, ConditionFunctions.EQ, c3, c4)
+    or1 = binary_condition(None, BooleanFunctions.OR, co1, co2)
 
-    c5 = Column("c1", "t1")
-    c6 = Column("c2", "t1")
-    co4 = binary_condition(ConditionFunctions.EQ, c5, c6)
+    c5 = Column(None, "c1", "t1")
+    c6 = Column(None, "c2", "t1")
+    co4 = binary_condition(None, ConditionFunctions.EQ, c5, c6)
 
-    c7 = Column("c1", "t1")
-    c8 = Column("c2", "t1")
-    co5 = binary_condition(ConditionFunctions.EQ, c7, c8)
-    or2 = binary_condition(BooleanFunctions.OR, co4, co5)
-    and1 = binary_condition(BooleanFunctions.AND, or1, or2)
+    c7 = Column(None, "c1", "t1")
+    c8 = Column(None, "c2", "t1")
+    co5 = binary_condition(None, ConditionFunctions.EQ, c7, c8)
+    or2 = binary_condition(None, BooleanFunctions.OR, co4, co5)
+    and1 = binary_condition(None, BooleanFunctions.AND, or1, or2)
 
     ret = list(and1)
     expected = [and1, or1, co1, c1, c2, co2, c3, c4, or2, co4, c5, c6, co5, c7, c8]
     assert ret == expected
 
-    cX = Column("cX", "t1")
+    cX = Column(None, "cX", "t1")
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c2":
