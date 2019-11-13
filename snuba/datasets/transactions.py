@@ -25,7 +25,7 @@ from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.prewhere import PreWhereProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
@@ -204,5 +204,5 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            PreWhereProcessor(),
+            PrewhereProcessor(),
         ]

@@ -36,7 +36,7 @@ class TableSource(RelationalSource):
     def get_mandatory_conditions(self) -> Sequence[Condition]:
         return self.__mandatory_conditions
 
-    def get_prewhere_candiates(self) -> Sequence[str]:
+    def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
 
 

@@ -129,12 +129,12 @@ class JoinClause(JoinNode):
             all_conditions.extend(table.get_mandatory_conditions())
         return all_conditions
 
-    def get_prewhere_candiates(self) -> Sequence[str]:
+    def get_prewhere_candidates(self) -> Sequence[str]:
         """
         The pre where condition can only come from the leftmost table in the
         join.
         """
-        return self.left_node.get_prewhere_candiates()
+        return self.left_node.get_prewhere_candidates()
 
 
 class JoinedSchema(Schema):

@@ -3,7 +3,7 @@ import pytest
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.processors.prewhere import PreWhereProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
@@ -75,7 +75,7 @@ def test_prewhere(query_body, keys, new_conditions, prewhere_conditions) -> None
     )
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-    processor = PreWhereProcessor()
+    processor = PrewhereProcessor()
     processor.process_query(query, request_settings)
 
     assert query.get_conditions() == new_conditions

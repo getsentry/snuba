@@ -18,7 +18,7 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.processors.prewhere import PreWhereProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -340,5 +340,5 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            PreWhereProcessor()
+            PrewhereProcessor()
         ]
