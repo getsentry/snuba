@@ -21,7 +21,6 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -235,12 +234,11 @@ class DiscoverDataset(TimeSeriesDataset):
             time_parse_columns=["timestamp", "start_ts", "finish_ts"],
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def _get_custom_query_processors(self) -> Sequence[QueryProcessor]:
         discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
 
         return [
             DatasetSelector(discover_source, self.__transactions_columns),
-            PrewhereProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
