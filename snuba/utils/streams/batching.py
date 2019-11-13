@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     Generic,
+    Mapping,
     MutableMapping,
     MutableSequence,
     Optional,
@@ -123,7 +124,7 @@ class BatchingConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(streams: Sequence[TStream]) -> None:
+        def on_partitions_assigned(streams: Mapping[TStream, TOffset]) -> None:
             logger.info("New streams assigned: %r", streams)
 
         def on_partitions_revoked(streams: Sequence[TStream]) -> None:

@@ -2,6 +2,7 @@ from copy import deepcopy
 
 from tests.base import BaseEventsTest
 
+from snuba import state
 from snuba.query.columns import column_expr
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -66,11 +67,6 @@ class TestEventsDataset(BaseEventsTest):
         # Columns that need escaping
         assert column_expr(self.dataset, 'sentry:release', deepcopy(query), ParsingContext()) == '`sentry:release`'
 
-        # Columns that start with a negative sign (used in orderby to signify
-        # sort order) retain the '-' sign outside the escaping backticks (if any)
-        assert column_expr(self.dataset, '-timestamp', deepcopy(query), ParsingContext()) == '-timestamp'
-        assert column_expr(self.dataset, '-sentry:release', deepcopy(query), ParsingContext()) == '-`sentry:release`'
-
         # A 'column' that is actually a string literal
         assert column_expr(self.dataset, '\'hello world\'', deepcopy(query), ParsingContext()) == '\'hello world\''
 
@@ -104,3 +100,49 @@ class TestEventsDataset(BaseEventsTest):
         # If we also want to use `tags_value`, make sure that we use
         # the `all_tags` alias instead of re-expanding the tags arrayJoin
         assert column_expr(self.dataset, 'tags_value', query, context) == '((all_tags)[2] AS tags_value)'
+
+    def test_order_by(self):
+        """
+        Order by in Snuba are represented as -COL_NAME when ordering DESC.
+        since the column is provided with the `-` character in front when reaching
+        the column_expr call, this can introduce a ton of corner cases depending
+        whether the column is aliased, whether it gets processed into something
+        else or whether it is escaped.
+
+        This test is supposed to cover those cases.
+        """
+        state.set_config('process_alias_without_neg', 1)
+        source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        query = Query({}, source)
+        # Columns that start with a negative sign (used in orderby to signify
+        # sort order) retain the '-' sign outside the escaping backticks (if any)
+        assert column_expr(self.dataset, '-timestamp', deepcopy(query), ParsingContext()) == '-timestamp'
+        assert column_expr(self.dataset, '-sentry:release', deepcopy(query), ParsingContext()) == '-`sentry:release`'
+
+        context = ParsingContext()
+        context.add_alias("al1")
+        assert column_expr(self.dataset, '-timestamp', deepcopy(query), context, "al1") == '-al1'
+
+        assert column_expr(
+            self.dataset,
+            '-timestamp',
+            deepcopy(query),
+            ParsingContext(),
+            "al1"
+        ) == '-(timestamp AS al1)'
+
+        assert column_expr(
+            self.dataset,
+            '-exception_stacks.type',
+            deepcopy(query),
+            ParsingContext()
+        ) == "-(exception_stacks.type AS `exception_stacks.type`)"
+
+        context = ParsingContext()
+        context.add_alias("`exception_stacks.type`")
+        assert column_expr(
+            self.dataset,
+            '-exception_stacks.type',
+            deepcopy(query),
+            context,
+        ) == "-`exception_stacks.type`"

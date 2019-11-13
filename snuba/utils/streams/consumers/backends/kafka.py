@@ -1,5 +1,4 @@
 import logging
-import time
 from enum import Enum
 from typing import (
     Any,
@@ -14,7 +13,7 @@ from typing import (
 
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka import Consumer as ConfluentConsumer
-from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
@@ -137,7 +136,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
         if self.__state is not KafkaConsumerState.CONSUMING:
@@ -171,7 +170,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
             try:
                 if on_assign is not None:
-                    on_assign(list(offsets.keys()))
+                    on_assign(offsets)
             finally:
                 self.__state = KafkaConsumerState.CONSUMING
 
@@ -275,35 +274,46 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
         self.__seek(offsets)
 
+    def pause(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.pause(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
+
+        # XXX: Seeking to a specific partition offset and immediately pausing
+        # that partition causes the seek to be ignored for some reason.
+        self.seek(
+            {
+                stream: offset
+                for stream, offset in self.__offsets.items()
+                if stream in streams
+            }
+        )
+
+    def resume(self, streams: Sequence[TopicPartition]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        self.__consumer.resume(
+            [
+                ConfluentTopicPartition(stream.topic, stream.partition)
+                for stream in streams
+            ]
+        )
+
     def commit(self) -> Mapping[TopicPartition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
-        result: Optional[Sequence[ConfluentTopicPartition]] = None
-
-        retries_remaining = 3
-        while result is None:
-            try:
-                result = self.__consumer.commit(asynchronous=False)
-                assert result is not None
-            except KafkaException as e:
-                if not e.args[0].code() in (
-                    KafkaError.REQUEST_TIMED_OUT,
-                    KafkaError.NOT_COORDINATOR_FOR_GROUP,
-                    KafkaError._WAIT_COORD,
-                ):
-                    raise
-
-                if not retries_remaining:
-                    raise
-
-                logger.warning(
-                    "Commit failed: %s (%d retries remaining)",
-                    str(e),
-                    retries_remaining,
-                )
-                retries_remaining -= 1
-                time.sleep(1)
+        result: Optional[Sequence[ConfluentTopicPartition]] = self.__consumer.commit(
+            asynchronous=False
+        )
+        assert result is not None  # synchronous commit should return result immediately
 
         offsets: MutableMapping[TopicPartition, int] = {}
 

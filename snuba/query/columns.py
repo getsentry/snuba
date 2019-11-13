@@ -3,6 +3,7 @@ import re
 from typing import OrderedDict
 import _strptime  # NOQA fixes _strptime deferred import issue
 
+from snuba import state
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -14,6 +15,7 @@ from snuba.util import (
     is_alias_column_expr,
     is_condition,
     is_function,
+    NEGATE_RE,
     QUOTED_LITERAL_RE,
 )
 
@@ -47,12 +49,40 @@ def column_expr(dataset, column_name, query: Query, parsing_context: ParsingCont
         if is_alias_column_expr(column_name):
             (column_name, _, alias) = column_name
         expr = dataset.column_expr(column_name, query, parsing_context)
-
     if aggregate:
         expr = function_expr(aggregate, expr)
 
-    alias = escape_alias(alias or column_name)
-    return alias_expr(expr, alias, parsing_context)
+    strip_negation = state.get_config('process_alias_without_neg', 0)
+    if strip_negation:
+        # in the ORDER BY clause, column_expr may receive column names prefixed with
+        # `-`. This is meant to be used for ORDER BY ... DESC.
+        # This means we need to keep the `-` outside of the aliased expression when
+        # we produce something like (COL AS alias) otherwise we build an invalid
+        # syntax.
+        # Worse, since escape_alias already does half of this work and keeps `-`
+        # outside of the escaped expression we end up in this situation:
+        #
+        # -events.event_id becomes (-events.event_id AS -`events.event_id`)
+        #
+        # Thus here we strip the `-` before processing escaping and aliases and we
+        # attach it back to the expression right before returning so that
+        # -events.event_id becomes -(events.event_id AS `events.event_id`)
+        # or
+        # -`events.event_id`
+        # if the alias already existed.
+        #
+        # The proper solution would be to strip the `-` before getting to column
+        # processing, but this will be done with the new column abstraction.
+        negate, col = NEGATE_RE.match(column_name).groups()
+        alias = escape_alias(alias or col)
+        expr_negate, expr = NEGATE_RE.match(expr).groups()
+        # expr_negate and negate should never be inconsistent with each other. Though
+        # will ensure this works properly before moving the `-` stripping at the beginning
+        # of the method to cover tags as well.
+        return f"{negate or expr_negate}{alias_expr(expr, alias, parsing_context)}"
+    else:
+        alias = escape_alias(alias or column_name)
+        return alias_expr(expr, alias, parsing_context)
 
 
 def complex_column_expr(dataset, expr, query: Query, parsing_context: ParsingContext, depth=0):

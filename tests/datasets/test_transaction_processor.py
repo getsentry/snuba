@@ -1,9 +1,9 @@
 from tests.base import BaseTest
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Tuple
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import uuid
 
@@ -166,15 +166,21 @@ class TransactionEvent:
 
 class TestTransactionsProcessor(BaseTest):
 
+    def __get_timestamps(slef) -> Tuple[float, float]:
+        timestamp = datetime.utcnow() - timedelta(seconds=5)
+        start_timestamp = timestamp - timedelta(seconds=5)
+        return (start_timestamp.timestamp(), timestamp.timestamp())
+
     def test_skip_non_transactions(self):
+        start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id='e5e062bf2e1d4afd96fd2f90b6770431',
             trace_id='7400045b25c443b885914600aa83ad04',
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            timestamp=finish,
+            start_timestamp=start,
             platform='python',
             dist='',
             user_name='me',
@@ -194,14 +200,15 @@ class TestTransactionsProcessor(BaseTest):
         assert processor.process_message(payload, meta) is None
 
     def test_missing_trace_context(self):
+        start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id='e5e062bf2e1d4afd96fd2f90b6770431',
             trace_id='7400045b25c443b885914600aa83ad04',
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            timestamp=finish,
+            start_timestamp=start,
             platform='python',
             dist='',
             user_name='me',
@@ -221,14 +228,15 @@ class TestTransactionsProcessor(BaseTest):
         assert processor.process_message(payload, meta) is None
 
     def test_base_process(self):
+        start, finish = self.__get_timestamps()
         message = TransactionEvent(
             event_id='e5e062bf2e1d4afd96fd2f90b6770431',
             trace_id='7400045b25c443b885914600aa83ad04',
             span_id='8841662216cc598b',
             transaction_name='/organizations/:orgId/issues/',
             op='navigation',
-            start_timestamp=1565303392.917,
-            timestamp=1565303393.918,
+            timestamp=finish,
+            start_timestamp=start,
             platform='python',
             dist='',
             user_name='me',

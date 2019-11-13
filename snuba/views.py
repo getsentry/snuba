@@ -191,20 +191,23 @@ def health():
 
 
 def parse_request_body(http_request):
-    try:
-        return json.loads(http_request.data)
-    except json.errors.JSONDecodeError as error:
-        raise BadRequest(str(error)) from error
+    with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+        try:
+            return json.loads(http_request.data)
+        except json.errors.JSONDecodeError as error:
+            raise BadRequest(str(error)) from error
 
 
 def validate_request_content(body, schema: RequestSchema, timer, dataset: Dataset) -> Request:
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-    try:
-        request = schema.validate(body, source)
-    except jsonschema.ValidationError as error:
-        raise BadRequest(str(error)) from error
+    with sentry_sdk.start_span(description="validate_request_content", op="validate") as span:
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        try:
+            request = schema.validate(body, source)
+            span.set_data("snuba_query", request.body)
+        except jsonschema.ValidationError as error:
+            raise BadRequest(str(error)) from error
 
-    timer.mark('validate_schema')
+        timer.mark('validate_schema')
 
     return request
 
@@ -315,9 +318,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
     source = relational_source.format_from()
-    # TODO: consider moving the performance logic and the pre_where generation into
-    # ClickhouseQuery since they are Clickhouse specific
-    query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
+    with sentry_sdk.start_span(description="create_query", op="db"):
+        # TODO: consider moving the performance logic and the pre_where generation into
+        # ClickhouseQuery since they are Clickhouse specific
+        query = ClickhouseQuery(dataset, request.query, request.settings, prewhere_conditions)
     timer.mark('prepare_query')
 
     stats = {
@@ -328,7 +332,10 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         'sample': request.query.get_sample(),
     }
 
-    return raw_query(request, query, clickhouse_ro, timer, stats)
+    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
+        span.set_tag("dataset", type(dataset).__name__)
+        span.set_tag("table", source)
+        return raw_query(request, query, clickhouse_ro, timer, stats)
 
 
 # Special internal endpoints that compute global aggregate data that we want to

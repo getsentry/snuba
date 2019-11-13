@@ -1,5 +1,6 @@
 from typing import Callable, Generic, Mapping, Optional, Sequence
 
+from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
 from snuba.utils.streams.consumers.types import Message, TStream, TOffset, TValue
 
@@ -14,13 +15,21 @@ class Consumer(Generic[TStream, TOffset, TValue]):
     that method.
     """
 
-    def __init__(self, backend: ConsumerBackend[TStream, TOffset, TValue]):
+    def __init__(
+        self,
+        backend: ConsumerBackend[TStream, TOffset, TValue],
+        commit_retry_policy: Optional[RetryPolicy] = None,
+    ):
+        if commit_retry_policy is None:
+            commit_retry_policy = NoRetryPolicy()
+
         self.__backend = backend
+        self.__commit_retry_policy = commit_retry_policy
 
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TStream]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TStream, TOffset]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TStream]], None]] = None,
     ) -> None:
         """
@@ -29,6 +38,15 @@ class Consumer(Generic[TStream, TOffset, TValue]):
         immediately: instead, the ``on_assign`` and ``on_revoke`` callbacks
         are called when the subscription state changes with the updated
         assignment for this consumer.
+
+        If provided, the ``on_assign`` callback is called with a mapping of
+        streams to their offsets (at this point, the working offset and the
+        committed offset are the same for each stream) on each subscription
+        change. Similarly, the ``on_revoke`` callback (if provided) is called
+        with a sequence of streams that are being removed from this
+        consumer's assignment. (This callback does not include the offsets,
+        as the working offset and committed offset may differ, in some cases
+        by substantial margin.)
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
@@ -91,6 +109,22 @@ class Consumer(Generic[TStream, TOffset, TValue]):
         """
         return self.__backend.seek(offsets)
 
+    def pause(self, streams: Sequence[TStream]) -> None:
+        """
+        Pause the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        return self.__backend.pause(streams)
+
+    def resume(self, streams: Sequence[TStream]) -> None:
+        """
+        Resume the consumption of messages for the provided streams.
+
+        Raises a ``RuntimeError`` if called on a closed consumer.
+        """
+        return self.__backend.resume(streams)
+
     def commit(self) -> Mapping[TStream, TOffset]:
         """
         Commit staged offsets for all streams that this consumer is assigned
@@ -99,7 +133,7 @@ class Consumer(Generic[TStream, TOffset, TValue]):
 
         Raises a ``RuntimeError`` if called on a closed consumer.
         """
-        return self.__backend.commit()
+        return self.__commit_retry_policy.call(self.__backend.commit)
 
     def close(self, timeout: Optional[float] = None) -> None:
         """

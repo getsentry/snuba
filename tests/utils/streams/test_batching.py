@@ -20,7 +20,7 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
         pass  # XXX: This is a bit of a smell.
@@ -45,6 +45,12 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
     def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
         raise NotImplementedError  # XXX: This is a bit more of a smell.
+
+    def pause(self, streams: Sequence[TopicPartition]):
+        raise NotImplementedError
+
+    def resume(self, streams: Sequence[TopicPartition]):
+        raise NotImplementedError
 
     def commit(self) -> Mapping[TopicPartition, int]:
         self.commit_calls += 1

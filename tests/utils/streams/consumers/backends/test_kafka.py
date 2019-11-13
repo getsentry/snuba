@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from typing import Iterator, Sequence
+from typing import Iterator, Mapping, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -52,10 +52,9 @@ def test_consumer_backend(topic: str) -> None:
 
     backend = build_backend()
 
-    def assignment_callback(streams: Sequence[TopicPartition]):
+    def assignment_callback(streams: Mapping[TopicPartition, int]):
         assignment_callback.called = True
-        assert streams == [TopicPartition(topic, 0)]
-        assert backend.tell() == {TopicPartition(topic, 0): 0}
+        assert streams == {TopicPartition(topic, 0): 0}
 
         backend.seek({TopicPartition(topic, 0): 1})
 
@@ -90,6 +89,10 @@ def test_consumer_backend(topic: str) -> None:
     with pytest.raises(ConsumerError):
         backend.seek({TopicPartition(topic, 1): 0})
 
+    backend.pause([TopicPartition(topic, 0)])
+
+    backend.resume([TopicPartition(topic, 0)])
+
     message = backend.poll(1.0)
     assert isinstance(message, Message)
     assert message.stream == TopicPartition(topic, 0)
@@ -123,6 +126,12 @@ def test_consumer_backend(topic: str) -> None:
 
     with pytest.raises(RuntimeError):
         backend.seek({TopicPartition(topic, 0): 0})
+
+    with pytest.raises(RuntimeError):
+        backend.pause([TopicPartition(topic, 0)])
+
+    with pytest.raises(RuntimeError):
+        backend.resume([TopicPartition(topic, 0)])
 
     with pytest.raises(RuntimeError):
         backend.commit()
