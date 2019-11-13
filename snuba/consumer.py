@@ -4,6 +4,7 @@ import simplejson as json
 
 from typing import Any, Mapping, Optional, Sequence
 
+from snuba import state
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import (
     ProcessedMessage,
@@ -32,7 +33,13 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
+        # This flag is meant to test this parameter before rolling it out everywhere.
+        format_default_for_omitted_fields = state.get_config(
+            'format_default_for_omitted_fields',
+            0
+        )
         self.__writer = enforce_table_writer(dataset).get_writer({
+            'input_format_defaults_for_omitted_fields': format_default_for_omitted_fields,
             'load_balancing': 'in_order',
             'insert_distributed_sync': 1,
         })
