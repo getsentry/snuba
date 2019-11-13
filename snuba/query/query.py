@@ -15,7 +15,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.collections import NodeContainer
+from snuba.query.collections import CompositeNodeContainer, NodeContainer
 from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, OrderBy
 from snuba.query.types import Condition
 from snuba.util import (
@@ -111,8 +111,17 @@ class Query:
         The ExpressionContainer can be used to traverse the expressions in the
         tree.
         """
-        # TODO: Implement this
-        raise NotImplementedError
+        CompositeNodeContainer(
+            containers=[
+                self.__selected_columns,
+                self.__aggregations,
+                [self.__array_join] if self.__array_join else [],
+                [self.__condition] if self.__condition else [],
+                self.__groupby,
+                [self.__having] if self.__having else [],
+                self.__order_by,
+            ]
+        )
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
