@@ -17,7 +17,7 @@ def test_iterate() -> None:
     column3 = Column(None, "c2", "t1")
     function_2 = FunctionCall(None, "f2", [column3, function_1])
 
-    expected = [function_2, column3, function_1, column1, column2]
+    expected = [column3, column1, column2, function_1, function_2]
     assert list(function_2) == expected
 
 
@@ -31,7 +31,7 @@ def test_aliased_cols() -> None:
     column3 = Column(None, "c2", "t1")
     function_2 = FunctionCall("af1", "f2", [column3, function_1])
 
-    expected = [function_2, column3, function_1, column1, column2]
+    expected = [column3, column1, column2, function_1, function_2]
     assert list(function_2) == expected
 
 
@@ -75,9 +75,9 @@ def test_add_alias() -> None:
         return e
     f = FunctionCall(None, "f", [column1])
 
-    f.transform(replace_expr)
-    expected = [f, column2]
-    assert list(f) == expected
+    f2 = f.transform(replace_expr)
+    expected = [column2, f]
+    assert list(f2) == expected
 
 
 def test_mapping_complex_expression() -> None:
@@ -97,13 +97,13 @@ def test_mapping_complex_expression() -> None:
 
     c1 = Column(None, "c1", "t1")
     f2 = FunctionCall(None, "fB", [f3])
-    f1 = FunctionCall(None, "f", [c1, f2])
+    f1 = FunctionCall(None, "f0", [c1, f2])
 
     # Only the external function is going to be replaced since, when map returns a new
     # column, we expect the func to have takern care of its own children.
-    f1.transform(replace_expr)
-    iterate = list(f1)
-    expected = [f1, c1, f2, f4, f5]
+    fend = f1.transform(replace_expr)
+    iterate = list(fend)
+    expected = [c1, f5, f4, f2, f1]
 
     assert iterate == expected
 
@@ -116,12 +116,12 @@ def test_aggregations() -> None:
     function_2 = FunctionCall(None, "f2", [column3, function_1])
 
     aggregation = Aggregation(None, "count", [function_2])
-    expected = [function_2, column3, function_1, column1, column2]
+    expected = [column3, column1, column2, function_1, function_2, aggregation]
     assert list(aggregation) == expected
 
     column4 = Column(None, "c4", "t2")
-    aggregation.transform(
+    a2 = aggregation.transform(
         lambda e: column4 if isinstance(e, Column) and e.column_name == "c1" else e
     )
-    expected = [function_2, column3, function_1, column4, column2]
-    assert list(aggregation) == expected
+    expected = [column3, column4, column2, function_1, function_2, aggregation]
+    assert list(a2) == expected

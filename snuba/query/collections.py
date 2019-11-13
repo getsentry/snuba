@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Iterator, TypeVar
+from typing import Generic, Iterable, Iterator, TypeVar
 
 
 TNode = TypeVar("TNode")
@@ -10,9 +10,8 @@ TNode = TypeVar("TNode")
 class NodeContainer(Generic[TNode], ABC):
     """
     A container of nodes in the query.
-    This is an Iterable so we can traverse the tree and it provides
-    a transform method to manipulate the content by applying a mapping
-    function to all the elements contained.
+    This is an Iterable so we can traverse the tree. It does not mandate
+    the data structure.
     """
 
     @abstractmethod
@@ -26,18 +25,18 @@ class NodeContainer(Generic[TNode], ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def transform(self, func: Callable[[TNode], TNode]) -> None:
-        """
-        Transforms the content of the container in place.
-        Defining a collection style map function that would return a
-        node to replace the mapped one in the tree is impractical since
-        nodes may represent either sequences (parameters of functions)
-        or individual nodes. This makes it very hard to provide a
-        meaningful return type for the map function.
 
-        The solution is that we can call transform only on containers and
-        they will transparently apply the mapping function on their content,
-        but will not produce a new container to replace the original one.
-        """
-        raise NotImplementedError
+class CompositeNodeContainer(NodeContainer[TNode]):
+    """
+    Iterates over multiple containers transparently. Main usage
+    is the iteration over multiple lists of expressions in the
+    Query object.
+    """
+
+    def __init__(self, containers: Iterable[NodeContainer[TNode]]):
+        self.__containers = containers
+
+    def __iter__(self) -> Iterator[TNode]:
+        for container in self.__containers:
+            for element in container:
+                yield element

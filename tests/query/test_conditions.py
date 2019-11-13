@@ -13,7 +13,7 @@ def test_expressions_from_basic_condition() -> None:
 
     condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
-    expected = [condition, f1, c, c2]
+    expected = [c, f1, c2, condition]
 
     assert ret == expected
 
@@ -30,7 +30,7 @@ def test_aliased_expressions_from_basic_condition() -> None:
 
     condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     ret = list(condition)
-    expected = [condition, f1, c, c2]
+    expected = [c, f1, c2, condition]
 
     assert ret == expected
 
@@ -53,7 +53,7 @@ def test_map_expressions_in_basic_condition() -> None:
     condition = binary_condition(None, ConditionFunctions.EQ, f1, c2)
     condition.transform(replace_col)
     ret = list(condition)
-    expected = [condition, f1, c3, c2]
+    expected = [c3, f1, c2, condition]
 
     assert ret == expected
 
@@ -84,7 +84,7 @@ def test_nested_simple_condition() -> None:
     and1 = binary_condition(None, BooleanFunctions.AND, or1, or2)
 
     ret = list(and1)
-    expected = [and1, or1, co1, c1, c2, co2, c3, c4, or2, co4, c5, c6, co5, c7, c8]
+    expected = [c1, c2, co1, c3, c4, co2, or1, c5, c6, co4, c7, c8, co5, or2, and1]
     assert ret == expected
 
     cX = Column(None, "cX", "t1")
@@ -96,5 +96,5 @@ def test_nested_simple_condition() -> None:
 
     and1.transform(replace_col)
     ret = list(and1)
-    expected = [and1, or1, co1, c1, cX, co2, c3, cX, or2, co4, c5, cX, co5, c7, cX]
+    expected = [c1, cX, co1, c3, cX, co2, or1, c5, cX, co4, c7, cX, co5, or2, and1]
     assert ret == expected

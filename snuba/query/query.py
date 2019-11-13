@@ -15,7 +15,8 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, ExpressionContainer
+from snuba.query.collections import NodeContainer
+from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression
 from snuba.query.types import Condition
 from snuba.util import (
     SAFE_COL_RE,
@@ -103,12 +104,12 @@ class Query:
         self.__having: Optional[Expression] = having
         self.__order_by: Sequence[Expression] = order_by or []
 
-    def get_all_expressions(self) -> ExpressionContainer:
+    def get_all_expressions(self) -> NodeContainer[Expression]:
         """
         Returns an expression container that iterates over all the expressions
         in the query no matter which level of nesting they are at.
         The ExpressionContainer can be used to traverse the expressions in the
-        tree or to replace expressions with the map method
+        tree.
         """
         # TODO: Implement this
         raise NotImplementedError

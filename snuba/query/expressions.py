@@ -11,9 +11,9 @@ from snuba.query.collections import NodeContainer
 class Expression(ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
-    It also represents an expression that can be resolved to a value. This
+    It represents an expression that can be resolved to a value. This
     includes column names, function calls and boolean conditions (which are
-    function calls themselves in the AST).
+    function calls themselves in the AST), literals, etc.
 
     The root of the tree is not a Node itself yet (since it is the Query object).
     Representing the root as a node itself does not seem very useful right now
@@ -35,54 +35,89 @@ class Expression(ABC):
         """
         raise NotImplementedError
 
-
-class ExpressionContainer(NodeContainer[Expression]):
-    """
-    Container able to iterate over expressions and to transform them in place.
-    This class exists for two reasons:
-    - in some place we check the type of an object through isinstance, and, since
-      the parameter of a generic disappears at runtime we cannot do something like
-      isinstance(a, NodeContainer[Expression])
-    - provides some common feature to transform and iterate over the children of
-      a hierarchical expression like a tree.
-    """
-
-    def _iterate_over_children(self,
-        children: Iterable[Expression],
-    ) -> Iterator[Expression]:
+    @abstractmethod
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
-        Traverses the children of a hierarchical container like a tree.
+        Transforms this expression through the function passed in input.
+        This works almost like a map function over sequences though, contrarily to
+        sequences, this acts on a subtree. The semantics of transform can be different
+        between intermediate nodes and leaves, so each node class can implement it
+        its own way.
+
+        It returns the new expression. It does not guarantee the returned value
+        will be a new object. No guarantee of immutability is given on expressions.
         """
-        for child in children:
-            if isinstance(child, ExpressionContainer):
+        raise NotImplementedError
+
+
+class HierarchicalExpression(Expression, NodeContainer[Expression]):
+    """
+    Expression that represent an intermediate node in the tree, which thus
+    can have children.
+
+    It provides two methods to iterate and transform. They both traverse
+    the subtree in a postfix order.
+    """
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        """
+        Transforms the subtree starting from the children and then applying
+        the transformation function to the root.
+        This order is chosen to make the semantics of transform more meaningful,
+        the transform operation will be performed on thechildren first (think
+        about the parameters of a function call) and then to the node itself.
+
+        The consequence of this is that, if the transformation function replaces
+        the root with something else, with different children, we trust the
+        transformation function and we do not run that same function over the
+        new children.
+        """
+        self._set_children(
+            map(lambda child: child.transform(func), self._get_children())
+        )
+        return func(self)
+
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a postfix order.
+        The order here is arbitrary, postfix is chosen to follow the same
+        order we have in the transform method.
+        """
+        for child in self._get_children():
+            if isinstance(child, HierarchicalExpression):
                 for sub in child:
                     yield sub
             else:
                 yield child
+        yield self
 
-    def _transform_children(self,
-        children: Sequence[Expression],
-        func: Callable[[Expression], Expression],
-    ) -> Sequence[Expression]:
+    @abstractmethod
+    def _get_children(self) -> Sequence[Expression]:
         """
-        Transforms in place the children of a hierarchical node by applying
-        a mapping function.
+        To be implemented by the subclasses to provide the list of children
+        for iteration/transformation.
         """
-        def process_child(param: Expression) -> Expression:
-            r = func(param)
-            if r == param and isinstance(r, ExpressionContainer):
-                # The expression was not replaced by the function, which
-                # means it was unchanged. This means we need to traverse
-                # its children.
-                r.transform(func)
-            return r
+        raise NotImplementedError
 
-        return list(map(process_child, children))
+    @abstractmethod
+    def _set_children(self, children: Sequence[Expression]) -> None:
+        """
+        To be implemented by the subclasses to reset the list of children
+        for iteration/transformation.
+        """
+        raise NotImplementedError
 
 
 class Null(Expression):
+    """
+    SQL NULL
+    """
+
     def format(self) -> str:
         raise NotImplementedError
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        return self
 
 
 @dataclass
@@ -96,9 +131,12 @@ class Column(Expression):
     def format(self) -> str:
         raise NotImplementedError
 
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        return func(self)
+
 
 @dataclass
-class FunctionCall(Expression, ExpressionContainer):
+class FunctionCall(HierarchicalExpression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
     This class also represent conditions. Since Clickhouse supports both the conventional
@@ -113,24 +151,15 @@ class FunctionCall(Expression, ExpressionContainer):
     def format(self) -> str:
         raise NotImplementedError
 
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        """
-        The children of a FunctionCall are the parameters of the function.
-        Thus map runs func on the parameters, not on the function itself.
-        """
-        self.parameters = self._transform_children(self.parameters, func)
+    def _get_children(self) -> Sequence[Expression]:
+        return self.parameters
 
-    def __iter__(self) -> Iterator[Expression]:
-        """
-        Traverse the subtree in a prefix order.
-        """
-        yield self
-        for e in self._iterate_over_children(self.parameters):
-            yield e
+    def _set_children(self, children: Sequence[Expression]) -> None:
+        self.parameters = children
 
 
 @dataclass
-class Aggregation(Expression, ExpressionContainer):
+class Aggregation(HierarchicalExpression):
     """
     Represents an aggregation function to be applied to an expression in the
     current query.
@@ -144,17 +173,8 @@ class Aggregation(Expression, ExpressionContainer):
     def format(self) -> str:
         raise NotImplementedError
 
-    def __iter__(self) -> Iterator[Expression]:
-        """
-        Traverses the subtrees represented by the parameters of the
-        aggregation.
-        """
-        for e in self._iterate_over_children(self.parameters):
-            yield e
+    def _get_children(self) -> Sequence[Expression]:
+        return self.parameters
 
-    def transform(self, func: Callable[[Expression], Expression]) -> None:
-        """
-        The children of an aggregation are the parameters of the aggregation
-        function. This runs the mapping function over them.
-        """
-        self.parameters = self._transform_children(self.parameters, func)
+    def _set_children(self, children: Sequence[Expression]) -> None:
+        self.parameters = children
