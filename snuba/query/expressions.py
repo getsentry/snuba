@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable, Iterator, Optional, Sequence
 
 from snuba.query.collections import NodeContainer
@@ -193,3 +194,24 @@ class Aggregation(HierarchicalExpression):
 
     def _set_children(self, children: Sequence[Expression]) -> None:
         self.parameters = children
+
+
+class OrderByDirection(Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+@dataclass
+class OrderBy(HierarchicalExpression):
+    direction: OrderByDirection
+    node: Expression
+
+    def format(self) -> str:
+        raise NotImplementedError
+
+    def _get_children(self) -> Sequence[Expression]:
+        return [self.node]
+
+    def _set_children(self, children: Sequence[Expression]) -> None:
+        assert len(children) == 1
+        self.node = children[0]

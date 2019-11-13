@@ -16,7 +16,7 @@ from typing import (
 
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.collections import NodeContainer
-from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression
+from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, OrderBy
 from snuba.query.types import Condition
 from snuba.util import (
     SAFE_COL_RE,
@@ -83,7 +83,7 @@ class Query:
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
-        order_by: Optional[Sequence[Expression]] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
     ):
         """
         Expects an already parsed query body.
@@ -102,7 +102,7 @@ class Query:
         self.__condition: Optional[Expression] = condition
         self.__groupby: Sequence[Expression] = groupby or []
         self.__having: Optional[Expression] = having
-        self.__order_by: Sequence[Expression] = order_by or []
+        self.__order_by: Sequence[OrderBy] = order_by or []
 
     def get_all_expressions(self) -> NodeContainer[Expression]:
         """
