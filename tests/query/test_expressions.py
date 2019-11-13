@@ -2,6 +2,7 @@ from snuba.query.expressions import (
     Aggregation,
     Column,
     Expression,
+    Literal,
     FunctionCall
 )
 
@@ -15,9 +16,10 @@ def test_iterate() -> None:
     column2 = Column(None, "c2", "t1")
     function_1 = FunctionCall(None, "f1", [column1, column2])
     column3 = Column(None, "c2", "t1")
-    function_2 = FunctionCall(None, "f2", [column3, function_1])
+    literal = Literal(None, "blablabla")
+    function_2 = FunctionCall(None, "f2", [column3, function_1, literal])
 
-    expected = [column3, column1, column2, function_1, function_2]
+    expected = [column3, column1, column2, function_1, literal, function_2]
     assert list(function_2) == expected
 
 

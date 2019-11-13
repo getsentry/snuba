@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Iterable, Iterator, Optional, Sequence
+from typing import Callable, Iterator, Optional, Sequence
 
 from snuba.query.collections import NodeContainer
 
@@ -73,7 +73,7 @@ class HierarchicalExpression(Expression, NodeContainer[Expression]):
         new children.
         """
         self._set_children(
-            map(lambda child: child.transform(func), self._get_children())
+            list(map(lambda child: child.transform(func), self._get_children()))
         )
         return func(self)
 
@@ -108,6 +108,7 @@ class HierarchicalExpression(Expression, NodeContainer[Expression]):
         raise NotImplementedError
 
 
+@dataclass
 class Null(Expression):
     """
     SQL NULL
@@ -118,6 +119,20 @@ class Null(Expression):
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return self
+
+
+@dataclass
+class Literal(Expression):
+    """
+    A literal in the SQL expression
+    """
+    value: str
+
+    def format(self) -> str:
+        raise NotImplementedError
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        return func(self)
 
 
 @dataclass
