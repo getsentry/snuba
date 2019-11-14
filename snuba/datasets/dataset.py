@@ -101,15 +101,6 @@ class Dataset(object):
         """
         raise NotImplementedError('dataset does not support queries')
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        """
-        Returns the keys that will be upgraded from a WHERE condition to a PREWHERE.
-
-        This is an ordered list, from highest priority to lowest priority. So, a column at index 1 will be upgraded
-        before a column at index 2. This is relevant when we have a maximum number of prewhere keys.
-        """
-        return []
-
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         """
         Return the parameters to perform the column split of the query.

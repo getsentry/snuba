@@ -1,5 +1,3 @@
-from typing import Sequence
-
 from snuba import settings as snuba_settings
 from snuba import util
 from snuba.query.columns import (
@@ -22,7 +20,6 @@ class ClickhouseQuery:
         dataset: Dataset,
         query: Query,
         settings: RequestSettings,
-        prewhere_conditions: Sequence[str],
     ) -> None:
         parsing_context = ParsingContext()
 
@@ -57,8 +54,8 @@ class ClickhouseQuery:
             where_clause = u'WHERE {}'.format(conditions_expr(dataset, query.get_conditions(), query, parsing_context))
 
         prewhere_clause = ''
-        if prewhere_conditions:
-            prewhere_clause = u'PREWHERE {}'.format(conditions_expr(dataset, prewhere_conditions, query, parsing_context))
+        if query.get_prewhere():
+            prewhere_clause = u'PREWHERE {}'.format(conditions_expr(dataset, query.get_prewhere(), query, parsing_context))
 
         group_clause = ''
         if groupby:
