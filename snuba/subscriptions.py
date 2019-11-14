@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import signal
+import uuid
 from concurrent.futures import FIRST_EXCEPTION, wait
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -362,11 +363,80 @@ def run(
 
 
 if __name__ == "__main__":
-    import sys
+    import click
 
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s %(levelname)-8s %(threadName)s %(message)s",
-    )
+    @dataclass
+    class Environment:
+        namespace: str
 
-    run(topic=sys.argv[1])
+        def get_kafka_configuration(self):
+            return {
+                "bootstrap.servers": "localhost:9092",
+            }
+
+        def get_topic(self) -> str:
+            return f"{self.namespace}"
+
+        def get_commit_log_topic(self) -> str:
+            return f"{self.namespace}-commit-log"
+
+        def get_subscription_topic(self) -> str:
+            return f"{self.namespace}-subscriptions"
+
+    @click.group()
+    @click.pass_context
+    @click.option("--log-level", type=str, default="debug")
+    @click.option("--namespace", type=str, default=None)
+    def cli(context, *, log_level: str, namespace: Optional[str]) -> None:
+        if namespace is None:
+            namespace = f"test-{uuid.uuid1().hex}"
+
+        logging.basicConfig(
+            level=getattr(logging, log_level.upper()),
+            format="%(asctime)s %(levelname)-8s %(threadName)s %(message)s",
+        )
+
+        context.obj = Environment(namespace)
+
+    @cli.command()
+    @click.pass_context
+    @click.option("--partitions", type=int, default=3)
+    @click.option("--replication-factor", type=int, default=1)
+    def setup(context, *, partitions: int, replication_factor: int) -> None:
+        environment: Environment = context.obj
+
+        from confluent_kafka.admin import AdminClient, NewTopic
+
+        client = AdminClient({**environment.get_kafka_configuration()})
+
+        topics = [
+            environment.get_topic(),
+            environment.get_commit_log_topic(),
+            environment.get_subscription_topic(),
+        ]
+
+        click.echo("Creating topics...", err=True)
+        futures = client.create_topics(
+            [NewTopic(topic, partitions, replication_factor) for topic in topics]
+        )
+        wait(futures.values())
+        for topic, future in futures.items():
+            click.echo(f"{topic}: {future}", err=True)
+
+        click.echo("Waiting for signal...", err=True)
+        try:
+            signal.pause()
+        except KeyboardInterrupt:
+            pass
+
+        click.echo("Deleting topics...", err=True)
+        futures = client.delete_topics(topics)
+        wait(futures.values())
+        for topic, future in futures.items():
+            click.echo(f"{topic}: {future}", err=True)
+
+    @cli.command()
+    def consume() -> None:
+        raise NotImplementedError
+
+    cli()
