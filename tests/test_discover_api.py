@@ -111,7 +111,7 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": self.project_id,
-                    "selected_columns": ["type", "tags[custom_tag]"],
+                    "selected_columns": ["type", "tags[custom_tag]", "release"],
                     "conditions": [["type", "!=", "transaction"]],
                     "orderby": "timestamp",
                     "limit": 1000,
@@ -122,7 +122,7 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
-        assert data["data"][0] == {"type": "error", "tags[custom_tag]": "custom_value"}
+        assert data["data"][0] == {"type": "error", "tags[custom_tag]": "custom_value", "release": None}
 
         response = self.app.post(
             "/query",
@@ -130,7 +130,7 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": 1,
-                    "selected_columns": ["type", "tags[foo]", "group_id"],
+                    "selected_columns": ["type", "tags[foo]", "group_id", "release"],
                     "conditions": [["type", "=", "transaction"]],
                     "orderby": "timestamp",
                     "limit": 1,
@@ -144,6 +144,7 @@ class TestDiscoverApi(BaseApiTest):
             "type": "transaction",
             "tags[foo]": "baz",
             "group_id": None,
+            "release": "1",
         }
 
     def test_aggregations(self):
