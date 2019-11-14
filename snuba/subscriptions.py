@@ -224,7 +224,6 @@ def run(
     remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
     topic: str = "events",
     commit_log_topic: str = "snuba-commit-log",
-    commit_log_consumer_group: str = "snuba-commit-log",
 ):
     shutdown_requested = Event()
 
@@ -237,7 +236,7 @@ def run(
             CommitLogConsumer(
                 bootstrap_servers,
                 commit_log_topic,
-                commit_log_consumer_group,
+                consumer_group,
                 partition_offsets_manager,
                 shutdown_requested,
             ),
