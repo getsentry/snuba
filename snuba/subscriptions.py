@@ -156,7 +156,7 @@ class SubscriptionConsumer:
         return execute(self.__run, name="subscriptions-consumer")
 
 
-class DatasetConsumer:
+class SubscribedQueryExecutionConsumer:
     def __init__(
         self,
         bootstrap_servers: str,
@@ -215,7 +215,7 @@ class DatasetConsumer:
                 continue
 
     def run(self) -> Future[None]:
-        return execute(self.__run, name="dataset-consumer")
+        return execute(self.__run, name="subscribed-query-execution-consumer")
 
 
 def run(
@@ -242,7 +242,7 @@ def run(
                 shutdown_requested,
             ),
             SubscriptionConsumer(bootstrap_servers, shutdown_requested),
-            DatasetConsumer(
+            SubscribedQueryExecutionConsumer(
                 bootstrap_servers,
                 topic,
                 consumer_group,
