@@ -109,7 +109,7 @@ class HierarchicalExpression(Expression):
         raise NotImplementedError
 
     @abstractmethod
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
         """
         Return a new instance of the expression with a new set of children.
         """
@@ -170,7 +170,7 @@ class FunctionCall(HierarchicalExpression):
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
         return FunctionCall(self.alias, self.function_name, children)
 
 
@@ -192,7 +192,7 @@ class Aggregation(HierarchicalExpression):
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
         return Aggregation(self.alias, self.function_name, children)
 
 
@@ -202,16 +202,11 @@ class OrderByDirection(Enum):
 
 
 @dataclass(frozen=True)
-class OrderBy(HierarchicalExpression):
+class OrderBy:
     direction: OrderByDirection
     node: Expression
 
     def format(self) -> str:
+        # TODO: Consider adding a `formattable` abstraction above expression. Will
+        # revisit when I will introduce the formatting logic.
         raise NotImplementedError
-
-    def _get_children(self) -> Sequence[Expression]:
-        return [self.node]
-
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
-        assert len(children) == 1
-        return OrderBy(self.alias, self.direction, children[0])

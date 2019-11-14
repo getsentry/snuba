@@ -97,13 +97,13 @@ class Query:
 
         # New data model
         # TODO: Provide a better typing for this.
-        self.__selected_columns: Sequence[Expression] = selected_columns or []
-        self.__aggregations: Sequence[NodeAggregation] = aggregations or []
+        self.__selected_columns = selected_columns or []
+        self.__aggregations = aggregations or []
         self.__array_join = array_join
-        self.__condition: Optional[Expression] = condition
-        self.__groupby: Sequence[Expression] = groupby or []
-        self.__having: Optional[Expression] = having
-        self.__order_by: Sequence[OrderBy] = order_by or []
+        self.__condition = condition
+        self.__groupby = groupby or []
+        self.__having = having
+        self.__order_by = order_by or []
 
     def get_all_expressions(self) -> Iterable[Expression]:
         """
@@ -112,14 +112,14 @@ class Query:
         The ExpressionContainer can be used to traverse the expressions in the
         tree.
         """
-        chain(*[
+        return chain(*[
             self.__selected_columns,
             self.__aggregations,
             [self.__array_join] if self.__array_join else [],
             [self.__condition] if self.__condition else [],
             self.__groupby,
             [self.__having] if self.__having else [],
-            self.__order_by,
+            map(lambda orderby: orderby.node, self.__order_by),
         ])
 
     def get_data_source(self) -> RelationalSource:
