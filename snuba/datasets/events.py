@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Tuple, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -18,10 +18,11 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import MigrationSchemaColumn, ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
-from snuba.query.types import Condition
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
@@ -211,6 +212,9 @@ class EventsDataset(TimeSeriesDataset):
             local_table_name='sentry_local',
             dist_table_name='sentry_dist',
             mandatory_conditions=[('deleted', '=', 0)],
+            prewhere_candidates=[
+                'event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id',
+            ],
             order_by='(project_id, toStartOfDay(timestamp), %s)' % sample_expr,
             partition_by='(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))',
             version_column='deleted',
@@ -334,5 +338,7 @@ class EventsDataset(TimeSeriesDataset):
             ),
         }
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            PrewhereProcessor()
+        ]

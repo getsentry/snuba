@@ -64,6 +64,7 @@ class GroupedMessageDataset(CdcDataset):
             local_table_name='groupedmessage_local',
             dist_table_name='groupedmessage_dist',
             mandatory_conditions=[('record_deleted', '=', 0)],
+            prewhere_candidates=["project_id", "id"],
             order_by='(project_id, id)',
             partition_by=None,
             version_column='offset',

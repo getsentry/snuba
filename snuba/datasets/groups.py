@@ -17,6 +17,7 @@ from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -55,6 +56,10 @@ class Groups(TimeSeriesDataset):
                     # expression.
                     (qualified_column('record_deleted', self.GROUPS_ALIAS), '=', 0)
                 ],
+                prewhere_candidates=[
+                    qualified_column(col, self.GROUPS_ALIAS)
+                    for col in groupedmessage_source.get_prewhere_candidates()
+                ],
                 alias=self.GROUPS_ALIAS,
             ),
             right_node=TableJoinNode(
@@ -62,6 +67,10 @@ class Groups(TimeSeriesDataset):
                 columns=events_source.get_columns(),
                 mandatory_conditions=[
                     (qualified_column('deleted', self.EVENTS_ALIAS), '=', 0)
+                ],
+                prewhere_candidates=[
+                    qualified_column(col, self.EVENTS_ALIAS)
+                    for col in events_source.get_prewhere_candidates()
                 ],
                 alias=self.EVENTS_ALIAS,
             ),
@@ -151,4 +160,5 @@ class Groups(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             SimpleJoinOptimizer(),
+            PrewhereProcessor(),
         ]
