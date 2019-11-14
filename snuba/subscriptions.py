@@ -6,7 +6,7 @@ import time
 import uuid
 from concurrent.futures import FIRST_EXCEPTION, wait
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from random import Random
 from threading import Event, Lock
@@ -16,6 +16,7 @@ from typing import (
     Iterator,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Optional,
     Sequence,
     Union,
@@ -80,6 +81,14 @@ class StreamingSubscriptions(Subscriptions):
 class StreamState:
     offsets: Offsets
     subscriptions: Subscriptions
+
+    __callbacks: MutableSequence[Callable[[StreamState], None]] = field(
+        default_factory=list, init=False, repr=False,
+    )
+
+    def add_callback(self, callback: Callable[[StreamState], None]) -> None:
+        self.__callbacks.append(callback)
+        raise NotImplementedError
 
 
 class StreamStateManager:
@@ -314,6 +323,9 @@ class SubscribedQueryExecutionConsumer:
             }
         )
 
+        def on_state_change(stream: Stream, state: StreamState) -> None:
+            raise NotImplementedError
+
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
@@ -323,7 +335,8 @@ class SubscribedQueryExecutionConsumer:
                 # TODO: The starting offset should be configurable.
                 # TODO: This seems like the wrong place to instantiate the
                 # remote consumer groups, but not sure where else it'd go...
-                streams[Stream(partition.topic, partition.partition)] = StreamState(
+                stream = Stream(partition.topic, partition.partition)
+                state = StreamState(
                     offsets=Offsets(
                         local=partition.offset
                         if partition.offset != OFFSET_INVALID
@@ -332,6 +345,8 @@ class SubscribedQueryExecutionConsumer:
                     ),
                     subscriptions=LoadingSubscriptions(),
                 )
+                state.add_callback(partial(on_state_change, stream))
+                streams[stream] = state
 
             consumer.assign(
                 [
