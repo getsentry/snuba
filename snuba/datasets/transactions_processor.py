@@ -131,6 +131,10 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed['partition'] = metadata.partition
             processed['offset'] = metadata.offset
 
+        sdk = data.get('sdk', None) or {}
+        processed['sdk_name'] = _unicodify(sdk.get('name', None))
+        processed['sdk_version'] = _unicodify(sdk.get('version', None))
+
         return ProcessedMessage(
             action=action_type,
             data=[processed],
