@@ -24,6 +24,8 @@ from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import TransactionsMessageProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
@@ -199,3 +201,8 @@ class TransactionsDataset(TimeSeriesDataset):
             project_column="project_id",
             timestamp_column="start_ts",
         )
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            PrewhereProcessor(),
+        ]

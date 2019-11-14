@@ -6,7 +6,6 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.types import Condition
 from snuba.util import escape_col, parse_datetime, qualified_column
 
@@ -114,15 +113,6 @@ class Dataset(object):
         that are applied to queries after parsing and before running them on Clickhouse.
         These are applied in sequence in the same order as they are defined and are supposed
         to be stateless.
-        """
-        return self._get_custom_query_processors() + [
-            PrewhereProcessor()
-        ]
-
-    def _get_custom_query_processors(self) -> Sequence[QueryProcessor]:
-        """
-        Returns the list of query processors that can be specified by the
-        dataset configuration
         """
         return []
 

@@ -17,6 +17,7 @@ from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -156,7 +157,8 @@ class Groups(TimeSeriesDataset):
         # queries.
         return []
 
-    def _get_custom_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             SimpleJoinOptimizer(),
+            PrewhereProcessor(),
         ]
