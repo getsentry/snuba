@@ -7,9 +7,10 @@ import uuid
 from concurrent.futures import FIRST_EXCEPTION, wait
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import partial
 from random import Random
 from threading import Event, Lock
-from typing import Callable, Iterator, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Callable, Iterator, Mapping, MutableMapping, Optional, Sequence
 
 from confluent_kafka import Consumer, Message, OFFSET_INVALID
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
@@ -99,12 +100,12 @@ class StreamStateManager:
 class CommitLogConsumer:
     def __init__(
         self,
-        bootstrap_servers: str,
+        kafka_configuration: Mapping[str, Any],
         consumer_group: str,
         stream_state_manager: StreamStateManager,
         shutdown_requested: Event,
     ) -> None:
-        self.__bootstrap_servers = bootstrap_servers
+        self.__kafka_configuration = kafka_configuration
         self.__consumer_group = consumer_group
         self.__stream_state_manager = stream_state_manager
         self.__shutdown_requested = shutdown_requested
@@ -114,7 +115,7 @@ class CommitLogConsumer:
 
         consumer = Consumer(
             {
-                "bootstrap.servers": self.__bootstrap_servers,
+                **self.__kafka_configuration,
                 "group.id": self.__consumer_group,
                 "enable.auto.commit": False,
                 "auto.offset.reset": "beginning",
@@ -159,12 +160,12 @@ class CommitLogConsumer:
 class SubscriptionConsumer:
     def __init__(
         self,
-        bootstrap_servers: str,
+        kafka_configuration: Mapping[str, Any],
         consumer_group: str,
         stream_state_manager: StreamStateManager,
         shutdown_requested: Event,
     ) -> None:
-        self.__bootstrap_servers = bootstrap_servers
+        self.__kafka_configuration = kafka_configuration
         self.__consumer_group = consumer_group
         self.__stream_state_manager = stream_state_manager
         self.__shutdown_requested = shutdown_requested
@@ -174,7 +175,7 @@ class SubscriptionConsumer:
 
         consumer = Consumer(
             {
-                "bootstrap.servers": self.__bootstrap_servers,
+                **self.__kafka_configuration,
                 "group.id": self.__consumer_group,
                 "enable.auto.commit": False,
                 "auto.offset.reset": "beginning",
@@ -219,14 +220,14 @@ class SubscriptionConsumer:
 class SubscribedQueryExecutionConsumer:
     def __init__(
         self,
-        bootstrap_servers: str,
+        kafka_configuration: Mapping[str, Any],
         topic: str,
         consumer_group: str,
         remote_consumer_groups: Sequence[str],
         stream_state_manager: StreamStateManager,
         shutdown_requested: Event,
     ) -> None:
-        self.__bootstrap_servers = bootstrap_servers
+        self.__kafka_configuration = kafka_configuration
         self.__topic = topic
         self.__consumer_group = consumer_group
         self.__remote_consumer_groups = remote_consumer_groups
@@ -238,7 +239,7 @@ class SubscribedQueryExecutionConsumer:
 
         consumer = Consumer(
             {
-                "bootstrap.servers": self.__bootstrap_servers,
+                **self.__kafka_configuration,
                 "group.id": self.__consumer_group,
                 "auto.offset.reset": "error",
                 "enable.auto.commit": False,
@@ -299,69 +300,11 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
-                print(stream, state)
+                # print(stream, state)
                 state.offsets.local = message.offset() + 1
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscribed-query-execution-consumer")
-
-
-def run(
-    bootstrap_servers: str = "localhost:9092",
-    consumer_group: str = "snuba-subscriptions",
-    topic: str = "events",
-    remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
-):
-    shutdown_requested = Event()
-
-    stream_state_manager = StreamStateManager()
-
-    # XXX: This will not type check -- these need a common type.
-    futures = {
-        consumer.run(): consumer
-        for consumer in [
-            CommitLogConsumer(
-                bootstrap_servers,
-                consumer_group,
-                stream_state_manager,
-                shutdown_requested,
-            ),
-            SubscriptionConsumer(
-                bootstrap_servers,
-                consumer_group,
-                stream_state_manager,
-                shutdown_requested,
-            ),
-            SubscribedQueryExecutionConsumer(
-                bootstrap_servers,
-                topic,
-                consumer_group,
-                remote_consumer_groups,
-                stream_state_manager,
-                shutdown_requested,
-            ),
-        ]
-    }
-
-    def handler(signal, frame):
-        logger.debug("Caught signal %r, requesting shutdown...", signal)
-        shutdown_requested.set()
-
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
-
-    done, running = wait(futures.keys(), return_when=FIRST_EXCEPTION)
-
-    if not shutdown_requested.is_set():
-        logger.warning("Requesting early shutdown due to %r...", done)
-        shutdown_requested.set()
-
-    for future, consumer in futures.items():
-        try:
-            result = future.result()
-            logger.debug("%r completed successfully, returning: %s", consumer, result)
-        except Exception as error:
-            logger.exception("%r completed with error, raising: %s", consumer, error)
 
 
 if __name__ == "__main__":
@@ -441,9 +384,14 @@ if __name__ == "__main__":
 
     @cli.command()
     @click.pass_context
+    @click.option("--commit-probability", type=float, default=0.05)
     @click.option("--seed", type=str)
-    def generator(context, *, seed: Optional[str] = None) -> None:
+    def generator(
+        context, *, commit_probability: float, seed: Optional[str] = None
+    ) -> None:
         environment: Environment = context.obj
+
+        assert 1.0 >= commit_probability >= 0.0
 
         if seed is None:
             seed = f"{hex(int(time.time()))}"
@@ -459,22 +407,97 @@ if __name__ == "__main__":
             *producer.list_topics().topics[environment.get_topic()].partitions.keys()
         ]
 
-        def on_delivery(error, message: Message) -> None:
-            print(message.offset())
+        def produce(*args, **kwargs):
+            queued = False
+            while not queued:
+                try:
+                    producer.produce(*args, **kwargs)
+                except BufferError as error:
+                    logger.debug(
+                        "Could not produce message due to error, will retry...",
+                        exc_info=True,
+                    )
+                else:
+                    queued = True
+
+        def on_delivery(error, message: Message, should_commit: bool) -> None:
+            if error is not None:
+                raise Exception(error)
+
+            if should_commit:
+                # TODO: This message should actually include the commit data.
+                produce(
+                    environment.get_commit_log_topic(), partition=message.partition(),
+                )
 
         while True:
             partition = random.choice(partitions)
-            try:
-                producer.produce(
-                    environment.get_topic(),
-                    partition=partition,
-                    on_delivery=on_delivery,
-                )
-            except BufferError:
-                producer.flush()  # TODO: This could be more efficient, but whatever.
+            should_commit = commit_probability > random.random()
+            produce(
+                environment.get_topic(),
+                partition=partition,
+                on_delivery=partial(on_delivery, should_commit=should_commit),
+            )
 
     @cli.command()
-    def consume() -> None:
-        raise NotImplementedError
+    @click.pass_context
+    @click.option("--consumer-group", type=str, default="snuba-subscriptions")
+    def consumer(context, *, consumer_group: str) -> None:
+        environment: Environment = context.obj
+
+        shutdown_requested = Event()
+
+        stream_state_manager = StreamStateManager()
+
+        # XXX: This will not type check -- these need a common type.
+        futures = {
+            consumer.run(): consumer
+            for consumer in [
+                CommitLogConsumer(
+                    environment.get_kafka_configuration(),
+                    consumer_group,
+                    stream_state_manager,
+                    shutdown_requested,
+                ),
+                SubscriptionConsumer(
+                    environment.get_kafka_configuration(),
+                    consumer_group,
+                    stream_state_manager,
+                    shutdown_requested,
+                ),
+                SubscribedQueryExecutionConsumer(
+                    environment.get_kafka_configuration(),
+                    environment.get_topic(),
+                    consumer_group,
+                    [],  # TODO
+                    stream_state_manager,
+                    shutdown_requested,
+                ),
+            ]
+        }
+
+        def handler(signal, frame):
+            logger.debug("Caught signal %r, requesting shutdown...", signal)
+            shutdown_requested.set()
+
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
+        done, running = wait(futures.keys(), return_when=FIRST_EXCEPTION)
+
+        if not shutdown_requested.is_set():
+            logger.warning("Requesting early shutdown due to %r...", done)
+            shutdown_requested.set()
+
+        for future, consumer in futures.items():
+            try:
+                result = future.result()
+                logger.debug(
+                    "%r completed successfully, returning: %s", consumer, result
+                )
+            except Exception as error:
+                logger.exception(
+                    "%r completed with error, raising: %s", consumer, error
+                )
 
     cli()
