@@ -20,7 +20,7 @@ from snuba.utils.concurrent import execute
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Stream:
     topic: str
     partition: int
@@ -136,7 +136,7 @@ class CommitLogConsumer:
                 ]
             )
 
-            logger.debug("Assigning %r to %r...", commit_log_streams, consumer)
+            logger.debug("Assigning %r to %r...", sorted(commit_log_streams), consumer)
             consumer.assign(
                 [
                     ConfluentTopicPartition(stream.topic, stream.partition)
@@ -196,7 +196,7 @@ class SubscriptionConsumer:
                 ]
             )
 
-            logger.debug("Assigning %r to %r...", subscription_streams, consumer)
+            logger.debug("Assigning %r to %r...", sorted(subscription_streams), consumer)
             consumer.assign(
                 [
                     ConfluentTopicPartition(stream.topic, stream.partition)
@@ -417,6 +417,7 @@ if __name__ == "__main__":
                         "Could not produce message due to error, will retry...",
                         exc_info=True,
                     )
+                    producer.flush()
                 else:
                     queued = True
 
@@ -426,6 +427,7 @@ if __name__ == "__main__":
 
             if should_commit:
                 # TODO: This message should actually include the commit data.
+                logger.debug('Committing offsets...')
                 produce(
                     environment.get_commit_log_topic(), partition=message.partition(),
                 )
