@@ -142,13 +142,13 @@ class PartitionSubscriptionsManager:
         self.__partitions: MutableMapping[TopicPartition, PartitionSubscriptions] = {}
         self.__lock = Lock()
 
-    @contextmanager
-    def get(self, partition: TopicPartition) -> Iterator[PartitionSubscriptions]:
+    def assign(self, partition: Sequence[TopicPartition]) -> None:
         with self.__lock:
-            subscriptions = self.__partitions.get(partition)
-            if subscriptions is None:
-                subscriptions = self.__partitions[partition] = Loading()
-                raise NotImplementedError  # start loading
+            pass  # TODO
+
+    def revoke(self, partition: TopicPartition) -> None:
+        with self.__lock:
+            pass  # TODO
 
 
 class SubscriptionConsumer:
@@ -208,10 +208,12 @@ class SubscribedQueryExecutionConsumer:
         ) -> None:
             logger.debug("Received updated assignment: %r", partitions)
 
-            offsets: MutableMapping[TopicPartition, int] = {}
+            partition_offsets: MutableMapping[TopicPartition, int] = {}
+
             for partition in consumer.committed(partitions):
-                tp = TopicPartition(partition.topic, partition.partition)
-                offsets[tp] = (
+                partition_offsets[
+                    TopicPartition(partition.topic, partition.partition)
+                ] = (
                     partition.offset
                     if partition.offset != OFFSET_INVALID
                     else consumer.get_watermark_offsets(partition)[0]
@@ -219,22 +221,33 @@ class SubscribedQueryExecutionConsumer:
 
             consumer.assign(
                 [
-                    ConfluentTopicPartition(tp.topic, tp.partition, offset)
-                    for tp, offset in offsets.items()
+                    ConfluentTopicPartition(
+                        partition.topic, partition.partition, offset
+                    )
+                    for partition, offset in partition_offsets.items()
                 ]
             )
 
-            for partition, offset in offsets.items():
+            for partition, offset in partition_offsets.items():
                 with self.__partition_offsets_manager.get(partition) as offsets:
                     offsets.local = offset
+
+            self.__partition_subscriptions_manager.assign(partition_offsets.keys())
 
         def on_revoke(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
             logger.debug("Received partition revocation: %r", partitions)
+
+            partitions = [
+                TopicPartition(partition.topic, partition.partition)
+                for partition in partitions
+            ]
+
             for partition in partitions:
-                tp = TopicPartition(partition.topic, partition.partition)
-                self.__partition_offsets_manager.delete(tp)
+                self.__partition_offsets_manager.delete(partition)
+
+            self.__partition_subscriptions_manager.revoke(partitions)
 
         logger.debug("Subscribing to %r...", self.__topic)
         consumer.subscribe([self.__topic], on_assign=on_assign, on_revoke=on_revoke)
