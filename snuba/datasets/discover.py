@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -144,6 +144,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("sentry:dist", Nullable(String())),
                 ("sentry:user", Nullable(String())),
                 ("transaction", Nullable(String())),
+                ("message", Nullable(String())),
                 # User
                 ("user_id", Nullable(String())),
                 ("username", Nullable(String())),
@@ -166,7 +167,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("server_name", Nullable(String())),
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
-                ("message", Nullable(String())),
                 ("search_message", Nullable(String())),
                 ("title", Nullable(String())),
                 ("location", Nullable(String())),
@@ -273,6 +273,8 @@ class DiscoverDataset(TimeSeriesDataset):
             if column_name == "email":
                 return "user_email"
             if column_name == "transaction":
+                return "transaction_name"
+            if column_name == "message":
                 return "transaction_name"
             if self.__events_columns.get(column_name):
                 return "NULL"
