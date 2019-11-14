@@ -8,7 +8,7 @@ from typing import Callable, Iterator, Optional, Sequence
 from snuba.query.collections import NodeContainer
 
 
-@dataclass
+@dataclass(frozen=True)
 class Expression(ABC):
     """
     A node in the Query AST. This can be a leaf or an intermediate node.
@@ -45,8 +45,9 @@ class Expression(ABC):
         between intermediate nodes and leaves, so each node class can implement it
         its own way.
 
-        It returns the new expression. It does not guarantee the returned value
-        will be a new object. No guarantee of immutability is given on expressions.
+        All expressions are frozen dataclasses. This means they are immutable and
+        format will either return self or a new instance. It cannot transform the
+        expression in place.
         """
         raise NotImplementedError
 
@@ -73,10 +74,10 @@ class HierarchicalExpression(Expression, NodeContainer[Expression]):
         transformation function and we do not run that same function over the
         new children.
         """
-        self._set_children(
+        transformed = self._duplicate_with_new_children(
             list(map(lambda child: child.transform(func), self._get_children()))
         )
-        return func(self)
+        return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         """
@@ -101,28 +102,14 @@ class HierarchicalExpression(Expression, NodeContainer[Expression]):
         raise NotImplementedError
 
     @abstractmethod
-    def _set_children(self, children: Sequence[Expression]) -> None:
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
         """
-        To be implemented by the subclasses to reset the list of children
-        for iteration/transformation.
+        Return a new instance of the expression with a new set of children.
         """
         raise NotImplementedError
 
 
-@dataclass
-class Null(Expression):
-    """
-    SQL NULL
-    """
-
-    def format(self) -> str:
-        raise NotImplementedError
-
-    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
-        return self
-
-
-@dataclass
+@dataclass(frozen=True)
 class Literal(Expression):
     """
     A literal in the SQL expression
@@ -136,7 +123,7 @@ class Literal(Expression):
         return func(self)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Column(Expression):
     """
     Represent a column in the schema of the dataset.
@@ -151,7 +138,7 @@ class Column(Expression):
         return func(self)
 
 
-@dataclass
+@dataclass(frozen=True)
 class FunctionCall(HierarchicalExpression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
@@ -170,11 +157,11 @@ class FunctionCall(HierarchicalExpression):
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
-    def _set_children(self, children: Sequence[Expression]) -> None:
-        self.parameters = children
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
+        return FunctionCall(self.alias, self.function_name, children)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Aggregation(HierarchicalExpression):
     """
     Represents an aggregation function to be applied to an expression in the
@@ -192,8 +179,8 @@ class Aggregation(HierarchicalExpression):
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
-    def _set_children(self, children: Sequence[Expression]) -> None:
-        self.parameters = children
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
+        return Aggregation(self.alias, self.function_name, children)
 
 
 class OrderByDirection(Enum):
@@ -201,7 +188,7 @@ class OrderByDirection(Enum):
     DESC = "desc"
 
 
-@dataclass
+@dataclass(frozen=True)
 class OrderBy(HierarchicalExpression):
     direction: OrderByDirection
     node: Expression
@@ -212,6 +199,6 @@ class OrderBy(HierarchicalExpression):
     def _get_children(self) -> Sequence[Expression]:
         return [self.node]
 
-    def _set_children(self, children: Sequence[Expression]) -> None:
+    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> None:
         assert len(children) == 1
-        self.node = children[0]
+        return OrderBy(self.alias, self.direction, children[0])

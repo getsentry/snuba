@@ -15,6 +15,7 @@ def test_iterate() -> None:
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
     function_1 = FunctionCall(None, "f1", [column1, column2])
+
     column3 = Column(None, "c2", "t1")
     literal = Literal(None, "blablabla")
     function_2 = FunctionCall(None, "f2", [column3, function_1, literal])
@@ -25,7 +26,8 @@ def test_iterate() -> None:
 
 def test_aliased_cols() -> None:
     """
-    Test iteration whan columns have aliases
+    Test iteration whan columns have aliases. This is the expression
+    f2(t1.c2, f1(t1.c1, t1.c2 as a2)) as af1
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column("a2", "c2", "t1")
@@ -67,6 +69,7 @@ def test_mapping_column_list() -> None:
 def test_add_alias() -> None:
     """
     Adds an alias to a column referenced in a function
+    f(t1.c1) -> f(t1.c1 as a)
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column("a", "c1", "t1")
@@ -78,14 +81,14 @@ def test_add_alias() -> None:
     f = FunctionCall(None, "f", [column1])
 
     f2 = f.transform(replace_expr)
-    expected = [column2, f]
+    expected = [column2, FunctionCall(None, "f", [column2])]
     assert list(f2) == expected
 
 
 def test_mapping_complex_expression() -> None:
     """
     Maps over an Expression container:
-    f(c1, fB(f())) -> f(c1, fB(f(f())))
+    f0(t1.c1, fB(f())) -> f0(t1.c1, fB(f(f() as a)))
     """
 
     f5 = FunctionCall("a", "f", [])
@@ -103,9 +106,12 @@ def test_mapping_complex_expression() -> None:
 
     # Only the external function is going to be replaced since, when map returns a new
     # column, we expect the func to have takern care of its own children.
-    fend = f1.transform(replace_expr)
-    iterate = list(fend)
-    expected = [c1, f5, f4, f2, f1]
+    f1 = f1.transform(replace_expr)
+    iterate = list(f1)
+    expected = [c1, f5, f4,
+        FunctionCall(None, "fB", [f4]),
+        FunctionCall(None, "f0", [c1, FunctionCall(None, "fB", [f4])]),
+    ]
 
     assert iterate == expected
 
@@ -125,5 +131,12 @@ def test_aggregations() -> None:
     a2 = aggregation.transform(
         lambda e: column4 if isinstance(e, Column) and e.column_name == "c1" else e
     )
-    expected = [column3, column4, column2, function_1, function_2, aggregation]
+
+    function_1b = FunctionCall(None, "f1", [column4, column2])
+    function_2b = FunctionCall(None, "f2", [column3, function_1b])
+    expected = [
+        column3, column4, column2, function_1b, function_2b,
+        Aggregation(None, "count", [function_2b]),
+    ]
+
     assert list(a2) == expected
