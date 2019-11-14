@@ -10,9 +10,18 @@ from dataclasses import dataclass
 from functools import partial
 from random import Random
 from threading import Event, Lock
-from typing import Any, Callable, Iterator, Mapping, MutableMapping, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Union,
+)
 
-from confluent_kafka import Consumer, Message, OFFSET_INVALID
+from confluent_kafka import Consumer, KafkaError, Message, OFFSET_INVALID
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.concurrent import execute
@@ -33,7 +42,38 @@ class Offsets:
 
 
 class Subscriptions:
-    pass
+    def handle(self, message: Message) -> Subscriptions:
+        raise NotImplementedError
+
+
+class LoadingSubscriptions(Subscriptions):
+    def handle(
+        self, message: Message
+    ) -> Union[LoadingSubscriptions, StreamingSubscriptions]:
+        error = message.error()
+        if error is not None:
+            if error == KafkaError._PARTITION_EOF:
+                return StreamingSubscriptions()
+            else:
+                raise Exception(error)
+
+        raise NotImplementedError
+
+        return self
+
+
+class StreamingSubscriptions(Subscriptions):
+    def handle(self, message: Message) -> StreamingSubscriptions:
+        error = message.error()
+        if error is not None:
+            if error == KafkaError._PARTITION_EOF:
+                return self
+            else:
+                raise Exception(error)
+
+        raise NotImplementedError
+
+        return self
 
 
 @dataclass
@@ -188,8 +228,11 @@ class SubscriptionConsumer:
                 "group.id": self.__consumer_group,
                 "enable.auto.commit": False,
                 "auto.offset.reset": "beginning",
+                "enable.partition.eof": True,
             }
         )
+
+        stream_mapping: MutableMapping[Stream, Stream] = {}
 
         def on_assign(streams: MutableMapping[Stream, StreamState]) -> None:
             # XXX: This is not thread safe -- this happens in the query
@@ -198,35 +241,45 @@ class SubscriptionConsumer:
             logger.debug("Updating subscription consumer assignment...")
 
             # TODO: This transformation should be configurable.
-            subscription_streams = set(
-                [
-                    Stream(f"{stream.topic}-subscriptions", stream.partition)
+            stream_mapping.update(
+                {
+                    Stream(f"{stream.topic}-subscriptions", stream.partition): stream
                     for stream in streams.keys()
-                ]
+                }
             )
 
             logger.debug(
-                "Assigning %r to %r...", sorted(subscription_streams), consumer
+                "Assigning %r to %r...", sorted(stream_mapping.keys()), consumer
             )
             consumer.assign(
                 [
                     ConfluentTopicPartition(stream.topic, stream.partition)
-                    for stream in subscription_streams
+                    for stream in stream_mapping.keys()
                 ]
             )
 
-        self.__stream_state_manager.add_callbacks(on_assign=on_assign)
+        def on_revoke(streams: MutableMapping[Stream, StreamState]) -> None:
+            logger.debug("Revoking subscription consumer assignment...")
+            consumer.unassign()
+            stream_mapping.clear()
+
+        self.__stream_state_manager.add_callbacks(
+            on_assign=on_assign, on_revoke=on_revoke
+        )
 
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
             if message is None:
                 continue
 
-            error = message.error()
-            if error is not None:
+            if message.topic() is not None and message.partition() is not None:
+                stream = Stream(message.topic(), message.partition())
+                with self.__stream_state_manager.get(stream_mapping[stream]) as state:
+                    state.subscriptions.handle(message)
+            else:
+                error = message.error()
+                assert error is not None
                 raise Exception(error)
-
-            raise NotImplementedError
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscriptions-consumer")
@@ -277,7 +330,7 @@ class SubscribedQueryExecutionConsumer:
                         else consumer.get_watermark_offsets(partition)[0],
                         remote={group: None for group in self.__remote_consumer_groups},
                     ),
-                    subscriptions=Subscriptions(),
+                    subscriptions=LoadingSubscriptions(),
                 )
 
             consumer.assign(
