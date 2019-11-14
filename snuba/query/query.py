@@ -93,6 +93,7 @@ class Query:
         self.__body = body
         self.__final = False
         self.__data_source = data_source
+        self.__prewhere_conditions: Sequence[Condition] = []
 
         # New data model
         # TODO: Provide a better typing for this.
@@ -184,6 +185,21 @@ class Query:
         conditions: Sequence[Condition],
     ) -> None:
         self.__extend_sequence("conditions", conditions)
+
+    def get_prewhere(self) -> Sequence[Condition]:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
+        return self.__prewhere_conditions
+
+    def set_prewhere(
+        self,
+        conditions: Sequence[Condition]
+    ) -> None:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
+        self.__prewhere_conditions = conditions
 
     def set_arrayjoin(
         self,
@@ -280,6 +296,7 @@ class Query:
         # Conditions need flattening as they can be nested as AND/OR
         self.__add_flat_conditions(col_exprs, self.get_conditions())
         self.__add_flat_conditions(col_exprs, self.get_having())
+        self.__add_flat_conditions(col_exprs, self.get_prewhere())
 
         if self.get_aggregations():
             col_exprs.extend([a[1] for a in self.get_aggregations()])

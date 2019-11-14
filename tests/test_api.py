@@ -419,7 +419,7 @@ class TestApi(BaseApiTest):
 
     def test_prewhere_conditions(self):
         settings.MAX_PREWHERE_CONDITIONS = 1
-        prewhere_keys = get_dataset('events').get_prewhere_keys()
+        prewhere_keys = ['event_id', 'issue', 'tags[sentry:release]', 'message', 'environment', 'project_id']
 
         # Before we run our test, make sure the column exists in our prewhere keys
         assert 'message' in prewhere_keys
