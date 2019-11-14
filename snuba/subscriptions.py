@@ -40,7 +40,7 @@ class StreamState:
 
 class StreamStateManager:
     def __init__(self) -> None:
-        self.__assignment: MutableMapping[Stream, StreamState] = {}
+        self.__streams: MutableMapping[Stream, StreamState] = {}
         self.__assignment_callbacks: Sequence[
             Callable[[Mapping[Stream, StreamState]], None]
         ] = []
@@ -57,43 +57,40 @@ class StreamStateManager:
         with self.__lock:
             if on_assign is not None:
                 self.__assignment_callbacks.append(on_assign)
-                if self.__assignment:
-                    on_assign(self.__assignment)
+                if self.__streams:
+                    on_assign(self.__streams)
 
             if on_revoke is not None:
                 self.__revocation_callbacks.append(on_revoke)
 
-    def assign(self, streams: Sequence[Stream]) -> None:
+    def assign(self, streams: Sequence[Stream, StreamState]) -> None:
         with self.__lock:
             logger.debug("Received stream assignment: %r", streams)
 
-            for stream in streams:
-                assert stream not in self.__assignment_callbacks
-                self.__assignment[stream] = StreamState(
-                    # TODO: How will remote consumer groups get passed into the state object?
-                    offsets=Offsets(local=None, remote={group: None for group in []}),
-                    subscriptions=Subscriptions(),
-                )
+            assert not self.__streams
+
+            self.__streams = streams
 
             logger.debug("Invoking stream assignment callbacks...")
             for callback in self.__assignment_callbacks:
-                callback(self.__assignment)
+                callback(self.__streams)
 
     def revoke(self, streams: Sequence[Stream]) -> None:
         with self.__lock:
             logger.debug("Recieved stream revocation: %r", streams)
 
+            assert set(streams) == self.__streams.keys()
+
             logger.debug("Invoking stream revocation callbacks...")
             for callback in self.__revocation_callbacks:
-                callback(self.__assignment)
+                callback(self.__streams)
 
-            for stream in streams:
-                del self.__assignment[stream]
+            self.__streams.clear()
 
     @contextmanager
     def get(self, stream: Stream) -> Iterator[StreamState]:
         with self.__lock:
-            yield self.__assignment[stream]
+            yield self.__streams[stream]
 
 
 class CommitLogConsumer:
@@ -127,6 +124,7 @@ class CommitLogConsumer:
             # commit log consumer thread instead.
             logger.debug("Updating commit log consumer assignment...")
 
+            # TODO: This transformation should be configurable.
             commit_log_streams = set(
                 [
                     Stream(f"{stream.topic}-commit-log", stream.partition)
@@ -245,25 +243,30 @@ class SubscribedQueryExecutionConsumer:
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
-            stream_offsets: MutableMapping[Stream, int] = {}
+            streams: MutableMapping[Stream, StreamState] = {}
 
             for partition in consumer.committed(partitions):
-                stream_offsets[Stream(partition.topic, partition.partition)] = (
-                    partition.offset
-                    if partition.offset != OFFSET_INVALID
-                    else consumer.get_watermark_offsets(partition)[0]
-                )  # TODO: This should be configurable
+                # TODO: The starting offset should be configurable.
+                streams[Stream(partition.topic, partition.partition)] = StreamState(
+                    offsets=Offsets(
+                        local=partition.offset
+                        if partition.offset != OFFSET_INVALID
+                        else consumer.get_watermark_offsets(partition)[0],
+                        remote={},
+                    ),
+                    subscriptions=Subscriptions(),
+                )
 
             consumer.assign(
                 [
-                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
-                    for stream, offset in stream_offsets.items()
+                    ConfluentTopicPartition(
+                        stream.topic, stream.partition, state.offsets.local
+                    )
+                    for stream, state in streams.items()
                 ]
             )
 
-            # TODO: This needs to set local offsets at this point.
-
-            self.__stream_state_manager.assign([*stream_offsets.keys()])
+            self.__stream_state_manager.assign(streams)
 
         def on_revoke(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
@@ -289,8 +292,8 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
-                state.offsets.local = message.offset()
                 print(stream, state)
+                state.offsets.local = message.offset() + 1
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscribed-query-execution-consumer")
