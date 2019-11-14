@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import signal
+import time
 import uuid
 from concurrent.futures import FIRST_EXCEPTION, wait
 from contextlib import contextmanager
 from dataclasses import dataclass
+from random import Random
 from threading import Event, Lock
 from typing import Callable, Iterator, Mapping, MutableMapping, Optional, Sequence
 
@@ -423,6 +425,8 @@ if __name__ == "__main__":
         for topic, future in futures.items():
             click.echo(f"{topic}: {future}", err=True)
 
+        click.echo(environment.namespace)
+
         click.echo("Waiting for signal...", err=True)
         try:
             signal.pause()
@@ -434,6 +438,40 @@ if __name__ == "__main__":
         wait(futures.values())
         for topic, future in futures.items():
             click.echo(f"{topic}: {future}", err=True)
+
+    @cli.command()
+    @click.pass_context
+    @click.option("--seed", type=str)
+    def generator(context, *, seed: Optional[str] = None) -> None:
+        environment: Environment = context.obj
+
+        if seed is None:
+            seed = f"{hex(int(time.time()))}"
+
+        random = Random(seed)
+        logger.debug("Instantiated random number generator with seed: %r", seed)
+
+        from confluent_kafka import Producer
+
+        producer = Producer({**environment.get_kafka_configuration()})
+
+        partitions = [
+            *producer.list_topics().topics[environment.get_topic()].partitions.keys()
+        ]
+
+        def on_delivery(error, message: Message) -> None:
+            print(message.offset())
+
+        while True:
+            partition = random.choice(partitions)
+            try:
+                producer.produce(
+                    environment.get_topic(),
+                    partition=partition,
+                    on_delivery=on_delivery,
+                )
+            except BufferError:
+                producer.flush()  # TODO: This could be more efficient, but whatever.
 
     @cli.command()
     def consume() -> None:
