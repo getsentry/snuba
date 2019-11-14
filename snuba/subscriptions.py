@@ -4,8 +4,9 @@ import logging
 import signal
 from concurrent.futures import FIRST_EXCEPTION, wait
 from threading import Event
+from typing import Optional, Sequence
 
-from confluent_kafka import Consumer
+from confluent_kafka import Consumer, Message, TopicPartition
 
 from snuba.utils.concurrent import execute
 
@@ -40,13 +41,37 @@ class SubscriptionConsumer:
 
 
 class DatasetConsumer:
-    def __init__(self, bootstrap_servers: str, shutdown_requested: Event) -> None:
+    def __init__(
+        self,
+        bootstrap_servers: str,
+        topic: str,
+        consumer_group: str,
+        shutdown_requested: Event,
+    ) -> None:
         self.__bootstrap_servers = bootstrap_servers
+        self.__topic = topic
+        self.__consumer_group = consumer_group
         self.__shutdown_requested = shutdown_requested
 
     def __run(self) -> None:
         logger.debug("Starting %r...", self)
-        self.__shutdown_requested.wait()
+
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.__bootstrap_servers,
+                "group.id": self.__consumer_group,
+            }
+        )
+
+        def on_assign(consumer: Consumer, partitions: Sequence[TopicPartition]) -> None:
+            logger.debug("Received updated assignment: %r", partitions)
+
+        consumer.subscribe([self.__topic], on_assign=on_assign)
+
+        while not self.__shutdown_requested.is_set():
+            message: Optional[Message] = consumer.poll(0.1)
+            if message is None:
+                continue
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="dataset-consumer")
@@ -65,7 +90,9 @@ def run(
         for consumer in [
             CommitLogConsumer(bootstrap_servers, shutdown_requested),
             SubscriptionConsumer(bootstrap_servers, shutdown_requested),
-            DatasetConsumer(bootstrap_servers, shutdown_requested),
+            DatasetConsumer(
+                bootstrap_servers, topic, consumer_group, shutdown_requested
+            ),
         ]
     }
 
