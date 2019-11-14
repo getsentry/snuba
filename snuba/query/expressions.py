@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Iterator, Optional, Sequence
 
-from snuba.query.collections import NodeContainer
-
 
 @dataclass(frozen=True)
 class Expression(ABC):
@@ -51,8 +49,17 @@ class Expression(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Used to iterate over this expression and its children. The exact
+        semantics depends on the structure of the expression.
+        See the implementations for more details.
+        """
+        raise NotImplementedError
 
-class HierarchicalExpression(Expression, NodeContainer[Expression]):
+
+class HierarchicalExpression(Expression):
     """
     Expression that represent an intermediate node in the tree, which thus
     can have children.
@@ -122,6 +129,9 @@ class Literal(Expression):
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
 
+    def __iter__(self) -> Iterator[Expression]:
+        yield self
+
 
 @dataclass(frozen=True)
 class Column(Expression):
@@ -136,6 +146,9 @@ class Column(Expression):
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
+
+    def __iter__(self) -> Iterator[Expression]:
+        yield self
 
 
 @dataclass(frozen=True)

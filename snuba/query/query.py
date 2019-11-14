@@ -4,6 +4,7 @@ from deprecation import deprecated
 from itertools import chain
 from typing import (
     Any,
+    Iterable,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -15,7 +16,6 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.collections import CompositeNodeContainer, NodeContainer
 from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, OrderBy
 from snuba.query.types import Condition
 from snuba.util import (
@@ -105,24 +105,22 @@ class Query:
         self.__having: Optional[Expression] = having
         self.__order_by: Sequence[OrderBy] = order_by or []
 
-    def get_all_expressions(self) -> NodeContainer[Expression]:
+    def get_all_expressions(self) -> Iterable[Expression]:
         """
         Returns an expression container that iterates over all the expressions
         in the query no matter which level of nesting they are at.
         The ExpressionContainer can be used to traverse the expressions in the
         tree.
         """
-        CompositeNodeContainer(
-            containers=[
-                self.__selected_columns,
-                self.__aggregations,
-                [self.__array_join] if self.__array_join else [],
-                [self.__condition] if self.__condition else [],
-                self.__groupby,
-                [self.__having] if self.__having else [],
-                self.__order_by,
-            ]
-        )
+        chain(*[
+            self.__selected_columns,
+            self.__aggregations,
+            [self.__array_join] if self.__array_join else [],
+            [self.__condition] if self.__condition else [],
+            self.__groupby,
+            [self.__having] if self.__having else [],
+            self.__order_by,
+        ])
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
