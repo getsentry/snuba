@@ -219,12 +219,14 @@ class SubscribedQueryExecutionConsumer:
         bootstrap_servers: str,
         topic: str,
         consumer_group: str,
+        remote_consumer_groups: Sequence[str],
         stream_state_manager: StreamStateManager,
         shutdown_requested: Event,
     ) -> None:
         self.__bootstrap_servers = bootstrap_servers
         self.__topic = topic
         self.__consumer_group = consumer_group
+        self.__remote_consumer_groups = remote_consumer_groups
         self.__stream_state_manager = stream_state_manager
         self.__shutdown_requested = shutdown_requested
 
@@ -247,12 +249,14 @@ class SubscribedQueryExecutionConsumer:
 
             for partition in consumer.committed(partitions):
                 # TODO: The starting offset should be configurable.
+                # TODO: This seems like the wrong place to instantiate the
+                # remote consumer groups, but not sure where else it'd go...
                 streams[Stream(partition.topic, partition.partition)] = StreamState(
                     offsets=Offsets(
                         local=partition.offset
                         if partition.offset != OFFSET_INVALID
                         else consumer.get_watermark_offsets(partition)[0],
-                        remote={},
+                        remote={group: None for group in self.__remote_consumer_groups},
                     ),
                     subscriptions=Subscriptions(),
                 )
@@ -302,8 +306,8 @@ class SubscribedQueryExecutionConsumer:
 def run(
     bootstrap_servers: str = "localhost:9092",
     consumer_group: str = "snuba-subscriptions",
-    remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
     topic: str = "events",
+    remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
 ):
     shutdown_requested = Event()
 
@@ -329,6 +333,7 @@ def run(
                 bootstrap_servers,
                 topic,
                 consumer_group,
+                remote_consumer_groups,
                 stream_state_manager,
                 shutdown_requested,
             ),
