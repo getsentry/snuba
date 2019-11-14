@@ -125,12 +125,18 @@ class Query:
         self.__extend_sequence("conditions", conditions)
 
     def get_prewhere(self) -> Sequence[Condition]:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
         return self.__prewhere_conditions
 
     def set_prewhere(
         self,
         conditions: Sequence[Condition]
     ) -> None:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
         self.__prewhere_conditions = conditions
 
     def set_arrayjoin(
