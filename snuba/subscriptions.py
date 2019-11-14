@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import signal
 from concurrent.futures import FIRST_EXCEPTION, wait
+from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import Event, Lock
-from typing import Callable, Mapping, MutableMapping, Optional, Sequence
+from typing import Callable, Iterator, Mapping, MutableMapping, Optional, Sequence
 
 from confluent_kafka import Consumer, Message, OFFSET_INVALID
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
@@ -69,6 +70,7 @@ class StreamStateManager:
             for stream in streams:
                 assert stream not in self.__assignment_callbacks
                 self.__assignment[stream] = StreamState(
+                    # TODO: How will remote consumer groups get passed into the state object?
                     offsets=Offsets(local=None, remote={group: None for group in []}),
                     subscriptions=Subscriptions(),
                 )
@@ -87,6 +89,11 @@ class StreamStateManager:
 
             for stream in streams:
                 del self.__assignment[stream]
+
+    @contextmanager
+    def get(self, stream: Stream) -> Iterator[StreamState]:
+        with self.__lock:
+            yield self.__assignment[stream]
 
 
 class CommitLogConsumer:
@@ -113,6 +120,29 @@ class CommitLogConsumer:
                 "auto.offset.reset": "beginning",
             }
         )
+
+        def on_assign(streams: MutableMapping[Stream, StreamState]) -> None:
+            # XXX: This is not thread safe -- this happens in the query
+            # executor thread, and will need to be pushed back to the
+            # commit log consumer thread instead.
+            logger.debug("Updating commit log consumer assignment...")
+
+            commit_log_streams = set(
+                [
+                    Stream(f"{stream.topic}-commit-log", stream.partition)
+                    for stream in streams.keys()
+                ]
+            )
+
+            logger.debug("Assigning %r to %r...", commit_log_streams, consumer)
+            consumer.assign(
+                [
+                    ConfluentTopicPartition(stream.topic, stream.partition)
+                    for stream in commit_log_streams
+                ]
+            )
+
+        self.__stream_state_manager.add_callbacks(on_assign=on_assign)
 
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
@@ -149,6 +179,30 @@ class SubscriptionConsumer:
                 "auto.offset.reset": "beginning",
             }
         )
+
+        def on_assign(streams: MutableMapping[Stream, StreamState]) -> None:
+            # XXX: This is not thread safe -- this happens in the query
+            # executor thread, and will need to be pushed back to the
+            # subscription consumer thread instead.
+            logger.debug("Updating subscription consumer assignment...")
+
+            # TODO: This transformation should be configurable.
+            subscription_streams = set(
+                [
+                    Stream(f"{stream.topic}-subscriptions", stream.partition)
+                    for stream in streams.keys()
+                ]
+            )
+
+            logger.debug("Assigning %r to %r...", subscription_streams, consumer)
+            consumer.assign(
+                [
+                    ConfluentTopicPartition(stream.topic, stream.partition)
+                    for stream in subscription_streams
+                ]
+            )
+
+        self.__stream_state_manager.add_callbacks(on_assign=on_assign)
 
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
@@ -207,6 +261,8 @@ class SubscribedQueryExecutionConsumer:
                 ]
             )
 
+            # TODO: This needs to set local offsets at this point.
+
             self.__stream_state_manager.assign([*stream_offsets.keys()])
 
         def on_revoke(
@@ -230,6 +286,11 @@ class SubscribedQueryExecutionConsumer:
             error = message.error()
             if error is not None:
                 raise Exception(error)
+
+            stream = Stream(message.topic(), message.partition())
+            with self.__stream_state_manager.get(stream) as state:
+                state.offsets.local = message.offset()
+                print(stream, state)
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscribed-query-execution-consumer")
