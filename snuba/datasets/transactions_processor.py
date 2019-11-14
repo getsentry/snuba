@@ -106,6 +106,15 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["environment"] = promoted_tags.get("environment")
 
         contexts = _as_dict_safe(data.get('contexts', None))
+        print(data)
+        if "geo" not in contexts and isinstance(data.get("geo"), dict):
+            geo = data.get("geo")
+            contexts["geo"] = {
+                "country_code": geo.get("country_code", None),
+                "region": geo.get("region", None),
+                "city": geo.get("city", None),
+            }
+
         extract_extra_contexts(processed, contexts)
 
         processed["dist"] = _unicodify(

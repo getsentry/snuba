@@ -30,6 +30,9 @@ class TransactionEvent:
     ipv4: Optional[str]
     environment: Optional[str]
     release: str
+    sdk_name: Optional[str]
+    sdk_version: Optional[str]
+    geo: Mapping[str, str]
 
     def serialize(self) -> Mapping[str, Any]:
         return (2, 'insert', {
@@ -50,6 +53,16 @@ class TransactionEvent:
                     'enhancements': 'eJybzDhxY05qemJypZWRgaGlroGxrqHRBABbEwcC',
                     'id': 'legacy:2019-03-12',
                 },
+                "sdk": {
+                    "version": self.sdk_version,
+                    "name": self.sdk_name,
+                    "packages": [
+                        {
+                            "version": "0.9.0",
+                            "name": "pypi:sentry-sdk"
+                        }
+                    ],
+                },
                 'breadcrumbs': {
                     'values': [
                         {
@@ -61,6 +74,7 @@ class TransactionEvent:
                         },
                     ],
                 },
+                "geo": self.geo,
                 'spans': [
                     {
                         'sampled': True,
@@ -148,10 +162,15 @@ class TransactionEvent:
             'contexts.key': [
                 'trace.sampled', 'trace.trace_id',
                 'trace.op', 'trace.span_id',
+                'geo.country_code', 'geo.region', 'geo.city'
             ],
             'contexts.value': [
-                'True', self.trace_id, self.op, self.span_id
+                'True', self.trace_id, self.op, self.span_id,
+                self.geo["country_code"], self.geo["region"],
+                self.geo["city"]
             ],
+            'sdk_name': 'sentry.python',
+            'sdk_version': '0.9.0',
             'offset': meta.offset,
             'partition': meta.partition,
             'retention_days': 90,
@@ -190,6 +209,13 @@ class TestTransactionsProcessor(BaseTest):
             ipv6=None,
             environment='prod',
             release='34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
+            sdk_name='sentry.python',
+            sdk_version='0.9.0',
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+            }
         )
         payload = message.serialize()
         # Force an invalid event
@@ -218,6 +244,13 @@ class TestTransactionsProcessor(BaseTest):
             ipv6=None,
             environment='prod',
             release='34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
+            sdk_name='sentry.python',
+            sdk_version='0.9.0',
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+            }
         )
         payload = message.serialize()
         # Force an invalid event
@@ -246,6 +279,13 @@ class TestTransactionsProcessor(BaseTest):
             ipv6=None,
             environment='prod',
             release='34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a',
+            sdk_name='sentry.python',
+            sdk_version='0.9.0',
+            geo={
+                "country_code": "XY",
+                "region": "fake_region",
+                "city": "fake_city",
+            }
         )
         meta = KafkaMessageMetadata(
             offset=1,
