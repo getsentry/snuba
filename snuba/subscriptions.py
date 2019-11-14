@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
 from threading import Event, Lock
-from typing import Callable, Iterator, MutableMapping, Optional, Sequence
+from typing import Iterator, MutableMapping, Optional, Sequence
 
 from confluent_kafka import Consumer, Message, OFFSET_INVALID
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
@@ -23,7 +23,7 @@ class TopicPartition:
     partition: int
 
 
-PartitionState = Enum("PartitionState", ["UNKNOWN"])
+PartitionOffsetsState = Enum("PartitionState", ["UNKNOWN"])
 
 
 @dataclass
@@ -32,35 +32,23 @@ class PartitionOffsets:
     remote: MutableMapping[str, Optional[int]]
 
     @property
-    def state(self) -> PartitionState:
+    def state(self) -> PartitionOffsetsState:
         if self.local is None:
-            return PartitionState.UNKNOWN
+            return PartitionOffsetsState.UNKNOWN
 
         for offset in self.remote.values():
             if offset is None:
-                return PartitionState.UNKNOWN
+                return PartitionOffsetsState.UNKNOWN
             else:
                 raise NotImplementedError  # TODO
 
 
 class PartitionOffsetsManager:
     def __init__(self, remote_consumer_groups: Sequence[str]) -> None:
-        self.__partitions: MutableMapping[TopicPartition, PartitionOffsets] = {}
         self.__remote_consumer_groups = remote_consumer_groups
-        self.__callbacks: Sequence[
-            Callable[[TopicPartition, PartitionState], None]
-        ] = []
 
+        self.__partitions: MutableMapping[TopicPartition, PartitionOffsets] = {}
         self.__lock = Lock()
-
-    def add_callback(
-        self, callback: Callable[[TopicPartition, PartitionState]]
-    ) -> None:
-        with self.__lock:
-            self.__callbacks.append(callback)
-
-            for partition, offsets in self.__partitions.items():
-                callback(partition, offsets.state)
 
     @contextmanager
     def get(self, partition: TopicPartition) -> Iterator[PartitionOffsets]:
@@ -71,24 +59,20 @@ class PartitionOffsetsManager:
                 offsets = self.__partitions[partition] = PartitionOffsets(
                     None, {group: None for group in self.__remote_consumer_groups}
                 )
-                state = None
-            else:
-                state = offsets.state
 
             yield offsets
             logger.debug("Offsets for %r have been updated to %r.", partition, offsets)
 
-            if state != offsets.state:
-                # TODO: Should this do anything special if the callback raises?
-                for callback in self.__callbacks:
-                    callback(partition, offsets.state)
+    def delete(self, partition: TopicPartition) -> None:
+        with self.__lock:
+            del self.__partitions[partition]
+            logger.debug("Offsets for %r have been deleted.", partition)
 
 
 @dataclass
 class CommitData:
     group: str
-    topic: str
-    partition: int
+    partition: TopicPartition
     offset: int
 
 
@@ -134,18 +118,52 @@ class CommitLogConsumer:
                 logger.debug("Skipping %r, group is not in consumer group set.", data)
                 continue
 
-            with self.__partition_offsets_manager.get(
-                TopicPartition(data.topic, data.partition)
-            ) as offsets:
+            with self.__partition_offsets_manager.get(data.partition) as offsets:
                 offsets.remote[data.group] = data.offset
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="commit-log-consumer")
 
 
+class PartitionSubscriptions:
+    pass
+
+
+class Loading(PartitionSubscriptions):
+    pass
+
+
+class Streaming(PartitionSubscriptions):
+    pass
+
+
+class PartitionSubscriptionsManager:
+    def __init__(self) -> None:
+        self.__partitions: MutableMapping[TopicPartition, PartitionSubscriptions] = {}
+        self.__lock = Lock()
+
+    @contextmanager
+    def get(self, partition: TopicPartition) -> Iterator[PartitionSubscriptions]:
+        with self.__lock:
+            subscriptions = self.__partitions.get(partition)
+            if subscriptions is None:
+                subscriptions = self.__partitions[partition] = Loading()
+                raise NotImplementedError  # start loading
+
+
 class SubscriptionConsumer:
-    def __init__(self, bootstrap_servers: str, shutdown_requested: Event) -> None:
+    def __init__(
+        self,
+        bootstrap_servers: str,
+        topic: str,
+        consumer_group: str,
+        partition_subscriptions_manager: PartitionSubscriptionsManager,
+        shutdown_requested: Event,
+    ) -> None:
         self.__bootstrap_servers = bootstrap_servers
+        self.__topic = topic
+        self.__consumer_group = consumer_group
+        self.__partition_subscriptions_manager = partition_subscriptions_manager
         self.__shutdown_requested = shutdown_requested
 
     def __run(self) -> None:
@@ -163,12 +181,14 @@ class SubscribedQueryExecutionConsumer:
         topic: str,
         consumer_group: str,
         partition_offsets_manager: PartitionOffsetsManager,
+        partition_subscriptions_manager: PartitionSubscriptionsManager,
         shutdown_requested: Event,
     ) -> None:
         self.__bootstrap_servers = bootstrap_servers
         self.__topic = topic
         self.__consumer_group = consumer_group
         self.__partition_offsets_manager = partition_offsets_manager
+        self.__partition_subscriptions_manager = partition_subscriptions_manager
         self.__shutdown_requested = shutdown_requested
 
     def __run(self) -> None:
@@ -178,41 +198,62 @@ class SubscribedQueryExecutionConsumer:
             {
                 "bootstrap.servers": self.__bootstrap_servers,
                 "group.id": self.__consumer_group,
+                "auto.offset.reset": "error",
+                "enable.auto.commit": False,
             }
         )
-
-        def on_state_change(partition: TopicPartition, state: PartitionState) -> None:
-            if state is PartitionState.UNKNOWN:
-                logger.debug("%r is in state %r, pausing...", partition, state)
-                consumer.pause(
-                    [ConfluentTopicPartition(partition.topic, partition.partition)]
-                )
-            else:
-                # TODO: Handle additional states as necessary.
-                raise ValueError("received unexpected state")
-
-        self.__partition_offsets_manager.add_callback(on_state_change)
 
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
         ) -> None:
             logger.debug("Received updated assignment: %r", partitions)
-            for partition in partitions:
-                with self.__partition_offsets_manager.get(
-                    TopicPartition(partition.topic, partition.partition)
-                ) as offsets:
-                    if partition.offset == OFFSET_INVALID:
-                        offsets.local = None
-                    else:
-                        assert partition.offset >= 0
-                        offsets.local = partition.offset
 
-        consumer.subscribe([self.__topic], on_assign=on_assign)
+            offsets: MutableMapping[TopicPartition, int] = {}
+            for partition in consumer.committed(partitions):
+                tp = TopicPartition(partition.topic, partition.partition)
+                offsets[tp] = (
+                    partition.offset
+                    if partition.offset != OFFSET_INVALID
+                    else consumer.get_watermark_offsets(partition)[0]
+                )  # TODO: This should be configurable
+
+            consumer.assign(
+                [
+                    ConfluentTopicPartition(tp.topic, tp.partition, offset)
+                    for tp, offset in offsets.items()
+                ]
+            )
+
+            for partition, offset in offsets.items():
+                with self.__partition_offsets_manager.get(partition) as offsets:
+                    offsets.local = offset
+
+        def on_revoke(
+            consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
+        ) -> None:
+            logger.debug("Received partition revocation: %r", partitions)
+            for partition in partitions:
+                tp = TopicPartition(partition.topic, partition.partition)
+                self.__partition_offsets_manager.delete(tp)
+
+        logger.debug("Subscribing to %r...", self.__topic)
+        consumer.subscribe([self.__topic], on_assign=on_assign, on_revoke=on_revoke)
 
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
             if message is None:
                 continue
+
+            error = message.error()
+            if error is not None:
+                raise Exception(error)
+
+            partition = TopicPartition(message.topic(), message.partition())
+            with self.__partition_offsets_manager.get(partition) as offsets:
+                # TODO: This should assert this doesn't invalidate our offset
+                # invariant. If it does, we need to handle it and pause or roll
+                # back.
+                offsets.local = message.offset()
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscribed-query-execution-consumer")
@@ -224,10 +265,12 @@ def run(
     remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
     topic: str = "events",
     commit_log_topic: str = "snuba-commit-log",
+    subscriptions_topic: str = "events-subscdriptions",
 ):
     shutdown_requested = Event()
 
     partition_offsets_manager = PartitionOffsetsManager(remote_consumer_groups)
+    partition_subscriptions_manager = PartitionSubscriptionsManager()
 
     # XXX: This will not type check -- these need a common type.
     futures = {
@@ -240,12 +283,19 @@ def run(
                 partition_offsets_manager,
                 shutdown_requested,
             ),
-            SubscriptionConsumer(bootstrap_servers, shutdown_requested),
+            SubscriptionConsumer(
+                bootstrap_servers,
+                subscriptions_topic,
+                consumer_group,
+                partition_subscriptions_manager,
+                shutdown_requested,
+            ),
             SubscribedQueryExecutionConsumer(
                 bootstrap_servers,
                 topic,
                 consumer_group,
                 partition_offsets_manager,
+                partition_subscriptions_manager,
                 shutdown_requested,
             ),
         ]
@@ -273,9 +323,11 @@ def run(
 
 
 if __name__ == "__main__":
+    import sys
+
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s %(levelname)-8s %(thread)s %(message)s",
     )
 
-    run()
+    run(topic=sys.argv[1])
