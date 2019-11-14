@@ -151,7 +151,16 @@ class CommitLogConsumer:
             if message is None:
                 continue
 
-            raise NotImplementedError
+            error = message.error()
+            if error is not None:
+                raise Exception(error)
+
+            [topic, partition, group] = message.key().decode("utf-8").split(":")
+            offset = int(message.value().decode("utf-8"))
+
+            stream = Stream(topic, int(partition))
+            with self.__stream_state_manager.get(stream) as state:
+                state.offsets.remote[group] = offset
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="commit-log-consumer")
@@ -196,7 +205,9 @@ class SubscriptionConsumer:
                 ]
             )
 
-            logger.debug("Assigning %r to %r...", sorted(subscription_streams), consumer)
+            logger.debug(
+                "Assigning %r to %r...", sorted(subscription_streams), consumer
+            )
             consumer.assign(
                 [
                     ConfluentTopicPartition(stream.topic, stream.partition)
@@ -210,6 +221,10 @@ class SubscriptionConsumer:
             message: Optional[Message] = consumer.poll(0.1)
             if message is None:
                 continue
+
+            error = message.error()
+            if error is not None:
+                raise Exception(error)
 
             raise NotImplementedError
 
@@ -300,7 +315,6 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
-                # print(stream, state)
                 state.offsets.local = message.offset() + 1
 
     def run(self) -> Future[None]:
@@ -384,10 +398,15 @@ if __name__ == "__main__":
 
     @cli.command()
     @click.pass_context
-    @click.option("--commit-probability", type=float, default=0.05)
+    @click.option("--commit-probability", type=float, default=0.002)
+    @click.option("--consumer-group", "-g", "consumer_groups", type=str, multiple=True)
     @click.option("--seed", type=str)
     def generator(
-        context, *, commit_probability: float, seed: Optional[str] = None
+        context,
+        *,
+        commit_probability: float,
+        consumer_groups: Sequence[str],
+        seed: Optional[str] = None,
     ) -> None:
         environment: Environment = context.obj
 
@@ -421,24 +440,40 @@ if __name__ == "__main__":
                 else:
                     queued = True
 
-        def on_delivery(error, message: Message, should_commit: bool) -> None:
+        def on_delivery(
+            error, message: Message, commit_consumer_groups: Sequence[str]
+        ) -> None:
             if error is not None:
                 raise Exception(error)
 
-            if should_commit:
-                # TODO: This message should actually include the commit data.
-                logger.debug('Committing offsets...')
+            for group in commit_consumer_groups:
+                logger.debug(
+                    "Committing offset (%r: %r) for group %r...",
+                    Stream(message.topic(), message.partition()),
+                    message.offset(),
+                    group,
+                )
                 produce(
-                    environment.get_commit_log_topic(), partition=message.partition(),
+                    environment.get_commit_log_topic(),
+                    key=f"{message.topic()}:{message.partition()}:{group}".encode(
+                        "utf-8"
+                    ),
+                    value=f"{message.offset()}".encode("utf-8"),
+                    partition=message.partition(),
                 )
 
         while True:
-            partition = random.choice(partitions)
-            should_commit = commit_probability > random.random()
             produce(
                 environment.get_topic(),
-                partition=partition,
-                on_delivery=partial(on_delivery, should_commit=should_commit),
+                partition=random.choice(partitions),
+                on_delivery=partial(
+                    on_delivery,
+                    commit_consumer_groups=[
+                        group
+                        for group in consumer_groups
+                        if commit_probability > random.random()
+                    ],
+                ),
             )
 
     @cli.command()
