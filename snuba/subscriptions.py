@@ -84,20 +84,60 @@ class PartitionOffsetsManager:
                     callback(partition, offsets.state)
 
 
+@dataclass
+class CommitData:
+    group: str
+    topic: str
+    partition: int
+    offset: int
+
+
 class CommitLogConsumer:
     def __init__(
         self,
         bootstrap_servers: str,
+        topic: str,
+        consumer_group: str,
         partition_offsets_manager: PartitionOffsetsManager,
         shutdown_requested: Event,
     ) -> None:
         self.__bootstrap_servers = bootstrap_servers
+        self.__topic = topic
+        self.__consumer_group = consumer_group
         self.__partition_offsets_manager = partition_offsets_manager
         self.__shutdown_requested = shutdown_requested
 
     def __run(self) -> None:
         logger.debug("Starting %r...", self)
-        self.__shutdown_requested.wait()
+
+        consumer = Consumer(
+            {
+                "bootstrap.servers": self.__bootstrap_servers,
+                "group.id": self.__consumer_group,
+                "enable.auto.commit": False,
+                "auto.offset.reset": "beginning",
+            }
+        )
+
+        consumer.subscribe([self.__topic])
+
+        while not self.__shutdown_requested.is_set():
+            message: Optional[Message] = consumer.poll(0.1)
+            if message is None:
+                continue
+
+            raise NotImplementedError  # TODO: Parse the message.
+
+            data = CommitData()
+
+            if data.group not in self.__consumer_group:
+                logger.debug("Skipping %r, group is not in consumer group set.", data)
+                continue
+
+            with self.__partition_offsets_manager.get(
+                TopicPartition(data.topic, data.partition)
+            ) as offsets:
+                offsets.remote[data.group] = data.offset
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="commit-log-consumer")
@@ -183,6 +223,8 @@ def run(
     consumer_group: str = "snuba-subscriptions",
     remote_consumer_groups: Sequence[str] = ["snuba-commit-log"],
     topic: str = "events",
+    commit_log_topic: str = "snuba-commit-log",
+    commit_log_consumer_group: str = "snuba-commit-log",
 ):
     shutdown_requested = Event()
 
@@ -193,7 +235,11 @@ def run(
         consumer.run(): consumer
         for consumer in [
             CommitLogConsumer(
-                bootstrap_servers, partition_offsets_manager, shutdown_requested
+                bootstrap_servers,
+                commit_log_topic,
+                commit_log_consumer_group,
+                partition_offsets_manager,
+                shutdown_requested,
             ),
             SubscriptionConsumer(bootstrap_servers, shutdown_requested),
             DatasetConsumer(
