@@ -108,7 +108,6 @@ class TransactionsMessageProcessor(MessageProcessor):
         contexts = _as_dict_safe(data.get('contexts', None))
 
         user_dict = data.get('user', data.get('sentry.interfaces.User', None)) or {}
-        print(user_dict)
         geo = user_dict.get('geo', None) or {}
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
