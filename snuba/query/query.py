@@ -4,6 +4,7 @@ from deprecation import deprecated
 from itertools import chain
 from typing import (
     Any,
+    Callable,
     Iterable,
     Mapping,
     MutableMapping,
@@ -113,14 +114,39 @@ class Query:
         tree.
         """
         return chain(*[
-            self.__selected_columns,
-            self.__aggregations,
-            [self.__array_join] if self.__array_join else [],
-            [self.__condition] if self.__condition else [],
-            self.__groupby,
-            [self.__having] if self.__having else [],
-            map(lambda orderby: orderby.node, self.__order_by),
+            chain(*self.__selected_columns),
+            chain(*self.__aggregations),
+            self.__array_join if self.__array_join else [],
+            self.__condition if self.__condition else [],
+            chain(*self.__groupby),
+            self.__having if self.__having else [],
+            chain(*map(lambda orderby: orderby.node, self.__order_by)),
         ])
+
+    def transform_expression(
+        self,
+        func: Callable[[Expression], Expression],
+    ) -> None:
+        """
+        Transforms in place the current query object by applying a transformation
+        function to all expressions contained in this query
+        """
+
+        def transform_expression_list(expressions: Sequence[Expression]):
+            return list(
+                map(lambda exp: exp.transform(func), expressions),
+            )
+
+        self.__selected_columns = transform_expression_list(self.__selected_columns)
+        self.__aggregations = transform_expression_list(self.__aggregations)
+        self.__array_join = self.__array_join.transform(func) if self.__array_join else None
+        self.__condition = self.__condition.transform(func) if self.__condition else None
+        self.__groupby = transform_expression_list(self.__groupby)
+        self.__having = self.__having.transform(func) if self.__having else None
+        self.__order_by = list(map(
+            lambda clause: clause.replace_node(clause.node.transform(func)),
+            self.__order_by,
+        ))
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source

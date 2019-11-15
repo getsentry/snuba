@@ -210,3 +210,9 @@ class OrderBy:
         # TODO: Consider adding a `formattable` abstraction above expression. Will
         # revisit when I will introduce the formatting logic.
         raise NotImplementedError
+
+    def replace_node(self, new_node: Expression):
+        """
+        Returns a new OrderBy clause with a new node.
+        """
+        return OrderBy(self.direction, new_node)
