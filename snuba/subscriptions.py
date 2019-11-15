@@ -40,12 +40,7 @@ class Stream:
 
 class Offsets:
 
-    State = Enum('State', [
-        'UNKNOWN',
-        'REMOTE_BEHIND',
-        'CAUGHT_UP',
-        'LOCAL_BEHIND',
-    ])
+    State = Enum("State", ["UNKNOWN", "REMOTE_BEHIND", "CAUGHT_UP", "LOCAL_BEHIND",])
 
     def __init__(self, local: int, remote: MutableMapping[str, Optional[int]]) -> None:
         self.__local = local
@@ -54,9 +49,7 @@ class Offsets:
         self.__callbacks: MutableSequence[Callable[[Offsets], None]] = []
 
     def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}(state={self.get_state()!r}, local={self.__local!r}, remote={self.__remote!r})"
-        )
+        return f"{type(self).__name__}(state={self.get_state()!r}, local={self.__local!r}, remote={self.__remote!r})"
 
     def get_local_offset(self) -> int:
         return self.__local
@@ -95,17 +88,14 @@ class Offsets:
 
 class Subscriptions:
 
-    State = Enum('State', [
-        'LOADING',
-        'STREAMING',
-    ])
+    State = Enum("State", ["LOADING", "STREAMING",])
 
     def __init__(self) -> None:
         self.__state = Subscriptions.State.LOADING
         self.__callbacks: MutableSequence[Callable[[Subscriptions], None]] = []
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}(state={self.get_state()!r})'
+        return f"{type(self).__name__}(state={self.get_state()!r})"
 
     def get_state(self) -> Subscriptions.State:
         return self.__state
@@ -126,7 +116,7 @@ class Subscriptions:
                 if error != KafkaError._PARTITION_EOF:
                     raise Exception(error)
         else:
-            raise ValueError('unexpected state')
+            raise ValueError("unexpected state")
 
         if state != self.get_state():
             self.__invoke_callbacks()
@@ -403,12 +393,19 @@ class SubscribedQueryExecutionConsumer:
         )
 
         def on_state_change(stream: Stream, state: StreamState) -> None:
-            if state.offsets.get_state() == Offsets.State.LOCAL_BEHIND and state.subscriptions.get_state() == Subscriptions.State.STREAMING:
-                logger.debug('Resuming %r (%r)...', stream, state)
-                consumer.resume([ConfluentTopicPartition(stream.topic, stream.partition)])
+            if (
+                state.offsets.get_state() == Offsets.State.LOCAL_BEHIND
+                and state.subscriptions.get_state() == Subscriptions.State.STREAMING
+            ):
+                logger.debug("Resuming %r (%r)...", stream, state)
+                consumer.resume(
+                    [ConfluentTopicPartition(stream.topic, stream.partition)]
+                )
             else:
-                logger.debug('Pausing %r (%r)...', stream, state)
-                consumer.pause([ConfluentTopicPartition(stream.topic, stream.partition)])
+                logger.debug("Pausing %r (%r)...", stream, state)
+                consumer.pause(
+                    [ConfluentTopicPartition(stream.topic, stream.partition)]
+                )
 
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
@@ -508,7 +505,7 @@ if __name__ == "__main__":
 
         logging.basicConfig(
             level=getattr(logging, log_level.upper()),
-            format="%(asctime)s %(levelname)-8s %(threadName)s %(message)s",
+            format="%(asctime)s %(levelname)-8s %(thread)s %(message)s",
         )
 
         context.obj = Environment(namespace)
