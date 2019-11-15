@@ -59,6 +59,12 @@ class JoinNode(RelationalSource, ABC):
         """
         raise NotImplementedError
 
+    def supports_sample(self) -> bool:
+        """
+        Disable the sample clause in joins
+        """
+        return False
+
 
 class TableJoinNode(TableSource, JoinNode):
     """
@@ -81,6 +87,12 @@ class TableJoinNode(TableSource, JoinNode):
 
     def get_tables(self) -> Mapping[str, TableSource]:
         return {self.__alias: self}
+
+    def supports_sample(self) -> bool:
+        """
+        Individual tables support SAMPLE
+        """
+        return True
 
 
 @dataclass(frozen=True)
