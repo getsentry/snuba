@@ -173,7 +173,6 @@ def test_duplicate_expression_alias():
 
 
 def test_order_by():
-    state.set_config('process_alias_without_neg', 1)
     dataset = get_dataset("groups")
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     body = {}
