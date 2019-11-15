@@ -93,11 +93,8 @@ class HierarchicalExpression(Expression):
         order we have in the transform method.
         """
         for child in self._get_children():
-            if isinstance(child, HierarchicalExpression):
-                for sub in child:
-                    yield sub
-            else:
-                yield child
+            for sub in child:
+                yield sub
         yield self
 
     @abstractmethod
