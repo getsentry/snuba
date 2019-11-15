@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import signal
 import time
@@ -427,6 +428,8 @@ class SubscribedQueryExecutionConsumer:
         logger.debug("Subscribing to %r...", self.__topic)
         consumer.subscribe([self.__topic], on_assign=on_assign, on_revoke=on_revoke)
 
+        counter = itertools.count(0)
+
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
             if message is None:
@@ -438,6 +441,9 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
+                processed = next(counter)
+                if processed % 100 == 0:
+                    logger.debug('%r messages processed.', processed)
                 state.offsets.set_local_offset(message.offset() + 1)
 
     def run(self) -> Future[None]:
@@ -598,6 +604,8 @@ if __name__ == "__main__":
                     ],
                 ),
             )
+
+            time.sleep(random.random() * 0.0001)
 
     @cli.command()
     @click.pass_context
