@@ -94,11 +94,42 @@ class Offsets:
 
 
 class Subscriptions:
+
+    State = Enum('State', [
+        'LOADING',
+        'STREAMING',
+    ])
+
     def __init__(self) -> None:
+        self.__state = Subscriptions.State.LOADING
         self.__callbacks: MutableSequence[Callable[[Subscriptions], None]] = []
 
     def __repr__(self) -> str:
-        return f'{type(self).__name__}()'
+        return f'{type(self).__name__}(state={self.get_state()!r})'
+
+    def get_state(self) -> Subscriptions.State:
+        return self.__state
+
+    def handle(self, message: Message) -> None:
+        state = self.get_state()
+
+        if state == Subscriptions.State.LOADING:
+            error = message.error()
+            if error is not None:
+                if error == KafkaError._PARTITION_EOF:
+                    self.__state = Subscriptions.State.STREAMING
+                else:
+                    raise Exception(error)
+        elif state == Subscriptions.State.STREAMING:
+            error = message.error()
+            if error is not None:
+                if error != KafkaError._PARTITION_EOF:
+                    raise Exception(error)
+        else:
+            raise ValueError('unexpected state')
+
+        if state != self.get_state():
+            self.__invoke_callbacks()
 
     def __invoke_callbacks(self) -> None:
         for callback in self.__callbacks:
@@ -332,7 +363,7 @@ class SubscriptionConsumer:
             if message.topic() is not None and message.partition() is not None:
                 stream = Stream(message.topic(), message.partition())
                 with self.__stream_state_manager.get(stream_mapping[stream]) as state:
-                    pass  # TODO
+                    state.subscriptions.handle(message)
             else:
                 error = message.error()
                 assert error is not None
@@ -372,12 +403,12 @@ class SubscribedQueryExecutionConsumer:
         )
 
         def on_state_change(stream: Stream, state: StreamState) -> None:
-            if state.offsets.get_state() != Offsets.State.LOCAL_BEHIND:
-                logger.debug('Pausing %r (%r)...', stream, state)
-                consumer.pause([ConfluentTopicPartition(stream.topic, stream.partition)])
-            else:
+            if state.offsets.get_state() == Offsets.State.LOCAL_BEHIND and state.subscriptions.get_state() == Subscriptions.State.STREAMING:
                 logger.debug('Resuming %r (%r)...', stream, state)
                 consumer.resume([ConfluentTopicPartition(stream.topic, stream.partition)])
+            else:
+                logger.debug('Pausing %r (%r)...', stream, state)
+                consumer.pause([ConfluentTopicPartition(stream.topic, stream.partition)])
 
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
@@ -429,7 +460,6 @@ class SubscribedQueryExecutionConsumer:
         consumer.subscribe([self.__topic], on_assign=on_assign, on_revoke=on_revoke)
 
         counter = itertools.count(0)
-
         while not self.__shutdown_requested.is_set():
             message: Optional[Message] = consumer.poll(0.1)
             if message is None:
@@ -441,9 +471,6 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
-                processed = next(counter)
-                if processed % 100 == 0:
-                    logger.debug('%r messages processed.', processed)
                 state.offsets.set_local_offset(message.offset() + 1)
 
     def run(self) -> Future[None]:
