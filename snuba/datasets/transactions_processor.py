@@ -106,14 +106,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["environment"] = promoted_tags.get("environment")
 
         contexts = _as_dict_safe(data.get('contexts', None))
-        print(data)
-        if "geo" not in contexts and isinstance(data.get("geo"), dict):
-            geo = data.get("geo")
-            contexts["geo"] = {
-                "country_code": geo.get("country_code", None),
-                "region": geo.get("region", None),
-                "city": geo.get("city", None),
-            }
+
+        user_dict = data.get('user', data.get('sentry.interfaces.User', None)) or {}
+        print(user_dict)
+        geo = user_dict.get('geo', None) or {}
+        if "geo" not in contexts and isinstance(geo, dict):
+            contexts["geo"] = geo
 
         extract_extra_contexts(processed, contexts)
 
@@ -123,7 +121,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
 
         user_data = {}
-        extract_user(user_data, data.get("user", {}))
+        extract_user(user_data, user_dict)
         processed["user"] = promoted_tags.get("sentry:user", "")
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]

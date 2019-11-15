@@ -74,7 +74,6 @@ class TransactionEvent:
                         },
                     ],
                 },
-                "geo": self.geo,
                 'spans': [
                     {
                         'sampled': True,
@@ -123,6 +122,7 @@ class TransactionEvent:
                     'ip_address': self.ipv4 or self.ipv6,
                     'id': self.user_id,
                     'email': self.user_email,
+                    "geo": self.geo,
                 },
                 'transaction': self.transaction_name,
             }
