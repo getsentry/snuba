@@ -8,6 +8,7 @@ from concurrent.futures import FIRST_EXCEPTION, wait
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
+from enum import Enum
 from random import Random
 from threading import Event, Lock
 from typing import (
@@ -36,59 +37,105 @@ class Stream:
     partition: int
 
 
-@dataclass
 class Offsets:
-    local: Optional[int]
-    remote: MutableMapping[str, Optional[int]]
+
+    State = Enum('State', [
+        'UNKNOWN',
+        'REMOTE_BEHIND',
+        'CAUGHT_UP',
+        'LOCAL_BEHIND',
+    ])
+
+    def __init__(self, local: int, remote: MutableMapping[str, Optional[int]]) -> None:
+        self.__local = local
+        self.__remote = remote
+
+        self.__callbacks: MutableSequence[Callable[[Offsets], None]] = []
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(state={self.get_state()!r}, local={self.__local!r}, remote={self.__remote!r})"
+        )
+
+    def get_local_offset(self) -> int:
+        return self.__local
+
+    def set_local_offset(self, offset: int):
+        state = self.get_state()
+        self.__local = offset
+        if self.get_state() != state:
+            self.__invoke_callbacks()
+
+    def set_remote_offset(self, group: str, offset: int):
+        if group not in self.__remote:
+            raise KeyError(f"{group!r} not in {sorted(self.__remote.keys())!r}")
+        state = self.get_state()
+        self.__remote[group] = offset
+        if self.get_state() != state:
+            self.__invoke_callbacks()
+
+    def get_state(self) -> Offsets.State:
+        for remote_offset in self.__remote.values():
+            if remote_offset is None:
+                return Offsets.State.UNKNOWN
+            elif self.__local > remote_offset:
+                return Offsets.State.REMOTE_BEHIND
+            elif self.__local == remote_offset:
+                return Offsets.State.CAUGHT_UP
+        return Offsets.State.LOCAL_BEHIND
+
+    def __invoke_callbacks(self) -> None:
+        for callback in self.__callbacks:
+            callback(self)
+
+    def add_callback(self, callback: Callable[[Offsets], None]) -> None:
+        self.__callbacks.append(callback)
 
 
 class Subscriptions:
-    def handle(self, message: Message) -> Subscriptions:
-        raise NotImplementedError
+    def __init__(self) -> None:
+        self.__callbacks: MutableSequence[Callable[[Subscriptions], None]] = []
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}()'
+
+    def __invoke_callbacks(self) -> None:
+        for callback in self.__callbacks:
+            callback(self)
+
+    def add_callback(self, callback: Callable[[Subscriptions], None]) -> None:
+        self.__callbacks.append(callback)
 
 
-class LoadingSubscriptions(Subscriptions):
-    def handle(
-        self, message: Message
-    ) -> Union[LoadingSubscriptions, StreamingSubscriptions]:
-        error = message.error()
-        if error is not None:
-            if error == KafkaError._PARTITION_EOF:
-                return StreamingSubscriptions()
-            else:
-                raise Exception(error)
-
-        raise NotImplementedError
-
-        return self
-
-
-class StreamingSubscriptions(Subscriptions):
-    def handle(self, message: Message) -> StreamingSubscriptions:
-        error = message.error()
-        if error is not None:
-            if error == KafkaError._PARTITION_EOF:
-                return self
-            else:
-                raise Exception(error)
-
-        raise NotImplementedError
-
-        return self
-
-
-@dataclass
 class StreamState:
-    offsets: Offsets
-    subscriptions: Subscriptions
+    def __init__(self, offsets: Offsets, subscriptions: Subscriptions) -> None:
+        self.__offsets = offsets
+        self.__subscriptions = subscriptions
 
-    __callbacks: MutableSequence[Callable[[StreamState], None]] = field(
-        default_factory=list, init=False, repr=False,
-    )
+        self.__callbacks: MutableSequence[Callable[[StreamState], None]] = []
+
+        self.__offsets.add_callback(lambda offsets: self.__invoke_callbacks())
+        self.__subscriptions.add_callback(
+            lambda subscriptions: self.__invoke_callbacks()
+        )
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.__offsets!r}, {self.__subscriptions!r})"
+
+    @property
+    def offsets(self) -> Offsets:
+        return self.__offsets
+
+    @property
+    def subscriptions(self) -> Subscriptions:
+        return self.__subscriptions
+
+    def __invoke_callbacks(self) -> None:
+        for callback in self.__callbacks:
+            callback(self)
 
     def add_callback(self, callback: Callable[[StreamState], None]) -> None:
         self.__callbacks.append(callback)
-        raise NotImplementedError
 
 
 class StreamStateManager:
@@ -209,7 +256,7 @@ class CommitLogConsumer:
 
             stream = Stream(topic, int(partition))
             with self.__stream_state_manager.get(stream) as state:
-                state.offsets.remote[group] = offset
+                state.offsets.set_remote_offset(group, offset)
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="commit-log-consumer")
@@ -284,7 +331,7 @@ class SubscriptionConsumer:
             if message.topic() is not None and message.partition() is not None:
                 stream = Stream(message.topic(), message.partition())
                 with self.__stream_state_manager.get(stream_mapping[stream]) as state:
-                    state.subscriptions.handle(message)
+                    pass  # TODO
             else:
                 error = message.error()
                 assert error is not None
@@ -324,7 +371,12 @@ class SubscribedQueryExecutionConsumer:
         )
 
         def on_state_change(stream: Stream, state: StreamState) -> None:
-            raise NotImplementedError
+            if state.offsets.get_state() != Offsets.State.LOCAL_BEHIND:
+                logger.debug('Pausing %r (%r)...', stream, state)
+                consumer.pause([ConfluentTopicPartition(stream.topic, stream.partition)])
+            else:
+                logger.debug('Resuming %r (%r)...', stream, state)
+                consumer.resume([ConfluentTopicPartition(stream.topic, stream.partition)])
 
         def on_assign(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
@@ -343,7 +395,7 @@ class SubscribedQueryExecutionConsumer:
                         else consumer.get_watermark_offsets(partition)[0],
                         remote={group: None for group in self.__remote_consumer_groups},
                     ),
-                    subscriptions=LoadingSubscriptions(),
+                    subscriptions=Subscriptions(),
                 )
                 state.add_callback(partial(on_state_change, stream))
                 streams[stream] = state
@@ -351,13 +403,16 @@ class SubscribedQueryExecutionConsumer:
             consumer.assign(
                 [
                     ConfluentTopicPartition(
-                        stream.topic, stream.partition, state.offsets.local
+                        stream.topic, stream.partition, state.offsets.get_local_offset()
                     )
                     for stream, state in streams.items()
                 ]
             )
 
             self.__stream_state_manager.assign(streams)
+
+            for stream, state in streams.items():
+                on_state_change(stream, state)  # XXX: clunky
 
         def on_revoke(
             consumer: Consumer, partitions: Sequence[ConfluentTopicPartition]
@@ -383,7 +438,7 @@ class SubscribedQueryExecutionConsumer:
 
             stream = Stream(message.topic(), message.partition())
             with self.__stream_state_manager.get(stream) as state:
-                state.offsets.local = message.offset() + 1
+                state.offsets.set_local_offset(message.offset() + 1)
 
     def run(self) -> Future[None]:
         return execute(self.__run, name="subscribed-query-execution-consumer")
@@ -546,8 +601,17 @@ if __name__ == "__main__":
 
     @cli.command()
     @click.pass_context
-    @click.option("--consumer-group", type=str, default="snuba-subscriptions")
-    def consumer(context, *, consumer_group: str) -> None:
+    @click.option("--consumer-group", "-g", type=str, default="snuba-subscriptions")
+    @click.option(
+        "--remote-consumer-group",
+        "-r",
+        "remote_consumer_groups",
+        type=str,
+        multiple=True,
+    )
+    def consumer(
+        context, *, consumer_group: str, remote_consumer_groups: Sequence[str]
+    ) -> None:
         environment: Environment = context.obj
 
         shutdown_requested = Event()
@@ -574,7 +638,7 @@ if __name__ == "__main__":
                     environment.get_kafka_configuration(),
                     environment.get_topic(),
                     consumer_group,
-                    [],  # TODO
+                    remote_consumer_groups,
                     stream_state_manager,
                     shutdown_requested,
                 ),
