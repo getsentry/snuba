@@ -35,12 +35,15 @@ class ClickhouseQuery:
         if query.get_final():
             from_clause = u'{} FINAL'.format(from_clause)
 
-        if query.get_sample():
-            sample_rate = query.get_sample()
-        elif settings.get_turbo():
-            sample_rate = snuba_settings.TURBO_SAMPLE_RATE
-        else:
+        if not query.get_data_source().supports_sample():
             sample_rate = None
+        else:
+            if query.get_sample():
+                sample_rate = query.get_sample()
+            elif settings.get_turbo():
+                sample_rate = snuba_settings.TURBO_SAMPLE_RATE
+            else:
+                sample_rate = None
 
         if sample_rate:
             from_clause = u'{} SAMPLE {}'.format(from_clause, sample_rate)

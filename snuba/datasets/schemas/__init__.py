@@ -57,6 +57,15 @@ class RelationalSource(ABC):
         """
         raise NotImplementedError
 
+    def supports_sample(self) -> bool:
+        """
+        TODO: This is a temporary method to prevent Clickhouse query to try to
+        add the SAMPLE clause to a JOIN expression, where SAMPLE not only is formatted
+        differently, but would have to be rethought since, in a join SAMPLE would
+        have to be applied table by table.
+        """
+        return True
+
 
 class Schema(ABC):
     """
