@@ -111,7 +111,6 @@ class TestEventsDataset(BaseEventsTest):
 
         This test is supposed to cover those cases.
         """
-        state.set_config('process_alias_without_neg', 1)
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query({}, source)
         # Columns that start with a negative sign (used in orderby to signify

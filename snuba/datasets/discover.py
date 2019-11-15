@@ -146,9 +146,9 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("timestamp", DateTime()),
                 ("platform", Nullable(String())),
                 ("environment", Nullable(String())),
-                ("sentry:release", Nullable(String())),
-                ("sentry:dist", Nullable(String())),
-                ("sentry:user", Nullable(String())),
+                ("release", Nullable(String())),
+                ("dist", Nullable(String())),
+                ("user", Nullable(String())),
                 ("transaction", Nullable(String())),
                 ("message", Nullable(String())),
                 # User
@@ -269,12 +269,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "'transaction'"
             if column_name == "timestamp":
                 return "finish_ts"
-            if column_name == "sentry:release":
-                return "release"
-            if column_name == "sentry:dist":
-                return "dist"
-            if column_name == "sentry:user":
-                return "user"
             if column_name == "username":
                 return "user_name"
             if column_name == "email":
@@ -286,6 +280,12 @@ class DiscoverDataset(TimeSeriesDataset):
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
+            if column_name == "release":
+                column_name = "tags[sentry:release]"
+            if column_name == "dist":
+                column_name = "tags[sentry:dist]"
+            if column_name == "user":
+                column_name = "tags[sentry:user]"
             if self.__transactions_columns.get(column_name):
                 return "NULL"
 
