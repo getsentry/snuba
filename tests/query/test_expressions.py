@@ -1,5 +1,4 @@
 from snuba.query.expressions import (
-    Aggregation,
     Column,
     Expression,
     Literal,
@@ -114,29 +113,3 @@ def test_mapping_complex_expression() -> None:
     ]
 
     assert iterate == expected
-
-
-def test_aggregations() -> None:
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t1")
-    function_1 = FunctionCall(None, "f1", [column1, column2])
-    column3 = Column(None, "c3", "t1")
-    function_2 = FunctionCall(None, "f2", [column3, function_1])
-
-    aggregation = Aggregation(None, "count", [function_2])
-    expected = [column3, column1, column2, function_1, function_2, aggregation]
-    assert list(aggregation) == expected
-
-    column4 = Column(None, "c4", "t2")
-    a2 = aggregation.transform(
-        lambda e: column4 if isinstance(e, Column) and e.column_name == "c1" else e
-    )
-
-    function_1b = FunctionCall(None, "f1", [column4, column2])
-    function_2b = FunctionCall(None, "f2", [column3, function_1b])
-    expected = [
-        column3, column4, column2, function_1b, function_2b,
-        Aggregation(None, "count", [function_2b]),
-    ]
-
-    assert list(a2) == expected

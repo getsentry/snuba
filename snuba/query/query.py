@@ -7,7 +7,6 @@ from itertools import chain
 from typing import (
     Any,
     Callable,
-    Generic,
     Iterable,
     Mapping,
     MutableMapping,
@@ -20,7 +19,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression
+from snuba.query.expressions import Column, Expression
 from snuba.query.types import Condition
 from snuba.util import (
     SAFE_COL_RE,
@@ -99,7 +98,6 @@ class Query:
         data_source: RelationalSource,
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[Expression]] = None,
-        aggregations: Optional[Sequence[NodeAggregation]] = None,
         array_join: Optional[Column] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
@@ -117,8 +115,8 @@ class Query:
         self.__prewhere_conditions: Sequence[Condition] = []
 
         # New data model
+        # TODO: Provide a better typing for this.
         self.__selected_columns = selected_columns or []
-        self.__aggregations = aggregations or []
         self.__array_join = array_join
         self.__condition = condition
         self.__groupby = groupby or []
@@ -134,7 +132,6 @@ class Query:
         """
         return chain(*[
             chain(*self.__selected_columns),
-            chain(*self.__aggregations),
             self.__array_join if self.__array_join else [],
             self.__condition if self.__condition else [],
             chain(*self.__groupby),
@@ -150,15 +147,15 @@ class Query:
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
         """
-        TExpr = TypeVar("TExpr")
 
-        def transform_expression_list(expressions: Sequence[TExpr]) -> Sequence[TExpr]:
+        def transform_expression_list(
+            expressions: Sequence[Expression],
+        ) -> Sequence[Expression]:
             return list(
                 map(lambda exp: exp.transform(func), expressions),
             )
 
         self.__selected_columns = transform_expression_list(self.__selected_columns)
-        self.__aggregations = transform_expression_list(self.__aggregations)
         self.__array_join = self.__array_join.transform(func) if self.__array_join else None
         self.__condition = self.__condition.transform(func) if self.__condition else None
         self.__groupby = transform_expression_list(self.__groupby)

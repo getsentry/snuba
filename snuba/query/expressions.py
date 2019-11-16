@@ -43,60 +43,6 @@ class Expression(ABC):
         raise NotImplementedError
 
 
-class HierarchicalExpression(Expression):
-    """
-    Expression that represent an intermediate node in the tree, which thus
-    can have children.
-
-    It provides two methods to iterate and transform. They both traverse
-    the subtree in a postfix order.
-    """
-
-    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
-        """
-        Transforms the subtree starting from the children and then applying
-        the transformation function to the root.
-        This order is chosen to make the semantics of transform more meaningful,
-        the transform operation will be performed on thechildren first (think
-        about the parameters of a function call) and then to the node itself.
-
-        The consequence of this is that, if the transformation function replaces
-        the root with something else, with different children, we trust the
-        transformation function and we do not run that same function over the
-        new children.
-        """
-        transformed = self._duplicate_with_new_children(
-            list(map(lambda child: child.transform(func), self._get_children()))
-        )
-        return func(transformed)
-
-    def __iter__(self) -> Iterator[Expression]:
-        """
-        Traverse the subtree in a postfix order.
-        The order here is arbitrary, postfix is chosen to follow the same
-        order we have in the transform method.
-        """
-        for child in self._get_children():
-            for sub in child:
-                yield sub
-        yield self
-
-    @abstractmethod
-    def _get_children(self) -> Sequence[Expression]:
-        """
-        To be implemented by the subclasses to provide the list of children
-        for iteration/transformation.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
-        """
-        Return a new instance of the expression with a new set of children.
-        """
-        raise NotImplementedError
-
-
 @dataclass(frozen=True)
 class Literal(Expression):
     """
@@ -127,7 +73,7 @@ class Column(Expression):
 
 
 @dataclass(frozen=True)
-class FunctionCall(HierarchicalExpression):
+class FunctionCall(Expression):
     """
     Represents an expression that resolves to a function call on Clickhouse.
     This class also represent conditions. Since Clickhouse supports both the conventional
@@ -139,27 +85,33 @@ class FunctionCall(HierarchicalExpression):
     function_name: str
     parameters: Sequence[Expression]
 
-    def _get_children(self) -> Sequence[Expression]:
-        return self.parameters
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        """
+        Transforms the subtree starting from the children and then applying
+        the transformation function to the root.
+        This order is chosen to make the semantics of transform more meaningful,
+        the transform operation will be performed on thechildren first (think
+        about the parameters of a function call) and then to the node itself.
 
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
-        return FunctionCall(self.alias, self.function_name, children)
+        The consequence of this is that, if the transformation function replaces
+        the root with something else, with different children, we trust the
+        transformation function and we do not run that same function over the
+        new children.
+        """
+        transformed = FunctionCall(
+            self.alias,
+            self.function_name,
+            list(map(lambda child: child.transform(func), self.parameters)),
+        )
+        return func(transformed)
 
-
-@dataclass(frozen=True)
-class Aggregation(HierarchicalExpression):
-    """
-    Represents an aggregation function to be applied to an expression in the
-    current query.
-
-    TODO: I don't think this should exist, but as of now a lot of our query
-    processing still relies on aggregation being a first class concept.
-    """
-    function_name: str
-    parameters: Sequence[Expression]
-
-    def _get_children(self) -> Sequence[Expression]:
-        return self.parameters
-
-    def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
-        return Aggregation(self.alias, self.function_name, children)
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a postfix order.
+        The order here is arbitrary, postfix is chosen to follow the same
+        order we have in the transform method.
+        """
+        for child in self.parameters:
+            for sub in child:
+                yield sub
+        yield self
