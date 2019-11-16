@@ -16,10 +16,11 @@ def test_iterate() -> None:
     function_1 = FunctionCall(None, "f1", [column1, column2])
 
     column3 = Column(None, "c2", "t1")
+    column4 = Column(None, "c3", "t1")
     literal = Literal(None, "blablabla")
-    function_2 = FunctionCall(None, "f2", [column3, function_1, literal])
+    function_2 = FunctionCall(None, "f2", [column3, function_1, literal], [column4])
 
-    expected = [column3, column1, column2, function_1, literal, function_2]
+    expected = [column3, column1, column2, function_1, literal, column4, function_2]
     assert list(function_2) == expected
 
 
@@ -62,7 +63,7 @@ def test_mapping_column_list() -> None:
     f = new_selected_cols[1]
     assert isinstance(f, FunctionCall)
     assert f.function_name == "f"
-    assert f.parameters == [column2]
+    assert f.parameters_group1 == [column2]
 
 
 def test_add_alias() -> None:

@@ -182,6 +182,9 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
+    def get_selected_columns_exp(self) -> Sequence[Expression]:
+        return self.__selected_columns
+
     def set_selected_columns(
         self,
         columns: Sequence[Any],
@@ -200,6 +203,9 @@ class Query:
     def get_groupby(self) -> Optional[Sequence[Groupby]]:
         return self.__body.get("groupby")
 
+    def get_groupby_exp(self) -> Sequence[Expression]:
+        return self.__groupby
+
     def set_groupby(
         self,
         groupby: Sequence[Aggregation],
@@ -214,6 +220,9 @@ class Query:
 
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
+
+    def get_conditions_exp(self) -> Optional[Condition]:
+        return self.__condition
 
     def set_conditions(
         self,
@@ -254,8 +263,14 @@ class Query:
     def get_having(self) -> Sequence[Condition]:
         return self.__body.get("having", [])
 
+    def get_having_exp(self) -> Optional[Expression]:
+        return self.__having
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
+
+    def get_orderby_exp(self) -> Sequence[OrderBy]:
+        return self.__order_by
 
     def set_orderby(
         self,

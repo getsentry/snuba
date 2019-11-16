@@ -81,9 +81,17 @@ class FunctionCall(Expression):
     representation only in the AST to make query processing easier.
     A query processor would not have to care of processing both functional conditions
     and infix conditions.
+
+    This function call abstraction can support both functions with one parameters group
+    like f(X,Y) and functions with two parameters groups f(X, Y)(Z).
+    Since we are not doing anything except transforming and iterating over these functions
+    there is no need to have a subclass for these two cases.
     """
     function_name: str
-    parameters: Sequence[Expression]
+    parameters_group1: Sequence[Expression]
+    # This is for expressions like f(x)(y).
+    # None means there is no second gorup of parameters
+    parameters_group2: Optional[Sequence[Expression]] = None
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -101,7 +109,10 @@ class FunctionCall(Expression):
         transformed = FunctionCall(
             self.alias,
             self.function_name,
-            list(map(lambda child: child.transform(func), self.parameters)),
+            list(map(lambda child: child.transform(func), self.parameters_group1)),
+            list(map(lambda child: child.transform(func), self.parameters_group2))
+            if self.parameters_group2 is not None
+            else None
         )
         return func(transformed)
 
@@ -111,7 +122,11 @@ class FunctionCall(Expression):
         The order here is arbitrary, postfix is chosen to follow the same
         order we have in the transform method.
         """
-        for child in self.parameters:
+        for child in self.parameters_group1:
             for sub in child:
                 yield sub
+        if self.parameters_group2:
+            for child in self.parameters_group2:
+                for sub in child:
+                    yield sub
         yield self

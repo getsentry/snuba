@@ -80,16 +80,28 @@ def test_replace_expression():
 
     query.transform_expression(replace)
 
-    expected_expressions = [
-        # selected columns
-        Literal(None, "f1"), FunctionCall("alias", "tag", [Literal(None, "f1")]),
-        # condition
-        Literal(None, "f1"), FunctionCall("alias", "tag", [Literal(None, "f1")]), Literal(None, "1"),
-        binary_condition(None, ConditionFunctions.EQ, FunctionCall("alias", "tag", [Literal(None, "f1")]), Literal(None, "1")),
-        # groupby
-        Literal(None, "f1"), FunctionCall("alias", "tag", [Literal(None, "f1")]),
-        # order by
-        column2, function_2,
-    ]
+    expected_query = Query(
+        {},
+        TableSource("my_table", ColumnSet([])),
+        selected_columns=[
+            FunctionCall("alias", "tag", [Literal(None, "f1")]),
+        ],
+        array_join=None,
+        condition=binary_condition(
+            None,
+            ConditionFunctions.EQ,
+            FunctionCall("alias", "tag", [Literal(None, "f1")]),
+            Literal(None, "1"),
+        ),
+        groupby=[FunctionCall("alias", "tag", [Literal(None, "f1")])],
+        having=None,
+        order_by=[orderby],
+    )
 
-    assert list(query.get_all_expressions()) == expected_expressions
+    assert query.get_selected_columns_exp() == expected_query.get_selected_columns_exp()
+    assert query.get_conditions_exp() == expected_query.get_conditions_exp()
+    assert query.get_groupby_exp() == expected_query.get_groupby_exp()
+    assert query.get_having_exp() == expected_query.get_having_exp()
+    assert query.get_orderby_exp() == expected_query.get_orderby_exp()
+
+    assert list(query.get_all_expressions()) == list(expected_query.get_all_expressions())
