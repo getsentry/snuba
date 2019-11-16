@@ -50,7 +50,7 @@ class OrderBy:
     direction: OrderByDirection
     node: Expression
 
-    def replace_node(self, new_node: Expression):
+    def replace_node(self, new_node: Expression) -> OrderBy:
         """
         Returns a new OrderBy clause with a new node.
         """
@@ -98,7 +98,7 @@ class Query:
         data_source: RelationalSource,
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[Expression]] = None,
-        array_join: Optional[Column] = None,
+        array_join: Optional[Expression] = None,
         condition: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
@@ -221,7 +221,7 @@ class Query:
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
 
-    def get_conditions_exp(self) -> Optional[Condition]:
+    def get_conditions_exp(self) -> Optional[Expression]:
         return self.__condition
 
     def set_conditions(
