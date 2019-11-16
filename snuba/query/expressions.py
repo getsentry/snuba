@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import Callable, Iterator, Optional, Sequence
+from typing import Callable, Iterator, Optional, Sequence, Union
 
 
 @dataclass(frozen=True)
@@ -14,25 +13,10 @@ class Expression(ABC):
     includes column names, function calls and boolean conditions (which are
     function calls themselves in the AST), literals, etc.
 
-    The root of the tree is not a Node itself yet (since it is the Query object).
-    Representing the root as a node itself does not seem very useful right now
-    since we never traverse the full tree. We could revisit that later.
-
-    All expression can have an optional alias.
+    All expressions can have an optional alias.
     """
 
     alias: Optional[str]
-
-    @abstractmethod
-    def format(self) -> str:
-        """
-        Turn this node into a string for the Clickhouse query.
-
-        TODO: provide a clickhouse formatter to this method so that, through
-        a strategy pattern, this class will provide the content for the query
-        and the clickhouse formatter will provide the format.
-        """
-        raise NotImplementedError
 
     @abstractmethod
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
@@ -118,10 +102,7 @@ class Literal(Expression):
     """
     A literal in the SQL expression
     """
-    value: str
-
-    def format(self) -> str:
-        raise NotImplementedError
+    value: Union[None, bool, str, float, int]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
@@ -137,9 +118,6 @@ class Column(Expression):
     """
     column_name: str
     table_name: Optional[str]
-
-    def format(self) -> str:
-        raise NotImplementedError
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
@@ -161,9 +139,6 @@ class FunctionCall(HierarchicalExpression):
     function_name: str
     parameters: Sequence[Expression]
 
-    def format(self) -> str:
-        raise NotImplementedError
-
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
@@ -183,33 +158,8 @@ class Aggregation(HierarchicalExpression):
     function_name: str
     parameters: Sequence[Expression]
 
-    def format(self) -> str:
-        raise NotImplementedError
-
     def _get_children(self) -> Sequence[Expression]:
         return self.parameters
 
     def _duplicate_with_new_children(self, children: Sequence[Expression]) -> Expression:
         return Aggregation(self.alias, self.function_name, children)
-
-
-class OrderByDirection(Enum):
-    ASC = "asc"
-    DESC = "desc"
-
-
-@dataclass(frozen=True)
-class OrderBy:
-    direction: OrderByDirection
-    node: Expression
-
-    def format(self) -> str:
-        # TODO: Consider adding a `formattable` abstraction above expression. Will
-        # revisit when I will introduce the formatting logic.
-        raise NotImplementedError
-
-    def replace_node(self, new_node: Expression):
-        """
-        Returns a new OrderBy clause with a new node.
-        """
-        return OrderBy(self.direction, new_node)

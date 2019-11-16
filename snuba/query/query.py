@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from deprecation import deprecated
+from enum import Enum
 from itertools import chain
 from typing import (
     Any,
     Callable,
+    Generic,
     Iterable,
     Mapping,
     MutableMapping,
@@ -17,7 +20,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression, OrderBy
+from snuba.query.expressions import Aggregation as NodeAggregation, Column, Expression
 from snuba.query.types import Condition
 from snuba.util import (
     SAFE_COL_RE,
@@ -36,6 +39,23 @@ Groupby = Sequence[Any]
 Limitby = Tuple[int, str]
 
 TElement = TypeVar("TElement")
+
+
+class OrderByDirection(Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+@dataclass(frozen=True)
+class OrderBy:
+    direction: OrderByDirection
+    node: Expression
+
+    def replace_node(self, new_node: Expression):
+        """
+        Returns a new OrderBy clause with a new node.
+        """
+        return OrderBy(self.direction, new_node)
 
 
 class Query:
@@ -97,7 +117,6 @@ class Query:
         self.__prewhere_conditions: Sequence[Condition] = []
 
         # New data model
-        # TODO: Provide a better typing for this.
         self.__selected_columns = selected_columns or []
         self.__aggregations = aggregations or []
         self.__array_join = array_join
@@ -131,8 +150,9 @@ class Query:
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
         """
+        TExpr = TypeVar("TExpr")
 
-        def transform_expression_list(expressions: Sequence[Expression]):
+        def transform_expression_list(expressions: Sequence[TExpr]) -> Sequence[TExpr]:
             return list(
                 map(lambda exp: exp.transform(func), expressions),
             )
