@@ -7,7 +7,7 @@ from typing import Any, MutableMapping, NamedTuple
 
 from snuba import settings, state
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.request import Request
 from snuba.state.rate_limit import RateLimitAggregator, RateLimitExceeded, PROJECT_RATE_LIMIT_NAME
 from snuba.util import (
@@ -28,7 +28,7 @@ class QueryResult(NamedTuple):
 
 def raw_query(
     request: Request,
-    query: ClickhouseQuery,
+    query: DictClickhouseQuery,
     client: ClickhousePool,
     timer: Timer,
     stats=None,

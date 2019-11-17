@@ -1,3 +1,6 @@
+from abc import ABC, abstractmethod
+from typing import Optional
+
 from snuba import settings as snuba_settings
 from snuba import util
 from snuba.query.columns import (
@@ -7,13 +10,28 @@ from snuba.query.columns import (
 from snuba.datasets.dataset import Dataset
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
+from snuba.query.expressions import Expression
 from snuba.request.request_settings import RequestSettings
 
 
-class ClickhouseQuery:
+class ClickhouseQuery(ABC):
     """
     Generates and represents a Clickhouse query from a Request
     and a snuba Query
+    """
+
+    @abstractmethod
+    def format_sql(self) -> str:
+        raise NotImplementedError
+
+
+class DictClickhouseQuery(ClickhouseQuery):
+    """
+    Legacy Clickhouse query that transforms the Snuba Query based
+    on the original query body dictionary into a string dunring construction
+    without additional processing.
+
+    To be used until the AST is not complete.
     """
 
     def __init__(self,
@@ -102,3 +120,50 @@ class ClickhouseQuery:
     def format_sql(self) -> str:
         """Produces a SQL string from the parameters."""
         return self.__formatted_query
+
+
+class AstClickhouseQuery(ClickhouseQuery):
+    """
+    Clickhouse query that takes the content from the Snuba Query
+    AST and can be processed (through query processors) for Clickhouse
+    specific customizations.
+
+    Here the process of formatting the query, is independent from
+    the query body dictionary and it is performed starting from the
+    AST.
+    """
+
+    def __init__(self,
+        query: Query,
+        settings: RequestSettings,
+    ) -> None:
+        # Snuba query structure
+        # Referencing them here directly since it makes it easier
+        # to process this query independently from the Snuba Query
+        # and there is no risk in doing so since they are immutable.
+        self.__selected_columns = query.get_selected_columns_exp()
+        self.__condition = query.get_conditions_exp()
+        self.__groupby = query.get_groupby_exp()
+        self.__having = query.get_having_exp()
+        self.__orderby = query.get_orderby_exp()
+        self.__data_source = query.get_data_source()
+        self.__arrayjoin = query.get_arrayjoin_exp()
+        self.__granularity = query.get_granularity()
+        self.__limit = query.get_limit()
+        self.__limitby = query.get_limitby()
+        self.__offset = query.get_offset()
+
+        # Clickhouse specific fields
+        self.__prewhere: Optional[Expression] = None
+        self.__final = settings.get_turbo()
+
+        # Attributes that should be clickhouse specific that
+        # have to be removed from the Snuba Query
+        self.__sample = query.get_sample()
+        self.__hastotals = query.has_totals()
+
+    def format_sql(self) -> str:
+        """
+        TODO: Do something interesting here.
+        """
+        raise NotImplementedError
