@@ -222,7 +222,7 @@ class TestTransactionsApi(BaseApiTest):
             'dataset': 'transactions',
             'project': 1,
             'selected_columns': ['transaction_name'],
-            'aggregations': [['apdex(duration, 10)', '', 'apdex_score']],
+            'aggregations': [['apdex(duration, 300)', '', 'apdex_score']],
             'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
             'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
             'orderby': 'transaction_name',

@@ -102,7 +102,7 @@ def function_expr(fn: str, args_expr: str='') -> str:
             return "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
                 col=escape_col(match.group(1)),
                 satisfied=match.group(2),
-                tolerated=match.group(2) * 4,
+                tolerated=int(match.group(2)) * 4,
             )
         raise ValueError("Invalid format for apdex()")
 
