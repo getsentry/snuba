@@ -220,4 +220,4 @@ class TestUtil(BaseTest):
             column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
             for (agg, col, alias) in body['aggregations']
         ]
-        assert exprs == ['((countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 300300300300)) / 2)) / count() AS apdex_score)']
+        assert exprs == ['((countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 1200)) / 2)) / count() AS apdex_score)']
