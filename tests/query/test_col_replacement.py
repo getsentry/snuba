@@ -18,7 +18,7 @@ test_data = [
         {
             "selected_columns": ["c3", "c2", ["f1", ["c3"]]],
             "conditions": [["c3", "=", "a"]],
-        }
+        },
     ),
     (
         # Test simple change in all fields
@@ -44,34 +44,32 @@ test_data = [
     (
         # Test complex nested function
         {
-            "selected_columns": [[
-                "function",
+            "selected_columns": [
                 [
+                    "function",
                     [
-                        "another_function",
-                        ["column", "another_column"]
+                        ["another_function", ["column", "another_column"]],
+                        "column",
+                        "another_column",
                     ],
-                    "column",
-                    "another_column"
-                ],
-                "column"  # alias
-            ]]
+                    "column",  # alias
+                ]
+            ]
         },
         "column",
         "replaced",
         {
-            "selected_columns": [[
-                "function",
+            "selected_columns": [
                 [
+                    "function",
                     [
-                        "another_function",
-                        ["replaced", "another_column"]
+                        ["another_function", ["replaced", "another_column"]],
+                        "replaced",
+                        "another_column",
                     ],
-                    "replaced",
-                    "another_column"
-                ],
-                "column"
-            ]]
+                    "column",
+                ]
+            ]
         },
     ),
     (
@@ -107,45 +105,19 @@ test_data = [
         # Test aggregate with complex expression
         {
             "aggregations": [
-                [
-                    "myAggregate()",
-                    [[
-                        "function",
-                        ["column", "another_column"]
-                    ]],
-                    "c1"
-                ],
-                [
-                    "myAggregate()",
-                    [
-                        "column", "another_column", "column"
-                    ],
-                    "c1"
-                ],
+                ["myAggregate()", [["function", ["column", "another_column"]]], "c1"],
+                ["myAggregate()", ["column", "another_column", "column"], "c1"],
             ],
         },
         "column",
         "replaced",
         {
             "aggregations": [
-                [
-                    "myAggregate()",
-                    [[
-                        "function",
-                        ["replaced", "another_column"]
-                    ]],
-                    "c1"
-                ],
-                [
-                    "myAggregate()",
-                    [
-                        "replaced", "another_column", "replaced"
-                    ],
-                    "c1"
-                ],
+                ["myAggregate()", [["function", ["replaced", "another_column"]]], "c1"],
+                ["myAggregate()", ["replaced", "another_column", "replaced"], "c1"],
             ],
         },
-    )
+    ),
 ]
 
 

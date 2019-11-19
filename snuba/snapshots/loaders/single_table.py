@@ -14,28 +14,29 @@ class SingleTableBulkLoader(BulkLoader):
     Load data from a source table into one clickhouse destination table.
     """
 
-    def __init__(self,
-                source: BulkLoadSource,
-                dest_table: str,
-                source_table: str,
-                row_processor: Callable[[SnapshotTableRow], WriterTableRow],
-            ):
+    def __init__(
+        self,
+        source: BulkLoadSource,
+        dest_table: str,
+        source_table: str,
+        row_processor: Callable[[SnapshotTableRow], WriterTableRow],
+    ):
         self.__source = source
         self.__dest_table = dest_table
         self.__source_table = source_table
         self.__row_processor = row_processor
 
     def load(self, writer: BufferedWriterWrapper) -> None:
-        logger = logging.getLogger('snuba.bulk-loader')
+        logger = logging.getLogger("snuba.bulk-loader")
 
-        clickhouse_ro = ClickhousePool(client_settings={
-            'readonly': True,
-        })
-        clickhouse_tables = clickhouse_ro.execute('show tables')
+        clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
+        clickhouse_tables = clickhouse_ro.execute("show tables")
         if (self.__dest_table,) not in clickhouse_tables:
             raise ValueError("Destination table %s does not exists" % self.__dest_table)
 
-        table_content = clickhouse_ro.execute("select count(*) from %s" % self.__dest_table)
+        table_content = clickhouse_ro.execute(
+            "select count(*) from %s" % self.__dest_table
+        )
         if table_content != [(0,)]:
             raise ValueError("Destination Table is not empty")
 

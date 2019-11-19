@@ -18,6 +18,7 @@ class Request:
     @property
     @deprecated(
         details="Do not access the internal query representation "
-        "use the specific accessor methods on the query object instead.")
+        "use the specific accessor methods on the query object instead."
+    )
     def body(self):
         return ChainMap(self.query.get_body(), *self.extensions.values())

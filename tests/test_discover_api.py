@@ -122,7 +122,11 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert len(data["data"]) == 1, data
-        assert data["data"][0] == {"type": "error", "tags[custom_tag]": "custom_value", "release": None}
+        assert data["data"][0] == {
+            "type": "error",
+            "tags[custom_tag]": "custom_value",
+            "release": None,
+        }
 
         response = self.app.post(
             "/query",

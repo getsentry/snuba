@@ -10,16 +10,17 @@ from snuba.request.request_settings import RequestSettings
 
 test_data = [
     (
-        {
-            "conditions": [
-                [["positionCaseInsensitive", ["message", "abc"]], "!=", 0]
-            ],
-        },
-        ["event_id", "issue", "tags[sentry:release]", "message", "environment", "project_id"],
-        [],
+        {"conditions": [[["positionCaseInsensitive", ["message", "abc"]], "!=", 0]]},
         [
-            [["positionCaseInsensitive", ["message", "abc"]], "!=", 0]
+            "event_id",
+            "issue",
+            "tags[sentry:release]",
+            "message",
+            "environment",
+            "project_id",
         ],
+        [],
+        [[["positionCaseInsensitive", ["message", "abc"]], "!=", 0]],
     ),
     (
         # Add pre-where condition in the expected order
@@ -32,47 +33,25 @@ test_data = [
             ],
         },
         ["a", "b", "c"],
-        [
-            ["d", "=", "1"],
-            ["c", "=", "3"],
-        ],
-        [
-            ["a", "=", "1"],
-            ["b", "=", "2"],
-        ],
+        [["d", "=", "1"], ["c", "=", "3"]],
+        [["a", "=", "1"], ["b", "=", "2"]],
     ),
     (
         # Do not add conditions that are parts of an OR
-        {
-            "conditions": [
-                [
-                    ["a", "=", "1"],
-                    ["b", "=", "2"],
-                ],
-                ["c", "=", "3"],
-            ],
-        },
+        {"conditions": [[["a", "=", "1"], ["b", "=", "2"]], ["c", "=", "3"]]},
         ["a", "b", "c"],
-        [
-            [
-                ["a", "=", "1"],
-                ["b", "=", "2"],
-            ],
-        ],
-        [
-            ["c", "=", "3"],
-        ],
-    )
+        [[["a", "=", "1"], ["b", "=", "2"]]],
+        [["c", "=", "3"]],
+    ),
 ]
 
 
-@pytest.mark.parametrize("query_body, keys, new_conditions, prewhere_conditions", test_data)
+@pytest.mark.parametrize(
+    "query_body, keys, new_conditions, prewhere_conditions", test_data
+)
 def test_prewhere(query_body, keys, new_conditions, prewhere_conditions) -> None:
     settings.MAX_PREWHERE_CONDITIONS = 2
-    query = Query(
-        query_body,
-        TableSource("my_table", ColumnSet([]), None, keys),
-    )
+    query = Query(query_body, TableSource("my_table", ColumnSet([]), None, keys),)
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     processor = PrewhereProcessor()

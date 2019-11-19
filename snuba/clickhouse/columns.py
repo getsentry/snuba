@@ -9,22 +9,21 @@ class Column(object):
         self.type = type
 
     def __repr__(self):
-        return 'Column({}, {})'.format(repr(self.name), repr(self.type))
+        return "Column({}, {})".format(repr(self.name), repr(self.type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.name == other.name \
+        return (
+            self.__class__ == other.__class__
+            and self.name == other.name
             and self.type == other.type
+        )
 
     def for_schema(self):
-        return '{} {}'.format(escape_col(self.name), self.type.for_schema())
+        return "{} {}".format(escape_col(self.name), self.type.for_schema())
 
     @staticmethod
     def to_columns(columns):
-        return [
-            Column(*col) if not isinstance(col, Column) else col
-            for col in columns
-        ]
+        return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
 
 class FlattenedColumn(object):
@@ -33,23 +32,27 @@ class FlattenedColumn(object):
         self.name = name
         self.type = type
 
-        self.flattened = '{}.{}'.format(self.base_name, self.name) if self.base_name else self.name
+        self.flattened = (
+            "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
+        )
         self.escaped = escape_col(self.flattened)
 
     def __repr__(self):
-        return 'FlattenedColumn({}, {}, {})'.format(
+        return "FlattenedColumn({}, {}, {})".format(
             repr(self.base_name), repr(self.name), repr(self.type)
         )
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.flattened == other.flattened \
+        return (
+            self.__class__ == other.__class__
+            and self.flattened == other.flattened
             and self.type == other.type
+        )
 
 
 class ColumnType(object):
     def __repr__(self):
-        return self.__class__.__name__ + '()'
+        return self.__class__.__name__ + "()"
 
     def __eq__(self, other):
         return self.__class__ == other.__class__
@@ -66,14 +69,13 @@ class Nullable(ColumnType):
         self.inner_type = inner_type
 
     def __repr__(self):
-        return u'Nullable({})'.format(repr(self.inner_type))
+        return "Nullable({})".format(repr(self.inner_type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
 
     def for_schema(self):
-        return u'Nullable({})'.format(self.inner_type.for_schema())
+        return "Nullable({})".format(self.inner_type.for_schema())
 
 
 class Materialized(ColumnType):
@@ -82,20 +84,18 @@ class Materialized(ColumnType):
         self.expression = expression
 
     def __repr__(self):
-        return u'Materialized({}, {})'.format(
-            repr(self.inner_type),
-            self.expression,
-        )
+        return "Materialized({}, {})".format(repr(self.inner_type), self.expression,)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.expression == other.expression \
+        return (
+            self.__class__ == other.__class__
+            and self.expression == other.expression
             and self.inner_type == other.inner_type
+        )
 
     def for_schema(self):
-        return u'{} MATERIALIZED {}'.format(
-            self.inner_type.for_schema(),
-            self.expression,
+        return "{} MATERIALIZED {}".format(
+            self.inner_type.for_schema(), self.expression,
         )
 
 
@@ -105,21 +105,17 @@ class WithDefault(ColumnType):
         self.default = default
 
     def __repr__(self):
-        return u'WithDefault({}, {})'.format(
-            repr(self.inner_type),
-            self.default,
-        )
+        return "WithDefault({}, {})".format(repr(self.inner_type), self.default,)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.default == other.default \
+        return (
+            self.__class__ == other.__class__
+            and self.default == other.default
             and self.inner_type == other.inner_type
+        )
 
     def for_schema(self):
-        return u'{} DEFAULT {}'.format(
-            self.inner_type.for_schema(),
-            self.default,
-        )
+        return "{} DEFAULT {}".format(self.inner_type.for_schema(), self.default,)
 
 
 class Array(ColumnType):
@@ -127,14 +123,13 @@ class Array(ColumnType):
         self.inner_type = inner_type
 
     def __repr__(self):
-        return u'Array({})'.format(repr(self.inner_type))
+        return "Array({})".format(repr(self.inner_type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
 
     def for_schema(self):
-        return u'Array({})'.format(self.inner_type.for_schema())
+        return "Array({})".format(self.inner_type.for_schema())
 
 
 class Nested(ColumnType):
@@ -142,16 +137,18 @@ class Nested(ColumnType):
         self.nested_columns = Column.to_columns(nested_columns)
 
     def __repr__(self):
-        return u'Nested({})'.format(repr(self.nested_columns))
+        return "Nested({})".format(repr(self.nested_columns))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
+        return (
+            self.__class__ == other.__class__
             and self.nested_columns == other.nested_columns
+        )
 
     def for_schema(self):
-        return u'Nested({})'.format(u", ".join(
-            column.for_schema() for column in self.nested_columns
-        ))
+        return "Nested({})".format(
+            ", ".join(column.for_schema() for column in self.nested_columns)
+        )
 
     def flatten(self, name):
         return [
@@ -165,14 +162,13 @@ class LowCardinality(ColumnType):
         self.inner_type = inner_type
 
     def __repr__(self):
-        return u'LowCardinality({})'.format(repr(self.inner_type))
+        return "LowCardinality({})".format(repr(self.inner_type))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.inner_type == other.inner_type
+        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
 
     def for_schema(self):
-        return u'LowCardinality({})'.format(self.inner_type.for_schema())
+        return "LowCardinality({})".format(self.inner_type.for_schema())
 
 
 class String(ColumnType):
@@ -196,14 +192,13 @@ class FixedString(ColumnType):
         self.length = length
 
     def __repr__(self):
-        return 'FixedString({})'.format(self.length)
+        return "FixedString({})".format(self.length)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.length == other.length
+        return self.__class__ == other.__class__ and self.length == other.length
 
     def for_schema(self):
-        return 'FixedString({})'.format(self.length)
+        return "FixedString({})".format(self.length)
 
 
 class UInt(ColumnType):
@@ -212,14 +207,13 @@ class UInt(ColumnType):
         self.size = size
 
     def __repr__(self):
-        return 'UInt({})'.format(self.size)
+        return "UInt({})".format(self.size)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.size == other.size
+        return self.__class__ == other.__class__ and self.size == other.size
 
     def for_schema(self):
-        return 'UInt{}'.format(self.size)
+        return "UInt{}".format(self.size)
 
 
 class Float(ColumnType):
@@ -228,14 +222,13 @@ class Float(ColumnType):
         self.size = size
 
     def __repr__(self):
-        return 'Float({})'.format(self.size)
+        return "Float({})".format(self.size)
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self.size == other.size
+        return self.__class__ == other.__class__ and self.size == other.size
 
     def for_schema(self):
-        return 'Float{}'.format(self.size)
+        return "Float{}".format(self.size)
 
 
 class DateTime(ColumnType):
@@ -273,11 +266,10 @@ class ColumnSet(object):
             self._lookup[col.escaped] = col
 
     def __repr__(self):
-        return 'ColumnSet({})'.format(repr(self.columns))
+        return "ColumnSet({})".format(repr(self.columns))
 
     def __eq__(self, other):
-        return self.__class__ == other.__class__ \
-            and self._flattened == other._flattened
+        return self.__class__ == other.__class__ and self._flattened == other._flattened
 
     def __len__(self):
         return len(self._flattened)
@@ -303,7 +295,7 @@ class ColumnSet(object):
             return default
 
     def for_schema(self):
-        return ', '.join(column.for_schema() for column in self.columns)
+        return ", ".join(column.for_schema() for column in self.columns)
 
 
 class QualifiedColumnSet(ColumnSet):

@@ -4,7 +4,7 @@ from typing import Callable, Mapping, Optional, Sequence, Tuple
 
 import logging
 
-logger = logging.getLogger('snuba.kafka-consumer')
+logger = logging.getLogger("snuba.kafka-consumer")
 
 
 class NoPartitionAssigned(Exception):
@@ -52,7 +52,6 @@ class StrictConsumer:
         on_partitions_revoked: Optional[
             Callable[[Consumer, Sequence[TopicPartition]], None]
         ] = None,
-
     ) -> None:
         self.__on_partitions_assigned = on_partitions_assigned
         self.__on_partitions_revoked = on_partitions_revoked
@@ -63,18 +62,17 @@ class StrictConsumer:
         self.__consuming = False
 
         consumer_config = {
-            'enable.auto.commit': False,
-            'bootstrap.servers': ','.join(bootstrap_servers),
-            'group.id': group_id,
-            'enable.partition.eof': 'true',
-            'auto.offset.reset': initial_auto_offset_reset,
+            "enable.auto.commit": False,
+            "bootstrap.servers": ",".join(bootstrap_servers),
+            "group.id": group_id,
+            "enable.partition.eof": "true",
+            "auto.offset.reset": initial_auto_offset_reset,
         }
 
         self.__consumer = self._create_consumer(consumer_config)
 
         def _on_partitions_assigned(
-            consumer: Consumer,
-            partitions: Sequence[TopicPartition],
+            consumer: Consumer, partitions: Sequence[TopicPartition],
         ):
             logger.info("New partitions assigned: %r", partitions)
             if self.__consuming:
@@ -88,14 +86,17 @@ class StrictConsumer:
                 self.__on_partitions_assigned(consumer, partitions)
 
         def _on_partitions_revoked(
-            consumer: Consumer,
-            partitions: Sequence[TopicPartition],
+            consumer: Consumer, partitions: Sequence[TopicPartition],
         ):
             logger.info("Partitions revoked: %r", partitions)
             if self.__on_partitions_revoked:
                 self.__on_partitions_revoked(consumer, partitions)
 
-        logger.debug("Subscribing strict consuemr to topic %s on broker %r", topic, bootstrap_servers)
+        logger.debug(
+            "Subscribing strict consuemr to topic %s on broker %r",
+            topic,
+            bootstrap_servers,
+        )
         self.__consumer.subscribe(
             [topic],
             on_assign=_on_partitions_assigned,
@@ -107,14 +108,14 @@ class StrictConsumer:
 
     def run(self) -> None:
         logger.debug("Running Strict Consumer")
-        partitions_metadata = self.__consumer \
-            .list_topics(self.__topic) \
-            .topics[self.__topic] \
-            .partitions
+        partitions_metadata = (
+            self.__consumer.list_topics(self.__topic).topics[self.__topic].partitions
+        )
 
         logger.debug("Partitions metadata received %r", partitions_metadata)
-        assert len(partitions_metadata) == 1, \
-            f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
+        assert (
+            len(partitions_metadata) == 1
+        ), f"Strict consumer only supports one partition topics. Found {len(partitions_metadata)} partitions"
 
         watermarks: Mapping[Tuple[int, str], int] = {}
 
@@ -140,9 +141,7 @@ class StrictConsumer:
             if commit_decision == CommitDecision.COMMIT_THIS:
                 self.__consumer.commit(asynchronous=False)
             elif commit_decision == CommitDecision.COMMIT_PREV:
-                prev_watermark = watermarks.get(
-                    (message.partition(), message.topic()),
-                )
+                prev_watermark = watermarks.get((message.partition(), message.topic()),)
                 if prev_watermark is not None:
                     commit_pos = TopicPartition(
                         partition=message.partition(),
