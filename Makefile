@@ -12,7 +12,7 @@ test:
 	SNUBA_SETTINGS=test py.test -vv
 
 install-python-dependencies:
-	pip install -e .
+	poetry install --extras=test
 
 install-librdkafka-homebrew:
 	brew install librdkafka

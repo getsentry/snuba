@@ -30,12 +30,18 @@ Snuba assumes:
 
 ## Install / Run (Only required if you are developing against Snuba)
 
+If you're using direnv, you can simply `direnv allow` and we'll manage the virtualenv for you. If not, start by creating one:
+
     mkvirtualenv snuba
     workon snuba
+
+Now install dependencies:
+
     make install-python-dependencies
     make install-librdkafka
 
-    # Run API server
+Run the API server:
+
     snuba api
 
 ## API
@@ -67,21 +73,26 @@ workon snuba
 git checkout your-snuba-branch
 snuba api
 ```
+
 And then in another terminal
+
 ```
 workon sentry
 git checkout master
 git pull
 sentry devservices up --exclude=snuba
 ```
+
 This will get the most recent version of Sentry on master, and bring up all snuba's dependencies.
 
 You will want to run the following Sentry tests:
+
 ```
 USE_SNUBA=1 make test-acceptance
 USE_SNUBA=1 make test-snuba
 make test-python
 ```
+
 Note that python tests do not currently pass with the `USE_SNUBA` flag, but should be fixed in the future. For now, simply run it without `USE_SNUBA` flag (which determines the version of TagStore). Note also that we check for the existance of `USE_SNUBA` rather than take into account the value. `USE_SNUBA=0` does not currently work as intended.
 
 ## Querying
@@ -114,7 +125,7 @@ An example query body might look like:
 
 `groupby` is a list of columns (or column aliases) that will be translated into
 a SQL `GROUP BY` clause. These columns are automatically included in the query
-output.  `selected_columns` is a list of additional columns that should be added
+output. `selected_columns` is a list of additional columns that should be added
 to the `SELECT` clause.
 
 Trying to use both of these in the same query will probably result in an invalid
@@ -147,7 +158,6 @@ specified as "count()", not "count".
     ["count()", null, "item_count"]
 
 Aggregations are also included in the output columns automatically.
-
 
 #### conditions
 
@@ -299,7 +309,6 @@ unpredictable way as the sampling rate approaches 0.
 Queries with sampling are stable. Ie the same query with the same sampling
 factor over the same data should consistently return the exact same result.
 
-
 ### Issues / Groups
 
 Snuba provides a magic column `issue` that can be used to group events by issue.
@@ -307,7 +316,7 @@ Snuba provides a magic column `issue` that can be used to group events by issue.
 Because events can be reassigned to different issues through merging, and
 because snuba does not support updates, we cannot store the issue id for an
 event in snuba. If you want to filter or group by `issue`, you need to pass a
-list of `issues` into the query.  This list is a mapping from issue ids to the
+list of `issues` into the query. This list is a mapping from issue ids to the
 event `primary_hash`es in that issue. Snuba automatically expands this mapping
 into the query so that filters/grouping on `issue` will just work.
 
@@ -316,7 +325,7 @@ into the query so that filters/grouping on `issue` will just work.
 Event tags are stored in one of 2 ways. Promoted tags are the ones we expect to
 be queried often and as such are stored as top level columns. The list of
 promoted tag columns is defined in settings and is somewhat fixed in the
-schema. The rest of an event's tags are stored as a key-value map.  In practice
+schema. The rest of an event's tags are stored as a key-value map. In practice
 this is implemented as 2 columns of type Array(String), called `tags.key` and
 `tags.value`
 
@@ -337,6 +346,7 @@ for a specific named tag. eg.
         ["tags[environment]", "=", "prod"],
         ["tags[custom_user_tag]", "IS NOT NULL"]
     ],
+
 <!-- -->
 
     # Find the number of unique environments
@@ -357,13 +367,13 @@ column.
     "aggregations": [
         ["top5", "tags_key", "top_tag_keys"],
     ],
+
 <!-- -->
 
     # Find any tags whose *value* is `bar`
     "conditions": [
         ["tags_value", "=", "bar"],
     ],
-
 
 Note, when using this expression. the thing you are counting is tags, not events, so if you
 have 10 events, each of which has 10 tags, then a `count()` of `tags_key` will return 100.
