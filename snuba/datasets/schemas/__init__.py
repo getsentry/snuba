@@ -100,17 +100,17 @@ class Schema(ABC):
 
         for column_name, column_type in expected_columns.items():
             if column_name not in self.get_columns():
-                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
+                errors.append(
+                    "Column '%s' exists in local ClickHouse but not in schema!"
+                    % column_name
+                )
                 continue
 
             expected_type = self.get_columns()[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
-                        column_name,
-                        expected_type,
-                        column_type
-                    )
+                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
+                    % (column_name, expected_type, column_type)
                 )
 
         return errors

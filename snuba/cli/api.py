@@ -2,7 +2,7 @@ import click
 
 
 @click.command()
-@click.option('--debug', is_flag=True)
+@click.option("--debug", is_flag=True)
 def api(debug):
     from snuba import settings
     from snuba.views import application

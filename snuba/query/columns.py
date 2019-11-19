@@ -3,7 +3,6 @@ import re
 from typing import OrderedDict
 import _strptime  # NOQA fixes _strptime deferred import issue
 
-from snuba import state
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -18,14 +17,23 @@ from snuba.util import (
     QUOTED_LITERAL_RE,
 )
 
-QUALIFIED_COLUMN_REGEX = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$")
+QUALIFIED_COLUMN_REGEX = re.compile(
+    r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$"
+)
 
 
 class InvalidConditionException(Exception):
     pass
 
 
-def column_expr(dataset, column_name, query: Query, parsing_context: ParsingContext, alias=None, aggregate=None):
+def column_expr(
+    dataset,
+    column_name,
+    query: Query,
+    parsing_context: ParsingContext,
+    alias=None,
+    aggregate=None,
+):
     """
     Certain special column names expand into more complex expressions. Return
     a 2-tuple of:
@@ -35,12 +43,14 @@ def column_expr(dataset, column_name, query: Query, parsing_context: ParsingCont
     """
     assert column_name or aggregate
     assert not aggregate or (aggregate and (column_name or alias))
-    column_name = column_name or ''
+    column_name = column_name or ""
 
     if is_function(column_name, 0):
         return complex_column_expr(dataset, column_name, query, parsing_context)
     elif isinstance(column_name, (list, tuple)) and aggregate:
-        return complex_column_expr(dataset, [aggregate, column_name, alias], query, parsing_context)
+        return complex_column_expr(
+            dataset, [aggregate, column_name, alias], query, parsing_context
+        )
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
@@ -76,36 +86,47 @@ def column_expr(dataset, column_name, query: Query, parsing_context: ParsingCont
     return f"{negate or expr_negate}{alias_expr(expr, alias, parsing_context)}"
 
 
-def complex_column_expr(dataset, expr, query: Query, parsing_context: ParsingContext, depth=0):
+def complex_column_expr(
+    dataset, expr, query: Query, parsing_context: ParsingContext, depth=0
+):
     function_tuple = is_function(expr, depth)
     if function_tuple is None:
-        raise ValueError('complex_column_expr was given an expr %s that is not a function at depth %d.' % (expr, depth))
+        raise ValueError(
+            "complex_column_expr was given an expr %s that is not a function at depth %d."
+            % (expr, depth)
+        )
 
     name, args, alias = function_tuple
     out = []
     i = 0
     while i < len(args):
-        next_2 = args[i:i + 2]
+        next_2 = args[i : i + 2]
         if is_function(next_2, depth + 1):
-            out.append(complex_column_expr(dataset, next_2, query, parsing_context, depth + 1))
+            out.append(
+                complex_column_expr(dataset, next_2, query, parsing_context, depth + 1)
+            )
             i += 2
         else:
             nxt = args[i]
             if is_function(nxt, depth + 1):  # Embedded function
-                out.append(complex_column_expr(dataset, nxt, query, parsing_context, depth + 1))
+                out.append(
+                    complex_column_expr(dataset, nxt, query, parsing_context, depth + 1)
+                )
             elif isinstance(nxt, str):
                 out.append(column_expr(dataset, nxt, query, parsing_context))
             else:
                 out.append(escape_literal(nxt))
             i += 1
 
-    ret = function_expr(name, ', '.join(out))
+    ret = function_expr(name, ", ".join(out))
     if alias:
         ret = alias_expr(ret, alias, parsing_context)
     return ret
 
 
-def conditions_expr(dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0):
+def conditions_expr(
+    dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
+):
     """
     Return a boolean expression suitable for putting in the WHERE clause of the
     query.  The expression is constructed by ANDing groups of OR expressions.
@@ -115,17 +136,20 @@ def conditions_expr(dataset, conditions, query: Query, parsing_context: ParsingC
     from snuba.clickhouse.columns import Array
 
     if not conditions:
-        return ''
+        return ""
 
     if depth == 0:
         # dedupe conditions at top level, but keep them in order
-        sub = OrderedDict((conditions_expr(dataset, cond, query, parsing_context, depth + 1), None) for cond in conditions)
-        return u' AND '.join(s for s in sub.keys() if s)
+        sub = OrderedDict(
+            (conditions_expr(dataset, cond, query, parsing_context, depth + 1), None)
+            for cond in conditions
+        )
+        return " AND ".join(s for s in sub.keys() if s)
     elif is_condition(conditions):
         lhs, op, lit = dataset.process_condition(conditions)
 
         # facilitate deduping IN conditions by sorting them.
-        if op in ('IN', 'NOT IN') and isinstance(lit, tuple):
+        if op in ("IN", "NOT IN") and isinstance(lit, tuple):
             lit = tuple(sorted(lit))
 
         # If the LHS is a simple column name that refers to an array column
@@ -139,30 +163,33 @@ def conditions_expr(dataset, conditions, query: Query, parsing_context: ParsingC
         # where all elements match (eg. all NOT LIKE 'foo').
         columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
         if (
-            isinstance(lhs, str) and
-            lhs in columns and
-            isinstance(columns[lhs].type, Array) and
-            columns[lhs].base_name != query.get_arrayjoin() and
-            not isinstance(lit, (list, tuple))
+            isinstance(lhs, str)
+            and lhs in columns
+            and isinstance(columns[lhs].type, Array)
+            and columns[lhs].base_name != query.get_arrayjoin()
+            and not isinstance(lit, (list, tuple))
         ):
-            any_or_all = 'arrayExists' if op in POSITIVE_OPERATORS else 'arrayAll'
-            return u'{}(x -> assumeNotNull(x {} {}), {})'.format(
+            any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
+            return "{}(x -> assumeNotNull(x {} {}), {})".format(
                 any_or_all,
                 op,
                 escape_literal(lit),
-                column_expr(dataset, lhs, query, parsing_context)
+                column_expr(dataset, lhs, query, parsing_context),
             )
         else:
-            return u'{} {} {}'.format(
+            return "{} {} {}".format(
                 column_expr(dataset, lhs, query, parsing_context),
                 op,
-                escape_literal(lit)
+                escape_literal(lit),
             )
 
     elif depth == 1:
-        sub = (conditions_expr(dataset, cond, query, parsing_context, depth + 1) for cond in conditions)
+        sub = (
+            conditions_expr(dataset, cond, query, parsing_context, depth + 1)
+            for cond in conditions
+        )
         sub = [s for s in sub if s]
-        res = u' OR '.join(sub)
-        return u'({})'.format(res) if len(sub) > 1 else res
+        res = " OR ".join(sub)
+        return "({})".format(res) if len(sub) > 1 else res
     else:
         raise InvalidConditionException(str(conditions))
