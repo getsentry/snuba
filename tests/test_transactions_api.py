@@ -23,9 +23,10 @@ class TestTransactionsApi(BaseApiTest):
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
         self.minutes = 180
+        self.skew = timedelta(minutes=self.minutes)
 
         self.base_time = datetime.utcnow().replace(
-            minute=0, second=0, microsecond=0
+            minute=0, second=0, microsecond=0, tzinfo=pytz.utc
         ) - timedelta(minutes=self.minutes)
         self.generate_fizzbuzz_events()
 
@@ -64,7 +65,7 @@ class TestTransactionsApi(BaseApiTest):
                                     "deleted": 0,
                                     "datetime": (
                                         self.base_time + timedelta(minutes=tick)
-                                    ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                                    ).isoformat(),
                                     "platform": self.platforms[
                                         (tock * p) % len(self.platforms)
                                     ],
@@ -78,11 +79,16 @@ class TestTransactionsApi(BaseApiTest):
                                         ),
                                         "type": "transaction",
                                         "transaction": "/api/do_things",
+                                        # XXX(dcramer): would be nice to document why these have to be naive
                                         "start_timestamp": datetime.timestamp(
-                                            self.base_time + timedelta(minutes=tick)
+                                            (
+                                                self.base_time + timedelta(minutes=tick)
+                                            ).replace(tzinfo=None)
                                         ),
                                         "timestamp": datetime.timestamp(
-                                            self.base_time + timedelta(minutes=tick)
+                                            (
+                                                self.base_time + timedelta(minutes=tick)
+                                            ).replace(tzinfo=None)
                                         ),
                                         "tags": {
                                             # Sentry
@@ -133,7 +139,6 @@ class TestTransactionsApi(BaseApiTest):
         self.write_processed_events(events)
 
     def test_read_ip(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -145,12 +150,8 @@ class TestTransactionsApi(BaseApiTest):
                         "ip_address_v4",
                         "ip_address_v6",
                     ],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
                 }
             ),
@@ -162,7 +163,6 @@ class TestTransactionsApi(BaseApiTest):
         assert "ip_address_v6" in data["data"][0]
 
     def test_read_lowcard(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -170,12 +170,8 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["transaction_op", "platform"],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
                 }
             ),
@@ -187,7 +183,6 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["transaction_op"] == "http"
 
     def test_start_ts_microsecond_truncation(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -201,7 +196,7 @@ class TestTransactionsApi(BaseApiTest):
                             ">",
                             (
                                 self.base_time
-                                - timedelta(minutes=180, microseconds=9876)
+                                - timedelta(minutes=self.minutes, microseconds=9876)
                             ).isoformat(),
                         ],
                         [
@@ -213,12 +208,8 @@ class TestTransactionsApi(BaseApiTest):
                             ).isoformat(),
                         ],
                     ],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                     "orderby": "start_ts",
                 }
             ),
@@ -229,7 +220,6 @@ class TestTransactionsApi(BaseApiTest):
         assert "transaction_name" in data["data"][0]
 
     def test_split_query(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -243,12 +233,8 @@ class TestTransactionsApi(BaseApiTest):
                         "transaction_hash",
                         "tags_key",
                     ],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -257,7 +243,6 @@ class TestTransactionsApi(BaseApiTest):
         assert len(data["data"]) > 1, data
 
     def test_column_formatting(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -265,12 +250,8 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["event_id", "ip_address", "project_id"],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -291,12 +272,8 @@ class TestTransactionsApi(BaseApiTest):
                     "project": 1,
                     "selected_columns": ["event_id", "project_id"],
                     "conditions": [["event_id", "=", first_event_id]],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
+                    "from_date": (self.base_time - self.skew).isoformat(),
+                    "to_date": (self.base_time + self.skew).isoformat(),
                 }
             ),
         )
@@ -307,23 +284,16 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0]["event_id"] == first_event_id
 
     def test_apdex_function(self):
-        skew = timedelta(minutes=180)
         response = self.app.post(
             "/query",
             data=json.dumps(
                 {
                     "dataset": "transactions",
                     "project": 1,
-                    "selected_columns": ["transaction_name"],
+                    "selected_columns": ["transaction_name", "duration"],
                     "aggregations": [["apdex(duration, 300)", "", "apdex_score"]],
-                    "from_date": (self.base_time - skew)
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
-                    "to_date": (self.base_time + timedelta(minutes=self.minutes))
-                    .replace(tzinfo=pytz.utc)
-                    .isoformat(),
                     "orderby": "transaction_name",
-                    "groupby": ["transaction_name"],
+                    "groupby": ["transaction_name", "duration"],
                 }
             ),
         )
@@ -334,4 +304,6 @@ class TestTransactionsApi(BaseApiTest):
         assert data["data"][0] == {
             "transaction_name": "/api/do_things",
             "apdex_score": 0.5,
+            # we select duration to make debugging easier on failure
+            "duration": 1000,
         }
