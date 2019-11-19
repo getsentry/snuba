@@ -8,6 +8,11 @@ endif
 
 .PHONY: test install-python-dependencies install-librdkafka install-librdkafka-homebrew install-librdkafka-src-
 
+develop: install-python-dependencies setup-git
+
+setup-git:
+	pre-commit install
+
 test:
 	SNUBA_SETTINGS=test py.test -vv
 
