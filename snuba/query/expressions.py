@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Iterator, Optional, Sequence, Union
 
 
@@ -98,7 +98,7 @@ class FunctionCall(Expression):
         Transforms the subtree starting from the children and then applying
         the transformation function to the root.
         This order is chosen to make the semantics of transform more meaningful,
-        the transform operation will be performed on thechildren first (think
+        the transform operation will be performed on the children first (think
         about the parameters of a function call) and then to the node itself.
 
         The consequence of this is that, if the transformation function replaces
@@ -106,11 +106,10 @@ class FunctionCall(Expression):
         transformation function and we do not run that same function over the
         new children.
         """
-        transformed = FunctionCall(
-            self.alias,
-            self.function_name,
-            list(map(lambda child: child.transform(func), self.parameters_group1)),
-            list(map(lambda child: child.transform(func), self.parameters_group2))
+        transformed = replace(
+            self,
+            parameters_group1=list(map(lambda child: child.transform(func), self.parameters_group1)),
+            parameters_group2=list(map(lambda child: child.transform(func), self.parameters_group2))
             if self.parameters_group2 is not None
             else None
         )

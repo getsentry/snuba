@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from deprecation import deprecated
 from enum import Enum
 from itertools import chain
@@ -49,12 +49,6 @@ class OrderByDirection(Enum):
 class OrderBy:
     direction: OrderByDirection
     node: Expression
-
-    def replace_node(self, new_node: Expression) -> OrderBy:
-        """
-        Returns a new OrderBy clause with a new node.
-        """
-        return OrderBy(self.direction, new_node)
 
 
 class Query:
@@ -161,7 +155,7 @@ class Query:
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
         self.__order_by = list(map(
-            lambda clause: clause.replace_node(clause.node.transform(func)),
+            lambda clause: replace(clause, node=clause.node.transform(func)),
             self.__order_by,
         ))
 
