@@ -42,6 +42,7 @@ SAFE_COL_RE = re.compile(r'^-?([a-zA-Z_][a-zA-Z0-9_\.]*)$')
 # Using the column escaping function would consider "." safe, which is not for
 # an alias.
 SAFE_ALIAS_RE = re.compile(r'^-?[a-zA-Z_][a-zA-Z0-9_]*$')
+APDEX_FUNCTION_RE = re.compile(r'^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$')
 
 
 def local_dataset_mode() -> bool:
@@ -95,6 +96,16 @@ def function_expr(fn: str, args_expr: str='') -> str:
     to more complex expressions.
 
     """
+    if fn.startswith("apdex("):
+        match = APDEX_FUNCTION_RE.match(fn)
+        if match:
+            return "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
+                col=escape_col(match.group(1)),
+                satisfied=match.group(2),
+                tolerated=match.group(2) * 4,
+            )
+        raise ValueError("Invalid format for apdex()")
+
     # For functions with no args, (or static args) we allow them to already
     # include them as part of the function name, eg, "count()" or "sleep(1)"
     if not args_expr and fn.endswith(')'):

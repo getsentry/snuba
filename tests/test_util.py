@@ -206,3 +206,18 @@ class TestUtil(BaseTest):
         # Or nested functions
         with pytest.raises(AssertionError):
             assert complex_column_expr(dataset, tuplify([r"safe", ['dang`erous', ['message']]]), deepcopy(query), ParsingContext())
+
+    @pytest.mark.parametrize('dataset', DATASETS)
+    def test_apdex_expression(self, dataset):
+        body = {
+            'aggregations': [
+                ['apdex(duration, 300)', '', 'apdex_score'],
+            ]
+        }
+        parsing_context = ParsingContext()
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        exprs = [
+            column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
+            for (agg, col, alias) in body['aggregations']
+        ]
+        assert exprs == ['((countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 300300300300)) / 2)) / count() AS apdex_score)']

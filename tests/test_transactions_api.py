@@ -67,7 +67,7 @@ class TestTransactionsApi(BaseApiTest):
                                 'transaction': '/api/do_things',
 
                                 'start_timestamp': datetime.timestamp(self.base_time + timedelta(minutes=tick)),
-                                'timestamp': datetime.timestamp(self.base_time + timedelta(minutes=tick)),
+                                'timestamp': datetime.timestamp(self.base_time + timedelta(minutes=tick, seconds=1)),
                                 'tags': {
                                     # Sentry
                                     'environment': self.environments[(tock * p) % len(self.environments)],
@@ -118,7 +118,7 @@ class TestTransactionsApi(BaseApiTest):
             'orderby': 'start_ts'
         }))
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
         assert len(data['data']) > 1, data
         assert 'ip_address_v4' in data['data'][0]
         assert 'ip_address_v6' in data['data'][0]
@@ -134,7 +134,7 @@ class TestTransactionsApi(BaseApiTest):
             'orderby': 'start_ts'
         }))
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
         assert len(data['data']) > 1, data
         assert 'platform' in data['data'][0]
         assert data['data'][0]['transaction_op'] == "http"
@@ -154,7 +154,7 @@ class TestTransactionsApi(BaseApiTest):
             'orderby': 'start_ts'
         }))
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
         assert len(data['data']) > 1, data
         assert 'transaction_name' in data['data'][0]
 
@@ -174,7 +174,7 @@ class TestTransactionsApi(BaseApiTest):
             'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
         }))
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
         assert len(data['data']) > 1, data
 
     def test_column_formatting(self):
@@ -192,7 +192,7 @@ class TestTransactionsApi(BaseApiTest):
         }))
 
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
 
         assert len(data['data']) == 180
         first_event_id = data['data'][0]['event_id']
@@ -212,6 +212,27 @@ class TestTransactionsApi(BaseApiTest):
         }))
 
         data = json.loads(response.data)
-        assert response.status_code == 200
+        assert response.status_code == 200, response.data
         assert len(data['data']) == 1
         assert data['data'][0]['event_id'] == first_event_id
+
+    def test_apdex_function(self):
+        skew = timedelta(minutes=180)
+        response = self.app.post('/query', data=json.dumps({
+            'dataset': 'transactions',
+            'project': 1,
+            'selected_columns': ['transaction_name'],
+            'aggregations': [['apdex(duration, 10)', '', 'apdex_score']],
+            'from_date': (self.base_time - skew).replace(tzinfo=pytz.utc).isoformat(),
+            'to_date': (self.base_time + timedelta(minutes=self.minutes)).replace(tzinfo=pytz.utc).isoformat(),
+            'orderby': 'transaction_name',
+            'groupby': ['transaction_name']
+        }))
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data['data']) == 1, data
+        assert 'apdex_score' in data['data'][0]
+        assert data['data'][0] == {
+            'transaction_name': '/api/do_things',
+            'apdex_score': 0.5
+        }
