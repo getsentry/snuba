@@ -87,7 +87,8 @@ class TestTransactionsApi(BaseApiTest):
                                         ),
                                         "timestamp": datetime.timestamp(
                                             (
-                                                self.base_time + timedelta(minutes=tick)
+                                                self.base_time
+                                                + timedelta(minutes=tick, seconds=1)
                                             ).replace(tzinfo=None)
                                         ),
                                         "tags": {
