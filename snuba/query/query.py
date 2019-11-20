@@ -232,6 +232,9 @@ class Query:
     def get_arrayjoin(self) -> Optional[str]:
         return self.__body.get("arrayjoin", None)
 
+    def get_arrayjoin_from_ast(self) -> Optional[Expression]:
+        return self.__array_join
+
     def get_having(self) -> Sequence[Condition]:
         return self.__body.get("having", [])
 

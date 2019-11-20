@@ -48,6 +48,7 @@ class Literal(Expression):
     """
     A literal in the SQL expression
     """
+
     value: Union[None, bool, str, float, int]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
@@ -62,6 +63,7 @@ class Column(Expression):
     """
     Represent a column in the schema of the dataset.
     """
+
     column_name: str
     table_name: Optional[str]
 
@@ -82,6 +84,7 @@ class FunctionCall(Expression):
     A query processor would not have to care of processing both functional conditions
     and infix conditions.
     """
+
     function_name: str
     parameters: Sequence[Expression]
 
@@ -100,7 +103,7 @@ class FunctionCall(Expression):
         """
         transformed = replace(
             self,
-            parameters=list(map(lambda child: child.transform(func), self.parameters))
+            parameters=list(map(lambda child: child.transform(func), self.parameters)),
         )
         return func(transformed)
 
@@ -120,11 +123,13 @@ class FunctionCall(Expression):
 class CurriedFunctionCall(Expression):
     """
     This function call represent a function with currying: f(x)(y).
-    Essentially it measn applying the function returned by f(x) to y.
+    it means applying the function returned by f(x) to y.
     Clickhouse has a few of these functions, like topK(5)(col).
 
-    We intentionally support only two groups of parameters.
+    We intentionally support only two groups of parameters to avoid an infinite
+    number of parameters groups recursively.
     """
+
     # The function on left side of the expression.
     # for topK this would be topK(5)
     internal_function: FunctionCall
@@ -135,20 +140,19 @@ class CurriedFunctionCall(Expression):
         """
         Applies the transformation function to this expression following
         the same policy of FunctionCall. The only difference is that this
-        one transforms the internal function before the parameters.
+        one transforms the internal function before applying the function to the
+        parameters.
         """
         transformed = replace(
             self,
             internal=func(self.internal_function),
-            parameters=list(map(lambda child: child.transform(func), self.parameters))
+            parameters=list(map(lambda child: child.transform(func), self.parameters)),
         )
         return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
         """
         Traverse the subtree in a postfix order.
-        The order here is arbitrary, postfix is chosen to follow the same
-        order we have in the transform method.
         """
         for child in self.internal_function:
             yield child
