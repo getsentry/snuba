@@ -78,7 +78,7 @@ def test_replace_expression():
             return FunctionCall(exp.alias, "tag", [Literal(None, "f1")])
         return exp
 
-    query.transform_expression(replace)
+    query.transform_expressions(replace)
 
     expected_query = Query(
         {},
@@ -98,10 +98,10 @@ def test_replace_expression():
         order_by=[orderby],
     )
 
-    assert query.get_selected_columns_exp() == expected_query.get_selected_columns_exp()
-    assert query.get_conditions_exp() == expected_query.get_conditions_exp()
-    assert query.get_groupby_exp() == expected_query.get_groupby_exp()
-    assert query.get_having_exp() == expected_query.get_having_exp()
-    assert query.get_orderby_exp() == expected_query.get_orderby_exp()
+    assert query.get_selected_columns_from_ast() == expected_query.get_selected_columns_from_ast()
+    assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
+    assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
+    assert query.get_having_from_ast() == expected_query.get_having_from_ast()
+    assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
 
     assert list(query.get_all_expressions()) == list(expected_query.get_all_expressions())

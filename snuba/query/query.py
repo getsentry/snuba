@@ -120,16 +120,16 @@ class Query:
         The ExpressionContainer can be used to traverse the expressions in the
         tree.
         """
-        return chain(*[
-            chain(*self.__selected_columns),
+        return chain(
+            chain.from_iterable(self.__selected_columns),
             self.__array_join if self.__array_join else [],
             self.__condition if self.__condition else [],
-            chain(*self.__groupby),
+            chain.from_iterable(self.__groupby),
             self.__having if self.__having else [],
-            chain(*map(lambda orderby: orderby.node, self.__order_by)),
-        ])
+            chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
+        )
 
-    def transform_expression(
+    def transform_expressions(
         self,
         func: Callable[[Expression], Expression],
     ) -> None:
@@ -169,7 +169,7 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
-    def get_selected_columns_exp(self) -> Sequence[Expression]:
+    def get_selected_columns_from_ast(self) -> Sequence[Expression]:
         return self.__selected_columns
 
     def set_selected_columns(
@@ -187,7 +187,7 @@ class Query:
     def get_groupby(self) -> Optional[Sequence[Groupby]]:
         return self.__body.get("groupby")
 
-    def get_groupby_exp(self) -> Sequence[Expression]:
+    def get_groupby_from_ast(self) -> Sequence[Expression]:
         return self.__groupby
 
     def set_groupby(
@@ -202,6 +202,7 @@ class Query:
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
 
+    def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
     def set_conditions(
@@ -209,6 +210,9 @@ class Query:
         conditions: Sequence[Condition]
     ) -> None:
         self.__body["conditions"] = conditions
+
+    def add_conditions(self, conditions: Sequence[Condition],) -> None:
+        self.__extend_sequence("conditions", conditions)
 
     def get_prewhere(self) -> Sequence[Condition]:
         """
@@ -231,13 +235,13 @@ class Query:
     def get_having(self) -> Sequence[Condition]:
         return self.__body.get("having", [])
 
-    def get_having_exp(self) -> Optional[Expression]:
+    def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
-    def get_orderby_exp(self) -> Sequence[OrderBy]:
+    def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
     def set_orderby(
