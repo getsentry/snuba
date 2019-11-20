@@ -82,7 +82,8 @@ class Query:
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self,
+    def __init__(
+        self,
         body: MutableMapping[str, Any],  # Temporary
         data_source: RelationalSource,
         # New data model to replace the one based on the dictionary
