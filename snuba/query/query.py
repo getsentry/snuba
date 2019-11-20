@@ -129,31 +129,37 @@ class Query:
             chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
         )
 
-    def transform_expressions(
-        self,
-        func: Callable[[Expression], Expression],
-    ) -> None:
+    def transform_expressions(self, func: Callable[[Expression], Expression],) -> None:
         """
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
+
+        Cointrarily to Expression.transform this happens in place since Query has
+        to be mutable as of now. This is because there are still parts of the query
+        processing that depends on the Query instance not to be replaced during the
+        query. See the Request class (that is immutable, so Query cannot be replaced).
         """
 
         def transform_expression_list(
             expressions: Sequence[Expression],
         ) -> Sequence[Expression]:
-            return list(
-                map(lambda exp: exp.transform(func), expressions),
-            )
+            return list(map(lambda exp: exp.transform(func), expressions),)
 
         self.__selected_columns = transform_expression_list(self.__selected_columns)
-        self.__array_join = self.__array_join.transform(func) if self.__array_join else None
-        self.__condition = self.__condition.transform(func) if self.__condition else None
+        self.__array_join = (
+            self.__array_join.transform(func) if self.__array_join else None
+        )
+        self.__condition = (
+            self.__condition.transform(func) if self.__condition else None
+        )
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
-        self.__order_by = list(map(
-            lambda clause: replace(clause, node=clause.node.transform(func)),
-            self.__order_by,
-        ))
+        self.__order_by = list(
+            map(
+                lambda clause: replace(clause, node=clause.node.transform(func)),
+                self.__order_by,
+            )
+        )
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
@@ -172,10 +178,7 @@ class Query:
     def get_selected_columns_from_ast(self) -> Sequence[Expression]:
         return self.__selected_columns
 
-    def set_selected_columns(
-        self,
-        columns: Sequence[Any],
-    ) -> None:
+    def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
@@ -190,10 +193,7 @@ class Query:
     def get_groupby_from_ast(self) -> Sequence[Expression]:
         return self.__groupby
 
-    def set_groupby(
-        self,
-        groupby: Sequence[Aggregation],
-    ) -> None:
+    def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
     def add_groupby(self, groupby: Sequence[Groupby],) -> None:
@@ -205,10 +205,7 @@ class Query:
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
-    def set_conditions(
-        self,
-        conditions: Sequence[Condition]
-    ) -> None:
+    def set_conditions(self, conditions: Sequence[Condition]) -> None:
         self.__body["conditions"] = conditions
 
     def add_conditions(self, conditions: Sequence[Condition],) -> None:
@@ -247,10 +244,7 @@ class Query:
     def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
-    def set_orderby(
-        self,
-        orderby: Sequence[Any]
-    ) -> None:
+    def set_orderby(self, orderby: Sequence[Any]) -> None:
         self.__body["orderby"] = orderby
 
     def get_limitby(self) -> Optional[Limitby]:
