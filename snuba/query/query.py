@@ -122,10 +122,10 @@ class Query:
         """
         return chain(
             chain.from_iterable(self.__selected_columns),
-            self.__array_join if self.__array_join else [],
-            self.__condition if self.__condition else [],
+            self.__array_join or [],
+            self.__condition or [],
             chain.from_iterable(self.__groupby),
-            self.__having if self.__having else [],
+            self.__having or [],
             chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
         )
 
