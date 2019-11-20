@@ -1,8 +1,9 @@
 from snuba.query.expressions import (
     Column,
+    CurriedFunctionCall,
     Expression,
     Literal,
-    FunctionCall
+    FunctionCall,
 )
 
 
@@ -18,9 +19,19 @@ def test_iterate() -> None:
     column3 = Column(None, "c2", "t1")
     column4 = Column(None, "c3", "t1")
     literal = Literal(None, "blablabla")
-    function_2 = FunctionCall(None, "f2", [column3, function_1, literal], [column4])
+    function_2i = FunctionCall(None, "f2", [column3, function_1, literal])
+    function_2 = CurriedFunctionCall(None, function_2i, [column4])
 
-    expected = [column3, column1, column2, function_1, literal, column4, function_2]
+    expected = [
+        column3,
+        column1,
+        column2,
+        function_1,
+        literal,
+        function_2i,
+        column4,
+        function_2,
+    ]
     assert list(function_2) == expected
 
 
@@ -53,17 +64,14 @@ def test_mapping_column_list() -> None:
     column2 = Column(None, "c2", "t2")
     column3 = Column(None, "c3", "t3")
     selected_cols = [column1, column2, column3]
-    new_selected_cols = list(map(
-        replace_col,
-        selected_cols
-    ))
+    new_selected_cols = list(map(replace_col, selected_cols))
 
     assert new_selected_cols[0] == column1
     assert new_selected_cols[2] == column3
     f = new_selected_cols[1]
     assert isinstance(f, FunctionCall)
     assert f.function_name == "f"
-    assert f.parameters_group1 == [column2]
+    assert f.parameters == [column2]
 
 
 def test_add_alias() -> None:
@@ -78,6 +86,7 @@ def test_add_alias() -> None:
         if isinstance(e, Column) and e.column_name == "c1":
             return column2
         return e
+
     f = FunctionCall(None, "f", [column1])
 
     f2 = f.transform(replace_expr)
@@ -108,7 +117,10 @@ def test_mapping_complex_expression() -> None:
     # column, we expect the func to have takern care of its own children.
     f1 = f1.transform(replace_expr)
     iterate = list(f1)
-    expected = [c1, f5, f4,
+    expected = [
+        c1,
+        f5,
+        f4,
         FunctionCall(None, "fB", [f4]),
         FunctionCall(None, "f0", [c1, FunctionCall(None, "fB", [f4])]),
     ]

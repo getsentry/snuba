@@ -81,17 +81,9 @@ class FunctionCall(Expression):
     representation only in the AST to make query processing easier.
     A query processor would not have to care of processing both functional conditions
     and infix conditions.
-
-    This function call abstraction can support both functions with one parameters group
-    like f(X,Y) and functions with two parameters groups f(X, Y)(Z).
-    Since we are not doing anything except transforming and iterating over these functions
-    there is no need to have a subclass for these two cases.
     """
     function_name: str
-    parameters_group1: Sequence[Expression]
-    # This is for expressions like f(x)(y).
-    # None means there is no second gorup of parameters
-    parameters_group2: Optional[Sequence[Expression]] = None
+    parameters: Sequence[Expression]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -108,10 +100,7 @@ class FunctionCall(Expression):
         """
         transformed = replace(
             self,
-            parameters_group1=list(map(lambda child: child.transform(func), self.parameters_group1)),
-            parameters_group2=list(map(lambda child: child.transform(func), self.parameters_group2))
-            if self.parameters_group2 is not None
-            else None
+            parameters=list(map(lambda child: child.transform(func), self.parameters))
         )
         return func(transformed)
 
@@ -121,11 +110,49 @@ class FunctionCall(Expression):
         The order here is arbitrary, postfix is chosen to follow the same
         order we have in the transform method.
         """
-        for child in self.parameters_group1:
+        for child in self.parameters:
             for sub in child:
                 yield sub
-        if self.parameters_group2:
-            for child in self.parameters_group2:
-                for sub in child:
-                    yield sub
+        yield self
+
+
+@dataclass(frozen=True)
+class CurriedFunctionCall(Expression):
+    """
+    This function call represent a function with currying: f(x)(y).
+    Essentially it measn applying the function returned by f(x) to y.
+    Clickhouse has a few of these functions, like topK(5)(col).
+
+    We intentionally support only two groups of parameters.
+    """
+    # The function on left side of the expression.
+    # for topK this would be topK(5)
+    internal_function: FunctionCall
+    # The list of parameters to apply to the result of internal_function.
+    parameters: Sequence[Expression]
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        """
+        Applies the transformation function to this expression following
+        the same policy of FunctionCall. The only difference is that this
+        one transforms the internal function before the parameters.
+        """
+        transformed = replace(
+            self,
+            internal=func(self.internal_function),
+            parameters=list(map(lambda child: child.transform(func), self.parameters))
+        )
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a postfix order.
+        The order here is arbitrary, postfix is chosen to follow the same
+        order we have in the transform method.
+        """
+        for child in self.internal_function:
+            yield child
+        for child in self.parameters:
+            for sub in child:
+                yield sub
         yield self
