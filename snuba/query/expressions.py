@@ -145,7 +145,7 @@ class CurriedFunctionCall(Expression):
         """
         transformed = replace(
             self,
-            internal=func(self.internal_function),
+            internal_function=self.internal_function.transform(func),
             parameters=list(map(lambda child: child.transform(func), self.parameters)),
         )
         return func(transformed)

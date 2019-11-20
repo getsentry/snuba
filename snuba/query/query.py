@@ -19,7 +19,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Expression
 from snuba.query.types import Condition
 from snuba.util import SAFE_COL_RE, columns_in_expr, is_condition, to_list
 
@@ -104,8 +104,6 @@ class Query:
         self.__data_source = data_source
         self.__prewhere_conditions: Sequence[Condition] = []
 
-        # New data model
-        # TODO: Provide a better typing for this.
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
         self.__condition = condition
@@ -133,6 +131,11 @@ class Query:
         """
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
+
+        Cointrarily to Expression.transform this happens in place since Query has
+        to be mutable as of now. This is because there are still parts of the query
+        processing that depends on the Query instance not to be replaced during the
+        query. See the Request class (that is immutable, so Query cannot be replaced).
         """
 
         def transform_expression_list(

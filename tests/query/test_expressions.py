@@ -126,3 +126,27 @@ def test_mapping_complex_expression() -> None:
     ]
 
     assert iterate == expected
+
+
+def test_mapping_curried_function() -> None:
+    c1 = Column(None, "c1", "t1")
+    f1 = FunctionCall(None, "f1", [c1])
+    c2 = Column(None, "c1", "t1")
+    f2 = CurriedFunctionCall(None, f1, [c2])
+
+    def replace_col(e: Expression) -> Expression:
+        if isinstance(e, Column) and e.column_name == "c1":
+            return Column(None, "c2", "t1")
+        return e
+
+    f3 = f2.transform(replace_col)
+
+    replaced_col = Column(None, "c2", "t1")
+    replaced_function = FunctionCall(None, "f1", [replaced_col])
+    expected = [
+        replaced_col,
+        replaced_function,
+        replaced_col,
+        CurriedFunctionCall(None, replaced_function, [replaced_col]),
+    ]
+    assert list(f3) == expected
