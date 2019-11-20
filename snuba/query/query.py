@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from deprecation import deprecated
 from enum import Enum
 from itertools import chain
@@ -21,16 +21,10 @@ from typing import (
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.expressions import Column, Expression
 from snuba.query.types import Condition
-from snuba.util import (
-    SAFE_COL_RE,
-    columns_in_expr,
-    is_condition,
-    to_list
-)
+from snuba.util import SAFE_COL_RE, columns_in_expr, is_condition, to_list
 
 Aggregation = Union[
-    Tuple[Any, Any, Any],
-    Sequence[Any],
+    Tuple[Any, Any, Any], Sequence[Any],
 ]
 
 Groupby = Sequence[Any]
@@ -49,12 +43,6 @@ class OrderByDirection(Enum):
 class OrderBy:
     direction: OrderByDirection
     node: Expression
-
-    def replace_node(self, new_node: Expression) -> OrderBy:
-        """
-        Returns a new OrderBy clause with a new node.
-        """
-        return OrderBy(self.direction, new_node)
 
 
 class Query:
@@ -90,10 +78,12 @@ class Query:
     - direct access to the root and explore specific parts of the tree
       from there.
     """
+
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self,
+    def __init__(
+        self,
         body: MutableMapping[str, Any],  # Temporary
         data_source: RelationalSource,
         # New data model to replace the one based on the dictionary
@@ -130,19 +120,16 @@ class Query:
         The ExpressionContainer can be used to traverse the expressions in the
         tree.
         """
-        return chain(*[
-            chain(*self.__selected_columns),
-            self.__array_join if self.__array_join else [],
-            self.__condition if self.__condition else [],
-            chain(*self.__groupby),
-            self.__having if self.__having else [],
-            chain(*map(lambda orderby: orderby.node, self.__order_by)),
-        ])
+        return chain(
+            chain.from_iterable(self.__selected_columns),
+            self.__array_join or [],
+            self.__condition or [],
+            chain.from_iterable(self.__groupby),
+            self.__having or [],
+            chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
+        )
 
-    def transform_expression(
-        self,
-        func: Callable[[Expression], Expression],
-    ) -> None:
+    def transform_expressions(self, func: Callable[[Expression], Expression],) -> None:
         """
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
@@ -151,19 +138,23 @@ class Query:
         def transform_expression_list(
             expressions: Sequence[Expression],
         ) -> Sequence[Expression]:
-            return list(
-                map(lambda exp: exp.transform(func), expressions),
-            )
+            return list(map(lambda exp: exp.transform(func), expressions),)
 
         self.__selected_columns = transform_expression_list(self.__selected_columns)
-        self.__array_join = self.__array_join.transform(func) if self.__array_join else None
-        self.__condition = self.__condition.transform(func) if self.__condition else None
+        self.__array_join = (
+            self.__array_join.transform(func) if self.__array_join else None
+        )
+        self.__condition = (
+            self.__condition.transform(func) if self.__condition else None
+        )
         self.__groupby = transform_expression_list(self.__groupby)
         self.__having = self.__having.transform(func) if self.__having else None
-        self.__order_by = list(map(
-            lambda clause: clause.replace_node(clause.node.transform(func)),
-            self.__order_by,
-        ))
+        self.__order_by = list(
+            map(
+                lambda clause: replace(clause, node=clause.node.transform(func)),
+                self.__order_by,
+            )
+        )
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
@@ -171,10 +162,7 @@ class Query:
     def set_data_source(self, data_source: RelationalSource) -> None:
         self.__data_source = data_source
 
-    def __extend_sequence(self,
-        field: str,
-        content: Sequence[TElement],
-    ) -> None:
+    def __extend_sequence(self, field: str, content: Sequence[TElement],) -> None:
         if field not in self.__body:
             self.__body[field] = []
         self.__body[field].extend(content)
@@ -182,58 +170,40 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
-    def get_selected_columns_exp(self) -> Sequence[Expression]:
+    def get_selected_columns_from_ast(self) -> Sequence[Expression]:
         return self.__selected_columns
 
-    def set_selected_columns(
-        self,
-        columns: Sequence[Any],
-    ) -> None:
+    def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
         return self.__body.get("aggregations")
 
-    def set_aggregations(
-        self,
-        aggregations: Sequence[Aggregation],
-    ) -> None:
+    def set_aggregations(self, aggregations: Sequence[Aggregation],) -> None:
         self.__body["aggregations"] = aggregations
 
     def get_groupby(self) -> Optional[Sequence[Groupby]]:
         return self.__body.get("groupby")
 
-    def get_groupby_exp(self) -> Sequence[Expression]:
+    def get_groupby_from_ast(self) -> Sequence[Expression]:
         return self.__groupby
 
-    def set_groupby(
-        self,
-        groupby: Sequence[Aggregation],
-    ) -> None:
+    def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
-    def add_groupby(
-        self,
-        groupby: Sequence[Groupby],
-    ) -> None:
+    def add_groupby(self, groupby: Sequence[Groupby],) -> None:
         self.__extend_sequence("groupby", groupby)
 
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
 
-    def get_conditions_exp(self) -> Optional[Expression]:
+    def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
-    def set_conditions(
-        self,
-        conditions: Sequence[Condition]
-    ) -> None:
+    def set_conditions(self, conditions: Sequence[Condition]) -> None:
         self.__body["conditions"] = conditions
 
-    def add_conditions(
-        self,
-        conditions: Sequence[Condition],
-    ) -> None:
+    def add_conditions(self, conditions: Sequence[Condition],) -> None:
         self.__extend_sequence("conditions", conditions)
 
     def get_prewhere(self) -> Sequence[Condition]:
@@ -242,43 +212,34 @@ class Query:
         """
         return self.__prewhere_conditions
 
-    def set_prewhere(
-        self,
-        conditions: Sequence[Condition]
-    ) -> None:
+    def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """
         Temporary method until pre where management is moved to Clickhouse query
         """
         self.__prewhere_conditions = conditions
 
-    def set_arrayjoin(
-        self,
-        arrayjoin: str
-    ) -> None:
+    def set_arrayjoin(self, arrayjoin: str) -> None:
         self.__body["arrayjoin"] = arrayjoin
 
     def get_arrayjoin(self) -> Optional[str]:
         return self.__body.get("arrayjoin", None)
 
-    def get_arrayjoin_exp(self) -> Optional[Expression]:
+    def get_arrayjoin_from_ast(self) -> Optional[Expression]:
         return self.__array_join
 
     def get_having(self) -> Sequence[Condition]:
         return self.__body.get("having", [])
 
-    def get_having_exp(self) -> Optional[Expression]:
+    def get_having_from_ast(self) -> Optional[Expression]:
         return self.__having
 
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
 
-    def get_orderby_exp(self) -> Sequence[OrderBy]:
+    def get_orderby_from_ast(self) -> Sequence[OrderBy]:
         return self.__order_by
 
-    def set_orderby(
-        self,
-        orderby: Sequence[Any]
-    ) -> None:
+    def set_orderby(self, orderby: Sequence[Any]) -> None:
         self.__body["orderby"] = orderby
 
     def get_limitby(self) -> Optional[Limitby]:
@@ -288,13 +249,13 @@ class Query:
         return self.__body.get("sample")
 
     def get_limit(self) -> Optional[int]:
-        return self.__body.get('limit', None)
+        return self.__body.get("limit", None)
 
     def set_limit(self, limit: int) -> None:
         self.__body["limit"] = limit
 
     def get_offset(self) -> int:
-        return self.__body.get('offset', 0)
+        return self.__body.get("offset", 0)
 
     def set_offset(self, offset: int) -> None:
         self.__body["offset"] = offset
@@ -325,7 +286,8 @@ class Query:
 
     @deprecated(
         details="Do not access the internal query representation "
-        "use the specific accessor methods instead.")
+        "use the specific accessor methods instead."
+    )
     def get_body(self) -> Mapping[str, Any]:
         return self.__body
 
@@ -373,19 +335,22 @@ class Query:
         self.__add_flat_conditions(col_exprs, self.get_having())
         return self.__get_referenced_columns(col_exprs)
 
-    def __add_flat_conditions(self, col_exprs: MutableSequence[Any], conditions=Optional[Sequence[Condition]]) -> None:
+    def __add_flat_conditions(
+        self, col_exprs: MutableSequence[Any], conditions=Optional[Sequence[Condition]]
+    ) -> None:
         if conditions:
-            flat_conditions = list(chain(*[[c] if is_condition(c) else c for c in conditions]))
+            flat_conditions = list(
+                chain(*[[c] if is_condition(c) else c for c in conditions])
+            )
             col_exprs.extend([c[0] for c in flat_conditions])
 
-    def __get_referenced_columns(self, col_exprs: MutableSequence[Any]) -> Sequence[Any]:
+    def __get_referenced_columns(
+        self, col_exprs: MutableSequence[Any]
+    ) -> Sequence[Any]:
         return set(chain(*[columns_in_expr(ex) for ex in col_exprs]))
 
     def __replace_col_in_expression(
-        self,
-        expression: Any,
-        old_column: str,
-        new_column: str,
+        self, expression: Any, old_column: str, new_column: str,
     ) -> Any:
         """
         Returns a copy of the expression with old_column replaced by new_column.
@@ -403,8 +368,11 @@ class Query:
             match = SAFE_COL_RE.match(expression)
             if match and match[1] == old_column:
                 return expression.replace(old_column, new_column)
-        elif (isinstance(expression, (list, tuple)) and len(expression) >= 2
-                and isinstance(expression[1], (list, tuple))):
+        elif (
+            isinstance(expression, (list, tuple))
+            and len(expression) >= 2
+            and isinstance(expression[1], (list, tuple))
+        ):
             params = [
                 self.__replace_col_in_expression(param, old_column, new_column)
                 for param in expression[1]
@@ -417,10 +385,7 @@ class Query:
         return expression
 
     def __replace_col_in_condition(
-        self,
-        condition: Condition,
-        old_column: str,
-        new_column: str,
+        self, condition: Condition, old_column: str, new_column: str,
     ) -> Condition:
         """
         Replaces a column in a structured condition. This is a level above replace_col_in_expression
@@ -433,22 +398,20 @@ class Query:
             return [
                 self.__replace_col_in_expression(condition[0], old_column, new_column),
                 condition[1],
-                condition[2]
+                condition[2],
             ]
         elif isinstance(condition, (tuple, list)):
             # nested condition
             return [
-                self.__replace_col_in_condition(cond, old_column, new_column) for cond in condition
+                self.__replace_col_in_condition(cond, old_column, new_column)
+                for cond in condition
             ]
         else:
             # Don't know what this is
             return condition
 
     def __replace_col_in_list(
-        self,
-        expressions: Any,
-        old_column: str,
-        new_column: str,
+        self, expressions: Any, old_column: str, new_column: str,
     ) -> Sequence[Any]:
         return [
             self.__replace_col_in_expression(expr, old_column, new_column)
@@ -473,48 +436,51 @@ class Query:
         """
 
         if self.get_selected_columns():
-            self.set_selected_columns(self.__replace_col_in_list(
-                self.get_selected_columns(),
-                old_column,
-                new_column,
-            ))
+            self.set_selected_columns(
+                self.__replace_col_in_list(
+                    self.get_selected_columns(), old_column, new_column,
+                )
+            )
 
         if self.get_arrayjoin():
             self.set_arrayjoin(
-                self.__replace_col_in_expression(self.get_arrayjoin(), old_column, new_column)
+                self.__replace_col_in_expression(
+                    self.get_arrayjoin(), old_column, new_column
+                )
             )
 
         if self.get_groupby():
-            self.set_groupby(self.__replace_col_in_list(
-                self.get_groupby(),
-                old_column,
-                new_column,
-            ))
+            self.set_groupby(
+                self.__replace_col_in_list(self.get_groupby(), old_column, new_column,)
+            )
 
         if self.get_orderby():
-            self.set_orderby(self.__replace_col_in_list(
-                self.get_orderby(),
-                old_column,
-                new_column,
-            ))
+            self.set_orderby(
+                self.__replace_col_in_list(self.get_orderby(), old_column, new_column,)
+            )
 
         if self.get_aggregations():
-            self.set_aggregations([
+            self.set_aggregations(
                 [
-                    aggr[0],
-                    self.__replace_col_in_expression(aggr[1], old_column, new_column)
-                    if not isinstance(aggr[1], (list, tuple))
-                    # This can be an expresison or a list of expressions
-                    else self.__replace_col_in_list(aggr[1], old_column, new_column),
-                    aggr[2],
-                ] for aggr in to_list(self.get_aggregations())
-            ])
+                    [
+                        aggr[0],
+                        self.__replace_col_in_expression(
+                            aggr[1], old_column, new_column
+                        )
+                        if not isinstance(aggr[1], (list, tuple))
+                        # This can be an expresison or a list of expressions
+                        else self.__replace_col_in_list(
+                            aggr[1], old_column, new_column
+                        ),
+                        aggr[2],
+                    ]
+                    for aggr in to_list(self.get_aggregations())
+                ]
+            )
 
         if self.get_conditions():
             self.set_conditions(
                 self.__replace_col_in_condition(
-                    to_list(self.get_conditions()),
-                    old_column,
-                    new_column,
+                    to_list(self.get_conditions()), old_column, new_column,
                 )
             )

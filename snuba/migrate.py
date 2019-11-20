@@ -6,18 +6,22 @@ import logging
 
 from snuba.datasets.schemas.tables import MigrationSchemaColumn, TableSchema
 
-logger = logging.getLogger('snuba.migrate')
+logger = logging.getLogger("snuba.migrate")
 
 
 def _run_schema(conn, schema):
     if not isinstance(schema, TableSchema):
         return
     clickhouse_table = schema.get_local_table_name()
-    get_schema = lambda: {
-        column_name: MigrationSchemaColumn(column_type, default_type, default_expr)
-        for column_name, column_type, default_type, default_expr
-        in [cols[:4] for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)]
-    }
+
+    def get_schema():
+        return {
+            column_name: MigrationSchemaColumn(column_type, default_type, default_expr)
+            for column_name, column_type, default_type, default_expr in [
+                cols[:4]
+                for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
+            ]
+        }
 
     local_schema = get_schema()
 

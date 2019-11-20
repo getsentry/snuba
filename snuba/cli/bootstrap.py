@@ -1,20 +1,24 @@
 import click
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import get_dataset, DATASET_NAMES
 
 
 @click.command()
-@click.option('--bootstrap-server', default=settings.DEFAULT_BROKERS, multiple=True,
-              help='Kafka bootstrap server to use.')
-@click.option('--kafka/--no-kafka', default=True)
-@click.option('--force', is_flag=True)
+@click.option(
+    "--bootstrap-server",
+    default=settings.DEFAULT_BROKERS,
+    multiple=True,
+    help="Kafka bootstrap server to use.",
+)
+@click.option("--kafka/--no-kafka", default=True)
+@click.option("--force", is_flag=True)
 def bootstrap(bootstrap_server, kafka, force):
     """
     Warning: Not intended to be used in production yet.
     """
     if not force:
-        raise click.ClickException('Must use --force to run')
+        raise click.ClickException("Must use --force to run")
 
     import time
 
@@ -24,10 +28,12 @@ def bootstrap(bootstrap_server, kafka, force):
         attempts = 0
         while True:
             try:
-                client = AdminClient({
-                    'bootstrap.servers': ','.join(bootstrap_server),
-                    'socket.timeout.ms': 1000,
-                })
+                client = AdminClient(
+                    {
+                        "bootstrap.servers": ",".join(bootstrap_server),
+                        "socket.timeout.ms": 1000,
+                    }
+                )
                 client.list_topics(timeout=1)
                 break
             except Exception as e:
@@ -64,7 +70,7 @@ def bootstrap(bootstrap_server, kafka, force):
     attempts = 0
     while True:
         try:
-            ClickhousePool().execute('SELECT 1')
+            ClickhousePool().execute("SELECT 1")
             break
         except Exception as e:
             print(e)

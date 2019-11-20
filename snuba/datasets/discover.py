@@ -61,9 +61,7 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
 
 
 class DiscoverSource(RelationalSource):
-    def __init__(
-        self, columns: ColumnSet, table_source: RelationalSource
-    ) -> None:
+    def __init__(self, columns: ColumnSet, table_source: RelationalSource) -> None:
         self.__columns = columns
         self.__table_source = table_source
 
@@ -157,8 +155,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("email", Nullable(String())),
                 ("ip_address", Nullable(String())),
                 # Other tags and context
-                ("tags", Nested([("key", String()), ("value", String()), ])),
-                ("contexts", Nested([("key", String()), ("value", String()), ])),
+                ("tags", Nested([("key", String()), ("value", String())])),
+                ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
 

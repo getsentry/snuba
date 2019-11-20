@@ -21,20 +21,18 @@ class ConsumerStateData:
     Represent the state information we pass from one
     state to the other.
     """
+
     snapshot_id: SnapshotId
     transaction_data: TransactionData
 
     @classmethod
     def snapshot_ready_state(
-        cls,
-        snapshot_id: SnapshotId,
-        transaction_data: TransactionData,
+        cls, snapshot_id: SnapshotId, transaction_data: TransactionData,
     ) -> ConsumerStateData:
         """
         Builds the StateData to share when we have a valid snapshot id to
         work on.
         """
         return ConsumerStateData(
-            snapshot_id=snapshot_id,
-            transaction_data=transaction_data,
+            snapshot_id=snapshot_id, transaction_data=transaction_data,
         )

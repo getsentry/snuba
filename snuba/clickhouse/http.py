@@ -29,7 +29,8 @@ CLICKHOUSE_ERROR_RE = re.compile(
 
 
 class HTTPBatchWriter(BatchWriter):
-    def __init__(self,
+    def __init__(
+        self,
         schema: TableSchema,
         host,
         port,

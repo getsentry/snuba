@@ -33,7 +33,6 @@ META_FILE = """
 
 
 class TestPostgresSnapshot:
-
     def __prepare_directory(self, tmp_path, table_content):
         snapshot_base = tmp_path / "cdc-snapshot"
         snapshot_base.mkdir()
@@ -55,7 +54,7 @@ class TestPostgresSnapshot:
             tmp_path,
             """id,status
 0,1
-"""
+""",
         )
         snapshot = PostgresSnapshot.load("snuba", snapshot_base)
         descriptor = snapshot.get_descriptor()
@@ -64,7 +63,8 @@ class TestPostgresSnapshot:
         assert descriptor.xmin == 3372750
         assert descriptor.xip_list == []
         tables = {
-            table_config.table: table_config.columns for table_config in descriptor.tables
+            table_config.table: table_config.columns
+            for table_config in descriptor.tables
         }
         assert "sentry_groupedmessage" in tables
         assert tables["sentry_groupedmessage"] == ["id", "status"]
@@ -83,7 +83,7 @@ class TestPostgresSnapshot:
             tmp_path,
             """id
 0
-"""
+""",
         )
         with pytest.raises(ValueError, match=".+sentry_groupedmessage.+status.+"):
             snapshot = PostgresSnapshot.load("snuba", snapshot_base)

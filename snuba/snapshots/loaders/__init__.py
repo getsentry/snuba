@@ -11,6 +11,7 @@ class BulkLoader(ABC):
     The dataset returns an instance of this class to be used to perform
     the bulk load operation.
     """
+
     @abstractmethod
     def load(self, writer: BufferedWriterWrapper) -> None:
         raise NotImplementedError

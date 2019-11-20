@@ -24,19 +24,31 @@ from snuba.util import local_dataset_mode
 
 
 @click.command()
-@click.option('--events-file', help='Event JSON input file.')
-@click.option('--repeat', default=1, help='Number of times to repeat the input.')
-@click.option('--profile-process/--no-profile-process',
-              default=False, help='Whether or not to profile processing.')
-@click.option('--profile-write/--no-profile-write',
-              default=False, help='Whether or not to profile writing.')
-@click.option('--dataset', default='events', type=click.Choice(DATASET_NAMES),
-              help='The dataset to consume/run replacements for (currently only events supported)')
-@click.option('--log-level', default=settings.LOG_LEVEL, help='Logging level to use.')
+@click.option("--events-file", help="Event JSON input file.")
+@click.option("--repeat", default=1, help="Number of times to repeat the input.")
+@click.option(
+    "--profile-process/--no-profile-process",
+    default=False,
+    help="Whether or not to profile processing.",
+)
+@click.option(
+    "--profile-write/--no-profile-write",
+    default=False,
+    help="Whether or not to profile writing.",
+)
+@click.option(
+    "--dataset",
+    default="events",
+    type=click.Choice(DATASET_NAMES),
+    help="The dataset to consume/run replacements for (currently only events supported)",
+)
+@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
 def perf(events_file, repeat, profile_process, profile_write, dataset, log_level):
     from snuba.perf import run, logger
 
-    logging.basicConfig(level=getattr(logging, log_level.upper()), format='%(asctime)s %(message)s')
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
+    )
 
     dataset = get_dataset(dataset)
     if not local_dataset_mode():
@@ -44,6 +56,9 @@ def perf(events_file, repeat, profile_process, profile_write, dataset, log_level
         sys.exit(1)
 
     run(
-        events_file, dataset,
-        repeat=repeat, profile_process=profile_process, profile_write=profile_write
+        events_file,
+        dataset,
+        repeat=repeat,
+        profile_process=profile_process,
+        profile_write=profile_write,
     )

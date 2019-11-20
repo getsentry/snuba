@@ -15,8 +15,8 @@ class PausedState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateData
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self,
-        input: Optional[ConsumerStateData],
+    def handle(
+        self, input: Optional[ConsumerStateData],
     ) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         # TODO: Actually wait on the control topic for instructions
         return (

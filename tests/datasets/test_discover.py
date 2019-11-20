@@ -27,7 +27,7 @@ test_data = [
 class TestDiscover(BaseDatasetTest):
     @pytest.mark.parametrize("conditions, expected_dataset", test_data)
     def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
-        query = Query({"conditions": conditions, }, get_dataset_source("discover"))
+        query = Query({"conditions": conditions}, get_dataset_source("discover"))
 
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
         for processor in get_dataset("discover").get_query_processors():

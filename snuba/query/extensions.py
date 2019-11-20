@@ -11,10 +11,7 @@ class QueryExtension(ABC):
     processing the extension data.
     """
 
-    def __init__(self,
-        schema: Schema,
-        processor: ExtensionQueryProcessor,
-    ) -> None:
+    def __init__(self, schema: Schema, processor: ExtensionQueryProcessor,) -> None:
         self.__schema = schema
         self.__processor = processor
 
