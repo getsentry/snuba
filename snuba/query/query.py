@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from deprecation import deprecated
+from enum import Enum
 from itertools import chain
 from typing import (
     Any,
+    Callable,
+    Iterable,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -15,6 +19,7 @@ from typing import (
 )
 
 from snuba.datasets.schemas import RelationalSource
+from snuba.query.expressions import Expression
 from snuba.query.types import Condition
 from snuba.util import SAFE_COL_RE, columns_in_expr, is_condition, to_list
 
@@ -29,6 +34,17 @@ Limitby = Tuple[int, str]
 TElement = TypeVar("TElement")
 
 
+class OrderByDirection(Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
+@dataclass(frozen=True)
+class OrderBy:
+    direction: OrderByDirection
+    node: Expression
+
+
 class Query:
     """
     Represents a parsed query we can edit during query processing.
@@ -41,12 +57,43 @@ class Query:
     an abstract Snuba query and a concrete Clickhouse query, but
     that cannot come in this PR since it also requires a proper
     schema split in the dataset to happen.
+
+    NEW DATA MODEL:
+    The query is represented as a tree. The Query object is the root.
+    Nodes in the tree can have different types (Expression, Conditions, etc.)
+    Each node could be an individual node (like a column) or an collection.
+    A collection can be a sequence (like a list of Columns) or a hierarchy
+    (like function calls).
+
+    There are three ways to manipulate the query:
+    - traverse the tree. Traversing the full tree in an untyped way is
+      not extremely useful. What is more interesting is being able to
+      iterate over all the nodes of a given type (like expressions).
+      This is achieved through the NodeContainer interface.
+
+    - replace specific nodes. NodeContainer provides a map methods that
+      allows the callsite to apply a func to all nodes of a specific
+      type. This is useful for replacing expressions across the query.
+
+    - direct access to the root and explore specific parts of the tree
+      from there.
     """
 
     # TODO: Make getters non nullable when possible. This is a risky
     # change so we should take one field at a time.
 
-    def __init__(self, body: MutableMapping[str, Any], data_source: RelationalSource):
+    def __init__(
+        self,
+        body: MutableMapping[str, Any],  # Temporary
+        data_source: RelationalSource,
+        # New data model to replace the one based on the dictionary
+        selected_columns: Optional[Sequence[Expression]] = None,
+        array_join: Optional[Expression] = None,
+        condition: Optional[Expression] = None,
+        groupby: Optional[Sequence[Expression]] = None,
+        having: Optional[Expression] = None,
+        order_by: Optional[Sequence[OrderBy]] = None,
+    ):
         """
         Expects an already parsed query body.
         """
@@ -56,6 +103,61 @@ class Query:
         self.__final = False
         self.__data_source = data_source
         self.__prewhere_conditions: Sequence[Condition] = []
+
+        self.__selected_columns = selected_columns or []
+        self.__array_join = array_join
+        self.__condition = condition
+        self.__groupby = groupby or []
+        self.__having = having
+        self.__order_by = order_by or []
+
+    def get_all_expressions(self) -> Iterable[Expression]:
+        """
+        Returns an expression container that iterates over all the expressions
+        in the query no matter which level of nesting they are at.
+        The ExpressionContainer can be used to traverse the expressions in the
+        tree.
+        """
+        return chain(
+            chain.from_iterable(self.__selected_columns),
+            self.__array_join or [],
+            self.__condition or [],
+            chain.from_iterable(self.__groupby),
+            self.__having or [],
+            chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
+        )
+
+    def transform_expressions(self, func: Callable[[Expression], Expression],) -> None:
+        """
+        Transforms in place the current query object by applying a transformation
+        function to all expressions contained in this query
+
+        Cointrarily to Expression.transform this happens in place since Query has
+        to be mutable as of now. This is because there are still parts of the query
+        processing that depends on the Query instance not to be replaced during the
+        query. See the Request class (that is immutable, so Query cannot be replaced).
+        """
+
+        def transform_expression_list(
+            expressions: Sequence[Expression],
+        ) -> Sequence[Expression]:
+            return list(map(lambda exp: exp.transform(func), expressions),)
+
+        self.__selected_columns = transform_expression_list(self.__selected_columns)
+        self.__array_join = (
+            self.__array_join.transform(func) if self.__array_join else None
+        )
+        self.__condition = (
+            self.__condition.transform(func) if self.__condition else None
+        )
+        self.__groupby = transform_expression_list(self.__groupby)
+        self.__having = self.__having.transform(func) if self.__having else None
+        self.__order_by = list(
+            map(
+                lambda clause: replace(clause, node=clause.node.transform(func)),
+                self.__order_by,
+            )
+        )
 
     def get_data_source(self) -> RelationalSource:
         return self.__data_source
@@ -71,6 +173,9 @@ class Query:
     def get_selected_columns(self) -> Optional[Sequence[Any]]:
         return self.__body.get("selected_columns")
 
+    def get_selected_columns_from_ast(self) -> Sequence[Expression]:
+        return self.__selected_columns
+
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
@@ -83,6 +188,9 @@ class Query:
     def get_groupby(self) -> Optional[Sequence[Groupby]]:
         return self.__body.get("groupby")
 
+    def get_groupby_from_ast(self) -> Sequence[Expression]:
+        return self.__groupby
+
     def set_groupby(self, groupby: Sequence[Aggregation],) -> None:
         self.__body["groupby"] = groupby
 
@@ -91,6 +199,9 @@ class Query:
 
     def get_conditions(self) -> Optional[Sequence[Condition]]:
         return self.__body.get("conditions")
+
+    def get_condition_from_ast(self) -> Optional[Expression]:
+        return self.__condition
 
     def set_conditions(self, conditions: Sequence[Condition]) -> None:
         self.__body["conditions"] = conditions
@@ -116,11 +227,20 @@ class Query:
     def get_arrayjoin(self) -> Optional[str]:
         return self.__body.get("arrayjoin", None)
 
+    def get_arrayjoin_from_ast(self) -> Optional[Expression]:
+        return self.__array_join
+
     def get_having(self) -> Sequence[Condition]:
         return self.__body.get("having", [])
 
+    def get_having_from_ast(self) -> Optional[Expression]:
+        return self.__having
+
     def get_orderby(self) -> Optional[Sequence[Any]]:
         return self.__body.get("orderby")
+
+    def get_orderby_from_ast(self) -> Sequence[OrderBy]:
+        return self.__order_by
 
     def set_orderby(self, orderby: Sequence[Any]) -> None:
         self.__body["orderby"] = orderby
