@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 19.10b0
+    hooks:
+      - id: black
+  - repo: git://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-xml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: fix-encoding-pragma
+        args: ["--remove"]
+  - repo: https://github.com/pycqa/flake8
+    rev: 3.7.8
+    hooks:
+      - id: flake8
+        language_version: python3.7
+default_language_version:
+  python: python3.7

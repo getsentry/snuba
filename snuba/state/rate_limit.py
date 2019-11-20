@@ -11,16 +11,16 @@ from typing import (
     MutableMapping,
     Optional,
     Sequence,
-    Type
+    Type,
 )
 import uuid
 
 from snuba import state
 
-logger = logging.getLogger('snuba.state.rate_limit')
+logger = logging.getLogger("snuba.state.rate_limit")
 
-PROJECT_RATE_LIMIT_NAME = 'project'
-GLOBAL_RATE_LIMIT_NAME = 'global'
+PROJECT_RATE_LIMIT_NAME = "project"
+GLOBAL_RATE_LIMIT_NAME = "global"
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,7 @@ class RateLimitStats:
     The stats returned after the rate limit is run to tell the caller about the current
     rate and number of concurrent requests.
     """
+
     rate: float
     concurrent: int
 
@@ -56,6 +57,7 @@ class RateLimitStatsContainer:
     """
     A container to collect stats for all the rate limits that have been run.
     """
+
     def __init__(self) -> None:
         self.__stats: MutableMapping[str, RateLimitStats] = {}
 
@@ -65,10 +67,12 @@ class RateLimitStatsContainer:
     def get_stats(self, rate_limit_name: str) -> Optional[RateLimitStats]:
         return self.__stats.get(rate_limit_name)
 
-    def __format_single_dict(self, name: str, stats: RateLimitStats) -> Mapping[str, float]:
+    def __format_single_dict(
+        self, name: str, stats: RateLimitStats
+    ) -> Mapping[str, float]:
         return {
-            f'{name}_rate': stats.rate,
-            f'{name}_concurrent': stats.concurrent,
+            f"{name}_rate": stats.rate,
+            f"{name}_concurrent": stats.concurrent,
         }
 
     def to_dict(self) -> TypingChainMap[str, float]:
@@ -76,12 +80,17 @@ class RateLimitStatsContainer:
         Converts the internal representation into a mapping so that it can be added to
         the stats that are returned in the response body
         """
-        grouped_stats = [self.__format_single_dict(name, rate_limit) for name, rate_limit in self.__stats.items()]
+        grouped_stats = [
+            self.__format_single_dict(name, rate_limit)
+            for name, rate_limit in self.__stats.items()
+        ]
         return ChainMap(*grouped_stats)
 
 
 @contextmanager
-def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Optional[RateLimitStats]]:
+def rate_limit(
+    rate_limit_params: RateLimitParameters,
+) -> Iterator[Optional[RateLimitStats]]:
     """
     A context manager for rate limiting that allows for limiting based on
     on a rolling-window per-second rate as well as the number of requests
@@ -101,20 +110,21 @@ def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Optional[Rate
                                  now
     """
 
-    bucket = '{}{}'.format(state.ratelimit_prefix, rate_limit_params.bucket)
+    bucket = "{}{}".format(state.ratelimit_prefix, rate_limit_params.bucket)
     query_id = uuid.uuid4()
 
     now = time.time()
-    bypass_rate_limit, rate_history_s = state.get_configs([
-        ('bypass_rate_limit', 0),
-        ('rate_history_sec', 3600)
-    ])
+    bypass_rate_limit, rate_history_s = state.get_configs(
+        [("bypass_rate_limit", 0), ("rate_history_sec", 3600)]
+    )
 
     if bypass_rate_limit == 1:
         yield None
 
     pipe = state.rds.pipeline(transaction=False)
-    pipe.zremrangebyscore(bucket, '-inf', '({:f}'.format(now - rate_history_s))  # cleanup
+    pipe.zremrangebyscore(
+        bucket, "-inf", "({:f}".format(now - rate_history_s)
+    )  # cleanup
     pipe.zadd(bucket, now + state.max_query_duration_s, query_id)  # add query
     if rate_limit_params.per_second_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need per-second
@@ -123,7 +133,7 @@ def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Optional[Rate
     if rate_limit_params.concurrent_limit is None:
         pipe.exists("nosuchkey")  # no-op if we don't need concurrent
     else:
-        pipe.zcount(bucket, '({:f}'.format(now), '+inf')  # get concurrent
+        pipe.zcount(bucket, "({:f}".format(now), "+inf")  # get concurrent
 
     try:
         _, _, historical, concurrent = pipe.execute()
@@ -139,10 +149,20 @@ def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Optional[Rate
 
     rate_limit_name = rate_limit_params.rate_limit_name
 
-    Reason = namedtuple('reason', 'scope name val limit')
+    Reason = namedtuple("reason", "scope name val limit")
     reasons = [
-        Reason(rate_limit_name, 'concurrent', concurrent, rate_limit_params.concurrent_limit),
-        Reason(rate_limit_name, 'per-second', per_second, rate_limit_params.per_second_limit),
+        Reason(
+            rate_limit_name,
+            "concurrent",
+            concurrent,
+            rate_limit_params.concurrent_limit,
+        ),
+        Reason(
+            rate_limit_name,
+            "per-second",
+            per_second,
+            rate_limit_params.per_second_limit,
+        ),
     ]
 
     reason = next((r for r in reasons if r.limit is not None and r.val > r.limit), None)
@@ -155,7 +175,9 @@ def rate_limit(rate_limit_params: RateLimitParameters) -> Iterator[Optional[Rate
             pass
 
         raise RateLimitExceeded(
-            '{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}'.format(r=reason)
+            "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
+                r=reason
+            )
         )
 
     try:
@@ -174,14 +196,13 @@ def get_global_rate_limit_params() -> RateLimitParameters:
     Returns the configuration object for the global rate limit
     """
 
-    (per_second, concurr) = state.get_configs([
-        ('global_per_second_limit', None),
-        ('global_concurrent_limit', 1000),
-    ])
+    (per_second, concurr) = state.get_configs(
+        [("global_per_second_limit", None), ("global_concurrent_limit", 1000)]
+    )
 
     return RateLimitParameters(
         rate_limit_name=GLOBAL_RATE_LIMIT_NAME,
-        bucket='global',
+        bucket="global",
         per_second_limit=per_second,
         concurrent_limit=concurr,
     )
@@ -209,9 +230,9 @@ class RateLimitAggregator(AbstractContextManager):
         return stats
 
     def __exit__(
-            self,
-            exc_type: Optional[Type[BaseException]],
-            exc_val: Optional[BaseException],
-            exc_tb: Optional[TracebackType]
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
     ) -> None:
         self.stack.pop_all().close()

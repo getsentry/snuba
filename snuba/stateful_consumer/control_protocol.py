@@ -14,7 +14,7 @@ from snuba.snapshots.postgres_snapshot import Xid
 # is the actual error because it does not know which is the expected message.
 # We should try to split them into three schemas.
 CONTROL_MSG_SCHEMA = {
-    'anyOf': [
+    "anyOf": [
         {"$ref": "#/definitions/snapshot-init"},
         {"$ref": "#/definitions/snapshot-abort"},
         {"$ref": "#/definitions/snapshot-loaded"},
@@ -22,11 +22,7 @@ CONTROL_MSG_SCHEMA = {
     "definitions": {
         "base": {
             "type": "object",
-            "properties": {
-                "snapshot-id": {
-                    "type": "string"
-                }
-            },
+            "properties": {"snapshot-id": {"type": "string"}},
             "required": ["snapshot-id"],
         },
         "snapshot-init": {
@@ -36,26 +32,19 @@ CONTROL_MSG_SCHEMA = {
                     "properties": {
                         "event": {"const": "snapshot-init"},
                         "product": {"type": "string"},
-                        "tables": {
-                            "type": "array",
-                            "items": [
-                                {"type": "string"}
-                            ],
-                        },
+                        "tables": {"type": "array", "items": [{"type": "string"}]},
                     },
                     "required": ["event", "product", "tables"],
-                }
+                },
             ]
         },
         "snapshot-abort": {
             "allOf": [
                 {"$ref": "#/definitions/base"},
                 {
-                    "properties": {
-                        "event": {"const": "snapshot-abort"},
-                    },
+                    "properties": {"event": {"const": "snapshot-abort"}},
                     "required": ["event"],
-                }
+                },
             ]
         },
         "snapshot-loaded": {
@@ -71,19 +60,17 @@ CONTROL_MSG_SCHEMA = {
                                 "xmax": {"type": "number"},
                                 "xip-list": {
                                     "type": "array",
-                                    "items": [
-                                        {"type": "number"}
-                                    ],
+                                    "items": [{"type": "number"}],
                                 },
                             },
                             "required": ["xmin", "xmax", "xip-list"],
-                        }
+                        },
                     },
                     "required": ["event", "transaction-info"],
-                }
+                },
             ]
-        }
-    }
+        },
+    },
 }
 
 
@@ -105,21 +92,16 @@ class SnapshotInit(ControlMessage):
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-init"
         return cls(
-            id=json["snapshot-id"],
-            tables=json["tables"],
-            product=json["product"],
+            id=json["snapshot-id"], tables=json["tables"], product=json["product"],
         )
 
 
 @dataclass(frozen=True)
 class SnapshotAbort(ControlMessage):
-
     @classmethod
     def from_json(cls, json: Mapping[str, Any]) -> ControlMessage:
         assert json["event"] == "snapshot-abort"
-        return cls(
-            id=json["snapshot-id"],
-        )
+        return cls(id=json["snapshot-id"],)
 
 
 @dataclass(frozen=True)
@@ -127,6 +109,7 @@ class TransactionData:
     """
     Provides the metadata for the loaded snapshot.
     """
+
     xmin: Xid
     xmax: Xid
     xip_list: Sequence[Xid]
@@ -145,7 +128,7 @@ class SnapshotLoaded(ControlMessage):
                 xmin=json["transaction-info"]["xmin"],
                 xmax=json["transaction-info"]["xmax"],
                 xip_list=json["transaction-info"]["xip-list"],
-            )
+            ),
         )
 
     def to_dict(self) -> Mapping[str, Any]:
@@ -156,7 +139,7 @@ class SnapshotLoaded(ControlMessage):
                 "xmin": self.transaction_info.xmin,
                 "xmax": self.transaction_info.xmax,
                 "xip-list": self.transaction_info.xip_list,
-            }
+            },
         }
 
 

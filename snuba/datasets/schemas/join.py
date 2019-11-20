@@ -25,6 +25,7 @@ class JoinConditionExpression(NamedTuple):
     Represent one qualified column [alias.column] in the
     ON clause within the join expression.
     """
+
     table_alias: str
     column: str
 
@@ -34,12 +35,15 @@ class JoinCondition:
     """
     Represent a condition in the ON clause in the JOIN expression
     """
+
     left: JoinConditionExpression
     right: JoinConditionExpression
 
     def __str__(self) -> str:
-        return f"{self.left.table_alias}.{self.left.column} = " \
+        return (
+            f"{self.left.table_alias}.{self.left.column} = "
             f"{self.right.table_alias}.{self.right.column}"
+        )
 
 
 class JoinNode(RelationalSource, ABC):
@@ -72,7 +76,8 @@ class TableJoinNode(TableSource, JoinNode):
     It can be a table or a view.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         table_name: str,
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]],
@@ -106,6 +111,7 @@ class JoinClause(JoinNode):
     This does not validate the join makes sense nor it checks
     the aliases are valid.
     """
+
     left_node: JoinNode
     right_node: JoinNode
     mapping: Sequence[JoinCondition]
@@ -156,9 +162,7 @@ class JoinedSchema(Schema):
     that keeps reference to the schemas we are joining.
     """
 
-    def __init__(self,
-        join_root: JoinNode,
-    ) -> None:
+    def __init__(self, join_root: JoinNode,) -> None:
         self.__source = join_root
 
     def get_data_source(self) -> RelationalSource:

@@ -14,11 +14,10 @@ from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.consumers.backends.kafka import KafkaMessage
 
 
-logger = logging.getLogger('snuba.consumer')
+logger = logging.getLogger("snuba.consumer")
 
 KafkaMessageMetadata = collections.namedtuple(
-    'KafkaMessageMetadata',
-    'offset partition'
+    "KafkaMessageMetadata", "offset partition"
 )
 
 
@@ -32,17 +31,18 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        self.__writer = enforce_table_writer(dataset).get_writer({
-            'load_balancing': 'in_order',
-            'insert_distributed_sync': 1,
-        })
+        self.__writer = enforce_table_writer(dataset).get_writer(
+            {"load_balancing": "in_order", "insert_distributed_sync": 1}
+        )
 
     def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
         value = json.loads(message.value)
-        metadata = KafkaMessageMetadata(offset=message.offset, partition=message.stream.partition)
+        metadata = KafkaMessageMetadata(
+            offset=message.offset, partition=message.stream.partition
+        )
         processed = self._process_message_impl(value, metadata)
         if processed is None:
             return None
@@ -55,11 +55,11 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         return processed
 
     def _process_message_impl(
-        self,
-        value: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
+        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
-        processor = enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
+        processor = (
+            enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
+        )
         return processor.process_message(value, metadata)
 
     def delivery_callback(self, error, message):
@@ -82,14 +82,14 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         if inserts:
             self.__writer.write(inserts)
 
-            self.metrics.timing('inserts', len(inserts))
+            self.metrics.timing("inserts", len(inserts))
 
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
                     self.replacements_topic,
-                    key=str(key).encode('utf-8'),
-                    value=json.dumps(replacement).encode('utf-8'),
+                    key=str(key).encode("utf-8"),
+                    value=json.dumps(replacement).encode("utf-8"),
                     on_delivery=self.delivery_callback,
                 )
 

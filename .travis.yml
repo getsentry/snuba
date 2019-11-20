@@ -13,4 +13,18 @@ before_install:
   - docker ps -a
 
 script:
-  - docker run --net host -e SNUBA_SETTINGS=travis --entrypoint python getsentry/snuba -m pytest -vv
+  - docker run -v ~/.artifacts:/.artifacts --net host -e SNUBA_SETTINGS=travis --entrypoint python getsentry/snuba -m pytest -vv --cov . --cov-report="xml:/.artifacts/coverage.xml" --junit-xml="/.artifacts/pytest.junit.xml"
+
+notifications:
+  webhooks:
+    urls:
+      - https://zeus.ci/hooks/765a963c-0af7-11ea-9a3f-6a1577f6e072/public/provider/travis/webhook
+    on_success: always
+    on_failure: always
+    on_start: always
+    on_cancel: always
+    on_error: always
+after_script:
+  - npm install -g @zeus-ci/cli
+  - $(npm bin -g)/zeus upload -t "application/x-junit+xml" ~/.artifacts/*.junit.xml
+  - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" ~/.artifacts/coverage.xml

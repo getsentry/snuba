@@ -5,7 +5,7 @@ from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.state_machine import State
 
-logger = logging.getLogger('snuba.snapshot-catchup')
+logger = logging.getLogger("snuba.snapshot-catchup")
 
 
 class CatchingUpState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]):
@@ -17,10 +17,7 @@ class CatchingUpState(State[ConsumerStateCompletionEvent, Optional[ConsumerState
     consumption.
     """
 
-    def __init__(
-        self,
-        consumer_builder: ConsumerBuilder
-    ) -> None:
+    def __init__(self, consumer_builder: ConsumerBuilder) -> None:
         super().__init__()
         self.__consumer_builder = consumer_builder
         self.__consumer = None
@@ -29,7 +26,9 @@ class CatchingUpState(State[ConsumerStateCompletionEvent, Optional[ConsumerState
         if self.__consumer:
             self.__consumer.signal_shutdown()
 
-    def handle(self, state_data: Optional[ConsumerStateData]) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
+    def handle(
+        self, state_data: Optional[ConsumerStateData]
+    ) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         assert state_data is not None
 
         consumer = self.__consumer_builder.build_snapshot_aware_consumer(

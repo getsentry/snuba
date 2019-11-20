@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Optional
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.datasets.cdc import CdcDataset
@@ -10,7 +10,9 @@ from snuba.stateful_consumer.states.paused import PausedState
 from snuba.stateful_consumer.states.catching_up import CatchingUpState
 
 
-class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]):
+class ConsumerStateMachine(
+    StateMachine[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]
+):
     """
     Context class for the stateful consumer. The states defined here
     regulate when the consumer is consuming from the main topic and when
@@ -54,7 +56,9 @@ class ConsumerStateMachine(StateMachine[ConsumerStateCompletionEvent, Optional[C
 
     def _build_state(
         self,
-        state_class: StateType[ConsumerStateCompletionEvent, Optional[ConsumerStateData]],
+        state_class: StateType[
+            ConsumerStateCompletionEvent, Optional[ConsumerStateData]
+        ],
     ) -> State[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         if state_class == ConsumingState:
             return ConsumingState(self.__consumer_builder)

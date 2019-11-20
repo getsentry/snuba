@@ -10,10 +10,10 @@ class DatasetSchemas(object):
     """
 
     def __init__(
-            self,
-            read_schema: Schema,
-            write_schema: Union[WritableTableSchema, None],
-            intermediary_schemas: Optional[List[Schema]] = None
+        self,
+        read_schema: Schema,
+        write_schema: Union[WritableTableSchema, None],
+        intermediary_schemas: Optional[List[Schema]] = None,
     ) -> None:
         if intermediary_schemas is None:
             intermediary_schemas = []

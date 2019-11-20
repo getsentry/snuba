@@ -9,7 +9,7 @@ from typing import Any, NamedTuple, Optional, Sequence, Union
 
 from snuba.util import force_bytes
 
-HASH_RE = re.compile(r'^[0-9a-f]{32}$', re.IGNORECASE)
+HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 MAX_UINT32 = 2 ** 32 - 1
 
 
@@ -29,11 +29,7 @@ class MessageProcessor(object):
     event stream into a row or statement to be inserted or executed against clickhouse.
     """
 
-    def process_message(
-        self,
-        message,
-        metadata=None,
-    ) -> Optional[ProcessedMessage]:
+    def process_message(self, message, metadata=None,) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 
@@ -72,9 +68,9 @@ def _boolify(s):
 
     s = _unicodify(s)
 
-    if s in ('yes', 'true', '1'):
+    if s in ("yes", "true", "1"):
         return True
-    elif s in ('false', 'no', '0'):
+    elif s in ("false", "no", "0"):
         return False
 
     return None
@@ -104,7 +100,7 @@ def _unicodify(s):
     if isinstance(s, dict) or isinstance(s, list):
         return json.dumps(s)
 
-    return str(s).encode('utf8', errors='backslashreplace').decode('utf8')
+    return str(s).encode("utf8", errors="backslashreplace").decode("utf8")
 
 
 def _hashify(h):
@@ -122,7 +118,9 @@ def _ensure_valid_date(dt):
     return dt
 
 
-def _ensure_valid_ip(ip: Any) -> Optional[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
+def _ensure_valid_ip(
+    ip: Any,
+) -> Optional[Union[ipaddress.IPv4Address, ipaddress.IPv6Address]]:
     """
     IP addresses in e.g. `user.ip_address` might be invalid due to PII stripping.
     """

@@ -8,12 +8,16 @@ from typing import Any, Mapping, Optional, Sequence, Type
 from snuba.processor import MessageProcessor, ProcessorAction, ProcessedMessage
 from snuba.writer import WriterTableRow
 
-KAFKA_ONLY_PARTITION = 0  # CDC only works with single partition topics. So partition must be 0
+KAFKA_ONLY_PARTITION = (
+    0  # CDC only works with single partition topics. So partition must be 0
+)
 
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 
-date_re = re.compile("^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})")
+date_re = re.compile(
+    "^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(\.\d{1,6})?(\+\d{2})"
+)
 
 date_with_nanosec = re.compile("^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.")
 
@@ -22,7 +26,7 @@ def parse_postgres_datetime(date: str) -> datetime:
     # Postgres dates express the timezone in hours while strptime expects
     # the timezone to be expressed in HHmm, thus we need to add 00 as minutes.
     date = f"{date}00"
-    if (date_with_nanosec.match(date)):
+    if date_with_nanosec.match(date):
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITH_NS)
     else:
         return datetime.strptime(date, POSTGRES_DATE_FORMAT_WITHOUT_NS)
@@ -50,18 +54,12 @@ class CdcMessageRow(ABC):
 
     @classmethod
     def from_wal(
-        cls,
-        offset: int,
-        columnnames: Sequence[str],
-        columnvalues: Sequence[Any],
+        cls, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
     ) -> CdcMessageRow:
         raise NotImplementedError
 
     @classmethod
-    def from_bulk(
-        cls,
-        row: Mapping[str, Any],
-    ) -> CdcMessageRow:
+    def from_bulk(cls, row: Mapping[str, Any],) -> CdcMessageRow:
         raise NotImplementedError
 
     @abstractmethod
@@ -70,7 +68,6 @@ class CdcMessageRow(ABC):
 
 
 class CdcProcessor(MessageProcessor):
-
     def __init__(self, pg_table: str, message_row_class: Type[CdcMessageRow]):
         self.pg_table = pg_table
         self._message_row_class = message_row_class
@@ -81,44 +78,38 @@ class CdcProcessor(MessageProcessor):
     def _process_commit(self, offset: int) -> Sequence[WriterTableRow]:
         return []
 
-    def _process_insert(self,
-        offset: int,
-        columnnames: Sequence[str],
-        columnvalues: Sequence[Any],
+    def _process_insert(
+        self, offset: int, columnnames: Sequence[str], columnvalues: Sequence[Any],
     ) -> Sequence[WriterTableRow]:
-        return [self._message_row_class.from_wal(
-            offset,
-            columnnames,
-            columnvalues
-        ).to_clickhouse()]
+        return [
+            self._message_row_class.from_wal(
+                offset, columnnames, columnvalues
+            ).to_clickhouse()
+        ]
 
-    def _process_update(self,
+    def _process_update(
+        self,
         offset: int,
         key: Mapping[str, Any],
         columnnames: Sequence[str],
         columnvalues: Sequence[Any],
     ) -> Sequence[WriterTableRow]:
-        old_key = dict(zip(key['keynames'], key['keyvalues']))
-        new_key = {
-            key: columnvalues[columnnames.index(key)]
-            for key
-            in key['keynames']
-        }
+        old_key = dict(zip(key["keynames"], key["keyvalues"]))
+        new_key = {key: columnvalues[columnnames.index(key)] for key in key["keynames"]}
 
         ret = []
         if old_key != new_key:
             ret.extend(self._process_delete(offset, key))
 
-        ret.append(self._message_row_class.from_wal(
-            offset,
-            columnnames,
-            columnvalues
-        ).to_clickhouse())
+        ret.append(
+            self._message_row_class.from_wal(
+                offset, columnnames, columnvalues
+            ).to_clickhouse()
+        )
         return ret
 
-    def _process_delete(self,
-        offset: int,
-        key: Mapping[str, Any],
+    def _process_delete(
+        self, offset: int, key: Mapping[str, Any],
     ) -> Sequence[WriterTableRow]:
         return []
 
@@ -126,37 +117,45 @@ class CdcProcessor(MessageProcessor):
         assert isinstance(value, dict)
 
         partition = metadata.partition
-        assert partition == KAFKA_ONLY_PARTITION, 'CDC can only work with single partition topics for consistency'
+        assert (
+            partition == KAFKA_ONLY_PARTITION
+        ), "CDC can only work with single partition topics for consistency"
 
         offset = metadata.offset
-        event = value['event']
-        if event == 'begin':
+        event = value["event"]
+        if event == "begin":
             messages = self._process_begin(offset)
-        elif event == 'commit':
+        elif event == "commit":
             messages = self._process_commit(offset)
-        elif event == 'change':
-            table_name = value['table']
+        elif event == "change":
+            table_name = value["table"]
             if table_name != self.pg_table:
                 return None
 
-            operation = value['kind']
-            if operation == 'insert':
+            operation = value["kind"]
+            if operation == "insert":
                 messages = self._process_insert(
-                    offset, value['columnnames'], value['columnvalues'])
-            elif operation == 'update':
+                    offset, value["columnnames"], value["columnvalues"]
+                )
+            elif operation == "update":
                 messages = self._process_update(
-                    offset, value['oldkeys'], value['columnnames'], value['columnvalues'])
-            elif operation == 'delete':
-                messages = self._process_delete(offset, value['oldkeys'])
+                    offset,
+                    value["oldkeys"],
+                    value["columnnames"],
+                    value["columnvalues"],
+                )
+            elif operation == "delete":
+                messages = self._process_delete(offset, value["oldkeys"])
             else:
-                raise ValueError("Invalid value for operation in replication log: %s" % value['kind'])
+                raise ValueError(
+                    "Invalid value for operation in replication log: %s" % value["kind"]
+                )
         else:
-            raise ValueError("Invalid value for event in replication log: %s" % value['event'])
+            raise ValueError(
+                "Invalid value for event in replication log: %s" % value["event"]
+            )
 
         if not messages:
             return None
 
-        return ProcessedMessage(
-            action=ProcessorAction.INSERT,
-            data=messages,
-        )
+        return ProcessedMessage(action=ProcessorAction.INSERT, data=messages,)

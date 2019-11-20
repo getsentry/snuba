@@ -29,17 +29,17 @@ class KafkaStreamLoader:
         self,
         processor: MessageProcessor,
         default_topic: str,
-        replacement_topic: Optional[str]=None,
-        commit_log_topic: Optional[str]=None,
+        replacement_topic: Optional[str] = None,
+        commit_log_topic: Optional[str] = None,
     ) -> None:
         self.__processor = processor
         self.__default_topic_spec = KafkaTopicSpec(topic_name=default_topic)
-        self.__replacement_topic_spec = KafkaTopicSpec(topic_name=replacement_topic) \
-            if replacement_topic \
-            else None
-        self.__commit_log_topic_spec = KafkaTopicSpec(topic_name=commit_log_topic) \
-            if commit_log_topic \
-            else None
+        self.__replacement_topic_spec = (
+            KafkaTopicSpec(topic_name=replacement_topic) if replacement_topic else None
+        )
+        self.__commit_log_topic_spec = (
+            KafkaTopicSpec(topic_name=commit_log_topic) if commit_log_topic else None
+        )
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
@@ -77,9 +77,8 @@ class TableWriter:
     between bulk load and stream load.
     """
 
-    def __init__(self,
-        write_schema: WritableTableSchema,
-        stream_loader: KafkaStreamLoader,
+    def __init__(
+        self, write_schema: WritableTableSchema, stream_loader: KafkaStreamLoader,
     ) -> None:
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader

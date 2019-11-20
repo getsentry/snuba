@@ -10,7 +10,16 @@ from confluent_kafka.admin import (
 
 
 class FakeConfluentKafkaMessage(object):
-    def __init__(self, topic: str, partition: int, offset, value: Optional[bytes], key=None, headers=None, error=None) -> None:
+    def __init__(
+        self,
+        topic: str,
+        partition: int,
+        offset,
+        value: Optional[bytes],
+        key=None,
+        headers=None,
+        error=None,
+    ) -> None:
         if value is not None:
             assert isinstance(value, bytes)
 
@@ -19,10 +28,11 @@ class FakeConfluentKafkaMessage(object):
         self._offset = offset
         self._value = value
         self._key = key
-        self._headers = {
-            str(k): str(v) if v else None
-            for k, v in headers.items()
-        } if headers else None
+        self._headers = (
+            {str(k): str(v) if v else None for k, v in headers.items()}
+            if headers
+            else None
+        )
         self._headers = headers
         self._error = error
 
@@ -97,8 +107,7 @@ class FakeConfluentKafkaConsumer(object):
         self.commit_calls += 1
         return [
             TopicPartition(topic, partition, offset)
-            for (topic, partition), offset in
-            self.positions.items()
+            for (topic, partition), offset in self.positions.items()
         ]
 
     def close(self, *args, **kwargs):
@@ -111,16 +120,14 @@ class FakeConfluentKafkaConsumer(object):
         meta = ClusterMetadata()
         topic_meta = TopicMetadata()
         topic_meta.topic = topic
-        topic_meta.partitions = {
-            0: PartitionMetadata()
-        }
-        meta.topics = {
-            topic: topic_meta
-        }
+        topic_meta.partitions = {0: PartitionMetadata()}
+        meta.topics = {topic: topic_meta}
         return meta
 
 
-def build_confluent_kafka_message(offset: int, partition: int, value: Optional[bytes], eof: bool = False) -> FakeConfluentKafkaMessage:
+def build_confluent_kafka_message(
+    offset: int, partition: int, value: Optional[bytes], eof: bool = False
+) -> FakeConfluentKafkaMessage:
     if eof:
         error = MagicMock()
         error.code.return_value = KafkaError._PARTITION_EOF

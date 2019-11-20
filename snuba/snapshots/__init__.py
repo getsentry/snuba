@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
 
 from contextlib import contextmanager
-from typing import Any, Mapping, NewType, Generator, IO, Iterable, Optional, Sequence
+from typing import Any, Mapping, NewType, Generator, Iterable, Optional, Sequence
 from dataclasses import dataclass
 
 SnapshotId = NewType("SnapshotId", str)
@@ -16,6 +15,7 @@ class TableConfig:
     """
     Represents the snapshot configuration for a table.
     """
+
     table: str
     columns: Optional[Sequence[str]]
 
@@ -25,6 +25,7 @@ class SnapshotDescriptor:
     """
     Provides the metadata for the loaded snapshot.
     """
+
     id: SnapshotId
     tables: Sequence[TableConfig]
 
@@ -49,5 +50,7 @@ class BulkLoadSource(ABC):
 
     @abstractmethod
     @contextmanager
-    def get_table_file(self, table: str) -> Generator[Iterable[SnapshotTableRow], None, None]:
+    def get_table_file(
+        self, table: str
+    ) -> Generator[Iterable[SnapshotTableRow], None, None]:
         raise NotImplementedError
