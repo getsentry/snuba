@@ -168,13 +168,13 @@ class AstClickhouseQuery(ClickhouseQuery):
         # Referencing them here directly since it makes it easier
         # to process this query independently from the Snuba Query
         # and there is no risk in doing so since they are immutable.
-        self.__selected_columns = query.get_selected_columns_exp()
-        self.__condition = query.get_conditions_exp()
-        self.__groupby = query.get_groupby_exp()
-        self.__having = query.get_having_exp()
-        self.__orderby = query.get_orderby_exp()
+        self.__selected_columns = query.get_selected_columns_from_ast()
+        self.__condition = query.get_conditions_from_ast()
+        self.__groupby = query.get_groupby_from_ast()
+        self.__having = query.get_having_from_ast()
+        self.__orderby = query.get_orderby_from_ast()
         self.__data_source = query.get_data_source()
-        self.__arrayjoin = query.get_arrayjoin_exp()
+        self.__arrayjoin = query.get_arrayjoin_from_ast()
         self.__granularity = query.get_granularity()
         self.__limit = query.get_limit()
         self.__limitby = query.get_limitby()
