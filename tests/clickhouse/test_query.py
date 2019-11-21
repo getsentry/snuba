@@ -1,12 +1,12 @@
 from tests.base import BaseEventsTest
 from unittest.mock import patch
 
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.query.query import Query
 from snuba.request import RequestSettings
 
 
-class TestClickhouseQuery(BaseEventsTest):
+class TestDictClickhouseQuery(BaseEventsTest):
     def test_provided_sample_should_be_used(self):
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query(
@@ -15,7 +15,7 @@ class TestClickhouseQuery(BaseEventsTest):
         )
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        clickhouse_query = ClickhouseQuery(
+        clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
@@ -28,7 +28,7 @@ class TestClickhouseQuery(BaseEventsTest):
             source,
         )
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
-        clickhouse_query = ClickhouseQuery(
+        clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
@@ -40,7 +40,7 @@ class TestClickhouseQuery(BaseEventsTest):
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = RequestSettings(turbo=True, consistent=False, debug=False)
 
-        clickhouse_query = ClickhouseQuery(
+        clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
@@ -51,7 +51,7 @@ class TestClickhouseQuery(BaseEventsTest):
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
-        clickhouse_query = ClickhouseQuery(
+        clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
