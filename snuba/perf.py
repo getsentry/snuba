@@ -10,7 +10,11 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
 
 
-logger = logging.getLogger('snuba.perf')
+logger = logging.getLogger("snuba.perf")
+
+
+def format_time(t: float) -> str:
+    return ("%.2f" % t).rjust(10, " ")
 
 
 def get_messages(events_file):
@@ -19,17 +23,12 @@ def get_messages(events_file):
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
         messages.append(
-            KafkaMessage(
-                TopicPartition('events', 1),
-                0,
-                raw_event.encode('utf-8')
-            ),
+            KafkaMessage(TopicPartition("events", 1), 0, raw_event.encode("utf-8")),
         )
     return messages
 
 
-def run(events_file, dataset, repeat=1,
-        profile_process=False, profile_write=False):
+def run(events_file, dataset, repeat=1, profile_process=False, profile_write=False):
     """
     Measures the write performance of a dataset
     """
@@ -52,7 +51,7 @@ def run(events_file, dataset, repeat=1,
     processed = []
 
     def process():
-        with settings_override({'DISCARD_OLD_EVENTS': False}):
+        with settings_override({"DISCARD_OLD_EVENTS": False}):
             for message in messages:
                 result = consumer.process_message(message)
                 if result is not None:
@@ -64,35 +63,33 @@ def run(events_file, dataset, repeat=1,
     time_start = time.time()
     if profile_process:
         filename = tempfile.NamedTemporaryFile(
-            prefix=os.path.basename(events_file) + '.process.',
-            suffix='.pstats',
+            prefix=os.path.basename(events_file) + ".process.",
+            suffix=".pstats",
             delete=False,
         ).name
-        cProfile.runctx('process()', globals(), locals(), filename=filename)
-        logger.info('Profile Data: %s', filename)
+        cProfile.runctx("process()", globals(), locals(), filename=filename)
+        logger.info("Profile Data: %s", filename)
     else:
         process()
     time_write = time.time()
     if profile_write:
         filename = tempfile.NamedTemporaryFile(
-            prefix=os.path.basename(events_file) + '.write.',
-            suffix='.pstats',
+            prefix=os.path.basename(events_file) + ".write.",
+            suffix=".pstats",
             delete=False,
         ).name
-        cProfile.runctx('write()', globals(), locals(), filename=filename)
-        logger.info('Profile Data: %s', filename)
+        cProfile.runctx("write()", globals(), locals(), filename=filename)
+        logger.info("Profile Data: %s", filename)
     else:
         write()
     time_finish = time.time()
-
-    format_time = lambda t: ("%.2f" % t).rjust(10, ' ')
 
     time_to_process = (time_write - time_start) * 1000
     time_to_write = (time_finish - time_write) * 1000
     time_total = (time_finish - time_start) * 1000
     num_events = len(processed)
 
-    logger.info("Number of events: %s" % str(num_events).rjust(10, ' '))
+    logger.info("Number of events: %s" % str(num_events).rjust(10, " "))
     logger.info("Total:            %sms" % format_time(time_total))
     logger.info("Total process:    %sms" % format_time(time_to_process))
     logger.info("Total write:      %sms" % format_time(time_to_write))

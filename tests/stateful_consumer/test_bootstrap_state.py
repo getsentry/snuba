@@ -4,11 +4,13 @@ from snuba.datasets.factory import get_dataset
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
-from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, build_confluent_kafka_message
+from tests.backends.confluent_kafka import (
+    FakeConfluentKafkaConsumer,
+    build_confluent_kafka_message,
+)
 
 
 class TestBootstrapState:
-
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
             topic="topic",
@@ -21,7 +23,7 @@ class TestBootstrapState:
             on_message=on_message,
         )
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_empty_topic(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
@@ -30,17 +32,14 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control",
-            "somewhere",
-            "something",
-            get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
         )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.NO_SNAPSHOT
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_snapshot_for_other_table(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
@@ -55,17 +54,14 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control",
-            "somewhere",
-            "something",
-            get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
         )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.NO_SNAPSHOT
         assert kafka_consumer.commit_calls == 1
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_init_snapshot(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
@@ -80,17 +76,14 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control",
-            "somewhere",
-            "something",
-            get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
         )
 
         ret = bootstrap.handle(None)
         assert ret[0] == ConsumerStateCompletionEvent.SNAPSHOT_INIT_RECEIVED
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_snapshot_loaded(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
@@ -112,7 +105,7 @@ class TestBootstrapState:
                 (
                     b'{"snapshot-id":"abc123", "event":"snapshot-loaded",'
                     b'"transaction-info": {"xmin":123, "xmax":124, "xip-list": []}'
-                    b'}'
+                    b"}"
                 ),
                 False,
             ),
@@ -121,10 +114,7 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control",
-            "somewhere",
-            "something",
-            get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
         )
 
         ret = bootstrap.handle(None)

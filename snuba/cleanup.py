@@ -4,7 +4,7 @@ import logging
 from snuba import util
 
 
-logger = logging.getLogger('snuba.cleanup')
+logger = logging.getLogger("snuba.cleanup")
 
 
 def run_cleanup(clickhouse, database, table, dry_run=True):
@@ -23,10 +23,7 @@ def get_active_partitions(clickhouse, database, table):
         AND table = %(table)s
         AND active = 1
         """,
-        {
-            'database': database,
-            'table': table,
-        }
+        {"database": database, "table": table},
     )
 
     return [util.decode_part_str(part) for part, in response]
@@ -56,10 +53,10 @@ def drop_partitions(clickhouse, database, table, parts, dry_run=True):
 
     for part_date, retention_days in parts:
         args = {
-            'database': database,
-            'table': table,
-            'date_str': part_date.strftime("%Y-%m-%d"),
-            'retention_days': retention_days,
+            "database": database,
+            "table": table,
+            "date_str": part_date.strftime("%Y-%m-%d"),
+            "retention_days": retention_days,
         }
 
         query = (query_template % args).strip()

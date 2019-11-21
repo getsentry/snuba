@@ -18,7 +18,7 @@ from snuba.stateful_consumer.control_protocol import (
 )
 from snuba.utils.state_machine import State
 
-logger = logging.getLogger('snuba.snapshot-load')
+logger = logging.getLogger("snuba.snapshot-load")
 
 
 class RecoveryState:
@@ -87,7 +87,9 @@ class RecoveryState:
         else:
             return ConsumerStateCompletionEvent.SNAPSHOT_READY_RECEIVED
 
-    def get_active_snapshot(self) -> Optional[Tuple[SnapshotId, Optional[TransactionData]]]:
+    def get_active_snapshot(
+        self,
+    ) -> Optional[Tuple[SnapshotId, Optional[TransactionData]]]:
         if self.__active_snapshot_id:
             return (self.__active_snapshot_id, self.__loaded_snapshot_transactions)
         else:
@@ -107,15 +109,16 @@ class RecoveryState:
         commit the message for failover.
         """
         logger.debug("Processing init message for %r", msg.id)
-        if msg.product != settings.SNAPSHOT_LOAD_PRODUCT or \
-                self.__postgres_table_name not in msg.tables:
+        if (
+            msg.product != settings.SNAPSHOT_LOAD_PRODUCT
+            or self.__postgres_table_name not in msg.tables
+        ):
             # Not a snapshot this consumer is interested into.
             return self.__commit_if_no_active_snapshot()
 
         if msg.id in self.__past_snapshots:
             logger.warning(
-                "Duplicate Snapshot init: %r",
-                msg.id,
+                "Duplicate Snapshot init: %r", msg.id,
             )
             return self.__commit_if_no_active_snapshot()
 
@@ -183,7 +186,8 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     The recovery process is done by consuming the whole control topic.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
@@ -221,8 +225,8 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     def signal_shutdown(self) -> None:
         self.__consumer.signal_shutdown()
 
-    def handle(self,
-        state_data: Optional[ConsumerStateData],
+    def handle(
+        self, state_data: Optional[ConsumerStateData],
     ) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         logger.info("Running %r", self.__consumer)
         self.__consumer.run()
@@ -230,8 +234,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
         snapshot = self.__recovery_state.get_active_snapshot()
         if snapshot and snapshot[1] is not None:
             state_data = ConsumerStateData.snapshot_ready_state(
-                snapshot_id=snapshot[0],
-                transaction_data=snapshot[1],
+                snapshot_id=snapshot[0], transaction_data=snapshot[1],
             )
         else:
             state_data = None

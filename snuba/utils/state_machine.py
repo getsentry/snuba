@@ -1,28 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import (
-    Generic,
-    Mapping,
-    Optional,
-    Type,
-    TypeVar,
-    Tuple,
-    Union
-)
+from typing import Generic, Mapping, Optional, Type, TypeVar, Tuple, Union
 
 import logging
 
 
-logger = logging.getLogger('snuba.state-machine')
+logger = logging.getLogger("snuba.state-machine")
 
 
 # Enum that identifies the event a state raises upon termination.
 # This is used by the context to resolve the next state.
-TStateCompletionEvent = TypeVar('TStateCompletionEvent')
+TStateCompletionEvent = TypeVar("TStateCompletionEvent")
 
 
 # Any context data produced by a state during its work that has to be made
 # available to the following states.
-TStateData = TypeVar('TStateData')
+TStateData = TypeVar("TStateData")
 
 
 class State(Generic[TStateCompletionEvent, TStateData], ABC):
@@ -41,7 +33,9 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def handle(self, state_data: Union[TStateData, None]) -> Tuple[TStateCompletionEvent, TStateData]:
+    def handle(
+        self, state_data: Union[TStateData, None]
+    ) -> Tuple[TStateCompletionEvent, TStateData]:
         """
         Implemented by each state. It runs its own state specific logic and
         returns a tuple that contains the state result, which identifies the
@@ -54,11 +48,7 @@ class State(Generic[TStateCompletionEvent, TStateData], ABC):
 StateType = Type[State[TStateCompletionEvent, TStateData]]
 
 StateTransitions = Mapping[
-    TStateCompletionEvent,
-    Union[
-        StateType[TStateCompletionEvent, TStateData],
-        None,
-    ]
+    TStateCompletionEvent, Union[StateType[TStateCompletionEvent, TStateData], None]
 ]
 
 StateMachineDefinition = Mapping[
@@ -82,7 +72,9 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         start_state: StateType[TStateCompletionEvent, TStateData],
     ) -> None:
         self.__definition = definition
-        self.__current_state_type: Union[StateType[TStateCompletionEvent, TStateData], None] = start_state
+        self.__current_state_type: Union[
+            StateType[TStateCompletionEvent, TStateData], None
+        ] = start_state
         self.__has_shutdown = False
         self.__current_state: Optional[State[TStateCompletionEvent, TStateData]] = None
 
@@ -103,9 +95,7 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         state_data = None
 
         while self.__current_state_type is not None:
-            current_state = self._build_state(
-                self.__current_state_type,
-            )
+            current_state = self._build_state(self.__current_state_type,)
             self.__current_state = current_state
             event, state_data = current_state.handle(state_data)
 
@@ -115,7 +105,9 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
 
             current_state_map = self.__definition[self.__current_state_type]
             if event not in current_state_map:
-                raise ValueError(f"No valid transition from state {self.__current_state_type} with event {event}.")
+                raise ValueError(
+                    f"No valid transition from state {self.__current_state_type} with event {event}."
+                )
 
             next_state_type = current_state_map[event]
 
@@ -136,8 +128,8 @@ class StateMachine(Generic[TStateCompletionEvent, TStateData], ABC):
         self.__has_shutdown = True
 
     @abstractmethod
-    def _build_state(self,
-        state_class: StateType[TStateCompletionEvent, TStateData],
+    def _build_state(
+        self, state_class: StateType[TStateCompletionEvent, TStateData],
     ) -> State[TStateCompletionEvent, TStateData]:
         """
         Factory to provide implementations of the state given

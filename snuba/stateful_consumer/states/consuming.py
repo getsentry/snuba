@@ -15,10 +15,7 @@ class ConsumingState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     starts.
     """
 
-    def __init__(
-        self,
-        consumer_builder: ConsumerBuilder,
-    ) -> None:
+    def __init__(self, consumer_builder: ConsumerBuilder,) -> None:
         super().__init__()
 
         self.__consumer = consumer_builder.build_base_consumer()
@@ -26,8 +23,8 @@ class ConsumingState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
     def signal_shutdown(self) -> None:
         self.__consumer.signal_shutdown()
 
-    def handle(self,
-        state_data: Optional[ConsumerStateData],
+    def handle(
+        self, state_data: Optional[ConsumerStateData],
     ) -> Tuple[ConsumerStateCompletionEvent, Optional[ConsumerStateData]]:
         self.__consumer.run()
         return (

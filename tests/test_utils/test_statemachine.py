@@ -12,7 +12,9 @@ class State1(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
+    def handle(
+        self, state_data: ConsumerStateData
+    ) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         self.__processed_state[State1] = True
         return (ConsumerStateCompletionEvent.NO_SNAPSHOT, "consume")
 
@@ -25,7 +27,9 @@ class State2(State[ConsumerStateCompletionEvent, ConsumerStateData]):
     def signal_shutdown(self) -> None:
         pass
 
-    def handle(self, state_data: ConsumerStateData) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
+    def handle(
+        self, state_data: ConsumerStateData
+    ) -> Tuple[ConsumerStateCompletionEvent, ConsumerStateData]:
         assert state_data == "consume"
         self.__processed_state[State2] = True
         return (ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED, None)
@@ -36,19 +40,14 @@ class TestContext(StateMachine[ConsumerStateCompletionEvent, ConsumerStateData])
         self.__processed_state = processed_states
         super(TestContext, self).__init__(
             definition={
-                State1: {
-                    ConsumerStateCompletionEvent.NO_SNAPSHOT: State2,
-                },
-                State2: {
-                    ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None,
-                },
+                State1: {ConsumerStateCompletionEvent.NO_SNAPSHOT: State2},
+                State2: {ConsumerStateCompletionEvent.CONSUMPTION_COMPLETED: None},
             },
             start_state=State1,
         )
 
     def _build_state(
-        self,
-        state_class: StateType,
+        self, state_class: StateType,
     ) -> State[ConsumerStateCompletionEvent, ConsumerStateData]:
         return state_class(self.__processed_state)
 
@@ -56,9 +55,7 @@ class TestContext(StateMachine[ConsumerStateCompletionEvent, ConsumerStateData])
 class TestStateMachine:
     def test_states(self) -> None:
         processed_states = {}
-        context = TestContext(
-            processed_states
-        )
+        context = TestContext(processed_states)
 
         context.run()
         assert processed_states == {

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -21,6 +21,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -60,9 +61,7 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
 
 
 class DiscoverSource(RelationalSource):
-    def __init__(
-        self, columns: ColumnSet, table_source: RelationalSource
-    ) -> None:
+    def __init__(self, columns: ColumnSet, table_source: RelationalSource) -> None:
         self.__columns = columns
         self.__table_source = table_source
 
@@ -86,6 +85,11 @@ class DiscoverSource(RelationalSource):
             .get_read_schema()
             .get_data_source()
         )
+
+    def get_prewhere_candidates(self) -> Sequence[str]:
+        if self.__table_source:
+            return self.__table_source.get_prewhere_candidates()
+        return []
 
 
 class DatasetSelector(QueryProcessor):
@@ -140,18 +144,19 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("timestamp", DateTime()),
                 ("platform", Nullable(String())),
                 ("environment", Nullable(String())),
-                ("sentry:release", Nullable(String())),
-                ("sentry:dist", Nullable(String())),
-                ("sentry:user", Nullable(String())),
+                ("release", Nullable(String())),
+                ("dist", Nullable(String())),
+                ("user", Nullable(String())),
                 ("transaction", Nullable(String())),
+                ("message", Nullable(String())),
                 # User
                 ("user_id", Nullable(String())),
                 ("username", Nullable(String())),
                 ("email", Nullable(String())),
                 ("ip_address", Nullable(String())),
                 # Other tags and context
-                ("tags", Nested([("key", String()), ("value", String()), ])),
-                ("contexts", Nested([("key", String()), ("value", String()), ])),
+                ("tags", Nested([("key", String()), ("value", String())])),
+                ("contexts", Nested([("key", String()), ("value", String())])),
             ]
         )
 
@@ -166,7 +171,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("server_name", Nullable(String())),
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
-                ("message", Nullable(String())),
                 ("search_message", Nullable(String())),
                 ("title", Nullable(String())),
                 ("location", Nullable(String())),
@@ -234,6 +238,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         return [
             DatasetSelector(discover_source, self.__transactions_columns),
+            PrewhereProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
@@ -262,21 +267,23 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "'transaction'"
             if column_name == "timestamp":
                 return "finish_ts"
-            if column_name == "sentry:release":
-                return "release"
-            if column_name == "sentry:dist":
-                return "dist"
-            if column_name == "sentry:user":
-                return "user"
             if column_name == "username":
                 return "user_name"
             if column_name == "email":
                 return "user_email"
             if column_name == "transaction":
                 return "transaction_name"
+            if column_name == "message":
+                return "transaction_name"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
+            if column_name == "release":
+                column_name = "tags[sentry:release]"
+            if column_name == "dist":
+                column_name = "tags[sentry:dist]"
+            if column_name == "user":
+                column_name = "tags[sentry:user]"
             if self.__transactions_columns.get(column_name):
                 return "NULL"
 

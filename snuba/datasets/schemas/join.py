@@ -25,6 +25,7 @@ class JoinConditionExpression(NamedTuple):
     Represent one qualified column [alias.column] in the
     ON clause within the join expression.
     """
+
     table_alias: str
     column: str
 
@@ -34,12 +35,15 @@ class JoinCondition:
     """
     Represent a condition in the ON clause in the JOIN expression
     """
+
     left: JoinConditionExpression
     right: JoinConditionExpression
 
     def __str__(self) -> str:
-        return f"{self.left.table_alias}.{self.left.column} = " \
+        return (
+            f"{self.left.table_alias}.{self.left.column} = "
             f"{self.right.table_alias}.{self.right.column}"
+        )
 
 
 class JoinNode(RelationalSource, ABC):
@@ -59,6 +63,12 @@ class JoinNode(RelationalSource, ABC):
         """
         raise NotImplementedError
 
+    def supports_sample(self) -> bool:
+        """
+        Disable the sample clause in joins
+        """
+        return False
+
 
 class TableJoinNode(TableSource, JoinNode):
     """
@@ -66,13 +76,15 @@ class TableJoinNode(TableSource, JoinNode):
     It can be a table or a view.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         table_name: str,
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]],
+        prewhere_candidates: Optional[Sequence[str]],
         alias: str,
     ) -> None:
-        super().__init__(table_name, columns, mandatory_conditions)
+        super().__init__(table_name, columns, mandatory_conditions, prewhere_candidates)
         self.__alias = alias
 
     def format_from(self) -> str:
@@ -80,6 +92,12 @@ class TableJoinNode(TableSource, JoinNode):
 
     def get_tables(self) -> Mapping[str, TableSource]:
         return {self.__alias: self}
+
+    def supports_sample(self) -> bool:
+        """
+        Individual tables support SAMPLE
+        """
+        return True
 
 
 @dataclass(frozen=True)
@@ -93,6 +111,7 @@ class JoinClause(JoinNode):
     This does not validate the join makes sense nor it checks
     the aliases are valid.
     """
+
     left_node: JoinNode
     right_node: JoinNode
     mapping: Sequence[JoinCondition]
@@ -128,6 +147,13 @@ class JoinClause(JoinNode):
             all_conditions.extend(table.get_mandatory_conditions())
         return all_conditions
 
+    def get_prewhere_candidates(self) -> Sequence[str]:
+        """
+        The pre where condition can only come from the leftmost table in the
+        join.
+        """
+        return self.left_node.get_prewhere_candidates()
+
 
 class JoinedSchema(Schema):
     """
@@ -136,9 +162,7 @@ class JoinedSchema(Schema):
     that keeps reference to the schemas we are joining.
     """
 
-    def __init__(self,
-        join_root: JoinNode,
-    ) -> None:
+    def __init__(self, join_root: JoinNode,) -> None:
         self.__source = join_root
 
     def get_data_source(self) -> RelationalSource:

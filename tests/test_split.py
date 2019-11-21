@@ -13,7 +13,7 @@ from snuba.utils.metrics.timer import Timer
 
 
 def setup_function(function):
-    state.set_config('use_split', 1)
+    state.set_config("use_split", 1)
 
 
 test_data_no_split = [
@@ -35,18 +35,14 @@ def test_no_split(dataset_name: str):
             "limit": 100,
             "offset": 50,
         },
-        events.get_dataset_schemas().get_read_schema().get_data_source()
+        events.get_dataset_schemas().get_read_schema().get_data_source(),
     )
 
     @split_query
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
-    request = Request(
-        query,
-        RequestSettings(False, False, False),
-        {},
-    )
+    request = Request(query, RequestSettings(False, False, False), {},)
 
     do_query(events, request, None)
 
@@ -54,19 +50,13 @@ def test_no_split(dataset_name: str):
 test_data_col = [
     (
         "events",
-        [
-            {
-                "event_id": "a",
-                "project_id": "1",
-                "timestamp": " 2019-10-01 22:33:42"
-            }
-        ],
+        [{"event_id": "a", "project_id": "1", "timestamp": " 2019-10-01 22:33:42"}],
         [
             {
                 "event_id": "a",
                 "project_id": "1",
                 "level": "error",
-                "timestamp": " 2019-10-01 22:33:42"
+                "timestamp": " 2019-10-01 22:33:42",
             }
         ],
     ),
@@ -76,7 +66,7 @@ test_data_col = [
             {
                 "events.event_id": "a",
                 "events.project_id": "1",
-                "events.timestamp": " 2019-10-01 22:33:42"
+                "events.timestamp": " 2019-10-01 22:33:42",
             }
         ],
         [
@@ -84,20 +74,21 @@ test_data_col = [
                 "events.event_id": "a",
                 "events.project_id": "1",
                 "events.level": "error",
-                "events.timestamp": " 2019-10-01 22:33:42"
+                "events.timestamp": " 2019-10-01 22:33:42",
             }
         ],
-    )
+    ),
 ]
 
 
-@pytest.mark.parametrize("dataset_name, first_query_data, second_query_data", test_data_col)
+@pytest.mark.parametrize(
+    "dataset_name, first_query_data, second_query_data", test_data_col
+)
 def test_col_split(
     dataset_name: str,
     first_query_data: Mapping[str, Any],
     second_query_data: Mapping[str, Any],
 ):
-
     @split_query
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         selected_cols = request.query.get_selected_columns()
@@ -130,7 +121,7 @@ def test_col_split(
                 "from_date": "2019-09-19T10:00:00",
                 "to_date": "2019-09-19T12:00:00",
                 "granularity": 3600,
-            }
+            },
         },
     )
 
