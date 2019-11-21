@@ -19,7 +19,7 @@ from snuba.api.split import split_query
 from snuba.consumer import KafkaMessageMetadata
 from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -327,7 +327,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: consider moving the performance logic and the pre_where generation into
         # ClickhouseQuery since they are Clickhouse specific
-        query = ClickhouseQuery(dataset, request.query, request.settings)
+        query = DictClickhouseQuery(dataset, request.query, request.settings)
     timer.mark("prepare_query")
 
     stats = {
