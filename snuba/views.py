@@ -16,6 +16,7 @@ from uuid import UUID
 from snuba import schemas, settings, state, util
 from snuba.api.query import QueryResult, raw_query
 from snuba.api.split import split_query
+from snuba.consumer import KafkaMessageMetadata
 from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import ClickhouseQuery
@@ -434,16 +435,20 @@ if application.debug or application.testing:
         ensure_table_exists(dataset)
 
         rows = []
+        offset = 0
         for message in json.loads(http_request.data):
             processed_message = (
                 enforce_table_writer(dataset)
                 .get_stream_loader()
                 .get_processor()
-                .process_message(message)
+                .process_message(
+                    message, KafkaMessageMetadata(offset=offset, partition=0,)
+                )
             )
             if processed_message:
                 assert processed_message.action is ProcessorAction.INSERT
                 rows.extend(processed_message.data)
+            offset += 1
 
         enforce_table_writer(dataset).get_writer().write(rows)
 
