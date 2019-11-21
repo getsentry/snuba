@@ -28,7 +28,7 @@ class ClickhouseQuery(ABC):
 class DictClickhouseQuery(ClickhouseQuery):
     """
     Legacy Clickhouse query that transforms the Snuba Query based
-    on the original query body dictionary into a string dunring construction
+    on the original query body dictionary into a string during construction
     without additional processing.
 
     To be used until the AST is not complete.
