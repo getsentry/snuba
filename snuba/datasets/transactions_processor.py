@@ -103,6 +103,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["environment"] = promoted_tags.get("environment")
 
         contexts = _as_dict_safe(data.get("contexts", None))
+
+        user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+        geo = user_dict.get("geo", None) or {}
+        if "geo" not in contexts and isinstance(geo, dict):
+            contexts["geo"] = geo
+
         extract_extra_contexts(processed, contexts)
 
         processed["dist"] = _unicodify(
@@ -110,7 +116,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         )
 
         user_data = {}
-        extract_user(user_data, data.get("user", {}))
+        extract_user(user_data, user_dict)
         processed["user"] = promoted_tags.get("sentry:user", "")
         processed["user_name"] = user_data["username"]
         processed["user_id"] = user_data["user_id"]
@@ -126,5 +132,14 @@ class TransactionsMessageProcessor(MessageProcessor):
         if metadata is not None:
             processed["partition"] = metadata.partition
             processed["offset"] = metadata.offset
+
+        sdk = data.get("sdk", None) or {}
+        processed["sdk_name"] = _unicodify(sdk.get("name", ""))
+        processed["sdk_version"] = _unicodify(sdk.get("version", ""))
+
+        if processed["sdk_name"] == "":
+            metrics.increment("missing_sdk_name")
+        if processed["sdk_version"] == "":
+            metrics.increment("missing_sdk_version")
 
         return ProcessedMessage(action=action_type, data=[processed],)

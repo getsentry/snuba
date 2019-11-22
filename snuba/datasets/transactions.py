@@ -66,6 +66,17 @@ def transactions_migrations(
     duration_col = current_schema.get("duration")
     if duration_col and duration_col.default_type == "MATERIALIZED":
         ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
+
+    if "sdk_name" not in current_schema:
+        ret.append(
+            "ALTER TABLE %s ADD COLUMN sdk_name String DEFAULT ''" % clickhouse_table
+        )
+
+    if "sdk_version" not in current_schema:
+        ret.append(
+            "ALTER TABLE %s ADD COLUMN sdk_version String DEFAULT ''" % clickhouse_table
+        )
+
     return ret
 
 
@@ -98,6 +109,8 @@ class TransactionsDataset(TimeSeriesDataset):
                 ("user_id", Nullable(String())),
                 ("user_name", Nullable(String())),
                 ("user_email", Nullable(String())),
+                ("sdk_name", WithDefault(String(), "''")),
+                ("sdk_version", WithDefault(String(), "''")),
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 ("partition", UInt(16)),
