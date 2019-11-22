@@ -132,7 +132,7 @@ class Query:
         Transforms in place the current query object by applying a transformation
         function to all expressions contained in this query
 
-        Cointrarily to Expression.transform this happens in place since Query has
+        Contrary to Expression.transform, this happens in place since Query has
         to be mutable as of now. This is because there are still parts of the query
         processing that depends on the Query instance not to be replaced during the
         query. See the Request class (that is immutable, so Query cannot be replaced).

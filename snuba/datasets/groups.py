@@ -100,7 +100,13 @@ class Groups(TimeSeriesDataset):
         super().__init__(
             dataset_schemas=dataset_schemas,
             time_group_columns={"events.time": "events.timestamp"},
-            time_parse_columns=["events.timestamp"],
+            time_parse_columns=[
+                "events.timestamp",
+                "events.received",
+                "groups.last_seen",
+                "groups.first_seen",
+                "groups.active_at",
+            ],
         )
 
     def column_expr(
