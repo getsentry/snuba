@@ -280,7 +280,6 @@ class TestTransactionsProcessor(BaseTest):
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city",},
         )
         meta = KafkaMessageMetadata(offset=1, partition=2,)
-        meta = KafkaMessageMetadata(offset=1, partition=2,)
 
         processor = TransactionsMessageProcessor()
         ret = processor.process_message(message.serialize(), meta)
