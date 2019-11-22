@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 
 from datetime import datetime
 from flask import Flask, redirect, render_template, request as http_request
@@ -16,10 +17,10 @@ from uuid import UUID
 from snuba import schemas, settings, state, util
 from snuba.api.query import QueryResult, raw_query
 from snuba.api.split import split_query
-from snuba.consumer import KafkaMessageMetadata
-from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.consumer import KafkaMessageMetadata
+from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -435,8 +436,9 @@ if application.debug or application.testing:
         ensure_table_exists(dataset)
 
         rows = []
-        offset = 0
-        for message in json.loads(http_request.data):
+        offset_base = int(round(time.time() * 1000))
+        for index, message in enumerate(json.loads(http_request.data)):
+            offset = offset_base + index
             processed_message = (
                 enforce_table_writer(dataset)
                 .get_stream_loader()
@@ -448,7 +450,6 @@ if application.debug or application.testing:
             if processed_message:
                 assert processed_message.action is ProcessorAction.INSERT
                 rows.extend(processed_message.data)
-            offset += 1
 
         enforce_table_writer(dataset).get_writer().write(rows)
 
