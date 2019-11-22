@@ -69,12 +69,12 @@ def transactions_migrations(
 
     if "sdk_name" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_name Nullable(String)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN sdk_name String DEFAULT ''" % clickhouse_table
         )
 
     if "sdk_version" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_version Nullable(String)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN sdk_version String DEFAULT ''" % clickhouse_table
         )
 
     return ret
@@ -109,10 +109,10 @@ class TransactionsDataset(TimeSeriesDataset):
                 ("user_id", Nullable(String())),
                 ("user_name", Nullable(String())),
                 ("user_email", Nullable(String())),
-                ("sdk_name", Nullable(String())),
-                ("sdk_version", Nullable(String())),
-                ("tags", Nested([("key", String()), ("value", String()),])),
-                ("contexts", Nested([("key", String()), ("value", String()),])),
+                ("sdk_name", WithDefault(String(), "''")),
+                ("sdk_version", WithDefault(String(), "''")),
+                ("tags", Nested([("key", String()), ("value", String())])),
+                ("contexts", Nested([("key", String()), ("value", String())])),
                 ("partition", UInt(16)),
                 ("offset", UInt(64)),
                 ("retention_days", UInt(16)),
