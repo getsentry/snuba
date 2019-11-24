@@ -10,29 +10,37 @@ from snuba.query.expressions import (
 )
 
 
-class DummyVisitor(ExpressionVisitor):
+class DummyVisitor(ExpressionVisitor[List[Expression]]):
     def __init__(self):
         self.__visited_nodes: List[Expression] = []
 
     def get_visited_nodes(self) -> List[Expression]:
         return self.__visited_nodes
 
-    def visitLiteral(self, exp: Literal) -> None:
+    def visitLiteral(self, exp: Literal) -> List[Expression]:
         self.__visited_nodes.append(exp)
+        return [exp]
 
-    def visitColumn(self, exp: Column) -> None:
+    def visitColumn(self, exp: Column) -> List[Expression]:
         self.__visited_nodes.append(exp)
+        return [exp]
 
-    def visitFunctionCall(self, exp: FunctionCall) -> None:
+    def visitFunctionCall(self, exp: FunctionCall) -> List[Expression]:
+        ret = []
         self.__visited_nodes.append(exp)
+        ret.append(exp)
         for param in exp.parameters:
-            param.accept(self)
+            ret.extend(param.accept(self))
+        return ret
 
-    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> None:
+    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> List[Expression]:
+        ret = []
         self.__visited_nodes.append(exp)
-        exp.internal_function.accept(self)
+        ret.append(exp)
+        ret.extend(exp.internal_function.accept(self))
         for param in exp.parameters:
-            param.accept(self)
+            ret.extend(param.accept(self))
+        return ret
 
 
 def test_visit_expression():
@@ -47,8 +55,11 @@ def test_visit_expression():
     curried = CurriedFunctionCall("al7", f2, [f1])
 
     visitor = DummyVisitor()
-    curried.accept(visitor)
+    ret = curried.accept(visitor)
 
     expected = [curried, f2, col2, literal2, f1, col1, literal1]
 
+    # Tests the state changes on the Visitor
     assert visitor.get_visited_nodes() == expected
+    # Tests the retun value of the visitor
+    assert ret == expected
