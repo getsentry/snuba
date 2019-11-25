@@ -110,7 +110,31 @@ def test_aliases() -> None:
         ],
     )
 
-    expected = (
-        "f1((tag(table1.column1) AS tag[something]), tag[something], tag[something])"
-    )
+    expected = "f1((tag(table1.column1) AS `tag[something]`), `tag[something]`, `tag[something]`)"
     assert f.accept(ClickhouseExpressionFormatter()) == expected
+
+
+test_escaped = [
+    (
+        Column(None, "tags.values", "table.something"),
+        "table.something.tags.values",
+    ),  # Columns with dot are not escaped
+    (
+        Column(None, "tags[something]", "weird_!@#$%^^&*_table"),
+        "`weird_!@#$%^^&*_table`.`tags[something]`",
+    ),  # Somebody thought that table name was a good idea.
+    (
+        Column("alias.cannot.have.dot", "columns.can", "table"),
+        "(table.columns.can AS `alias.cannot.have.dot`)",
+    ),  # Escaping is different between columns and aliases
+    (
+        FunctionCall(None, "f*&^%$#unction", [Column(None, "column", "table")]),
+        "`f*&^%$#unction`(table.column)",
+    ),  # Function names can be escaped. Hopefully it will never happen
+]
+
+
+@pytest.mark.parametrize("expression, expected", test_escaped)
+def test_escaping(expression: Expression, expected: str) -> None:
+    visitor = ClickhouseExpressionFormatter()
+    assert expression.accept(visitor) == expected
