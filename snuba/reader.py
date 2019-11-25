@@ -67,28 +67,28 @@ def transform_columns(result: Result) -> Result:
         else:
             return iter(result["data"])
 
-    columns = set([col["name"] for col in result["meta"]])
-    for col in columns:
-        if DATETIME_TYPE_RE.match(col["type"]):
+    columns = {col["name"]: col['type'] for col in result["meta"]}
+    for col_name, col_type in columns.items():
+        if DATETIME_TYPE_RE.match(col_type):
             for row in iterate_rows():
                 if (
-                    row[col["name"]] is not None
+                    row[col_name] is not None
                 ):  # The column value can be null/None at times.
-                    row[col["name"]] = (
-                        row[col["name"]].replace(tzinfo=tz.tzutc()).isoformat()
+                    row[col_name] = (
+                        row[col_name].replace(tzinfo=tz.tzutc()).isoformat()
                     )
-        elif DATE_TYPE_RE.match(col["type"]):
+        elif DATE_TYPE_RE.match(col_type):
             for row in iterate_rows():
                 if (
-                    row[col["name"]] is not None
+                    row[col_name] is not None
                 ):  # The column value can be null/None at times.
-                    row[col["name"]] = (
-                        datetime(*(row[col["name"]].timetuple()[:6]))
+                    row[col_name] = (
+                        datetime(*(row[col_name].timetuple()[:6]))
                         .replace(tzinfo=tz.tzutc())
                         .isoformat()
                     )
-        elif UUID_TYPE_RE.match(col["type"]):
+        elif UUID_TYPE_RE.match(col_type):
             for row in iterate_rows():
-                row[col["name"]] = str(row[col["name"]])
+                row[col_name] = str(row[col_name])
 
     return result
