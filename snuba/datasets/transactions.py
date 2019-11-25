@@ -77,6 +77,11 @@ def transactions_migrations(
             "ALTER TABLE %s ADD COLUMN sdk_version String DEFAULT ''" % clickhouse_table
         )
 
+    if "transaction_status" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN transaction_status UInt8 DEFAULT 0 AFTER transaction_op"
+        )
+
     return ret
 
 
@@ -94,6 +99,7 @@ class TransactionsDataset(TimeSeriesDataset):
                     Materialized(UInt(64), "cityHash64(transaction_name)",),
                 ),
                 ("transaction_op", LowCardinality(String())),
+                ("transaction_status", WithDefault(UInt(8), 0)),
                 ("start_ts", DateTime()),
                 ("start_ms", UInt(16)),
                 ("finish_ts", DateTime()),
