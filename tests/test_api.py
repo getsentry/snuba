@@ -1218,6 +1218,20 @@ class TestApi(BaseApiTest):
         }
         json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
+    def test_aggregate_timestamp(self):
+        query = {
+            "project": 1,
+            "selected_columns": ["timestamp"],
+            "aggregations": [
+                ["count", "", "count"],
+                ["argMax", ["project_id", "timestamp"], "projectid"],
+                ["argMax", ["event_id", "timestamp"], "latest_event"],
+            ],
+            "groupby": ["timestamp"]
+        }
+        result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
+        assert "error" not in result
+
     def test_test_endpoints(self):
         project_id = 73
         group_id = 74

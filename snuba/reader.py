@@ -67,7 +67,8 @@ def transform_columns(result: Result) -> Result:
         else:
             return iter(result["data"])
 
-    for col in result["meta"]:
+    columns = set([col["name"] for col in result["meta"]])
+    for col in columns:
         if DATETIME_TYPE_RE.match(col["type"]):
             for row in iterate_rows():
                 if (
