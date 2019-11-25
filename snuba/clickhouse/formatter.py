@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.util import escape_alias, escape_col, escape_literal
+from snuba.util import escape_alias, escape_col, escape_string
 
 # Tokens used when formatting. Defining them as costant
 # will make it easy (if/when needed) to make some changes
@@ -48,7 +48,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         if not alias:
             return formatted_exp
         elif self.__parsing_context.is_alias_present(alias):
-            return escape_alias(alias)
+            ret = escape_alias(alias)
+            # This is for the type checker. escape_alias can return None if
+            # we pass None. But here we do not pass None so a None return value
+            # is not valid.
+            assert ret is not None
+            return ret
         else:
             self.__parsing_context.add_alias(alias)
             return f"{OPEN_BRACKET}{formatted_exp}{SPACE}AS{SPACE}{escape_alias(alias)}{CLOSED_BRACKET}"
@@ -60,17 +65,19 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return TRUE
         elif exp.value is False:
             return FALSE
-        elif isinstance(exp.value, (str, int, float)):
-            return escape_literal(exp.value)
+        elif isinstance(exp.value, str):
+            return escape_string(exp.value)
+        elif isinstance(exp.value, (int, float)):
+            return str(exp.value)
         else:
             raise ValueError(f"Invalid literal type {type(exp.value)}")
 
     def visitColumn(self, exp: Column) -> str:
         ret = []
         if exp.table_name:
-            ret.append(escape_col(exp.table_name))
+            ret.append(escape_col(exp.table_name) or "")
             ret.append(DOT)
-        ret.append(escape_col(exp.column_name))
+        ret.append(escape_col(exp.column_name) or "")
         return self.__alias("".join(ret), exp.alias)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:

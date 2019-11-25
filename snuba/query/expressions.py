@@ -64,9 +64,8 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
 
     The original Visitor pattern does not foresee a return type for visit and accept
     methods, instead it relies on having the Visitor class stateful (any side effect a visit method
-    could produce has to make changes to the state of the class). This implementation
-    allows the Visitor to define a return type which is generic. This makes it possible
-    to traverse the Expression in a stateless way.
+    could produce has to make changes to the state of the visitor object). This implementation
+    allows the Visitor to define a return type which is generic.
     """
 
     @abstractmethod
