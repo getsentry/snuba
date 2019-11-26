@@ -1218,16 +1218,14 @@ class TestApi(BaseApiTest):
         }
         json.loads(self.app.post("/query", data=json.dumps(query)).data)
 
-    def test_aggregate_timestamp(self):
+    def test_duplicate_column(self):
         query = {
-            "project": 1,
-            "selected_columns": ["timestamp"],
-            "aggregations": [
-                ["count", "", "count"],
-                ["argMax", ["project_id", "timestamp"], "projectid"],
-                ["argMax", ["event_id", "timestamp"], "latest_event"],
-            ],
-            "groupby": ["timestamp"]
+            "selected_columns": ["timestamp", "timestamp"],
+            "limit": 3,
+            "project": [1],
+            "from_date": "2019-11-21T01:00:36",
+            "to_date": "2019-11-26T01:00:36",
+            "granularity": 3600,
         }
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
         assert "error" not in result
