@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import Callable, Iterator, Optional, Sequence, Union
+from typing import Callable, Generic, Iterator, Optional, Sequence, TypeVar, Union
+
+TVisited = TypeVar("TVisited")
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,46 @@ class Expression(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        """
+        Accepts a visitor class to traverse the tree. The only role of this method is to
+        call the right visit method on the visitor object. Requiring the implementation
+        to call the method with the right type forces us to keep the visitor interface
+        up to date every time we create a new subclass of Expression.
+        """
+        raise NotImplementedError
+
+
+class ExpressionVisitor(ABC, Generic[TVisited]):
+    """
+    Implementation of a Visitor pattern to simplify traversal of the AST while preserving
+    the structure and delegating the control of the traversal algorithm to the client.
+    This pattern is generally used for evaluation or formatting. While the iteration
+    defined above is for stateless use cases where the order of the nodes is not important.
+
+    The original Visitor pattern does not foresee a return type for visit and accept
+    methods, instead it relies on having the Visitor class stateful (any side effect a visit method
+    could produce has to make changes to the state of the visitor object). This implementation
+    allows the Visitor to define a return type which is generic.
+    """
+
+    @abstractmethod
+    def visitLiteral(self, exp: Literal) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visitColumn(self, exp: Column) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TVisited:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class Literal(Expression):
@@ -56,6 +98,9 @@ class Literal(Expression):
 
     def __iter__(self) -> Iterator[Expression]:
         yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitLiteral(self)
 
 
 @dataclass(frozen=True)
@@ -72,6 +117,9 @@ class Column(Expression):
 
     def __iter__(self) -> Iterator[Expression]:
         yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitColumn(self)
 
 
 @dataclass(frozen=True)
@@ -118,6 +166,9 @@ class FunctionCall(Expression):
                 yield sub
         yield self
 
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitFunctionCall(self)
+
 
 @dataclass(frozen=True)
 class CurriedFunctionCall(Expression):
@@ -160,3 +211,6 @@ class CurriedFunctionCall(Expression):
             for sub in child:
                 yield sub
         yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitCurriedFunctionCall(self)

@@ -3,17 +3,16 @@ import re
 from typing import OrderedDict
 import _strptime  # NOQA fixes _strptime deferred import issue
 
+from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import (
     alias_expr,
-    escape_alias,
     escape_literal,
     function_expr,
     is_condition,
     is_function,
-    NEGATE_RE,
     QUOTED_LITERAL_RE,
 )
 

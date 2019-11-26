@@ -4,6 +4,7 @@ import pytest
 
 from tests.base import BaseTest
 
+from snuba.clickhouse.escaping import escape_identifier, escape_alias
 from snuba.datasets.factory import get_dataset
 from snuba import state
 from snuba.query.columns import (
@@ -14,8 +15,6 @@ from snuba.query.columns import (
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
-    escape_alias,
-    escape_col,
     escape_literal,
     tuplify,
 )
@@ -39,18 +38,18 @@ class TestUtil(BaseTest):
             == "(1, 'a', toDate('2001-01-01'))"
         )
 
-    def test_escape_col(self):
-        assert escape_col(None) is None
-        assert escape_col("") == ""
-        assert escape_col("foo") == "foo"
-        assert escape_col("foo.bar") == "foo.bar"
-        assert escape_col("foo:bar") == "`foo:bar`"
+    def test_escape_identifier(self):
+        assert escape_identifier(None) is None
+        assert escape_identifier("") == ""
+        assert escape_identifier("foo") == "foo"
+        assert escape_identifier("foo.bar") == "foo.bar"
+        assert escape_identifier("foo:bar") == "`foo:bar`"
 
         # Even though backtick characters in columns should be
         # disallowed by the query schema, make sure we dont allow
         # injection anyway.
-        assert escape_col("`") == r"`\``"
-        assert escape_col("production`; --") == r"`production\`; --`"
+        assert escape_identifier("`") == r"`\``"
+        assert escape_identifier("production`; --") == r"`production\`; --`"
 
     def test_escape_alias(self):
         assert escape_alias(None) is None

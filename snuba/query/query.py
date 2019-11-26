@@ -18,10 +18,11 @@ from typing import (
     Union,
 )
 
+from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.expressions import Expression
 from snuba.query.types import Condition
-from snuba.util import SAFE_COL_RE, columns_in_expr, is_condition, to_list
+from snuba.util import columns_in_expr, is_condition, to_list
 
 Aggregation = Union[
     Tuple[Any, Any, Any], Sequence[Any],
