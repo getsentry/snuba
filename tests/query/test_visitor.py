@@ -61,5 +61,5 @@ def test_visit_expression():
 
     # Tests the state changes on the Visitor
     assert visitor.get_visited_nodes() == expected
-    # Tests the retun value of the visitor
+    # Tests the return value of the visitor
     assert ret == expected

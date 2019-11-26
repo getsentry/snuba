@@ -10,7 +10,7 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 from snuba.util import escape_alias, escape_col, escape_string
 
-# Tokens used when formatting. Defining them as costant
+# Tokens used when formatting. Defining them as constant
 # will make it easy (if/when needed) to make some changes
 # to the layout of the output.
 NULL = "NULL"
@@ -19,8 +19,8 @@ SPACE = " "
 TRUE = "true"
 FALSE = "false"
 QUOTE = "'"
-OPEN_BRACKET = "("
-CLOSED_BRACKET = ")"
+OPEN_PAREN = "("
+CLOSED_PAREN = ")"
 DOT = "."
 
 
@@ -29,7 +29,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     This Visitor implementation is able to format one expression in the Snuba
     Query for Clickhouse.
 
-    The only state mainained is the PrasingContext, which allows us to resolve
+    The only state maintained is the ParsingContext, which allows us to resolve
     aliases and can be reused when formatting multiple expressions.
 
     When passing an instance of this class to the accept method of
@@ -42,7 +42,9 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     """
 
     def __init__(self, parsing_context: Optional[ParsingContext] = None) -> None:
-        self.__parsing_context = parsing_context or ParsingContext()
+        self.__parsing_context = (
+            parsing_context if parsing_context is not None else ParsingContext()
+        )
 
     def __alias(self, formatted_exp: str, alias: Optional[str]) -> str:
         if not alias:
@@ -56,7 +58,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return ret
         else:
             self.__parsing_context.add_alias(alias)
-            return f"{OPEN_BRACKET}{formatted_exp}{SPACE}AS{SPACE}{escape_alias(alias)}{CLOSED_BRACKET}"
+            return f"{OPEN_PAREN}{formatted_exp}{SPACE}AS{SPACE}{escape_alias(alias)}{CLOSED_PAREN}"
 
     def visitLiteral(self, exp: Literal) -> str:
         if exp.value is None:
@@ -70,7 +72,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         elif isinstance(exp.value, (int, float)):
             return str(exp.value)
         else:
-            raise ValueError(f"Invalid literal type {type(exp.value)}")
+            raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
     def visitColumn(self, exp: Column) -> str:
         ret = []
@@ -83,7 +85,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
         ret = [p.accept(self) for p in parameters]
         param_list = ", ".join(ret)
-        return f"{OPEN_BRACKET}{param_list}{CLOSED_BRACKET}"
+        return f"{OPEN_PAREN}{param_list}{CLOSED_PAREN}"
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
         ret = f"{escape_col(exp.function_name)}{self.__visit_params(exp.parameters)}"
