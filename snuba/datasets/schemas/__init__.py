@@ -45,6 +45,27 @@ class RelationalSource(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def get_prewhere_candidates(self) -> Sequence[str]:
+        """
+        Returns the list of keys that can be promoted to PREWHERE conditions
+        if found in the conditions field of the query.
+        pre where keys depend on the actual table used to run the query, so,
+        since the query processors can change the datasource of the query, the
+        list of candidates must be associated to the data source itself and not
+        to the dataset.
+        """
+        raise NotImplementedError
+
+    def supports_sample(self) -> bool:
+        """
+        TODO: This is a temporary method to prevent Clickhouse query to try to
+        add the SAMPLE clause to a JOIN expression, where SAMPLE not only is formatted
+        differently, but would have to be rethought since, in a join SAMPLE would
+        have to be applied table by table.
+        """
+        return True
+
 
 class Schema(ABC):
     """
@@ -79,17 +100,17 @@ class Schema(ABC):
 
         for column_name, column_type in expected_columns.items():
             if column_name not in self.get_columns():
-                errors.append("Column '%s' exists in local ClickHouse but not in schema!" % column_name)
+                errors.append(
+                    "Column '%s' exists in local ClickHouse but not in schema!"
+                    % column_name
+                )
                 continue
 
             expected_type = self.get_columns()[column_name].type.for_schema()
             if column_type != expected_type:
                 errors.append(
-                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)" % (
-                        column_name,
-                        expected_type,
-                        column_type
-                    )
+                    "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
+                    % (column_name, expected_type, column_type)
                 )
 
         return errors

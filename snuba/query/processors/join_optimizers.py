@@ -16,10 +16,7 @@ class SimpleJoinOptimizer(QueryProcessor):
     of tables joined together when more than one is referenced in the query.
     """
 
-    def process_query(self,
-        query: Query,
-        request_settings: RequestSettings,
-    ) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
         from_clause = query.get_data_source()
         if not isinstance(from_clause, JoinClause):
             return
@@ -36,7 +33,9 @@ class SimpleJoinOptimizer(QueryProcessor):
                 table_alias = match[1]
                 referenced_aliases.add(table_alias)
 
-        assert len(referenced_aliases) > 0, "Trying to otpimize a join query without aliases"
+        assert (
+            len(referenced_aliases) > 0
+        ), "Trying to otpimize a join query without aliases"
         if len(referenced_aliases) > 1:
             return
 

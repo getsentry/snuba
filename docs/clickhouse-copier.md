@@ -449,4 +449,3 @@ consumer.commit(offsets=topic_partitions, asynchronous=False)
 
 Start up the consumers and they should pick up at `2018-07-11` (midnight,
 exactly where the copy left off).
-

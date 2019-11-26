@@ -130,6 +130,6 @@ def test_basic_retry_policy_with_supression():
     )
     try:
         policy.call(function)
-    except UnexpectedError as e:
+    except UnexpectedError:
         assert function.call_count == 2
         assert clock.time() == 1

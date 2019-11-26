@@ -5,15 +5,16 @@ from datetime import datetime
 from tests.base import BaseDatasetTest
 from snuba.clickhouse.native import ClickhousePool
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.cdc.groupassignee_processor import GroupAssigneeProcessor, GroupAssigneeRow
+from snuba.datasets.cdc.groupassignee_processor import (
+    GroupAssigneeProcessor,
+    GroupAssigneeRow,
+)
 
 
 class TestGroupassignee(BaseDatasetTest):
-
     def setup_method(self, test_method):
         super().setup_method(
-            test_method,
-            'groupassignee',
+            test_method, "groupassignee",
         )
 
     BEGIN_MSG = '{"event":"begin","xid":2380836}'
@@ -41,46 +42,43 @@ class TestGroupassignee(BaseDatasetTest):
         '{"event":"change","xid":3803982,"timestamp":"2019-09-19 00:17:55.032443+00","kind":"insert","schema":"public","table":"sen'
         'try_groupasignee","columnnames":["id","project_id","group_id","user_id","date_added","team_id"],"columntypes":["bigint","b'
         'igint","bigint","integer","timestamp with time zone","bigint"],"columnvalues":[35,2,1359,1,"2019-09-19 00:17:55+00"'
-        ',null]}'
+        ",null]}"
     )
 
     PROCESSED = {
-        'offset': 42,
-        'project_id': 2,
-        'group_id': 1359,
-        'record_deleted': 0,
-        'user_id': 1,
-        'team_id': None,
-        'date_added': datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
+        "offset": 42,
+        "project_id": 2,
+        "group_id": 1359,
+        "record_deleted": 0,
+        "user_id": 1,
+        "team_id": None,
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
     }
 
     PROCESSED_UPDATE = {
-        'offset': 42,
-        'project_id': 3,
-        'group_id': 1359,
-        'record_deleted': 0,
-        'user_id': 1,
-        'team_id': None,
-        'date_added': datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
+        "offset": 42,
+        "project_id": 3,
+        "group_id": 1359,
+        "record_deleted": 0,
+        "user_id": 1,
+        "team_id": None,
+        "date_added": datetime(2019, 9, 19, 0, 17, 55, tzinfo=pytz.UTC),
     }
 
     DELETED = {
-        'offset': 42,
-        'project_id': 2,
-        'group_id': 1359,
-        'record_deleted': 1,
-        'user_id': None,
-        'team_id': None,
-        'date_added': None,
+        "offset": 42,
+        "project_id": 2,
+        "group_id": 1359,
+        "record_deleted": 1,
+        "user_id": None,
+        "team_id": None,
+        "date_added": None,
     }
 
     def test_messages(self):
-        processor = GroupAssigneeProcessor('sentry_groupasignee')
+        processor = GroupAssigneeProcessor("sentry_groupasignee")
 
-        metadata = KafkaMessageMetadata(
-            offset=42,
-            partition=0,
-        )
+        metadata = KafkaMessageMetadata(offset=42, partition=0,)
 
         begin_msg = json.loads(self.BEGIN_MSG)
         ret = processor.process_message(begin_msg, metadata)
@@ -97,13 +95,13 @@ class TestGroupassignee(BaseDatasetTest):
         cp = ClickhousePool()
         ret = cp.execute("SELECT * FROM test_groupassignee_local;")
         assert ret[0] == (
-            42,     # offset
-            0,      # deleted
-            2,      # project_id
-            1359,   # group_id
+            42,  # offset
+            0,  # deleted
+            2,  # project_id
+            1359,  # group_id
             datetime(2019, 9, 19, 0, 17, 55),
-            1,      # user_id
-            None,   # team_id
+            1,  # user_id
+            None,  # team_id
         )
 
         update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
@@ -121,22 +119,24 @@ class TestGroupassignee(BaseDatasetTest):
         assert ret.data == [self.DELETED]
 
     def test_bulk_load(self):
-        row = GroupAssigneeRow.from_bulk({
-            'project_id': '2',
-            'group_id': '1359',
-            'date_added': '2019-09-19 00:17:55+00',
-            'user_id': '1',
-            'team_id': '',
-        })
+        row = GroupAssigneeRow.from_bulk(
+            {
+                "project_id": "2",
+                "group_id": "1359",
+                "date_added": "2019-09-19 00:17:55+00",
+                "user_id": "1",
+                "team_id": "",
+            }
+        )
         self.write_processed_records(row.to_clickhouse())
         cp = ClickhousePool()
         ret = cp.execute("SELECT * FROM test_groupassignee_local;")
         assert ret[0] == (
-            0,     # offset
-            0,      # deleted
-            2,      # project_id
-            1359,   # group_id
+            0,  # offset
+            0,  # deleted
+            2,  # project_id
+            1359,  # group_id
             datetime(2019, 9, 19, 0, 17, 55),
-            1,      # user_id
-            None,   # team_id
+            1,  # user_id
+            None,  # team_id
         )

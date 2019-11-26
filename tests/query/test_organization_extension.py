@@ -14,12 +14,7 @@ def test_organization_extension_query_processing_happy_path():
     raw_data = {"organization": 2}
 
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query(
-        {
-            "conditions": []
-        },
-        TableSource("my_table", ColumnSet([]))
-    )
+    query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])))
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 
     extension.get_processor().process_query(query, valid_data, request_settings)

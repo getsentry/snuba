@@ -19,6 +19,7 @@ def test_empty_query():
     assert query.get_limit() is None
     assert query.get_offset() == 0
     assert query.has_totals() is False
+    assert query.get_prewhere() == []
 
     assert query.get_data_source().format_from() == "my_table"
 
@@ -105,96 +106,75 @@ def test_edit_query():
     query.set_granularity(7200)
     assert query.get_granularity() == 7200
 
+    query.set_prewhere([["pc6", "=", "10"]])
+    assert query.get_prewhere() == [["pc6", "=", "10"]]
+
 
 def test_referenced_columns():
     # a = 1 AND b = 1
-    dataset = get_dataset('events')
+    dataset = get_dataset("events")
     source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-    body = {
-        'conditions': [
-            ['a', '=', '1'],
-            ['b', '=', '1'],
-        ]
-    }
+    body = {"conditions": [["a", "=", "1"], ["b", "=", "1"]]}
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b'])
-    assert query.get_columns_referenced_in_conditions() == set(['a', 'b'])
+    assert query.get_all_referenced_columns() == set(["a", "b"])
+    assert query.get_columns_referenced_in_conditions() == set(["a", "b"])
     assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR c = 1)
-    body = {
-        'conditions': [
-            ['a', '=', '1'],
-            [
-                ['b', '=', '1'],
-                ['c', '=', '1'],
-            ],
-        ]
-    }
+    body = {"conditions": [["a", "=", "1"], [["b", "=", "1"], ["c", "=", "1"]]]}
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
-    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c'])
+    assert query.get_all_referenced_columns() == set(["a", "b", "c"])
+    assert query.get_columns_referenced_in_conditions() == set(["a", "b", "c"])
     assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR foo(c) = 1)
     body = {
-        'conditions': [
-            ['a', '=', '1'],
-            [
-                ['b', '=', '1'],
-                [['foo', ['c']], '=', '1'],
-            ],
-        ]
+        "conditions": [["a", "=", "1"], [["b", "=", "1"], [["foo", ["c"]], "=", "1"]]]
     }
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b', 'c'])
-    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c'])
+    assert query.get_all_referenced_columns() == set(["a", "b", "c"])
+    assert query.get_columns_referenced_in_conditions() == set(["a", "b", "c"])
     assert query.get_columns_referenced_in_having() == set([])
 
     # a = 1 AND (b = 1 OR foo(c, bar(d)) = 1)
     body = {
-        'conditions': [
-            ['a', '=', '1'],
-            [
-                ['b', '=', '1'],
-                [['foo', ['c', ['bar', ['d']]]], '=', '1'],
-            ],
+        "conditions": [
+            ["a", "=", "1"],
+            [["b", "=", "1"], [["foo", ["c", ["bar", ["d"]]]], "=", "1"]],
         ]
     }
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd'])
-    assert query.get_columns_referenced_in_conditions() == set(['a', 'b', 'c', 'd'])
+    assert query.get_all_referenced_columns() == set(["a", "b", "c", "d"])
+    assert query.get_columns_referenced_in_conditions() == set(["a", "b", "c", "d"])
     assert query.get_columns_referenced_in_having() == set([])
 
     # Other fields, including expressions in selected columns
     body = {
-        'arrayjoin': 'tags_key',
-        'groupby': ['time', 'issue'],
-        'orderby': '-time',
-        'selected_columns': [
-            'issue',
-            'time',
-            ['foo', ['c', ['bar', ['d']]]]  # foo(c, bar(d))
+        "arrayjoin": "tags_key",
+        "groupby": ["time", "issue"],
+        "orderby": "-time",
+        "selected_columns": [
+            "issue",
+            "time",
+            ["foo", ["c", ["bar", ["d"]]]],  # foo(c, bar(d))
         ],
-        'aggregations': [
-            ['uniq', 'tags_value', 'values_seen']
-        ]
+        "aggregations": [["uniq", "tags_value", "values_seen"]],
     }
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['tags_key', 'tags_value', 'time', 'issue', 'c', 'd'])
+    assert query.get_all_referenced_columns() == set(
+        ["tags_key", "tags_value", "time", "issue", "c", "d"]
+    )
     assert query.get_columns_referenced_in_conditions() == set([])
     assert query.get_columns_referenced_in_having() == set([])
 
     body = {
-        'conditions': [['a', '=', '1']],
-        'having': [
-            ['b', '=', '1'],
-            [
-                ['c', '=', '1'],
-                [['foo', ['d', ['bar', ['e']]]], '=', '1'],
-            ],
-        ]
+        "conditions": [["a", "=", "1"]],
+        "having": [
+            ["b", "=", "1"],
+            [["c", "=", "1"], [["foo", ["d", ["bar", ["e"]]]], "=", "1"]],
+        ],
     }
     query = Query(body, source)
-    assert query.get_all_referenced_columns() == set(['a', 'b', 'c', 'd', 'e'])
-    assert query.get_columns_referenced_in_having() == set(['b', 'c', 'd', 'e'])
+    query.set_prewhere([["pc6", "=", "10"]])
+    assert query.get_all_referenced_columns() == set(["a", "b", "c", "d", "e", "pc6"])
+    assert query.get_columns_referenced_in_having() == set(["b", "c", "d", "e"])
