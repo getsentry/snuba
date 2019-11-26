@@ -36,5 +36,5 @@ def escape_alias(alias: Optional[str]) -> Optional[str]:
     return escape_expression(alias, SAFE_ALIAS_RE)
 
 
-def escape_col(col: Optional[str]) -> Optional[str]:
+def escape_identifier(col: Optional[str]) -> Optional[str]:
     return escape_expression(col, SAFE_COL_RE)

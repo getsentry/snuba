@@ -8,7 +8,7 @@ from typing import Any, Mapping, Optional, Sequence
 import simplejson as json
 
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.escaping import escape_col, escape_string
+from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
@@ -404,7 +404,7 @@ def process_delete_tag(message, dataset) -> Optional[Replacement]:
         "select_columns": ", ".join(select_columns),
         "project_id": message["project_id"],
         "tag_str": escape_string(tag),
-        "tag_column": escape_col(tag_column_name),
+        "tag_column": escape_identifier(tag_column_name),
         "timestamp": timestamp.strftime(DATETIME_FORMAT),
     }
 

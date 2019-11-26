@@ -19,7 +19,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
-from snuba.clickhouse.escaping import escape_col, escape_string
+from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -69,7 +69,7 @@ def function_expr(fn: str, args_expr: str = "") -> str:
         match = APDEX_FUNCTION_RE.match(fn)
         if match:
             return "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
-                col=escape_col(match.group(1)),
+                col=escape_identifier(match.group(1)),
                 satisfied=match.group(2),
                 tolerated=int(match.group(2)) * 4,
             )

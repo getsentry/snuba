@@ -3,7 +3,7 @@ from typing import Any, Mapping, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.clickhouse.escaping import escape_col
+from snuba.clickhouse.escaping import escape_identifier
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
@@ -72,9 +72,9 @@ class TagColumnProcessor:
         col_type = str(col_type) if col_type else None
 
         if col_type and "String" in col_type and "FixedString" not in col_type:
-            return escape_col(col)
+            return escape_identifier(col)
         else:
-            return "toString({})".format(escape_col(col))
+            return "toString({})".format(escape_identifier(col))
 
     def __tag_expr(self, column_name: str, table_alias: str = "",) -> str:
         """

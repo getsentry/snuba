@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.clickhouse.escaping import escape_alias, escape_col, escape_string
+from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 
 # Tokens used when formatting. Defining them as constant
 # will make it easy (if/when needed) to make some changes
@@ -77,9 +77,9 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def visitColumn(self, exp: Column) -> str:
         ret = []
         if exp.table_name:
-            ret.append(escape_col(exp.table_name) or "")
+            ret.append(escape_identifier(exp.table_name) or "")
             ret.append(DOT)
-        ret.append(escape_col(exp.column_name) or "")
+        ret.append(escape_identifier(exp.column_name) or "")
         return self.__alias("".join(ret), exp.alias)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
@@ -88,7 +88,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         return f"{OPEN_PAREN}{param_list}{CLOSED_PAREN}"
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
-        ret = f"{escape_col(exp.function_name)}{self.__visit_params(exp.parameters)}"
+        ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"
         return self.__alias(ret, exp.alias)
 
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> str:

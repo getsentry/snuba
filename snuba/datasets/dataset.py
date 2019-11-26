@@ -1,6 +1,6 @@
 from typing import Optional, Mapping, NamedTuple, Sequence, Tuple, Union
 
-from snuba.clickhouse.escaping import escape_col
+from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
@@ -91,7 +91,7 @@ class Dataset(object):
         Return an expression for the column name. Handle special column aliases
         that evaluate to something else.
         """
-        return escape_col(qualified_column(column_name, table_alias))
+        return escape_identifier(qualified_column(column_name, table_alias))
 
     def process_condition(self, condition) -> Tuple[str, str, any]:
         """

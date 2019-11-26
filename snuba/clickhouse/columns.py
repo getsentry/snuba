@@ -1,6 +1,6 @@
 from typing import Mapping
 
-from snuba.clickhouse.escaping import escape_col
+from snuba.clickhouse.escaping import escape_identifier
 
 
 class Column(object):
@@ -19,7 +19,7 @@ class Column(object):
         )
 
     def for_schema(self):
-        return "{} {}".format(escape_col(self.name), self.type.for_schema())
+        return "{} {}".format(escape_identifier(self.name), self.type.for_schema())
 
     @staticmethod
     def to_columns(columns):
@@ -35,7 +35,7 @@ class FlattenedColumn(object):
         self.flattened = (
             "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
         )
-        self.escaped = escape_col(self.flattened)
+        self.escaped = escape_identifier(self.flattened)
 
     def __repr__(self):
         return "FlattenedColumn({}, {}, {})".format(
