@@ -10,19 +10,6 @@ from snuba.query.expressions import (
 from snuba.query.parsing import ParsingContext
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
 
-# Tokens used when formatting. Defining them as constant
-# will make it easy (if/when needed) to make some changes
-# to the layout of the output.
-NULL = "NULL"
-COMMA = ","
-SPACE = " "
-TRUE = "true"
-FALSE = "false"
-QUOTE = "'"
-OPEN_PAREN = "("
-CLOSED_PAREN = ")"
-DOT = "."
-
 
 class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     """
@@ -58,15 +45,15 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return ret
         else:
             self.__parsing_context.add_alias(alias)
-            return f"{OPEN_PAREN}{formatted_exp}{SPACE}AS{SPACE}{escape_alias(alias)}{CLOSED_PAREN}"
+            return f"({formatted_exp} AS {escape_alias(alias)})"
 
     def visitLiteral(self, exp: Literal) -> str:
         if exp.value is None:
-            return NULL
+            return "NULL"
         elif exp.value is True:
-            return TRUE
+            return "true"
         elif exp.value is False:
-            return FALSE
+            return "false"
         elif isinstance(exp.value, str):
             return escape_string(exp.value)
         elif isinstance(exp.value, (int, float)):
@@ -78,14 +65,14 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         ret = []
         if exp.table_name:
             ret.append(escape_identifier(exp.table_name) or "")
-            ret.append(DOT)
+            ret.append(".")
         ret.append(escape_identifier(exp.column_name) or "")
         return self.__alias("".join(ret), exp.alias)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
         ret = [p.accept(self) for p in parameters]
         param_list = ", ".join(ret)
-        return f"{OPEN_PAREN}{param_list}{CLOSED_PAREN}"
+        return f"({param_list})"
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
         ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"
