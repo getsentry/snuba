@@ -1,5 +1,6 @@
 from typing import Optional, Mapping, NamedTuple, Sequence, Tuple, Union
 
+from snuba.clickhouse.escaping import escape_col
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
@@ -7,7 +8,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.types import Condition
-from snuba.util import escape_col, parse_datetime, qualified_column
+from snuba.util import parse_datetime, qualified_column
 
 
 class ColumnSplitSpec(NamedTuple):

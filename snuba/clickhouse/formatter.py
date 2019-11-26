@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.util import escape_alias, escape_col, escape_string
+from snuba.clickhouse.escaping import escape_alias, escape_col, escape_string
 
 # Tokens used when formatting. Defining them as constant
 # will make it easy (if/when needed) to make some changes

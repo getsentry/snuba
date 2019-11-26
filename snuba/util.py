@@ -9,7 +9,6 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
-    Pattern,
     Sequence,
     Tuple,
     Union,
@@ -20,6 +19,7 @@ import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
+from snuba.clickhouse.escaping import escape_col, escape_string
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -32,16 +32,8 @@ logger = logging.getLogger("snuba.util")
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
-ESCAPE_STRING_RE = re.compile(r"(['\\])")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
 TOPK_FUNCTION_RE = re.compile(r"^top([1-9]\d*)$")
-ESCAPE_COL_RE = re.compile(r"([`\\])")
-NEGATE_RE = re.compile(r"^(-?)(.*)$")
-SAFE_COL_RE = re.compile(r"^-?([a-zA-Z_][a-zA-Z0-9_\.]*)$")
-# Alias escaping is different than column names when we introduce table aliases.
-# Using the column escaping function would consider "." safe, which is not for
-# an alias.
-SAFE_ALIAS_RE = re.compile(r"^-?[a-zA-Z_][a-zA-Z0-9_]*$")
 APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
 
 
@@ -59,29 +51,6 @@ def qualified_column(column_name: str, alias: str = "") -> str:
     empty. If the table is empty it returns the column itself.
     """
     return column_name if not alias else f"{alias}.{column_name}"
-
-
-def escape_expression(expr: Optional[str], regex: Pattern[str]) -> Optional[str]:
-    if not expr:
-        return expr
-    elif regex.match(expr):
-        # Column/Alias is safe to use without wrapping.
-        return expr
-    else:
-        # Column/Alias needs special characters escaped, and to be wrapped with
-        # backticks. If the column starts with a '-', keep that outside the
-        # backticks as it is not part of the column name, but used by the query
-        # generator to signify the sort order if we are sorting by this column.
-        col = ESCAPE_COL_RE.sub(r"\\\1", expr)
-        return "{}`{}`".format(*NEGATE_RE.match(col).groups())
-
-
-def escape_alias(alias: Optional[str]) -> Optional[str]:
-    return escape_expression(alias, SAFE_ALIAS_RE)
-
-
-def escape_col(col: Optional[str]) -> Optional[str]:
-    return escape_expression(col, SAFE_COL_RE)
 
 
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
@@ -228,11 +197,6 @@ def tuplify(nested: Any) -> Any:
     if isinstance(nested, (list, tuple)):
         return tuple(tuplify(child) for child in nested)
     return nested
-
-
-def escape_string(str: str) -> str:
-    str = ESCAPE_STRING_RE.sub(r"\\\1", str)
-    return "'{}'".format(str)
 
 
 def escape_literal(

@@ -4,6 +4,7 @@ import pytest
 
 from tests.base import BaseTest
 
+from snuba.clickhouse.escaping import escape_col, escape_alias
 from snuba.datasets.factory import get_dataset
 from snuba import state
 from snuba.query.columns import (
@@ -14,8 +15,6 @@ from snuba.query.columns import (
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
-    escape_alias,
-    escape_col,
     escape_literal,
     tuplify,
 )
