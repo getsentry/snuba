@@ -32,17 +32,19 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
+        options = {
+            "load_balancing": "in_order",
+            "insert_distributed_sync": 1,
+        }
         # This flag is meant to test this parameter before rolling it out everywhere.
         format_default_for_omitted_fields = state.get_config(
             "format_default_for_omitted_fields", 0
         )
-        self.__writer = enforce_table_writer(dataset).get_writer(
-            {
-                "input_format_defaults_for_omitted_fields": format_default_for_omitted_fields,
-                "load_balancing": "in_order",
-                "insert_distributed_sync": 1,
-            }
-        )
+        if format_default_for_omitted_fields:
+            options[
+                "input_format_defaults_for_omitted_fields"
+            ] = format_default_for_omitted_fields
+        self.__writer = enforce_table_writer(dataset).get_writer(options)
 
     def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
