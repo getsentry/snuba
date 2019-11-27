@@ -32,7 +32,11 @@ class ConsumerWorker(AbstractBatchWorker[KafkaMessage, ProcessedMessage]):
         self.replacements_topic = replacements_topic
         self.metrics = metrics
         self.__writer = enforce_table_writer(dataset).get_writer(
-            {"load_balancing": "in_order", "insert_distributed_sync": 1}
+            {
+                "load_balancing": "in_order",
+                "insert_distributed_sync": 1,
+                "input_format_defaults_for_omitted_fields": 1,
+            }
         )
 
     def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
