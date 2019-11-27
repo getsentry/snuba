@@ -262,7 +262,6 @@ class DiscoverDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         detected_dataset = detect_dataset(query, self.__transactions_columns)
-        dataset = get_dataset(detected_dataset)
 
         if detected_dataset == TRANSACTIONS:
             if column_name == "type":
@@ -278,15 +277,11 @@ class DiscoverDataset(TimeSeriesDataset):
             if column_name == "message":
                 return "transaction_name"
             if column_name == "geo_country_code":
-                return dataset.column_expr(
-                    "contexts[geo.country_code]", query, parsing_context
-                )
+                column_name = "contexts[geo.country_code]"
             if column_name == "geo_region":
-                return dataset.column_expr(
-                    "contexts[geo.region]", query, parsing_context
-                )
+                column_name = "contexts[geo.region]"
             if column_name == "geo_city":
-                return dataset.column_expr("contexts[geo.city]", query, parsing_context)
+                column_name = "contexts[geo.city]"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
@@ -299,7 +294,9 @@ class DiscoverDataset(TimeSeriesDataset):
             if self.__transactions_columns.get(column_name):
                 return "NULL"
 
-        return dataset.column_expr(column_name, query, parsing_context)
+        return get_dataset(detected_dataset).column_expr(
+            column_name, query, parsing_context
+        )
 
 
 class InvalidDataset(Exception):
