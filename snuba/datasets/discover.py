@@ -157,6 +157,10 @@ class DiscoverDataset(TimeSeriesDataset):
                 # SDK
                 ("sdk_name", Nullable(String())),
                 ("sdk_version", Nullable(String())),
+                # geo location context
+                ("geo_country_code", Nullable(String())),
+                ("geo_region", Nullable(String())),
+                ("geo_city", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -179,9 +183,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
-                ("geo_country_code", Nullable(String())),
-                ("geo_region", Nullable(String())),
-                ("geo_city", Nullable(String())),
                 ("sdk_integrations", Nullable(Array(String()))),
                 ("version", Nullable(String())),
                 ("http_method", Nullable(String())),
