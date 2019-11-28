@@ -162,7 +162,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         self.__events_columns = ColumnSet(
             [
-                ("group_id", Nullable(UInt(64))),
+                ("group_id", UInt(64)),
                 ("primary_hash", Nullable(FixedString(32))),
                 ("type", Nullable(String())),
                 # Promoted tags
@@ -275,6 +275,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "transaction_name"
             if column_name == "message":
                 return "transaction_name"
+            if column_name == "group_id":
+                return "0"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
