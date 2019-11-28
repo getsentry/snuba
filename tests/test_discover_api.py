@@ -147,7 +147,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0] == {
             "type": "transaction",
             "tags[foo]": "baz",
-            "group_id": None,
+            "group_id": 0,
             "release": "1",
         }
 
