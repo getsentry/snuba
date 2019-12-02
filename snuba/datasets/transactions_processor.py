@@ -28,6 +28,9 @@ metrics = create_metrics(
 )
 
 
+UNKNOWN_SPAN_STATUS = 2
+
+
 class TransactionsMessageProcessor(MessageProcessor):
     PROMOTED_TAGS = {
         "environment",
@@ -77,7 +80,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
-            status = transaction_ctx.get("status", 2)
+            status = transaction_ctx.get("status", UNKNOWN_SPAN_STATUS)
             if (isinstance(status, str) and status.isdigit()) or isinstance(
                 status, int
             ):
