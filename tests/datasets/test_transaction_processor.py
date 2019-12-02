@@ -33,6 +33,7 @@ class TransactionEvent:
     sdk_name: Optional[str]
     sdk_version: Optional[str]
     geo: Mapping[str, str]
+    status: int
 
     def serialize(self) -> Mapping[str, Any]:
         return (
@@ -108,6 +109,7 @@ class TransactionEvent:
                             "op": self.op,
                             "type": "trace",
                             "span_id": self.span_id,
+                            "status": str(self.status),
                         }
                     },
                     "tags": [
@@ -139,6 +141,7 @@ class TransactionEvent:
             "span_id": int(self.span_id, 16),
             "transaction_name": self.transaction_name,
             "transaction_op": self.op,
+            "transaction_status": self.status,
             "start_ts": start_timestamp,
             "start_ms": int(start_timestamp.microsecond / 1000),
             "finish_ts": finish_timestamp,
@@ -161,6 +164,7 @@ class TransactionEvent:
                 "trace.trace_id",
                 "trace.op",
                 "trace.span_id",
+                "trace.status",
                 "geo.country_code",
                 "geo.region",
                 "geo.city",
@@ -170,6 +174,7 @@ class TransactionEvent:
                 self.trace_id,
                 self.op,
                 self.span_id,
+                str(self.status),
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
@@ -201,6 +206,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
+            status=1,
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
@@ -215,7 +221,7 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city",},
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
         # Force an invalid event
@@ -232,6 +238,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
+            status=1,
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
@@ -246,7 +253,7 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city",},
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         payload = message.serialize()
         # Force an invalid event
@@ -263,6 +270,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
+            status=1,
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
@@ -277,7 +285,7 @@ class TestTransactionsProcessor(BaseTest):
             release="34a554c14b68285d8a8eb6c5c4c56dfc1db9a83a",
             sdk_name="sentry.python",
             sdk_version="0.9.0",
-            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city",},
+            geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
         meta = KafkaMessageMetadata(offset=1, partition=2,)
 
