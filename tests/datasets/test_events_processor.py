@@ -428,6 +428,7 @@ class TestEventsProcessor(BaseEventsTest):
                 "list": [1, 2, 3],
                 "dict": {"key": "value"},
                 "str": "string",
+                "\ud83c": "invalid utf-8 surrogate",
             },
         }
         orig_tags = {
@@ -483,6 +484,7 @@ class TestEventsProcessor(BaseEventsTest):
             "device": {},
             "extra": {
                 "dict": {"key": "value"},
+                "\ud83c": "invalid utf-8 surrogate",
                 "float": 1.3,
                 "int": 0,
                 "list": [1, 2, 3],
@@ -499,8 +501,8 @@ class TestEventsProcessor(BaseEventsTest):
         extract_extra_contexts(extra_output, contexts)
 
         assert extra_output == {
-            "contexts.key": ["extra.int", "extra.float", "extra.str"],
-            "contexts.value": [u"0", u"1.3", u"string"],
+            "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],
+            "contexts.value": [u"0", u"1.3", u"string", u"invalid utf-8 surrogate"],
         }
 
     def test_extract_user(self):
