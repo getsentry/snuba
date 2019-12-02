@@ -77,10 +77,9 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
-            status = transaction_ctx.get("status", None)
-            if status is not None and (
-                (isinstance(status, str) and status.isdigit())
-                or isinstance(status, int)
+            status = transaction_ctx.get("status", 2)
+            if (isinstance(status, str) and status.isdigit()) or isinstance(
+                status, int
             ):
                 # This condition is complex because, at the time of writing, the status
                 # field is being migrated from a string to an integer and we should not
