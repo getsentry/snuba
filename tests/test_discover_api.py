@@ -164,7 +164,7 @@ class TestDiscoverApi(BaseApiTest):
         assert data["data"][0] == {
             "type": "transaction",
             "tags[foo]": "baz",
-            "group_id": None,
+            "group_id": 0,
             "release": "1",
             "geo_city": "San Francisco",
             "sdk_name": "sentry.python",
@@ -347,3 +347,44 @@ class TestDiscoverApi(BaseApiTest):
             ).data
         )
         assert len(result["data"]) == 1
+
+    def test_transaction_group_ids(self):
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "selected_columns": [
+                            "group_id",
+                        ],
+                        "conditions": [
+                            ["type", "=", "transaction"],
+                        ]
+                    }
+                ),
+            ).data
+        )
+        assert result["data"][0]["group_id"] == 0
+
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "selected_columns": [
+                            "group_id",
+                        ],
+                        "conditions": [
+                            ["type", "=", "transaction"],
+                            ["group_id", "IN", (1, 2, 3, 4)],
+                        ]
+                    }
+                ),
+            ).data
+        )
+
+        assert result["data"] == []
