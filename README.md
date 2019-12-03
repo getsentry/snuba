@@ -27,16 +27,14 @@ Snuba assumes:
 1. A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`).
 2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
    `6379`
-   
+
 A quick way to get these services running is to set up sentry, then use:
 
     sentry devservices up --exclude=snuba
 
 ## Install / Run (Only required if you are developing against Snuba)
 
-Make sure you're running Python 3.7+ when setting up this environment.
-
-    mkvirtualenv snuba
+    mkvirtualenv snuba --python=python3.7
     workon snuba
     make install-python-dependencies
     make install-librdkafka
