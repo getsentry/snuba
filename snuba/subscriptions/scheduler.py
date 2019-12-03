@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Generic, Iterator, Tuple, TypeVar
 
-from snuba.utils.types import Interval
 from snuba.subscriptions.types import TTimestamp
+from snuba.utils.types import Interval
 
 
 TTask = TypeVar("TTask")
