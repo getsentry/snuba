@@ -229,7 +229,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ),
                 write_schema=None,
             ),
-            time_group_columns={"time": "timestamp", "bucketed_end": "finish_ts"},
+            time_group_columns={},
             time_parse_columns=["timestamp", "start_ts", "finish_ts"],
         )
 
@@ -263,6 +263,8 @@ class DiscoverDataset(TimeSeriesDataset):
         detected_dataset = detect_dataset(query, self.__transactions_columns)
 
         if detected_dataset == TRANSACTIONS:
+            if column_name == "time":
+                return self.time_expr("finish_ts", query.get_granularity())
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -278,6 +280,8 @@ class DiscoverDataset(TimeSeriesDataset):
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
+            if column_name == "time":
+                return self.time_expr("timestamp", query.get_granularity())
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":
