@@ -3,7 +3,6 @@ from typing import Optional
 from snuba import settings
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.query.expressions import Expression
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
@@ -38,7 +37,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__offset = query.get_offset()
 
         # Clickhouse specific fields
-        self.__prewhere: Optional[Expression] = None
+        self.__prewhere: query.get_prewhere_ast()
         self.__turbo = settings.get_turbo()
         self.__final = query.get_final()
 
@@ -48,7 +47,6 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__hastotals = query.has_totals()
 
         self.__settings = settings
-
         self.__formatted_query: Optional[str] = None
 
     def format_sql(self) -> str:
@@ -64,11 +62,13 @@ class AstClickhouseQuery(ClickhouseQuery):
         columns = ", ".join(selected_cols)
         select_clause = f"SELECT {columns}"
 
+        # TODO: The visitor approach will be used for the FROM clause as well.
         from_clause = f"FROM {self.__data_source.format_from()}"
 
         if self.__final:
             from_clause = f"{from_clause} FINAL"
 
+        # TODO: Sampling rate will become one step of Clickhouse query processing
         if not self.__data_source.supports_sample():
             sample_rate = None
         else:
@@ -95,6 +95,8 @@ class AstClickhouseQuery(ClickhouseQuery):
             )
             where_clause = f"WHERE {formatted_condition}"
 
+        # TODO: Pre where processing will become a step in Clickhouse Query processing
+        # instead of being pulled from the Snuba Query
         prewhere_clause = ""
         if self.__prewhere:
             formatted_prewhere = self.__prewhere.accept(
