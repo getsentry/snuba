@@ -154,6 +154,13 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("username", Nullable(String())),
                 ("email", Nullable(String())),
                 ("ip_address", Nullable(String())),
+                # SDK
+                ("sdk_name", Nullable(String())),
+                ("sdk_version", Nullable(String())),
+                # geo location context
+                ("geo_country_code", Nullable(String())),
+                ("geo_region", Nullable(String())),
+                ("geo_city", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -176,12 +183,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
-                ("geo_country_code", Nullable(String())),
-                ("geo_region", Nullable(String())),
-                ("geo_city", Nullable(String())),
-                ("sdk_name", Nullable(String())),
                 ("sdk_integrations", Nullable(Array(String()))),
-                ("sdk_version", Nullable(String())),
                 ("version", Nullable(String())),
                 ("http_method", Nullable(String())),
                 ("http_referer", Nullable(String())),
@@ -275,6 +277,12 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "transaction_name"
             if column_name == "message":
                 return "transaction_name"
+            if column_name == "geo_country_code":
+                column_name = "contexts[geo.country_code]"
+            if column_name == "geo_region":
+                column_name = "contexts[geo.region]"
+            if column_name == "geo_city":
+                column_name = "contexts[geo.city]"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
