@@ -264,7 +264,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
-                return self.time_expr("finish_ts", query.get_granularity())
+                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -281,7 +281,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "NULL"
         else:
             if column_name == "time":
-                return self.time_expr("timestamp", query.get_granularity())
+                return self.time_expr("timestamp", query.get_granularity(), table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":
