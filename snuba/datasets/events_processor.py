@@ -63,7 +63,8 @@ def extract_extra_contexts(output, contexts):
                 if isinstance(ctx_value, valid_types):
                     value = _unicodify(ctx_value)
                     if value:
-                        context_keys.append("%s.%s" % (ctx_name, inner_ctx_name))
+                        ctx_key = f"{ctx_name}.{inner_ctx_name}"
+                        context_keys.append(_unicodify(ctx_key))
                         context_values.append(_unicodify(ctx_value))
 
     output["contexts.key"] = context_keys
