@@ -162,7 +162,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         self.__events_columns = ColumnSet(
             [
-                ("group_id", UInt(64)),
+                ("group_id", Nullable(UInt(64))),
                 ("primary_hash", Nullable(FixedString(32))),
                 ("type", Nullable(String())),
                 # Promoted tags
@@ -276,6 +276,11 @@ class DiscoverDataset(TimeSeriesDataset):
             if column_name == "message":
                 return "transaction_name"
             if column_name == "group_id":
+                # TODO: We return 0 here instead of NULL so conditions like group_id
+                # in (1, 2, 3) will work, since Clickhouse won't run a query like:
+                # SELECT (NULL AS group_id) FROM transactions WHERE group_id IN (1, 2, 3)
+                # When we have the query AST, we should solve this by transforming the
+                # nonsensical conditions instead.
                 return "0"
             if self.__events_columns.get(column_name):
                 return "NULL"
