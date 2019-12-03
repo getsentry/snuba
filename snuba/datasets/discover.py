@@ -27,6 +27,8 @@ from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
+from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
+
 EVENTS = "events"
 TRANSACTIONS = "transactions"
 
@@ -109,6 +111,35 @@ class DatasetSelector(QueryProcessor):
         source = query.get_data_source()
         assert isinstance(source, DiscoverSource)
         source.set_table_source(detected_dataset)
+
+
+class SimpleColumnValidator(QueryProcessor):
+    """
+    Checks that requested columns are present on the Discover schema. Prevents a column
+    that happens to be present on an underlying dataset being inadvertently exposed
+    on Discover.
+    """
+
+    def __init__(self, all_columns: ColumnSet) -> None:
+        self.__columns = all_columns
+
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        aliases = query.get_aliases()
+        columns = [
+            col for col in query.get_all_referenced_columns() if col not in aliases
+        ]
+        time_group_columns = [
+            "time",
+            "bucketed_end",
+        ]  # TODO: Remove when "time" column is correctly handled
+        for col in columns:
+            if (
+                col
+                and col not in self.__columns
+                and not NESTED_COL_EXPR_RE.match(col)
+                and col not in time_group_columns
+            ):
+                raise InvalidColumn(col)
 
 
 class DiscoverSchema(Schema):
@@ -239,6 +270,7 @@ class DiscoverDataset(TimeSeriesDataset):
         discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
 
         return [
+            SimpleColumnValidator(discover_source.get_columns()),
             DatasetSelector(discover_source, self.__transactions_columns),
             PrewhereProcessor(),
         ]
@@ -308,4 +340,8 @@ class DiscoverDataset(TimeSeriesDataset):
 
 
 class InvalidDataset(Exception):
+    pass
+
+
+class InvalidColumn(Exception):
     pass
