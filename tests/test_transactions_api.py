@@ -112,6 +112,7 @@ class TestTransactionsApi(BaseApiTest):
                                                 "trace_id": trace_id,
                                                 "span_id": span_id,
                                                 "op": "http",
+                                                "status": "0",
                                             },
                                         },
                                         "spans": [

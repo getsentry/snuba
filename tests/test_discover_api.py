@@ -74,6 +74,11 @@ class TestDiscoverApi(BaseApiTest):
                             "user": {
                                 "email": "sally@example.org",
                                 "ip_address": "8.8.8.8",
+                                "geo": {
+                                    "city": "San Francisco",
+                                    "region": "CA",
+                                    "country_code": "US",
+                                },
                             },
                             "contexts": {
                                 "trace": {
@@ -81,6 +86,11 @@ class TestDiscoverApi(BaseApiTest):
                                     "span_id": span_id,
                                     "op": "http",
                                 },
+                            },
+                            "sdk": {
+                                "name": "sentry.python",
+                                "version": "0.13.4",
+                                "integrations": ["django"],
                             },
                             "spans": [
                                 {
@@ -134,7 +144,14 @@ class TestDiscoverApi(BaseApiTest):
                 {
                     "dataset": "discover",
                     "project": 1,
-                    "selected_columns": ["type", "tags[foo]", "group_id", "release"],
+                    "selected_columns": [
+                        "type",
+                        "tags[foo]",
+                        "group_id",
+                        "release",
+                        "sdk_name",
+                        "geo_city",
+                    ],
                     "conditions": [["type", "=", "transaction"]],
                     "orderby": "timestamp",
                     "limit": 1,
@@ -149,6 +166,8 @@ class TestDiscoverApi(BaseApiTest):
             "tags[foo]": "baz",
             "group_id": 0,
             "release": "1",
+            "geo_city": "San Francisco",
+            "sdk_name": "sentry.python",
         }
 
     def test_aggregations(self):
@@ -234,6 +253,49 @@ class TestDiscoverApi(BaseApiTest):
 
         assert response.status_code == 200
         assert data["data"] == [{"type": "error", "uniq_trace_id": 0}]
+
+    def test_geo_column_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["geo_country_code", "=", "MX"],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == [{"count": 0}]
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["geo_country_code", "=", "US"],
+                        ["geo_region", "=", "CA"],
+                        ["geo_city", "=", "San Francisco"],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        data = json.loads(response.data)
+
+        assert response.status_code == 200
+        assert data["data"] == [{"count": 1}]
 
     def test_having(self):
         result = json.loads(
