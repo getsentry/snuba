@@ -9,13 +9,11 @@ from snuba.clickhouse.columns import (
     Nested,
     Nullable,
     String,
-    WithDefault,
     UInt,
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.transactions_processor import UNKNOWN_SPAN_STATUS
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.query.extensions import QueryExtension
@@ -213,7 +211,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("span_id", Nullable(UInt(64))),
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
-                ("transaction_status", WithDefault(UInt(8), UNKNOWN_SPAN_STATUS)),
+                ("transaction_status", Nullable(UInt(8))),
                 # TODO: Time columns below will need to be aligned more closely to the
                 # names in events once we figure out how timeseries queries will work
                 ("start_ts", Nullable(DateTime())),
