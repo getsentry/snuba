@@ -201,6 +201,9 @@ class DiscoverDataset(TimeSeriesDataset):
         self.__events_columns = ColumnSet(
             [
                 ("group_id", Nullable(UInt(64))),
+                # TODO: We should deprecate "issue" since it's just an alias
+                # for group_id but it's still being passed by Sentry.
+                ("issue", Nullable(UInt(64))),
                 ("primary_hash", Nullable(FixedString(32))),
                 ("type", Nullable(String())),
                 # Promoted tags
