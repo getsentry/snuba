@@ -88,6 +88,8 @@ class TransactionsMessageProcessor(MessageProcessor):
                 # field is being migrated from a string to an integer and we should not
                 # throw if an old format event is received.
                 processed["transaction_status"] = int(status)
+            else:
+                processed["transaction_status"] = UNKNOWN_SPAN_STATUS
             if data["timestamp"] - data["start_timestamp"] < 0:
                 # Seems we have some negative durations in the DB
                 metrics.increment("negative_duration")
