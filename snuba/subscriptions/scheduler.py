@@ -35,8 +35,9 @@ class Scheduler(ABC, Generic[TTimestamp, TTask]):
         self, interval: Interval[TTimestamp]
     ) -> Iterator[ScheduledTask[TTimestamp, TTask]]:
         """
-        Return all of the tasks that were scheduled to be executed between
-        the lower bound (exclusive) and upper bound (inclusive) of the
-        provided interval.
+        Find all of the tasks that were scheduled to be executed between the
+        lower bound (exclusive) and upper bound (inclusive) of the provided
+        interval. The tasks returned should be ordered by timestamp in
+        ascending order.
         """
         raise NotImplementedError
