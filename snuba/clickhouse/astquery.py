@@ -37,7 +37,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__offset = query.get_offset()
 
         # Clickhouse specific fields
-        self.__prewhere: query.get_prewhere_ast()
+        self.__prewhere = query.get_prewhere_ast()
         self.__turbo = settings.get_turbo()
         self.__final = query.get_final()
 
