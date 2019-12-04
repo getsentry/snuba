@@ -86,7 +86,7 @@ def bootstrap(bootstrap_server, kafka, force, log_level):
             break
         except Exception as e:
             logger.error(
-                "Connection to Kafka failed (attempt %d)", attempts, exc_info=e
+                "Connection to Clickhouse failed (attempt %d)", attempts, exc_info=e
             )
             attempts += 1
             if attempts == 60:
