@@ -2,7 +2,6 @@ import calendar
 from datetime import datetime
 from functools import partial
 import simplejson as json
-import pytest
 import uuid
 
 from snuba import settings
@@ -389,39 +388,3 @@ class TestDiscoverApi(BaseApiTest):
         )
 
         assert result["data"] == []
-
-    def test_invalid_column(self):
-        result = json.loads(
-            self.app.post(
-                "/query",
-                data=json.dumps(
-                    {
-                        "dataset": "discover",
-                        "project": self.project_id,
-                        "selected_columns": [
-                            "project_id",
-                            "time",
-                            "timestamp",
-                            "tags[some_custom_tag]",
-                        ],
-                    }
-                ),
-            ).data
-        )
-        assert len(result["data"]) == 1
-
-        with pytest.raises(Exception):
-            result = json.loads(
-                self.app.post(
-                    "/query",
-                    data=json.dumps(
-                        {
-                            "dataset": "discover",
-                            "project": self.project_id,
-                            "selected_columns": [
-                                "invalid_thing"
-                            ],
-                        }
-                    ),
-                ).data
-            )

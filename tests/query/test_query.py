@@ -178,12 +178,3 @@ def test_referenced_columns():
     query.set_prewhere([["pc6", "=", "10"]])
     assert query.get_all_referenced_columns() == set(["a", "b", "c", "d", "e", "pc6"])
     assert query.get_columns_referenced_in_having() == set(["b", "c", "d", "e"])
-
-    def test_get_aliases():
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-
-        body = {"aggregations": [["uniq", "tags_value", "values_seen"]]}
-        assert Query(body, source).get_aliases() == ["values_seen"]
-
-        body = {"selected_columns": ["event_id", "project_id"]}
-        assert Query(body, source).get_aliases() == []
