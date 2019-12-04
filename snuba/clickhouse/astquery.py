@@ -59,8 +59,8 @@ class AstClickhouseQuery(ClickhouseQuery):
             e.accept(ClickhouseExpressionFormatter(parsing_context))
             for e in self.__selected_columns
         ]
-        columns = ", ".join(selected_cols)
-        select_clause = f"SELECT {columns}"
+        formatted_columns = ", ".join(selected_cols)
+        select_clause = f"SELECT {formatted_columns}"
 
         # TODO: The visitor approach will be used for the FROM clause as well.
         from_clause = f"FROM {self.__data_source.format_from()}"
@@ -83,10 +83,10 @@ class AstClickhouseQuery(ClickhouseQuery):
 
         join_clause = ""
         if self.__arrayjoin:
-            array_join = self.__arrayjoin.accept(
+            formatted_array_join = self.__arrayjoin.accept(
                 ClickhouseExpressionFormatter(parsing_context)
             )
-            join_clause = f"ARRAY JOIN {array_join}"
+            join_clause = f"ARRAY JOIN {formatted_array_join}"
 
         where_clause = ""
         if self.__condition:
