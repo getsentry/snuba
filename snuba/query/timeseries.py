@@ -43,7 +43,7 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
         query.add_conditions(
             [
                 (self.__timestamp_column, ">=", from_date.isoformat()),
-                (self.__timestamp_column, "<", to_date.isoformat()),
+                (self.__timestamp_column, "<=", to_date.isoformat()),
             ]
         )
 
