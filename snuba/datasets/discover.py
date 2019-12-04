@@ -278,6 +278,13 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "transaction_name"
             if column_name == "message":
                 return "transaction_name"
+            if column_name == "group_id":
+                # TODO: We return 0 here instead of NULL so conditions like group_id
+                # in (1, 2, 3) will work, since Clickhouse won't run a query like:
+                # SELECT (NULL AS group_id) FROM transactions WHERE group_id IN (1, 2, 3)
+                # When we have the query AST, we should solve this by transforming the
+                # nonsensical conditions instead.
+                return "0"
             if column_name == "geo_country_code":
                 column_name = "contexts[geo.country_code]"
             if column_name == "geo_region":
