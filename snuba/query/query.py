@@ -329,12 +329,6 @@ class Query:
         # Return the set of all columns referenced in any expression
         return self.__get_referenced_columns(col_exprs)
 
-    def get_aliases(self) -> Sequence[str]:
-        if self.get_aggregations():
-            return [agg[2] for agg in self.get_aggregations()]
-
-        return []
-
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []
         self.__add_flat_conditions(col_exprs, self.get_conditions())
