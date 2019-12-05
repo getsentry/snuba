@@ -1,3 +1,4 @@
+import logging
 import click
 
 from snuba import settings
@@ -13,21 +14,29 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--force", is_flag=True)
-def bootstrap(bootstrap_server, kafka, force):
+@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+def bootstrap(bootstrap_server, kafka, force, log_level):
     """
     Warning: Not intended to be used in production yet.
     """
     if not force:
         raise click.ClickException("Must use --force to run")
 
+    logger = logging.getLogger("snuba.bootstrap")
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
+    )
+
     import time
 
     if kafka:
+        logger.debug("Using Kafka with %r", bootstrap_server)
         from confluent_kafka.admin import AdminClient, NewTopic
 
         attempts = 0
         while True:
             try:
+                logger.debug("Attempting to connect to Kafka (attempt %d)", attempts)
                 client = AdminClient(
                     {
                         "bootstrap.servers": ",".join(bootstrap_server),
@@ -37,7 +46,9 @@ def bootstrap(bootstrap_server, kafka, force):
                 client.list_topics(timeout=1)
                 break
             except Exception as e:
-                print(e)
+                logger.error(
+                    "Connection to Kafka failed (attempt %d)", attempts, exc_info=e
+                )
                 attempts += 1
                 if attempts == 60:
                     raise
@@ -61,19 +72,22 @@ def bootstrap(bootstrap_server, kafka, force):
         for topic, future in client.create_topics(topics).items():
             try:
                 future.result()
-                print("Topic %s created" % topic)
+                logger.info("Topic %s created", topic)
             except Exception as e:
-                print("Failed to create topic %s: %s" % (topic, e))
+                logger.error("Failed to create topic %s", topic, exc_info=e)
 
     from snuba.clickhouse.native import ClickhousePool
 
     attempts = 0
     while True:
         try:
+            logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
             ClickhousePool().execute("SELECT 1")
             break
         except Exception as e:
-            print(e)
+            logger.error(
+                "Connection to Clickhouse failed (attempt %d)", attempts, exc_info=e
+            )
             attempts += 1
             if attempts == 60:
                 raise
@@ -86,5 +100,8 @@ def bootstrap(bootstrap_server, kafka, force):
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
 
+        logger.debug("Creating tables for dataset %s", name)
         for statement in dataset.get_dataset_schemas().get_create_statements():
+            logger.debug("Executing:\n%s", statement)
             ClickhousePool().execute(statement)
+        logger.info("Tables for dataset %s created.", name)

@@ -154,6 +154,13 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("username", Nullable(String())),
                 ("email", Nullable(String())),
                 ("ip_address", Nullable(String())),
+                # SDK
+                ("sdk_name", Nullable(String())),
+                ("sdk_version", Nullable(String())),
+                # geo location context
+                ("geo_country_code", Nullable(String())),
+                ("geo_region", Nullable(String())),
+                ("geo_city", Nullable(String())),
                 # Other tags and context
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -176,12 +183,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
-                ("geo_country_code", Nullable(String())),
-                ("geo_region", Nullable(String())),
-                ("geo_city", Nullable(String())),
-                ("sdk_name", Nullable(String())),
                 ("sdk_integrations", Nullable(Array(String()))),
-                ("sdk_version", Nullable(String())),
                 ("version", Nullable(String())),
                 ("http_method", Nullable(String())),
                 ("http_referer", Nullable(String())),
@@ -209,6 +211,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("span_id", Nullable(UInt(64))),
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
+                ("transaction_status", Nullable(UInt(8))),
                 # TODO: Time columns below will need to be aligned more closely to the
                 # names in events once we figure out how timeseries queries will work
                 ("start_ts", Nullable(DateTime())),
@@ -277,6 +280,19 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "transaction_name"
             if column_name == "message":
                 return "transaction_name"
+            if column_name == "group_id":
+                # TODO: We return 0 here instead of NULL so conditions like group_id
+                # in (1, 2, 3) will work, since Clickhouse won't run a query like:
+                # SELECT (NULL AS group_id) FROM transactions WHERE group_id IN (1, 2, 3)
+                # When we have the query AST, we should solve this by transforming the
+                # nonsensical conditions instead.
+                return "0"
+            if column_name == "geo_country_code":
+                column_name = "contexts[geo.country_code]"
+            if column_name == "geo_region":
+                column_name = "contexts[geo.region]"
+            if column_name == "geo_city":
+                column_name = "contexts[geo.city]"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
