@@ -150,11 +150,8 @@ class TimeSeriesDataset(Dataset):
         self.__time_group_columns = time_group_columns
         self.__time_parse_columns = time_parse_columns
 
-    def __time_expr(
-        self, column_name: str, granularity: int, table_alias: str = ""
-    ) -> str:
-        real_column = self.__time_group_columns[column_name]
-        real_column = qualified_column(real_column, table_alias)
+    def time_expr(self, column_name: str, granularity: int, table_alias: str) -> str:
+        real_column = qualified_column(column_name, table_alias)
         template = {
             3600: "toStartOfHour({column})",
             60: "toStartOfMinute({column})",
@@ -173,7 +170,8 @@ class TimeSeriesDataset(Dataset):
         table_alias: str = "",
     ):
         if column_name in self.__time_group_columns:
-            return self.__time_expr(column_name, query.get_granularity(), table_alias)
+            real_column = self.__time_group_columns[column_name]
+            return self.time_expr(real_column, query.get_granularity(), table_alias)
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
 
