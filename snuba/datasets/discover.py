@@ -211,6 +211,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("span_id", Nullable(UInt(64))),
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
+                ("transaction_status", Nullable(UInt(8))),
                 # TODO: Time columns below will need to be aligned more closely to the
                 # names in events once we figure out how timeseries queries will work
                 ("start_ts", Nullable(DateTime())),
