@@ -211,6 +211,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("span_id", Nullable(UInt(64))),
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
+                ("transaction_status", Nullable(UInt(8))),
                 # TODO: Time columns below will need to be aligned more closely to the
                 # names in events once we figure out how timeseries queries will work
                 ("start_ts", Nullable(DateTime())),
@@ -231,7 +232,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ),
                 write_schema=None,
             ),
-            time_group_columns={"time": "timestamp", "bucketed_end": "finish_ts"},
+            time_group_columns={},
             time_parse_columns=["timestamp", "start_ts", "finish_ts"],
         )
 
@@ -265,6 +266,8 @@ class DiscoverDataset(TimeSeriesDataset):
         detected_dataset = detect_dataset(query, self.__transactions_columns)
 
         if detected_dataset == TRANSACTIONS:
+            if column_name == "time":
+                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -293,6 +296,8 @@ class DiscoverDataset(TimeSeriesDataset):
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
+            if column_name == "time":
+                return self.time_expr("timestamp", query.get_granularity(), table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":

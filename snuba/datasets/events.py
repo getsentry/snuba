@@ -243,6 +243,7 @@ class EventsDataset(TimeSeriesDataset):
             mandatory_conditions=[("deleted", "=", 0)],
             prewhere_candidates=[
                 "event_id",
+                "group_id",
                 "issue",
                 "tags[sentry:release]",
                 "message",
