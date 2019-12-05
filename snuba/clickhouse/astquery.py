@@ -36,15 +36,18 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__limitby = query.get_limitby()
         self.__offset = query.get_offset()
 
-        # Clickhouse specific fields
-        self.__prewhere = query.get_prewhere_ast()
+        if self.__having:
+            assert self.__groupby, "found HAVING clause with no GROUP BY"
+
+        # Clickhouse specific fields. Some are still in the Snuba
+        # query and have to be moved.
         self.__turbo = settings.get_turbo()
         self.__final = query.get_final()
-
-        # Attributes that should be clickhouse specific that
-        # have to be removed from the Snuba Query
         self.__sample = query.get_sample()
         self.__hastotals = query.has_totals()
+        # TODO: Pre where processing will become a step in Clickhouse Query processing
+        # instead of being pulled from the Snuba Query
+        self.__prewhere = query.get_prewhere_ast()
 
         self.__settings = settings
         self.__formatted_query: Optional[str] = None
@@ -54,11 +57,9 @@ class AstClickhouseQuery(ClickhouseQuery):
             return self.__formatted_query
 
         parsing_context = ParsingContext()
+        formatter = ClickhouseExpressionFormatter(parsing_context)
 
-        selected_cols = [
-            e.accept(ClickhouseExpressionFormatter(parsing_context))
-            for e in self.__selected_columns
-        ]
+        selected_cols = [e.accept(formatter) for e in self.__selected_columns]
         formatted_columns = ", ".join(selected_cols)
         select_clause = f"SELECT {formatted_columns}"
 
@@ -81,36 +82,25 @@ class AstClickhouseQuery(ClickhouseQuery):
         if sample_rate:
             from_clause = f"{from_clause} SAMPLE {sample_rate}"
 
-        join_clause = ""
+        array_join_clause = ""
         if self.__arrayjoin:
-            formatted_array_join = self.__arrayjoin.accept(
-                ClickhouseExpressionFormatter(parsing_context)
-            )
-            join_clause = f"ARRAY JOIN {formatted_array_join}"
+            formatted_array_join = self.__arrayjoin.accept(formatter)
+            array_join_clause = f"ARRAY JOIN {formatted_array_join}"
+
+        prewhere_clause = ""
+        if self.__prewhere:
+            formatted_prewhere = self.__prewhere.accept(formatter)
+            prewhere_clause = f"PREWHERE {formatted_prewhere}"
 
         where_clause = ""
         if self.__condition:
-            formatted_condition = self.__condition.accept(
-                ClickhouseExpressionFormatter(parsing_context)
-            )
+            formatted_condition = self.__condition.accept(formatter)
             where_clause = f"WHERE {formatted_condition}"
-
-        # TODO: Pre where processing will become a step in Clickhouse Query processing
-        # instead of being pulled from the Snuba Query
-        prewhere_clause = ""
-        if self.__prewhere:
-            formatted_prewhere = self.__prewhere.accept(
-                ClickhouseExpressionFormatter(parsing_context)
-            )
-            prewhere_clause = f"PREWHERE {formatted_prewhere}"
 
         group_clause = ""
         if self.__groupby:
             # reformat to use aliases generated during the select clause formatting.
-            groupby_expressions = [
-                e.accept(ClickhouseExpressionFormatter(parsing_context))
-                for e in self.__groupby
-            ]
+            groupby_expressions = [e.accept(formatter) for e in self.__groupby]
             formatted_groupby = ", ".join(groupby_expressions)
             group_clause = f"GROUP BY ({formatted_groupby})"
             if self.__hastotals:
@@ -118,16 +108,13 @@ class AstClickhouseQuery(ClickhouseQuery):
 
         having_clause = ""
         if self.__having:
-            assert self.__groupby, "found HAVING clause with no GROUP BY"
-            formatted_having = self.__having.accept(
-                ClickhouseExpressionFormatter(parsing_context)
-            )
+            formatted_having = self.__having.accept(formatter)
             having_clause = f"HAVING {formatted_having}"
 
         order_clause = ""
         if self.__orderby:
             orderby = [
-                f"{e.node.accept(ClickhouseExpressionFormatter(parsing_context))} {e.direction.value}"
+                f"{e.node.accept(formatter)} {e.direction.value}"
                 for e in self.__orderby
             ]
             formatted_orderby = ", ".join(orderby)
@@ -147,7 +134,7 @@ class AstClickhouseQuery(ClickhouseQuery):
                 for c in [
                     select_clause,
                     from_clause,
-                    join_clause,
+                    array_join_clause,
                     prewhere_clause,
                     where_clause,
                     group_clause,

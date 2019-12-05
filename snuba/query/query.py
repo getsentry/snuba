@@ -109,7 +109,7 @@ class Query:
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
         self.__condition = condition
-        self.__ast_prewhere = prewhere
+        self.__prewhere = prewhere
         self.__groupby = groupby or []
         self.__having = having
         self.__order_by = order_by or []
@@ -222,7 +222,7 @@ class Query:
         """
         Temporary method until pre where management is moved to Clickhouse query
         """
-        return self.__ast_prewhere
+        return self.__prewhere
 
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """
