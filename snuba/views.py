@@ -302,7 +302,7 @@ def dataset_query(dataset, body, timer):
 
 
 @split_query
-def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
+def parse_and_run_query(dataset, request: Request, timer, referrer: str = None) -> QueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
@@ -334,7 +334,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     stats = {
         "clickhouse_table": source,
         "final": request.query.get_final(),
-        "referrer": http_request.referrer,
+        "referrer": referrer if referrer is not None else http_request.referrer,
         "num_days": (to_date - from_date).days,
         "sample": request.query.get_sample(),
     }
