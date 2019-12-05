@@ -60,8 +60,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         formatter = ClickhouseExpressionFormatter(parsing_context)
 
         selected_cols = [e.accept(formatter) for e in self.__selected_columns]
-        formatted_columns = ", ".join(selected_cols)
-        select_clause = f"SELECT {formatted_columns}"
+        select_clause = f"SELECT {', '.join(selected_cols)}"
 
         # TODO: The visitor approach will be used for the FROM clause as well.
         from_clause = f"FROM {self.__data_source.format_from()}"
@@ -101,15 +100,13 @@ class AstClickhouseQuery(ClickhouseQuery):
         if self.__groupby:
             # reformat to use aliases generated during the select clause formatting.
             groupby_expressions = [e.accept(formatter) for e in self.__groupby]
-            formatted_groupby = ", ".join(groupby_expressions)
-            group_clause = f"GROUP BY ({formatted_groupby})"
+            group_clause = f"GROUP BY ({', '.join(groupby_expressions)})"
             if self.__hastotals:
                 group_clause = f"{group_clause} WITH TOTALS"
 
         having_clause = ""
         if self.__having:
-            formatted_having = self.__having.accept(formatter)
-            having_clause = f"HAVING {formatted_having}"
+            having_clause = f"HAVING {self.__having.accept(formatter)}"
 
         order_clause = ""
         if self.__orderby:
@@ -117,8 +114,7 @@ class AstClickhouseQuery(ClickhouseQuery):
                 f"{e.node.accept(formatter)} {e.direction.value}"
                 for e in self.__orderby
             ]
-            formatted_orderby = ", ".join(orderby)
-            order_clause = f"ORDER BY {formatted_orderby}"
+            order_clause = f"ORDER BY {', '.join(orderby)}"
 
         limitby_clause = ""
         if self.__limitby is not None:
@@ -126,7 +122,7 @@ class AstClickhouseQuery(ClickhouseQuery):
 
         limit_clause = ""
         if self.__limit is not None:
-            limit_clause = f"LIMIT {self.__offset}, {self.__limit}"
+            limit_clause = f"LIMIT {self.__limit} OFFSET {self.__offset}"
 
         self.__formatted_query = " ".join(
             [
