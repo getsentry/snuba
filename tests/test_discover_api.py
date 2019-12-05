@@ -340,7 +340,7 @@ class TestDiscoverApi(BaseApiTest):
                         "dataset": "discover",
                         "project": self.project_id,
                         "selected_columns": ["project_id"],
-                        "groupby": ["bucketed_end", "project_id"],
+                        "groupby": ["time", "project_id"],
                         "conditions": [["type", "=", "transaction"]],
                     }
                 ),
