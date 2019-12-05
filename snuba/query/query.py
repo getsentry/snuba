@@ -36,8 +36,8 @@ TElement = TypeVar("TElement")
 
 
 class OrderByDirection(Enum):
-    ASC = "asc"
-    DESC = "desc"
+    ASC = "ASC"
+    DESC = "DESC"
 
 
 @dataclass(frozen=True)
@@ -91,6 +91,7 @@ class Query:
         selected_columns: Optional[Sequence[Expression]] = None,
         array_join: Optional[Expression] = None,
         condition: Optional[Expression] = None,
+        prewhere: Optional[Expression] = None,
         groupby: Optional[Sequence[Expression]] = None,
         having: Optional[Expression] = None,
         order_by: Optional[Sequence[OrderBy]] = None,
@@ -108,6 +109,7 @@ class Query:
         self.__selected_columns = selected_columns or []
         self.__array_join = array_join
         self.__condition = condition
+        self.__prewhere = prewhere
         self.__groupby = groupby or []
         self.__having = having
         self.__order_by = order_by or []
@@ -215,6 +217,12 @@ class Query:
         Temporary method until pre where management is moved to Clickhouse query
         """
         return self.__prewhere_conditions
+
+    def get_prewhere_ast(self) -> Optional[Expression]:
+        """
+        Temporary method until pre where management is moved to Clickhouse query
+        """
+        return self.__prewhere
 
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """
