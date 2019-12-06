@@ -1,4 +1,5 @@
 from datetime import datetime
+from semaphore.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import Optional
 
 import uuid
@@ -80,16 +81,15 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
-            status = transaction_ctx.get("status", UNKNOWN_SPAN_STATUS)
-            if (isinstance(status, str) and status.isdigit()) or isinstance(
-                status, int
-            ):
-                # This condition is complex because, at the time of writing, the status
-                # field is being migrated from a string to an integer and we should not
-                # throw if an old format event is received.
-                processed["transaction_status"] = int(status)
+
+            status = transaction_ctx.get("status", None)
+            if status:
+                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
             else:
-                processed["transaction_status"] = UNKNOWN_SPAN_STATUS
+                int_status = UNKNOWN_SPAN_STATUS
+
+            processed["transaction_status"] = int_status
+
             if data["timestamp"] - data["start_timestamp"] < 0:
                 # Seems we have some negative durations in the DB
                 metrics.increment("negative_duration")

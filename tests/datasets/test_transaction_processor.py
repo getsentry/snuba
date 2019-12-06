@@ -33,7 +33,7 @@ class TransactionEvent:
     sdk_name: Optional[str]
     sdk_version: Optional[str]
     geo: Mapping[str, str]
-    status: int
+    status: str
 
     def serialize(self) -> Mapping[str, Any]:
         return (
@@ -109,7 +109,7 @@ class TransactionEvent:
                             "op": self.op,
                             "type": "trace",
                             "span_id": self.span_id,
-                            "status": str(self.status),
+                            "status": self.status,
                         }
                     },
                     "tags": [
@@ -141,7 +141,7 @@ class TransactionEvent:
             "span_id": int(self.span_id, 16),
             "transaction_name": self.transaction_name,
             "transaction_op": self.op,
-            "transaction_status": self.status,
+            "transaction_status": 1 if self.status == "cancelled" else 2,
             "start_ts": start_timestamp,
             "start_ms": int(start_timestamp.microsecond / 1000),
             "finish_ts": finish_timestamp,
@@ -174,7 +174,7 @@ class TransactionEvent:
                 self.trace_id,
                 self.op,
                 self.span_id,
-                str(self.status),
+                self.status,
                 self.geo["country_code"],
                 self.geo["region"],
                 self.geo["city"],
@@ -206,7 +206,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
-            status=1,
+            status="cancelled",
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
@@ -238,7 +238,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
-            status=1,
+            status="cancelled",
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
@@ -270,7 +270,7 @@ class TestTransactionsProcessor(BaseTest):
             trace_id="7400045b25c443b885914600aa83ad04",
             span_id="8841662216cc598b",
             transaction_name="/organizations/:orgId/issues/",
-            status=1,
+            status="cancelled",
             op="navigation",
             timestamp=finish,
             start_timestamp=start,
