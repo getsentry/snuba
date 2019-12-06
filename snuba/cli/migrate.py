@@ -13,7 +13,7 @@ from snuba.util import local_dataset_mode
 @click.option(
     "--dataset", type=click.Choice(DATASET_NAMES), help="The dataset to target",
 )
-def migrate(log_level, dataset):
+def migrate(*, log_level: str, dataset: str) -> None:
     from snuba.migrate import logger, run
 
     logging.basicConfig(
