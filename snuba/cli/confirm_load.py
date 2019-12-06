@@ -1,6 +1,7 @@
 import logging
 import click
 import json
+from typing import Sequence
 
 from confluent_kafka import Producer
 
@@ -27,7 +28,14 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
     help="Source of the dump. Depending on the dataset it may have different meaning.",
 )
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
+def confirm_load(
+    *,
+    control_topic: str,
+    bootstrap_server: Sequence[str],
+    dataset: str,
+    source: str,
+    log_level: str
+) -> None:
     """
     Confirms the snapshot has been loaded by sending the
     snapshot-loaded message on the control topic.
