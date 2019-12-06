@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Sequence, Tuple
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
@@ -39,7 +39,7 @@ def extract_user(output, user):
     output["ip_address"] = str(ip_addr) if ip_addr is not None else None
 
 
-def extract_extra_tags(output, tags):
+def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:
     tag_keys = []
     tag_values = []
     for tag_key, tag_value in sorted(tags.items()):
@@ -48,11 +48,10 @@ def extract_extra_tags(output, tags):
             tag_keys.append(_unicodify(tag_key))
             tag_values.append(value)
 
-    output["tags.key"] = tag_keys
-    output["tags.value"] = tag_values
+    return (tag_keys, tag_values)
 
 
-def extract_extra_contexts(output, contexts):
+def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
     context_keys = []
     context_values = []
     valid_types = (int, float, str)
@@ -67,8 +66,7 @@ def extract_extra_contexts(output, contexts):
                         context_keys.append(_unicodify(ctx_key))
                         context_values.append(_unicodify(ctx_value))
 
-    output["contexts.key"] = context_keys
-    output["contexts.value"] = context_values
+    return (context_keys, context_values)
 
 
 def enforce_retention(message, timestamp):
@@ -208,8 +206,10 @@ class EventsProcessor(MessageProcessor):
         http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
         self.extract_http(processed, http)
 
-        extract_extra_contexts(processed, contexts)
-        extract_extra_tags(processed, tags)
+        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
+            contexts
+        )
+        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}

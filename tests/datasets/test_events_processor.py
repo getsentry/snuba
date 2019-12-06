@@ -372,7 +372,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extract_extra_tags(extra_output, tags)
+        extra_output["tags.key"], extra_output["tags.value"] = extract_extra_tags(tags)
 
         valid_items = [(k, v) for k, v in sorted(orig_tags.items()) if v]
         assert extra_output == {
@@ -498,7 +498,7 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extract_extra_contexts(extra_output, contexts)
+        extra_output["contexts.key"], extra_output["contexts.value"] = extract_extra_contexts(contexts)
 
         assert extra_output == {
             "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],

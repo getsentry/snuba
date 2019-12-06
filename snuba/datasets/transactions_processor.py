@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Sequence
 
 import uuid
 
@@ -30,6 +30,8 @@ metrics = create_metrics(
 
 UNKNOWN_SPAN_STATUS = 2
 
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
+
 
 class TransactionsMessageProcessor(MessageProcessor):
     PROMOTED_TAGS = {
@@ -38,6 +40,18 @@ class TransactionsMessageProcessor(MessageProcessor):
         "sentry:user",
         "sentry:dist",
     }
+
+    def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
+        def escape_field(field: str) -> str:
+            """
+            We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
+            that we can always rebuild the tags from the map. When looking for tags with LIKE
+            there should be no issue. But there may be other cases.
+            """
+            return field.translate(ESCAPE_TRANSLATION)
+
+        pairs = [f"{escape_field(k)}:{escape_field(v)}" for k, v in zip(keys, values)]
+        return "|".join(pairs)
 
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
@@ -107,7 +121,10 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["platform"] = _unicodify(event["platform"])
 
         tags = _as_dict_safe(data.get("tags", None))
-        extract_extra_tags(processed, tags)
+        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        processed["tags_map"] = self.__merge_nested_field(
+            processed["tags.key"], processed["tags.value"]
+        )
 
         promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
         processed["release"] = promoted_tags.get(
@@ -122,7 +139,12 @@ class TransactionsMessageProcessor(MessageProcessor):
         if "geo" not in contexts and isinstance(geo, dict):
             contexts["geo"] = geo
 
-        extract_extra_contexts(processed, contexts)
+        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
+            contexts
+        )
+        processed["contexts_map"] = self.__merge_nested_field(
+            processed["contexts.key"], processed["contexts.value"]
+        )
 
         processed["dist"] = _unicodify(
             promoted_tags.get("sentry:dist", data.get("dist")),
