@@ -187,21 +187,35 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("version", Nullable(String())),
                 ("http_method", Nullable(String())),
                 ("http_referer", Nullable(String())),
-                ("exception_stacks.type", Nullable(String())),
-                ("exception_stacks.value", Nullable(String())),
-                ("exception_stacks.mechanism_type", Nullable(String())),
-                ("exception_stacks.mechanism_handled", Nullable(UInt(8))),
-                ("exception_frames.abs_path", Nullable(String())),
-                ("exception_frames.filename", Nullable(String())),
-                ("exception_frames.package", Nullable(String())),
-                ("exception_frames.module", Nullable(String())),
-                ("exception_frames.function", Nullable(String())),
-                ("exception_frames.in_app", Nullable(UInt(8))),
-                ("exception_frames.colno", Nullable(UInt(32))),
-                ("exception_frames.lineno", Nullable(UInt(32))),
-                ("exception_frames.stack_level", Nullable(UInt(16))),
-                ("modules.name", String()),
-                ("modules.version", String()),
+                # exception interface
+                (
+                    "exception_stacks",
+                    Nested(
+                        [
+                            ("type", Nullable(String())),
+                            ("value", Nullable(String())),
+                            ("mechanism_type", Nullable(String())),
+                            ("mechanism_handled", Nullable(UInt(8))),
+                        ]
+                    ),
+                ),
+                (
+                    "exception_frames",
+                    Nested(
+                        [
+                            ("abs_path", Nullable(String())),
+                            ("filename", Nullable(String())),
+                            ("package", Nullable(String())),
+                            ("module", Nullable(String())),
+                            ("function", Nullable(String())),
+                            ("in_app", Nullable(UInt(8))),
+                            ("colno", Nullable(UInt(32))),
+                            ("lineno", Nullable(UInt(32))),
+                            ("stack_level", UInt(16)),
+                        ]
+                    ),
+                ),
+                ("modules", Nested([("name", String()), ("version", String())])),
             ]
         )
 
