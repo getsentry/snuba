@@ -21,7 +21,10 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
     help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset", type=click.Choice(DATASET_NAMES), help="The dataset to bulk load"
+    "--dataset",
+    "dataset_name",
+    type=click.Choice(DATASET_NAMES),
+    help="The dataset to bulk load",
 )
 @click.option(
     "--source",
@@ -32,7 +35,7 @@ def confirm_load(
     *,
     control_topic: str,
     bootstrap_server: Sequence[str],
-    dataset: str,
+    dataset_name: str,
     source: str,
     log_level: str
 ) -> None:
@@ -50,11 +53,11 @@ def confirm_load(
     logger = logging.getLogger("snuba.loaded-snapshot")
     logger.info(
         "Sending load completion message for dataset %s, from source %s",
-        dataset,
+        dataset_name,
         source,
     )
 
-    dataset = get_dataset(dataset)
+    dataset = get_dataset(dataset_name)
     assert isinstance(
         dataset, CdcDataset
     ), "Only CDC dataset have a control topic thus are supported."
@@ -88,7 +91,7 @@ def confirm_load(
     )
     json_string = json.dumps(msg.to_dict())
 
-    def delivery_callback(error, message):
+    def delivery_callback(error, message) -> None:
         if error is not None:
             raise error
         else:
