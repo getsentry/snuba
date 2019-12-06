@@ -1,5 +1,6 @@
 import logging
 import signal
+from typing import Optional, Sequence
 
 import click
 
@@ -40,6 +41,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 )
 @click.option(
     "--dataset",
+    "dataset_name",
     default="events",
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
@@ -47,11 +49,13 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 @click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
+    type=int,
     help="Max number of messages to batch in memory before writing to Kafka.",
 )
 @click.option(
     "--max-batch-time-ms",
     default=settings.DEFAULT_MAX_BATCH_TIME_MS,
+    type=int,
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
 @click.option(
@@ -91,23 +95,24 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
 )
 def consumer(
-    raw_events_topic,
-    replacements_topic,
-    commit_log_topic,
-    control_topic,
-    consumer_group,
-    bootstrap_server,
-    dataset,
-    max_batch_size,
-    max_batch_time_ms,
-    auto_offset_reset,
-    queued_max_messages_kbytes,
-    queued_min_messages,
-    log_level,
-    dogstatsd_host,
-    dogstatsd_port,
-    stateful_consumer,
-):
+    *,
+    raw_events_topic: Optional[str],
+    replacements_topic: Optional[str],
+    commit_log_topic: Optional[str],
+    control_topic: Optional[str],
+    consumer_group: str,
+    bootstrap_server: Sequence[str],
+    dataset_name: str,
+    max_batch_size: int,
+    max_batch_time_ms: int,
+    auto_offset_reset: str,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
+    log_level: str,
+    dogstatsd_host: str,
+    dogstatsd_port: int,
+    stateful_consumer: bool,
+) -> None:
 
     import sentry_sdk
 
@@ -116,7 +121,6 @@ def consumer(
     logging.basicConfig(
         level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
     )
-    dataset_name = dataset
     dataset = get_dataset(dataset_name)
 
     consumer_builder = ConsumerBuilder(
@@ -146,7 +150,7 @@ def consumer(
             dataset=dataset,
         )
 
-        def handler(signum, frame):
+        def handler(signum, frame) -> None:
             context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
@@ -156,7 +160,7 @@ def consumer(
     else:
         consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum, frame):
+        def handler(signum, frame) -> None:
             consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
