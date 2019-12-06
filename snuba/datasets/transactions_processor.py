@@ -81,12 +81,13 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
+
             status = transaction_ctx.get("status", None)
-            int_status = None
             if status:
-                int_status = SPAN_STATUS_NAME_TO_CODE.get(status)
-            if int_status is None:
+                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
+            else:
                 int_status = UNKNOWN_SPAN_STATUS
+
             processed["transaction_status"] = int_status
 
             if data["timestamp"] - data["start_timestamp"] < 0:
