@@ -1,5 +1,6 @@
 import logging
 import click
+from typing import Sequence
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
@@ -15,7 +16,9 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--force", is_flag=True)
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-def bootstrap(*, bootstrap_server, kafka: bool, force: bool, log_level: str) -> None:
+def bootstrap(
+    *, bootstrap_server: Sequence[int], kafka: bool, force: bool, log_level: str
+) -> None:
     """
     Warning: Not intended to be used in production yet.
     """
