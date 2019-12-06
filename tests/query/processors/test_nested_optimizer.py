@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.processors.tagsmap import CollapsedNestedFieldOptimizer
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
@@ -96,9 +96,9 @@ test_data = [
 
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
-def test_prewhere(query_body, expected_condition) -> None:
+def test_nested_optimizer(query_body, expected_condition) -> None:
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-    processor = CollapsedNestedFieldOptimizer(nested_col="tags", merged_col="tags_map")
+    processor = NestedFieldConditionOptimizer(nested_col="tags", merged_col="tags_map")
     processor.process_query(query, request_settings)
     assert query.get_conditions() == expected_condition
