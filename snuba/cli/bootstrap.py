@@ -17,7 +17,7 @@ from snuba.datasets.factory import get_dataset, DATASET_NAMES
 @click.option("--force", is_flag=True)
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
 def bootstrap(
-    *, bootstrap_server: Sequence[int], kafka: bool, force: bool, log_level: str
+    *, bootstrap_server: Sequence[str], kafka: bool, force: bool, log_level: str
 ) -> None:
     """
     Warning: Not intended to be used in production yet.
