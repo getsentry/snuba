@@ -85,14 +85,14 @@ def transactions_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN transaction_status UInt8 DEFAULT {UNKNOWN_SPAN_STATUS} AFTER transaction_op"
         )
 
-    if "tags_map" not in current_schema:
+    if "_tags_flattened" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN tags_map String DEFAULT ''"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT ''"
         )
 
-    if "contexts_map" not in current_schema:
+    if "_contexts_flattened" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN contexts_map String DEFAULT ''"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _contexts_flattened String DEFAULT ''"
         )
 
     return ret
@@ -131,9 +131,9 @@ class TransactionsDataset(TimeSeriesDataset):
                 ("sdk_name", WithDefault(String(), "''")),
                 ("sdk_version", WithDefault(String(), "''")),
                 ("tags", Nested([("key", String()), ("value", String())])),
-                ("tags_map", String()),
+                ("_tags_flattened", String()),
                 ("contexts", Nested([("key", String()), ("value", String())])),
-                ("contexts_map", String()),
+                ("_contexts_flattened", String()),
                 ("partition", UInt(16)),
                 ("offset", UInt(64)),
                 ("retention_days", UInt(16)),

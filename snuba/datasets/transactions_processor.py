@@ -35,10 +35,10 @@ ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
 
 def escape_field(field: str) -> str:
     """
-            We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-            that we can always rebuild the tags from the map. When looking for tags with LIKE
-            there should be no issue. But there may be other cases.
-            """
+    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
+    that we can always rebuild the tags from the map. When looking for tags with LIKE
+    there should be no issue. But there may be other cases.
+    """
     return field.translate(ESCAPE_TRANSLATION)
 
 
@@ -133,7 +133,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["tags_map"] = self.__merge_nested_field(
+        processed["_tags_flattened"] = self.__merge_nested_field(
             processed["tags.key"], processed["tags.value"]
         )
 
@@ -153,7 +153,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
-        processed["contexts_map"] = self.__merge_nested_field(
+        processed["_contexts_flattened"] = self.__merge_nested_field(
             processed["contexts.key"], processed["contexts.value"]
         )
 
