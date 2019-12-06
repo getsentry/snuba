@@ -1,21 +1,22 @@
 import click
 import json
+from typing import Any, Mapping
 
 from snuba import state
 
 
-def human_fmt(values):
+def human_fmt(values: Mapping[Any, Any]) -> str:
     lines = []
     for k, v in values.items():
         lines.append(f"{k} = {v!r} ({type(v).__name__})")
     return "\n".join(lines)
 
 
-def json_fmt(values):
+def json_fmt(values: Any) -> str:
     return json.dumps(values)
 
 
-def get_user():
+def get_user() -> str:
     import getpass
 
     return f"{getpass.getuser()} (cli)"
@@ -25,13 +26,13 @@ FORMATS = {"human": human_fmt, "json": json_fmt}
 
 
 @click.group()
-def config():
+def config() -> None:
     "Manage runtime configuration."
 
 
 @config.command("get-all")
 @click.option("--format", type=click.Choice(FORMATS.keys()), default="human")
-def get_all(*, format):
+def get_all(*, format: str) -> None:
     "Dump all runtime configuration."
 
     rv = state.get_raw_configs()
@@ -41,7 +42,7 @@ def get_all(*, format):
 @config.command()
 @click.option("--format", type=click.Choice(FORMATS.keys()), default="human")
 @click.argument("key")
-def get(*, key, format):
+def get(*, key: str, format: str) -> None:
     "Get a single key."
 
     try:
@@ -54,7 +55,7 @@ def get(*, key, format):
 @config.command()
 @click.argument("key")
 @click.argument("value")
-def set(*, key, value):
+def set(*, key: str, value: str) -> None:
     "Set a single key."
 
     state.set_config(key, value, user=get_user())
@@ -62,7 +63,7 @@ def set(*, key, value):
 
 @config.command("set-many")
 @click.argument("data")
-def set_many(*, data):
+def set_many(*, data: str) -> None:
     "Set multiple keys, input as JSON."
 
     state.set_configs(json.loads(data), user=get_user())
@@ -70,7 +71,7 @@ def set_many(*, data):
 
 @config.command()
 @click.argument("key")
-def delete(*, key):
+def delete(*, key: str) -> None:
     "Delete a single key."
 
     try:
@@ -85,7 +86,7 @@ def delete(*, key):
 
 
 @config.command()
-def log():
+def log() -> None:
     "Dump the config change log."
     from datetime import datetime
 
