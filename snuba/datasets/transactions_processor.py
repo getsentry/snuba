@@ -31,7 +31,7 @@ metrics = create_metrics(
 
 UNKNOWN_SPAN_STATUS = 2
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
 
 
 def escape_field(field: str) -> str:
@@ -57,7 +57,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         # Tags are pre sorted, but it seems contexts are not, so to make this generic
         # we ensure the invariant is respected here.
         pairs = sorted(zip(keys, values))
-        pairs = [f"|{escape_field(k)}:{escape_field(v)}|" for k, v in pairs]
+        pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
         # The result is going to be:
         # |tag:val||tag:val|
         # This gives the guarantee we will always have a delimiter on both side of the

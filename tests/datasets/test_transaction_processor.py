@@ -116,7 +116,7 @@ class TransactionEvent:
                         ["sentry:release", self.release],
                         ["sentry:user", self.user_id],
                         ["environment", self.environment],
-                        ["we\|r:d", "tag"],
+                        ["we|r=d", "tag"],
                     ],
                     "user": {
                         "username": self.user_name,
@@ -158,7 +158,7 @@ class TransactionEvent:
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_email": self.user_email,
-            "tags.key": ["environment", "sentry:release", "sentry:user", "we\|r:d"],
+            "tags.key": ["environment", "sentry:release", "sentry:user", "we|r=d"],
             "tags.value": [self.environment, self.release, self.user_id, "tag"],
             "contexts.key": [
                 "trace.sampled",
@@ -185,11 +185,11 @@ class TransactionEvent:
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
-            "_tags_flattened": f"|environment:{self.environment}||sentry\:release:{self.release}||sentry\:user:{self.user_id}||we\\\\\|r\:d:tag|",
+            "_tags_flattened": f"|environment={self.environment}||sentry:release={self.release}||sentry:user={self.user_id}||we\\|r\\=d=tag|",
             "_contexts_flattened": (
-                f"|geo.city:{self.geo['city']}||geo.country_code:{self.geo['country_code']}||geo.region:{self.geo['region']}|"
-                f"|trace.op:{self.op}||trace.sampled:True||trace.span_id:{self.span_id}||trace.status:{str(self.status)}|"
-                f"|trace.trace_id:{self.trace_id}|"
+                f"|geo.city={self.geo['city']}||geo.country_code={self.geo['country_code']}||geo.region={self.geo['region']}|"
+                f"|trace.op={self.op}||trace.sampled=True||trace.span_id={self.span_id}||trace.status={str(self.status)}|"
+                f"|trace.trace_id={self.trace_id}|"
             ),
         }
 
