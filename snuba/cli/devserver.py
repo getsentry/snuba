@@ -4,7 +4,7 @@ import click
 @click.command()
 @click.option("--bootstrap/--no-bootstrap", default=True)
 @click.option("--workers/--no-workers", default=True)
-def devserver(bootstrap, workers):
+def devserver(*, bootstrap: bool, workers: bool) -> None:
     "Starts all Snuba processes for local development."
     import os
     import sys
