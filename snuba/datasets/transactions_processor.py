@@ -33,6 +33,15 @@ UNKNOWN_SPAN_STATUS = 2
 ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
 
 
+def escape_field(field: str) -> str:
+    """
+    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
+    that we can always rebuild the tags from the map. When looking for tags with LIKE
+    there should be no issue. But there may be other cases.
+    """
+    return field.translate(ESCAPE_TRANSLATION)
+
+
 class TransactionsMessageProcessor(MessageProcessor):
     PROMOTED_TAGS = {
         "environment",
@@ -42,14 +51,6 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
-        def escape_field(field: str) -> str:
-            """
-            We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-            that we can always rebuild the tags from the map. When looking for tags with LIKE
-            there should be no issue. But there may be other cases.
-            """
-            return field.translate(ESCAPE_TRANSLATION)
-
         pairs = [f"{escape_field(k)}:{escape_field(v)}" for k, v in zip(keys, values)]
         return "|".join(pairs)
 
