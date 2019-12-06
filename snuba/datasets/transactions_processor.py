@@ -33,6 +33,15 @@ UNKNOWN_SPAN_STATUS = 2
 ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
 
 
+def escape_field(field: str) -> str:
+    """
+            We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
+            that we can always rebuild the tags from the map. When looking for tags with LIKE
+            there should be no issue. But there may be other cases.
+            """
+    return field.translate(ESCAPE_TRANSLATION)
+
+
 class TransactionsMessageProcessor(MessageProcessor):
     PROMOTED_TAGS = {
         "environment",
@@ -42,16 +51,18 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
-        def escape_field(field: str) -> str:
-            """
-            We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-            that we can always rebuild the tags from the map. When looking for tags with LIKE
-            there should be no issue. But there may be other cases.
-            """
-            return field.translate(ESCAPE_TRANSLATION)
-
-        pairs = [f"{escape_field(k)}:{escape_field(v)}" for k, v in zip(keys, values)]
-        return "|".join(pairs)
+        # We need to guarantee the content of the merged string is sorted otherwise we
+        # will not be able to run a LIKE operation over multiple fields at the same time.
+        # Tags are pre sorted, but it seems contexts are not, so to make this generic
+        # we ensure the invariant is respected here.
+        pairs = sorted(zip(keys, values))
+        pairs = [f"|{escape_field(k)}:{escape_field(v)}|" for k, v in pairs]
+        # The result is going to be:
+        # |tag:val||tag:val|
+        # This gives the guarantee we will always have a delimiter on both side of the
+        # tag pair, thus we can univocally identify a tag with a LIKE expression even if
+        # the value or the tag name in the query is a substring of a real tag.
+        return "".join(pairs)
 
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))

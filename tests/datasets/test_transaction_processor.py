@@ -185,11 +185,11 @@ class TransactionEvent:
             "offset": meta.offset,
             "partition": meta.partition,
             "retention_days": 90,
-            "tags_map": f"environment:{self.environment}|sentry\:release:{self.release}|sentry\:user:{self.user_id}|we\\\\\|r\:d:tag",
+            "tags_map": f"|environment:{self.environment}||sentry\:release:{self.release}||sentry\:user:{self.user_id}||we\\\\\|r\:d:tag|",
             "contexts_map": (
-                f"trace.sampled:True|trace.trace_id:{self.trace_id}|trace.op:{self.op}|trace.span_id:{self.span_id}|"
-                f"trace.status:{str(self.status)}|geo.country_code:{self.geo['country_code']}|"
-                f"geo.region:{self.geo['region']}|geo.city:{self.geo['city']}"
+                f"|geo.city:{self.geo['city']}||geo.country_code:{self.geo['country_code']}||geo.region:{self.geo['region']}|"
+                f"|trace.op:{self.op}||trace.sampled:True||trace.span_id:{self.span_id}||trace.status:{str(self.status)}|"
+                f"|trace.trace_id:{self.trace_id}|"
             ),
         }
 
