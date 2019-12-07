@@ -1,4 +1,5 @@
 from datetime import datetime
+from semaphore.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import Optional, Sequence
 
 import uuid
@@ -30,7 +31,16 @@ metrics = create_metrics(
 
 UNKNOWN_SPAN_STATUS = 2
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", ":": "\:"})
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
+
+
+def escape_field(field: str) -> str:
+    """
+    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
+    that we can always rebuild the tags from the map. When looking for tags with LIKE
+    there should be no issue. But there may be other cases.
+    """
+    return field.translate(ESCAPE_TRANSLATION)
 
 
 def escape_field(field: str) -> str:
@@ -51,8 +61,18 @@ class TransactionsMessageProcessor(MessageProcessor):
     }
 
     def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
-        pairs = [f"{escape_field(k)}:{escape_field(v)}" for k, v in zip(keys, values)]
-        return "|".join(pairs)
+        # We need to guarantee the content of the merged string is sorted otherwise we
+        # will not be able to run a LIKE operation over multiple fields at the same time.
+        # Tags are pre sorted, but it seems contexts are not, so to make this generic
+        # we ensure the invariant is respected here.
+        pairs = sorted(zip(keys, values))
+        pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
+        # The result is going to be:
+        # |tag:val||tag:val|
+        # This gives the guarantee we will always have a delimiter on both side of the
+        # tag pair, thus we can univocally identify a tag with a LIKE expression even if
+        # the value or the tag name in the query is a substring of a real tag.
+        return "".join(pairs)
 
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
@@ -95,16 +115,15 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
-            status = transaction_ctx.get("status", UNKNOWN_SPAN_STATUS)
-            if (isinstance(status, str) and status.isdigit()) or isinstance(
-                status, int
-            ):
-                # This condition is complex because, at the time of writing, the status
-                # field is being migrated from a string to an integer and we should not
-                # throw if an old format event is received.
-                processed["transaction_status"] = int(status)
+
+            status = transaction_ctx.get("status", None)
+            if status:
+                int_status = SPAN_STATUS_NAME_TO_CODE.get(status, UNKNOWN_SPAN_STATUS)
             else:
-                processed["transaction_status"] = UNKNOWN_SPAN_STATUS
+                int_status = UNKNOWN_SPAN_STATUS
+
+            processed["transaction_status"] = int_status
+
             if data["timestamp"] - data["start_timestamp"] < 0:
                 # Seems we have some negative durations in the DB
                 metrics.increment("negative_duration")
@@ -123,7 +142,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["tags_map"] = self.__merge_nested_field(
+        processed["_tags_flattened"] = self.__merge_nested_field(
             processed["tags.key"], processed["tags.value"]
         )
 
@@ -143,7 +162,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
-        processed["contexts_map"] = self.__merge_nested_field(
+        processed["_contexts_flattened"] = self.__merge_nested_field(
             processed["contexts.key"], processed["contexts.value"]
         )
 
