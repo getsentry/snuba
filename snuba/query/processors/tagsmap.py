@@ -1,7 +1,7 @@
 import re
 
 from enum import Enum
-from typing import Optional, NamedTuple, Sequence, Tuple
+from typing import Optional, NamedTuple, Sequence
 
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -104,7 +104,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             if not keyvalue:
                 new_conditions.append(c)
             else:
-                expression = f"{escape_field(keyvalue.nested_col_index)}:{escape_field(keyvalue.value)}"
+                expression = f"{escape_field(keyvalue.nested_col_index)}={escape_field(keyvalue.value)}"
                 if keyvalue.operand == Operand.EQ:
                     positive_like_expression.append(expression)
                 else:
@@ -112,7 +112,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
 
         if positive_like_expression:
             # Positive conditions "=" are all merged together in one LIKE expression
-            like_formatted = f"%|{'%'.join(positive_like_expression)}|%"
+            like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
             new_conditions.append([self.__merged_col, "LIKE", like_formatted])
 
         for expression in negative_like_expression:

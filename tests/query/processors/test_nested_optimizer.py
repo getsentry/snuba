@@ -13,7 +13,7 @@ test_data = [
     ),  # No tags
     (
         {"conditions": [["tags[test.tag]", "=", "1"], ["c", "=", "3"]]},
-        [["c", "=", "3"], ["tags_map", "LIKE", "%test.tag:1%"]],
+        [["c", "=", "3"], ["tags_map", "LIKE", "%|test.tag=1|%"]],
     ),  # One simple tag condition
     (
         {
@@ -24,7 +24,10 @@ test_data = [
                 ["tags[test3.tag]", "=", "3"],
             ]
         },
-        [["c", "=", "3"], ["tags_map", "LIKE", "%test.tag:1%test2.tag:2%test3.tag:3%"]],
+        [
+            ["c", "=", "3"],
+            ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%|test3.tag=3|%"],
+        ],
     ),  # Multiple tags in the same merge
     (
         {
@@ -37,9 +40,9 @@ test_data = [
         },
         [
             ["c", "=", "3"],
-            ["tags_map", "LIKE", "%test2.tag:2%"],
-            ["tags_map", "NOT LIKE", "%test.tag:1%"],
-            ["tags_map", "NOT LIKE", "%test3.tag:3%"],
+            ["tags_map", "LIKE", "%|test2.tag=2|%"],
+            ["tags_map", "NOT LIKE", "%|test.tag=1|%"],
+            ["tags_map", "NOT LIKE", "%|test3.tag=3|%"],
         ],
     ),  # Negative conditions mixed with positive ones
     (
@@ -53,7 +56,7 @@ test_data = [
         [
             ["c", "=", "3"],
             [["func", ["tags[test2.tag]"]], "=", "2"],
-            ["tags_map", "LIKE", "%test.tag:1%"],
+            ["tags_map", "LIKE", "%|test.tag=1|%"],
         ],
     ),  # Nested condition. Only the external one is converted
     (
@@ -64,7 +67,7 @@ test_data = [
                 [["ifNull", ["tags[test2.tag]", ""]], "=", "2"],
             ]
         },
-        [["c", "=", "3"], ["tags_map", "LIKE", "%test.tag:1%test2.tag:2%"]],
+        [["c", "=", "3"], ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%"]],
     ),  # Nested conditions in ifNull. This is converted.
     (
         {
@@ -77,7 +80,7 @@ test_data = [
         [
             ["c", "=", "3"],
             ["contexts[test.context]", "=", "1"],
-            ["tags_map", "LIKE", "%test.tag:1%"],
+            ["tags_map", "LIKE", "%|test.tag=1|%"],
         ],
     ),  # Both contexts and tags are present
     (

@@ -32,7 +32,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.tagsmap import CollapsedNestedFieldOptimizer
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
