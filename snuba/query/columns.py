@@ -1,9 +1,12 @@
+import numbers
 import re
 
-from typing import OrderedDict
+from datetime import date, datetime
+from typing import Any, List, Optional, OrderedDict, Tuple, Union
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
+from snuba.query.parser.functions import parse_function
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
@@ -88,39 +91,21 @@ def column_expr(
 def complex_column_expr(
     dataset, expr, query: Query, parsing_context: ParsingContext, depth=0
 ):
-    function_tuple = is_function(expr, depth)
-    if function_tuple is None:
-        raise ValueError(
-            "complex_column_expr was given an expr %s that is not a function at depth %d."
-            % (expr, depth)
-        )
+    def column_builder(val: str) -> Any:
+        return column_expr(dataset, val, query, parsing_context)
 
-    name, args, alias = function_tuple
-    out = []
-    i = 0
-    while i < len(args):
-        next_2 = args[i : i + 2]
-        if is_function(next_2, depth + 1):
-            out.append(
-                complex_column_expr(dataset, next_2, query, parsing_context, depth + 1)
-            )
-            i += 2
-        else:
-            nxt = args[i]
-            if is_function(nxt, depth + 1):  # Embedded function
-                out.append(
-                    complex_column_expr(dataset, nxt, query, parsing_context, depth + 1)
-                )
-            elif isinstance(nxt, str):
-                out.append(column_expr(dataset, nxt, query, parsing_context))
-            else:
-                out.append(escape_literal(nxt))
-            i += 1
+    def literal_builder(
+        val: Optional[Union[str, datetime, date, List[Any], Tuple[Any], numbers.Number]]
+    ) -> Any:
+        return escape_literal(val)
 
-    ret = function_expr(name, ", ".join(out))
-    if alias:
-        ret = alias_expr(ret, alias, parsing_context)
-    return ret
+    def output_builder(alias: Optional[str], name: str, params: List[Any]) -> Any:
+        ret = function_expr(name, ", ".join(params))
+        if alias:
+            ret = alias_expr(ret, alias, parsing_context)
+        return ret
+
+    return parse_function(output_builder, column_builder, literal_builder, expr, depth,)
 
 
 def conditions_expr(
