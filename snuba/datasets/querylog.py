@@ -30,7 +30,7 @@ class QueryLogDataset(Dataset):
     This is meant to consume the queries topic populated by Snuba itself.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) ->:
         columns = ColumnSet(
             [
                 ("clickhouse_query", String()),
@@ -46,14 +46,11 @@ class QueryLogDataset(Dataset):
                 # The trace id this was run into. This is meant to be used to match a query
                 # with ther APM data.
                 ("trace_id", UUID()),
-                # Details about the query
                 ("dataset", LowCardinality(String())),
                 ("from_clause", LowCardinality(String())),
                 ("columns", Array(LowCardinality(String()))),
                 ("limit", Nullable(UInt(32))),
                 ("offset", Nullable(UInt(32))),
-                # Further query specific fields (This should eventually be
-                # removed in favor of columns once we are comfortable on the schema)
                 ("tags", Nested([("key", String()), ("value", String())])),
             ]
         )
