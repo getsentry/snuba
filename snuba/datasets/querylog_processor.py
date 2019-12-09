@@ -69,5 +69,8 @@ class QueryLogMessageProcessor(MessageProcessor):
         processed["columns"] = promoted_tags["columns"]
 
         tags = _as_dict_safe(tags)
+        for key in promoted_tags.keys():
+            if key in tags:
+                del tags[key]
         extract_extra_tags(processed, tags)
         return ProcessedMessage(action=action_type, data=[processed])
