@@ -34,7 +34,7 @@ class QueryLogDataset(Dataset):
                 ("clickhouse_query", String()),
                 ("snuba_query", String()),
                 ("timestamp", DateTime()),
-                ("duration", UInt(32)),
+                ("duration_ms", UInt(32)),
                 ("referrer", String()),
                 # This is to assess the statistical accuracy if we sample the writes.
                 # hits = 1 / sampling_rate. Thus it means the amount of queries this row
