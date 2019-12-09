@@ -36,6 +36,7 @@ REDIS_DB = 1
 # Query Recording Options
 RECORD_QUERIES = False
 QUERIES_TOPIC = "snuba-queries"
+QUERY_LOG_DATASET_SAMPLING_RATE = 0.1
 
 # Runtime Config Options
 CONFIG_MEMOIZE_TIMEOUT = 10
