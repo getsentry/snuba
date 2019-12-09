@@ -61,7 +61,7 @@ def outcomes_read_migrations(
     ret = []
     if "bytes" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN bytes_seen Nullable(UInt64)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN bytes Nullable(UInt64)" % clickhouse_table
         )
 
     return ret
