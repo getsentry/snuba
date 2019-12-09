@@ -11,11 +11,27 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.datasets.schemas.tables import MergeTreeSchema
+from snuba.datasets.schemas.tables import (
+    MigrationSchemaColumn,
+    MergeTreeSchema
+)
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.timeseries import TimeSeriesExtension
+
+
+def outcomes_raw_read_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+    if "event_size" not in current_schema:
+        ret.append(
+            "ALTER TABLE %s ADD COLUMN event_size Nullable(UInt32)" % clickhouse_table
+        )
+
+    return ret
 
 
 class OutcomesRawDataset(TimeSeriesDataset):
@@ -29,6 +45,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
+                ("event_size", Nullable(UInt(32))),
             ]
         )
 
@@ -39,6 +56,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
             order_by="(org_id, project_id, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 16384},
+            migration_function=outcomes_raw_read_migrations
         )
 
         dataset_schemas = DatasetSchemas(
