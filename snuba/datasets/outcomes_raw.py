@@ -26,9 +26,9 @@ def outcomes_raw_read_migrations(
 ) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
-    if "event_size" not in current_schema:
+    if "size" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN event_size Nullable(UInt32)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN size Nullable(UInt32)" % clickhouse_table
         )
 
     return ret
@@ -45,7 +45,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
-                ("event_size", Nullable(UInt(32))),
+                ("size", Nullable(UInt(32))),
             ]
         )
 

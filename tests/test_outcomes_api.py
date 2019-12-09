@@ -36,7 +36,7 @@ class TestOutcomesApi(BaseApiTest):
                     {
                         "project_id": project_id,
                         "event_id": uuid.uuid4().hex,
-                        "event_size": 65536,
+                        "size": 65536,
                         "timestamp": (self.base_time + time_since_base).strftime(
                             "%Y-%m-%dT%H:%M:%S.%fZ"
                         ),

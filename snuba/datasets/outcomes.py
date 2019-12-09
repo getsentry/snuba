@@ -46,9 +46,9 @@ def outcomes_write_migrations(
 ) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
-    if "event_size" not in current_schema:
+    if "size" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN event_size Nullable(UInt32)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN size Nullable(UInt32)" % clickhouse_table
         )
 
     return ret
@@ -59,9 +59,9 @@ def outcomes_read_migrations(
 ) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
-    if "bytes" not in current_schema:
+    if "bytes_received" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN bytes Nullable(UInt64)" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN bytes_received Nullable(UInt64)" % clickhouse_table
         )
 
     return ret
@@ -81,7 +81,7 @@ class OutcomesProcessor(MessageProcessor):
             "outcome": value["outcome"],
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
-            "event_size": value.get("event_size")
+            "size": value.get("size")
         }
 
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
@@ -102,7 +102,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
-                ("event_size", Nullable(UInt(32))),
+                ("size", Nullable(UInt(32))),
             ]
         )
 
@@ -126,7 +126,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(String())),
                 ("times_seen", UInt(64)),
-                ("bytes", Nullable(UInt(64))),
+                ("bytes_received", Nullable(UInt(64))),
             ]
         )
 
@@ -149,7 +149,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", String()),
                 ("times_seen", UInt(64)),
-                ("bytes", Nullable(UInt(64))),
+                ("bytes_received", Nullable(UInt(64))),
             ]
         )
 
@@ -165,7 +165,7 @@ class OutcomesDataset(TimeSeriesDataset):
                    outcome,
                    ifNull(reason, 'none') AS reason,
                    count() AS times_seen,
-                   sum(event_size) AS bytes
+                   sum(size) AS bytes_received
                FROM %(source_table_name)s
                GROUP BY org_id, project_id, key_id, timestamp, outcome, reason
                """
