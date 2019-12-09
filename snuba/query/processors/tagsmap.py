@@ -1,7 +1,7 @@
 import re
 
 from enum import Enum
-from typing import Optional, NamedTuple, Sequence
+from typing import Optional, List, NamedTuple
 
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -96,8 +96,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             return
 
         new_conditions = []
-        positive_like_expression: Sequence[str] = []
-        negative_like_expression: Sequence[str] = []
+        positive_like_expression: List[str] = []
+        negative_like_expression: List[str] = []
 
         for c in conditions:
             keyvalue = self.__is_optimizable(c, self.__nested_col)
