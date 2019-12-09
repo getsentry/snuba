@@ -30,7 +30,7 @@ class QueryLogDataset(Dataset):
     This is meant to consume the queries topic populated by Snuba itself.
     """
 
-    def __init__(self) ->:
+    def __init__(self) -> None:
         columns = ColumnSet(
             [
                 ("clickhouse_query", String()),
