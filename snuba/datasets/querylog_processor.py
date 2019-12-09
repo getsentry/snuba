@@ -2,9 +2,11 @@ import random
 import simplejson as json
 import uuid
 
-from typing import Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
+from snuba import settings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
@@ -13,7 +15,6 @@ from snuba.processor import (
     _ensure_valid_date,
 )
 from snuba.datasets.events_processor import extract_extra_tags
-from snuba import settings
 
 
 class QueryLogMessageProcessor(MessageProcessor):
@@ -27,7 +28,9 @@ class QueryLogMessageProcessor(MessageProcessor):
         "offset",
     }
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Dict[str, Any], metadata: Optional[KafkaMessageMetadata] = None
+    ) -> Optional[ProcessedMessage]:
         action_type = ProcessorAction.INSERT
         sampling_rate = settings.QUERY_LOG_DATASET_SAMPLING_RATE
         if random.random() > sampling_rate:
