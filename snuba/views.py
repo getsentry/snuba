@@ -93,6 +93,7 @@ sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
     integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
     release=os.getenv("SNUBA_RELEASE"),
+    traces_sample_rate=1,
 )
 
 
@@ -338,6 +339,11 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         "num_days": (to_date - from_date).days,
         "sample": request.query.get_sample(),
     }
+
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            scope.span.set_tag("dataset", type(dataset).__name__)
+            scope.span.set_tag("referrer", http_request.referrer)
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
         span.set_tag("dataset", type(dataset).__name__)
