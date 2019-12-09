@@ -331,15 +331,23 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         query = DictClickhouseQuery(dataset, request.query, request.settings)
     timer.mark("prepare_query")
 
-    stats = {
-        "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": http_request.referrer,
-        "num_days": (to_date - from_date).days,
-        "sample": request.query.get_sample(),
-    }
+    columns = request.query.get_all_referenced_columns()
+    columns = sorted(columns)
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
+        stats = {
+            "from_clause": source,
+            "final": request.query.get_final(),
+            "referrer": http_request.referrer,
+            "num_days": (to_date - from_date).days,
+            "sample": request.query.get_sample(),
+            "trace_id": span.trace_id,
+            "dataset": type(dataset).__name__,
+            "columns": columns,
+            "limit": request.query.get_limit(),
+            "offset": request.query.get_offset(),
+        }
+
         span.set_tag("dataset", type(dataset).__name__)
         span.set_tag("table", source)
         return raw_query(request, query, clickhouse_ro, timer, stats)

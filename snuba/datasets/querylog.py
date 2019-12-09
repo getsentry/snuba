@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     DateTime,
     LowCardinality,
     Nested,
+    Nullable,
     String,
     UInt,
     UUID,
@@ -14,6 +15,7 @@ from snuba.clickhouse.columns import (
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.querylog_processor import QueryLogMessageProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
@@ -41,16 +43,15 @@ class QueryLogDataset(Dataset):
                 # represents, and, as a consequence the accuracy (the higher hits, the lower
                 # the accuracy).
                 ("hits", UInt(32)),
-                # The span this tra
-                ("transaction_id", UUID()),
-                ("span_id", UInt(64)),
+                # The trace id this was run into. This is meant to be used to match a query
+                # with ther APM data.
+                ("trace_id", UUID()),
                 # Details about the query
                 ("dataset", LowCardinality(String())),
                 ("from_clause", LowCardinality(String())),
                 ("columns", Array(LowCardinality(String()))),
-                ("limit", UInt(32)),
-                ("offset", UInt(32)),
-                ("projects", Array(UInt(64))),
+                ("limit", Nullable(UInt(32))),
+                ("offset", Nullable(UInt(32))),
                 # Further query specific fields (This should eventually be
                 # removed in favor of columns once we are comfortable on the schema)
                 ("tags", Nested([("key", String()), ("value", String())])),
@@ -63,7 +64,7 @@ class QueryLogDataset(Dataset):
             dist_table_name="query_log_dist",
             mandatory_conditions=[],
             prewhere_candidates=[],
-            order_by="(dataset, referrer, toStartOfDay(timestamp), transaction_id)",
+            order_by="(dataset, referrer, toStartOfDay(timestamp), trace_id)",
             partition_by="(toMonday(timestamp))",
             sample_expr=None,
             migration_function=None,
@@ -76,7 +77,7 @@ class QueryLogDataset(Dataset):
             table_writer=TableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
-                    processor=None, default_topic="snuba-queries",
+                    processor=QueryLogMessageProcessor(), default_topic="snuba-queries",
                 ),
             ),
         )

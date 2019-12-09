@@ -1,5 +1,6 @@
 import random
 import simplejson as json
+import uuid
 
 from typing import Optional
 from datetime import datetime
@@ -10,26 +11,26 @@ from snuba.processor import (
     ProcessorAction,
     ProcessedMessage,
     _ensure_valid_date,
-    _ensure_valid_ip,
-    _unicodify,
 )
-from snuba.datasets.events_processor import (
-    enforce_retention,
-    extract_base,
-    extract_extra_contexts,
-    extract_extra_tags,
-    extract_user,
-)
+from snuba.datasets.events_processor import extract_extra_tags
 from snuba import settings
 
 
 class QueryLogMessageProcessor(MessageProcessor):
+    PROMOTED_TAGS = {
+        "referrer",
+        "trace_id",
+        "dataset",
+        "from_clause",
+        "columns",
+        "limit",
+        "offset",
+    }
+
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
         action_type = ProcessorAction.INSERT
-        if not (isinstance(message, (list, tuple)) and len(message) >= 2):
-            return None
         sampling_rate = settings.QUERY_LOG_DATASET_SAMPLING_RATE
-        if random.random() < sampling_rate:
+        if random.random() > sampling_rate:
             return None
 
         snuba_query = json.dumps(message.get("request", {}))
@@ -44,18 +45,26 @@ class QueryLogMessageProcessor(MessageProcessor):
             "snuba_query": snuba_query,
             "timestamp": timestamp,
             "duration_ms": message["timing"]["duration_ms"],
-            "referrer": message["stats"]["referrer"],
             "hits": int(1 / sampling_rate),
-            "transaction_id": message["stats"]["transaction_id"],
-            "span_id": message["stats"]["span_id"],
-            "dataset": message["stats"]["dataset"],
-            "from_clause": message["stats"]["clickhouse_table"],
-            "columns": message["stats"]["columns"],
-            "limit": message["stats"]["limit"],
-            "offset": message["stats"]["offset"],
-            "projects": message["stats"]["projects"],
-            "tags": message["stats"]["limit"],
         }
 
-        extract_extra_tags(processed, message["stats"]["tags"])
+        tags = message["stats"]
+        promoted_tags = {col: tags[col] for col in self.PROMOTED_TAGS if col in tags}
+
+        processed["trace_id"] = str(uuid.UUID(promoted_tags["trace_id"]))
+        processed["referrer"] = promoted_tags["referrer"]
+        processed["from_clause"] = promoted_tags["from_clause"]
+        processed["dataset"] = promoted_tags["dataset"]
+
+        processed["limit"] = (
+            int(promoted_tags["limit"]) if promoted_tags["limit"] else None
+        )
+        processed["offset"] = (
+            int(promoted_tags["offset"]) if promoted_tags["offset"] else None
+        )
+
+        processed["columns"] = promoted_tags["columns"]
+
+        tags = _as_dict_safe(tags)
+        extract_extra_tags(processed, tags)
         return ProcessedMessage(action=action_type, data=[processed])
