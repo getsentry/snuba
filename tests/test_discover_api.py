@@ -297,6 +297,26 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         assert data["data"] == [{"count": 1}]
 
+    def test_exception_stack_column_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["exception_stacks.type", "LIKE", "Arithmetic%"],
+                        ["exception_frames.filename", "LIKE", "%.java"],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"count": 1}]
+
     def test_having(self):
         result = json.loads(
             self.app.post(
@@ -340,7 +360,7 @@ class TestDiscoverApi(BaseApiTest):
                         "dataset": "discover",
                         "project": self.project_id,
                         "selected_columns": ["project_id"],
-                        "groupby": ["bucketed_end", "project_id"],
+                        "groupby": ["time", "project_id"],
                         "conditions": [["type", "=", "transaction"]],
                     }
                 ),
@@ -356,12 +376,8 @@ class TestDiscoverApi(BaseApiTest):
                     {
                         "dataset": "discover",
                         "project": self.project_id,
-                        "selected_columns": [
-                            "group_id",
-                        ],
-                        "conditions": [
-                            ["type", "=", "transaction"],
-                        ]
+                        "selected_columns": ["group_id"],
+                        "conditions": [["type", "=", "transaction"]],
                     }
                 ),
             ).data
@@ -375,13 +391,11 @@ class TestDiscoverApi(BaseApiTest):
                     {
                         "dataset": "discover",
                         "project": self.project_id,
-                        "selected_columns": [
-                            "group_id",
-                        ],
+                        "selected_columns": ["group_id"],
                         "conditions": [
                             ["type", "=", "transaction"],
                             ["group_id", "IN", (1, 2, 3, 4)],
-                        ]
+                        ],
                     }
                 ),
             ).data
