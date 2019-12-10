@@ -11,7 +11,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function
 
 
-TAG_PATTERN = re.compile(r"([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.]+)\]")
+TAG_PATTERN = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 class Operand(Enum):
@@ -20,7 +20,7 @@ class Operand(Enum):
 
 
 class OptimizableCondition(NamedTuple):
-    nested_col_index: str
+    nested_col_key: str
     operand: Operand
     value: str
 
@@ -44,9 +44,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
     transformed into `tags_map LIKE "%tag1:2%"`
     """
 
-    def __init__(self, nested_col: str, merged_col: str) -> None:
+    def __init__(self, nested_col: str, flattened_col: str) -> None:
         self.__nested_col = nested_col
-        self.__merged_col = merged_col
+        self.__flattened_col = flattened_col
 
     def __is_optimizable(
         self, condition: Condition, column: str
@@ -62,35 +62,35 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         """
         if not is_condition(condition):
             return None
-        if condition[1] not in ["=", "!="]:
+        if condition[1] not in [Operand.EQ.value, Operand.NEQ.value]:
             return None
         if not isinstance(condition[2], str):
             # We can only support literals for now.
             return None
-        lhr = condition[0]
+        lhs = condition[0]
 
-        # This unpoacks the ifNull function. This is just an optimization to make this class more
+        # This unpacks the ifNull function. This is just an optimization to make this class more
         # useful since the product wraps tags access into ifNull very often and it is a trivial
         # function to unpack. We could exptend it to more functions later.
-        function_expr = is_function(lhr, 0)
+        function_expr = is_function(lhs, 0)
         if function_expr and function_expr[0] == "ifNull" and len(function_expr[1]) > 0:
-            lhr = function_expr[1][0]
-        if not isinstance(lhr, str):
+            lhs = function_expr[1][0]
+        if not isinstance(lhs, str):
             return None
 
         # Now we have a condition in the form of: ["tags[something]", "=", "a string"]
-        tag = TAG_PATTERN.match(lhr)
+        tag = TAG_PATTERN.match(lhs)
         if tag and tag[1] == self.__nested_col:
             # tag[0] is the full expression that matches the re.
-            nested_col_index = tag[2]
+            nested_col_key = tag[2]
             return OptimizableCondition(
-                nested_col_index=nested_col_index,
+                nested_col_key=nested_col_key,
                 operand=Operand.EQ if condition[1] == "=" else Operand.NEQ,
                 value=condition[2],
             )
         return None
 
-    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         conditions = query.get_conditions()
         if not conditions:
             return
@@ -104,7 +104,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             if not keyvalue:
                 new_conditions.append(c)
             else:
-                expression = f"{escape_field(keyvalue.nested_col_index)}={escape_field(keyvalue.value)}"
+                expression = f"{escape_field(keyvalue.nested_col_key)}={escape_field(keyvalue.value)}"
                 if keyvalue.operand == Operand.EQ:
                     positive_like_expression.append(expression)
                 else:
@@ -113,13 +113,15 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if positive_like_expression:
             # Positive conditions "=" are all merged together in one LIKE expression
             like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
-            new_conditions.append([self.__merged_col, "LIKE", like_formatted])
+            new_conditions.append([self.__flattened_col, "LIKE", like_formatted])
 
         for expression in negative_like_expression:
             # Negative conditions "!=" cannot be merged together. We can still transform
             # them into NOT LIKE statements, but each condition has to be one
             # statement.
             not_like_formatted = f"%|{expression}|%"
-            new_conditions.append([self.__merged_col, "NOT LIKE", not_like_formatted])
+            new_conditions.append(
+                [self.__flattened_col, "NOT LIKE", not_like_formatted]
+            )
 
         query.set_conditions(new_conditions)

@@ -102,6 +102,8 @@ test_data = [
 def test_nested_optimizer(query_body, expected_condition) -> None:
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
-    processor = NestedFieldConditionOptimizer(nested_col="tags", merged_col="tags_map")
+    processor = NestedFieldConditionOptimizer(
+        nested_col="tags", flattened_col="tags_map"
+    )
     processor.process_query(query, request_settings)
     assert query.get_conditions() == expected_condition
