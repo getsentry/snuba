@@ -1,6 +1,7 @@
 import logging
 import click
 import json
+from typing import Optional, Sequence
 
 from confluent_kafka import Producer
 
@@ -12,22 +13,29 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
 
 
 @click.command()
-@click.option("--control-topic", default=None, help="Topic to produce messages onto.")
+@click.option("--control-topic", help="Topic to produce messages onto.")
 @click.option(
-    "--bootstrap-server",
-    default=None,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset", type=click.Choice(DATASET_NAMES), help="The dataset to bulk load"
+    "--dataset",
+    "dataset_name",
+    type=click.Choice(DATASET_NAMES),
+    help="The dataset to bulk load",
 )
 @click.option(
     "--source",
     help="Source of the dump. Depending on the dataset it may have different meaning.",
 )
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
+def confirm_load(
+    *,
+    control_topic: Optional[str],
+    bootstrap_server: Sequence[str],
+    dataset_name: str,
+    source: Optional[str],
+    log_level: str
+) -> None:
     """
     Confirms the snapshot has been loaded by sending the
     snapshot-loaded message on the control topic.
@@ -42,11 +50,11 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
     logger = logging.getLogger("snuba.loaded-snapshot")
     logger.info(
         "Sending load completion message for dataset %s, from source %s",
-        dataset,
+        dataset_name,
         source,
     )
 
-    dataset = get_dataset(dataset)
+    dataset = get_dataset(dataset_name)
     assert isinstance(
         dataset, CdcDataset
     ), "Only CDC dataset have a control topic thus are supported."
@@ -80,7 +88,7 @@ def confirm_load(control_topic, bootstrap_server, dataset, source, log_level):
     )
     json_string = json.dumps(msg.to_dict())
 
-    def delivery_callback(error, message):
+    def delivery_callback(error, message) -> None:
         if error is not None:
             raise error
         else:

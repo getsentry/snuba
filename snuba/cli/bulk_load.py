@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import click
 
@@ -10,7 +11,10 @@ from snuba.writer import BufferedWriterWrapper
 
 @click.command()
 @click.option(
-    "--dataset", type=click.Choice(DATASET_NAMES), help="The dataset to bulk load"
+    "--dataset",
+    "dataset_name",
+    type=click.Choice(DATASET_NAMES),
+    help="The dataset to bulk load",
 )
 @click.option(
     "--source",
@@ -18,7 +22,13 @@ from snuba.writer import BufferedWriterWrapper
 )
 @click.option("--dest-table", help="Clickhouse destination table.")
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-def bulk_load(dataset, dest_table, source, log_level):
+def bulk_load(
+    *,
+    dataset_name: Optional[str],
+    dest_table: Optional[str],
+    source: Optional[str],
+    log_level: str,
+) -> None:
     import sentry_sdk
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
@@ -28,9 +38,9 @@ def bulk_load(dataset, dest_table, source, log_level):
 
     logger = logging.getLogger("snuba.load-snapshot")
     logger.info(
-        "Start bulk load process for dataset %s, from source %s", dataset, source
+        "Start bulk load process for dataset %s, from source %s", dataset_name, source
     )
-    dataset = get_dataset(dataset)
+    dataset = get_dataset(dataset_name)
 
     # TODO: Have a more abstract way to load sources if/when we support more than one.
     snapshot_source = PostgresSnapshot.load(

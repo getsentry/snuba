@@ -4,7 +4,7 @@ from pkgutil import walk_packages
 
 @click.group()
 @click.version_option()
-def main():
+def main() -> None:
     """\b
                      o
                     O
