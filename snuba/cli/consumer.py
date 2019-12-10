@@ -34,10 +34,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     help="Consumer group use for consuming the raw events topic.",
 )
 @click.option(
-    "--bootstrap-server",
-    default=None,
-    multiple=True,
-    help="Kafka bootstrap server to use.",
+    "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
     "--dataset",
