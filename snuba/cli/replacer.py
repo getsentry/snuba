@@ -10,9 +10,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 
 @click.command()
 @click.option(
-    "--replacements-topic",
-    default=None,
-    help="Topic to consume replacement messages from.",
+    "--replacements-topic", help="Topic to consume replacement messages from.",
 )
 @click.option(
     "--consumer-group",

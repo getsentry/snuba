@@ -13,7 +13,7 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
 
 
 @click.command()
-@click.option("--control-topic", default=None, help="Topic to produce messages onto.")
+@click.option("--control-topic", help="Topic to produce messages onto.")
 @click.option(
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )

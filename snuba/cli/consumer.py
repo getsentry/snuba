@@ -12,22 +12,15 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
 
 @click.command()
+@click.option("--raw-events-topic", help="Topic to consume raw events from.")
 @click.option(
-    "--raw-events-topic", default=None, help="Topic to consume raw events from."
-)
-@click.option(
-    "--replacements-topic",
-    default=None,
-    help="Topic to produce replacement messages info.",
+    "--replacements-topic", help="Topic to produce replacement messages info.",
 )
 @click.option(
     "--commit-log-topic",
-    default=None,
     help="Topic for committed offsets to be written to, triggering post-processing task(s)",
 )
-@click.option(
-    "--control-topic", default=None, help="Topic used to control the snapshot"
-)
+@click.option("--control-topic", help="Topic used to control the snapshot")
 @click.option(
     "--consumer-group",
     default="snuba-consumers",
