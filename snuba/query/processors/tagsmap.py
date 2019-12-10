@@ -3,6 +3,7 @@ import re
 from enum import Enum
 from typing import Optional, List, NamedTuple
 
+from snuba import state
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.transactions_processor import escape_field
@@ -91,6 +92,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         return None
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        enabled = state.get_config("optimize_nested_col_conditions", 0)
+        if not enabled:
+            return
         conditions = query.get_conditions()
         if not conditions:
             return
