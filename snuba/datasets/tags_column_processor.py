@@ -13,7 +13,7 @@ from snuba.util import (
 )
 
 # A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(r"^(tags|contexts)\[([a-zA-Z0-9_\.:-]+)\]$")
+NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 class TagColumnProcessor:
@@ -54,7 +54,8 @@ class TagColumnProcessor:
 
         It returns None if the column is not a tag or context.
         """
-        if NESTED_COL_EXPR_RE.match(column_name):
+        matched = NESTED_COL_EXPR_RE.match(column_name)
+        if matched and matched[1] in ["tags", "contexts"]:
             return self.__tag_expr(column_name, table_alias)
         elif column_name in ["tags_key", "tags_value"]:
             return self.__tags_expr(column_name, query, parsing_context, table_alias)

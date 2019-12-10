@@ -1,18 +1,14 @@
-import re
-
 from enum import Enum
 from typing import Optional, List, NamedTuple
 
 from snuba import state
+from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.transactions_processor import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function
-
-
-TAG_PATTERN = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 class Operand(Enum):
@@ -80,7 +76,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             return None
 
         # Now we have a condition in the form of: ["tags[something]", "=", "a string"]
-        tag = TAG_PATTERN.match(lhs)
+        tag = NESTED_COL_EXPR_RE.match(lhs)
         if tag and tag[1] == self.__nested_col:
             # tag[0] is the full expression that matches the re.
             nested_col_key = tag[2]
