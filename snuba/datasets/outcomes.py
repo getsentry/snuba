@@ -48,7 +48,7 @@ def outcomes_write_migrations(
     ret = []
     if "size" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN size Nullable(UInt32)" % clickhouse_table
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN size Nullable(UInt32)"
         )
 
     return ret
@@ -61,7 +61,7 @@ def outcomes_read_migrations(
     ret = []
     if "bytes_received" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN bytes_received Nullable(UInt64)" % clickhouse_table
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received Nullable(UInt64)"
         )
 
     return ret
@@ -180,7 +180,6 @@ class OutcomesDataset(TimeSeriesDataset):
             local_destination_table_name=READ_LOCAL_TABLE_NAME,
             dist_source_table_name=WRITE_DIST_TABLE_NAME,
             dist_destination_table_name=READ_DIST_TABLE_NAME,
-            migration_function=outcomes_read_migrations,
         )
 
         dataset_schemas = DatasetSchemas(

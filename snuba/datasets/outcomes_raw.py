@@ -21,19 +21,6 @@ from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-def outcomes_raw_read_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
-) -> Sequence[str]:
-    # Add/remove known migrations
-    ret = []
-    if "size" not in current_schema:
-        ret.append(
-            "ALTER TABLE %s ADD COLUMN size Nullable(UInt32)" % clickhouse_table
-        )
-
-    return ret
-
-
 class OutcomesRawDataset(TimeSeriesDataset):
     def __init__(self):
         read_columns = ColumnSet(
@@ -56,7 +43,6 @@ class OutcomesRawDataset(TimeSeriesDataset):
             order_by="(org_id, project_id, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 16384},
-            migration_function=outcomes_raw_read_migrations
         )
 
         dataset_schemas = DatasetSchemas(
