@@ -120,6 +120,7 @@ def rate_limit(
 
     if bypass_rate_limit == 1:
         yield None
+        return
 
     pipe = state.rds.pipeline(transaction=False)
     pipe.zremrangebyscore(
@@ -142,6 +143,7 @@ def rate_limit(
     except Exception as ex:
         logger.exception(ex)
         yield None  # fail open if redis is having issues
+        return
 
     per_second = historical / float(state.rate_lookback_s)
 
@@ -172,7 +174,6 @@ def rate_limit(
             state.rds.zrem(bucket, query_id)  # not allowed / not counted
         except Exception as ex:
             logger.exception(ex)
-            pass
 
         raise RateLimitExceeded(
             "{r.scope} {r.name} of {r.val:.0f} exceeds limit of {r.limit:.0f}".format(
@@ -188,7 +189,6 @@ def rate_limit(
             state.rds.zincrby(bucket, query_id, -float(state.max_query_duration_s))
         except Exception as ex:
             logger.exception(ex)
-            pass
 
 
 def get_global_rate_limit_params() -> RateLimitParameters:
