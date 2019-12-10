@@ -1,7 +1,7 @@
 import logging
 import click
 import json
-from typing import Sequence
+from typing import Optional, Sequence
 
 from confluent_kafka import Producer
 
@@ -30,10 +30,10 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
 def confirm_load(
     *,
-    control_topic: str,
+    control_topic: Optional[str],
     bootstrap_server: Sequence[str],
     dataset_name: str,
-    source: str,
+    source: Optional[str],
     log_level: str
 ) -> None:
     """
