@@ -1,5 +1,6 @@
 import pytest
 
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -100,6 +101,7 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
+    state.set_config("optimize_nested_col_conditions", 1)
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     processor = NestedFieldConditionOptimizer(
