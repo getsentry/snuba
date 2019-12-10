@@ -9,7 +9,7 @@ import simplejson as json
 import time
 import uuid
 from functools import partial
-from typing import Any, Iterator, Mapping, Optional, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.redis import redis_client as rds
@@ -179,7 +179,9 @@ def get_config(key: str, default: Optional[Any] = None) -> Optional[Any]:
     return get_all_configs().get(key, default)
 
 
-def get_configs(key_defaults: Mapping[str, Optional[Any]]) -> Sequence[Optional[Any]]:
+def get_configs(
+    key_defaults: Iterable[Tuple[str, Optional[Any]]]
+) -> Sequence[Optional[Any]]:
     all_confs = get_all_configs()
     return [all_confs.get(k, d) for k, d in key_defaults]
 

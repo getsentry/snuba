@@ -21,6 +21,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NA
 @click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
     "--dataset",
+    "dataset_name",
     default="events",
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
@@ -32,7 +33,15 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NA
     help="Clickhouse connection send/receive timeout, must be long enough for OPTIMIZE to complete.",
 )
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_level):
+def optimize(
+    *,
+    clickhouse_host: str,
+    clickhouse_port: int,
+    database: str,
+    dataset_name: str,
+    timeout: int,
+    log_level: str
+) -> None:
     from datetime import datetime
     from snuba.clickhouse.native import ClickhousePool
     from snuba.optimize import run_optimize, logger
@@ -41,7 +50,7 @@ def optimize(clickhouse_host, clickhouse_port, database, dataset, timeout, log_l
         level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
     )
 
-    dataset = get_dataset(dataset)
+    dataset = get_dataset(dataset_name)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
