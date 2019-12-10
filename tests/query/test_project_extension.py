@@ -1,4 +1,5 @@
 import pytest
+from copy import deepcopy
 from typing import Sequence
 
 from tests.base import BaseTest
@@ -136,6 +137,28 @@ class TestProjectExtensionWithGroups(BaseTest):
         ]
         assert self.query.get_conditions() == expected
         assert not self.query.get_final()
+
+    def test_when_strict_group_condition_takes_over(self):
+        """
+        group_ID IN [something] takes over the NOT IN conditions for merged groups.
+        Still it excludes groups that were in the merge exclusion list
+        """
+        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+        state.set_config("max_group_ids_exclude", 5)
+        replacer.set_project_exclude_groups(2, [100, 101, 102])
+
+        query = deepcopy(self.query)
+        query.add_conditions([["issue", "IN", [102, 103, 104]]])
+        self.extension.get_processor().process_query(
+            query, self.valid_data, request_settings
+        )
+
+        expected = [
+            (["issue", "IN", [103, 104]]),
+            ("project_id", "IN", [2]),
+        ]
+        assert query.get_conditions() == expected
+        assert not query.get_final()
 
     def test_when_there_are_too_many_groups_to_exclude(self):
         request_settings = RequestSettings(turbo=False, consistent=False, debug=False)

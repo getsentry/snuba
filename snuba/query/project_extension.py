@@ -1,8 +1,8 @@
-from typing import Sequence
+from typing import List, Sequence
 
 from snuba import settings, util
 from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
-from snuba.query.query import Query
+from snuba.query.query import Query, Condition
 from snuba.query.query_processor import ExtensionData
 from snuba.replacer import get_projects_query_flags
 from snuba.request.request_settings import RequestSettings
@@ -112,9 +112,43 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
                 if len(exclude_group_ids) > max_group_ids_exclude:
                     query.set_final(True)
                 else:
-                    query.add_conditions(
-                        [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
-                    )
+                    # Check if there is a more selective conditions around group_id/issue
+                    # in the query conditions. Privilege the positive conditions instead of
+                    # the negative ones.
+                    strict_issue_conditions = False
+                    replaced_conditions: List[Condition] = []
+                    for c in query.get_conditions():
+                        new_condition = c
+                        if (
+                            util.is_condition(c)
+                            and c[0] in ["group_id", "issue"]
+                            and c[1] == "IN"
+                            and isinstance(c[2], list)
+                            and all(isinstance(group, int) for group in c[2])
+                        ):
+                            group_ids_with_exclusions = [
+                                group
+                                for group in c[2]
+                                if group not in exclude_group_ids
+                            ]
+                            if group_ids_with_exclusions:
+                                strict_issue_conditions = True
+                                new_condition = [c[0], c[1], group_ids_with_exclusions]
+
+                        replaced_conditions.append(new_condition)
+
+                    query.set_conditions(replaced_conditions)
+
+                    if not strict_issue_conditions:
+                        query.add_conditions(
+                            [
+                                (
+                                    ["assumeNotNull", ["group_id"]],
+                                    "NOT IN",
+                                    exclude_group_ids,
+                                )
+                            ]
+                        )
             else:
                 query.set_final(final)
 
