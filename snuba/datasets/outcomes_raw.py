@@ -11,10 +11,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.datasets.schemas.tables import (
-    MigrationSchemaColumn,
-    MergeTreeSchema
-)
+from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -32,7 +29,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
-                ("size", Nullable(UInt(32))),
+                ("size", UInt(32)),
             ]
         )
 

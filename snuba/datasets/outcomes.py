@@ -48,7 +48,7 @@ def outcomes_write_migrations(
     ret = []
     if "size" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN size Nullable(UInt32)"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN size UInt32"
         )
 
     return ret
@@ -61,7 +61,7 @@ def outcomes_read_migrations(
     ret = []
     if "bytes_received" not in current_schema:
         ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received Nullable(UInt64)"
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received UInt64"
         )
 
     return ret
@@ -102,7 +102,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
-                ("size", Nullable(UInt(32))),
+                ("size", UInt(32)),
             ]
         )
 
@@ -126,7 +126,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(String())),
                 ("times_seen", UInt(64)),
-                ("bytes_received", Nullable(UInt(64))),
+                ("bytes_received", UInt(64)),
             ]
         )
 
@@ -149,7 +149,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", String()),
                 ("times_seen", UInt(64)),
-                ("bytes_received", Nullable(UInt(64))),
+                ("bytes_received", UInt(64)),
             ]
         )
 
