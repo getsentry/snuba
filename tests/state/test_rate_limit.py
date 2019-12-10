@@ -18,8 +18,8 @@ class TestRateLimit(BaseTest):
     def test_concurrent_limit(self):
         # No concurrent limit should not raise
         rate_limit_params = RateLimitParameters("foo", "bar", None, None)
-        with rate_limit(rate_limit_params):
-            pass
+        with rate_limit(rate_limit_params) as stats:
+            assert stats is not None
 
         # 0 concurrent limit
         rate_limit_params = RateLimitParameters("foo", "bar", None, 0)
@@ -59,20 +59,20 @@ class TestRateLimit(BaseTest):
         # Create 30 queries at time 0, should all be allowed
         with patch.object(state.time, "time", lambda: 0):
             for _ in range(30):
-                with rate_limit(rate_limit_params):
-                    pass
+                with rate_limit(rate_limit_params) as stats:
+                    assert stats is not None
 
         # Create another 30 queries at time 30, should also be allowed
         with patch.object(state.time, "time", lambda: 30):
             for _ in range(30):
-                with rate_limit(rate_limit_params):
-                    pass
+                with rate_limit(rate_limit_params) as stats:
+                    assert stats is not None
 
         with patch.object(state.time, "time", lambda: 60):
             # 1 more query should be allowed at T60 because it does not make the previous
             # rate exceed 1/sec until it has finished.
-            with rate_limit(rate_limit_params):
-                pass
+            with rate_limit(rate_limit_params) as stats:
+                assert stats is not None
 
             # But the next one should not be allowed
             with pytest.raises(RateLimitExceeded):
@@ -82,8 +82,8 @@ class TestRateLimit(BaseTest):
         # Another query at time 61 should be allowed because the first 30 queries
         # have fallen out of the lookback window
         with patch.object(state.time, "time", lambda: 61):
-            with rate_limit(rate_limit_params):
-                pass
+            with rate_limit(rate_limit_params) as stats:
+                assert stats is not None
 
     def test_aggregator(self):
         # do not raise with multiple valid rate limits
@@ -123,3 +123,10 @@ class TestRateLimit(BaseTest):
         assert rate_limit_container.get_stats("bar") is None
 
         assert rate_limit_container.to_dict() == {"foo_rate": 0.5, "foo_concurrent": 2}
+
+    def test_bypass_rate_limit(self):
+        rate_limit_params = RateLimitParameters("foo", "bar", None, None)
+        state.set_config("bypass_rate_limit", 1)
+
+        with rate_limit(rate_limit_params) as stats:
+            assert stats is None
