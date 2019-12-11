@@ -13,11 +13,9 @@ from snuba.state.rate_limit import (
     RateLimitExceeded,
     PROJECT_RATE_LIMIT_NAME,
 )
-from snuba.util import (
-    create_metrics,
-    force_bytes,
-    Timer,
-)
+from snuba.util import create_metrics, force_bytes
+from snuba.utils.metrics.timer import Timer
+
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")

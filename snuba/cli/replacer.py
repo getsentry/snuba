@@ -1,5 +1,6 @@
 import logging
 import signal
+from typing import Optional, Sequence
 
 import click
 
@@ -9,9 +10,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 
 @click.command()
 @click.option(
-    "--replacements-topic",
-    default=None,
-    help="Topic to consume replacement messages from.",
+    "--replacements-topic", help="Topic to consume replacement messages from.",
 )
 @click.option(
     "--consumer-group",
@@ -37,6 +36,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 )
 @click.option(
     "--dataset",
+    "dataset_name",
     default="events",
     type=click.Choice(["events"]),
     help="The dataset to consume/run replacements for (currently only events supported)",
@@ -44,11 +44,13 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 @click.option(
     "--max-batch-size",
     default=settings.DEFAULT_MAX_BATCH_SIZE,
+    type=int,
     help="Max number of messages to batch in memory before writing to Kafka.",
 )
 @click.option(
     "--max-batch-time-ms",
     default=settings.DEFAULT_MAX_BATCH_TIME_MS,
+    type=int,
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
 @click.option(
@@ -83,21 +85,21 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
 )
 def replacer(
     *,
-    replacements_topic,
-    consumer_group,
-    bootstrap_server,
-    clickhouse_host,
-    clickhouse_port,
-    dataset,
-    max_batch_size,
-    max_batch_time_ms,
-    auto_offset_reset,
-    queued_max_messages_kbytes,
-    queued_min_messages,
-    log_level,
-    dogstatsd_host,
-    dogstatsd_port,
-):
+    replacements_topic: Optional[str],
+    consumer_group: str,
+    bootstrap_server: Sequence[str],
+    clickhouse_host: str,
+    clickhouse_port: int,
+    dataset_name: str,
+    max_batch_size: int,
+    max_batch_time_ms: int,
+    auto_offset_reset: str,
+    queued_max_messages_kbytes: int,
+    queued_min_messages: int,
+    log_level: str,
+    dogstatsd_host: str,
+    dogstatsd_port: int,
+) -> None:
 
     import sentry_sdk
     from snuba import util
@@ -112,7 +114,7 @@ def replacer(
     )
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    dataset = get_dataset(dataset)
+    dataset = get_dataset(dataset_name)
 
     logging.basicConfig(
         level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
@@ -165,7 +167,7 @@ def replacer(
         recoverable_errors=[TransportError],
     )
 
-    def handler(signum, frame):
+    def handler(signum, frame) -> None:
         replacer.signal_shutdown()
 
     signal.signal(signal.SIGINT, handler)
