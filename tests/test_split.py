@@ -42,7 +42,7 @@ def test_no_split(dataset_name: str):
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
-    request = Request(query, RequestSettings(False, False, False), {},)
+    request = Request(query, RequestSettings(False, False, False), {}, "tests")
 
     do_query(events, request, None)
 
@@ -123,6 +123,7 @@ def test_col_split(
                 "granularity": 3600,
             },
         },
+        "tests",
     )
 
     do_query(events, request, None)

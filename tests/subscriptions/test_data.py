@@ -59,5 +59,5 @@ class TestApi(BaseEventsTest):
             resolution=timedelta(minutes=1),
         )
         request = subscription.build_request(self.dataset, datetime.utcnow(), 100, Mock())
-        query_result = parse_and_run_query(self.dataset, request, Mock(), referrer='subscription')
+        query_result = parse_and_run_query(self.dataset, request, Mock())
         assert query_result.result['data'][0]['count'] == 10
