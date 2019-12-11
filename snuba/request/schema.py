@@ -72,7 +72,7 @@ class RequestSchema:
         }
         return cls(generic_schema, settings_schema, extensions_schemas)
 
-    def validate(self, value, data_source: RelationalSource) -> Request:
+    def validate(self, value, data_source: RelationalSource, referrer: str) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
         query_body = {
@@ -100,6 +100,7 @@ class RequestSchema:
                 settings["turbo"], settings["consistent"], settings["debug"]
             ),
             extensions,
+            referrer,
         )
 
     def __generate_template_impl(self, schema) -> Any:

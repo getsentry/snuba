@@ -112,6 +112,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
 
         if positive_like_expression:
             # Positive conditions "=" are all merged together in one LIKE expression
+            positive_like_expression = sorted(positive_like_expression)
             like_formatted = f"%|{'|%|'.join(positive_like_expression)}|%"
             new_conditions.append([self.__flattened_col, "LIKE", like_formatted])
 

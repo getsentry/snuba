@@ -14,6 +14,7 @@ class Request:
     query: Query
     settings: RequestSettings  # settings provided by the request
     extensions: Mapping[str, Mapping[str, Any]]
+    referrer: str
 
     @property
     @deprecated(
