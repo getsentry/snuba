@@ -8,7 +8,7 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
 from tests.base import BaseEventsTest
 
 
