@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -18,8 +19,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
-from snuba.utils.streams.consumers.types import ConsumerError, EndOfStream, Message
+from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 
 
 logger = logging.getLogger(__name__)
@@ -30,12 +30,25 @@ class TopicPartition(NamedTuple):
     partition: int
 
 
-class KafkaMessage(Message[TopicPartition, int, bytes]):
+class ConsumerError(Exception):
+    """
+    Base class for exceptions that are raised during consumption.
 
-    __slots__ = ["stream", "offset", "value"]
+    Subclasses may extend this class to disambiguate errors that are specific
+    to their implementation.
+    """
 
-    def get_next_offset(self) -> int:
-        return self.offset + 1
+
+class EndOfStream(ConsumerError):
+    """
+    Raised when there are no more messages to consume from the stream.
+    """
+
+    def __init__(self, stream: TopicPartition, offset: int):
+        # The stream that the consumer has reached the end of.
+        self.stream = stream
+        # The next unconsumed offset (where there is currently no message.)
+        self.offset = offset
 
 
 class TransportError(ConsumerError):
@@ -52,7 +65,23 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
+@dataclass(frozen=True)
+class KafkaMessage:
+    """
+    Represents a single message within a stream.
+    """
+
+    __slots__ = ["stream", "offset", "value"]
+
+    stream: TopicPartition
+    offset: int
+    value: bytes
+
+    def get_next_offset(self) -> int:
+        return self.offset + 1
+
+
+class KafkaConsumer:
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -89,7 +118,15 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
     )
 
-    def __init__(self, configuration: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        configuration: Mapping[str, Any],
+        *,
+        commit_retry_policy: Optional[RetryPolicy] = None,
+    ) -> None:
+        if commit_retry_policy is None:
+            commit_retry_policy = NoRetryPolicy()
+
         auto_offset_reset = configuration.get("auto.offset.reset", "largest")
         if auto_offset_reset in {"smallest", "earliest", "beginning"}:
             self.__resolve_partition_starting_offset = (
@@ -113,6 +150,8 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         )
 
         self.__offsets: MutableMapping[TopicPartition, int] = {}
+
+        self.__commit_retry_policy = commit_retry_policy
 
         self.__state = KafkaConsumerState.CONSUMING
 
@@ -139,6 +178,24 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
     ) -> None:
+        """
+        Subscribe to topic streams. This replaces a previous subscription.
+        This method does not block. The subscription may not be fulfilled
+        immediately: instead, the ``on_assign`` and ``on_revoke`` callbacks
+        are called when the subscription state changes with the updated
+        assignment for this consumer.
+
+        If provided, the ``on_assign`` callback is called with a mapping of
+        streams to their offsets (at this point, the working offset and the
+        committed offset are the same for each stream) on each subscription
+        change. Similarly, the ``on_revoke`` callback (if provided) is called
+        with a sequence of streams that are being removed from this
+        consumer's assignment. (This callback does not include the offsets,
+        as the working offset and committed offset may differ, in some cases
+        by substantial margin.)
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
@@ -202,12 +259,44 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         )
 
     def unsubscribe(self) -> None:
+        """
+        Unsubscribe from streams.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
         self.__consumer.unsubscribe()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+        """
+        Return the next message available to be consumed, if one is
+        available. If no message is available, this method will block up to
+        the ``timeout`` value before returning ``None``. A timeout of
+        ``0.0`` represents "do not block", while a timeout of ``None``
+        represents "block until a message is available (or forever)".
+
+        Calling this method may also invoke subscription state change
+        callbacks.
+
+        This method may also raise an ``EndOfStream`` error (a subtype of
+        ``ConsumerError``) when the consumer has reached the end of a stream
+        that it is subscribed to and no additional messages are available.
+        The ``stream`` attribute of the raised exception specifies the end
+        which stream has been reached. (Since this consumer is multiplexing a
+        set of streams, this exception does not mean that *all* of the
+        streams that the consumer is subscribed to do not have any messages,
+        just that it has reached the end of one of them. This also does not
+        mean that additional messages won't be available in future poll
+        calls.) Not every backend implementation supports this feature or is
+        configured to raise in this scenario.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+
+        Raises a ``TransportError`` for various other consumption-related
+        errors.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
@@ -241,6 +330,11 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         return result
 
     def tell(self) -> Mapping[TopicPartition, int]:
+        """
+        Return the read offsets for all assigned streams.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -266,6 +360,11 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         self.__offsets.update(offsets)
 
     def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+        """
+        Change the read offsets for the provided streams.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -275,6 +374,11 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         self.__seek(offsets)
 
     def pause(self, streams: Sequence[TopicPartition]) -> None:
+        """
+        Pause the consumption of messages for the provided streams.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -296,6 +400,11 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         )
 
     def resume(self, streams: Sequence[TopicPartition]) -> None:
+        """
+        Resume the consumption of messages for the provided streams.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -306,7 +415,7 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
             ]
         )
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def __commit(self) -> Mapping[TopicPartition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -332,7 +441,25 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
         return offsets
 
+    def commit(self) -> Mapping[TopicPartition, int]:
+        """
+        Commit staged offsets for all streams that this consumer is assigned
+        to. The return value of this method is a mapping of streams with
+        their committed offsets as values.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
+        return self.__commit_retry_policy.call(self.__commit)
+
     def close(self, timeout: Optional[float] = None) -> None:
+        """
+        Close the consumer. This stops consuming messages, *may* commit
+        staged offsets (depending on the configuration), and ends its
+        subscription.
+
+        Raises a ``InvalidState`` if the consumer is unable to be closed
+        before the timeout is reached.
+        """
         try:
             self.__consumer.close()
         except RuntimeError:
@@ -364,14 +491,16 @@ def build_kafka_consumer_configuration(
     }
 
 
-class KafkaConsumerBackendWithCommitLog(KafkaConsumerBackend):
+class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        *,
         producer: ConfluentProducer,
         commit_log_topic: str,
+        commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration)
+        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]

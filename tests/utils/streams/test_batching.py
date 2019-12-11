@@ -12,13 +12,11 @@ from typing import (
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
 
 
-class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
+class FakeKafkaConsumer:
     def __init__(self):
         self.items: MutableSequence[KafkaMessage] = []
         self.commit_calls = 0
@@ -66,7 +64,7 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
+class FakeWorker(AbstractBatchWorker[Any]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
@@ -81,10 +79,10 @@ class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
 
 class TestConsumer(object):
     def test_batch_size(self) -> None:
-        backend = FakeKafkaConsumerBackend()
+        consumer = FakeKafkaConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
-            Consumer(backend),
+            consumer,
             "topic",
             worker=worker,
             max_batch_size=2,
@@ -92,25 +90,25 @@ class TestConsumer(object):
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        backend.items = [
+        consumer.items = [
             KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
             for i in [1, 2, 3]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
         batching_consumer._shutdown()
 
         assert worker.processed == [b"1", b"2", b"3"]
         assert worker.flushed == [[b"1", b"2"]]
-        assert backend.commit_calls == 1
-        assert backend.close_calls == 1
+        assert consumer.commit_calls == 1
+        assert consumer.close_calls == 1
 
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
-        backend = FakeKafkaConsumerBackend()
+        consumer = FakeKafkaConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
-            Consumer(backend),
+            consumer,
             "topic",
             worker=worker,
             max_batch_size=100,
@@ -119,27 +117,27 @@ class TestConsumer(object):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        backend.items = [
+        consumer.items = [
             KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
             for i in [1, 2, 3]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        backend.items = [
+        consumer.items = [
             KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
             for i in [4, 5, 6]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        backend.items = [
+        consumer.items = [
             KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
             for i in [7, 8, 9]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         batching_consumer._shutdown()
@@ -156,5 +154,5 @@ class TestConsumer(object):
             b"9",
         ]
         assert worker.flushed == [[b"1", b"2", b"3", b"4", b"5", b"6"]]
-        assert backend.commit_calls == 1
-        assert backend.close_calls == 1
+        assert consumer.commit_calls == 1
+        assert consumer.close_calls == 1

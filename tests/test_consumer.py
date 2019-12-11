@@ -6,7 +6,7 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
 from tests.base import BaseEventsTest
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 

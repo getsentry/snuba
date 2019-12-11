@@ -14,30 +14,27 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.types import (
+from snuba.utils.streams.consumer import (
     ConsumerError,
-    Message,
-    TStream,
-    TOffset,
-    TValue,
+    KafkaConsumer,
+    KafkaMessage,
+    TopicPartition,
 )
 
 
 logger = logging.getLogger(__name__)
 
-TMessage = TypeVar("TMessage")
 
 TResult = TypeVar("TResult")
 
 
-class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
+class AbstractBatchWorker(ABC, Generic[TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: TMessage) -> Optional[TResult]:
+    def process_message(self, message: KafkaMessage) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -62,10 +59,11 @@ class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
 
 
 @dataclass
-class Offsets(Generic[TOffset]):
+class Offsets:
     __slots__ = ["lo", "hi"]
-    lo: TOffset
-    hi: TOffset
+
+    lo: int
+    hi: int
 
 
 class BatchingConsumer:
@@ -93,9 +91,9 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: Consumer[TStream, TOffset, TValue],
+        consumer: KafkaConsumer,
         topic: str,
-        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue], TResult],
+        worker: AbstractBatchWorker[TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -113,7 +111,7 @@ class BatchingConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[TResult] = []
-        self.__batch_offsets: MutableMapping[TStream, Offsets[TOffset]] = {}
+        self.__batch_offsets: MutableMapping[TopicPartition, Offsets] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -124,10 +122,10 @@ class BatchingConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(streams: Mapping[TStream, TOffset]) -> None:
+        def on_partitions_assigned(streams: Mapping[TopicPartition, int]) -> None:
             logger.info("New streams assigned: %r", streams)
 
-        def on_partitions_revoked(streams: Sequence[TStream]) -> None:
+        def on_partitions_revoked(streams: Sequence[TopicPartition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
             logger.info("Streams revoked: %r", streams)
             self._flush(force=True)
@@ -165,7 +163,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message[TStream, TOffset, TValue]) -> None:
+    def _handle_message(self, msg: KafkaMessage) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen

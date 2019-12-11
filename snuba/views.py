@@ -36,7 +36,7 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
 
 
 logger = logging.getLogger("snuba.api")
