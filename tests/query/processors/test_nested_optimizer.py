@@ -33,6 +33,20 @@ test_data = [
     (
         {
             "conditions": [
+                ["tags[test2.tag]", "=", "2"],
+                ["tags[test.tag]", "=", "1"],
+                ["c", "=", "3"],
+                ["tags[test3.tag]", "=", "3"],
+            ]
+        },
+        [
+            ["c", "=", "3"],
+            ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%|test3.tag=3|%"],
+        ],
+    ),  # Multiple tags in the same merge and properly sorted
+    (
+        {
+            "conditions": [
                 ["tags[test.tag]", "!=", "1"],
                 ["c", "=", "3"],
                 ["tags[test2.tag]", "=", "2"],
