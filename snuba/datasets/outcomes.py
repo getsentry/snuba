@@ -25,6 +25,7 @@ from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     SummingMergeTreeSchema,
     MaterializedViewSchema,
+    TableSchema,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
@@ -64,6 +65,20 @@ def outcomes_read_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received UInt64"
         )
 
+    return ret
+
+
+def outcomes_mv_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn], table_definition: str = None
+) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+
+    if table_definition is None:
+        return ret
+
+    if "bytes_received" in current_schema:
+        ret.extend((f"""RENAME TABLE {clickhouse_table} TO old_{clickhouse_table}""", table_definition, f"""DETACH TABLE old_{clickhouse_table}"""))
     return ret
 
 
@@ -180,6 +195,7 @@ class OutcomesDataset(TimeSeriesDataset):
             local_destination_table_name=READ_LOCAL_TABLE_NAME,
             dist_source_table_name=WRITE_DIST_TABLE_NAME,
             dist_destination_table_name=READ_DIST_TABLE_NAME,
+            migration_function=outcomes_mv_migrations,
         )
 
         dataset_schemas = DatasetSchemas(
