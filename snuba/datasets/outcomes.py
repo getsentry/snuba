@@ -77,7 +77,7 @@ def outcomes_mv_migrations(
     if table_definition is None:
         return ret
 
-    if "bytes_received" in current_schema:
+    if "bytes_received" not in current_schema:
         ret.extend((
             f"""RENAME TABLE {clickhouse_table} TO old_{clickhouse_table}""",
             table_definition,
