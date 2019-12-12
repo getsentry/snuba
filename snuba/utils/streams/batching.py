@@ -18,7 +18,8 @@ from snuba.utils.streams.consumer import (
     ConsumerError,
     KafkaConsumer,
     KafkaMessage,
-    TopicPartition,
+    Partition,
+    Topic,
 )
 
 
@@ -53,7 +54,7 @@ class AbstractBatchWorker(ABC, Generic[TResult]):
         store(s) it is maintaining. Afterwards the offsets are committed by
         the consumer.
 
-        A simple example would be writing the batch to another stream.
+        A simple example would be writing the batch to another topic.
         """
         pass
 
@@ -92,7 +93,7 @@ class BatchingConsumer:
     def __init__(
         self,
         consumer: KafkaConsumer,
-        topic: str,
+        topic: Topic,
         worker: AbstractBatchWorker[TResult],
         max_batch_size: int,
         max_batch_time: int,
@@ -111,7 +112,7 @@ class BatchingConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[TResult] = []
-        self.__batch_offsets: MutableMapping[TopicPartition, Offsets] = {}
+        self.__batch_offsets: MutableMapping[Partition, Offsets] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -122,12 +123,12 @@ class BatchingConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(streams: Mapping[TopicPartition, int]) -> None:
-            logger.info("New streams assigned: %r", streams)
+        def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
+            logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(streams: Sequence[TopicPartition]) -> None:
+        def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Streams revoked: %r", streams)
+            logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
 
         self.consumer.subscribe(
@@ -179,10 +180,10 @@ class BatchingConsumer:
         self.__batch_processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
-        if msg.stream in self.__batch_offsets:
-            self.__batch_offsets[msg.stream].hi = msg.offset
+        if msg.partition in self.__batch_offsets:
+            self.__batch_offsets[msg.partition].hi = msg.offset
         else:
-            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.partition] = Offsets(msg.offset, msg.offset)
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")

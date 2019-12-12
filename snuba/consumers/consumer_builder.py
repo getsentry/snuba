@@ -12,6 +12,7 @@ from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+    Topic,
     TransportError,
     build_kafka_consumer_configuration,
 )
@@ -122,13 +123,13 @@ class ConsumerBuilder:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
                 producer=self.producer,
-                commit_log_topic=self.commit_log_topic,
+                commit_log_topic=Topic(self.commit_log_topic),
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
         return BatchingConsumer(
             consumer,
-            self.raw_topic,
+            Topic(self.raw_topic),
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,
