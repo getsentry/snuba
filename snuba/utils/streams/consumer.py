@@ -188,6 +188,8 @@ class KafkaConsumer:
     ) -> ConfluentTopicPartition:
         raise ConsumerError("unable to resolve partition offsets")
 
+    # Balanced Consumer Methods
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -289,6 +291,33 @@ class KafkaConsumer:
             raise InvalidState(self.__state)
 
         self.__consumer.unsubscribe()
+
+    # Managed Consumer Methods
+
+    def assign(
+        self, partitions: Mapping[Partition, Optional[int]]
+    ) -> Mapping[Partition, int]:
+        """
+        Set the current partition assignment. This replaces any existing
+        assignment.
+
+        If no offset is provided, the last committed offset is used. If there
+        is no committed offset stored, the strategy specified by the
+        ``auto.offset.reset`` configuration parameter is used to determine
+        the starting offset.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
+        raise NotImplementedError
+
+    def unassign(self) -> None:
+        """
+        Remove the current assignment.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
+        self.__consumer.unassign()
+        self.__offsets.clear()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
         """
