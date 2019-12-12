@@ -42,19 +42,21 @@ def test_data_types() -> None:
     assert Partition(Topic("other-topic"), 0) not in Topic("topic")
 
 
+def build_consumer() -> KafkaConsumer:
+    return KafkaConsumer(
+        {
+            **configuration,
+            "auto.offset.reset": "earliest",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "true",
+            "enable.partition.eof": "true",
+            "group.id": f"test-{uuid.uuid1().hex}",
+            "session.timeout.ms": 10000,
+        }
+    )
+
+
 def test_consumer_backend(topic: Topic) -> None:
-    def build_consumer() -> KafkaConsumer:
-        return KafkaConsumer(
-            {
-                **configuration,
-                "auto.offset.reset": "earliest",
-                "enable.auto.commit": "false",
-                "enable.auto.offset.store": "true",
-                "enable.partition.eof": "true",
-                "group.id": "test",
-                "session.timeout.ms": 10000,
-            }
-        )
 
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
@@ -133,6 +135,12 @@ def test_consumer_backend(topic: Topic) -> None:
         consumer.unsubscribe()
 
     with pytest.raises(RuntimeError):
+        consumer.assign({Partition(topic, 0): 0})
+
+    with pytest.raises(RuntimeError):
+        consumer.unassign()
+
+    with pytest.raises(RuntimeError):
         consumer.poll()
 
     with pytest.raises(RuntimeError):
@@ -169,6 +177,41 @@ def test_consumer_backend(topic: Topic) -> None:
         assert error.offset == 2
     else:
         raise AssertionError("expected EndOfPartition error")
+
+    consumer.close()
+
+
+def test_consumer_managed_assignment(topic: Topic):
+    producer = ConfluentProducer(configuration)
+    value = uuid.uuid1().hex.encode("utf-8")
+    for i in range(2):
+        producer.produce(topic.name, value=value)
+    assert producer.flush(5.0) == 0
+
+    consumer = build_consumer()
+
+    assert consumer.assign({Partition(topic, 0): None}) == {Partition(topic, 0): 0}
+    assert consumer.tell() == {Partition(topic, 0): 0}
+
+    message = consumer.poll(1.0)
+    assert isinstance(message, KafkaMessage)
+    assert message.partition == Partition(topic, 0)
+    assert message.offset == 0
+    assert message.value == value
+    assert consumer.tell() == {Partition(topic, 0): 1}
+
+    assert consumer.assign({Partition(topic, 0): 0}) == {Partition(topic, 0): 0}
+    assert consumer.tell() == {Partition(topic, 0): 0}
+
+    message = consumer.poll(1.0)
+    assert isinstance(message, KafkaMessage)
+    assert message.partition == Partition(topic, 0)
+    assert message.offset == 0
+    assert message.value == value
+    assert consumer.tell() == {Partition(topic, 0): 1}
+
+    consumer.unassign()
+    assert consumer.tell() == {}
 
     consumer.close()
 
