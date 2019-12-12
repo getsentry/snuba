@@ -4,11 +4,14 @@ from typing import Iterator, Mapping, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
-from snuba.utils.streams.consumers.types import ConsumerError, EndOfStream, Message
-from snuba.utils.streams.consumers.backends.kafka import (
-    KafkaConsumerBackend,
-    KafkaConsumerBackendWithCommitLog,
-    TopicPartition,
+from snuba.utils.streams.consumer import (
+    ConsumerError,
+    EndOfPartition,
+    KafkaMessage,
+    KafkaConsumer,
+    KafkaConsumerWithCommitLog,
+    Partition,
+    Topic,
 )
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -17,7 +20,7 @@ configuration = {"bootstrap.servers": "127.0.0.1"}
 
 
 @pytest.yield_fixture
-def topic() -> Iterator[str]:
+def topic() -> Iterator[Topic]:
     name = f"test-{uuid.uuid1().hex}"
     client = AdminClient(configuration)
     [[key, future]] = client.create_topics(
@@ -26,16 +29,22 @@ def topic() -> Iterator[str]:
     assert key == name
     assert future.result() is None
     try:
-        yield name
+        yield Topic(name)
     finally:
         [[key, future]] = client.delete_topics([name]).items()
         assert key == name
         assert future.result() is None
 
 
-def test_consumer_backend(topic: str) -> None:
-    def build_backend() -> KafkaConsumerBackend:
-        return KafkaConsumerBackend(
+def test_data_types() -> None:
+    assert Partition(Topic("topic"), 0) in Topic("topic")
+    assert Partition(Topic("topic"), 0) not in Topic("other-topic")
+    assert Partition(Topic("other-topic"), 0) not in Topic("topic")
+
+
+def test_consumer_backend(topic: Topic) -> None:
+    def build_consumer() -> KafkaConsumer:
+        return KafkaConsumer(
             {
                 **configuration,
                 "auto.offset.reset": "earliest",
@@ -50,127 +59,127 @@ def test_consumer_backend(topic: str) -> None:
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
     for i in range(2):
-        producer.produce(topic, value=value)
+        producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    backend = build_backend()
+    consumer = build_consumer()
 
-    def assignment_callback(streams: Mapping[TopicPartition, int]):
+    def assignment_callback(partitions: Mapping[Partition, int]):
         assignment_callback.called = True
-        assert streams == {TopicPartition(topic, 0): 0}
+        assert partitions == {Partition(topic, 0): 0}
 
-        backend.seek({TopicPartition(topic, 0): 1})
+        consumer.seek({Partition(topic, 0): 1})
 
         with pytest.raises(ConsumerError):
-            backend.seek({TopicPartition(topic, 1): 0})
+            consumer.seek({Partition(topic, 1): 0})
 
-    def revocation_callback(streams: Sequence[TopicPartition]):
+    def revocation_callback(partitions: Sequence[Partition]):
         revocation_callback.called = True
-        assert streams == [TopicPartition(topic, 0)]
-        assert backend.tell() == {TopicPartition(topic, 0): 1}
+        assert partitions == [Partition(topic, 0)]
+        assert consumer.tell() == {Partition(topic, 0): 1}
 
         # Not sure why you'd want to do this, but it shouldn't error.
-        backend.seek({TopicPartition(topic, 0): 0})
+        consumer.seek({Partition(topic, 0): 0})
 
     # TODO: It'd be much nicer if ``subscribe`` returned a future that we could
     # use to wait for assignment, but we'd need to be very careful to avoid
     # edge cases here. It's probably not worth the complexity for now.
-    backend.subscribe(
+    consumer.subscribe(
         [topic], on_assign=assignment_callback, on_revoke=revocation_callback
     )
 
-    message = backend.poll(10.0)  # XXX: getting the subcription is slow
-    assert isinstance(message, Message)
-    assert message.stream == TopicPartition(topic, 0)
+    message = consumer.poll(10.0)  # XXX: getting the subcription is slow
+    assert isinstance(message, KafkaMessage)
+    assert message.partition == Partition(topic, 0)
     assert message.offset == 1
     assert message.value == value
 
-    assert backend.tell() == {TopicPartition(topic, 0): 2}
+    assert consumer.tell() == {Partition(topic, 0): 2}
     assert getattr(assignment_callback, "called", False)
 
-    backend.seek({TopicPartition(topic, 0): 0})
-    assert backend.tell() == {TopicPartition(topic, 0): 0}
+    consumer.seek({Partition(topic, 0): 0})
+    assert consumer.tell() == {Partition(topic, 0): 0}
 
     with pytest.raises(ConsumerError):
-        backend.seek({TopicPartition(topic, 1): 0})
+        consumer.seek({Partition(topic, 1): 0})
 
-    backend.pause([TopicPartition(topic, 0)])
+    consumer.pause([Partition(topic, 0)])
 
-    backend.resume([TopicPartition(topic, 0)])
+    consumer.resume([Partition(topic, 0)])
 
-    message = backend.poll(1.0)
-    assert isinstance(message, Message)
-    assert message.stream == TopicPartition(topic, 0)
+    message = consumer.poll(1.0)
+    assert isinstance(message, KafkaMessage)
+    assert message.partition == Partition(topic, 0)
     assert message.offset == 0
     assert message.value == value
 
-    assert backend.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
+    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
-    backend.unsubscribe()
+    consumer.unsubscribe()
 
-    assert backend.poll(1.0) is None
+    assert consumer.poll(1.0) is None
 
-    assert backend.tell() == {}
+    assert consumer.tell() == {}
 
     with pytest.raises(ConsumerError):
-        backend.seek({TopicPartition(topic, 0): 0})
+        consumer.seek({Partition(topic, 0): 0})
 
-    backend.close()
-
-    with pytest.raises(RuntimeError):
-        backend.subscribe([topic])
+    consumer.close()
 
     with pytest.raises(RuntimeError):
-        backend.unsubscribe()
+        consumer.subscribe([topic])
 
     with pytest.raises(RuntimeError):
-        backend.poll()
+        consumer.unsubscribe()
 
     with pytest.raises(RuntimeError):
-        backend.tell()
+        consumer.poll()
 
     with pytest.raises(RuntimeError):
-        backend.seek({TopicPartition(topic, 0): 0})
+        consumer.tell()
 
     with pytest.raises(RuntimeError):
-        backend.pause([TopicPartition(topic, 0)])
+        consumer.seek({Partition(topic, 0): 0})
 
     with pytest.raises(RuntimeError):
-        backend.resume([TopicPartition(topic, 0)])
+        consumer.pause([Partition(topic, 0)])
 
     with pytest.raises(RuntimeError):
-        backend.commit()
+        consumer.resume([Partition(topic, 0)])
 
-    backend.close()
+    with pytest.raises(RuntimeError):
+        consumer.commit()
 
-    backend = build_backend()
+    consumer.close()
 
-    backend.subscribe([topic])
+    consumer = build_consumer()
 
-    message = backend.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, Message)
-    assert message.stream == TopicPartition(topic, 0)
+    consumer.subscribe([topic])
+
+    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+    assert isinstance(message, KafkaMessage)
+    assert message.partition == Partition(topic, 0)
     assert message.offset == 1
     assert message.value == value
 
     try:
-        assert backend.poll(1.0) is None
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
+        assert consumer.poll(1.0) is None
+    except EndOfPartition as error:
+        assert error.partition == Partition(topic, 0)
         assert error.offset == 2
     else:
-        raise AssertionError("expected EndOfStream error")
+        raise AssertionError("expected EndOfPartition error")
 
-    backend.close()
+    consumer.close()
 
 
-def test_auto_offset_reset_earliest(topic: str) -> None:
+def test_auto_offset_reset_earliest(topic: Topic) -> None:
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic, value=value)
+    producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    backend = KafkaConsumerBackend(
+    consumer = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "earliest",
@@ -181,22 +190,22 @@ def test_auto_offset_reset_earliest(topic: str) -> None:
         }
     )
 
-    backend.subscribe([topic])
+    consumer.subscribe([topic])
 
-    message = backend.poll(10.0)
-    assert isinstance(message, Message)
+    message = consumer.poll(10.0)
+    assert isinstance(message, KafkaMessage)
     assert message.offset == 0
 
-    backend.close()
+    consumer.close()
 
 
-def test_auto_offset_reset_latest(topic: str) -> None:
+def test_auto_offset_reset_latest(topic: Topic) -> None:
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic, value=value)
+    producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    backend = KafkaConsumerBackend(
+    consumer = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "latest",
@@ -207,26 +216,26 @@ def test_auto_offset_reset_latest(topic: str) -> None:
         }
     )
 
-    backend.subscribe([topic])
+    consumer.subscribe([topic])
 
     try:
-        backend.poll(10.0)  # XXX: getting the subcription is slow
-    except EndOfStream as error:
-        assert error.stream == TopicPartition(topic, 0)
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
+    except EndOfPartition as error:
+        assert error.partition == Partition(topic, 0)
         assert error.offset == 1
     else:
-        raise AssertionError("expected EndOfStream error")
+        raise AssertionError("expected EndOfPartition error")
 
-    backend.close()
+    consumer.close()
 
 
-def test_auto_offset_reset_error(topic: str) -> None:
+def test_auto_offset_reset_error(topic: Topic) -> None:
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic, value=value)
+    producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    backend = KafkaConsumerBackend(
+    consumer = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "error",
@@ -237,21 +246,21 @@ def test_auto_offset_reset_error(topic: str) -> None:
         }
     )
 
-    backend.subscribe([topic])
+    consumer.subscribe([topic])
 
     with pytest.raises(ConsumerError):
-        backend.poll(10.0)  # XXX: getting the subcription is slow
+        consumer.poll(10.0)  # XXX: getting the subcription is slow
 
-    backend.close()
+    consumer.close()
 
 
-def test_commit_log_consumer_backend(topic: str) -> None:
+def test_commit_log_consumer(topic: Topic) -> None:
     # XXX: This would be better as an integration test (or at least a test
     # against an abstract Producer interface) instead of against a test against
     # a mock.
     commit_log_producer = FakeConfluentKafkaProducer()
 
-    backend = KafkaConsumerBackendWithCommitLog(
+    consumer = KafkaConsumerWithCommitLog(
         {
             **configuration,
             "auto.offset.reset": "earliest",
@@ -261,25 +270,27 @@ def test_commit_log_consumer_backend(topic: str) -> None:
             "group.id": "test",
             "session.timeout.ms": 10000,
         },
-        commit_log_producer,
-        "commit-log",
+        producer=commit_log_producer,
+        commit_log_topic=Topic("commit-log"),
     )
 
-    backend.subscribe([topic])
+    consumer.subscribe([topic])
 
     producer = ConfluentProducer(configuration)
-    producer.produce(topic)
+    producer.produce(topic.name)
     assert producer.flush(5.0) == 0
 
-    message = backend.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, Message)
+    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+    assert isinstance(message, KafkaMessage)
 
-    assert backend.commit() == {TopicPartition(topic, 0): message.get_next_offset()}
+    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]
     assert commit_message.topic() == "commit-log"
-    assert commit_message.key() == "{}:{}:{}".format(topic, 0, "test").encode("utf-8")
+    assert commit_message.key() == "{}:{}:{}".format(topic.name, 0, "test").encode(
+        "utf-8"
+    )
     assert commit_message.value() == "{}".format(message.get_next_offset()).encode(
         "utf-8"
     )

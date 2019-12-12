@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import logging
+from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -6,7 +9,6 @@ from typing import (
     Mapping,
     MutableMapping,
     MutableSequence,
-    NamedTuple,
     Optional,
     Sequence,
 )
@@ -18,24 +20,51 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
-from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
-from snuba.utils.streams.consumers.types import ConsumerError, EndOfStream, Message
+from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 
 
 logger = logging.getLogger(__name__)
 
 
-class TopicPartition(NamedTuple):
-    topic: str
-    partition: int
+@dataclass(frozen=True)
+class Topic:
+    __slots__ = ["name"]
+
+    name: str
+
+    def __contains__(self, partition: Partition) -> bool:
+        return partition.topic == self
 
 
-class KafkaMessage(Message[TopicPartition, int, bytes]):
+@dataclass(frozen=True)
+class Partition:
+    __slots__ = ["topic", "index"]
 
-    __slots__ = ["stream", "offset", "value"]
+    topic: Topic
+    index: int
 
-    def get_next_offset(self) -> int:
-        return self.offset + 1
+
+class ConsumerError(Exception):
+    """
+    Base class for exceptions that are raised during consumption.
+
+    Subclasses may extend this class to disambiguate errors that are specific
+    to their implementation.
+    """
+
+
+class EndOfPartition(ConsumerError):
+    """
+    Raised when there are no more messages to consume from the partition.
+    """
+
+    def __init__(self, partition: Partition, offset: int):
+        # The partition that the consumer has reached the end of.
+        self.partition = partition
+
+        # The next unconsumed offset in the partition (where there is currently
+        # no message.)
+        self.offset = offset
 
 
 class TransportError(ConsumerError):
@@ -52,7 +81,23 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
+@dataclass(frozen=True)
+class KafkaMessage:
+    """
+    Represents a single message within a partition.
+    """
+
+    __slots__ = ["partition", "offset", "value"]
+
+    partition: Partition
+    offset: int
+    value: bytes
+
+    def get_next_offset(self) -> int:
+        return self.offset + 1
+
+
+class KafkaConsumer:
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -89,7 +134,15 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         [OFFSET_BEGINNING, OFFSET_END, OFFSET_STORED, OFFSET_INVALID]
     )
 
-    def __init__(self, configuration: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        configuration: Mapping[str, Any],
+        *,
+        commit_retry_policy: Optional[RetryPolicy] = None,
+    ) -> None:
+        if commit_retry_policy is None:
+            commit_retry_policy = NoRetryPolicy()
+
         auto_offset_reset = configuration.get("auto.offset.reset", "largest")
         if auto_offset_reset in {"smallest", "earliest", "beginning"}:
             self.__resolve_partition_starting_offset = (
@@ -112,7 +165,9 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
             {**configuration, "auto.offset.reset": "error"}
         )
 
-        self.__offsets: MutableMapping[TopicPartition, int] = {}
+        self.__offsets: MutableMapping[Partition, int] = {}
+
+        self.__commit_retry_policy = commit_retry_policy
 
         self.__state = KafkaConsumerState.CONSUMING
 
@@ -135,10 +190,29 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
 
     def subscribe(
         self,
-        topics: Sequence[str],
-        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
-        on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        topics: Sequence[Topic],
+        on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
+        """
+        Subscribe to topics. This replaces a previous subscription.
+
+        This method does not block. The subscription may not be fulfilled
+        immediately: instead, the ``on_assign`` and ``on_revoke`` callbacks
+        are called when the subscription state changes with the updated
+        assignment for this consumer.
+
+        If provided, the ``on_assign`` callback is called with a mapping of
+        partitions to their offsets (at this point, the working offset and the
+        committed offset are the same for each partition) on each subscription
+        change. Similarly, the ``on_revoke`` callback (if provided) is called
+        with a sequence of partitions that are being removed from this
+        consumer's assignment. (This callback does not include the offsets,
+        as the working offset and committed offset may differ, in some cases
+        by substantial margin.)
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
@@ -160,8 +234,8 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
                     else:
                         raise ValueError("received unexpected offset")
 
-                offsets: MutableMapping[TopicPartition, int] = {
-                    TopicPartition(i.topic, i.partition): i.offset for i in assignment
+                offsets: MutableMapping[Partition, int] = {
+                    Partition(Topic(i.topic), i.partition): i.offset for i in assignment
                 }
                 self.__seek(offsets)
             except Exception:
@@ -179,35 +253,71 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         ) -> None:
             self.__state = KafkaConsumerState.REVOKING
 
-            streams = [TopicPartition(i.topic, i.partition) for i in partitions]
+            partitions = [Partition(Topic(i.topic), i.partition) for i in partitions]
 
             try:
                 if on_revoke is not None:
-                    on_revoke(streams)
+                    on_revoke(partitions)
             finally:
-                for stream in streams:
+                for partition in partitions:
                     try:
-                        self.__offsets.pop(stream)
+                        self.__offsets.pop(partition)
                     except KeyError:
-                        # If there was an error during assignment, this stream
-                        # may have never been added to the offsets mapping.
+                        # If there was an error during assignment, this
+                        # partition may have never been added to the offsets
+                        # mapping.
                         logger.warning(
-                            "failed to delete offset for unknown stream: %r", stream
+                            "failed to delete offset for unknown partition: %r",
+                            partition,
                         )
 
                 self.__state = KafkaConsumerState.CONSUMING
 
         self.__consumer.subscribe(
-            topics, on_assign=assignment_callback, on_revoke=revocation_callback
+            [topic.name for topic in topics],
+            on_assign=assignment_callback,
+            on_revoke=revocation_callback,
         )
 
     def unsubscribe(self) -> None:
+        """
+        Unsubscribe from topics.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
         self.__consumer.unsubscribe()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+        """
+        Return the next message available to be consumed, if one is
+        available. If no message is available, this method will block up to
+        the ``timeout`` value before returning ``None``. A timeout of
+        ``0.0`` represents "do not block", while a timeout of ``None``
+        represents "block until a message is available (or forever)".
+
+        Calling this method may also invoke subscription state change
+        callbacks.
+
+        This method may also raise an ``EndOfPartition`` error (a subtype of
+        ``ConsumerError``) when the consumer has reached the end of a
+        partition that it is subscribed to and no additional messages are
+        available. The ``partition`` attribute of the raised exception
+        specifies the end which partition has been reached. (Since this
+        consumer is multiplexing a set of partitions, this exception does not
+        mean that *all* of the partitions that the consumer is subscribed to
+        do not have any messages, just that it has reached the end of one of
+        them. This also does not mean that additional messages won't be
+        available in future poll calls.) Not every backend implementation
+        supports this feature or is configured to raise in this scenario.
+
+        Raises an ``InvalidState`` exception if called on a closed consumer.
+
+        Raises a ``TransportError`` for various other consumption-related
+        errors.
+        """
         if self.__state is not KafkaConsumerState.CONSUMING:
             raise InvalidState(self.__state)
 
@@ -221,8 +331,8 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         if error is not None:
             code = error.code()
             if code == KafkaError._PARTITION_EOF:
-                raise EndOfStream(
-                    TopicPartition(message.topic(), message.partition()),
+                raise EndOfPartition(
+                    Partition(Topic(message.topic()), message.partition()),
                     message.offset(),
                 )
             elif code == KafkaError._TRANSPORT:
@@ -231,57 +341,76 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
                 raise ConsumerError(str(error))
 
         result = KafkaMessage(
-            TopicPartition(message.topic(), message.partition()),
+            Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             message.value(),
         )
 
-        self.__offsets[result.stream] = result.get_next_offset()
+        self.__offsets[result.partition] = result.get_next_offset()
 
         return result
 
-    def tell(self) -> Mapping[TopicPartition, int]:
+    def tell(self) -> Mapping[Partition, int]:
+        """
+        Return the read offsets for all assigned partitions.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
         return self.__offsets
 
-    def __seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+    def __seek(self, offsets: Mapping[Partition, int]) -> None:
         if self.__state is KafkaConsumerState.ASSIGNING:
             # Calling ``seek`` on the Confluent consumer from an assignment
             # callback will throw an "Erroneous state" error. Instead,
             # partition offsets have to be initialized by calling ``assign``.
             self.__consumer.assign(
                 [
-                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
-                    for stream, offset in offsets.items()
+                    ConfluentTopicPartition(
+                        partition.topic.name, partition.index, offset
+                    )
+                    for partition, offset in offsets.items()
                 ]
             )
         else:
-            for stream, offset in offsets.items():
+            for partition, offset in offsets.items():
                 self.__consumer.seek(
-                    ConfluentTopicPartition(stream.topic, stream.partition, offset)
+                    ConfluentTopicPartition(
+                        partition.topic.name, partition.index, offset
+                    )
                 )
 
         self.__offsets.update(offsets)
 
-    def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
+        """
+        Change the read offsets for the provided partitions.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
         if offsets.keys() - self.__offsets.keys():
-            raise ConsumerError("cannot seek on unassigned streams")
+            raise ConsumerError("cannot seek on unassigned partitions")
 
         self.__seek(offsets)
 
-    def pause(self, streams: Sequence[TopicPartition]) -> None:
+    def pause(self, partitions: Sequence[Partition]) -> None:
+        """
+        Pause the consumption of messages for the provided partitions.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
         self.__consumer.pause(
             [
-                ConfluentTopicPartition(stream.topic, stream.partition)
-                for stream in streams
+                ConfluentTopicPartition(partition.topic.name, partition.index)
+                for partition in partitions
             ]
         )
 
@@ -289,24 +418,29 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         # that partition causes the seek to be ignored for some reason.
         self.seek(
             {
-                stream: offset
-                for stream, offset in self.__offsets.items()
-                if stream in streams
+                partition: offset
+                for partition, offset in self.__offsets.items()
+                if partition in partitions
             }
         )
 
-    def resume(self, streams: Sequence[TopicPartition]) -> None:
+    def resume(self, partitions: Sequence[Partition]) -> None:
+        """
+        Resume the consumption of messages for the provided partitions.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
         self.__consumer.resume(
             [
-                ConfluentTopicPartition(stream.topic, stream.partition)
-                for stream in streams
+                ConfluentTopicPartition(partition.topic.name, partition.index)
+                for partition in partitions
             ]
         )
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def __commit(self) -> Mapping[Partition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
@@ -315,24 +449,42 @@ class KafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         )
         assert result is not None  # synchronous commit should return result immediately
 
-        offsets: MutableMapping[TopicPartition, int] = {}
+        offsets: MutableMapping[Partition, int] = {}
 
         for value in result:
             # The Confluent Kafka Consumer will include logical offsets in the
-            # sequence of ``TopicPartition`` objects returned by ``commit``.
-            # These are an implementation detail of the Kafka Consumer, so we
-            # don't expose them here.
+            # sequence of ``Partition`` objects returned by ``commit``. These
+            # are an implementation detail of the Kafka Consumer, so we don't
+            # expose them here.
             # NOTE: These should no longer be seen now that we are forcing
             # offsets to be set as part of the assignment callback.
             if value.offset in self.LOGICAL_OFFSETS:
                 continue
 
             assert value.offset >= 0, "expected non-negative offset"
-            offsets[TopicPartition(value.topic, value.partition)] = value.offset
+            offsets[Partition(Topic(value.topic), value.partition)] = value.offset
 
         return offsets
 
+    def commit(self) -> Mapping[Partition, int]:
+        """
+        Commit staged offsets for all partitions that this consumer is
+        assigned to. The return value of this method is a mapping of
+        partitions with their committed offsets as values.
+
+        Raises an ``InvalidState`` if called on a closed consumer.
+        """
+        return self.__commit_retry_policy.call(self.__commit)
+
     def close(self, timeout: Optional[float] = None) -> None:
+        """
+        Close the consumer. This stops consuming messages, *may* commit
+        staged offsets (depending on the configuration), and ends its
+        subscription.
+
+        Raises a ``InvalidState`` if the consumer is unable to be closed
+        before the timeout is reached.
+        """
         try:
             self.__consumer.close()
         except RuntimeError:
@@ -364,14 +516,16 @@ def build_kafka_consumer_configuration(
     }
 
 
-class KafkaConsumerBackendWithCommitLog(KafkaConsumerBackend):
+class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        *,
         producer: ConfluentProducer,
-        commit_log_topic: str,
+        commit_log_topic: Topic,
+        commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration)
+        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
@@ -386,14 +540,14 @@ class KafkaConsumerBackendWithCommitLog(KafkaConsumerBackend):
         if error is not None:
             raise Exception(error.str())
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def commit(self) -> Mapping[Partition, int]:
         offsets = super().commit()
 
-        for stream, offset in offsets.items():
+        for partition, offset in offsets.items():
             self.__producer.produce(
-                self.__commit_log_topic,
+                self.__commit_log_topic.name,
                 key="{}:{}:{}".format(
-                    stream.topic, stream.partition, self.__group_id
+                    partition.topic.name, partition.index, self.__group_id
                 ).encode("utf-8"),
                 value="{}".format(offset).encode("utf-8"),
                 on_delivery=self.__commit_message_delivery_callback,

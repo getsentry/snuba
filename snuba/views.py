@@ -36,7 +36,7 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
 
 
 logger = logging.getLogger("snuba.api")
@@ -231,14 +231,14 @@ def parse_request_body(http_request):
 
 
 def validate_request_content(
-    body, schema: RequestSchema, timer, dataset: Dataset
+    body, schema: RequestSchema, timer, dataset: Dataset, referrer: str
 ) -> Request:
     with sentry_sdk.start_span(
         description="validate_request_content", op="validate"
     ) as span:
         source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         try:
-            request = schema.validate(body, source)
+            request = schema.validate(body, source, referrer)
             span.set_data("snuba_query", request.body)
         except jsonschema.ValidationError as error:
             raise BadRequest(str(error)) from error
@@ -284,7 +284,9 @@ def dataset_query(dataset, body, timer):
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
     query_result = parse_and_run_query(
-        dataset, validate_request_content(body, schema, timer, dataset), timer,
+        dataset,
+        validate_request_content(body, schema, timer, dataset, http_request.referrer),
+        timer,
     )
 
     def json_default(obj):
@@ -334,7 +336,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
     stats = {
         "clickhouse_table": source,
         "final": request.query.get_final(),
-        "referrer": http_request.referrer,
+        "referrer": request.referrer,
         "num_days": (to_date - from_date).days,
         "sample": request.query.get_sample(),
     }
@@ -367,6 +369,7 @@ def sdk_distribution(*, timer: Timer):
         ),
         timer,
         dataset,
+        http_request.referrer,
     )
 
     request.query.set_aggregations(
@@ -470,7 +473,7 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message = KafkaMessage(TopicPartition("topic", 0), 0, http_request.data,)
+        message = KafkaMessage(Partition(Topic("topic"), 0), 0, http_request.data,)
 
         type_ = record[1]
         metrics = DummyMetricsBackend()

@@ -14,30 +14,28 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.types import (
+from snuba.utils.streams.consumer import (
     ConsumerError,
-    Message,
-    TStream,
-    TOffset,
-    TValue,
+    KafkaConsumer,
+    KafkaMessage,
+    Partition,
+    Topic,
 )
 
 
 logger = logging.getLogger(__name__)
 
-TMessage = TypeVar("TMessage")
 
 TResult = TypeVar("TResult")
 
 
-class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
+class AbstractBatchWorker(ABC, Generic[TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: TMessage) -> Optional[TResult]:
+    def process_message(self, message: KafkaMessage) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -56,16 +54,17 @@ class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
         store(s) it is maintaining. Afterwards the offsets are committed by
         the consumer.
 
-        A simple example would be writing the batch to another stream.
+        A simple example would be writing the batch to another topic.
         """
         pass
 
 
 @dataclass
-class Offsets(Generic[TOffset]):
+class Offsets:
     __slots__ = ["lo", "hi"]
-    lo: TOffset
-    hi: TOffset
+
+    lo: int
+    hi: int
 
 
 class BatchingConsumer:
@@ -93,9 +92,9 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: Consumer[TStream, TOffset, TValue],
-        topic: str,
-        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue], TResult],
+        consumer: KafkaConsumer,
+        topic: Topic,
+        worker: AbstractBatchWorker[TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -113,7 +112,7 @@ class BatchingConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[TResult] = []
-        self.__batch_offsets: MutableMapping[TStream, Offsets[TOffset]] = {}
+        self.__batch_offsets: MutableMapping[Partition, Offsets] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -124,12 +123,12 @@ class BatchingConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(streams: Mapping[TStream, TOffset]) -> None:
-            logger.info("New streams assigned: %r", streams)
+        def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
+            logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(streams: Sequence[TStream]) -> None:
+        def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Streams revoked: %r", streams)
+            logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
 
         self.consumer.subscribe(
@@ -165,7 +164,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message[TStream, TOffset, TValue]) -> None:
+    def _handle_message(self, msg: KafkaMessage) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -181,10 +180,10 @@ class BatchingConsumer:
         self.__batch_processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
-        if msg.stream in self.__batch_offsets:
-            self.__batch_offsets[msg.stream].hi = msg.offset
+        if msg.partition in self.__batch_offsets:
+            self.__batch_offsets[msg.partition].hi = msg.offset
         else:
-            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.partition] = Offsets(msg.offset, msg.offset)
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")

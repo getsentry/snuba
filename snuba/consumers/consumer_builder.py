@@ -9,10 +9,10 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.backends.kafka import (
-    KafkaConsumerBackend,
-    KafkaConsumerBackendWithCommitLog,
+from snuba.utils.streams.consumer import (
+    KafkaConsumer,
+    KafkaConsumerWithCommitLog,
+    Topic,
     TransportError,
     build_kafka_consumer_configuration,
 )
@@ -116,15 +116,20 @@ class ConsumerBuilder:
         )
 
         if self.commit_log_topic is None:
-            backend = KafkaConsumerBackend(configuration)
+            consumer = KafkaConsumer(
+                configuration, commit_retry_policy=self.__commit_retry_policy
+            )
         else:
-            backend = KafkaConsumerBackendWithCommitLog(
-                configuration, self.producer, self.commit_log_topic,
+            consumer = KafkaConsumerWithCommitLog(
+                configuration,
+                producer=self.producer,
+                commit_log_topic=Topic(self.commit_log_topic),
+                commit_retry_policy=self.__commit_retry_policy,
             )
 
         return BatchingConsumer(
-            Consumer(backend, self.__commit_retry_policy,),
-            self.raw_topic,
+            consumer,
+            Topic(self.raw_topic),
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,

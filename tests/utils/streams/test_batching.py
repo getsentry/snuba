@@ -12,24 +12,22 @@ from typing import (
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.backends.abstract import ConsumerBackend
-from snuba.utils.streams.consumers.backends.kafka import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
 
 
-class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
+class FakeKafkaConsumer:
     def __init__(self):
         self.items: MutableSequence[KafkaMessage] = []
         self.commit_calls = 0
         self.close_calls = 0
-        self.positions: MutableMapping[TopicPartition, int] = {}
+        self.positions: MutableMapping[Partition, int] = {}
 
     def subscribe(
         self,
         topics: Sequence[str],
-        on_assign: Optional[Callable[[Mapping[TopicPartition, int]], None]] = None,
-        on_revoke: Optional[Callable[[Sequence[TopicPartition]], None]] = None,
+        on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
         pass  # XXX: This is a bit of a smell.
 
@@ -42,23 +40,23 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         except IndexError:
             return None
 
-        self.positions[message.stream] = message.get_next_offset()
+        self.positions[message.partition] = message.get_next_offset()
 
         return message
 
-    def tell(self) -> Mapping[TopicPartition, int]:
+    def tell(self) -> Mapping[Partition, int]:
         return self.__positions
 
-    def seek(self, offsets: Mapping[TopicPartition, int]) -> None:
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
         raise NotImplementedError  # XXX: This is a bit more of a smell.
 
-    def pause(self, streams: Sequence[TopicPartition]):
+    def pause(self, partitions: Sequence[Partition]):
         raise NotImplementedError
 
-    def resume(self, streams: Sequence[TopicPartition]):
+    def resume(self, partitions: Sequence[Partition]):
         raise NotImplementedError
 
-    def commit(self) -> Mapping[TopicPartition, int]:
+    def commit(self) -> Mapping[Partition, int]:
         self.commit_calls += 1
         return self.positions
 
@@ -66,7 +64,7 @@ class FakeKafkaConsumerBackend(ConsumerBackend[TopicPartition, int, bytes]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
+class FakeWorker(AbstractBatchWorker[Any]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
@@ -81,37 +79,37 @@ class FakeWorker(AbstractBatchWorker[KafkaMessage, Any]):
 
 class TestConsumer(object):
     def test_batch_size(self) -> None:
-        backend = FakeKafkaConsumerBackend()
+        consumer = FakeKafkaConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
-            Consumer(backend),
-            "topic",
+            consumer,
+            Topic("topic"),
             worker=worker,
             max_batch_size=2,
             max_batch_time=100,
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        backend.items = [
-            KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
+        consumer.items = [
+            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
             for i in [1, 2, 3]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
         batching_consumer._shutdown()
 
         assert worker.processed == [b"1", b"2", b"3"]
         assert worker.flushed == [[b"1", b"2"]]
-        assert backend.commit_calls == 1
-        assert backend.close_calls == 1
+        assert consumer.commit_calls == 1
+        assert consumer.close_calls == 1
 
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
-        backend = FakeKafkaConsumerBackend()
+        consumer = FakeKafkaConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
-            Consumer(backend),
-            "topic",
+            consumer,
+            Topic("topic"),
             worker=worker,
             max_batch_size=100,
             max_batch_time=2000,
@@ -119,27 +117,27 @@ class TestConsumer(object):
         )
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
-        backend.items = [
-            KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
+        consumer.items = [
+            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
             for i in [1, 2, 3]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
-        backend.items = [
-            KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
+        consumer.items = [
+            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
             for i in [4, 5, 6]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
-        backend.items = [
-            KafkaMessage(TopicPartition("topic", 0), i, f"{i}".encode("utf-8"))
+        consumer.items = [
+            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
             for i in [7, 8, 9]
         ]
-        for x in range(len(backend.items)):
+        for x in range(len(consumer.items)):
             batching_consumer._run_once()
 
         batching_consumer._shutdown()
@@ -156,5 +154,5 @@ class TestConsumer(object):
             b"9",
         ]
         assert worker.flushed == [[b"1", b"2", b"3", b"4", b"5", b"6"]]
-        assert backend.commit_calls == 1
-        assert backend.close_calls == 1
+        assert consumer.commit_calls == 1
+        assert consumer.close_calls == 1
