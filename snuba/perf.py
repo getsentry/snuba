@@ -7,7 +7,7 @@ from itertools import chain
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
 
 
 logger = logging.getLogger("snuba.perf")
@@ -23,7 +23,7 @@ def get_messages(events_file):
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
         messages.append(
-            KafkaMessage(TopicPartition("events", 1), 0, raw_event.encode("utf-8")),
+            KafkaMessage(Partition(Topic("events"), 1), 0, raw_event.encode("utf-8")),
         )
     return messages
 

@@ -41,7 +41,7 @@ class ConsumerWorker(AbstractBatchWorker[ProcessedMessage]):
         # json.
         value = json.loads(message.value)
         metadata = KafkaMessageMetadata(
-            offset=message.offset, partition=message.stream.partition
+            offset=message.offset, partition=message.partition.index
         )
         processed = self._process_message_impl(value, metadata)
         if processed is None:

@@ -6,7 +6,7 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, TopicPartition
+from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
 from tests.base import BaseEventsTest
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -19,7 +19,7 @@ class TestConsumer(BaseEventsTest):
         event = self.event
 
         message = KafkaMessage(
-            TopicPartition("events", 456),
+            Partition(Topic("events"), 456),
             123,
             json.dumps((0, "insert", event)).encode(
                 "utf-8"
@@ -65,7 +65,7 @@ class TestConsumer(BaseEventsTest):
         event["data"]["received"] = int(calendar.timegm(old_timestamp.timetuple()))
 
         message = KafkaMessage(
-            TopicPartition("events", 1),
+            Partition(Topic("events"), 1),
             42,
             json.dumps((0, "insert", event)).encode("utf-8"),
         )

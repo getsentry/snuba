@@ -108,6 +108,7 @@ def replacer(
     from snuba.utils.streams.batching import BatchingConsumer
     from snuba.utils.streams.consumer import (
         KafkaConsumer,
+        Topic,
         TransportError,
         build_kafka_consumer_configuration,
     )
@@ -156,7 +157,7 @@ def replacer(
                 queued_min_messages=queued_min_messages,
             ),
         ),
-        replacements_topic,
+        Topic(replacements_topic),
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
