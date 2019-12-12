@@ -8,7 +8,6 @@ from typing import (
     Callable,
     Mapping,
     MutableMapping,
-    MutableSequence,
     Optional,
     Sequence,
 )
@@ -173,20 +172,41 @@ class KafkaConsumer:
 
     def __resolve_partition_offset_earliest(
         self, partition: ConfluentTopicPartition
-    ) -> ConfluentTopicPartition:
+    ) -> int:
         low, high = self.__consumer.get_watermark_offsets(partition)
-        return ConfluentTopicPartition(partition.topic, partition.partition, low)
+        return int(low)
 
     def __resolve_partition_offset_latest(
         self, partition: ConfluentTopicPartition
-    ) -> ConfluentTopicPartition:
+    ) -> int:
         low, high = self.__consumer.get_watermark_offsets(partition)
-        return ConfluentTopicPartition(partition.topic, partition.partition, high)
+        return int(high)
 
     def __resolve_partition_offset_error(
         self, partition: ConfluentTopicPartition
     ) -> ConfluentTopicPartition:
         raise ConsumerError("unable to resolve partition offsets")
+
+    def __get_starting_offsets(
+        self, partitions: Sequence[Partition]
+    ) -> Mapping[Partition, int]:
+        result: MutableMapping[Partition, int] = {}
+
+        for item in self.__consumer.committed(
+            [
+                ConfluentTopicPartition(partition.topic.name, partition.index)
+                for partition in partitions
+            ]
+        ):
+            partition = Partition(Topic(item.topic), item.partition)
+            if item.offset >= 0:
+                result[partition] = item.offset
+            elif item.offset == OFFSET_INVALID:
+                result[partition] = self.__resolve_partition_starting_offset(item)
+            else:
+                raise ValueError("received unexpected offset")
+
+        return result
 
     # Balanced Consumer Methods
 
@@ -224,21 +244,12 @@ class KafkaConsumer:
             self.__state = KafkaConsumerState.ASSIGNING
 
             try:
-                assignment: MutableSequence[ConfluentTopicPartition] = []
-
-                for partition in self.__consumer.committed(partitions):
-                    if partition.offset >= 0:
-                        assignment.append(partition)
-                    elif partition.offset == OFFSET_INVALID:
-                        assignment.append(
-                            self.__resolve_partition_starting_offset(partition)
-                        )
-                    else:
-                        raise ValueError("received unexpected offset")
-
-                offsets: MutableMapping[Partition, int] = {
-                    Partition(Topic(i.topic), i.partition): i.offset for i in assignment
-                }
+                offsets = self.__get_starting_offsets(
+                    [
+                        Partition(Topic(partition.topic), partition.partition)
+                        for partition in partitions
+                    ]
+                )
                 self.__seek(offsets)
             except Exception:
                 self.__state = KafkaConsumerState.ERROR
@@ -308,7 +319,34 @@ class KafkaConsumer:
 
         Raises an ``InvalidState`` exception if called on a closed consumer.
         """
-        raise NotImplementedError
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
+        assignment = {
+            **{
+                partition: offset
+                for partition, offset in partitions.items()
+                if offset is not None
+            },
+            **self.__get_starting_offsets(
+                [
+                    partition
+                    for partition, offset in partitions.items()
+                    if offset is None
+                ]
+            ),
+        }
+
+        self.__consumer.assign(
+            [
+                ConfluentTopicPartition(partition.topic.name, partition.index, offset)
+                for partition, offset in assignment.items()
+            ]
+        )
+
+        self.__offsets = assignment
+
+        return assignment
 
     def unassign(self) -> None:
         """
@@ -316,6 +354,9 @@ class KafkaConsumer:
 
         Raises an ``InvalidState`` exception if called on a closed consumer.
         """
+        if self.__state is not KafkaConsumerState.CONSUMING:
+            raise InvalidState(self.__state)
+
         self.__consumer.unassign()
         self.__offsets.clear()
 
