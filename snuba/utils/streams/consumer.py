@@ -184,7 +184,7 @@ class KafkaConsumer:
 
     def __resolve_partition_offset_error(
         self, partition: ConfluentTopicPartition
-    ) -> ConfluentTopicPartition:
+    ) -> int:
         raise ConsumerError("unable to resolve partition offsets")
 
     def __get_starting_offsets(
