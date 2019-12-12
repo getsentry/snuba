@@ -78,7 +78,11 @@ def outcomes_mv_migrations(
         return ret
 
     if "bytes_received" in current_schema:
-        ret.extend((f"""RENAME TABLE {clickhouse_table} TO old_{clickhouse_table}""", table_definition, f"""DETACH TABLE old_{clickhouse_table}"""))
+        ret.extend((
+            f"""RENAME TABLE {clickhouse_table} TO old_{clickhouse_table}""",
+            table_definition,
+            f"""DETACH TABLE old_{clickhouse_table}"""
+        ))
     return ret
 
 
