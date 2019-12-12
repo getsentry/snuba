@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from typing import Iterator, Mapping, Sequence
+from typing import Iterator, Mapping, Optional, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
@@ -42,7 +42,10 @@ def test_data_types() -> None:
     assert Partition(Topic("other-topic"), 0) not in Topic("topic")
 
 
-def build_consumer() -> KafkaConsumer:
+def build_consumer(group: Optional[str] = None) -> KafkaConsumer:
+    if group is None:
+        group = f"test-{uuid.uuid1().hex}"
+
     return KafkaConsumer(
         {
             **configuration,
@@ -50,13 +53,14 @@ def build_consumer() -> KafkaConsumer:
             "enable.auto.commit": "false",
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
-            "group.id": f"test-{uuid.uuid1().hex}",
+            "group.id": group,
             "session.timeout.ms": 10000,
         }
     )
 
 
 def test_consumer_backend(topic: Topic) -> None:
+    group = f"test-{uuid.uuid1().hex}"
 
     producer = ConfluentProducer(configuration)
     value = uuid.uuid1().hex.encode("utf-8")
@@ -64,7 +68,7 @@ def test_consumer_backend(topic: Topic) -> None:
         producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    consumer = build_consumer()
+    consumer = build_consumer(group)
 
     def assignment_callback(partitions: Mapping[Partition, int]):
         assignment_callback.called = True
@@ -160,7 +164,7 @@ def test_consumer_backend(topic: Topic) -> None:
 
     consumer.close()
 
-    consumer = build_consumer()
+    consumer = build_consumer(group)
 
     consumer.subscribe([topic])
 
