@@ -33,6 +33,7 @@ class TestReplacer(BaseEventsTest):
             Partition(Topic("replacements"), 0),
             0,
             Payload(None, json.dumps(msg).encode("utf-8")),
+            datetime.now(),
         )
 
     def _issue_count(self, project_id, group_id=None):
@@ -244,6 +245,7 @@ class TestReplacer(BaseEventsTest):
                     )
                 ).encode("utf-8"),
             ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -280,6 +282,7 @@ class TestReplacer(BaseEventsTest):
                     )
                 ).encode("utf-8"),
             ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -318,6 +321,7 @@ class TestReplacer(BaseEventsTest):
                     )
                 ).encode("utf-8"),
             ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -373,6 +377,7 @@ class TestReplacer(BaseEventsTest):
                     )
                 ).encode("utf-8"),
             ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)

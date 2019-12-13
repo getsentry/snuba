@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 
@@ -36,11 +37,12 @@ class Message:
     Represents a single message within a partition.
     """
 
-    __slots__ = ["partition", "offset", "payload"]
+    __slots__ = ["partition", "offset", "payload", "timestamp"]
 
     partition: Partition
     offset: int
     payload: Payload
+    timestamp: datetime
 
     def get_next_offset(self) -> int:
         return self.offset + 1

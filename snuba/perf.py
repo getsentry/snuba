@@ -3,6 +3,7 @@ import logging
 import os
 import tempfile
 import time
+from datetime import datetime
 from itertools import chain
 
 from snuba.util import settings_override
@@ -27,6 +28,7 @@ def get_messages(events_file):
                 Partition(Topic("events"), 1),
                 0,
                 Payload(None, raw_event.encode("utf-8")),
+                datetime.now(),
             ),
         )
     return messages

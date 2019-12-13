@@ -24,6 +24,7 @@ class TestConsumer(BaseEventsTest):
             Payload(
                 None, json.dumps((0, "insert", event)).encode("utf-8")
             ),  # event doesn't really matter
+            datetime.now(),
         )
 
         replacement_topic = (
@@ -68,6 +69,7 @@ class TestConsumer(BaseEventsTest):
             Partition(Topic("events"), 1),
             42,
             Payload(None, json.dumps((0, "insert", event)).encode("utf-8")),
+            datetime.now(),
         )
 
         assert test_worker.process_message(message) is None

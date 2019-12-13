@@ -92,7 +92,10 @@ class TestConsumer(object):
 
         consumer.items = [
             Message(
-                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+                Partition(Topic("topic"), 0),
+                i,
+                Payload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
             )
             for i in [1, 2, 3]
         ]
@@ -121,7 +124,10 @@ class TestConsumer(object):
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
         consumer.items = [
             Message(
-                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+                Partition(Topic("topic"), 0),
+                i,
+                Payload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
             )
             for i in [1, 2, 3]
         ]
@@ -131,7 +137,10 @@ class TestConsumer(object):
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
         consumer.items = [
             Message(
-                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+                Partition(Topic("topic"), 0),
+                i,
+                Payload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
             )
             for i in [4, 5, 6]
         ]
@@ -141,7 +150,10 @@ class TestConsumer(object):
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
         consumer.items = [
             Message(
-                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+                Partition(Topic("topic"), 0),
+                i,
+                Payload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
             )
             for i in [7, 8, 9]
         ]

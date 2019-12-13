@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
@@ -316,6 +317,7 @@ class KafkaConsumer(Consumer):
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             Payload(message.key(), message.value()),
+            datetime.fromtimestamp(message.timestamp()[1] / 1000.0),  # XXX: tzinfo?
         )
 
         self.__offsets[result.partition] = result.get_next_offset()

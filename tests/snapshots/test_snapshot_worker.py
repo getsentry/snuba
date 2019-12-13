@@ -80,7 +80,10 @@ class TestSnapshotWorker:
 
         ret = worker.process_message(
             Message(
-                Partition(Topic("topic"), 0), 1, Payload(None, message.encode("utf-8"))
+                Partition(Topic("topic"), 0),
+                1,
+                Payload(None, message.encode("utf-8")),
+                datetime.now(),
             )
         )
         assert ret == expected
