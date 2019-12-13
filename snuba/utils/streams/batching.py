@@ -14,10 +14,10 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import (
+from snuba.utils.streams.consumer import KafkaConsumer
+from snuba.utils.streams.types import (
     ConsumerError,
-    KafkaConsumer,
-    KafkaMessage,
+    Message,
     Partition,
     Topic,
 )
@@ -35,7 +35,7 @@ class AbstractBatchWorker(ABC, Generic[TResult]):
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: KafkaMessage) -> Optional[TResult]:
+    def process_message(self, message: Message) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -164,7 +164,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: KafkaMessage) -> None:
+    def _handle_message(self, msg: Message) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen

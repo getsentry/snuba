@@ -11,7 +11,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaMessage
+from snuba.utils.streams.types import Message
 
 
 logger = logging.getLogger("snuba.consumer")
@@ -35,7 +35,7 @@ class ConsumerWorker(AbstractBatchWorker[ProcessedMessage]):
             {"load_balancing": "in_order", "insert_distributed_sync": 1}
         )
 
-    def process_message(self, message: KafkaMessage) -> Optional[ProcessedMessage]:
+    def process_message(self, message: Message) -> Optional[ProcessedMessage]:
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.

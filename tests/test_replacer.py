@@ -8,7 +8,7 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 
 
@@ -28,8 +28,8 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg: str) -> KafkaMessage:
-        return KafkaMessage(
+    def _wrap(self, msg: str) -> Message:
+        return Message(
             Partition(Topic("replacements"), 0), 0, json.dumps(msg).encode("utf-8"),
         )
 
@@ -225,7 +225,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message = Message(
             Partition(Topic("replacements"), 1),
             42,
             json.dumps(
@@ -257,7 +257,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message = Message(
             Partition(Topic("replacements"), 1),
             42,
             json.dumps(
@@ -291,7 +291,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message = Message(
             Partition(Topic("replacements"), 1),
             42,
             json.dumps(
@@ -345,7 +345,7 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message = KafkaMessage(
+        message = Message(
             Partition(Topic("replacements"), 1),
             42,
             json.dumps(

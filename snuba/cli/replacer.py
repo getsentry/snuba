@@ -108,10 +108,10 @@ def replacer(
     from snuba.utils.streams.batching import BatchingConsumer
     from snuba.utils.streams.consumer import (
         KafkaConsumer,
-        Topic,
         TransportError,
         build_kafka_consumer_configuration,
     )
+    from snuba.utils.streams.types import Topic
 
     sentry_sdk.init(dsn=settings.SENTRY_DSN)
     dataset = get_dataset(dataset_name)

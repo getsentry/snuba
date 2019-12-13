@@ -12,10 +12,10 @@ from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
-    Topic,
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.types import Topic
 
 
 class ConsumerBuilder:

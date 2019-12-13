@@ -36,7 +36,7 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger("snuba.api")
@@ -473,7 +473,7 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message = KafkaMessage(Partition(Topic("topic"), 0), 0, http_request.data,)
+        message = Message(Partition(Topic("topic"), 0), 0, http_request.data,)
 
         type_ = record[1]
         metrics = DummyMetricsBackend()

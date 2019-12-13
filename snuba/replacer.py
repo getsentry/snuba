@@ -16,7 +16,7 @@ from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaMessage
+from snuba.utils.streams.types import Message
 
 from . import settings
 
@@ -121,7 +121,7 @@ class ReplacerWorker(AbstractBatchWorker[Replacement]):
             col.escaped for col in dataset.get_required_columns()
         ]
 
-    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
+    def process_message(self, message: Message) -> Optional[Replacement]:
         message = json.loads(message.value)
         version = message[0]
 

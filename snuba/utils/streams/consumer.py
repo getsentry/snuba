@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 import logging
-from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -21,50 +18,15 @@ from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-
+from snuba.utils.streams.types import (
+    ConsumerError,
+    EndOfPartition,
+    Message,
+    Partition,
+    Topic,
+)
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class Topic:
-    __slots__ = ["name"]
-
-    name: str
-
-    def __contains__(self, partition: Partition) -> bool:
-        return partition.topic == self
-
-
-@dataclass(frozen=True)
-class Partition:
-    __slots__ = ["topic", "index"]
-
-    topic: Topic
-    index: int
-
-
-class ConsumerError(Exception):
-    """
-    Base class for exceptions that are raised during consumption.
-
-    Subclasses may extend this class to disambiguate errors that are specific
-    to their implementation.
-    """
-
-
-class EndOfPartition(ConsumerError):
-    """
-    Raised when there are no more messages to consume from the partition.
-    """
-
-    def __init__(self, partition: Partition, offset: int):
-        # The partition that the consumer has reached the end of.
-        self.partition = partition
-
-        # The next unconsumed offset in the partition (where there is currently
-        # no message.)
-        self.offset = offset
 
 
 class TransportError(ConsumerError):
@@ -79,22 +41,6 @@ KafkaConsumerState = Enum(
 class InvalidState(RuntimeError):
     def __init__(self, state: KafkaConsumerState):
         self.__state = state
-
-
-@dataclass(frozen=True)
-class KafkaMessage:
-    """
-    Represents a single message within a partition.
-    """
-
-    __slots__ = ["partition", "offset", "value"]
-
-    partition: Partition
-    offset: int
-    value: bytes
-
-    def get_next_offset(self) -> int:
-        return self.offset + 1
 
 
 class KafkaConsumer:
@@ -290,7 +236,7 @@ class KafkaConsumer:
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -340,7 +286,7 @@ class KafkaConsumer:
             else:
                 raise ConsumerError(str(error))
 
-        result = KafkaMessage(
+        result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             message.value(),
@@ -530,7 +476,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 

@@ -5,11 +5,13 @@ from typing import Iterator, Mapping, Sequence
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 from snuba.utils.streams.consumer import (
-    ConsumerError,
-    EndOfPartition,
-    KafkaMessage,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+)
+from snuba.utils.streams.types import (
+    ConsumerError,
+    EndOfPartition,
+    Message,
     Partition,
     Topic,
 )
@@ -89,7 +91,7 @@ def test_consumer_backend(topic: Topic) -> None:
     )
 
     message = consumer.poll(10.0)  # XXX: getting the subcription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
     assert message.value == value
@@ -108,7 +110,7 @@ def test_consumer_backend(topic: Topic) -> None:
     consumer.resume([Partition(topic, 0)])
 
     message = consumer.poll(1.0)
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 0
     assert message.value == value
@@ -157,7 +159,7 @@ def test_consumer_backend(topic: Topic) -> None:
     consumer.subscribe([topic])
 
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
     assert message.value == value
@@ -193,7 +195,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
     consumer.subscribe([topic])
 
     message = consumer.poll(10.0)
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.offset == 0
 
     consumer.close()
@@ -281,7 +283,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     assert producer.flush(5.0) == 0
 
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
 
     assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
