@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -487,6 +488,23 @@ def build_kafka_consumer_configuration(
     }
 
 
+@dataclass(frozen=True)
+class Commit:
+    __slots__ = ["group", "partition", "offset"]
+
+    group: str
+    partition: Partition
+    offset: int
+
+    def encode(self) -> Payload:
+        return Payload(
+            f"{self.partition.topic.name}:{self.partition.index}:{self.group}".encode(
+                "utf-8"
+            ),
+            f"{self.offset}".encode("utf-8"),
+        )
+
+
 class KafkaConsumerWithCommitLog(KafkaConsumer):
     def __init__(
         self,
@@ -515,12 +533,11 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         offsets = super().commit()
 
         for partition, offset in offsets.items():
+            payload = Commit(self.__group_id, partition, offset).encode()
             self.__producer.produce(
                 self.__commit_log_topic.name,
-                key="{}:{}:{}".format(
-                    partition.topic.name, partition.index, self.__group_id
-                ).encode("utf-8"),
-                value="{}".format(offset).encode("utf-8"),
+                key=payload.key,
+                value=payload.value,
                 on_delivery=self.__commit_message_delivery_callback,
             )
 
