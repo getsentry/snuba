@@ -10,7 +10,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Payload, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
@@ -79,6 +79,8 @@ class TestSnapshotWorker:
         )
 
         ret = worker.process_message(
-            Message(Partition(Topic("topic"), 0), 1, message.encode("utf-8"),)
+            Message(
+                Partition(Topic("topic"), 0), 1, Payload(None, message.encode("utf-8"))
+            )
         )
         assert ret == expected

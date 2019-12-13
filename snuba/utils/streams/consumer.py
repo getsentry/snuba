@@ -24,6 +24,7 @@ from snuba.utils.streams.types import (
     EndOfPartition,
     Message,
     Partition,
+    Payload,
     Topic,
 )
 
@@ -313,7 +314,7 @@ class KafkaConsumer(Consumer):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            message.value(),
+            Payload(message.key(), message.value()),
         )
 
         self.__offsets[result.partition] = result.get_next_offset()

@@ -8,7 +8,7 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Payload, Topic
 from tests.base import BaseEventsTest
 
 
@@ -30,7 +30,9 @@ class TestReplacer(BaseEventsTest):
 
     def _wrap(self, msg: str) -> Message:
         return Message(
-            Partition(Topic("replacements"), 0), 0, json.dumps(msg).encode("utf-8"),
+            Partition(Topic("replacements"), 0),
+            0,
+            Payload(None, json.dumps(msg).encode("utf-8")),
         )
 
     def _issue_count(self, project_id, group_id=None):
@@ -228,17 +230,20 @@ class TestReplacer(BaseEventsTest):
         message = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_groups",
-                    {
-                        "project_id": project_id,
-                        "group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            Payload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_groups",
+                        {
+                            "project_id": project_id,
+                            "group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
         )
 
         processed = self.replacer.process_message(message)
@@ -260,18 +265,21 @@ class TestReplacer(BaseEventsTest):
         message = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_merge",
-                    {
-                        "project_id": project_id,
-                        "new_group_id": 2,
-                        "previous_group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            Payload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_merge",
+                        {
+                            "project_id": project_id,
+                            "new_group_id": 2,
+                            "previous_group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
         )
 
         processed = self.replacer.process_message(message)
@@ -294,19 +302,22 @@ class TestReplacer(BaseEventsTest):
         message = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_unmerge",
-                    {
-                        "project_id": project_id,
-                        "previous_group_id": 1,
-                        "new_group_id": 2,
-                        "hashes": ["a" * 32],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            Payload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_unmerge",
+                        {
+                            "project_id": project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
         )
 
         processed = self.replacer.process_message(message)
@@ -348,17 +359,20 @@ class TestReplacer(BaseEventsTest):
         message = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_tag",
-                    {
-                        "project_id": project_id,
-                        "tag": "browser.name",
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            Payload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_tag",
+                        {
+                            "project_id": project_id,
+                            "tag": "browser.name",
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
         )
 
         processed = self.replacer.process_message(message)

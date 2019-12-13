@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -22,16 +23,24 @@ class Partition:
 
 
 @dataclass(frozen=True)
+class Payload:
+    __slots__ = ["key", "value"]
+
+    key: Optional[bytes]
+    value: bytes
+
+
+@dataclass(frozen=True)
 class Message:
     """
     Represents a single message within a partition.
     """
 
-    __slots__ = ["partition", "offset", "value"]
+    __slots__ = ["partition", "offset", "payload"]
 
     partition: Partition
     offset: int
-    value: bytes
+    payload: Payload
 
     def get_next_offset(self) -> int:
         return self.offset + 1

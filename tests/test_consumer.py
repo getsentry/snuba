@@ -6,7 +6,7 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Payload, Topic
 from tests.base import BaseEventsTest
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -21,8 +21,8 @@ class TestConsumer(BaseEventsTest):
         message = Message(
             Partition(Topic("events"), 456),
             123,
-            json.dumps((0, "insert", event)).encode(
-                "utf-8"
+            Payload(
+                None, json.dumps((0, "insert", event)).encode("utf-8")
             ),  # event doesn't really matter
         )
 
@@ -67,7 +67,7 @@ class TestConsumer(BaseEventsTest):
         message = Message(
             Partition(Topic("events"), 1),
             42,
-            json.dumps((0, "insert", event)).encode("utf-8"),
+            Payload(None, json.dumps((0, "insert", event)).encode("utf-8")),
         )
 
         assert test_worker.process_message(message) is None

@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Payload, Topic
 
 
 class FakeKafkaConsumer:
@@ -64,14 +64,14 @@ class FakeKafkaConsumer:
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[Any]):
+class FakeWorker(AbstractBatchWorker[bytes]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message: Message) -> Optional[Any]:
-        self.processed.append(message.value)
-        return message.value
+    def process_message(self, message: Message) -> bytes:
+        self.processed.append(message.payload.value)
+        return message.payload.value
 
     def flush_batch(self, batch: Sequence[Any]) -> None:
         self.flushed.append(batch)
@@ -91,7 +91,9 @@ class TestConsumer(object):
         )
 
         consumer.items = [
-            Message(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+            )
             for i in [1, 2, 3]
         ]
         for x in range(len(consumer.items)):
@@ -118,7 +120,9 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
         consumer.items = [
-            Message(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+            )
             for i in [1, 2, 3]
         ]
         for x in range(len(consumer.items)):
@@ -126,7 +130,9 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
         consumer.items = [
-            Message(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+            )
             for i in [4, 5, 6]
         ]
         for x in range(len(consumer.items)):
@@ -134,7 +140,9 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
         consumer.items = [
-            Message(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0), i, Payload(None, f"{i}".encode("utf-8"))
+            )
             for i in [7, 8, 9]
         ]
         for x in range(len(consumer.items)):

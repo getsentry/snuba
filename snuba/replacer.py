@@ -122,7 +122,7 @@ class ReplacerWorker(AbstractBatchWorker[Replacement]):
         ]
 
     def process_message(self, message: Message) -> Optional[Replacement]:
-        message = json.loads(message.value)
+        message = json.loads(message.payload.value)
         version = message[0]
 
         if version == 2:

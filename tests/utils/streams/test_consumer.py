@@ -13,6 +13,7 @@ from snuba.utils.streams.types import (
     EndOfPartition,
     Message,
     Partition,
+    Payload,
     Topic,
 )
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
@@ -94,7 +95,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.value == value
+    assert message.payload == Payload(None, value)
 
     assert consumer.tell() == {Partition(topic, 0): 2}
     assert getattr(assignment_callback, "called", False)
@@ -113,7 +114,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 0
-    assert message.value == value
+    assert message.payload == Payload(None, value)
 
     assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
@@ -162,7 +163,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.value == value
+    assert message.payload == Payload(None, value)
 
     try:
         assert consumer.poll(1.0) is None

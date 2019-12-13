@@ -39,7 +39,7 @@ class ConsumerWorker(AbstractBatchWorker[ProcessedMessage]):
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
-        value = json.loads(message.value)
+        value = json.loads(message.payload.value)
         metadata = KafkaMessageMetadata(
             offset=message.offset, partition=message.partition.index
         )
