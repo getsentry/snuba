@@ -1,4 +1,5 @@
 import logging
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
     Any,
@@ -29,6 +30,29 @@ from snuba.utils.streams.types import (
 logger = logging.getLogger(__name__)
 
 
+class Consumer(ABC):
+    @abstractmethod
+    def subscribe(
+        self,
+        topics: Sequence[Topic],
+        on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def commit(self) -> Mapping[Partition, int]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def close(self, timeout: Optional[float] = None) -> None:
+        raise NotImplementedError
+
+
 class TransportError(ConsumerError):
     pass
 
@@ -43,7 +67,7 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-class KafkaConsumer:
+class KafkaConsumer(Consumer):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned

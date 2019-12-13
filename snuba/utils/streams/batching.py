@@ -14,7 +14,7 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import KafkaConsumer
+from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.types import (
     ConsumerError,
     Message,
@@ -92,7 +92,7 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: KafkaConsumer,
+        consumer: Consumer,
         topic: Topic,
         worker: AbstractBatchWorker[TResult],
         max_batch_size: int,
