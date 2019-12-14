@@ -6,7 +6,9 @@ from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
     FunctionCall,
+    Lambda,
     Literal,
+    Variable,
 )
 from snuba.query.parsing import ParsingContext
 
@@ -15,7 +17,6 @@ test_expressions = [
     (Literal(None, 123), "123",),  # INT literal
     (Literal(None, 123.321), "123.321",),  # FLOAT literal
     (Literal(None, None), "NULL",),  # NULL
-    (Literal(None, True), "true",),  # True
     (Literal(None, False), "false",),  # False
     (Column(None, "column1", "table1"), "table1.column1"),  # Basic Column no alias
     (Column(None, "column1", None), "column1"),  # Basic Column with no table
@@ -77,6 +78,23 @@ test_expressions = [
         ),
         "f0(table1.param1)(f1(table1.param2), table1.param3)",
     ),  # Curried function call with hierarchy
+    (
+        FunctionCall(
+            None,
+            "arrayExists",
+            [
+                Lambda(
+                    None,
+                    ["x", "y"],
+                    FunctionCall(
+                        None, "testFunc", [Variable(None, "x"), Variable(None, "y")]
+                    ),
+                ),
+                Column(None, "test", None),
+            ],
+        ),
+        "arrayExists((x, y -> testFunc(x, y)), test)",
+    ),  # Lambda expression
 ]
 
 

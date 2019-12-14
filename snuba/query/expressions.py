@@ -84,6 +84,14 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TVisited:
         raise NotImplementedError
 
+    @abstractmethod
+    def visitVariable(self, exp: Variable) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
+    def visitLambda(self, exp: Lambda) -> TVisited:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class Literal(Expression):
@@ -214,3 +222,53 @@ class CurriedFunctionCall(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visitCurriedFunctionCall(self)
+
+
+@dataclass(frozen=True)
+class Variable(Expression):
+    """
+    A bound variable in a lambda expression. This is used to refer to variables
+    declared in the lambda expression
+    """
+
+    name: str
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        return func(self)
+
+    def __iter__(self) -> Iterator[Expression]:
+        yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitVariable(self)
+
+
+@dataclass(frozen=True)
+class Lambda(Expression):
+    """
+    A lambda expression in the form (x,y,z -> transform(x,y,z))
+    """
+
+    # the bound variables in the expressions. These are intentionally not expressions
+    # since they are variable names and cannot have aliases
+    variables: Sequence[str]
+    transformation: Expression
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        """
+        Applies the transformation to the inner expression but not to the variables
+        declaration.
+        """
+        transformed = replace(self, transformation=self.transformation.transform(func),)
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        """
+        Traverse the subtree in a postfix order.
+        """
+        for child in self.transformation:
+            yield child
+        yield self
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitLambda(self)

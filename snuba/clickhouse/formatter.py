@@ -5,7 +5,9 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    Lambda,
     Literal,
+    Variable,
 )
 from snuba.query.parsing import ParsingContext
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
@@ -81,4 +83,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
         ret = f"{int_func}{self.__visit_params(exp.parameters)}"
+        return self.__alias(ret, exp.alias)
+
+    def visitVariable(self, exp: Variable) -> str:
+        return escape_identifier(exp.name)
+
+    def visitLambda(self, exp: Lambda) -> str:
+        variables = [escape_identifier(v) for v in exp.variables]
+        ret = f"({', '.join(variables)} -> {exp.transformation.accept(self)})"
         return self.__alias(ret, exp.alias)
