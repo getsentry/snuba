@@ -320,9 +320,9 @@ class MaterializedViewSchema(TableSchema):
         )
 
     def get_migration_statements(
-            self,
+        self,
     ) -> Callable[[str, Mapping[str, MigrationSchemaColumn], str], Sequence[str]]:
         return functools.partial(
-            self._TableSchema__migration_function,
+            super().migration_function,
             table_definition=self.get_local_table_definition()
         )
