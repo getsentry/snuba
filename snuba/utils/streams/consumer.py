@@ -80,15 +80,7 @@ class Payload:
     value: bytes
 
 
-class PayloadCodec(Codec[Payload, Payload]):
-    def encode(self, value: Payload) -> Payload:
-        return value
-
-    def decode(self, value: Payload) -> Payload:
-        return value
-
-
-class KafkaConsumer(Consumer[Payload]):
+class KafkaConsumer(Consumer[TPayload]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -128,6 +120,7 @@ class KafkaConsumer(Consumer[Payload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        codec: Codec[Payload, TPayload],
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -156,7 +149,7 @@ class KafkaConsumer(Consumer[Payload]):
             {**configuration, "auto.offset.reset": "error"}
         )
 
-        self.__codec = PayloadCodec()
+        self.__codec = codec
 
         self.__offsets: MutableMapping[Partition, int] = {}
 
@@ -283,7 +276,7 @@ class KafkaConsumer(Consumer[Payload]):
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -336,7 +329,7 @@ class KafkaConsumer(Consumer[Payload]):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.encode(Payload(message.key(), message.value())),
+            self.__codec.decode(Payload(message.key(), message.value())),
             datetime.fromtimestamp(message.timestamp()[1] / 1000.0),  # XXX: tzinfo?
         )
 
@@ -532,21 +525,22 @@ class CommitCodec(Codec[Payload, Commit]):
         raise NotImplementedError  # TODO
 
 
-class KafkaConsumerWithCommitLog(KafkaConsumer):
+class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        codec: Codec[Payload, TPayload],
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
+        super().__init__(configuration, codec, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 

@@ -105,9 +105,11 @@ def replacer(
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
+    from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
     from snuba.utils.streams.consumer import (
         KafkaConsumer,
+        Payload,
         TransportError,
         build_kafka_consumer_configuration,
     )
@@ -147,6 +149,7 @@ def replacer(
         host=clickhouse_host, port=clickhouse_port, client_settings=client_settings,
     )
 
+    codec: PassthroughCodec[Payload] = PassthroughCodec()
     replacer = BatchingConsumer(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -156,6 +159,7 @@ def replacer(
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
             ),
+            codec=codec,
         ),
         Topic(replacements_topic),
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),

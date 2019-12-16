@@ -15,3 +15,14 @@ class Codec(Generic[TEncoded, TDecoded], ABC):
     @abstractmethod
     def decode(self, value: TEncoded) -> TDecoded:
         raise NotImplementedError
+
+
+T = TypeVar("T")
+
+
+class PassthroughCodec(Generic[T], Codec[T, T]):
+    def encode(self, value: T) -> T:
+        return value
+
+    def decode(self, value: T) -> T:
+        return value

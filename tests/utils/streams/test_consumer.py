@@ -4,6 +4,7 @@ from typing import Iterator, Mapping, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
+from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
@@ -46,7 +47,8 @@ def test_data_types() -> None:
 
 
 def test_consumer_backend(topic: Topic) -> None:
-    def build_consumer() -> KafkaConsumer:
+    def build_consumer() -> KafkaConsumer[Payload]:
+        codec: PassthroughCodec[Payload] = PassthroughCodec()
         return KafkaConsumer(
             {
                 **configuration,
@@ -56,7 +58,8 @@ def test_consumer_backend(topic: Topic) -> None:
                 "enable.partition.eof": "true",
                 "group.id": "test",
                 "session.timeout.ms": 10000,
-            }
+            },
+            codec=codec,
         )
 
     producer = ConfluentProducer(configuration)
@@ -182,6 +185,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[Payload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -190,7 +194,8 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-earliest",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
@@ -208,6 +213,7 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[Payload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -216,7 +222,8 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-latest",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
@@ -238,6 +245,7 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[Payload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -246,7 +254,8 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-error",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
@@ -263,6 +272,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     # a mock.
     commit_log_producer = FakeConfluentKafkaProducer()
 
+    codec: PassthroughCodec[Payload] = PassthroughCodec()
     consumer = KafkaConsumerWithCommitLog(
         {
             **configuration,
@@ -273,6 +283,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
             "group.id": "test",
             "session.timeout.ms": 10000,
         },
+        codec=codec,
         producer=commit_log_producer,
         commit_log_topic=Topic("commit-log"),
     )
