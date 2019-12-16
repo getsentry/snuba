@@ -36,7 +36,8 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.types import Message, Partition, Payload, Topic
+from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger("snuba.api")

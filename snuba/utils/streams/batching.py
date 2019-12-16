@@ -14,7 +14,7 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.consumer import Consumer, Payload
 from snuba.utils.streams.types import (
     ConsumerError,
     Message,
@@ -35,7 +35,7 @@ class AbstractBatchWorker(ABC, Generic[TResult]):
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: Message) -> Optional[TResult]:
+    def process_message(self, message: Message[Payload]) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -92,7 +92,7 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: Consumer,
+        consumer: Consumer[Payload],
         topic: Topic,
         worker: AbstractBatchWorker[TResult],
         max_batch_size: int,
@@ -164,7 +164,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message) -> None:
+    def _handle_message(self, msg: Message[Payload]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen

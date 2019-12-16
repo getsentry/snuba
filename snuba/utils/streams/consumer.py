@@ -6,6 +6,7 @@ from enum import Enum
 from typing import (
     Any,
     Callable,
+    Generic,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -26,14 +27,14 @@ from snuba.utils.streams.types import (
     EndOfPartition,
     Message,
     Partition,
-    Payload,
+    TPayload,
     Topic,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class Consumer(ABC):
+class Consumer(Generic[TPayload], ABC):
     @abstractmethod
     def subscribe(
         self,
@@ -44,7 +45,7 @@ class Consumer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         raise NotImplementedError
 
     @abstractmethod
@@ -70,7 +71,15 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-class KafkaConsumer(Consumer):
+@dataclass(frozen=True)
+class Payload:
+    __slots__ = ["key", "value"]
+
+    key: Optional[bytes]
+    value: bytes
+
+
+class KafkaConsumer(Consumer[Payload]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -263,7 +272,7 @@ class KafkaConsumer(Consumer):
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -521,7 +530,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 

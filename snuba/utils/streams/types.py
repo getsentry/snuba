@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Generic, TypeVar
 
 
 @dataclass(frozen=True)
@@ -23,16 +23,11 @@ class Partition:
     index: int
 
 
-@dataclass(frozen=True)
-class Payload:
-    __slots__ = ["key", "value"]
-
-    key: Optional[bytes]
-    value: bytes
+TPayload = TypeVar("TPayload")
 
 
 @dataclass(frozen=True)
-class Message:
+class Message(Generic[TPayload]):
     """
     Represents a single message within a partition.
     """
@@ -41,7 +36,7 @@ class Message:
 
     partition: Partition
     offset: int
-    payload: Payload
+    payload: TPayload
     timestamp: datetime
 
     def get_next_offset(self) -> int:

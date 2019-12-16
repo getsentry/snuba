@@ -8,7 +8,8 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.types import Message, Partition, Payload, Topic
+from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 
 

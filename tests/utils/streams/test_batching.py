@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.types import Message, Partition, Payload, Topic
+from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 class FakeKafkaConsumer:

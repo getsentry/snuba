@@ -8,7 +8,8 @@ from itertools import chain
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.types import Message, Partition, Payload, Topic
+from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger("snuba.perf")

@@ -8,12 +8,12 @@ from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.consumer import Payload
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
     Message,
     Partition,
-    Payload,
     Topic,
 )
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
