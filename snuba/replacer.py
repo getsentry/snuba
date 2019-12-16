@@ -107,7 +107,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker[Replacement]):
+class ReplacerWorker(AbstractBatchWorker[Payload, Replacement]):
     def __init__(
         self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
     ) -> None:

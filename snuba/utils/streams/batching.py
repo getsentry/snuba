@@ -14,11 +14,12 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import Consumer, Payload
+from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.types import (
     ConsumerError,
     Message,
     Partition,
+    TPayload,
     Topic,
 )
 
@@ -29,13 +30,13 @@ logger = logging.getLogger(__name__)
 TResult = TypeVar("TResult")
 
 
-class AbstractBatchWorker(ABC, Generic[TResult]):
+class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: Message[Payload]) -> Optional[TResult]:
+    def process_message(self, message: Message[TPayload]) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -67,7 +68,7 @@ class Offsets:
     hi: int
 
 
-class BatchingConsumer:
+class BatchingConsumer(Generic[TPayload]):
     """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
     loop. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
@@ -92,9 +93,9 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: Consumer[Payload],
+        consumer: Consumer[TPayload],
         topic: Topic,
-        worker: AbstractBatchWorker[TResult],
+        worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -164,7 +165,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message[Payload]) -> None:
+    def _handle_message(self, msg: Message[TPayload]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen

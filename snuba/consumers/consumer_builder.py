@@ -12,6 +12,7 @@ from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+    Payload,
     TransportError,
     build_kafka_consumer_configuration,
 )
@@ -106,7 +107,7 @@ class ConsumerBuilder:
 
         self.__commit_retry_policy = commit_retry_policy
 
-    def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer:
+    def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer[Payload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -137,7 +138,7 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer:
+    def build_base_consumer(self) -> BatchingConsumer[Payload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -152,7 +153,7 @@ class ConsumerBuilder:
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer:
+    ) -> BatchingConsumer[Payload]:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """
