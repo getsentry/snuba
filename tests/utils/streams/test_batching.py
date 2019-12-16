@@ -13,12 +13,12 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import Consumer, Payload
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
-class FakeKafkaConsumer:
-    def __init__(self):
+class FakeConsumer(Consumer[Payload]):
+    def __init__(self) -> None:
         self.items: MutableSequence[Message[Payload]] = []
         self.commit_calls = 0
         self.close_calls = 0
@@ -26,13 +26,10 @@ class FakeKafkaConsumer:
 
     def subscribe(
         self,
-        topics: Sequence[str],
+        topics: Sequence[Topic],
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        pass  # XXX: This is a bit of a smell.
-
-    def unsubscribe(self) -> None:
         pass  # XXX: This is a bit of a smell.
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
@@ -45,23 +42,11 @@ class FakeKafkaConsumer:
 
         return message
 
-    def tell(self) -> Mapping[Partition, int]:
-        return self.__positions
-
-    def seek(self, offsets: Mapping[Partition, int]) -> None:
-        raise NotImplementedError  # XXX: This is a bit more of a smell.
-
-    def pause(self, partitions: Sequence[Partition]):
-        raise NotImplementedError
-
-    def resume(self, partitions: Sequence[Partition]):
-        raise NotImplementedError
-
     def commit(self) -> Mapping[Partition, int]:
         self.commit_calls += 1
         return self.positions
 
-    def close(self) -> None:
+    def close(self, timeout: Optional[float] = None) -> None:
         self.close_calls += 1
 
 
@@ -80,7 +65,7 @@ class FakeWorker(AbstractBatchWorker[bytes]):
 
 class TestConsumer(object):
     def test_batch_size(self) -> None:
-        consumer = FakeKafkaConsumer()
+        consumer = FakeConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
             consumer,
@@ -111,7 +96,7 @@ class TestConsumer(object):
 
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
-        consumer = FakeKafkaConsumer()
+        consumer = FakeConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
             consumer,
