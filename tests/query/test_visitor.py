@@ -6,7 +6,9 @@ from snuba.query.expressions import (
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    Lambda,
     Literal,
+    Argument,
 )
 
 
@@ -40,6 +42,17 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
         ret.extend(exp.internal_function.accept(self))
         for param in exp.parameters:
             ret.extend(param.accept(self))
+        return ret
+
+    def visitArgument(self, exp: Argument) -> List[Expression]:
+        self.__visited_nodes.append(exp)
+        return [exp]
+
+    def visitLambda(self, exp: Lambda) -> List[Expression]:
+        self.__visited_nodes.append(exp)
+        self.__visited_nodes.append(exp.transform.accept(self))
+        ret = [exp]
+        ret.extend(exp.transform.accept(self))
         return ret
 
 
