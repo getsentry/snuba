@@ -21,6 +21,7 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
+from snuba.utils.codecs import Codec
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.types import (
     ConsumerError,
@@ -77,6 +78,14 @@ class Payload:
 
     key: Optional[bytes]
     value: bytes
+
+
+class PayloadCodec(Codec[Payload, Payload]):
+    def encode(self, value: Payload) -> Payload:
+        return value
+
+    def decode(self, value: Payload) -> Payload:
+        return value
 
 
 class KafkaConsumer(Consumer[Payload]):
@@ -146,6 +155,8 @@ class KafkaConsumer(Consumer[Payload]):
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
+
+        self.__codec = PayloadCodec()
 
         self.__offsets: MutableMapping[Partition, int] = {}
 
@@ -325,7 +336,7 @@ class KafkaConsumer(Consumer[Payload]):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            Payload(message.key(), message.value()),
+            self.__codec.encode(Payload(message.key(), message.value())),
             datetime.fromtimestamp(message.timestamp()[1] / 1000.0),  # XXX: tzinfo?
         )
 
@@ -507,13 +518,18 @@ class Commit:
     partition: Partition
     offset: int
 
-    def encode(self) -> Payload:
+
+class CommitCodec(Codec[Payload, Commit]):
+    def encode(self, value: Commit) -> Payload:
         return Payload(
-            f"{self.partition.topic.name}:{self.partition.index}:{self.group}".encode(
+            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
                 "utf-8"
             ),
-            f"{self.offset}".encode("utf-8"),
+            f"{value.offset}".encode("utf-8"),
         )
+
+    def decode(self, value: Payload) -> Commit:
+        raise NotImplementedError  # TODO
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer):
@@ -543,8 +559,9 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
     def commit(self) -> Mapping[Partition, int]:
         offsets = super().commit()
 
+        codec = CommitCodec()
         for partition, offset in offsets.items():
-            payload = Commit(self.__group_id, partition, offset).encode()
+            payload = codec.encode(Commit(self.__group_id, partition, offset))
             self.__producer.produce(
                 self.__commit_log_topic.name,
                 key=payload.key,
