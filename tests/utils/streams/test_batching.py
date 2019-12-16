@@ -50,7 +50,7 @@ class FakeConsumer(Consumer[Payload]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[bytes]):
+class FakeWorker(AbstractBatchWorker[Payload, bytes]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
