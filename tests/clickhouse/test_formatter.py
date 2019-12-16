@@ -17,6 +17,7 @@ test_expressions = [
     (Literal(None, 123), "123",),  # INT literal
     (Literal(None, 123.321), "123.321",),  # FLOAT literal
     (Literal(None, None), "NULL",),  # NULL
+    (Literal(None, True), "true",),  # True
     (Literal(None, False), "false",),  # False
     (Column(None, "column1", "table1"), "table1.column1"),  # Basic Column no alias
     (Column(None, "column1", None), "column1"),  # Basic Column with no table
