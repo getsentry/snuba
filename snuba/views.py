@@ -93,7 +93,6 @@ sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
     integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
     release=os.getenv("SNUBA_RELEASE"),
-    traces_sample_rate=1,
 )
 
 
