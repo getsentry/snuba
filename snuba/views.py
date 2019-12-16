@@ -474,7 +474,7 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("topic"), 0),
             0,
             Payload(None, http_request.data),

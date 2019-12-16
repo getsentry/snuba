@@ -29,7 +29,7 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg: str) -> Message:
+    def _wrap(self, msg: str) -> Message[Payload]:
         return Message(
             Partition(Topic("replacements"), 0),
             0,
@@ -229,7 +229,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("replacements"), 1),
             42,
             Payload(
@@ -265,7 +265,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("replacements"), 1),
             42,
             Payload(
@@ -303,7 +303,7 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("replacements"), 1),
             42,
             Payload(
@@ -361,7 +361,7 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("replacements"), 1),
             42,
             Payload(

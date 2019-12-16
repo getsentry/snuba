@@ -19,7 +19,7 @@ from snuba.utils.streams.types import Message, Partition, Topic
 
 class FakeKafkaConsumer:
     def __init__(self):
-        self.items: MutableSequence[Message] = []
+        self.items: MutableSequence[Message[Payload]] = []
         self.commit_calls = 0
         self.close_calls = 0
         self.positions: MutableMapping[Partition, int] = {}
@@ -35,7 +35,7 @@ class FakeKafkaConsumer:
     def unsubscribe(self) -> None:
         pass  # XXX: This is a bit of a smell.
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
         try:
             message = self.items.pop(0)
         except IndexError:
@@ -70,7 +70,7 @@ class FakeWorker(AbstractBatchWorker[bytes]):
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message: Message) -> bytes:
+    def process_message(self, message: Message[Payload]) -> bytes:
         self.processed.append(message.payload.value)
         return message.payload.value
 

@@ -5,6 +5,7 @@ import tempfile
 import time
 from datetime import datetime
 from itertools import chain
+from typing import MutableSequence, Sequence
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -19,9 +20,9 @@ def format_time(t: float) -> str:
     return ("%.2f" % t).rjust(10, " ")
 
 
-def get_messages(events_file):
+def get_messages(events_file) -> Sequence[Message[Payload]]:
     "Create a fake Kafka message for each JSON event in the file."
-    messages = []
+    messages: MutableSequence[Message[Payload]] = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
         messages.append(

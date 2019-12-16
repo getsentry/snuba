@@ -19,7 +19,7 @@ class TestConsumer(BaseEventsTest):
     def test_offsets(self):
         event = self.event
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("events"), 456),
             123,
             Payload(
@@ -66,7 +66,7 @@ class TestConsumer(BaseEventsTest):
         event["data"]["datetime"] = old_timestamp_str
         event["data"]["received"] = int(calendar.timegm(old_timestamp.timetuple()))
 
-        message = Message(
+        message: Message[Payload] = Message(
             Partition(Topic("events"), 1),
             42,
             Payload(None, json.dumps((0, "insert", event)).encode("utf-8")),

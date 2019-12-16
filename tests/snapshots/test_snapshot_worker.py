@@ -62,9 +62,9 @@ class TestSnapshotWorker:
         ),
     ]
 
-    @pytest.mark.parametrize("message, expected", test_data)
+    @pytest.mark.parametrize("value, expected", test_data)
     def test_send_message(
-        self, message: str, expected: Optional[ProcessedMessage],
+        self, value: str, expected: Optional[ProcessedMessage],
     ) -> None:
         dataset = get_dataset("groupedmessage")
         snapshot_id = uuid1()
@@ -79,12 +79,12 @@ class TestSnapshotWorker:
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        ret = worker.process_message(
-            Message(
-                Partition(Topic("topic"), 0),
-                1,
-                Payload(None, message.encode("utf-8")),
-                datetime.now(),
-            )
+        message: Message[Payload] = Message(
+            Partition(Topic("topic"), 0),
+            1,
+            Payload(None, value.encode("utf-8")),
+            datetime.now(),
         )
+
+        ret = worker.process_message(message)
         assert ret == expected
