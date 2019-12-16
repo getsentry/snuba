@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    Variable,
+    Argument,
 )
 
 
@@ -44,7 +44,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
             ret.extend(param.accept(self))
         return ret
 
-    def visitVariable(self, exp: Variable) -> List[Expression]:
+    def visitArgument(self, exp: Argument) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 

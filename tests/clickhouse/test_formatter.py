@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    Variable,
+    Argument,
 )
 from snuba.query.parsing import ParsingContext
 
@@ -88,7 +88,7 @@ test_expressions = [
                     None,
                     ["x", "y"],
                     FunctionCall(
-                        None, "testFunc", [Variable(None, "x"), Variable(None, "y")]
+                        None, "testFunc", [Argument(None, "x"), Argument(None, "y")]
                     ),
                 ),
                 Column(None, "test", None),

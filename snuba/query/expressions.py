@@ -85,7 +85,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
-    def visitVariable(self, exp: Variable) -> TVisited:
+    def visitArgument(self, exp: Argument) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
@@ -225,7 +225,7 @@ class CurriedFunctionCall(Expression):
 
 
 @dataclass(frozen=True)
-class Variable(Expression):
+class Argument(Expression):
     """
     A bound variable in a lambda expression. This is used to refer to variables
     declared in the lambda expression
@@ -240,7 +240,7 @@ class Variable(Expression):
         yield self
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitVariable(self)
+        return visitor.visitArgument(self)
 
 
 @dataclass(frozen=True)
@@ -249,17 +249,17 @@ class Lambda(Expression):
     A lambda expression in the form (x,y,z -> transform(x,y,z))
     """
 
-    # the bound variables in the expressions. These are intentionally not expressions
+    # the parameters in the expressions. These are intentionally not expressions
     # since they are variable names and cannot have aliases
-    variables: Sequence[str]
+    parameters: Sequence[str]
     transformation: Expression
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
-        Applies the transformation to the inner expression but not to the variables
+        Applies the transformation to the inner expression but not to the parameters
         declaration.
         """
-        transformed = replace(self, transformation=self.transformation.transform(func),)
+        transformed = replace(self, transformation=self.transformation.transform(func))
         return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
