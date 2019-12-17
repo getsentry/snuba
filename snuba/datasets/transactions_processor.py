@@ -66,7 +66,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         return "".join(pairs)
 
     def __extract_timestamp(self, field):
-        timestamp = _ensure_valid_date(datetime.fromtimestamp(field))
+        timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
         if timestamp is None:
             timestamp = datetime.utcnow()
         milliseconds = int(timestamp.microsecond / 1000)
@@ -90,7 +90,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             return None
         extract_base(processed, event)
         processed["retention_days"] = enforce_retention(
-            event, datetime.fromtimestamp(data["timestamp"]),
+            event, datetime.utcfromtimestamp(data["timestamp"]),
         )
         if not data.get("contexts", {}).get("trace"):
             return None
