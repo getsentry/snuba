@@ -5,15 +5,12 @@ from dataclasses import dataclass, replace
 from typing import (
     Callable,
     Generic,
-    Hashable,
-    Iterable,
     Iterator,
     Optional,
-    Sequence,
     TypeVar,
+    Tuple,
     Union,
 )
-from typing_extensions import Protocol
 
 TVisited = TypeVar("TVisited")
 
@@ -141,20 +138,6 @@ class Column(Expression):
         return visitor.visitColumn(self)
 
 
-T = TypeVar("T", covariant=True)
-
-
-class HashableIterable(Protocol[T], Hashable, Iterable[T]):
-    """
-    Placeholder type for parameter lists that have to be hashable.
-    The only concrete type to achieve that is a Tuple, but we cannot
-    define the type of the collection as Tuple since the number of element
-    is not predetermined.
-    """
-
-    pass
-
-
 @dataclass(frozen=True)
 class FunctionCall(Expression):
     """
@@ -167,7 +150,8 @@ class FunctionCall(Expression):
     """
 
     function_name: str
-    parameters: HashableIterable[Expression]
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -218,7 +202,8 @@ class CurriedFunctionCall(Expression):
     # for topK this would be topK(5)
     internal_function: FunctionCall
     # The parameters to apply to the result of internal_function.
-    parameters: HashableIterable[Expression]
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -276,7 +261,8 @@ class Lambda(Expression):
 
     # the parameters in the expressions. These are intentionally not expressions
     # since they are variable names and cannot have aliases
-    parameters: HashableIterable[str]
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[str, ...]
     transformation: Expression
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:

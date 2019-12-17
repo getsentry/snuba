@@ -86,9 +86,16 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         return self.__alias(ret, exp.alias)
 
     def visitArgument(self, exp: Argument) -> str:
-        return escape_identifier(exp.name)
+        ret = escape_identifier(exp.name)
+        # This is for the type checker. escape_identifier can return
+        # None if the input is None. Here the input is not None.
+        assert ret is not None
+        return ret
 
     def visitLambda(self, exp: Lambda) -> str:
-        parameters = [escape_identifier(v) for v in exp.parameters]
+        parameters = [
+            escape_identifier(v) if escape_identifier(v) is not None else ""
+            for v in exp.parameters
+        ]
         ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
         return self.__alias(ret, exp.alias)
