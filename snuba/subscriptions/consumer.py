@@ -1,15 +1,26 @@
 from datetime import datetime
-from typing import Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
-Tick = Interval[datetime]
+class State:
+    def __init__(self) -> None:
+        self.__timestamp: Optional[datetime] = None
+
+    def push(self, timestamp: datetime) -> Optional[Interval[datetime]]:
+        if self.__timestamp is not None:
+            interval: Interval[datetime] = Interval(self.__timestamp, timestamp)
+            self.__timestamp = timestamp
+            return interval
+        else:
+            self.__timestamp = timestamp
+            return None
 
 
-class TickConsumer(Consumer[Tick]):
+class TickConsumer(Consumer[Interval[datetime]]):
     """
     The ``TickConsumer`` is a ``Consumer`` implementation that differs from
     other ``Consumer`` implementations in that the messages returned returns
@@ -58,19 +69,63 @@ class TickConsumer(Consumer[Tick]):
     # between B and C, since the message B was the first message received by
     # the consumer.
 
+    def __init__(self, consumer: Consumer[Any]) -> None:
+        self.__consumer = consumer
+
+        self.__partitions: MutableMapping[Partition, State] = {}
+
     def subscribe(
         self,
         topics: Sequence[Topic],
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        raise NotImplementedError
+        def assignment_callback(partitions: Mapping[Partition, int]) -> None:
+            for partition in partitions:
+                self.__partitions[partition] = State()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
-        raise NotImplementedError
+            if on_assign is not None:
+                on_assign(partitions)
+
+        def revocation_callback(partitions: Sequence[Partition]) -> None:
+            # TODO: This is probably not necessary.
+            for partition in partitions:
+                del self.__partitions[partition]
+
+            if on_revoke is not None:
+                on_revoke(partitions)
+
+        self.__consumer.subscribe(
+            topics, on_assign=assignment_callback, on_revoke=on_revoke
+        )
+
+    def poll(
+        self, timeout: Optional[float] = None
+    ) -> Optional[Message[Interval[datetime]]]:
+        message = self.__consumer.poll(timeout)
+        if message is None:
+            return None
+
+        interval = self.__partitions[message.partition].push(message.timestamp)
+        if interval is None:
+            return None
+
+        # TODO: It might make sense to return the message offset from the
+        # message on the lower side of the interval, since that message offset
+        # most closely mirrors the behavior of Confluent Kafka driver's commit
+        # method signature (message offset + 1) while retaining our desired
+        # restart behavior.
+        result: Message[Interval[datetime]] = Message(
+            message.partition, message.offset, interval, message.timestamp,
+        )
+
+        # TODO: This needs to manually stage the offset of the message for
+        # commit (if indicated by the consumer configuration.)
+
+        return result
 
     def commit(self) -> Mapping[Partition, int]:
-        raise NotImplementedError
+        return self.__consumer.commit()
 
     def close(self, timeout: Optional[float] = None) -> None:
-        raise NotImplementedError
+        return self.__consumer.close(timeout)
