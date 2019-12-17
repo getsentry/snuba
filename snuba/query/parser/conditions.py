@@ -1,12 +1,21 @@
 from typing import Any, Callable, Optional, OrderedDict, Sequence, TypeVar
 
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Column, Expression, Literal, FunctionCall
+from snuba.query.expressions import (
+    Argument,
+    Column,
+    Expression,
+    Lambda,
+    Literal,
+    FunctionCall,
+)
 from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
     BooleanFunctions,
+    OPERATOR_TO_FUNCTION,
 )
+from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import is_condition, QUOTED_LITERAL_RE
 
 
@@ -107,7 +116,9 @@ def parse_conditions(
         raise InvalidConditionException(str(conditions))
 
 
-def parse_conditions_to_expr(expr: Sequence[Any]) -> Expression:
+def parse_conditions_to_expr(
+    expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
+) -> Expression:
     def simple_expression_builder(val: str) -> Expression:
         # TODO: This will use the schema of the dataset to decide
         # if the expression is a column or a literal.
@@ -140,10 +151,40 @@ def parse_conditions_to_expr(expr: Sequence[Any]) -> Expression:
     def array_condition_builder(
         op: str, literals: Sequence[str], lhs: Expression
     ) -> Expression:
-        pass
+        function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
+        rhs = [Literal(None, s) for s in literals]
+
+        # Only IN and NOT IN can have a right hand side of the condition that is an
+        # array of literals
+        assert op in ["IN", "NOT IN"]
+        # This is an expresison like:
+        # arrayExists(x -> assumeNotNull(notIn(x, tuple(a,b,c,d))), lhs)
+        return FunctionCall(
+            None,
+            function_name,
+            [
+                Lambda(
+                    None,
+                    ["x"],
+                    FunctionCall(
+                        None,
+                        "assumeNotNull",
+                        [
+                            FunctionCall(
+                                None,
+                                OPERATOR_TO_FUNCTION[op],
+                                [Argument(None, "x"), FunctionCall(None, "tuple", rhs)],
+                            )
+                        ],
+                    ),
+                ),
+                lhs,
+            ],
+        )
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
-        pass
+        rhs = Literal(None, literal)
+        return binary_condition(None, OPERATOR_TO_FUNCTION[op], lhs, rhs)
 
     return parse_conditions(
         simple_expression_builder,
@@ -152,7 +193,7 @@ def parse_conditions_to_expr(expr: Sequence[Any]) -> Expression:
         array_condition_builder,
         simple_condition_builder,
         dataset,
-        conditions,
-        query.get_arrayjoin(),
-        depth,
+        expr,
+        arrayjoin,
+        0,
     )
