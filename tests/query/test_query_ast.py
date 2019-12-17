@@ -17,7 +17,7 @@ def test_iterate_over_query():
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
     function_1 = FunctionCall("alias", "f1", (column1, column2))
-    function_2 = FunctionCall("alias", "f2", (column2))
+    function_2 = FunctionCall("alias", "f2", (column2,))
 
     condition = binary_condition(
         None, ConditionFunctions.EQ, column1, Literal(None, "1")
@@ -65,7 +65,7 @@ def test_replace_expression():
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
     function_1 = FunctionCall("alias", "f1", (column1, column2))
-    function_2 = FunctionCall("alias", "f2", (column2))
+    function_2 = FunctionCall("alias", "f2", (column2,))
 
     condition = binary_condition(
         None, ConditionFunctions.EQ, function_1, Literal(None, "1")
@@ -86,7 +86,7 @@ def test_replace_expression():
 
     def replace(exp: Expression) -> Expression:
         if isinstance(exp, FunctionCall) and exp.function_name == "f1":
-            return FunctionCall(exp.alias, "tag", (Literal(None, "f1")))
+            return FunctionCall(exp.alias, "tag", (Literal(None, "f1"),))
         return exp
 
     query.transform_expressions(replace)
@@ -94,7 +94,7 @@ def test_replace_expression():
     expected_query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),)),],
+        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
         array_join=None,
         condition=binary_condition(
             None,
