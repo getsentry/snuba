@@ -1,4 +1,4 @@
-from snuba.utils.codecs import Codec, PassthroughCodec
+from snuba.utils.streams.codecs import Codec, PassthroughCodec
 
 
 def test_passthrough_codec() -> None:

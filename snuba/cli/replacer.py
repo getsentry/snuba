@@ -105,8 +105,8 @@ def replacer(
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
-    from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
+    from snuba.utils.streams.codecs import PassthroughCodec
     from snuba.utils.streams.consumer import (
         KafkaConsumer,
         Payload,

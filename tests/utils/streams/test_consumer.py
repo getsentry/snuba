@@ -4,11 +4,11 @@ from typing import Iterator, Mapping, Sequence
 
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
-from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
 )
+from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import Payload
 from snuba.utils.streams.types import (
     ConsumerError,
