@@ -15,14 +15,7 @@ from typing import (
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import (
-    ConsumerError,
-    Message,
-    Partition,
-    TPayload,
-    Topic,
-)
-
+from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 

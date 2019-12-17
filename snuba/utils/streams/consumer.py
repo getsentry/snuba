@@ -1,7 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
@@ -28,8 +28,8 @@ from snuba.utils.streams.types import (
     EndOfPartition,
     Message,
     Partition,
-    TPayload,
     Topic,
+    TPayload,
 )
 
 logger = logging.getLogger(__name__)
