@@ -1,8 +1,9 @@
 import logging
 import os
 import time
-
 from datetime import datetime
+from typing import NamedTuple
+
 from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
@@ -15,13 +16,15 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
-from snuba.api.query import QueryResult, raw_query
-from snuba.api.split import split_query
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.api.query import (
+    clickhouse_ro,
+    clickhouse_rw,
+    ClickHouseQueryResult,
+    parse_and_run_query,
+    RawQueryException,
+)
 from snuba.consumer import KafkaMessageMetadata
 from snuba.query.schema import SETTINGS_SCHEMA
-from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -44,8 +47,11 @@ logging.basicConfig(
     level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
 )
 
-clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
+
+class QueryResult(NamedTuple):
+    # TODO: Give a better abstraction to QueryResult
+    result: ClickHouseQueryResult
+    status: int
 
 
 try:
@@ -283,7 +289,7 @@ def dataset_query(dataset, body, timer):
     ensure_table_exists(dataset)
 
     schema = RequestSchema.build_with_extensions(dataset.get_extensions())
-    query_result = parse_and_run_query(
+    query_result = run_query(
         dataset,
         validate_request_content(body, schema, timer, dataset, http_request.referrer),
         timer,
@@ -303,60 +309,22 @@ def dataset_query(dataset, body, timer):
     )
 
 
-@split_query
-def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
-        request.extensions["timeseries"]
-    )
-
-    extensions = dataset.get_extensions()
-    for name, extension in extensions.items():
-        extension.get_processor().process_query(
-            request.query, request.extensions[name], request.settings
-        )
-
-    request.query.add_conditions(dataset.default_conditions())
-
-    if request.settings.get_turbo():
-        request.query.set_final(False)
-
-    for processor in dataset.get_query_processors():
-        processor.process_query(request.query, request.settings)
-
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
-
-    source = relational_source.format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        # TODO: consider moving the performance logic and the pre_where generation into
-        # ClickhouseQuery since they are Clickhouse specific
-        query = DictClickhouseQuery(dataset, request.query, request.settings)
-    timer.mark("prepare_query")
-
-    stats = {
-        "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": request.referrer,
-        "num_days": (to_date - from_date).days,
-        "sample": request.query.get_sample(),
-    }
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", type(dataset).__name__)
-            scope.span.set_tag("referrer", http_request.referrer)
-
-    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
-        span.set_tag("dataset", type(dataset).__name__)
-        span.set_tag("table", source)
-        result = raw_query(request, query, clickhouse_ro, timer, stats)
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            if "max_threads" in stats:
-                scope.span.set_tag("max_threads", stats["max_threads"])
-
-    return result
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+    try:
+        return QueryResult(parse_and_run_query(dataset, request, timer), 200)
+    except RawQueryException as e:
+        error = {
+            "type": e.type,
+            "message": e.message,
+        }
+        error.update(e.meta)
+        result = {
+            "error": error,
+            "sql": e.sql,
+            "stats": e.stats,
+            "timing": e.timer,
+        }
+        return QueryResult(result, 429 if e.type == "rate-limited" else 500)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -389,7 +357,7 @@ def sdk_distribution(*, timer: Timer):
 
     ensure_table_exists(dataset)
 
-    query_result = parse_and_run_query(dataset, request, timer)
+    query_result = run_query(dataset, request, timer)
     return (
         json.dumps(
             query_result.result,
