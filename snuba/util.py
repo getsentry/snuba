@@ -15,6 +15,7 @@ from typing import (
 )
 import logging
 import numbers
+import pytz
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
 
@@ -53,9 +54,21 @@ def qualified_column(column_name: str, alias: str = "") -> str:
     return column_name if not alias else f"{alias}.{column_name}"
 
 
+epoch = datetime.utcfromtimestamp(0).replace(tzinfo=pytz.utc)
+
+
 def parse_datetime(value: str, alignment: int = 1) -> datetime:
-    dt = dateutil_parse(value, ignoretz=True).replace(microsecond=0)
-    return dt - timedelta(seconds=(dt - dt.min).seconds % alignment)
+    # XXX: It only makes sense for alignment to be between 1 and 60, since the
+    # input domain is only 0 to 59. In general, this function doesn't really
+    # make much sense for any values that don't divide evenly into 60 since
+    # lower values will appear more than higher values in the output range.
+    dt = dateutil_parse(value).replace(microsecond=0)
+
+    # If a datetime does not have an associated timezone, we assume UTC.
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=pytz.utc)
+
+    return dt - timedelta(seconds=(dt - epoch).seconds % alignment)
 
 
 def function_expr(fn: str, args_expr: str = "") -> str:
