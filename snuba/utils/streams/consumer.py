@@ -330,7 +330,7 @@ class KafkaConsumer(Consumer[TPayload]):
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
             self.__codec.decode(Payload(message.key(), message.value())),
-            datetime.fromtimestamp(message.timestamp()[1] / 1000.0),  # XXX: tzinfo?
+            datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
         self.__offsets[result.partition] = result.get_next_offset()
