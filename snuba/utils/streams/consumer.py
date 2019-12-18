@@ -295,9 +295,13 @@ class KafkaConsumer(Consumer[TPayload]):
             finally:
                 for partition in partitions:
                     # Staged offsets are deleted during partition revocation to
-                    # avoid committing offsets for partitions that are no
-                    # longer owned by this consumer.
+                    # prevent later committing offsets for partitions that are
+                    # no longer owned by this consumer.
                     if partition in self.__staged_offsets:
+                        logger.warning(
+                            "Dropping staged offset for revoked partition (%r)!",
+                            partition,
+                        )
                         del self.__staged_offsets[partition]
 
                     try:
