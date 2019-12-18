@@ -28,7 +28,7 @@ metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snub
 clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
 
-ClickHouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
+ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 
 class RawQueryException(Exception):
@@ -47,7 +47,7 @@ def raw_query(
     client: ClickhousePool,
     timer: Timer,
     stats: MutableMapping[str, Any] = None,
-) -> ClickHouseQueryResult:
+) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -225,7 +225,7 @@ def log_query_and_update_stats(
 
 
 @split_query
-def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> ClickHouseQueryResult:
+def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )

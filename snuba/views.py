@@ -19,7 +19,7 @@ from snuba import schemas, settings, state, util
 from snuba.api.query import (
     clickhouse_ro,
     clickhouse_rw,
-    ClickHouseQueryResult,
+    ClickhouseQueryResult,
     parse_and_run_query,
     RawQueryException,
 )
@@ -50,7 +50,7 @@ logging.basicConfig(
 
 class QueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
-    result: ClickHouseQueryResult
+    result: ClickhouseQueryResult
     status: int
 
 
