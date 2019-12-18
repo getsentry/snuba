@@ -1,7 +1,7 @@
 import logging
 
 from hashlib import md5
-from typing import Any, MutableMapping
+from typing import Any, Mapping, MutableMapping
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -11,6 +11,7 @@ from snuba import settings, state
 from snuba.api.split import split_query
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.datasets.dataset import Dataset
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
 from snuba.state.rate_limit import (
@@ -31,8 +32,8 @@ ClickHouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 
 class RawQueryException(Exception):
-    def __init__(self, type, message, stats, timer, sql, **meta):
-        self.type = type
+    def __init__(self, err_type: str, message: str, stats: Mapping[str, Any], timer: Timer, sql: str, **meta):
+        self.err_type = err_type
         self.message = message
         self.stats = stats
         self.timer = timer
@@ -45,7 +46,7 @@ def raw_query(
     query: DictClickhouseQuery,
     client: ClickhousePool,
     timer: Timer,
-    stats=None,
+    stats: MutableMapping[str, Any] = None,
 ) -> ClickHouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
@@ -150,12 +151,12 @@ def raw_query(
                         stats = log_query_and_update_stats(request, sql, timer, stats, 'error', query_settings)
                         meta = {}
                         if isinstance(ex, ClickHouseError):
-                            type = "clickhouse"
+                            err_type = "clickhouse"
                             meta["code"] = ex.code
                         else:
-                            type = "unknown"
+                            err_type = "unknown"
                         raise RawQueryException(
-                            type=type,
+                            err_type=err_type,
                             message=error,
                             stats=stats,
                             timer=timer,
@@ -165,7 +166,7 @@ def raw_query(
             except RateLimitExceeded as ex:
                 stats = log_query_and_update_stats(request, sql, timer, stats, 'rate-limited', query_settings)
                 raise RawQueryException(
-                    type="rate-limited",
+                    err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
                     timer=timer,
@@ -188,9 +189,9 @@ def log_query_and_update_stats(
     request: Request,
     sql: str,
     timer: Timer,
-    stats: MutableMapping,
+    stats: MutableMapping[str, Any],
     status: str,
-    query_settings: MutableMapping,
+    query_settings: Mapping[str, Any],
 ) -> MutableMapping:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -224,7 +225,7 @@ def log_query_and_update_stats(
 
 
 @split_query
-def parse_and_run_query(dataset, request: Request, timer) -> ClickHouseQueryResult:
+def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> ClickHouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
