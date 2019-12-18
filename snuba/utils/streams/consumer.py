@@ -73,7 +73,7 @@ class InvalidState(RuntimeError):
 
 
 @dataclass(frozen=True)
-class Payload:
+class KafkaPayload:
     __slots__ = ["key", "value"]
 
     key: Optional[bytes]
@@ -120,7 +120,7 @@ class KafkaConsumer(Consumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[Payload, TPayload],
+        codec: Codec[KafkaPayload, TPayload],
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -329,7 +329,7 @@ class KafkaConsumer(Consumer[TPayload]):
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.decode(Payload(message.key(), message.value())),
+            self.__codec.decode(KafkaPayload(message.key(), message.value())),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
@@ -512,16 +512,16 @@ class Commit:
     offset: int
 
 
-class CommitCodec(Codec[Payload, Commit]):
-    def encode(self, value: Commit) -> Payload:
-        return Payload(
+class CommitCodec(Codec[KafkaPayload, Commit]):
+    def encode(self, value: Commit) -> KafkaPayload:
+        return KafkaPayload(
             f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
                 "utf-8"
             ),
             f"{value.offset}".encode("utf-8"),
         )
 
-    def decode(self, value: Payload) -> Commit:
+    def decode(self, value: KafkaPayload) -> Commit:
         raise NotImplementedError  # TODO
 
 
@@ -529,7 +529,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
-        codec: Codec[Payload, TPayload],
+        codec: Codec[KafkaPayload, TPayload],
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,

@@ -8,7 +8,7 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 
@@ -29,11 +29,11 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg: str) -> Message[Payload]:
+    def _wrap(self, msg: str) -> Message[KafkaPayload]:
         return Message(
             Partition(Topic("replacements"), 0),
             0,
-            Payload(None, json.dumps(msg).encode("utf-8")),
+            KafkaPayload(None, json.dumps(msg).encode("utf-8")),
             datetime.now(),
         )
 
@@ -229,10 +229,10 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            Payload(
+            KafkaPayload(
                 None,
                 json.dumps(
                     (
@@ -265,10 +265,10 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            Payload(
+            KafkaPayload(
                 None,
                 json.dumps(
                     (
@@ -303,10 +303,10 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            Payload(
+            KafkaPayload(
                 None,
                 json.dumps(
                     (
@@ -361,10 +361,10 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            Payload(
+            KafkaPayload(
                 None,
                 json.dumps(
                     (

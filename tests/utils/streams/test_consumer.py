@@ -9,7 +9,7 @@ from snuba.utils.streams.consumer import (
     KafkaConsumerWithCommitLog,
 )
 from snuba.utils.streams.codecs import PassthroughCodec
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -47,8 +47,8 @@ def test_data_types() -> None:
 
 
 def test_consumer_backend(topic: Topic) -> None:
-    def build_consumer() -> KafkaConsumer[Payload]:
-        codec: PassthroughCodec[Payload] = PassthroughCodec()
+    def build_consumer() -> KafkaConsumer[KafkaPayload]:
+        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         return KafkaConsumer(
             {
                 **configuration,
@@ -98,7 +98,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.payload == Payload(None, value)
+    assert message.payload == KafkaPayload(None, value)
 
     assert consumer.tell() == {Partition(topic, 0): 2}
     assert getattr(assignment_callback, "called", False)
@@ -117,7 +117,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 0
-    assert message.payload == Payload(None, value)
+    assert message.payload == KafkaPayload(None, value)
 
     assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
@@ -166,7 +166,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.payload == Payload(None, value)
+    assert message.payload == KafkaPayload(None, value)
 
     try:
         assert consumer.poll(1.0) is None
@@ -185,7 +185,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    codec: PassthroughCodec[Payload] = PassthroughCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -213,7 +213,7 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    codec: PassthroughCodec[Payload] = PassthroughCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -245,7 +245,7 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
-    codec: PassthroughCodec[Payload] = PassthroughCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -272,7 +272,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     # a mock.
     commit_log_producer = FakeConfluentKafkaProducer()
 
-    codec: PassthroughCodec[Payload] = PassthroughCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumerWithCommitLog(
         {
             **configuration,

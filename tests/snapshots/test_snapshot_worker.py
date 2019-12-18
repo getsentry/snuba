@@ -10,7 +10,7 @@ from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -79,10 +79,10 @@ class TestSnapshotWorker:
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             1,
-            Payload(None, value.encode("utf-8")),
+            KafkaPayload(None, value.encode("utf-8")),
             datetime.now(),
         )
 

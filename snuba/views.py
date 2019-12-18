@@ -36,7 +36,7 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
@@ -474,10 +474,10 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message: Message[Payload] = Message(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             0,
-            Payload(None, http_request.data),
+            KafkaPayload(None, http_request.data),
             datetime.now(),
         )
 

@@ -13,7 +13,7 @@ from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
-    Payload,
+    KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
 )
@@ -108,7 +108,9 @@ class ConsumerBuilder:
 
         self.__commit_retry_policy = commit_retry_policy
 
-    def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer[Payload]:
+    def __build_consumer(
+        self, worker: ConsumerWorker
+    ) -> BatchingConsumer[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -117,7 +119,7 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
-        codec: PassthroughCodec[Payload] = PassthroughCodec()
+        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
                 configuration,
@@ -143,7 +145,7 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer[Payload]:
+    def build_base_consumer(self) -> BatchingConsumer[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -158,7 +160,7 @@ class ConsumerBuilder:
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer[Payload]:
+    ) -> BatchingConsumer[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """

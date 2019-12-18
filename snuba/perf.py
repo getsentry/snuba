@@ -9,7 +9,7 @@ from typing import MutableSequence, Sequence
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import Payload
+from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
@@ -20,16 +20,16 @@ def format_time(t: float) -> str:
     return ("%.2f" % t).rjust(10, " ")
 
 
-def get_messages(events_file) -> Sequence[Message[Payload]]:
+def get_messages(events_file) -> Sequence[Message[KafkaPayload]]:
     "Create a fake Kafka message for each JSON event in the file."
-    messages: MutableSequence[Message[Payload]] = []
+    messages: MutableSequence[Message[KafkaPayload]] = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
         messages.append(
             Message(
                 Partition(Topic("events"), 1),
                 0,
-                Payload(None, raw_event.encode("utf-8")),
+                KafkaPayload(None, raw_event.encode("utf-8")),
                 datetime.now(),
             ),
         )

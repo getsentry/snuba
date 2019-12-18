@@ -109,7 +109,7 @@ def replacer(
     from snuba.utils.streams.codecs import PassthroughCodec
     from snuba.utils.streams.consumer import (
         KafkaConsumer,
-        Payload,
+        KafkaPayload,
         TransportError,
         build_kafka_consumer_configuration,
     )
@@ -149,7 +149,7 @@ def replacer(
         host=clickhouse_host, port=clickhouse_port, client_settings=client_settings,
     )
 
-    codec: PassthroughCodec[Payload] = PassthroughCodec()
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     replacer = BatchingConsumer(
         KafkaConsumer(
             build_kafka_consumer_configuration(

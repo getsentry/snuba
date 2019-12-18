@@ -13,13 +13,13 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.consumer import Consumer, Payload
+from snuba.utils.streams.consumer import Consumer, KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
-class FakeConsumer(Consumer[Payload]):
+class FakeConsumer(Consumer[KafkaPayload]):
     def __init__(self) -> None:
-        self.items: MutableSequence[Message[Payload]] = []
+        self.items: MutableSequence[Message[KafkaPayload]] = []
         self.commit_calls = 0
         self.close_calls = 0
         self.positions: MutableMapping[Partition, int] = {}
@@ -32,7 +32,7 @@ class FakeConsumer(Consumer[Payload]):
     ) -> None:
         pass  # XXX: This is a bit of a smell.
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Payload]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         try:
             message = self.items.pop(0)
         except IndexError:
@@ -50,12 +50,12 @@ class FakeConsumer(Consumer[Payload]):
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[Payload, bytes]):
+class FakeWorker(AbstractBatchWorker[KafkaPayload, bytes]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message: Message[Payload]) -> bytes:
+    def process_message(self, message: Message[KafkaPayload]) -> bytes:
         self.processed.append(message.payload.value)
         return message.payload.value
 
@@ -80,7 +80,7 @@ class TestConsumer(object):
             Message(
                 Partition(Topic("topic"), 0),
                 i,
-                Payload(None, f"{i}".encode("utf-8")),
+                KafkaPayload(None, f"{i}".encode("utf-8")),
                 datetime.now(),
             )
             for i in [1, 2, 3]
@@ -112,7 +112,7 @@ class TestConsumer(object):
             Message(
                 Partition(Topic("topic"), 0),
                 i,
-                Payload(None, f"{i}".encode("utf-8")),
+                KafkaPayload(None, f"{i}".encode("utf-8")),
                 datetime.now(),
             )
             for i in [1, 2, 3]
@@ -125,7 +125,7 @@ class TestConsumer(object):
             Message(
                 Partition(Topic("topic"), 0),
                 i,
-                Payload(None, f"{i}".encode("utf-8")),
+                KafkaPayload(None, f"{i}".encode("utf-8")),
                 datetime.now(),
             )
             for i in [4, 5, 6]
@@ -138,7 +138,7 @@ class TestConsumer(object):
             Message(
                 Partition(Topic("topic"), 0),
                 i,
-                Payload(None, f"{i}".encode("utf-8")),
+                KafkaPayload(None, f"{i}".encode("utf-8")),
                 datetime.now(),
             )
             for i in [7, 8, 9]
