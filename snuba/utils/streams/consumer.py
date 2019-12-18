@@ -566,6 +566,7 @@ def build_kafka_consumer_configuration(
 ) -> Mapping[str, Any]:
     return {
         "enable.auto.commit": False,
+        "enable.auto.offset.store": False,
         "bootstrap.servers": ",".join(bootstrap_servers),
         "group.id": group_id,
         "auto.offset.reset": auto_offset_reset,
