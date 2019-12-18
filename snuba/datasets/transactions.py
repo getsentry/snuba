@@ -239,4 +239,7 @@ class TransactionsDataset(TimeSeriesDataset):
         return [
             PrewhereProcessor(),
             NestedFieldConditionOptimizer("tags", "_tags_flattened", "start_ts"),
+            NestedFieldConditionOptimizer(
+                "contexts", "_contexts_flattened", "start_ts"
+            ),
         ]
