@@ -80,6 +80,26 @@ class KafkaPayload:
     value: bytes
 
 
+def as_kafka_configuration_bool(value: Any) -> bool:
+    """
+    Convert a value to a Python boolean, using the same conversions used by
+    the librdkafka configuration parser.
+    """
+    # https://github.com/edenhill/librdkafka/blob/c8293af/src/rdkafka_conf.c#L1633-L1660
+    if isinstance(value, str):
+        value = value.lower()
+        if value in {"true", "t", "1"}:
+            return True
+        elif value in {"false", "f", "0"}:
+            return False
+        else:
+            raise ValueError(f"cannot interpret {value!r} as boolean")
+    elif isinstance(value, bool):
+        return value
+    else:
+        raise TypeError(f"cannot interpret {value!r} as boolean")
+
+
 class KafkaConsumer(Consumer[TPayload]):
     """
     The behavior of this consumer differs slightly from the Confluent
@@ -142,6 +162,22 @@ class KafkaConsumer(Consumer[TPayload]):
             )
         else:
             raise ValueError("invalid value for 'auto.offset.reset' configuration")
+
+        if (
+            as_kafka_configuration_bool(configuration.get("enable.auto.commit", "true"))
+            is not False
+        ):
+            raise ValueError("invalid value for 'enable.auto.commit' configuration")
+
+        if (
+            as_kafka_configuration_bool(
+                configuration.get("enable.auto.offset.store", "true")
+            )
+            is not False
+        ):
+            raise ValueError(
+                "invalid value for 'enable.auto.offset.store' configuration"
+            )
 
         # NOTE: Offsets are explicitly managed as part of the assignment
         # callback, so preemptively resetting offsets is not enabled.
