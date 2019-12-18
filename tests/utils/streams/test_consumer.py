@@ -5,6 +5,8 @@ from typing import Iterator, Mapping, Sequence
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 from snuba.utils.streams.consumer import (
+    Commit,
+    CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
 )
@@ -276,6 +278,12 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
     consumer.close()
 
 
+def test_commit_codec() -> None:
+    codec = CommitCodec()
+    commit = Commit("group", Partition(Topic("topic"), 0), 0)
+    assert codec.decode(codec.encode(commit)) == commit
+
+
 def test_commit_log_consumer(topic: Topic) -> None:
     # XXX: This would be better as an integration test (or at least a test
     # against an abstract Producer interface) instead of against a test against
@@ -314,9 +322,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]
     assert commit_message.topic() == "commit-log"
-    assert commit_message.key() == "{}:{}:{}".format(topic.name, 0, "test").encode(
-        "utf-8"
-    )
-    assert commit_message.value() == "{}".format(message.get_next_offset()).encode(
-        "utf-8"
-    )
+
+    assert CommitCodec().decode(
+        KafkaPayload(commit_message.key(), commit_message.value())
+    ) == Commit("test", Partition(topic, 0), message.get_next_offset())
