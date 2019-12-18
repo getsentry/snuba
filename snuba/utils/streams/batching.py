@@ -245,5 +245,5 @@ class BatchingConsumer(Generic[TPayload]):
         self._reset_batch()
 
     def _commit(self) -> None:
-        offsets = self.consumer.commit()
+        offsets = self.consumer.commit_offsets()
         logger.debug("Committed offsets: %s", offsets)

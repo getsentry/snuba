@@ -119,7 +119,7 @@ def test_consumer_backend(topic: Topic) -> None:
     assert message.offset == 0
     assert message.payload == KafkaPayload(None, value)
 
-    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
+    assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
 
     consumer.unsubscribe()
 
@@ -154,7 +154,7 @@ def test_consumer_backend(topic: Topic) -> None:
         consumer.resume([Partition(topic, 0)])
 
     with pytest.raises(RuntimeError):
-        consumer.commit()
+        consumer.commit_offsets()
 
     consumer.close()
 
@@ -297,7 +297,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)
 
-    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
+    assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]

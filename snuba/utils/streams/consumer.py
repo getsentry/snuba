@@ -50,7 +50,7 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def commit(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, int]:
         raise NotImplementedError
 
     @abstractmethod
@@ -453,7 +453,7 @@ class KafkaConsumer(Consumer[TPayload]):
 
         return offsets
 
-    def commit(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, int]:
         """
         Commit staged offsets for all partitions that this consumer is
         assigned to. The return value of this method is a mapping of
@@ -550,8 +550,8 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         if error is not None:
             raise Exception(error.str())
 
-    def commit(self) -> Mapping[Partition, int]:
-        offsets = super().commit()
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        offsets = super().commit_offsets()
 
         codec = CommitCodec()
         for partition, offset in offsets.items():

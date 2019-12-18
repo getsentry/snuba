@@ -42,7 +42,7 @@ class FakeConsumer(Consumer[KafkaPayload]):
 
         return message
 
-    def commit(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, int]:
         self.commit_calls += 1
         return self.positions
 
