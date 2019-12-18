@@ -522,7 +522,9 @@ class CommitCodec(Codec[KafkaPayload, Commit]):
         )
 
     def decode(self, value: KafkaPayload) -> Commit:
-        raise NotImplementedError  # TODO
+        topic_name, partition_index, group = value.key.decode("utf-8").split(":", 3)
+        offset = int(value.value.decode("utf-8"))
+        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
 
 
 class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
