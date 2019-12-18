@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 import logging
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
     Callable,
+    Generic,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -21,50 +22,40 @@ from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-
+from snuba.utils.streams.codecs import Codec
+from snuba.utils.streams.types import (
+    ConsumerError,
+    EndOfPartition,
+    Message,
+    Partition,
+    Topic,
+    TPayload,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class Topic:
-    __slots__ = ["name"]
+class Consumer(Generic[TPayload], ABC):
+    @abstractmethod
+    def subscribe(
+        self,
+        topics: Sequence[Topic],
+        on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
+        on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
+    ) -> None:
+        raise NotImplementedError
 
-    name: str
+    @abstractmethod
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+        raise NotImplementedError
 
-    def __contains__(self, partition: Partition) -> bool:
-        return partition.topic == self
+    @abstractmethod
+    def commit(self) -> Mapping[Partition, int]:
+        raise NotImplementedError
 
-
-@dataclass(frozen=True)
-class Partition:
-    __slots__ = ["topic", "index"]
-
-    topic: Topic
-    index: int
-
-
-class ConsumerError(Exception):
-    """
-    Base class for exceptions that are raised during consumption.
-
-    Subclasses may extend this class to disambiguate errors that are specific
-    to their implementation.
-    """
-
-
-class EndOfPartition(ConsumerError):
-    """
-    Raised when there are no more messages to consume from the partition.
-    """
-
-    def __init__(self, partition: Partition, offset: int):
-        # The partition that the consumer has reached the end of.
-        self.partition = partition
-
-        # The next unconsumed offset in the partition (where there is currently
-        # no message.)
-        self.offset = offset
+    @abstractmethod
+    def close(self, timeout: Optional[float] = None) -> None:
+        raise NotImplementedError
 
 
 class TransportError(ConsumerError):
@@ -82,22 +73,14 @@ class InvalidState(RuntimeError):
 
 
 @dataclass(frozen=True)
-class KafkaMessage:
-    """
-    Represents a single message within a partition.
-    """
+class KafkaPayload:
+    __slots__ = ["key", "value"]
 
-    __slots__ = ["partition", "offset", "value"]
-
-    partition: Partition
-    offset: int
+    key: Optional[bytes]
     value: bytes
 
-    def get_next_offset(self) -> int:
-        return self.offset + 1
 
-
-class KafkaConsumer:
+class KafkaConsumer(Consumer[TPayload]):
     """
     The behavior of this consumer differs slightly from the Confluent
     consumer during rebalancing operations. Whenever a partition is assigned
@@ -137,6 +120,7 @@ class KafkaConsumer:
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        codec: Codec[KafkaPayload, TPayload],
         *,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -164,6 +148,8 @@ class KafkaConsumer:
         self.__consumer = ConfluentConsumer(
             {**configuration, "auto.offset.reset": "error"}
         )
+
+        self.__codec = codec
 
         self.__offsets: MutableMapping[Partition, int] = {}
 
@@ -290,7 +276,7 @@ class KafkaConsumer:
 
         self.__consumer.unsubscribe()
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         """
         Return the next message available to be consumed, if one is
         available. If no message is available, this method will block up to
@@ -340,10 +326,11 @@ class KafkaConsumer:
             else:
                 raise ConsumerError(str(error))
 
-        result = KafkaMessage(
+        result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            message.value(),
+            self.__codec.decode(KafkaPayload(message.key(), message.value())),
+            datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
         self.__offsets[result.partition] = result.get_next_offset()
@@ -516,21 +503,44 @@ def build_kafka_consumer_configuration(
     }
 
 
-class KafkaConsumerWithCommitLog(KafkaConsumer):
+@dataclass(frozen=True)
+class Commit:
+    __slots__ = ["group", "partition", "offset"]
+
+    group: str
+    partition: Partition
+    offset: int
+
+
+class CommitCodec(Codec[KafkaPayload, Commit]):
+    def encode(self, value: Commit) -> KafkaPayload:
+        return KafkaPayload(
+            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
+                "utf-8"
+            ),
+            f"{value.offset}".encode("utf-8"),
+        )
+
+    def decode(self, value: KafkaPayload) -> Commit:
+        raise NotImplementedError  # TODO
+
+
+class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
     def __init__(
         self,
         configuration: Mapping[str, Any],
+        codec: Codec[KafkaPayload, TPayload],
         *,
         producer: ConfluentProducer,
         commit_log_topic: Topic,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        super().__init__(configuration, commit_retry_policy=commit_retry_policy)
+        super().__init__(configuration, codec, commit_retry_policy=commit_retry_policy)
         self.__producer = producer
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         self.__producer.poll(0.0)
         return super().poll(timeout)
 
@@ -543,13 +553,13 @@ class KafkaConsumerWithCommitLog(KafkaConsumer):
     def commit(self) -> Mapping[Partition, int]:
         offsets = super().commit()
 
+        codec = CommitCodec()
         for partition, offset in offsets.items():
+            payload = codec.encode(Commit(self.__group_id, partition, offset))
             self.__producer.produce(
                 self.__commit_log_topic.name,
-                key="{}:{}:{}".format(
-                    partition.topic.name, partition.index, self.__group_id
-                ).encode("utf-8"),
-                value="{}".format(offset).encode("utf-8"),
+                key=payload.key,
+                value=payload.value,
                 on_delivery=self.__commit_message_delivery_callback,
             )
 

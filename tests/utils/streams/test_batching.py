@@ -12,29 +12,27 @@ from typing import (
 from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
+from snuba.utils.streams.consumer import Consumer, KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
-class FakeKafkaConsumer:
-    def __init__(self):
-        self.items: MutableSequence[KafkaMessage] = []
+class FakeConsumer(Consumer[KafkaPayload]):
+    def __init__(self) -> None:
+        self.items: MutableSequence[Message[KafkaPayload]] = []
         self.commit_calls = 0
         self.close_calls = 0
         self.positions: MutableMapping[Partition, int] = {}
 
     def subscribe(
         self,
-        topics: Sequence[str],
+        topics: Sequence[Topic],
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
         pass  # XXX: This is a bit of a smell.
 
-    def unsubscribe(self) -> None:
-        pass  # XXX: This is a bit of a smell.
-
-    def poll(self, timeout: Optional[float] = None) -> Optional[KafkaMessage]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[KafkaPayload]]:
         try:
             message = self.items.pop(0)
         except IndexError:
@@ -44,34 +42,22 @@ class FakeKafkaConsumer:
 
         return message
 
-    def tell(self) -> Mapping[Partition, int]:
-        return self.__positions
-
-    def seek(self, offsets: Mapping[Partition, int]) -> None:
-        raise NotImplementedError  # XXX: This is a bit more of a smell.
-
-    def pause(self, partitions: Sequence[Partition]):
-        raise NotImplementedError
-
-    def resume(self, partitions: Sequence[Partition]):
-        raise NotImplementedError
-
     def commit(self) -> Mapping[Partition, int]:
         self.commit_calls += 1
         return self.positions
 
-    def close(self) -> None:
+    def close(self, timeout: Optional[float] = None) -> None:
         self.close_calls += 1
 
 
-class FakeWorker(AbstractBatchWorker[Any]):
+class FakeWorker(AbstractBatchWorker[KafkaPayload, bytes]):
     def __init__(self) -> None:
         self.processed: MutableSequence[Optional[Any]] = []
         self.flushed: MutableSequence[Sequence[Any]] = []
 
-    def process_message(self, message: KafkaMessage) -> Optional[Any]:
-        self.processed.append(message.value)
-        return message.value
+    def process_message(self, message: Message[KafkaPayload]) -> bytes:
+        self.processed.append(message.payload.value)
+        return message.payload.value
 
     def flush_batch(self, batch: Sequence[Any]) -> None:
         self.flushed.append(batch)
@@ -79,7 +65,7 @@ class FakeWorker(AbstractBatchWorker[Any]):
 
 class TestConsumer(object):
     def test_batch_size(self) -> None:
-        consumer = FakeKafkaConsumer()
+        consumer = FakeConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
             consumer,
@@ -91,7 +77,12 @@ class TestConsumer(object):
         )
 
         consumer.items = [
-            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0),
+                i,
+                KafkaPayload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
+            )
             for i in [1, 2, 3]
         ]
         for x in range(len(consumer.items)):
@@ -105,7 +96,7 @@ class TestConsumer(object):
 
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
-        consumer = FakeKafkaConsumer()
+        consumer = FakeConsumer()
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
             consumer,
@@ -118,7 +109,12 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
         consumer.items = [
-            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0),
+                i,
+                KafkaPayload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
+            )
             for i in [1, 2, 3]
         ]
         for x in range(len(consumer.items)):
@@ -126,7 +122,12 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
         consumer.items = [
-            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0),
+                i,
+                KafkaPayload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
+            )
             for i in [4, 5, 6]
         ]
         for x in range(len(consumer.items)):
@@ -134,7 +135,12 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
         consumer.items = [
-            KafkaMessage(Partition(Topic("topic"), 0), i, f"{i}".encode("utf-8"))
+            Message(
+                Partition(Topic("topic"), 0),
+                i,
+                KafkaPayload(None, f"{i}".encode("utf-8")),
+                datetime.now(),
+            )
             for i in [7, 8, 9]
         ]
         for x in range(len(consumer.items)):

@@ -5,11 +5,15 @@ from typing import Iterator, Mapping, Sequence
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 from snuba.utils.streams.consumer import (
-    ConsumerError,
-    EndOfPartition,
-    KafkaMessage,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+)
+from snuba.utils.streams.codecs import PassthroughCodec
+from snuba.utils.streams.consumer import KafkaPayload
+from snuba.utils.streams.types import (
+    ConsumerError,
+    EndOfPartition,
+    Message,
     Partition,
     Topic,
 )
@@ -43,7 +47,8 @@ def test_data_types() -> None:
 
 
 def test_consumer_backend(topic: Topic) -> None:
-    def build_consumer() -> KafkaConsumer:
+    def build_consumer() -> KafkaConsumer[KafkaPayload]:
+        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         return KafkaConsumer(
             {
                 **configuration,
@@ -53,7 +58,8 @@ def test_consumer_backend(topic: Topic) -> None:
                 "enable.partition.eof": "true",
                 "group.id": "test",
                 "session.timeout.ms": 10000,
-            }
+            },
+            codec=codec,
         )
 
     producer = ConfluentProducer(configuration)
@@ -89,10 +95,10 @@ def test_consumer_backend(topic: Topic) -> None:
     )
 
     message = consumer.poll(10.0)  # XXX: getting the subcription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.value == value
+    assert message.payload == KafkaPayload(None, value)
 
     assert consumer.tell() == {Partition(topic, 0): 2}
     assert getattr(assignment_callback, "called", False)
@@ -108,10 +114,10 @@ def test_consumer_backend(topic: Topic) -> None:
     consumer.resume([Partition(topic, 0)])
 
     message = consumer.poll(1.0)
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 0
-    assert message.value == value
+    assert message.payload == KafkaPayload(None, value)
 
     assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
@@ -157,10 +163,10 @@ def test_consumer_backend(topic: Topic) -> None:
     consumer.subscribe([topic])
 
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.partition == Partition(topic, 0)
     assert message.offset == 1
-    assert message.value == value
+    assert message.payload == KafkaPayload(None, value)
 
     try:
         assert consumer.poll(1.0) is None
@@ -179,6 +185,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -187,13 +194,14 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-earliest",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
 
     message = consumer.poll(10.0)
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
     assert message.offset == 0
 
     consumer.close()
@@ -205,6 +213,7 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -213,7 +222,8 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-latest",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
@@ -235,6 +245,7 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
     producer.produce(topic.name, value=value)
     assert producer.flush(5.0) == 0
 
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumer(
         {
             **configuration,
@@ -243,7 +254,8 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
             "enable.auto.offset.store": "true",
             "enable.partition.eof": "true",
             "group.id": "test-error",
-        }
+        },
+        codec=codec,
     )
 
     consumer.subscribe([topic])
@@ -260,6 +272,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     # a mock.
     commit_log_producer = FakeConfluentKafkaProducer()
 
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer = KafkaConsumerWithCommitLog(
         {
             **configuration,
@@ -270,6 +283,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
             "group.id": "test",
             "session.timeout.ms": 10000,
         },
+        codec=codec,
         producer=commit_log_producer,
         commit_log_topic=Topic("commit-log"),
     )
@@ -281,7 +295,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     assert producer.flush(5.0) == 0
 
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, KafkaMessage)
+    assert isinstance(message, Message)
 
     assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
 
