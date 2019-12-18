@@ -1,17 +1,19 @@
-import pytest
 import uuid
 from typing import Iterator, Mapping, Sequence
 
+import pytest
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
+
+from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import (
     Commit,
     CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+    KafkaPayload,
+    as_kafka_configuration_bool,
 )
-from snuba.utils.streams.codecs import PassthroughCodec
-from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -326,3 +328,37 @@ def test_commit_log_consumer(topic: Topic) -> None:
     assert CommitCodec().decode(
         KafkaPayload(commit_message.key(), commit_message.value())
     ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+
+
+def test_as_kafka_configuration_bool():
+    assert as_kafka_configuration_bool(False) == False
+    assert as_kafka_configuration_bool("false") == False
+    assert as_kafka_configuration_bool("FALSE") == False
+    assert as_kafka_configuration_bool("0") == False
+    assert as_kafka_configuration_bool("f") == False
+    assert as_kafka_configuration_bool(0) == False
+
+    assert as_kafka_configuration_bool(True) == True
+    assert as_kafka_configuration_bool("true") == True
+    assert as_kafka_configuration_bool("TRUE") == True
+    assert as_kafka_configuration_bool("1") == True
+    assert as_kafka_configuration_bool("t") == True
+    assert as_kafka_configuration_bool(1) == True
+
+    with pytest.raises(TypeError):
+        assert as_kafka_configuration_bool(None)
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("tru")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("flase")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool(2)
+
+    with pytest.raises(TypeError):
+        assert as_kafka_configuration_bool(0.0)

@@ -100,8 +100,15 @@ def as_kafka_configuration_bool(value: Any) -> bool:
             raise ValueError(f"cannot interpret {value!r} as boolean")
     elif isinstance(value, bool):
         return value
-    else:
-        raise TypeError(f"cannot interpret {value!r} as boolean")
+    elif isinstance(value, int):
+        if value == 1:
+            return True
+        elif value == 0:
+            return False
+        else:
+            raise ValueError(f"cannot interpret {value!r} as boolean")
+
+    raise TypeError(f"cannot interpret {value!r} as boolean")
 
 
 class KafkaConsumer(Consumer[TPayload]):
