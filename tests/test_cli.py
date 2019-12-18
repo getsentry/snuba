@@ -15,3 +15,4 @@ class TestCli(object):
 
         proc.send_signal(signal.SIGINT)
         proc.wait()
+        assert proc.returncode == 0  # a happy death
