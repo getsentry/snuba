@@ -123,6 +123,9 @@ def test_consumer_backend(topic: Topic) -> None:
 
     consumer.stage_offsets({message.partition: message.get_next_offset()})
 
+    with pytest.raises(ConsumerError):
+        consumer.stage_offsets({Partition(Topic("invalid"), 0): 0})
+
     assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
 
     consumer.unsubscribe()
