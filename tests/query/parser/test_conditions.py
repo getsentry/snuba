@@ -153,12 +153,15 @@ test_conditions = [
         [[[["tag", ["foo"]], "=", 1], ["b", "=", 2]]],
         FunctionCall(
             None,
-            BooleanFunctions.AND,
+            BooleanFunctions.OR,
             (
                 FunctionCall(
                     None,
                     ConditionFunctions.EQ,
-                    (FunctionCall(None, "tag", ("foo",)), Literal(None, 1)),
+                    (
+                        FunctionCall(None, "tag", (Column(None, "foo", None),)),
+                        Literal(None, 1),
+                    ),
                 ),
                 FunctionCall(
                     None,
@@ -168,25 +171,6 @@ test_conditions = [
             ),
         ),
     ),  # Test functions in conditions
-    (
-        [[["tags[foo]", "=", 1], ["b", "=", 2]]],
-        FunctionCall(
-            None,
-            BooleanFunctions.OR,
-            (
-                FunctionCall(
-                    None,
-                    ConditionFunctions.EQ,
-                    (FunctionCall(None, "tag", ("foo",)), Literal(None, 1)),
-                ),
-                FunctionCall(
-                    None,
-                    ConditionFunctions.EQ,
-                    (Column(None, "b", None), Literal(None, 2)),
-                ),
-            ),
-        ),
-    ),
     (
         [["primary_hash", "LIKE", "%foo%"]],
         FunctionCall(

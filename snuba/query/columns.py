@@ -111,7 +111,7 @@ def complex_column_expr(
 def conditions_expr(
     dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
 ):
-    def simple_expression_builder(val: str) -> str:
+    def simple_expression_builder(val: Any) -> str:
         return column_expr(dataset, val, query, parsing_context)
 
     def and_builder(expressions: Sequence[str]) -> str:

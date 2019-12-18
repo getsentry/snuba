@@ -15,8 +15,9 @@ from snuba.query.conditions import (
     BooleanFunctions,
     OPERATOR_TO_FUNCTION,
 )
+from snuba.query.parser.functions import parse_function_to_expr
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.util import is_condition, QUOTED_LITERAL_RE
+from snuba.util import is_condition, is_function, QUOTED_LITERAL_RE
 
 
 TExpression = TypeVar("TExpression")
@@ -27,7 +28,7 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    simple_expression_builder: Callable[[str], TExpression],
+    simple_expression_builder: Callable[[Any], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     array_condition_builder: Callable[[str, Sequence[str], TExpression], TExpression],
@@ -119,7 +120,9 @@ def parse_conditions(
 def parse_conditions_to_expr(
     expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
 ) -> Expression:
-    def simple_expression_builder(val: str) -> Expression:
+    def simple_expression_builder(val: Any) -> Expression:
+        if is_function(val, 0):
+            return parse_function_to_expr(val)
         # TODO: This will use the schema of the dataset to decide
         # if the expression is a column or a literal.
         if QUOTED_LITERAL_RE.match(val):
@@ -139,7 +142,7 @@ def parse_conditions_to_expr(
             None,
             function,
             expressions[0],
-            multi_expression_builder(function, expressions[1:]),
+            multi_expression_builder(expressions[1:], function),
         )
 
     def and_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
