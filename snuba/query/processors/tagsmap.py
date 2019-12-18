@@ -98,9 +98,6 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         return None
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        enabled = state.get_config("optimize_nested_col_conditions", 0)
-        if not enabled:
-            return
         conditions = query.get_conditions()
         if not conditions:
             return
