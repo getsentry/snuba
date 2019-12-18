@@ -16,10 +16,12 @@ def test_iterate_over_query():
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
-    function_1 = FunctionCall("alias", "f1", [column1, column2])
-    function_2 = FunctionCall("alias", "f2", [column2])
+    function_1 = FunctionCall("alias", "f1", (column1, column2))
+    function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(None, ConditionFunctions.EQ, column1, Literal(None, "1"))
+    condition = binary_condition(
+        None, ConditionFunctions.EQ, column1, Literal(None, "1")
+    )
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
@@ -36,13 +38,20 @@ def test_iterate_over_query():
 
     expected_expressions = [
         # selected columns
-        column1, column2, function_1,
+        column1,
+        column2,
+        function_1,
         # condition
-        column1, Literal(None, "1"), condition,
+        column1,
+        Literal(None, "1"),
+        condition,
         # groupby
-        column1, column2, function_1,
+        column1,
+        column2,
+        function_1,
         # order by
-        column2, function_2,
+        column2,
+        function_2,
     ]
 
     assert list(query.get_all_expressions()) == expected_expressions
@@ -55,10 +64,12 @@ def test_replace_expression():
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
-    function_1 = FunctionCall("alias", "f1", [column1, column2])
-    function_2 = FunctionCall("alias", "f2", [column2])
+    function_1 = FunctionCall("alias", "f1", (column1, column2))
+    function_2 = FunctionCall("alias", "f2", (column2,))
 
-    condition = binary_condition(None, ConditionFunctions.EQ, function_1, Literal(None, "1"))
+    condition = binary_condition(
+        None, ConditionFunctions.EQ, function_1, Literal(None, "1")
+    )
 
     orderby = OrderBy(OrderByDirection.ASC, function_2)
 
@@ -75,7 +86,7 @@ def test_replace_expression():
 
     def replace(exp: Expression) -> Expression:
         if isinstance(exp, FunctionCall) and exp.function_name == "f1":
-            return FunctionCall(exp.alias, "tag", [Literal(None, "f1")])
+            return FunctionCall(exp.alias, "tag", (Literal(None, "f1"),))
         return exp
 
     query.transform_expressions(replace)
@@ -83,25 +94,28 @@ def test_replace_expression():
     expected_query = Query(
         {},
         TableSource("my_table", ColumnSet([])),
-        selected_columns=[
-            FunctionCall("alias", "tag", [Literal(None, "f1")]),
-        ],
+        selected_columns=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
         array_join=None,
         condition=binary_condition(
             None,
             ConditionFunctions.EQ,
-            FunctionCall("alias", "tag", [Literal(None, "f1")]),
+            FunctionCall("alias", "tag", (Literal(None, "f1"),)),
             Literal(None, "1"),
         ),
-        groupby=[FunctionCall("alias", "tag", [Literal(None, "f1")])],
+        groupby=[FunctionCall("alias", "tag", (Literal(None, "f1"),))],
         having=None,
         order_by=[orderby],
     )
 
-    assert query.get_selected_columns_from_ast() == expected_query.get_selected_columns_from_ast()
+    assert (
+        query.get_selected_columns_from_ast()
+        == expected_query.get_selected_columns_from_ast()
+    )
     assert query.get_condition_from_ast() == expected_query.get_condition_from_ast()
     assert query.get_groupby_from_ast() == expected_query.get_groupby_from_ast()
     assert query.get_having_from_ast() == expected_query.get_having_from_ast()
     assert query.get_orderby_from_ast() == expected_query.get_orderby_from_ast()
 
-    assert list(query.get_all_expressions()) == list(expected_query.get_all_expressions())
+    assert list(query.get_all_expressions()) == list(
+        expected_query.get_all_expressions()
+    )

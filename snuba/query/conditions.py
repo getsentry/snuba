@@ -51,10 +51,10 @@ class BooleanFunctions:
 def binary_condition(
     alias: Optional[str], function_name: str, lhs: Expression, rhs: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, function_name, [lhs, rhs])
+    return FunctionCall(alias, function_name, (lhs, rhs))
 
 
 def unary_condition(
     alias: Optional[str], function_name: str, operand: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, function_name, [operand])
+    return FunctionCall(alias, function_name, (operand,))

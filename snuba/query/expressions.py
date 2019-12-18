@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import Callable, Generic, Iterator, Optional, Sequence, TypeVar, Union
+from typing import (
+    Callable,
+    Generic,
+    Iterator,
+    Optional,
+    TypeVar,
+    Tuple,
+    Union,
+)
 
 TVisited = TypeVar("TVisited")
 
@@ -142,7 +150,8 @@ class FunctionCall(Expression):
     """
 
     function_name: str
-    parameters: Sequence[Expression]
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -159,7 +168,7 @@ class FunctionCall(Expression):
         """
         transformed = replace(
             self,
-            parameters=list(map(lambda child: child.transform(func), self.parameters)),
+            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
         )
         return func(transformed)
 
@@ -192,8 +201,9 @@ class CurriedFunctionCall(Expression):
     # The function on left side of the expression.
     # for topK this would be topK(5)
     internal_function: FunctionCall
-    # The list of parameters to apply to the result of internal_function.
-    parameters: Sequence[Expression]
+    # The parameters to apply to the result of internal_function.
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[Expression, ...]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         """
@@ -205,7 +215,7 @@ class CurriedFunctionCall(Expression):
         transformed = replace(
             self,
             internal_function=self.internal_function.transform(func),
-            parameters=list(map(lambda child: child.transform(func), self.parameters)),
+            parameters=tuple(map(lambda child: child.transform(func), self.parameters)),
         )
         return func(transformed)
 
@@ -251,7 +261,8 @@ class Lambda(Expression):
 
     # the parameters in the expressions. These are intentionally not expressions
     # since they are variable names and cannot have aliases
-    parameters: Sequence[str]
+    # This is a tuple with variable size and not a Sequence to enforce it is hashable
+    parameters: Tuple[str, ...]
     transformation: Expression
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
