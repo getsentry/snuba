@@ -1,3 +1,7 @@
+import logging
+
+from datetime import datetime
+
 from enum import Enum
 from typing import Optional, List, NamedTuple
 
@@ -22,6 +26,11 @@ class OptimizableCondition(NamedTuple):
     value: str
 
 
+logger = logging.getLogger("snuba.query-processing")
+
+BEGINNING_OF_TIME = datetime(2019, 12, 11, 0, 0, 0)
+
+
 class NestedFieldConditionOptimizer(QueryProcessor):
     """
     This processor scans the the conditions in the query and converts
@@ -41,9 +50,10 @@ class NestedFieldConditionOptimizer(QueryProcessor):
     transformed into `tags_map LIKE "%tag1:2%"`
     """
 
-    def __init__(self, nested_col: str, flattened_col: str) -> None:
+    def __init__(self, nested_col: str, flattened_col: str, start_ts_col: str) -> None:
         self.__nested_col = nested_col
         self.__flattened_col = flattened_col
+        self.__start_ts_col = start_ts_col
 
     def __is_optimizable(
         self, condition: Condition, column: str
@@ -93,6 +103,33 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             return
         conditions = query.get_conditions()
         if not conditions:
+            return
+
+        # Enable the processor only if we have enough data in the flattened
+        # columns. Which have been deployed at BEGINNING_OF_TIME. If the query
+        # starts earlier than that we do not apply the optimization.
+        from_time_condition = list(
+            filter(
+                lambda c: is_condition(c)
+                and c[0] == self.__start_ts_col
+                and c[1] in (">=", ">")
+                and isinstance(c[2], str),
+                conditions,
+            )
+        )
+        if not from_time_condition:
+            return
+        try:
+            start_ts = datetime.strptime(from_time_condition[0][2], "%Y-%m-%dT%H:%M:%S")
+            if (start_ts - BEGINNING_OF_TIME).total_seconds() < 0:
+                return
+        except Exception:
+            # We should not get here, it means the from timestamp is malformed
+            # Returning here is just for safety
+            logger.error(
+                "Cannot parse start date for NestedFieldOptimizer: %r",
+                from_time_condition[0],
+            )
             return
 
         new_conditions = []

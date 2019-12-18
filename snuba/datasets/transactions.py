@@ -238,5 +238,5 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             PrewhereProcessor(),
-            NestedFieldConditionOptimizer("tags", "_tags_flattened"),
+            NestedFieldConditionOptimizer("tags", "_tags_flattened", "start_ts"),
         ]
