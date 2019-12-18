@@ -2,22 +2,13 @@ from datetime import datetime
 from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import Message, NamedTuple, Partition, Topic
 from snuba.utils.types import Interval
 
 
-class State:
-    def __init__(self) -> None:
-        self.__timestamp: Optional[datetime] = None
-
-    def push(self, timestamp: datetime) -> Optional[Interval[datetime]]:
-        if self.__timestamp is not None:
-            interval: Interval[datetime] = Interval(self.__timestamp, timestamp)
-            self.__timestamp = timestamp
-            return interval
-        else:
-            self.__timestamp = timestamp
-            return None
+class MessageDetails(NamedTuple):
+    offset: int
+    timestamp: datetime
 
 
 class TickConsumer(Consumer[Interval[datetime]]):
@@ -71,8 +62,9 @@ class TickConsumer(Consumer[Interval[datetime]]):
 
     def __init__(self, consumer: Consumer[Any]) -> None:
         self.__consumer = consumer
-
-        self.__partitions: MutableMapping[Partition, State] = {}
+        self.__previous_messages: MutableMapping[
+            Partition, Optional[MessageDetails]
+        ] = {}
 
     def subscribe(
         self,
@@ -82,15 +74,17 @@ class TickConsumer(Consumer[Interval[datetime]]):
     ) -> None:
         def assignment_callback(partitions: Mapping[Partition, int]) -> None:
             for partition in partitions:
-                self.__partitions[partition] = State()
+                self.__previous_messages[partition] = None
 
             if on_assign is not None:
                 on_assign(partitions)
 
         def revocation_callback(partitions: Sequence[Partition]) -> None:
-            # TODO: This is probably not necessary.
+            # TODO: This is probably not necessary -- this could be handled as
+            # part of the assignment callback to avoid having to force reset
+            # the partitions on rebalance (see the consumer implementation.)
             for partition in partitions:
-                del self.__partitions[partition]
+                del self.__previous_messages[partition]
 
             if on_revoke is not None:
                 on_revoke(partitions)
@@ -106,26 +100,26 @@ class TickConsumer(Consumer[Interval[datetime]]):
         if message is None:
             return None
 
-        interval = self.__partitions[message.partition].push(message.timestamp)
-        if interval is None:
-            return None
+        previous_message = self.__previous_messages.get(message.partition)
 
-        # TODO: It might make sense to return the message offset from the
-        # message on the lower side of the interval, since that message offset
-        # most closely mirrors the behavior of Confluent Kafka driver's commit
-        # method signature (message offset + 1) while retaining our desired
-        # restart behavior.
-        result: Message[Interval[datetime]] = Message(
-            message.partition, message.offset, interval, message.timestamp,
-        )
-
-        # TODO: This needs to manually stage the offset of the message for
-        # commit (if indicated by the consumer configuration.)
+        result: Optional[Message[Interval[datetime]]]
+        if previous_message is not None:
+            result = Message(
+                message.partition,
+                previous_message.offset,
+                Interval(previous_message.timestamp, message.timestamp),
+                previous_message.timestamp,
+            )
+        else:
+            result = None
 
         return result
 
-    def commit(self) -> Mapping[Partition, int]:
-        return self.__consumer.commit()
+    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        return self.__consumer.stage_offsets(offsets)
+
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        return self.__consumer.commit_offsets()
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
