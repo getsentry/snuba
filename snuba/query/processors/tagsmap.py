@@ -112,29 +112,27 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         # columns. Which have been deployed at BEGINNING_OF_TIME. If the query
         # starts earlier than that we do not apply the optimization.
         if self.__beginning_of_time:
-            from_time_conditions = list(
-                filter(
-                    lambda c: is_condition(c)
-                    and c[0] == self.__start_ts_col
-                    and c[1] in (">=", ">")
-                    and isinstance(c[2], str),
-                    conditions,
-                )
-            )
-            if not from_time_conditions:
-                return
-
-            try:
-                start_ts = parse_datetime(from_time_conditions[0][2])
-                if (start_ts - self.__beginning_of_time).total_seconds() < 0:
-                    return
-            except Exception:
-                # We should not get here, it means the from timestamp is malformed
-                # Returning here is just for safety
-                logger.error(
-                    "Cannot parse start date for NestedFieldOptimizer: %r",
-                    from_time_conditions[0],
-                )
+            apply_optimization = False
+            for condition in conditions:
+                if (
+                    is_condition(condition)
+                    and condition[0] == self.__start_ts_col
+                    and condition[1] in (">=", ">")
+                    and isinstance(condition[2], str)
+                ):
+                    try:
+                        start_ts = parse_datetime(condition[2])
+                        if (start_ts - self.__beginning_of_time).total_seconds() > 0:
+                            apply_optimization = True
+                    except Exception:
+                        # We should not get here, it means the from timestamp is malformed
+                        # Returning here is just for safety
+                        logger.error(
+                            "Cannot parse start date for NestedFieldOptimizer: %r",
+                            condition,
+                        )
+                        return
+            if not apply_optimization:
                 return
 
         new_conditions = []

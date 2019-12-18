@@ -52,6 +52,22 @@ test_data = [
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
                 ["c", "=", "3"],
+                ["start_ts", ">", "2019-01-01T06:35:17"],
+                ["start_ts", ">", "2019-12-18T06:35:17"],
+            ]
+        },
+        [
+            ["c", "=", "3"],
+            ["start_ts", ">", "2019-01-01T06:35:17"],
+            ["start_ts", ">", "2019-12-18T06:35:17"],
+            ["tags_map", "LIKE", "%|test.tag=1|%"],
+        ],
+    ),  # Two start conditions: apply
+    (
+        {
+            "conditions": [
+                ["tags[test.tag]", "=", "1"],
+                ["c", "=", "3"],
                 ["tags[test2.tag]", "=", "2"],
                 ["tags[test3.tag]", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
