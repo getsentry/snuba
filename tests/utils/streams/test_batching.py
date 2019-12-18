@@ -38,8 +38,6 @@ class FakeConsumer(Consumer[KafkaPayload]):
         except IndexError:
             return None
 
-        self.positions[message.partition] = message.get_next_offset()
-
         return message
 
     def stage_offsets(self, positions: Mapping[Partition, int]) -> None:
