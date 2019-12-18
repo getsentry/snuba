@@ -152,7 +152,7 @@ def parse_conditions_to_expr(
         op: str, literals: Sequence[str], lhs: Expression
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
-        rhs = [Literal(None, s) for s in literals]
+        rhs = tuple(Literal(None, s) for s in literals)
 
         # Only IN and NOT IN can have a right hand side of the condition that is an
         # array of literals
@@ -162,24 +162,24 @@ def parse_conditions_to_expr(
         return FunctionCall(
             None,
             function_name,
-            [
+            (
                 Lambda(
                     None,
-                    ["x"],
+                    ("x",),
                     FunctionCall(
                         None,
                         "assumeNotNull",
-                        [
+                        (
                             FunctionCall(
                                 None,
                                 OPERATOR_TO_FUNCTION[op],
-                                [Argument(None, "x"), FunctionCall(None, "tuple", rhs)],
+                                (Argument(None, "x"), FunctionCall(None, "tuple", rhs)),
                             )
-                        ],
+                        ),
                     ),
                 ),
                 lhs,
-            ],
+            ),
         )
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
