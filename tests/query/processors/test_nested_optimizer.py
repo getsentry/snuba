@@ -1,6 +1,7 @@
 import pytest
 
-from snuba import state
+from datetime import datetime
+
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -165,7 +166,10 @@ def test_nested_optimizer(query_body, expected_condition) -> None:
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
     processor = NestedFieldConditionOptimizer(
-        nested_col="tags", flattened_col="tags_map", start_ts_col="start_ts"
+        nested_col="tags",
+        flattened_col="tags_map",
+        start_ts_col="start_ts",
+        beginning_of_time=datetime(2019, 12, 11, 0, 0, 0),
     )
     processor.process_query(query, request_settings)
 

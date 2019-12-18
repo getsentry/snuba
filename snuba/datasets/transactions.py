@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
@@ -36,6 +36,13 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+
+
+# This is the moment in time we started filling in flattened_tags and flattened_contexts
+# columns. It is captured to use the flattened tags optimization only for queries that
+# do not go back this much in time.
+# Will be removed in february.
+BEGINNING_OF_TIME = datetime(2019, 12, 11, 0, 0, 0)
 
 
 class TransactionsTableWriter(TableWriter):
@@ -238,8 +245,10 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             PrewhereProcessor(),
-            NestedFieldConditionOptimizer("tags", "_tags_flattened", "start_ts"),
             NestedFieldConditionOptimizer(
-                "contexts", "_contexts_flattened", "start_ts"
+                "tags", "_tags_flattened", "start_ts", BEGINNING_OF_TIME
+            ),
+            NestedFieldConditionOptimizer(
+                "contexts", "_contexts_flattened", "start_ts", BEGINNING_OF_TIME
             ),
         ]
