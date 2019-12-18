@@ -42,9 +42,14 @@ class FakeConsumer(Consumer[KafkaPayload]):
 
         return message
 
+    def stage_offsets(self, positions: Mapping[Partition, int]) -> None:
+        self.positions.update(positions)
+
     def commit_offsets(self) -> Mapping[Partition, int]:
         self.commit_calls += 1
-        return self.positions
+        positions = self.positions.copy()
+        self.positions.clear()
+        return positions
 
     def close(self, timeout: Optional[float] = None) -> None:
         self.close_calls += 1

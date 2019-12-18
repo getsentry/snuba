@@ -169,6 +169,8 @@ class BatchingConsumer(Generic[TPayload]):
         if result is not None:
             self.__batch_results.append(result)
 
+        self.consumer.stage_offsets({msg.partition: msg.get_next_offset()})
+
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
         self.__batch_processing_time_ms += duration
