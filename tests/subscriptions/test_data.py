@@ -4,9 +4,9 @@ from unittest.mock import Mock
 import uuid
 
 from snuba import settings
+from snuba.api.query import parse_and_run_query
 from snuba.datasets.factory import enforce_table_writer
 from snuba.subscriptions.data import Subscription
-from snuba.views import parse_and_run_query
 from tests.base import BaseEventsTest
 
 
@@ -59,5 +59,5 @@ class TestApi(BaseEventsTest):
             resolution=timedelta(minutes=1),
         )
         request = subscription.build_request(self.dataset, datetime.utcnow(), 100, Mock())
-        query_result = parse_and_run_query(self.dataset, request, Mock())
-        assert query_result.result['data'][0]['count'] == 10
+        result = parse_and_run_query(self.dataset, request, Mock())
+        assert result['data'][0]['count'] == 10
