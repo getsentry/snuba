@@ -46,7 +46,7 @@ def parse_conditions(
     from snuba.clickhouse.columns import Array
 
     if not conditions:
-        return ""
+        return None
 
     if depth == 0:
         # dedupe conditions at top level, but keep them in order
@@ -120,7 +120,7 @@ def parse_conditions(
 
 def parse_conditions_to_expr(
     expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
-) -> Expression:
+) -> Optional[Expression]:
     def simple_expression_builder(val: Any) -> Expression:
         if is_function(val, 0):
             return parse_function_to_expr(val)
@@ -133,9 +133,8 @@ def parse_conditions_to_expr(
 
     def multi_expression_builder(
         expressions: Sequence[Expression], function: str
-    ) -> Optional[Expression]:
-        if len(expressions) == 0:
-            return None
+    ) -> Expression:
+        assert len(expressions) > 0
         if len(expressions) == 1:
             return expressions[0]
 
@@ -147,9 +146,13 @@ def parse_conditions_to_expr(
         )
 
     def and_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
+        if not expressions:
+            return None
         return multi_expression_builder(expressions, BooleanFunctions.AND)
 
     def or_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
+        if not expressions:
+            return None
         return multi_expression_builder(expressions, BooleanFunctions.OR)
 
     def tuplify_literal(op: str, literal: Any) -> Expression:
@@ -183,7 +186,7 @@ def parse_conditions_to_expr(
                                 None,
                                 OPERATOR_TO_FUNCTION[op],
                                 (Argument(None, "x"), tuplify_literal(op, literal)),
-                            )
+                            ),
                         ),
                     ),
                 ),

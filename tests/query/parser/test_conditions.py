@@ -19,6 +19,8 @@ from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.util import tuplify
 
 test_conditions = [
+    ([], None,),
+    ([[[]], []], None,),
     (
         [["a", "=", 1]],
         FunctionCall(
@@ -51,6 +53,36 @@ test_conditions = [
         ),
     ),
     (
+        [["a", "=", 1], ["b", "=", 2], ["c", "=", 3]],
+        FunctionCall(
+            None,
+            BooleanFunctions.AND,
+            (
+                FunctionCall(
+                    None,
+                    ConditionFunctions.EQ,
+                    (Column(None, "a", None), Literal(None, 1)),
+                ),
+                FunctionCall(
+                    None,
+                    BooleanFunctions.AND,
+                    (
+                        FunctionCall(
+                            None,
+                            ConditionFunctions.EQ,
+                            (Column(None, "b", None), Literal(None, 2)),
+                        ),
+                        FunctionCall(
+                            None,
+                            ConditionFunctions.EQ,
+                            (Column(None, "c", None), Literal(None, 3)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Odd number of conditions. Right associative expression
+    (
         [[["a", "=", 1], ["b", "=", 2]]],
         FunctionCall(
             None,
@@ -69,6 +101,36 @@ test_conditions = [
             ),
         ),
     ),
+    (
+        [[["a", "=", 1], ["b", "=", 2], ["c", "=", 3]]],
+        FunctionCall(
+            None,
+            BooleanFunctions.OR,
+            (
+                FunctionCall(
+                    None,
+                    ConditionFunctions.EQ,
+                    (Column(None, "a", None), Literal(None, 1)),
+                ),
+                FunctionCall(
+                    None,
+                    BooleanFunctions.OR,
+                    (
+                        FunctionCall(
+                            None,
+                            ConditionFunctions.EQ,
+                            (Column(None, "b", None), Literal(None, 2)),
+                        ),
+                        FunctionCall(
+                            None,
+                            ConditionFunctions.EQ,
+                            (Column(None, "c", None), Literal(None, 3)),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    ),  # Odd number of conditions. Right associative expression
     (
         [[["a", "=", 1], ["b", "=", 2]], ["c", "=", 3]],
         FunctionCall(
@@ -217,7 +279,7 @@ test_conditions = [
                                 None,
                                 ConditionFunctions.LIKE,
                                 (Argument(None, "x"), Literal(None, "%foo%")),
-                            )
+                            ),
                         ),
                     ),
                 ),
@@ -242,7 +304,7 @@ test_conditions = [
                                 None,
                                 ConditionFunctions.NOT_LIKE,
                                 (Argument(None, "x"), Literal(None, "%foo%")),
-                            )
+                            ),
                         ),
                     ),
                 ),
