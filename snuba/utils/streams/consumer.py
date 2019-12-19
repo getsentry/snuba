@@ -36,6 +36,43 @@ logger = logging.getLogger(__name__)
 
 
 class Consumer(Generic[TPayload], ABC):
+    """
+    This abstract class provides an interface for consuming messages from a
+    multiplexed collection of partitioned topic streams.
+
+    Partitions support sequential access, as well as random access by
+    offsets. There are three types of offsets that a consumer interacts with:
+    working offsets, staged offsets, and committed offsets. Offsets always
+    represent the starting offset of the *next* message to be read. (For
+    example, committing an offset of X means the next message fetched via
+    poll will have a least an offset of X, and the last message read had an
+    offset less than X.)
+
+    The working offsets are used track the current read position within a
+    partition. This can be also be considered as a cursor, or as high
+    watermark. Working offsets are local to the consumer process. They are
+    not shared with other consumer instances in the same consumer group and
+    do not persist beyond the lifecycle of the consumer instance, unless they
+    are committed.
+
+    Committed offsets are managed by an external arbiter/service, and are
+    used as the starting point for a consumer when it is assigned a partition
+    during the subscription process. To ensure that a consumer roughly "picks
+    up where it left off" after restarting, or that another consumer in the
+    same group doesn't read messages that have been processed by another
+    consumer within the same group during a rebalance operation, offsets must
+    be regularly committed by calling ``commit_offsets`` after they have been
+    staged with ``stage_offsets``. Offsets are not staged or committed
+    automatically!
+
+    During rebalance operations, working offsets are rolled back to the
+    latest committed offset for a partition, and staged offsets are cleared
+    after the revocation callback provided to ``subscribe`` is called. (This
+    occurs even if the consumer retains ownership of the partition across
+    assignments.) For this reason, it is generally good practice to ensure
+    offsets are committed as part of the revocation callback.
+    """
+
     @abstractmethod
     def subscribe(
         self,
@@ -50,7 +87,20 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def commit(self) -> Mapping[Partition, int]:
+    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        """
+        Stage offsets to be committed. If an offset has already been staged
+        for a given partition, that offset is overwritten (even if the offset
+        moves in reverse.)
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        """
+        Commit staged offsets. The return value of this method is a mapping
+        of streams with their committed offsets as values.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -78,6 +128,33 @@ class KafkaPayload:
 
     key: Optional[bytes]
     value: bytes
+
+
+def as_kafka_configuration_bool(value: Any) -> bool:
+    """
+    Convert a value to a Python boolean, using the same conversions used by
+    the librdkafka configuration parser.
+    """
+    # https://github.com/edenhill/librdkafka/blob/c8293af/src/rdkafka_conf.c#L1633-L1660
+    if isinstance(value, str):
+        value = value.lower()
+        if value in {"true", "t", "1"}:
+            return True
+        elif value in {"false", "f", "0"}:
+            return False
+        else:
+            raise ValueError(f"cannot interpret {value!r} as boolean")
+    elif isinstance(value, bool):
+        return value
+    elif isinstance(value, int):
+        if value == 1:
+            return True
+        elif value == 0:
+            return False
+        else:
+            raise ValueError(f"cannot interpret {value!r} as boolean")
+
+    raise TypeError(f"cannot interpret {value!r} as boolean")
 
 
 class KafkaConsumer(Consumer[TPayload]):
@@ -143,6 +220,22 @@ class KafkaConsumer(Consumer[TPayload]):
         else:
             raise ValueError("invalid value for 'auto.offset.reset' configuration")
 
+        if (
+            as_kafka_configuration_bool(configuration.get("enable.auto.commit", "true"))
+            is not False
+        ):
+            raise ValueError("invalid value for 'enable.auto.commit' configuration")
+
+        if (
+            as_kafka_configuration_bool(
+                configuration.get("enable.auto.offset.store", "true")
+            )
+            is not False
+        ):
+            raise ValueError(
+                "invalid value for 'enable.auto.offset.store' configuration"
+            )
+
         # NOTE: Offsets are explicitly managed as part of the assignment
         # callback, so preemptively resetting offsets is not enabled.
         self.__consumer = ConfluentConsumer(
@@ -152,6 +245,7 @@ class KafkaConsumer(Consumer[TPayload]):
         self.__codec = codec
 
         self.__offsets: MutableMapping[Partition, int] = {}
+        self.__staged_offsets: MutableMapping[Partition, int] = {}
 
         self.__commit_retry_policy = commit_retry_policy
 
@@ -246,6 +340,16 @@ class KafkaConsumer(Consumer[TPayload]):
                     on_revoke(partitions)
             finally:
                 for partition in partitions:
+                    # Staged offsets are deleted during partition revocation to
+                    # prevent later committing offsets for partitions that are
+                    # no longer owned by this consumer.
+                    if partition in self.__staged_offsets:
+                        logger.warning(
+                            "Dropping staged offset for revoked partition (%r)!",
+                            partition,
+                        )
+                        del self.__staged_offsets[partition]
+
                     try:
                         self.__offsets.pop(partition)
                     except KeyError:
@@ -427,14 +531,40 @@ class KafkaConsumer(Consumer[TPayload]):
             ]
         )
 
+    def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        if offsets.keys() - self.__offsets.keys():
+            raise ConsumerError("cannot stage offsets for unassigned partitions")
+
+        # TODO: Maybe log a warning if these offsets exceed the current
+        # offsets, since that's probably a side effect of an incorrect usage
+        # pattern?
+        self.__staged_offsets.update(offsets)
+
     def __commit(self) -> Mapping[Partition, int]:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
-        result: Optional[Sequence[ConfluentTopicPartition]] = self.__consumer.commit(
-            asynchronous=False
-        )
+        result: Optional[Sequence[ConfluentTopicPartition]]
+
+        if self.__staged_offsets:
+            result = self.__consumer.commit(
+                offsets=[
+                    ConfluentTopicPartition(
+                        partition.topic.name, partition.index, offset
+                    )
+                    for partition, offset in self.__staged_offsets.items()
+                ],
+                asynchronous=False,
+            )
+        else:
+            result = []
+
         assert result is not None  # synchronous commit should return result immediately
+
+        self.__staged_offsets.clear()
 
         offsets: MutableMapping[Partition, int] = {}
 
@@ -453,7 +583,7 @@ class KafkaConsumer(Consumer[TPayload]):
 
         return offsets
 
-    def commit(self) -> Mapping[Partition, int]:
+    def commit_offsets(self) -> Mapping[Partition, int]:
         """
         Commit staged offsets for all partitions that this consumer is
         assigned to. The return value of this method is a mapping of
@@ -493,6 +623,7 @@ def build_kafka_consumer_configuration(
 ) -> Mapping[str, Any]:
     return {
         "enable.auto.commit": False,
+        "enable.auto.offset.store": False,
         "bootstrap.servers": ",".join(bootstrap_servers),
         "group.id": group_id,
         "auto.offset.reset": auto_offset_reset,
@@ -552,8 +683,8 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         if error is not None:
             raise Exception(error.str())
 
-    def commit(self) -> Mapping[Partition, int]:
-        offsets = super().commit()
+    def commit_offsets(self) -> Mapping[Partition, int]:
+        offsets = super().commit_offsets()
 
         codec = CommitCodec()
         for partition, offset in offsets.items():

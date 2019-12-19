@@ -1,17 +1,19 @@
-import pytest
 import uuid
 from typing import Iterator, Mapping, Sequence
 
+import pytest
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
+
+from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import (
     Commit,
     CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
+    KafkaPayload,
+    as_kafka_configuration_bool,
 )
-from snuba.utils.streams.codecs import PassthroughCodec
-from snuba.utils.streams.consumer import KafkaPayload
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -56,7 +58,7 @@ def test_consumer_backend(topic: Topic) -> None:
                 **configuration,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": "false",
-                "enable.auto.offset.store": "true",
+                "enable.auto.offset.store": "false",
                 "enable.partition.eof": "true",
                 "group.id": "test",
                 "session.timeout.ms": 10000,
@@ -121,7 +123,14 @@ def test_consumer_backend(topic: Topic) -> None:
     assert message.offset == 0
     assert message.payload == KafkaPayload(None, value)
 
-    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
+    assert consumer.commit_offsets() == {}
+
+    consumer.stage_offsets({message.partition: message.get_next_offset()})
+
+    with pytest.raises(ConsumerError):
+        consumer.stage_offsets({Partition(Topic("invalid"), 0): 0})
+
+    assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
 
     consumer.unsubscribe()
 
@@ -156,7 +165,10 @@ def test_consumer_backend(topic: Topic) -> None:
         consumer.resume([Partition(topic, 0)])
 
     with pytest.raises(RuntimeError):
-        consumer.commit()
+        consumer.stage_offsets({})
+
+    with pytest.raises(RuntimeError):
+        consumer.commit_offsets()
 
     consumer.close()
 
@@ -193,7 +205,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
             **configuration,
             "auto.offset.reset": "earliest",
             "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
+            "enable.auto.offset.store": "false",
             "enable.partition.eof": "true",
             "group.id": "test-earliest",
         },
@@ -221,7 +233,7 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
             **configuration,
             "auto.offset.reset": "latest",
             "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
+            "enable.auto.offset.store": "false",
             "enable.partition.eof": "true",
             "group.id": "test-latest",
         },
@@ -253,7 +265,7 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
             **configuration,
             "auto.offset.reset": "error",
             "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
+            "enable.auto.offset.store": "false",
             "enable.partition.eof": "true",
             "group.id": "test-error",
         },
@@ -286,7 +298,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
             **configuration,
             "auto.offset.reset": "earliest",
             "enable.auto.commit": "false",
-            "enable.auto.offset.store": "true",
+            "enable.auto.offset.store": "false",
             "enable.partition.eof": "true",
             "group.id": "test",
             "session.timeout.ms": 10000,
@@ -305,7 +317,9 @@ def test_commit_log_consumer(topic: Topic) -> None:
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)
 
-    assert consumer.commit() == {Partition(topic, 0): message.get_next_offset()}
+    consumer.stage_offsets({message.partition: message.get_next_offset()})
+
+    assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
 
     assert len(commit_log_producer.messages) == 1
     commit_message = commit_log_producer.messages[0]
@@ -314,3 +328,37 @@ def test_commit_log_consumer(topic: Topic) -> None:
     assert CommitCodec().decode(
         KafkaPayload(commit_message.key(), commit_message.value())
     ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+
+
+def test_as_kafka_configuration_bool():
+    assert as_kafka_configuration_bool(False) == False
+    assert as_kafka_configuration_bool("false") == False
+    assert as_kafka_configuration_bool("FALSE") == False
+    assert as_kafka_configuration_bool("0") == False
+    assert as_kafka_configuration_bool("f") == False
+    assert as_kafka_configuration_bool(0) == False
+
+    assert as_kafka_configuration_bool(True) == True
+    assert as_kafka_configuration_bool("true") == True
+    assert as_kafka_configuration_bool("TRUE") == True
+    assert as_kafka_configuration_bool("1") == True
+    assert as_kafka_configuration_bool("t") == True
+    assert as_kafka_configuration_bool(1) == True
+
+    with pytest.raises(TypeError):
+        assert as_kafka_configuration_bool(None)
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("tru")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool("flase")
+
+    with pytest.raises(ValueError):
+        assert as_kafka_configuration_bool(2)
+
+    with pytest.raises(TypeError):
+        assert as_kafka_configuration_bool(0.0)
