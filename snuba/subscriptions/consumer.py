@@ -1,8 +1,16 @@
 from datetime import datetime
-from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+)
 
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import Message, NamedTuple, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
@@ -11,7 +19,12 @@ class MessageDetails(NamedTuple):
     timestamp: datetime
 
 
-class TickConsumer(Consumer[Interval[datetime]]):
+class Tick(NamedTuple):
+    offsets: Interval[int]
+    timestamps: Interval[datetime]
+
+
+class TickConsumer(Consumer[Tick]):
     """
     The ``TickConsumer`` is a ``Consumer`` implementation that differs from
     other ``Consumer`` implementations in that the messages returned returns
@@ -93,25 +106,30 @@ class TickConsumer(Consumer[Interval[datetime]]):
             topics, on_assign=assignment_callback, on_revoke=on_revoke
         )
 
-    def poll(
-        self, timeout: Optional[float] = None
-    ) -> Optional[Message[Interval[datetime]]]:
+    def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
         message = self.__consumer.poll(timeout)
         if message is None:
             return None
 
         previous_message = self.__previous_messages.get(message.partition)
 
-        result: Optional[Message[Interval[datetime]]]
+        result: Optional[Message[Tick]]
         if previous_message is not None:
             result = Message(
                 message.partition,
                 previous_message.offset,
-                Interval(previous_message.timestamp, message.timestamp),
+                Tick(
+                    Interval(previous_message.offset, message.offset),
+                    Interval(previous_message.timestamp, message.timestamp),
+                ),
                 previous_message.timestamp,
             )
         else:
             result = None
+
+        self.__previous_messages[message.partition] = MessageDetails(
+            message.offset, message.timestamp
+        )
 
         return result
 
@@ -123,3 +141,21 @@ class TickConsumer(Consumer[Interval[datetime]]):
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
+
+
+if __name__ == "__main__":
+    from snuba.utils.streams.codecs import PassthroughCodec
+    from snuba.utils.streams.consumer import KafkaConsumer
+
+    c = KafkaConsumer(
+        {
+            "bootstrap.servers": "127.0.0.1:9092",
+            "group.id": "asdf",
+            "enable.auto.commit": "false",
+            "enable.auto.offset.store": "false",
+            "auto.offset.reset": "earliest",
+        },
+        codec=PassthroughCodec(),
+    )
+    t = TickConsumer(c)
+    t.subscribe([Topic("test")])
