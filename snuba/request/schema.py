@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Type
 
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.extensions import QueryExtension
@@ -19,6 +19,7 @@ class RequestSchema:
         query_schema: Schema,
         settings_schema: Schema,
         extensions_schemas: Mapping[str, Schema],
+        settings_class: Type[RequestSettings] = RequestSettings,
     ):
         self.__query_schema = query_schema
         self.__settings_schema = settings_schema
@@ -31,6 +32,7 @@ class RequestSchema:
             "definitions": {},
             "additionalProperties": False,
         }
+        self.__setting_class = settings_class
 
         for schema in itertools.chain(
             [self.__query_schema, self.__settings_schema],
@@ -62,7 +64,9 @@ class RequestSchema:
 
     @classmethod
     def build_with_extensions(
-        cls, extensions: Mapping[str, QueryExtension]
+        cls,
+        extensions: Mapping[str, QueryExtension],
+        settings_class: Type[RequestSettings] = RequestSettings,
     ) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMA
@@ -70,7 +74,7 @@ class RequestSchema:
             extension_key: extension.get_schema()
             for extension_key, extension in extensions.items()
         }
-        return cls(generic_schema, settings_schema, extensions_schemas)
+        return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
     def validate(self, value, data_source: RelationalSource, referrer: str) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
@@ -96,7 +100,7 @@ class RequestSchema:
 
         return Request(
             Query(query_body, data_source),
-            RequestSettings(
+            self.__setting_class(
                 settings["turbo"], settings["consistent"], settings["debug"]
             ),
             extensions,

@@ -34,3 +34,20 @@ class RequestSettings:
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
+
+
+class SubscriptionRequestSettings(RequestSettings):
+    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
+        self.__debug = debug
+
+    def get_turbo(self) -> bool:
+        return False
+
+    def get_consistent(self) -> bool:
+        return True
+
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        return []
+
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
