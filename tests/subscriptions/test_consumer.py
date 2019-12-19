@@ -2,7 +2,8 @@ from datetime import datetime
 from typing import Callable, Mapping, MutableMapping, Optional, Sequence, cast
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
-from snuba.utils.streams.consumer import Consumer, Message, Partition, Topic, TPayload
+from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 from snuba.utils.types import Interval
 
 epoch = datetime(2019, 12, 19)
@@ -78,7 +79,7 @@ class DummyConsumer(Consumer[TPayload]):
     def commit_offsets(self) -> Mapping[Partition, int]:
         assert not self.__closed
 
-        offsets = self.__staged_offsets.copy()
+        offsets = {**self.__staged_offsets}
         self.__committed_offsets.update(offsets)
         self.__staged_offsets.clear()
         return offsets
