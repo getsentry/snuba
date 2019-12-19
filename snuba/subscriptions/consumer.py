@@ -141,21 +141,3 @@ class TickConsumer(Consumer[Tick]):
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
-
-
-if __name__ == "__main__":
-    from snuba.utils.streams.codecs import PassthroughCodec
-    from snuba.utils.streams.consumer import KafkaConsumer
-
-    c = KafkaConsumer(
-        {
-            "bootstrap.servers": "127.0.0.1:9092",
-            "group.id": "asdf",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "false",
-            "auto.offset.reset": "earliest",
-        },
-        codec=PassthroughCodec(),
-    )
-    t = TickConsumer(c)
-    t.subscribe([Topic("test")])
