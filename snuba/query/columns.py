@@ -121,10 +121,10 @@ def conditions_expr(
         res = " OR ".join(expressions)
         return "({})".format(res) if len(expressions) > 1 else res
 
-    def array_condition_builder(op: str, literals: Sequence[str], lhs: str) -> str:
+    def unpack_array_condition_builder(op: str, literal: Any, lhs: str) -> str:
         any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
         return "{}(x -> assumeNotNull(x {} {}), {})".format(
-            any_or_all, op, escape_literal(literals), lhs,
+            any_or_all, op, escape_literal(literal), lhs,
         )
 
     def simple_condition_builder(lhs: str, op: str, literal: Any) -> str:
@@ -134,7 +134,7 @@ def conditions_expr(
         simple_expression_builder,
         and_builder,
         or_builder,
-        array_condition_builder,
+        unpack_array_condition_builder,
         simple_condition_builder,
         dataset,
         conditions,

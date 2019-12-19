@@ -11,7 +11,6 @@ from snuba.query.expressions import (
 )
 from snuba.query.conditions import (
     binary_condition,
-    ConditionFunctions,
     BooleanFunctions,
     OPERATOR_TO_FUNCTION,
 )
@@ -31,7 +30,7 @@ def parse_conditions(
     simple_expression_builder: Callable[[Any], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
-    array_condition_builder: Callable[[str, Sequence[str], TExpression], TExpression],
+    unpack_array_condition_builder: Callable[[str, Any, TExpression], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
     dataset: Dataset,
     conditions: Any,
@@ -57,7 +56,7 @@ def parse_conditions(
                     simple_expression_builder,
                     and_builder,
                     or_builder,
-                    array_condition_builder,
+                    unpack_array_condition_builder,
                     simple_condition_builder,
                     dataset,
                     cond,
@@ -93,7 +92,9 @@ def parse_conditions(
             and columns[lhs].base_name != array_join
             and not isinstance(lit, (list, tuple))
         ):
-            return array_condition_builder(op, lit, simple_expression_builder(lhs))
+            return unpack_array_condition_builder(
+                op, lit, simple_expression_builder(lhs)
+            )
         else:
             return simple_condition_builder(simple_expression_builder(lhs), op, lit)
 
@@ -103,7 +104,7 @@ def parse_conditions(
                 simple_expression_builder,
                 and_builder,
                 or_builder,
-                array_condition_builder,
+                unpack_array_condition_builder,
                 simple_condition_builder,
                 dataset,
                 cond,
@@ -151,17 +152,22 @@ def parse_conditions_to_expr(
     def or_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         return multi_expression_builder(expressions, BooleanFunctions.OR)
 
-    def array_condition_builder(
-        op: str, literals: Sequence[str], lhs: Expression
+    def tuplify_literal(op: str, literal: Any) -> Expression:
+        if isinstance(literal, (list, tuple)):
+            assert op in ["IN", "NOT IN"]
+            literals = tuple([Literal(None, l) for l in literal])
+            return FunctionCall(None, "tuple", literals)
+        else:
+            assert op not in ["IN", "NOT IN"]
+            return Literal(None, literal)
+
+    def unpack_array_condition_builder(
+        op: str, literal: Any, lhs: Expression
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
-        rhs = tuple(Literal(None, s) for s in literals)
 
-        # Only IN and NOT IN can have a right hand side of the condition that is an
-        # array of literals
-        assert op in ["IN", "NOT IN"]
         # This is an expresison like:
-        # arrayExists(x -> assumeNotNull(notIn(x, tuple(a,b,c,d))), lhs)
+        # arrayExists(x -> assumeNotNull(notLike(x, rhs)), lhs)
         return FunctionCall(
             None,
             function_name,
@@ -176,7 +182,7 @@ def parse_conditions_to_expr(
                             FunctionCall(
                                 None,
                                 OPERATOR_TO_FUNCTION[op],
-                                (Argument(None, "x"), FunctionCall(None, "tuple", rhs)),
+                                (Argument(None, "x"), tuplify_literal(op, literal)),
                             )
                         ),
                     ),
@@ -186,14 +192,15 @@ def parse_conditions_to_expr(
         )
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
-        rhs = Literal(None, literal)
-        return binary_condition(None, OPERATOR_TO_FUNCTION[op], lhs, rhs)
+        return binary_condition(
+            None, OPERATOR_TO_FUNCTION[op], lhs, tuplify_literal(op, literal)
+        )
 
     return parse_conditions(
         simple_expression_builder,
         and_builder,
         or_builder,
-        array_condition_builder,
+        unpack_array_condition_builder,
         simple_condition_builder,
         dataset,
         expr,

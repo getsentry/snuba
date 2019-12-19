@@ -5,7 +5,6 @@ from typing import Any, Sequence
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import (
     Column,
-    CurriedFunctionCall,
     Expression,
     FunctionCall,
     Lambda,
@@ -13,10 +12,8 @@ from snuba.query.expressions import (
     Argument,
 )
 from snuba.query.conditions import (
-    binary_condition,
     ConditionFunctions,
     BooleanFunctions,
-    OPERATOR_TO_FUNCTION,
 )
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.util import tuplify
@@ -196,7 +193,7 @@ test_conditions = [
                                 Column(None, "exception_stacks.type", None),
                                 Literal(None, 1),
                             ),
-                        )
+                        ),
                     ),
                 ),
                 Literal(None, 1),
