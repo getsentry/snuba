@@ -1,14 +1,17 @@
+import logging
+
+from datetime import datetime
+
 from enum import Enum
 from typing import Optional, List, NamedTuple
 
-from snuba import state
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.transactions_processor import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
-from snuba.util import is_condition, is_function
+from snuba.util import is_condition, is_function, parse_datetime
 
 
 class Operand(Enum):
@@ -20,6 +23,9 @@ class OptimizableCondition(NamedTuple):
     nested_col_key: str
     operand: Operand
     value: str
+
+
+logger = logging.getLogger(__name__)
 
 
 class NestedFieldConditionOptimizer(QueryProcessor):
@@ -41,9 +47,19 @@ class NestedFieldConditionOptimizer(QueryProcessor):
     transformed into `tags_map LIKE "%tag1:2%"`
     """
 
-    def __init__(self, nested_col: str, flattened_col: str) -> None:
+    def __init__(
+        self,
+        nested_col: str,
+        flattened_col: str,
+        start_ts_col: str,
+        beginning_of_time: Optional[datetime] = None,
+    ) -> None:
         self.__nested_col = nested_col
         self.__flattened_col = flattened_col
+        self.__start_ts_col = start_ts_col
+        # This is the cutoff time when we started filling in the relevant column.
+        # If a query goes back further than this date we cannot apply the optimization
+        self.__beginning_of_time = beginning_of_time
 
     def __is_optimizable(
         self, condition: Condition, column: str
@@ -88,12 +104,36 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         return None
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        enabled = state.get_config("optimize_nested_col_conditions", 0)
-        if not enabled:
-            return
         conditions = query.get_conditions()
         if not conditions:
             return
+
+        # Enable the processor only if we have enough data in the flattened
+        # columns. Which have been deployed at BEGINNING_OF_TIME. If the query
+        # starts earlier than that we do not apply the optimization.
+        if self.__beginning_of_time:
+            apply_optimization = False
+            for condition in conditions:
+                if (
+                    is_condition(condition)
+                    and condition[0] == self.__start_ts_col
+                    and condition[1] in (">=", ">")
+                    and isinstance(condition[2], str)
+                ):
+                    try:
+                        start_ts = parse_datetime(condition[2])
+                        if (start_ts - self.__beginning_of_time).total_seconds() > 0:
+                            apply_optimization = True
+                    except Exception:
+                        # We should not get here, it means the from timestamp is malformed
+                        # Returning here is just for safety
+                        logger.error(
+                            "Cannot parse start date for NestedFieldOptimizer: %r",
+                            condition,
+                        )
+                        return
+            if not apply_optimization:
+                return
 
         new_conditions = []
         positive_like_expression: List[str] = []

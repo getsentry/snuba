@@ -16,7 +16,8 @@ from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaMessage
+from snuba.utils.streams.consumer import KafkaPayload
+from snuba.utils.streams.types import Message
 
 from . import settings
 
@@ -106,7 +107,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker[Replacement]):
+class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
         self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
     ) -> None:
@@ -121,8 +122,8 @@ class ReplacerWorker(AbstractBatchWorker[Replacement]):
             col.escaped for col in dataset.get_required_columns()
         ]
 
-    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
-        message = json.loads(message.value)
+    def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        message = json.loads(message.payload.value)
         version = message[0]
 
         if version == 2:

@@ -98,7 +98,7 @@ def parse_function_to_expr(expr: Any) -> Expression:
     def output_builder(
         alias: Optional[str], name: str, params: List[Expression]
     ) -> Expression:
-        return FunctionCall(alias, name, params)
+        return FunctionCall(alias, name, tuple(params))
 
     return parse_function(
         output_builder, simple_expression_builder, literal_builder, expr, 0,
