@@ -653,8 +653,16 @@ class CommitCodec(Codec[KafkaPayload, Commit]):
         )
 
     def decode(self, value: KafkaPayload) -> Commit:
-        topic_name, partition_index, group = value.key.decode("utf-8").split(":", 3)
-        offset = int(value.value.decode("utf-8"))
+        key = value.key
+        if not isinstance(key, bytes):
+            raise TypeError("payload key must be a bytes object")
+
+        val = value.value
+        if not isinstance(val, bytes):
+            raise TypeError("payload value must be a bytes object")
+
+        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
+        offset = int(val.decode("utf-8"))
         return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
 
 
