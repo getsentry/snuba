@@ -334,11 +334,12 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         query = DictClickhouseQuery(dataset, request.query, request.settings)
     timer.mark("prepare_query")
 
+    num_days = (to_date - from_date).days
     stats = {
         "clickhouse_table": source,
         "final": request.query.get_final(),
         "referrer": request.referrer,
-        "num_days": (to_date - from_date).days,
+        "num_days": num_days,
         "sample": request.query.get_sample(),
     }
 
@@ -346,6 +347,7 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
         if scope.span:
             scope.span.set_tag("dataset", type(dataset).__name__)
             scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("timeframe_days", num_days)
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
         span.set_tag("dataset", type(dataset).__name__)
