@@ -8,7 +8,8 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.consumer import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 
 
@@ -28,9 +29,12 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg: str) -> KafkaMessage:
-        return KafkaMessage(
-            Partition(Topic("replacements"), 0), 0, json.dumps(msg).encode("utf-8"),
+    def _wrap(self, msg: str) -> Message[KafkaPayload]:
+        return Message(
+            Partition(Topic("replacements"), 0),
+            0,
+            KafkaPayload(None, json.dumps(msg).encode("utf-8")),
+            datetime.now(),
         )
 
     def _issue_count(self, project_id, group_id=None):
@@ -225,20 +229,24 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_groups",
-                    {
-                        "project_id": project_id,
-                        "group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_groups",
+                        {
+                            "project_id": project_id,
+                            "group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -257,21 +265,25 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_merge",
-                    {
-                        "project_id": project_id,
-                        "new_group_id": 2,
-                        "previous_group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_merge",
+                        {
+                            "project_id": project_id,
+                            "new_group_id": 2,
+                            "previous_group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -291,22 +303,26 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_unmerge",
-                    {
-                        "project_id": project_id,
-                        "previous_group_id": 1,
-                        "new_group_id": 2,
-                        "hashes": ["a" * 32],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_unmerge",
+                        {
+                            "project_id": project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -345,20 +361,24 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_tag",
-                    {
-                        "project_id": project_id,
-                        "tag": "browser.name",
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_tag",
+                        {
+                            "project_id": project_id,
+                            "tag": "browser.name",
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
