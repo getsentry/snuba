@@ -44,7 +44,7 @@ class Dataset(object):
         dataset_schemas: DatasetSchemas,
         *,
         table_writer: Optional[TableWriter] = None,
-    ):
+    ) -> None:
         self.__dataset_schemas = dataset_schemas
         self.__table_writer = table_writer
 
@@ -135,7 +135,7 @@ class TimeSeriesDataset(Dataset):
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
