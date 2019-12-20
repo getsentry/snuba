@@ -110,9 +110,9 @@ def complex_column_expr(
 
 def conditions_expr(
     dataset, conditions, query: Query, parsing_context: ParsingContext, depth=0
-):
-    def simple_expression_builder(val: Any) -> str:
-        return column_expr(dataset, val, query, parsing_context)
+) -> str:
+    def operand_builder(val: Any) -> str:
+        return str(column_expr(dataset, val, query, parsing_context))
 
     def and_builder(expressions: Sequence[str]) -> str:
         return " AND ".join(e for e in expressions if e)
@@ -121,7 +121,7 @@ def conditions_expr(
         res = " OR ".join(expressions)
         return "({})".format(res) if len(expressions) > 1 else res
 
-    def unpack_array_condition_builder(op: str, literal: Any, lhs: str) -> str:
+    def unpack_array_condition_builder(lhs: str, op: str, literal: Any) -> str:
         any_or_all = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
         return "{}(x -> assumeNotNull(x {} {}), {})".format(
             any_or_all, op, escape_literal(literal), lhs,
@@ -130,8 +130,8 @@ def conditions_expr(
     def simple_condition_builder(lhs: str, op: str, literal: Any) -> str:
         return "{} {} {}".format(lhs, op, escape_literal(literal))
 
-    return parse_conditions(
-        simple_expression_builder,
+    condition = parse_conditions(
+        operand_builder,
         and_builder,
         or_builder,
         unpack_array_condition_builder,
@@ -141,3 +141,5 @@ def conditions_expr(
         query.get_arrayjoin(),
         depth,
     )
+
+    return condition or ""

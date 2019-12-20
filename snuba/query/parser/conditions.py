@@ -27,10 +27,10 @@ class InvalidConditionException(Exception):
 
 
 def parse_conditions(
-    simple_expression_builder: Callable[[Any], TExpression],
+    operand_builder: Callable[[Any], TExpression],
     and_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
-    unpack_array_condition_builder: Callable[[str, Any, TExpression], TExpression],
+    unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
     dataset: Dataset,
     conditions: Any,
@@ -42,6 +42,14 @@ def parse_conditions(
     query.  The expression is constructed by ANDing groups of OR expressions.
     Expansion of columns is handled, as is replacement of columns with aliases,
     if the column has already been expanded and aliased elsewhere.
+
+    operand_builder: Builds the TExpression representing the left hand side
+      of a simple condition. This can be as nested as the user wants
+    and_builder / or_builder: Combine a list of expressions in AND/OR
+    unpack_array_condition_builder: Deals with a special case where we unpack conditions
+      on array columns. More details in the code.
+    simple_condition_builder: Generates a simple condition made by expression on the
+      left hand side, an operator and a literal on the right hand side.
     """
     from snuba.clickhouse.columns import Array
 
@@ -53,7 +61,7 @@ def parse_conditions(
         sub = OrderedDict(
             (
                 parse_conditions(
-                    simple_expression_builder,
+                    operand_builder,
                     and_builder,
                     or_builder,
                     unpack_array_condition_builder,
@@ -92,16 +100,14 @@ def parse_conditions(
             and columns[lhs].base_name != array_join
             and not isinstance(lit, (list, tuple))
         ):
-            return unpack_array_condition_builder(
-                op, lit, simple_expression_builder(lhs)
-            )
+            return unpack_array_condition_builder(operand_builder(lhs), op, lit)
         else:
-            return simple_condition_builder(simple_expression_builder(lhs), op, lit)
+            return simple_condition_builder(operand_builder(lhs), op, lit)
 
     elif depth == 1:
         sub = (
             parse_conditions(
-                simple_expression_builder,
+                operand_builder,
                 and_builder,
                 or_builder,
                 unpack_array_condition_builder,
@@ -121,7 +127,11 @@ def parse_conditions(
 def parse_conditions_to_expr(
     expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
 ) -> Optional[Expression]:
-    def simple_expression_builder(val: Any) -> Expression:
+    """
+    Relies on parse_conditions to parse a list of conditions into an Expression.
+    """
+
+    def operand_builder(val: Any) -> Expression:
         if is_function(val, 0):
             return parse_function_to_expr(val)
         # TODO: This will use the schema of the dataset to decide
@@ -155,7 +165,10 @@ def parse_conditions_to_expr(
             return None
         return multi_expression_builder(expressions, BooleanFunctions.OR)
 
-    def tuplify_literal(op: str, literal: Any) -> Expression:
+    def preprocess_literal(op: str, literal: Any) -> Expression:
+        """
+        Replaces lists with a function call to tuple.
+        """
         if isinstance(literal, (list, tuple)):
             assert op in ["IN", "NOT IN"]
             literals = tuple([Literal(None, l) for l in literal])
@@ -165,7 +178,7 @@ def parse_conditions_to_expr(
             return Literal(None, literal)
 
     def unpack_array_condition_builder(
-        op: str, literal: Any, lhs: Expression
+        lhs: Expression, op: str, literal: Any
     ) -> Expression:
         function_name = "arrayExists" if op in POSITIVE_OPERATORS else "arrayAll"
 
@@ -185,7 +198,7 @@ def parse_conditions_to_expr(
                             FunctionCall(
                                 None,
                                 OPERATOR_TO_FUNCTION[op],
-                                (Argument(None, "x"), tuplify_literal(op, literal)),
+                                (Argument(None, "x"), preprocess_literal(op, literal)),
                             ),
                         ),
                     ),
@@ -196,11 +209,11 @@ def parse_conditions_to_expr(
 
     def simple_condition_builder(lhs: Expression, op: str, literal: Any) -> Expression:
         return binary_condition(
-            None, OPERATOR_TO_FUNCTION[op], lhs, tuplify_literal(op, literal)
+            None, OPERATOR_TO_FUNCTION[op], lhs, preprocess_literal(op, literal)
         )
 
     return parse_conditions(
-        simple_expression_builder,
+        operand_builder,
         and_builder,
         or_builder,
         unpack_array_condition_builder,
