@@ -9,7 +9,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.schemas import Schema, validate_jsonschema
 
 
@@ -19,7 +19,7 @@ class RequestSchema:
         query_schema: Schema,
         settings_schema: Schema,
         extensions_schemas: Mapping[str, Schema],
-        settings_class: Type[RequestSettings] = RequestSettings,
+        settings_class: Type[RequestSettings] = HTTPRequestSettings,
     ):
         self.__query_schema = query_schema
         self.__settings_schema = settings_schema
@@ -66,7 +66,7 @@ class RequestSchema:
     def build_with_extensions(
         cls,
         extensions: Mapping[str, QueryExtension],
-        settings_class: Type[RequestSettings] = RequestSettings,
+        settings_class: Type[RequestSettings] = HTTPRequestSettings,
     ) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
         settings_schema = SETTINGS_SCHEMA

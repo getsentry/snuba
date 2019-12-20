@@ -4,7 +4,7 @@ from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Condition, Query
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 def get_dataset_source(dataset_name):
@@ -29,7 +29,7 @@ class TestDiscover(BaseDatasetTest):
     def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
         query = Query({"conditions": conditions}, get_dataset_source("discover"))
 
-        request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
         for processor in get_dataset("discover").get_query_processors():
             processor.process_query(query, request_settings)
 

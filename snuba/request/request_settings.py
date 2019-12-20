@@ -1,9 +1,11 @@
+from abc import ABC, abstractmethod
+
 from typing import Sequence
 
 from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
 
 
-class RequestSettings:
+class RequestSettings(ABC):
     """
     Settings that apply to how the query in the request should be run.
 
@@ -14,6 +16,37 @@ class RequestSettings:
     the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
+    @abstractmethod
+    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
+        pass
+
+    @abstractmethod
+    def get_turbo(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_consistent(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_debug(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        pass
+
+    @abstractmethod
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+
+class HTTPRequestSettings(RequestSettings):
+    """
+    Settings that are applied to all Requests initiated via the HTTP api. Allows
+    parameters to be customized, defaults to using global rate limits and allows
+    additional rate limits to be added.
+    """
     def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
@@ -37,6 +70,10 @@ class RequestSettings:
 
 
 class SubscriptionRequestSettings(RequestSettings):
+    """
+    Settings that are applied to Requests initiated via Subscriptions. Hard code most
+    parameters and skips all rate limiting.
+    """
     def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
         self.__debug = debug
 
@@ -45,6 +82,9 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def get_consistent(self) -> bool:
         return True
+
+    def get_debug(self) -> bool:
+        return self.__debug
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return []
