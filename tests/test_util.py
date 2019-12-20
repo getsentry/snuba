@@ -71,7 +71,7 @@ class TestUtil(BaseTest):
         conditions = []
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
-            is None
+            == ""
         )
 
         conditions = [[[]], []]
