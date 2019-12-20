@@ -1,28 +1,27 @@
 import logging
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 from typing import (
     Any,
-    MutableMapping,
     Callable,
-    Optional,
     Mapping,
-    Sequence,
+    MutableMapping,
     MutableSequence,
+    Optional,
+    Sequence,
 )
-
-from confluent_kafka import KafkaError
-from confluent_kafka import Message as ConfluentMessage
-from confluent_kafka import Producer as ConfluentProducer
 
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
 from confluent_kafka import Consumer as ConfluentConsumer
+from confluent_kafka import KafkaError
+from confluent_kafka import Message as ConfluentMessage
+from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.codecs import Codec
+from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -31,7 +30,6 @@ from snuba.utils.streams.types import (
     Topic,
     TPayload,
 )
-
 
 logger = logging.getLogger(__name__)
 
