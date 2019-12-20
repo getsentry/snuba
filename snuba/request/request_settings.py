@@ -43,7 +43,7 @@ class HTTPRequestSettings(RequestSettings):
     parameters to be customized, defaults to using global rate limits and allows
     additional rate limits to be added.
     """
-    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
+    def __init__(self, turbo: bool = False, consistent: bool = False, debug: bool = False) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug

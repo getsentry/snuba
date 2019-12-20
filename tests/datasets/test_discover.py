@@ -29,7 +29,7 @@ class TestDiscover(BaseDatasetTest):
     def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
         query = Query({"conditions": conditions}, get_dataset_source("discover"))
 
-        request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings()
         for processor in get_dataset("discover").get_query_processors():
             processor.process_query(query, request_settings)
 

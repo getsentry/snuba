@@ -180,7 +180,7 @@ test_data = [
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
-    request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
         flattened_col="tags_map",

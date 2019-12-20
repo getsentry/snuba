@@ -41,7 +41,7 @@ def test_no_split(dataset_name: str):
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
-    request = Request(query, HTTPRequestSettings(False, False, False), {}, "tests")
+    request = Request(query, HTTPRequestSettings(), {}, "tests")
 
     do_query(events, request, None)
 
@@ -113,7 +113,7 @@ def test_col_split(
 
     request = Request(
         query,
-        HTTPRequestSettings(False, False, False),
+        HTTPRequestSettings(),
         {
             "project": {"project": 1},
             "timeseries": {

@@ -55,7 +55,7 @@ def test_join_optimizer_two_tables(
         },
         simple_join_structure,
     )
-    request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
 
     optimizer = SimpleJoinOptimizer()
     optimizer.process_query(query, request_settings)

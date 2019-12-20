@@ -53,7 +53,7 @@ def test_prewhere(query_body, keys, new_conditions, prewhere_conditions) -> None
     settings.MAX_PREWHERE_CONDITIONS = 2
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, keys),)
 
-    request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor()
     processor.process_query(query, request_settings)
 

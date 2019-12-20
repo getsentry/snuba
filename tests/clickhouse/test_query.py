@@ -13,7 +13,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
             {"conditions": [], "aggregations": [], "groupby": [], "sample": 0.1},
             source,
         )
-        request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings()
 
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
@@ -27,7 +27,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
             {"conditions": [], "aggregations": [], "groupby": [], "sample": 0.1},
             source,
         )
-        request_settings = HTTPRequestSettings(turbo=True, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings(turbo=True)
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
@@ -38,7 +38,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
     def test_when_sample_is_not_provided_with_turbo(self):
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
-        request_settings = HTTPRequestSettings(turbo=True, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings(turbo=True)
 
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
@@ -49,7 +49,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
     def test_when_sample_is_not_provided_without_turbo(self):
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
-        request_settings = HTTPRequestSettings(turbo=False, consistent=False, debug=False)
+        request_settings = HTTPRequestSettings()
 
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
