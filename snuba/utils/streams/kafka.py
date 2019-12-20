@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import logging
+from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import partial
+from threading import Event
 from typing import (
     Any,
     Callable,
@@ -19,9 +24,11 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
+from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.codecs import Codec
 from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.producer import MessageDetails, Producer
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -637,3 +644,57 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
         if messages > 0:
             raise TimeoutError(f"{messages} commit log messages pending delivery")
+
+
+class KafkaProducer(Producer[TPayload]):
+    def __init__(self, configuration, codec: Codec[KafkaPayload, TPayload]) -> None:
+        self.__configuration = configuration
+        self.__codec = codec
+
+        self.__producer = ConfluentProducer(configuration)
+        self.__shutdown_requested = Event()
+
+        self.__result = execute(self.__worker)
+
+    def __worker(self) -> None:
+        while not self.__shutdown_requested.is_set():
+            self.__producer.poll(0.1)
+        self.__producer.flush()
+
+    def __delivery_callback(
+        self,
+        future: Future[MessageDetails],
+        error: KafkaError,
+        message: ConfluentMessage,
+    ) -> None:
+        if error is not None:
+            future.set_exception(TransportError(error))
+        else:
+            future.set_result(
+                MessageDetails(
+                    Partition(Topic(message.topic()), message.partition()),
+                    message.offset(),
+                )
+            )
+
+    def produce(self, topic: Topic, payload: TPayload) -> Future[MessageDetails]:
+        if self.__shutdown_requested.is_set():
+            raise RuntimeError("producer has been closed")
+
+        future: Future[MessageDetails] = Future()
+        future.set_running_or_notify_cancel()
+        try:
+            encoded = self.__codec.encode(payload)
+            self.__producer.produce(
+                topic.name,
+                value=encoded.value,
+                key=encoded.key,
+                on_delivery=partial(self.__delivery_callback, future),
+            )
+        except Exception as error:
+            future.set_exception(error)
+        return future
+
+    def close(self) -> Future[None]:
+        self.__shutdown_requested.set()
+        return self.__result
