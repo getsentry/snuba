@@ -32,7 +32,15 @@ ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 
 class RawQueryException(Exception):
-    def __init__(self, err_type: str, message: str, stats: Mapping[str, Any], timer: Timer, sql: str, **meta):
+    def __init__(
+        self,
+        err_type: str,
+        message: str,
+        stats: Mapping[str, Any],
+        timer: Timer,
+        sql: str,
+        **meta
+    ):
         self.err_type = err_type
         self.message = message
         self.stats = stats
@@ -148,7 +156,9 @@ def raw_query(
                     except BaseException as ex:
                         error = str(ex)
                         logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = log_query_and_update_stats(request, sql, timer, stats, 'error', query_settings)
+                        stats = log_query_and_update_stats(
+                            request, sql, timer, stats, "error", query_settings
+                        )
                         meta = {}
                         if isinstance(ex, ClickHouseError):
                             err_type = "clickhouse"
@@ -164,17 +174,21 @@ def raw_query(
                             **meta,
                         )
             except RateLimitExceeded as ex:
-                stats = log_query_and_update_stats(request, sql, timer, stats, 'rate-limited', query_settings)
+                stats = log_query_and_update_stats(
+                    request, sql, timer, stats, "rate-limited", query_settings
+                )
                 raise RawQueryException(
                     err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
                     timer=timer,
                     sql=sql,
-                    detail=str(ex)
+                    detail=str(ex),
                 )
 
-    stats = log_query_and_update_stats(request, sql, timer, stats, 'success', query_settings)
+    stats = log_query_and_update_stats(
+        request, sql, timer, stats, "success", query_settings
+    )
 
     result["timing"] = timer
 
@@ -225,7 +239,9 @@ def log_query_and_update_stats(
 
 
 @split_query
-def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> ClickhouseQueryResult:
+def parse_and_run_query(
+    dataset: Dataset, request: Request, timer: Timer
+) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
@@ -254,11 +270,12 @@ def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> Cli
         query = DictClickhouseQuery(dataset, request.query, request.settings)
     timer.mark("prepare_query")
 
+    num_days = (to_date - from_date).days
     stats = {
         "clickhouse_table": source,
         "final": request.query.get_final(),
         "referrer": request.referrer,
-        "num_days": (to_date - from_date).days,
+        "num_days": num_days,
         "sample": request.query.get_sample(),
     }
 
@@ -266,6 +283,7 @@ def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> Cli
         if scope.span:
             scope.span.set_tag("dataset", type(dataset).__name__)
             scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("timeframe_days", num_days)
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
         span.set_tag("dataset", type(dataset).__name__)
