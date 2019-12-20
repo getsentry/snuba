@@ -7,9 +7,13 @@ from typing import Any, Mapping, Type
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
-from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
-from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
+from snuba.request.request_settings import (
+    HTTPRequestSettings,
+    RequestSettings,
+    SubscriptionRequestSettings,
+)
 from snuba.schemas import Schema, validate_jsonschema
 
 
@@ -69,7 +73,7 @@ class RequestSchema:
         settings_class: Type[RequestSettings] = HTTPRequestSettings,
     ) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
-        settings_schema = SETTINGS_SCHEMA
+        settings_schema = SETTINGS_SCHEMA[settings_class]
         extensions_schemas = {
             extension_key: extension.get_schema()
             for extension_key, extension in extensions.items()
@@ -100,9 +104,7 @@ class RequestSchema:
 
         return Request(
             Query(query_body, data_source),
-            self.__setting_class(
-                settings["turbo"], settings["consistent"], settings["debug"]
-            ),
+            self.__setting_class(**settings),
             extensions,
             referrer,
         )
@@ -129,3 +131,26 @@ class RequestSchema:
 
     def generate_template(self) -> Any:
         return self.__generate_template_impl(self.__composite_schema)
+
+
+SETTINGS_SCHEMA = {
+    HTTPRequestSettings: {
+        "type": "object",
+        "properties": {
+            # Never add FINAL to queries, enable sampling
+            "turbo": {"type": "boolean", "default": False},
+            # Force queries to hit the first shard replica, ensuring the query
+            # sees data that was written before the query. This burdens the
+            # first replica, so should only be used when absolutely necessary.
+            "consistent": {"type": "boolean", "default": False},
+            "debug": {"type": "boolean", "default": False},
+        },
+        "additionalProperties": False,
+    },
+    # Subscriptions have no customizable settings.
+    SubscriptionRequestSettings: {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}

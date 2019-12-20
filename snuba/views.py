@@ -24,7 +24,6 @@ from snuba.api.query import (
     RawQueryException,
 )
 from snuba.consumer import KafkaMessageMetadata
-from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -34,7 +33,7 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMA
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -340,7 +339,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
-            SETTINGS_SCHEMA,
+            SETTINGS_SCHEMA[HTTPRequestSettings],
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,

@@ -17,10 +17,6 @@ class RequestSettings(ABC):
     """
 
     @abstractmethod
-    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
-        pass
-
-    @abstractmethod
     def get_turbo(self) -> bool:
         pass
 
@@ -74,9 +70,6 @@ class SubscriptionRequestSettings(RequestSettings):
     Settings that are applied to Requests initiated via Subscriptions. Hard code most
     parameters and skips all rate limiting.
     """
-    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
-        self.__debug = debug
-
     def get_turbo(self) -> bool:
         return False
 
@@ -84,7 +77,7 @@ class SubscriptionRequestSettings(RequestSettings):
         return True
 
     def get_debug(self) -> bool:
-        return self.__debug
+        return False
 
     def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
         return []
