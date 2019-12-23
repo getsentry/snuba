@@ -4,7 +4,7 @@ import itertools
 
 from typing import Any, Mapping
 
-from snuba.datasets.schemas import RelationalSource
+from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
@@ -72,7 +72,7 @@ class RequestSchema:
         }
         return cls(generic_schema, settings_schema, extensions_schemas)
 
-    def validate(self, value, data_source: RelationalSource, referrer: str) -> Request:
+    def validate(self, value, dataset: Dataset, referrer: str) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
         query_body = {
@@ -94,8 +94,9 @@ class RequestSchema:
                 if key in value
             }
 
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         return Request(
-            Query(query_body, data_source),
+            Query(query_body, source),
             RequestSettings(
                 settings["turbo"], settings["consistent"], settings["debug"]
             ),
