@@ -3,7 +3,6 @@ from typing import Any, Callable, Optional, OrderedDict, Sequence, TypeVar
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import (
     Argument,
-    Column,
     Expression,
     Lambda,
     Literal,
@@ -14,9 +13,9 @@ from snuba.query.conditions import (
     BooleanFunctions,
     OPERATOR_TO_FUNCTION,
 )
-from snuba.query.parser.functions import parse_function_to_expr
+from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.util import is_condition, is_function, QUOTED_LITERAL_RE
+from snuba.util import is_condition
 
 
 TExpression = TypeVar("TExpression")
@@ -131,16 +130,6 @@ def parse_conditions_to_expr(
     Relies on parse_conditions to parse a list of conditions into an Expression.
     """
 
-    def operand_builder(val: Any) -> Expression:
-        if is_function(val, 0):
-            return parse_function_to_expr(val)
-        # TODO: This will use the schema of the dataset to decide
-        # if the expression is a column or a literal.
-        if QUOTED_LITERAL_RE.match(val):
-            return Literal(None, val[1:-1])
-        else:
-            return Column(None, val, None)
-
     def multi_expression_builder(
         expressions: Sequence[Expression], function: str
     ) -> Expression:
@@ -213,7 +202,7 @@ def parse_conditions_to_expr(
         )
 
     return parse_conditions(
-        operand_builder,
+        parse_expression,
         and_builder,
         or_builder,
         unpack_array_condition_builder,
