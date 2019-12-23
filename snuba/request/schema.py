@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
+from snuba.query.parser import parse_query
 from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
 from snuba.request import Request
@@ -94,9 +95,9 @@ class RequestSchema:
                 if key in value
             }
 
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        query = parse_query(query_body, dataset)
         return Request(
-            Query(query_body, source),
+            query,
             RequestSettings(
                 settings["turbo"], settings["consistent"], settings["debug"]
             ),
