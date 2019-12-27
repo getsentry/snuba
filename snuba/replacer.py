@@ -260,8 +260,8 @@ def process_merge(message, all_column_names) -> Optional[Replacement]:
     )
 
     where = """\
+        PREWHERE group_id IN (%(previous_group_ids)s)
         WHERE project_id = %(project_id)s
-        AND group_id IN (%(previous_group_ids)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
@@ -311,8 +311,8 @@ def process_unmerge(message, all_column_names) -> Optional[Replacement]:
     )
 
     where = """\
+        PREWHERE group_id = %(previous_group_id)s
         WHERE project_id = %(project_id)s
-        AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
