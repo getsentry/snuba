@@ -197,8 +197,8 @@ def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
 
     where = """\
+        PREWHERE group_id IN (%(group_ids)s)
         WHERE project_id = %(project_id)s
-        AND group_id IN (%(group_ids)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
