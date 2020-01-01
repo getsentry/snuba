@@ -61,7 +61,6 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
             orderby = [col] + orderby[1:]
         else:
             raise ValueError(f"Invalid Order By clause {orderby}")
-        print(orderby)
         orderby_parsed = parse_expression(tuplify(orderby))
         orderby_exprs.append(
             OrderBy(
