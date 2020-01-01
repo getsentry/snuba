@@ -1,11 +1,16 @@
+import logging
+
 from typing import Any, MutableMapping
 
+from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.query import OrderBy, OrderByDirection, Query
 from snuba.query.columns import NEGATE_RE
 from snuba.util import is_function, tuplify
+
+logger = logging.getLogger("snuba.query_parser")
 
 
 def parse_query(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
@@ -14,7 +19,24 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
     account the initial query body. Extensions are parsed by extension
     processors and are supposed to update the AST.
     """
+    try:
+        return _parse_query_impl(body, dataset)
+    except Exception as e:
+        # During the development there is no need to fail Snuba queries if the parser
+        # has an issue, anyway the production query is ran based on the old query
+        # representation.
+        # Once we will be actually using the ast to build the Clickhouse query
+        # this try/except block will disappear.
+        enforce_validity = state.get_config("query_parsing_enforce_validity", 0)
+        if enforce_validity:
+            raise e
+        else:
+            logger.error("Failed to parse query", exc_info=e)
+            source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+            return Query(body, source)
 
+
+def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
     aggregate_exprs = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))
