@@ -1,13 +1,14 @@
 import logging
 
-from typing import Any, MutableMapping
+from typing import Any, MutableMapping, Optional
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
+from snuba.query.expressions import Expression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.query import OrderBy, OrderByDirection, Query
-from snuba.query.columns import NEGATE_RE
+from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.util import is_function, tuplify
 
 logger = logging.getLogger("snuba.query_parser")
@@ -64,7 +65,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset,) -> Quer
 
     arrayjoin = body.get("arrayjoin")
     if arrayjoin:
-        array_join_expr = parse_expression(body["arrayjoin"])
+        array_join_expr: Optional[Expression] = parse_expression(body["arrayjoin"])
     else:
         array_join_expr = None
 
@@ -76,10 +77,14 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset,) -> Quer
     orderby_exprs = []
     for orderby in body.get("orderby", []):
         if isinstance(orderby, str):
-            direction, col = NEGATE_RE.match(orderby).groups()
+            match = NEGATE_RE.match(orderby)
+            assert match is not None, f"Invalid Order By clause {orderby}"
+            direction, col = match.groups()
             orderby = col
         elif is_function(orderby):
-            direction, col = NEGATE_RE.match(orderby[0]).groups()
+            match = NEGATE_RE.match(orderby[0])
+            assert match is not None, f"Invalid Order By clause {orderby}"
+            direction, col = match.groups()
             orderby = [col] + orderby[1:]
         else:
             raise ValueError(f"Invalid Order By clause {orderby}")
