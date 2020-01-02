@@ -1,4 +1,5 @@
-from typing import Any, Callable, Optional, OrderedDict, Sequence, TypeVar
+from collections import OrderedDict
+from typing import Any, Callable, Optional, Sequence, TypeVar
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import (
@@ -105,7 +106,7 @@ def parse_conditions(
             return simple_condition_builder(operand_builder(lhs), op, lit)
 
     elif depth == 1:
-        sub = (
+        sub_expression = (
             parse_conditions(
                 operand_builder,
                 and_builder,
@@ -119,7 +120,7 @@ def parse_conditions(
             )
             for cond in conditions
         )
-        return or_builder([s for s in sub if s])
+        return or_builder([s for s in sub_expression if s])
     else:
         raise InvalidConditionException(str(conditions))
 
