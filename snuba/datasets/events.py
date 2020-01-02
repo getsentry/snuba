@@ -243,7 +243,6 @@ class EventsDataset(TimeSeriesDataset):
             mandatory_conditions=[("deleted", "=", 0)],
             prewhere_candidates=[
                 "event_id",
-                "issue",
                 "group_id",
                 "tags[sentry:release]",
                 "message",
@@ -308,7 +307,7 @@ class EventsDataset(TimeSeriesDataset):
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column
-        elif column_name == "issue" or column_name == "group_id":
+        elif column_name == "group_id":
             return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
         elif column_name == "message":
             # Because of the rename from message->search_message without backfill,

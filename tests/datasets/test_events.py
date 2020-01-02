@@ -131,10 +131,6 @@ class TestEventsDataset(BaseEventsTest):
 
         group_id_query = deepcopy(query)
         assert (
-            column_expr(self.dataset, "issue", group_id_query, ParsingContext())
-            == "(nullIf(group_id, 0) AS issue)"
-        )
-        assert (
             column_expr(self.dataset, "group_id", group_id_query, ParsingContext())
             == "(nullIf(group_id, 0) AS group_id)"
         )
