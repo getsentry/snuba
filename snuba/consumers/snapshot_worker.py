@@ -9,7 +9,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.snapshots import SnapshotId
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 
-logger = logging.getLogger('snuba.snapshot-consumer')
+logger = logging.getLogger("snuba.snapshot-consumer")
 
 
 class SnapshotAwareWorker(ConsumerWorker):
@@ -31,7 +31,8 @@ class SnapshotAwareWorker(ConsumerWorker):
     it is able to discard transactions that were already part of the snapshot.
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         dataset: Dataset,
         producer: Producer,
         snapshot_id: SnapshotId,
@@ -52,10 +53,8 @@ class SnapshotAwareWorker(ConsumerWorker):
         self.__xip_list_applied: Set[int] = set()
         logger.debug("Starting snapshot aware worker for id %s", self.__snapshot_id)
 
-    def __accept_message(self,
-        xid: int,
-        value: Mapping[str, Any],
-        metadata: KafkaMessageMetadata
+    def __accept_message(
+        self, xid: int, value: Mapping[str, Any], metadata: KafkaMessageMetadata
     ):
         if self.__catching_up and xid and xid >= self.__transaction_data.xmax:
             logger.info(
@@ -72,28 +71,22 @@ class SnapshotAwareWorker(ConsumerWorker):
             self.__xip_list_applied.clear()
             self.__catching_up = False
 
-        return super()._process_message_impl(
-            value,
-            metadata,
-        )
+        return super()._process_message_impl(value, metadata,)
 
-    def __drop_message(self,
-        xid: int,
+    def __drop_message(
+        self, xid: int,
     ):
         current_len = len(self.__skipped)
         self.__skipped.add(xid)
         new_len = len(self.__skipped)
         if new_len != current_len and new_len % 100 == 0:
             logger.info(
-                "Skipped %d transactions",
-                len(self.__skipped),
+                "Skipped %d transactions", len(self.__skipped),
             )
         return None
 
     def _process_message_impl(
-        self,
-        value: Mapping[str, Any],
-        metadata: KafkaMessageMetadata,
+        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
     ):
         """
         This delegates the processing of all transactions that follow the snapshot

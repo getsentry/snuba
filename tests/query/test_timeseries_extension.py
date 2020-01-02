@@ -47,29 +47,24 @@ test_data = [
             ("timestamp", "<", "2019-09-19T12:00:34"),
         ],
         60,
-    )
+    ),
 ]
 
 
-@pytest.mark.parametrize("raw_data, expected_conditions, expected_granularity", test_data)
+@pytest.mark.parametrize(
+    "raw_data, expected_conditions, expected_granularity", test_data
+)
 def test_query_extension_processing(
-    raw_data: dict,
-    expected_conditions: Sequence[Condition],
-    expected_granularity: int,
+    raw_data: dict, expected_conditions: Sequence[Condition], expected_granularity: int,
 ):
-    state.set_config('max_days', 1)
+    state.set_config("max_days", 1)
     extension = TimeSeriesExtension(
         default_granularity=60,
         default_window=datetime.timedelta(days=5),
-        timestamp_column='timestamp',
+        timestamp_column="timestamp",
     )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query(
-        {
-            "conditions": []
-        },
-        TableSource("my_table", ColumnSet([])),
-    )
+    query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)
 
     request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
 

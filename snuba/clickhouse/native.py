@@ -12,18 +12,19 @@ from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
 
-logger = logging.getLogger('snuba.clickhouse')
+logger = logging.getLogger("snuba.clickhouse")
 
 
 class ClickhousePool(object):
-    def __init__(self,
-                 host=settings.CLICKHOUSE_HOST,
-                 port=settings.CLICKHOUSE_PORT,
-                 connect_timeout=1,
-                 send_receive_timeout=300,
-                 max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
-                 client_settings={},
-                 ):
+    def __init__(
+        self,
+        host=settings.CLICKHOUSE_HOST,
+        port=settings.CLICKHOUSE_PORT,
+        connect_timeout=1,
+        send_receive_timeout=300,
+        max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,
+        client_settings={},
+    ):
         self.host = host
         self.port = port
         self.connect_timeout = connect_timeout
@@ -86,7 +87,11 @@ class ClickhousePool(object):
                 return self.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
-                logger.warning("Write to ClickHouse failed: %s (%d tries left)", str(e), attempts_remaining)
+                logger.warning(
+                    "Write to ClickHouse failed: %s (%d tries left)",
+                    str(e),
+                    attempts_remaining,
+                )
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
                     raise
@@ -109,7 +114,7 @@ class ClickhousePool(object):
             port=self.port,
             connect_timeout=self.connect_timeout,
             send_receive_timeout=self.send_receive_timeout,
-            settings=self.client_settings
+            settings=self.client_settings,
         )
 
     def close(self) -> None:
@@ -123,7 +128,7 @@ class ClickhousePool(object):
 
 
 class NativeDriverReader(Reader[ClickhouseQuery]):
-    def __init__(self, client):
+    def __init__(self, client) -> None:
         self.__client = client
 
     def __transform_result(self, result, with_totals: bool) -> Result:
@@ -148,7 +153,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
     def execute(
         self,
         query: ClickhouseQuery,
-        # TODO: move Clickhouse specific arguments into ClickhouseQuery
+        # TODO: move Clickhouse specific arguments into DictClickhouseQuery
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,

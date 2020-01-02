@@ -5,13 +5,33 @@
       <link rel="stylesheet" href="/css/base.css">
       <link rel="stylesheet" href="/css/toggle.css">
 
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/react/15.4.2/react-dom.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.21.1/babel.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/react/16.10.2/umd/react.production.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/16.10.2/umd/react-dom.production.min.js"></script>
       <script src="https://unpkg.com/react-table@latest/react-table.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.10/lodash.js"></script>
       <script type="text/jsx">
         var ReactTable = window.ReactTable.default;
+
+        class ErrorBoundary extends React.Component {
+          constructor(props) {
+            super(props);
+            this.state = {error: null};
+          }
+
+          componentDidCatch(error, errorInfo) {
+            this.setState({error});
+          }
+
+          render() {
+            let {error} = this.state;
+            if (error) {
+              return <p><strong>Error loading component</strong><pre>{error.stack}</pre></p>
+            }
+            return this.props.children;
+          }
+        }
+
         class Sparkline extends React.Component {
           constructor(props) {
             super(props);
@@ -230,62 +250,64 @@
                 </div>
 
                 <h2>Queries:</h2>
-                <ReactTable
-                  manual
-                  pages={-1}
-                  loading={!this.state.loaded}
-                  data={this.state.queries.slice(0, 50)}
-                  className="-striped -highlight"
-                  showPagination={false}
-                  columns={[
-                    {
-                      Header: 'date',
-                      width:90,
-                      id: 'date',
-                      accessor: row => new Date(row.timing.timestamp * 1000).toLocaleDateString()
-                    },{
-                      Header: 'time',
-                      width: 110,
-                      id: 'time',
-                      accessor: row => new Date(row.timing.timestamp * 1000).toLocaleTimeString()
-                    },{
-                      Header: 'project',
-                      width: 80,
-                      id: 'project',
-                      accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
-                    },{
-                      Header: 'referrer',
-                      width: 80,
-                      accessor: 'stats.referrer'
-                    },{
-                      Header: 'ms',
-                      width: 50,
-                      accessor: 'timing.duration_ms'
-                    },{
-                      Header: 'days',
-                      width:50,
-                      accessor: 'stats.num_days'
-                    },{
-                      Header: 'hit',
-                      id: 'hit',
-                      width:35,
-                      accessor: row => row.stats.cache_hit ? 'Y': ''
-                    },{
-                      Header: 'dup',
-                      id: 'dup',
-                      width:42,
-                      accessor: row => row.stats.is_duplicate ? 'Y': ''
-                    },{
-                      Header: 'groupby',
-                      width:200,
-                      id: 'groupby',
-                      accessor: row => (Array.isArray(row.request.groupby) ? row.request.groupby : [row.request.groupby]).join(', ')
-                    },{
-                      Header: 'SQL',
-                      accessor: 'sql'
-                    },
-                  ]}
-                />
+                <ErrorBoundary>
+                  <ReactTable
+                    manual
+                    pages={-1}
+                    loading={!this.state.loaded}
+                    data={this.state.queries.slice(0, 50)}
+                    className="-striped -highlight"
+                    showPagination={false}
+                    columns={[
+                      {
+                        Header: 'date',
+                        width:90,
+                        id: 'date',
+                        accessor: row => new Date(row.timing.timestamp * 1000).toLocaleDateString()
+                      },{
+                        Header: 'time',
+                        width: 110,
+                        id: 'time',
+                        accessor: row => new Date(row.timing.timestamp * 1000).toLocaleTimeString()
+                      },{
+                        Header: 'project',
+                        width: 80,
+                        id: 'project',
+                        accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
+                      },{
+                        Header: 'referrer',
+                        width: 80,
+                        accessor: 'stats.referrer'
+                      },{
+                        Header: 'ms',
+                        width: 50,
+                        accessor: 'timing.duration_ms'
+                      },{
+                        Header: 'days',
+                        width:50,
+                        accessor: 'stats.num_days'
+                      },{
+                        Header: 'hit',
+                        id: 'hit',
+                        width:35,
+                        accessor: row => row.stats.cache_hit ? 'Y': ''
+                      },{
+                        Header: 'dup',
+                        id: 'dup',
+                        width:42,
+                        accessor: row => row.stats.is_duplicate ? 'Y': ''
+                      },{
+                        Header: 'groupby',
+                        width:200,
+                        id: 'groupby',
+                        accessor: row => (Array.isArray(row.request.groupby) ? row.request.groupby : [row.request.groupby]).join(', ')
+                      },{
+                        Header: 'SQL',
+                        accessor: 'sql'
+                      },
+                    ]}
+                  />
+                </ErrorBoundary>
               </div>
             )
           }

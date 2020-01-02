@@ -5,15 +5,16 @@ from datetime import datetime
 from tests.base import BaseDatasetTest
 from snuba.clickhouse.native import ClickhousePool
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.cdc.groupedmessage_processor import GroupedMessageProcessor, GroupedMessageRow
+from snuba.datasets.cdc.groupedmessage_processor import (
+    GroupedMessageProcessor,
+    GroupedMessageRow,
+)
 
 
 class TestGroupedMessage(BaseDatasetTest):
-
     def setup_method(self, test_method):
         super(TestGroupedMessage, self).setup_method(
-            test_method,
-            'groupedmessage',
+            test_method, "groupedmessage",
         )
 
     BEGIN_MSG = '{"event":"begin","xid":2380836}'
@@ -57,40 +58,37 @@ class TestGroupedMessage(BaseDatasetTest):
         '"eJyT7tuwzAM3PkV2pzJiO34VRSdmvxAgA5dCtViDAGyJEi0AffrSxrZOlSTjrzj3Z1MrOBekCWHBcQaPj4xhXe72WyDv6YU0ouynnDGpMxzrEJSSzCrC+p7Vz8sgNhAvhdOZ/pKOKHd0PC5C9yqtjuPddcPQ9n0w8hPiLRHsWvZGsWD/91xI'
         'ya2IFxz7vJWfTUlHHnwSCEBUkbTZrxCCcOf2baY/XTU1VJm9cjHL4JriHPYvOnliyP0Jt2q4SpLkz7v6owW9E9rEOvl0PawczxcvkLIWppxg==",'
         '1560926969,2,0,0,null,"2019-06-19 06:45:32+00",false,"python",0,null,20]'
-        '}'
+        "}"
     )
 
     PROCESSED = {
-        'offset': 42,
-        'project_id': 2,
-        'id': 74,
-        'record_deleted': 0,
-        'status': 0,
-        'last_seen': datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
-        'first_seen': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'active_at': datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
-        'first_release_id': None,
+        "offset": 42,
+        "project_id": 2,
+        "id": 74,
+        "record_deleted": 0,
+        "status": 0,
+        "last_seen": datetime(2019, 6, 19, 6, 46, 28, tzinfo=pytz.UTC),
+        "first_seen": datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
+        "active_at": datetime(2019, 6, 19, 6, 45, 32, tzinfo=pytz.UTC),
+        "first_release_id": None,
     }
 
     DELETED = {
-        'offset': 42,
-        'project_id': 2,
-        'id': 74,
-        'record_deleted': 1,
-        'status': None,
-        'last_seen': None,
-        'first_seen': None,
-        'active_at': None,
-        'first_release_id': None,
+        "offset": 42,
+        "project_id": 2,
+        "id": 74,
+        "record_deleted": 1,
+        "status": None,
+        "last_seen": None,
+        "first_seen": None,
+        "active_at": None,
+        "first_release_id": None,
     }
 
     def test_messages(self):
-        processor = GroupedMessageProcessor('sentry_groupedmessage')
+        processor = GroupedMessageProcessor("sentry_groupedmessage")
 
-        metadata = KafkaMessageMetadata(
-            offset=42,
-            partition=0,
-        )
+        metadata = KafkaMessageMetadata(offset=42, partition=0,)
 
         begin_msg = json.loads(self.BEGIN_MSG)
         ret = processor.process_message(begin_msg, metadata)
@@ -127,15 +125,17 @@ class TestGroupedMessage(BaseDatasetTest):
         assert ret.data == [self.DELETED]
 
     def test_bulk_load(self):
-        row = GroupedMessageRow.from_bulk({
-            'project_id': '2',
-            'id': '10',
-            'status': '0',
-            'last_seen': '2019-06-28 17:57:32+00',
-            'first_seen': '2019-06-28 06:40:17+00',
-            'active_at': '2019-06-28 06:40:17+00',
-            'first_release_id': '26',
-        })
+        row = GroupedMessageRow.from_bulk(
+            {
+                "project_id": "2",
+                "id": "10",
+                "status": "0",
+                "last_seen": "2019-06-28 17:57:32+00",
+                "first_seen": "2019-06-28 06:40:17+00",
+                "active_at": "2019-06-28 06:40:17+00",
+                "first_release_id": "26",
+            }
+        )
         self.write_processed_records(row.to_clickhouse())
         cp = ClickhousePool()
         ret = cp.execute("SELECT * FROM test_groupedmessage_local;")

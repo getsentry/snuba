@@ -4,12 +4,18 @@ from confluent_kafka import KafkaError
 from unittest.mock import patch
 from unittest.mock import MagicMock
 
-from snuba.consumers.strict_consumer import CommitDecision, NoPartitionAssigned, StrictConsumer
-from tests.backends.confluent_kafka import FakeConfluentKafkaConsumer, build_confluent_kafka_message
+from snuba.consumers.strict_consumer import (
+    CommitDecision,
+    NoPartitionAssigned,
+    StrictConsumer,
+)
+from tests.backends.confluent_kafka import (
+    FakeConfluentKafkaConsumer,
+    build_confluent_kafka_message,
+)
 
 
 class TestStrictConsumer:
-
     def __consumer(self, on_message) -> StrictConsumer:
         return StrictConsumer(
             topic="my_topic",
@@ -22,7 +28,7 @@ class TestStrictConsumer:
             on_message=on_message,
         )
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_empty_topic(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         kafka_consumer.items = [
@@ -36,7 +42,7 @@ class TestStrictConsumer:
         consumer.run()
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_failure(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -49,7 +55,7 @@ class TestStrictConsumer:
 
         on_message.assert_not_called()
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_one_message(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer
@@ -68,7 +74,7 @@ class TestStrictConsumer:
         on_message.assert_called_once_with(msg)
         assert kafka_consumer.commit_calls == 0
 
-    @patch('snuba.consumers.strict_consumer.StrictConsumer._create_consumer')
+    @patch("snuba.consumers.strict_consumer.StrictConsumer._create_consumer")
     def test_commits(self, create_consumer) -> None:
         kafka_consumer = FakeConfluentKafkaConsumer()
         create_consumer.return_value = kafka_consumer

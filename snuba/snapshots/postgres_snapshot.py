@@ -8,7 +8,7 @@ import os.path
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Mapping, NewType, Generator, Iterable, Sequence
+from typing import NewType, Generator, Iterable, Sequence
 
 from snuba.snapshots import SnapshotDescriptor, TableConfig
 from snuba.snapshots import BulkLoadSource, SnapshotTableRow
@@ -25,10 +25,7 @@ SNAPSHOT_METADATA_SCHEMA = {
             "properties": {
                 "xmax": {"type": "number"},
                 "xmin": {"type": "number"},
-                "xip_list": {
-                    "type": "array",
-                    "items": {"type": "number"},
-                },
+                "xip_list": {"type": "array", "items": {"type": "number"}},
             },
             "required": ["xmax", "xmin", "xip_list"],
         },
@@ -38,17 +35,12 @@ SNAPSHOT_METADATA_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "table": {"type": "string"},
-                    "columns": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    }
+                    "columns": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["table"],
-            }
+            },
         },
-        "start_timestamp": {
-            "type": "number",
-        },
+        "start_timestamp": {"type": "number"},
     },
     "required": [
         "snapshot_id",
@@ -65,12 +57,13 @@ class PostgresSnapshotDescriptor(SnapshotDescriptor):
     """
     Provides the metadata for the loaded snapshot.
     """
+
     xmin: Xid
     xmax: Xid
     xip_list: Sequence[Xid]
 
 
-logger = logging.getLogger('snuba.postgres-snapshot')
+logger = logging.getLogger("snuba.postgres-snapshot")
 
 
 class PostgresSnapshot(BulkLoadSource):
@@ -94,16 +87,18 @@ class PostgresSnapshot(BulkLoadSource):
         with open(meta_file_name, "r") as meta_file:
             json_desc = json.load(meta_file)
             jsonschema.validate(
-                json_desc,
-                SNAPSHOT_METADATA_SCHEMA,
+                json_desc, SNAPSHOT_METADATA_SCHEMA,
             )
 
             if json_desc["product"] != product:
-                raise ValueError("Invalid product in Postgres snapshot %s. Expected %s"
-                    % (json_desc["product"], product))
+                raise ValueError(
+                    "Invalid product in Postgres snapshot %s. Expected %s"
+                    % (json_desc["product"], product)
+                )
 
             desc_content = [
-                TableConfig(table["table"], table.get("columns")) for table in json_desc["content"]
+                TableConfig(table["table"], table.get("columns"))
+                for table in json_desc["content"]
             ]
 
             descriptor = PostgresSnapshotDescriptor(
@@ -111,7 +106,7 @@ class PostgresSnapshot(BulkLoadSource):
                 xmin=json_desc["transactions"]["xmin"],
                 xmax=json_desc["transactions"]["xmax"],
                 xip_list=json_desc["transactions"]["xip_list"],
-                tables=desc_content
+                tables=desc_content,
             )
 
             logger.debug("Loading snapshot %r ", descriptor)
@@ -123,8 +118,7 @@ class PostgresSnapshot(BulkLoadSource):
 
     @contextmanager
     def get_table_file(
-        self,
-        table: str,
+        self, table: str,
     ) -> Generator[Iterable[SnapshotTableRow], None, None]:
         table_path = os.path.join(self.__path, "tables", "%s.csv" % table)
         try:
@@ -138,10 +132,8 @@ class PostgresSnapshot(BulkLoadSource):
                     existing_set = set(columns)
                     if not expected_set <= existing_set:
                         raise ValueError(
-                            "The table %s is missing columns %r " % (
-                                table,
-                                expected_set - existing_set,
-                            )
+                            "The table %s is missing columns %r "
+                            % (table, expected_set - existing_set,)
                         )
 
                     if len(existing_set) != len(expected_set):
@@ -151,7 +143,9 @@ class PostgresSnapshot(BulkLoadSource):
                             existing_set - expected_set,
                         )
                 else:
-                    logger.info("Won't pre-validate snapshot columns. There is nothing in the descriptor")
+                    logger.info(
+                        "Won't pre-validate snapshot columns. There is nothing in the descriptor"
+                    )
 
                 yield csv_file
 

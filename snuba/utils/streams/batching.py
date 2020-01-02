@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     Generic,
+    Mapping,
     MutableMapping,
     MutableSequence,
     Optional,
@@ -13,30 +14,22 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumers.consumer import Consumer
-from snuba.utils.streams.consumers.types import (
-    ConsumerError,
-    Message,
-    TStream,
-    TOffset,
-    TValue,
-)
-
+from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 
-TMessage = TypeVar("TMessage")
 
 TResult = TypeVar("TResult")
 
 
-class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
+class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: TMessage) -> Optional[TResult]:
+    def process_message(self, message: Message[TPayload]) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -55,19 +48,20 @@ class AbstractBatchWorker(ABC, Generic[TMessage, TResult]):
         store(s) it is maintaining. Afterwards the offsets are committed by
         the consumer.
 
-        A simple example would be writing the batch to another stream.
+        A simple example would be writing the batch to another topic.
         """
         pass
 
 
 @dataclass
-class Offsets(Generic[TOffset]):
+class Offsets:
     __slots__ = ["lo", "hi"]
-    lo: TOffset
-    hi: TOffset
+
+    lo: int
+    hi: int
 
 
-class BatchingConsumer:
+class BatchingConsumer(Generic[TPayload]):
     """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
     loop. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
@@ -92,9 +86,9 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: Consumer[TStream, TOffset, TValue],
-        topic: str,
-        worker: AbstractBatchWorker[Message[TStream, TOffset, TValue], TResult],
+        consumer: Consumer[TPayload],
+        topic: Topic,
+        worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -112,7 +106,7 @@ class BatchingConsumer:
         self.shutdown = False
 
         self.__batch_results: MutableSequence[TResult] = []
-        self.__batch_offsets: MutableMapping[TStream, Offsets[TOffset]] = {}
+        self.__batch_offsets: MutableMapping[Partition, Offsets] = {}
         self.__batch_deadline: Optional[float] = None
         self.__batch_messages_processed_count: int = 0
         # the total amount of time, in milliseconds, that it took to process
@@ -123,12 +117,12 @@ class BatchingConsumer:
         # The types passed to the `except` clause must be a tuple, not a Sequence.
         self.__recoverable_errors = tuple(recoverable_errors or [])
 
-        def on_partitions_assigned(streams: Sequence[TStream]) -> None:
-            logger.info("New streams assigned: %r", streams)
+        def on_partitions_assigned(partitions: Mapping[Partition, int]) -> None:
+            logger.info("New partitions assigned: %r", partitions)
 
-        def on_partitions_revoked(streams: Sequence[TStream]) -> None:
+        def on_partitions_revoked(partitions: Sequence[Partition]) -> None:
             "Reset the current in-memory batch, letting the next consumer take over where we left off."
-            logger.info("Streams revoked: %r", streams)
+            logger.info("Partitions revoked: %r", partitions)
             self._flush(force=True)
 
         self.consumer.subscribe(
@@ -164,7 +158,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: Message[TStream, TOffset, TValue]) -> None:
+    def _handle_message(self, msg: Message[TPayload]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -175,15 +169,17 @@ class BatchingConsumer:
         if result is not None:
             self.__batch_results.append(result)
 
+        self.consumer.stage_offsets({msg.partition: msg.get_next_offset()})
+
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
         self.__batch_processing_time_ms += duration
         self.__metrics.timing("process_message", duration)
 
-        if msg.stream in self.__batch_offsets:
-            self.__batch_offsets[msg.stream].hi = msg.offset
+        if msg.partition in self.__batch_offsets:
+            self.__batch_offsets[msg.partition].hi = msg.offset
         else:
-            self.__batch_offsets[msg.stream] = Offsets(msg.offset, msg.offset)
+            self.__batch_offsets[msg.partition] = Offsets(msg.offset, msg.offset)
 
     def _shutdown(self) -> None:
         logger.debug("Stopping")
@@ -251,5 +247,5 @@ class BatchingConsumer:
         self._reset_batch()
 
     def _commit(self) -> None:
-        offsets = self.consumer.commit()
+        offsets = self.consumer.commit_offsets()
         logger.debug("Committed offsets: %s", offsets)

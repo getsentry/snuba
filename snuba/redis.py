@@ -21,7 +21,7 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
         except (
             ConnectionError,
             BusyLoadingError,
-            KeyError  # see: https://github.com/Grokzen/redis-py-cluster/issues/287
+            KeyError,  # see: https://github.com/Grokzen/redis-py-cluster/issues/287
         ):
             self.connection_pool.nodes.reset()
             return super(self.__class__, self).execute_command(*args, **kwargs)
@@ -30,10 +30,7 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
 if settings.USE_REDIS_CLUSTER:
     startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
     if startup_nodes is None:
-        startup_nodes = [{
-            'host': settings.REDIS_HOST,
-            'port': settings.REDIS_PORT,
-        }]
+        startup_nodes = [{"host": settings.REDIS_HOST, "port": settings.REDIS_PORT}]
     redis_client = RetryingStrictRedisCluster(
         startup_nodes=startup_nodes,
         socket_keepalive=True,

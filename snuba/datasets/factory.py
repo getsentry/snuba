@@ -8,12 +8,13 @@ from snuba.datasets.table_storage import TableWriter
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 
 DATASET_NAMES: Set[str] = {
-    'events',
-    'groupassignee',
-    'groupedmessage',
-    'transactions',
-    'outcomes',
-    'outcomes_raw',
+    "events",
+    "groupassignee",
+    "groupedmessage",
+    "transactions",
+    "outcomes",
+    "outcomes_raw",
+    "discover",
 }
 
 
@@ -26,7 +27,9 @@ def get_dataset(name: str) -> Dataset:
         return DATASETS_IMPL[name]
 
     if name in settings.DISABLED_DATASETS:
-        raise InvalidDatasetError(f"dataset {name!r} is not available in this environment")
+        raise InvalidDatasetError(
+            f"dataset {name!r} is not available in this environment"
+        )
 
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
@@ -35,15 +38,17 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.groups import Groups
+    from snuba.datasets.discover import DiscoverDataset
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
-        'events': EventsDataset,
-        'groupassignee': GroupAssigneeDataset,
-        'groupedmessage': GroupedMessageDataset,
-        'groups': Groups,
-        'transactions': TransactionsDataset,
-        'outcomes': OutcomesDataset,
-        'outcomes_raw': OutcomesRawDataset,
+        "events": EventsDataset,
+        "groupassignee": GroupAssigneeDataset,
+        "groupedmessage": GroupedMessageDataset,
+        "groups": Groups,
+        "transactions": TransactionsDataset,
+        "outcomes": OutcomesDataset,
+        "outcomes_raw": OutcomesRawDataset,
+        "discover": DiscoverDataset,
     }
 
     try:

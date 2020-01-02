@@ -2,8 +2,8 @@ import click
 
 
 @click.command()
-@click.option('--debug', is_flag=True)
-def api(debug):
+@click.option("--debug", is_flag=True)
+def api(*, debug: bool) -> None:
     from snuba import settings
     from snuba.views import application
     from werkzeug.serving import WSGIRequestHandler

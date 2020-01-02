@@ -4,7 +4,7 @@ from pkgutil import walk_packages
 
 @click.group()
 @click.version_option()
-def main():
+def main() -> None:
     """\b
                      o
                     O
@@ -17,8 +17,8 @@ def main():
 """
 
 
-for loader, module_name, is_pkg in walk_packages(__path__, __name__ + '.'):
-    module = __import__(module_name, globals(), locals(), ['__name__'])
-    cmd = getattr(module, module_name.rsplit('.', 1)[-1])
+for loader, module_name, is_pkg in walk_packages(__path__, __name__ + "."):
+    module = __import__(module_name, globals(), locals(), ["__name__"])
+    cmd = getattr(module, module_name.rsplit(".", 1)[-1])
     if isinstance(cmd, click.Command):
         main.add_command(cmd)
