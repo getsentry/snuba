@@ -237,7 +237,7 @@ test_conditions = [
             ConditionFunctions.LIKE,
             (Column(None, "primary_hash", None), Literal(None, "%foo%")),
         ),
-    ),  # Test special output format of LIKE
+    ),  # Test output format of LIKE
     (
         [[["notEmpty", ["arrayElement", ["exception_stacks.type", 1]]], "=", 1]],
         FunctionCall(
