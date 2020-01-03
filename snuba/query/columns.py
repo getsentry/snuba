@@ -8,7 +8,6 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
 from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
-from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS

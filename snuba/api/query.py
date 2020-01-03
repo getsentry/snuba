@@ -9,9 +9,9 @@ from flask import request as http_request
 
 from snuba import settings, state
 from snuba.api.split import split_query
+from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import DictClickhouseQuery
-from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
@@ -290,9 +290,10 @@ def parse_and_run_query(
         span.set_tag("dataset", type(dataset).__name__)
         span.set_tag("table", source)
         try:
-            ast_query = AstClickhouseQuery(request.query, request.settings)
-            query_string = ast_query.format_sql()
-            span.set_tag("ast_query", query_string)
+            span.set_tag(
+                "ast_query",
+                AstClickhouseQuery(request.query, request.settings).format_sql(),
+            )
         except Exception as e:
             logger.error("Failed to format ast query", exc_info=e)
         result = raw_query(request, query, clickhouse_ro, timer, stats)

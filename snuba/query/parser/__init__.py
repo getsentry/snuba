@@ -3,18 +3,18 @@ import logging
 from typing import Any, MutableMapping, Optional
 
 from snuba import state
+from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.query import OrderBy, OrderByDirection, Query
-from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.util import is_function, tuplify
 
-logger = logging.getLogger("snuba.query_parser")
+logger = logging.getLogger(__name__)
 
 
-def parse_query(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
+def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -32,22 +32,19 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
         if enforce_validity:
             raise e
         else:
-            logger.error("Failed to parse query", exc_info=e)
+            logger.exception("Failed to parse query")
             source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
             return Query(body, source)
 
 
-def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset,) -> Query:
+def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     aggregate_exprs = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))
-        assert len(aggregation) == 3
         aggregation_function = aggregation[0]
-        assert isinstance(aggregation_function, str)
         column_expr = aggregation[1]
         column_expr = column_expr if column_expr else []
         alias = aggregation[2]
-        assert isinstance(alias, str)
         alias = alias if alias else None
 
         aggregate_exprs.append(
