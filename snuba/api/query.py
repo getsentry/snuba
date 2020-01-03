@@ -294,8 +294,8 @@ def parse_and_run_query(
                 "ast_query",
                 AstClickhouseQuery(request.query, request.settings).format_sql(),
             )
-        except Exception as e:
-            logger.error("Failed to format ast query", exc_info=e)
+        except Exception:
+            logger.exception("Failed to format ast query")
         result = raw_query(request, query, clickhouse_ro, timer, stats)
 
     with sentry_sdk.configure_scope() as scope:
