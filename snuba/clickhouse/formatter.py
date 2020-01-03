@@ -1,4 +1,6 @@
+from datetime import date, datetime
 from typing import Optional, Sequence
+
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -60,6 +62,11 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return escape_string(exp.value)
         elif isinstance(exp.value, (int, float)):
             return str(exp.value)
+        elif isinstance(exp.value, datetime):
+            value = exp.value.replace(tzinfo=None, microsecond=0)
+            return "toDateTime('{}')".format(value.isoformat())
+        elif isinstance(exp.value, date):
+            return "toDate('{}')".format(exp.value.isoformat())
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
