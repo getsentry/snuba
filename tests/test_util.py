@@ -68,6 +68,18 @@ class TestUtil(BaseTest):
             == "a = 1"
         )
 
+        conditions = []
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == ""
+        )
+
+        conditions = [[[]], []]
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == ""
+        )
+
         conditions = [[["a", "=", 1]]]
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())

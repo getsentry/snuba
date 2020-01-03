@@ -10,7 +10,7 @@ from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.codecs import PassthroughCodec
-from snuba.utils.streams.consumer import (
+from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,

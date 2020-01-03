@@ -16,7 +16,7 @@ def parse_function(
         TExpression,
     ],
     expr: Any,
-    depth=0,
+    depth: int = 0,
 ) -> TExpression:
     """
     Parses a function expression in the Snuba syntax and produces the expected data structure

@@ -11,7 +11,7 @@ from snuba.processor import (
 )
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaPayload
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message
 
 
