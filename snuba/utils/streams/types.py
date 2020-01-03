@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Generic, TypeVar
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Topic:
     __slots__ = ["name"]
 
@@ -15,7 +15,7 @@ class Topic:
         return partition.topic == self
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, order=True)
 class Partition:
     __slots__ = ["topic", "index"]
 
