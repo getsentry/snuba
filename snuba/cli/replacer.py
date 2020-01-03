@@ -107,7 +107,7 @@ def replacer(
     from snuba.replacer import ReplacerWorker
     from snuba.utils.streams.batching import BatchingConsumer
     from snuba.utils.streams.codecs import PassthroughCodec
-    from snuba.utils.streams.consumer import (
+    from snuba.utils.streams.kafka import (
         KafkaConsumer,
         KafkaPayload,
         TransportError,
