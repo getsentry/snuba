@@ -107,6 +107,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         conditions = query.get_conditions()
         if not conditions:
             return
+
         # Enable the processor only if we have enough data in the flattened
         # columns. Which have been deployed at BEGINNING_OF_TIME. If the query
         # starts earlier than that we do not apply the optimization.
@@ -133,6 +134,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                         return
             if not apply_optimization:
                 return
+
         new_conditions = []
         positive_like_expression: List[str] = []
         negative_like_expression: List[str] = []
