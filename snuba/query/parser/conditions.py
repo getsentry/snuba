@@ -14,9 +14,9 @@ from snuba.query.conditions import (
     BooleanFunctions,
     OPERATOR_TO_FUNCTION,
 )
-from snuba.query.parser.functions import parse_function_to_expr
+from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.util import is_condition, is_function, QUOTED_LITERAL_RE
+from snuba.util import is_condition
 
 
 TExpression = TypeVar("TExpression")
