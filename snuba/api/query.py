@@ -9,6 +9,7 @@ from flask import request as http_request
 
 from snuba import settings, state
 from snuba.api.split import split_query
+from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
@@ -288,6 +289,13 @@ def parse_and_run_query(
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
         span.set_tag("dataset", type(dataset).__name__)
         span.set_tag("table", source)
+        try:
+            span.set_tag(
+                "ast_query",
+                AstClickhouseQuery(request.query, request.settings).format_sql(),
+            )
+        except Exception:
+            logger.exception("Failed to format ast query")
         result = raw_query(request, query, clickhouse_ro, timer, stats)
 
     with sentry_sdk.configure_scope() as scope:

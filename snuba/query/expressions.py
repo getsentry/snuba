@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
+from datetime import date, datetime
 from typing import (
     Callable,
     Generic,
@@ -107,7 +108,7 @@ class Literal(Expression):
     A literal in the SQL expression
     """
 
-    value: Union[None, bool, str, float, int]
+    value: Union[None, bool, str, float, int, date, datetime]
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
