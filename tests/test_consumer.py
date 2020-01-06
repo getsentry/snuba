@@ -6,7 +6,8 @@ from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
@@ -18,12 +19,13 @@ class TestConsumer(BaseEventsTest):
     def test_offsets(self):
         event = self.event
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("events"), 456),
             123,
-            json.dumps((0, "insert", event)).encode(
-                "utf-8"
+            KafkaPayload(
+                None, json.dumps((0, "insert", event)).encode("utf-8")
             ),  # event doesn't really matter
+            datetime.now(),
         )
 
         replacement_topic = (
@@ -64,10 +66,11 @@ class TestConsumer(BaseEventsTest):
         event["data"]["datetime"] = old_timestamp_str
         event["data"]["received"] = int(calendar.timegm(old_timestamp.timetuple()))
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("events"), 1),
             42,
-            json.dumps((0, "insert", event)).encode("utf-8"),
+            KafkaPayload(None, json.dumps((0, "insert", event)).encode("utf-8")),
+            datetime.now(),
         )
 
         assert test_worker.process_message(message) is None

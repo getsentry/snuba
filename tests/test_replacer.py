@@ -8,7 +8,8 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
 
 
@@ -28,9 +29,12 @@ class TestReplacer(BaseEventsTest):
 
         self.project_id = 1
 
-    def _wrap(self, msg: str) -> KafkaMessage:
-        return KafkaMessage(
-            Partition(Topic("replacements"), 0), 0, json.dumps(msg).encode("utf-8"),
+    def _wrap(self, msg: str) -> Message[KafkaPayload]:
+        return Message(
+            Partition(Topic("replacements"), 0),
+            0,
+            KafkaPayload(None, json.dumps(msg).encode("utf-8")),
+            datetime.now(),
         )
 
     def _issue_count(self, project_id, group_id=None):
@@ -61,11 +65,11 @@ class TestReplacer(BaseEventsTest):
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(dist_write_table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(dist_write_table_name)s (%(required_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE group_id IN (%(group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert replacement.query_args == {
             "group_ids": "1, 2, 3",
@@ -97,11 +101,11 @@ class TestReplacer(BaseEventsTest):
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE group_id IN (%(previous_group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id IN (%(previous_group_ids)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE group_id IN (%(previous_group_ids)s) WHERE project_id = %(project_id)s AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert replacement.query_args == {
             "all_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
@@ -134,11 +138,11 @@ class TestReplacer(BaseEventsTest):
 
         assert (
             re.sub("[\n ]+", " ", replacement.count_query_template).strip()
-            == "SELECT count() FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "SELECT count() FROM %(dist_read_table_name)s FINAL PREWHERE group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert (
             re.sub("[\n ]+", " ", replacement.insert_query_template).strip()
-            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL WHERE project_id = %(project_id)s AND group_id = %(previous_group_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
+            == "INSERT INTO %(dist_write_table_name)s (%(all_columns)s) SELECT %(select_columns)s FROM %(dist_read_table_name)s FINAL PREWHERE group_id = %(previous_group_id)s WHERE project_id = %(project_id)s AND primary_hash IN (%(hashes)s) AND received <= CAST('%(timestamp)s' AS DateTime) AND NOT deleted"
         )
         assert replacement.query_args == {
             "all_columns": "event_id, project_id, group_id, timestamp, deleted, retention_days, platform, message, primary_hash, received, search_message, title, location, user_id, username, email, ip_address, geo_country_code, geo_region, geo_city, sdk_name, sdk_version, type, version, offset, partition, os_build, os_kernel_version, device_name, device_brand, device_locale, device_uuid, device_model_id, device_arch, device_battery_level, device_orientation, device_simulator, device_online, device_charging, level, logger, server_name, transaction, environment, `sentry:release`, `sentry:dist`, `sentry:user`, site, url, app_device, device, device_family, runtime, runtime_name, browser, browser_name, os, os_name, os_rooted, tags.key, tags.value, contexts.key, contexts.value, http_method, http_referer, exception_stacks.type, exception_stacks.value, exception_stacks.mechanism_type, exception_stacks.mechanism_handled, exception_frames.abs_path, exception_frames.filename, exception_frames.package, exception_frames.module, exception_frames.function, exception_frames.in_app, exception_frames.colno, exception_frames.lineno, exception_frames.stack_level, culprit, sdk_integrations, modules.name, modules.version",
@@ -225,20 +229,24 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_groups",
-                    {
-                        "project_id": project_id,
-                        "group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_groups",
+                        {
+                            "project_id": project_id,
+                            "group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -257,21 +265,25 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_merge",
-                    {
-                        "project_id": project_id,
-                        "new_group_id": 2,
-                        "previous_group_ids": [1],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_merge",
+                        {
+                            "project_id": project_id,
+                            "new_group_id": 2,
+                            "previous_group_ids": [1],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -291,22 +303,26 @@ class TestReplacer(BaseEventsTest):
 
         project_id = self.project_id
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_unmerge",
-                    {
-                        "project_id": project_id,
-                        "previous_group_id": 1,
-                        "new_group_id": 2,
-                        "hashes": ["a" * 32],
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_unmerge",
+                        {
+                            "project_id": project_id,
+                            "previous_group_id": 1,
+                            "new_group_id": 2,
+                            "hashes": ["a" * 32],
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)
@@ -345,20 +361,24 @@ class TestReplacer(BaseEventsTest):
 
         timestamp = datetime.now(tz=pytz.utc)
 
-        message = KafkaMessage(
+        message: Message[KafkaPayload] = Message(
             Partition(Topic("replacements"), 1),
             42,
-            json.dumps(
-                (
-                    2,
-                    "end_delete_tag",
-                    {
-                        "project_id": project_id,
-                        "tag": "browser.name",
-                        "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
-                    },
-                )
-            ).encode("utf-8"),
+            KafkaPayload(
+                None,
+                json.dumps(
+                    (
+                        2,
+                        "end_delete_tag",
+                        {
+                            "project_id": project_id,
+                            "tag": "browser.name",
+                            "datetime": timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
+                        },
+                    )
+                ).encode("utf-8"),
+            ),
+            datetime.now(),
         )
 
         processed = self.replacer.process_message(message)

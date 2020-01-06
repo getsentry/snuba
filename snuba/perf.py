@@ -3,11 +3,14 @@ import logging
 import os
 import tempfile
 import time
+from datetime import datetime
 from itertools import chain
+from typing import MutableSequence, Sequence
 
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger("snuba.perf")
@@ -17,13 +20,18 @@ def format_time(t: float) -> str:
     return ("%.2f" % t).rjust(10, " ")
 
 
-def get_messages(events_file):
+def get_messages(events_file) -> Sequence[Message[KafkaPayload]]:
     "Create a fake Kafka message for each JSON event in the file."
-    messages = []
+    messages: MutableSequence[Message[KafkaPayload]] = []
     raw_events = open(events_file).readlines()
     for raw_event in raw_events:
         messages.append(
-            KafkaMessage(Partition(Topic("events"), 1), 0, raw_event.encode("utf-8")),
+            Message(
+                Partition(Topic("events"), 1),
+                0,
+                KafkaPayload(None, raw_event.encode("utf-8")),
+                datetime.now(),
+            ),
         )
     return messages
 

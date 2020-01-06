@@ -9,13 +9,15 @@ from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.consumer import (
+from snuba.utils.streams.codecs import PassthroughCodec
+from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
-    Topic,
+    KafkaPayload,
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.types import Topic
 
 
 class ConsumerBuilder:
@@ -106,7 +108,9 @@ class ConsumerBuilder:
 
         self.__commit_retry_policy = commit_retry_policy
 
-    def __build_consumer(self, worker: ConsumerWorker) -> BatchingConsumer:
+    def __build_consumer(
+        self, worker: ConsumerWorker
+    ) -> BatchingConsumer[KafkaPayload]:
         configuration = build_kafka_consumer_configuration(
             bootstrap_servers=self.bootstrap_servers,
             group_id=self.group_id,
@@ -115,13 +119,17 @@ class ConsumerBuilder:
             queued_min_messages=self.queued_min_messages,
         )
 
+        codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         if self.commit_log_topic is None:
             consumer = KafkaConsumer(
-                configuration, commit_retry_policy=self.__commit_retry_policy
+                configuration,
+                codec=codec,
+                commit_retry_policy=self.__commit_retry_policy,
             )
         else:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
+                codec=codec,
                 producer=self.producer,
                 commit_log_topic=Topic(self.commit_log_topic),
                 commit_retry_policy=self.__commit_retry_policy,
@@ -137,7 +145,7 @@ class ConsumerBuilder:
             recoverable_errors=[TransportError],
         )
 
-    def build_base_consumer(self) -> BatchingConsumer:
+    def build_base_consumer(self) -> BatchingConsumer[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker.
         """
@@ -152,7 +160,7 @@ class ConsumerBuilder:
 
     def build_snapshot_aware_consumer(
         self, snapshot_id: SnapshotId, transaction_data: TransactionData,
-    ) -> BatchingConsumer:
+    ) -> BatchingConsumer[KafkaPayload]:
         """
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """

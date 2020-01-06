@@ -37,7 +37,7 @@ class GroupedMessageDataset(CdcDataset):
 
     POSTGRES_TABLE = "sentry_groupedmessage"
 
-    def __init__(self):
+    def __init__(self) -> None:
         columns = ColumnSet(
             [
                 # columns to maintain the dataset

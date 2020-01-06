@@ -6,47 +6,47 @@ from snuba.util import tuplify
 
 def test_complex_conditions_expr() -> None:
     assert parse_function_to_expr(tuplify(["count", []]),) == FunctionCall(
-        None, "count", []
+        None, "count", ()
     )
     assert parse_function_to_expr(tuplify(["notEmpty", ["foo"]]),) == FunctionCall(
-        None, "notEmpty", [Column(None, "foo", None)]
+        None, "notEmpty", (Column(None, "foo", None),)
     )
     assert parse_function_to_expr(
         tuplify(["notEmpty", ["arrayElement", ["foo", 1]]]),
     ) == FunctionCall(
         None,
         "notEmpty",
-        [
+        (
             FunctionCall(
-                None, "arrayElement", [Column(None, "foo", None), Literal(None, 1)]
-            )
-        ],
+                None, "arrayElement", (Column(None, "foo", None), Literal(None, 1))
+            ),
+        ),
     )
     assert parse_function_to_expr(
         tuplify(["foo", ["bar", ["qux"], "baz"]]),
     ) == FunctionCall(
         None,
         "foo",
-        [
-            FunctionCall(None, "bar", [Column(None, "qux", None)]),
+        (
+            FunctionCall(None, "bar", (Column(None, "qux", None),)),
             Column(None, "baz", None),
-        ],
+        ),
     )
     assert parse_function_to_expr(tuplify(["foo", [], "a"]),) == FunctionCall(
-        "a", "foo", []
+        "a", "foo", ()
     )
     assert parse_function_to_expr(tuplify(["foo", ["b", "c"], "d"]),) == FunctionCall(
-        "d", "foo", [Column(None, "b", None), Column(None, "c", None)]
+        "d", "foo", (Column(None, "b", None), Column(None, "c", None))
     )
     assert parse_function_to_expr(tuplify(["foo", ["b", "c", ["d"]]]),) == FunctionCall(
         None,
         "foo",
-        [Column(None, "b", None), FunctionCall(None, "c", [Column(None, "d", None)])],
+        (Column(None, "b", None), FunctionCall(None, "c", (Column(None, "d", None),))),
     )
 
     assert parse_function_to_expr(
         tuplify(["emptyIfNull", ["project_id"]]),
-    ) == FunctionCall(None, "emptyIfNull", [Column(None, "project_id", None)])
+    ) == FunctionCall(None, "emptyIfNull", (Column(None, "project_id", None),))
 
     assert parse_function_to_expr(
         tuplify(["or", [["or", ["a", "b"]], "c"]]),
@@ -110,18 +110,18 @@ def test_complex_conditions_expr() -> None:
     ) == FunctionCall(
         "release",
         "if",
-        [
+        (
             FunctionCall(
                 None,
                 "in",
-                [
+                (
                     Column(None, "release", None),
-                    FunctionCall(None, "tuple", [Literal(None, "foo")]),
-                ],
+                    FunctionCall(None, "tuple", (Literal(None, "foo"),)),
+                ),
             ),
             Column(None, "release", None),
             Literal(None, "other"),
-        ],
+        ),
     )
 
     # TODO once search_message is filled in everywhere, this can be just 'message' again.
@@ -130,5 +130,5 @@ def test_complex_conditions_expr() -> None:
     ) == FunctionCall(
         None,
         "positionCaseInsensitive",
-        [Column(None, "message", None), Literal(None, "lol 'single' quotes")],
+        (Column(None, "message", None), Literal(None, "lol 'single' quotes")),
     )
