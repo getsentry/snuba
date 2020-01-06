@@ -10,7 +10,7 @@ from typing import (
 )
 
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
@@ -138,7 +138,14 @@ class TickConsumer(Consumer[Tick]):
         }
 
     def seek(self, offsets: Mapping[Partition, int]) -> None:
-        raise NotImplementedError
+        if offsets.keys() - self.__consumer.tell().keys():
+            raise ConsumerError("cannot seek on unassigned partitions")
+
+        for partition in offsets:
+            if partition in self.__previous_messages:
+                del self.__previous_messages[partition]
+
+        return self.__consumer.seek(offsets)
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         return self.__consumer.stage_offsets(offsets)
