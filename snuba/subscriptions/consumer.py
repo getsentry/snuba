@@ -75,9 +75,7 @@ class TickConsumer(Consumer[Tick]):
 
     def __init__(self, consumer: Consumer[Any]) -> None:
         self.__consumer = consumer
-        self.__previous_messages: MutableMapping[
-            Partition, Optional[MessageDetails]
-        ] = {}
+        self.__previous_messages: MutableMapping[Partition, MessageDetails] = {}
 
     def subscribe(
         self,
@@ -85,25 +83,16 @@ class TickConsumer(Consumer[Tick]):
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        def assignment_callback(partitions: Mapping[Partition, int]) -> None:
-            for partition in partitions:
-                self.__previous_messages[partition] = None
-
-            if on_assign is not None:
-                on_assign(partitions)
-
         def revocation_callback(partitions: Sequence[Partition]) -> None:
-            # TODO: This is probably not necessary -- this could be handled as
-            # part of the assignment callback to avoid having to force reset
-            # the partitions on rebalance (see the consumer implementation.)
             for partition in partitions:
-                del self.__previous_messages[partition]
+                if partition in self.__previous_messages:
+                    del self.__previous_messages[partition]
 
             if on_revoke is not None:
                 on_revoke(partitions)
 
         self.__consumer.subscribe(
-            topics, on_assign=assignment_callback, on_revoke=on_revoke
+            topics, on_assign=on_assign, on_revoke=revocation_callback
         )
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
