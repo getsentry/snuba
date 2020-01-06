@@ -86,6 +86,9 @@ class DummyConsumer(Consumer[TPayload]):
 
         return None
 
+    def tell(self) -> Mapping[Partition, int]:
+        return self.__offsets
+
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         assert not self.__closed
 

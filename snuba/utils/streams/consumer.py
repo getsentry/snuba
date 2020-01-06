@@ -71,6 +71,13 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def tell(self) -> Mapping[Partition, int]:
+        """
+        Return the working offsets for all currently assigned positions.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         """
         Stage offsets to be committed. If an offset has already been staged
