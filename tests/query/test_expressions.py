@@ -1,7 +1,9 @@
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
+    Lambda,
     Literal,
     FunctionCall,
 )
@@ -14,13 +16,13 @@ def test_iterate() -> None:
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column(None, "c2", "t1")
-    function_1 = FunctionCall(None, "f1", [column1, column2])
+    function_1 = FunctionCall(None, "f1", (column1, column2))
 
     column3 = Column(None, "c2", "t1")
     column4 = Column(None, "c3", "t1")
     literal = Literal(None, "blablabla")
-    function_2i = FunctionCall(None, "f2", [column3, function_1, literal])
-    function_2 = CurriedFunctionCall(None, function_2i, [column4])
+    function_2i = FunctionCall(None, "f2", (column3, function_1, literal))
+    function_2 = CurriedFunctionCall(None, function_2i, (column4,))
 
     expected = [
         column3,
@@ -42,9 +44,9 @@ def test_aliased_cols() -> None:
     """
     column1 = Column(None, "c1", "t1")
     column2 = Column("a2", "c2", "t1")
-    function_1 = FunctionCall(None, "f1", [column1, column2])
+    function_1 = FunctionCall(None, "f1", (column1, column2))
     column3 = Column(None, "c2", "t1")
-    function_2 = FunctionCall("af1", "f2", [column3, function_1])
+    function_2 = FunctionCall("af1", "f2", (column3, function_1))
 
     expected = [column3, column1, column2, function_1, function_2]
     assert list(function_2) == expected
@@ -57,7 +59,7 @@ def test_mapping_column_list() -> None:
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c2":
-            return FunctionCall(None, "f", [e])
+            return FunctionCall(None, "f", (e,))
         return e
 
     column1 = Column(None, "c1", "t1")
@@ -71,7 +73,7 @@ def test_mapping_column_list() -> None:
     f = new_selected_cols[1]
     assert isinstance(f, FunctionCall)
     assert f.function_name == "f"
-    assert f.parameters == [column2]
+    assert f.parameters == (column2,)
 
 
 def test_add_alias() -> None:
@@ -87,10 +89,10 @@ def test_add_alias() -> None:
             return column2
         return e
 
-    f = FunctionCall(None, "f", [column1])
+    f = FunctionCall(None, "f", (column1,))
 
     f2 = f.transform(replace_expr)
-    expected = [column2, FunctionCall(None, "f", [column2])]
+    expected = [column2, FunctionCall(None, "f", (column2,))]
     assert list(f2) == expected
 
 
@@ -100,9 +102,9 @@ def test_mapping_complex_expression() -> None:
     f0(t1.c1, fB(f())) -> f0(t1.c1, fB(f(f() as a)))
     """
 
-    f5 = FunctionCall("a", "f", [])
-    f4 = FunctionCall(None, "f", [f5])
-    f3 = FunctionCall(None, "f", [])
+    f5 = FunctionCall("a", "f", ())
+    f4 = FunctionCall(None, "f", (f5,))
+    f3 = FunctionCall(None, "f", ())
 
     def replace_expr(e: Expression) -> Expression:
         if isinstance(e, FunctionCall) and e.function_name == "f":
@@ -110,8 +112,8 @@ def test_mapping_complex_expression() -> None:
         return e
 
     c1 = Column(None, "c1", "t1")
-    f2 = FunctionCall(None, "fB", [f3])
-    f1 = FunctionCall(None, "f0", [c1, f2])
+    f2 = FunctionCall(None, "fB", (f3,))
+    f1 = FunctionCall(None, "f0", (c1, f2))
 
     # Only the external function is going to be replaced since, when map returns a new
     # column, we expect the func to have takern care of its own children.
@@ -121,8 +123,8 @@ def test_mapping_complex_expression() -> None:
         c1,
         f5,
         f4,
-        FunctionCall(None, "fB", [f4]),
-        FunctionCall(None, "f0", [c1, FunctionCall(None, "fB", [f4])]),
+        FunctionCall(None, "fB", (f4,)),
+        FunctionCall(None, "f0", (c1, FunctionCall(None, "fB", (f4,)))),
     ]
 
     assert iterate == expected
@@ -130,9 +132,9 @@ def test_mapping_complex_expression() -> None:
 
 def test_mapping_curried_function() -> None:
     c1 = Column(None, "c1", "t1")
-    f1 = FunctionCall(None, "f1", [c1])
+    f1 = FunctionCall(None, "f1", (c1,))
     c2 = Column(None, "c1", "t1")
-    f2 = CurriedFunctionCall(None, f1, [c2])
+    f2 = CurriedFunctionCall(None, f1, (c2,))
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c1":
@@ -142,11 +144,33 @@ def test_mapping_curried_function() -> None:
     f3 = f2.transform(replace_col)
 
     replaced_col = Column(None, "c2", "t1")
-    replaced_function = FunctionCall(None, "f1", [replaced_col])
+    replaced_function = FunctionCall(None, "f1", (replaced_col,))
     expected = [
         replaced_col,
         replaced_function,
         replaced_col,
-        CurriedFunctionCall(None, replaced_function, [replaced_col]),
+        CurriedFunctionCall(None, replaced_function, (replaced_col,)),
     ]
     assert list(f3) == expected
+
+
+def test_hash() -> None:
+    """
+    Ensures expressions are hashable
+    """
+    column1 = Column(None, "c1", "t1")
+    column2 = Column(None, "c2", "t1")
+    function_1 = FunctionCall(None, "f1", (column1, column2))
+    literal = Literal(None, "blablabla")
+    function_2 = CurriedFunctionCall(None, function_1, (column1,))
+    lm = Lambda(None, ("x", "y"), FunctionCall(None, "test", (Argument(None, "x"))))
+
+    s = set()
+    s.add(column1)
+    s.add(column2)
+    s.add(function_1)
+    s.add(literal)
+    s.add(function_2)
+    s.add(lm)
+
+    assert len(s) == 6

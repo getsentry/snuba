@@ -16,7 +16,8 @@ from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
-from snuba.utils.streams.consumer import KafkaMessage
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message
 
 from . import settings
 
@@ -106,7 +107,7 @@ class Replacement:
     query_time_flags: Any
 
 
-class ReplacerWorker(AbstractBatchWorker[Replacement]):
+class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
         self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
     ) -> None:
@@ -121,8 +122,8 @@ class ReplacerWorker(AbstractBatchWorker[Replacement]):
             col.escaped for col in dataset.get_required_columns()
         ]
 
-    def process_message(self, message: KafkaMessage) -> Optional[Replacement]:
-        message = json.loads(message.value)
+    def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
+        message = json.loads(message.payload.value)
         version = message[0]
 
         if version == 2:
@@ -196,8 +197,8 @@ def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     select_columns = map(lambda i: i if i != "deleted" else "1", required_columns)
 
     where = """\
+        PREWHERE group_id IN (%(group_ids)s)
         WHERE project_id = %(project_id)s
-        AND group_id IN (%(group_ids)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
@@ -259,8 +260,8 @@ def process_merge(message, all_column_names) -> Optional[Replacement]:
     )
 
     where = """\
+        PREWHERE group_id IN (%(previous_group_ids)s)
         WHERE project_id = %(project_id)s
-        AND group_id IN (%(previous_group_ids)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted
     """
@@ -310,8 +311,8 @@ def process_unmerge(message, all_column_names) -> Optional[Replacement]:
     )
 
     where = """\
+        PREWHERE group_id = %(previous_group_id)s
         WHERE project_id = %(project_id)s
-        AND group_id = %(previous_group_id)s
         AND primary_hash IN (%(hashes)s)
         AND received <= CAST('%(timestamp)s' AS DateTime)
         AND NOT deleted

@@ -19,7 +19,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 
 
 class OutcomesRawDataset(TimeSeriesDataset):
-    def __init__(self):
+    def __init__(self) -> None:
         read_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),

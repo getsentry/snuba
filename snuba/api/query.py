@@ -1,12 +1,19 @@
 import logging
 
-from clickhouse_driver.errors import Error as ClickHouseError
 from hashlib import md5
-from typing import Any, MutableMapping, NamedTuple
+from typing import Any, Mapping, MutableMapping
+
+import sentry_sdk
+from clickhouse_driver.errors import Error as ClickHouseError
+from flask import request as http_request
 
 from snuba import settings, state
+from snuba.api.split import split_query
+from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool
 from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.datasets.dataset import Dataset
+from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
 from snuba.state.rate_limit import (
     RateLimitAggregator,
@@ -16,15 +23,31 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.metrics.timer import Timer
 
-
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")
 
+clickhouse_rw = ClickhousePool()
+clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
 
-class QueryResult(NamedTuple):
-    # TODO: Give a better abstraction to QueryResult
-    result: MutableMapping[str, MutableMapping[str, Any]]
-    status: int
+ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
+
+
+class RawQueryException(Exception):
+    def __init__(
+        self,
+        err_type: str,
+        message: str,
+        stats: Mapping[str, Any],
+        timer: Timer,
+        sql: str,
+        **meta
+    ):
+        self.err_type = err_type
+        self.message = message
+        self.stats = stats
+        self.timer = timer
+        self.sql = sql
+        self.meta = meta
 
 
 def raw_query(
@@ -32,8 +55,8 @@ def raw_query(
     query: DictClickhouseQuery,
     client: ClickhousePool,
     timer: Timer,
-    stats=None,
-) -> QueryResult:
+    stats: MutableMapping[str, Any] = None,
+) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -77,9 +100,7 @@ def raw_query(
             }
         ),
 
-        if result:
-            status = 200
-        else:
+        if not result:
             try:
                 with RateLimitAggregator(
                     request.settings.get_rate_limit_params()
@@ -119,7 +140,6 @@ def raw_query(
                             query_id=query_id if use_deduper else None,
                             with_totals=request.query.has_totals(),
                         )
-                        status = 200
 
                         logger.debug(sql)
                         timer.mark("execute")
@@ -136,32 +156,65 @@ def raw_query(
 
                     except BaseException as ex:
                         error = str(ex)
-                        status = 500
                         logger.exception("Error running query: %s\n%s", sql, error)
+                        stats = log_query_and_update_stats(
+                            request, sql, timer, stats, "error", query_settings
+                        )
+                        meta = {}
                         if isinstance(ex, ClickHouseError):
-                            result = {
-                                "error": {
-                                    "type": "clickhouse",
-                                    "code": ex.code,
-                                    "message": error,
-                                }
-                            }
+                            err_type = "clickhouse"
+                            meta["code"] = ex.code
                         else:
-                            result = {"error": {"type": "unknown", "message": error}}
-
+                            err_type = "unknown"
+                        raise RawQueryException(
+                            err_type=err_type,
+                            message=error,
+                            stats=stats,
+                            timer=timer,
+                            sql=sql,
+                            **meta,
+                        )
             except RateLimitExceeded as ex:
-                error = str(ex)
-                status = 429
-                result = {
-                    "error": {
-                        "type": "ratelimit",
-                        "message": "rate limit exceeded",
-                        "detail": error,
-                    }
-                }
+                stats = log_query_and_update_stats(
+                    request, sql, timer, stats, "rate-limited", query_settings
+                )
+                raise RawQueryException(
+                    err_type="rate-limited",
+                    message="rate limit exceeded",
+                    stats=stats,
+                    timer=timer,
+                    sql=sql,
+                    detail=str(ex),
+                )
+
+    stats = log_query_and_update_stats(
+        request, sql, timer, stats, "success", query_settings
+    )
+
+    result["timing"] = timer
+
+    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+        result["stats"] = stats
+        result["sql"] = sql
+
+    return result
+
+
+def log_query_and_update_stats(
+    request: Request,
+    sql: str,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    status: str,
+    query_settings: Mapping[str, Any],
+) -> MutableMapping:
+    """
+    If query logging is enabled then logs details about the query and its status, as
+    well as timing information.
+    Also updates stats with any relevant information and returns the updated dict.
+    """
 
     stats.update(query_settings)
-
     if settings.RECORD_QUERIES:
         # send to redis
         state.record_query(
@@ -183,11 +236,71 @@ def raw_query(
             },
             mark_tags={"final": str(stats.get("final", False))},
         )
+    return stats
 
-    result["timing"] = timer
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-        result["stats"] = stats
-        result["sql"] = sql
+@split_query
+def parse_and_run_query(
+    dataset: Dataset, request: Request, timer: Timer
+) -> ClickhouseQueryResult:
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
+        request.extensions["timeseries"]
+    )
 
-    return QueryResult(result, status)
+    extensions = dataset.get_extensions()
+    for name, extension in extensions.items():
+        extension.get_processor().process_query(
+            request.query, request.extensions[name], request.settings
+        )
+
+    request.query.add_conditions(dataset.default_conditions())
+
+    if request.settings.get_turbo():
+        request.query.set_final(False)
+
+    for processor in dataset.get_query_processors():
+        processor.process_query(request.query, request.settings)
+
+    relational_source = request.query.get_data_source()
+    request.query.add_conditions(relational_source.get_mandatory_conditions())
+
+    source = relational_source.format_from()
+    with sentry_sdk.start_span(description="create_query", op="db"):
+        # TODO: consider moving the performance logic and the pre_where generation into
+        # ClickhouseQuery since they are Clickhouse specific
+        query = DictClickhouseQuery(dataset, request.query, request.settings)
+    timer.mark("prepare_query")
+
+    num_days = (to_date - from_date).days
+    stats = {
+        "clickhouse_table": source,
+        "final": request.query.get_final(),
+        "referrer": request.referrer,
+        "num_days": num_days,
+        "sample": request.query.get_sample(),
+    }
+
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            scope.span.set_tag("dataset", type(dataset).__name__)
+            scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("timeframe_days", num_days)
+
+    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
+        span.set_tag("dataset", type(dataset).__name__)
+        span.set_tag("table", source)
+        try:
+            span.set_tag(
+                "ast_query",
+                AstClickhouseQuery(request.query, request.settings).format_sql(),
+            )
+        except Exception:
+            logger.exception("Failed to format ast query")
+        result = raw_query(request, query, clickhouse_ro, timer, stats)
+
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            if "max_threads" in stats:
+                scope.span.set_tag("max_threads", stats["max_threads"])
+
+    return result
