@@ -242,9 +242,9 @@ class EventsDataset(TimeSeriesDataset):
             dist_table_name="sentry_dist",
             mandatory_conditions=[("deleted", "=", 0)],
             prewhere_candidates=[
-                "event_id",
                 "issue",
                 "group_id",
+                "event_id",
                 "tags[sentry:release]",
                 "message",
                 "environment",
