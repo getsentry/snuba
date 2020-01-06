@@ -122,6 +122,24 @@ class TickConsumer(Consumer[Tick]):
 
         return result
 
+    def tell(self) -> Mapping[Partition, int]:
+        # If there is no previous message for a partition, return the current
+        # consumer offset, otherwise return the previous message offset (which
+        # will be the next offset returned for that partition) to make the
+        # behavior of the consumer consistent with what would typically be
+        # expected by the caller.
+        return {
+            partition: (
+                self.__previous_messages[partition].offset
+                if partition in self.__previous_messages
+                else offset
+            )
+            for partition, offset in self.__consumer.tell().items()
+        }
+
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
+        raise NotImplementedError
+
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         return self.__consumer.stage_offsets(offsets)
 

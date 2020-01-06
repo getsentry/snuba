@@ -1,5 +1,3 @@
-from typing import cast
-
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyConsumer, epoch
@@ -10,17 +8,36 @@ from snuba.utils.types import Interval
 def test_tick_consumer() -> None:
     topic = Topic("messages")
 
-    consumer = TickConsumer(
-        cast(
-            Consumer[int],
-            DummyConsumer({Partition(topic, 0): [0, 1, 2], Partition(topic, 1): [0]}),
-        )
+    inner_consumer: Consumer[int] = DummyConsumer(
+        {Partition(topic, 0): [0, 1, 2], Partition(topic, 1): [0]}
     )
+
+    consumer = TickConsumer(inner_consumer)
 
     consumer.subscribe([topic])
 
+    assert consumer.tell() == {
+        Partition(topic, 0): 0,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 0,
+        Partition(topic, 1): 0,
+    }
+
     # consume 0, 0
     assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 0,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 1,
+        Partition(topic, 1): 0,
+    }
 
     # consume 0, 1
     assert consumer.poll() == Message(
@@ -30,6 +47,16 @@ def test_tick_consumer() -> None:
         epoch,
     )
 
+    assert consumer.tell() == {
+        Partition(topic, 0): 1,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 2,
+        Partition(topic, 1): 0,
+    }
+
     # consume 0, 2
     assert consumer.poll() == Message(
         Partition(topic, 0),
@@ -38,8 +65,38 @@ def test_tick_consumer() -> None:
         epoch,
     )
 
+    assert consumer.tell() == {
+        Partition(topic, 0): 2,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 3,
+        Partition(topic, 1): 0,
+    }
+
     # consume 1, 0
     assert consumer.poll() is None
 
+    assert consumer.tell() == {
+        Partition(topic, 0): 2,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 3,
+        Partition(topic, 1): 1,
+    }
+
     # consume no message
     assert consumer.poll() is None
+
+    assert consumer.tell() == {
+        Partition(topic, 0): 2,
+        Partition(topic, 1): 0,
+    }
+
+    assert inner_consumer.tell() == {
+        Partition(topic, 0): 3,
+        Partition(topic, 1): 1,
+    }
