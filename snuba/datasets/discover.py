@@ -118,7 +118,7 @@ class DatasetSelector(QueryProcessor):
         discover_source: RelationalSource,
         events_columns: ColumnSet,
         transactions_columns: ColumnSet,
-        followup_processors: Mapping[str, Sequence[QueryProcessor]],
+        post_processors: Mapping[str, Sequence[QueryProcessor]],
     ) -> None:
         self.__discover_source = discover_source
         self.__events_columns = events_columns
@@ -126,7 +126,7 @@ class DatasetSelector(QueryProcessor):
         # These are the processors that need to run depending on the selected dataset.
         # Adding them here instead of as top level processors running their own conditions
         # to make the coupling explicit.
-        self.__followup_processors = followup_processors
+        self._post_processors = post_processors
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         detected_dataset = detect_dataset(
@@ -135,7 +135,7 @@ class DatasetSelector(QueryProcessor):
         source = query.get_data_source()
         assert isinstance(source, DiscoverSource)
         source.set_table_source(detected_dataset)
-        for processor in self.__followup_processors.get(detected_dataset, []):
+        for processor in self._post_processors.get(detected_dataset, []):
             processor.process_query(query, request_settings)
 
 
@@ -286,7 +286,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 discover_source=discover_source,
                 events_columns=self.__events_columns,
                 transactions_columns=self.__transactions_columns,
-                followup_processors={
+                post_processors={
                     TRANSACTIONS: [
                         NestedFieldConditionOptimizer(
                             "tags", "_tags_flattened", "timestamp", BEGINNING_OF_TIME
