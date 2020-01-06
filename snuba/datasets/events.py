@@ -86,7 +86,7 @@ class EventsDataset(TimeSeriesDataset):
     and the particular quirks of storing and querying them.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         metadata_columns = ColumnSet(
             [
                 # optional stream related data

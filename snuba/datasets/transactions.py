@@ -107,7 +107,7 @@ def transactions_migrations(
 
 
 class TransactionsDataset(TimeSeriesDataset):
-    def __init__(self):
+    def __init__(self) -> None:
         columns = ColumnSet(
             [
                 ("project_id", UInt(64)),

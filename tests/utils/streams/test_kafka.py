@@ -6,7 +6,7 @@ from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba.utils.streams.codecs import PassthroughCodec
-from snuba.utils.streams.consumer import (
+from snuba.utils.streams.kafka import (
     Commit,
     CommitCodec,
     KafkaConsumer,
@@ -42,12 +42,6 @@ def topic() -> Iterator[Topic]:
         [[key, future]] = client.delete_topics([name]).items()
         assert key == name
         assert future.result() is None
-
-
-def test_data_types() -> None:
-    assert Partition(Topic("topic"), 0) in Topic("topic")
-    assert Partition(Topic("topic"), 0) not in Topic("other-topic")
-    assert Partition(Topic("other-topic"), 0) not in Topic("topic")
 
 
 def test_consumer_backend(topic: Topic) -> None:

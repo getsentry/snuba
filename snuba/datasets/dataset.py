@@ -1,4 +1,4 @@
-from typing import Optional, Mapping, NamedTuple, Sequence, Tuple, Union
+from typing import Any, Optional, Mapping, NamedTuple, Sequence, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.dataset_schemas import DatasetSchemas
@@ -44,7 +44,7 @@ class Dataset(object):
         dataset_schemas: DatasetSchemas,
         *,
         table_writer: Optional[TableWriter] = None,
-    ):
+    ) -> None:
         self.__dataset_schemas = dataset_schemas
         self.__table_writer = table_writer
 
@@ -93,7 +93,7 @@ class Dataset(object):
         """
         return escape_identifier(qualified_column(column_name, table_alias))
 
-    def process_condition(self, condition) -> Tuple[str, str, any]:
+    def process_condition(self, condition) -> Tuple[str, str, Any]:
         """
         Return a processed condition tuple.
         This enables a dataset to do any parsing/transformations
@@ -135,7 +135,7 @@ class TimeSeriesDataset(Dataset):
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
@@ -175,7 +175,7 @@ class TimeSeriesDataset(Dataset):
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
 
-    def process_condition(self, condition) -> Tuple[str, str, any]:
+    def process_condition(self, condition) -> Tuple[str, str, Any]:
         lhs, op, lit = condition
         if (
             lhs in self.__time_parse_columns
