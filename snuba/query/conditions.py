@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Mapping, Optional
 
 from snuba.query.expressions import Expression, FunctionCall
 
@@ -15,6 +15,27 @@ class ConditionFunctions:
     LT = "less"
     GT = "greater"
     IS_NULL = "isNull"
+    IS_NOT_NULL = "isNotNull"
+    LIKE = "like"
+    NOT_LIKE = "notLike"
+    IN = "in"
+    NOT_IN = "notIn"
+
+
+OPERATOR_TO_FUNCTION: Mapping[str, str] = {
+    ">": ConditionFunctions.GT,
+    "<": ConditionFunctions.LT,
+    ">=": ConditionFunctions.GTE,
+    "<=": ConditionFunctions.LTE,
+    "=": ConditionFunctions.EQ,
+    "!=": ConditionFunctions.NEQ,
+    "IN": ConditionFunctions.IN,
+    "NOT IN": ConditionFunctions.NOT_IN,
+    "IS NULL": ConditionFunctions.IS_NULL,
+    "IS NOT NULL": ConditionFunctions.IS_NOT_NULL,
+    "LIKE": ConditionFunctions.LIKE,
+    "NOT LIKE": ConditionFunctions.NOT_LIKE,
+}
 
 
 class BooleanFunctions:

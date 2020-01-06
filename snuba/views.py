@@ -38,7 +38,7 @@ from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumer import KafkaPayload
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 
 
@@ -242,9 +242,8 @@ def validate_request_content(
     with sentry_sdk.start_span(
         description="validate_request_content", op="validate"
     ) as span:
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
         try:
-            request = schema.validate(body, source, referrer)
+            request = schema.validate(body, dataset, referrer)
             span.set_data("snuba_query", request.body)
         except jsonschema.ValidationError as error:
             raise BadRequest(str(error)) from error

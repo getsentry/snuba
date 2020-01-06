@@ -16,12 +16,14 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
+from snuba.datasets.transactions import BEGINNING_OF_TIME
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -31,7 +33,9 @@ EVENTS = "events"
 TRANSACTIONS = "transactions"
 
 
-def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
+def detect_dataset(
+    query: Query, events_columns: ColumnSet, transactions_columns: ColumnSet
+) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" dataset. This is going to be wrong in some cases.
@@ -47,13 +51,18 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
                 elif tuple(condition) == ("type", "=", "transaction"):
                     return TRANSACTIONS
 
-    # If there is a condition that references a transactions only field, just switch
-    # to the transactions dataset
-    if [
-        col
-        for col in query.get_columns_referenced_in_conditions()
-        if transactions_columns.get(col)
-    ]:
+    # Check for any conditions that reference a dataset specific field
+    condition_columns = query.get_columns_referenced_in_conditions()
+    if any(events_columns.get(col) for col in condition_columns):
+        return EVENTS
+    if any(transactions_columns.get(col) for col in condition_columns):
+        return TRANSACTIONS
+
+    # Check for any other references to a dataset specific field
+    all_referenced_columns = query.get_all_referenced_columns()
+    if any(events_columns.get(col) for col in all_referenced_columns):
+        return EVENTS
+    if any(transactions_columns.get(col) for col in all_referenced_columns):
         return TRANSACTIONS
 
     # Use events by default
@@ -61,6 +70,10 @@ def detect_dataset(query: Query, transactions_columns: ColumnSet) -> str:
 
 
 class DiscoverSource(RelationalSource):
+    # TODO: Make this generic. It does not need to be discover specific.
+    # A mutable RelationalSource that switches between multiple datasets
+    # can be used in other scenarios.
+
     def __init__(self, columns: ColumnSet, table_source: RelationalSource) -> None:
         self.__columns = columns
         self.__table_source = table_source
@@ -98,17 +111,32 @@ class DatasetSelector(QueryProcessor):
     the detected dataset.
     """
 
+    # TODO: Make this generic. It does not need to be discover specific.
+
     def __init__(
-        self, discover_source: RelationalSource, transactions_columns: ColumnSet
+        self,
+        discover_source: RelationalSource,
+        events_columns: ColumnSet,
+        transactions_columns: ColumnSet,
+        post_processors: Mapping[str, Sequence[QueryProcessor]],
     ) -> None:
         self.__discover_source = discover_source
+        self.__events_columns = events_columns
         self.__transactions_columns = transactions_columns
+        # These are the processors that need to run depending on the selected dataset.
+        # Adding them here instead of as top level processors running their own conditions
+        # to make the coupling explicit.
+        self._post_processors = post_processors
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        detected_dataset = detect_dataset(query, self.__transactions_columns)
+        detected_dataset = detect_dataset(
+            query, self.__events_columns, self.__transactions_columns
+        )
         source = query.get_data_source()
         assert isinstance(source, DiscoverSource)
         source.set_table_source(detected_dataset)
+        for processor in self._post_processors.get(detected_dataset, []):
+            processor.process_query(query, request_settings)
 
 
 class DiscoverSchema(Schema):
@@ -141,6 +169,7 @@ class DiscoverDataset(TimeSeriesDataset):
             [
                 ("event_id", FixedString(32)),
                 ("project_id", UInt(64)),
+                ("type", Nullable(String())),
                 ("timestamp", DateTime()),
                 ("platform", Nullable(String())),
                 ("environment", Nullable(String())),
@@ -149,6 +178,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("user", Nullable(String())),
                 ("transaction", Nullable(String())),
                 ("message", Nullable(String())),
+                ("title", Nullable(String())),
                 # User
                 ("user_id", Nullable(String())),
                 ("username", Nullable(String())),
@@ -171,7 +201,6 @@ class DiscoverDataset(TimeSeriesDataset):
             [
                 ("group_id", Nullable(UInt(64))),
                 ("primary_hash", Nullable(FixedString(32))),
-                ("type", Nullable(String())),
                 # Promoted tags
                 ("level", Nullable(String())),
                 ("logger", Nullable(String())),
@@ -179,7 +208,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("site", Nullable(String())),
                 ("url", Nullable(String())),
                 ("search_message", Nullable(String())),
-                ("title", Nullable(String())),
                 ("location", Nullable(String())),
                 ("culprit", Nullable(String())),
                 ("received", Nullable(DateTime())),
@@ -254,7 +282,27 @@ class DiscoverDataset(TimeSeriesDataset):
         discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
 
         return [
-            DatasetSelector(discover_source, self.__transactions_columns),
+            DatasetSelector(
+                discover_source=discover_source,
+                events_columns=self.__events_columns,
+                transactions_columns=self.__transactions_columns,
+                post_processors={
+                    TRANSACTIONS: [
+                        NestedFieldConditionOptimizer(
+                            "tags",
+                            "_tags_flattened",
+                            {"start_ts", "finish_ts", "timestamp"},
+                            BEGINNING_OF_TIME,
+                        ),
+                        NestedFieldConditionOptimizer(
+                            "contexts",
+                            "_contexts_flattened",
+                            {"start_ts", "finish_ts", "timestamp"},
+                            BEGINNING_OF_TIME,
+                        ),
+                    ]
+                },
+            ),
             PrewhereProcessor(),
         ]
 
@@ -277,7 +325,9 @@ class DiscoverDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        detected_dataset = detect_dataset(query, self.__transactions_columns)
+        detected_dataset = detect_dataset(
+            query, self.__events_columns, self.__transactions_columns
+        )
 
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
@@ -293,6 +343,8 @@ class DiscoverDataset(TimeSeriesDataset):
             if column_name == "transaction":
                 return "transaction_name"
             if column_name == "message":
+                return "transaction_name"
+            if column_name == "title":
                 return "transaction_name"
             if column_name == "group_id":
                 # TODO: We return 0 here instead of NULL so conditions like group_id

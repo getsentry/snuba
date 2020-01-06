@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 
 from enum import Enum
-from typing import Optional, List, NamedTuple
+from typing import Optional, List, NamedTuple, Set
 
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.query import Query
@@ -51,12 +51,12 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         self,
         nested_col: str,
         flattened_col: str,
-        start_ts_col: str,
+        timestamp_cols: Set[str],
         beginning_of_time: Optional[datetime] = None,
     ) -> None:
         self.__nested_col = nested_col
         self.__flattened_col = flattened_col
-        self.__start_ts_col = start_ts_col
+        self.__timestamp_cols = timestamp_cols
         # This is the cutoff time when we started filling in the relevant column.
         # If a query goes back further than this date we cannot apply the optimization
         self.__beginning_of_time = beginning_of_time
@@ -116,7 +116,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             for condition in conditions:
                 if (
                     is_condition(condition)
-                    and condition[0] == self.__start_ts_col
+                    and isinstance(condition[0], str)
+                    and condition[0] in self.__timestamp_cols
                     and condition[1] in (">=", ">")
                     and isinstance(condition[2], str)
                 ):

@@ -1,9 +1,9 @@
 import pytest
-from typing import Sequence
+from typing import Any, MutableMapping
 from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.query import Condition, Query
+from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -17,17 +17,22 @@ def get_dataset_source(dataset_name):
 
 
 test_data = [
-    ([["type", "=", "transaction"]], "transactions",),
-    ([["type", "!=", "transaction"]], "events",),
-    ([], "events",),
-    ([["duration", "=", 0]], "transactions",),
+    ({"conditions": [["type", "=", "transaction"]]}, "transactions",),
+    ({"conditions": [["type", "!=", "transaction"]]}, "events",),
+    ({"conditions": []}, "events",),
+    ({"conditions": [["duration", "=", 0]]}, "transactions",),
+    # No conditions, other referenced columns
+    ({"selected_columns": ["group_id"]}, "events"),
+    ({"selected_columns": ["trace_id"]}, "transactions"),
+    ({"selected_columns": ["group_id", "trace_id"]}, "events"),
+    ({"aggregations": [["max", "duration", "max_duration"]]}, "transactions"),
 ]
 
 
 class TestDiscover(BaseDatasetTest):
-    @pytest.mark.parametrize("conditions, expected_dataset", test_data)
-    def test_data_source(self, conditions: Sequence[Condition], expected_dataset: str):
-        query = Query({"conditions": conditions}, get_dataset_source("discover"))
+    @pytest.mark.parametrize("query_body, expected_dataset", test_data)
+    def test_data_source(self, query_body: MutableMapping[str, Any], expected_dataset: str):
+        query = Query(query_body, get_dataset_source("discover"))
 
         request_settings = HTTPRequestSettings()
         for processor in get_dataset("discover").get_query_processors():

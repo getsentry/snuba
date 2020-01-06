@@ -80,5 +80,5 @@ unittest2==1.1.0
 urllib3==1.25.3
 uWSGI==2.0.17
 wcwidth==0.1.7
-Werkzeug==0.14.1
+Werkzeug==0.15.3
 wrapt==1.10.11

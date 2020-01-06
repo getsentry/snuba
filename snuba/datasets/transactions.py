@@ -107,7 +107,7 @@ def transactions_migrations(
 
 
 class TransactionsDataset(TimeSeriesDataset):
-    def __init__(self):
+    def __init__(self) -> None:
         columns = ColumnSet(
             [
                 ("project_id", UInt(64)),
@@ -246,9 +246,12 @@ class TransactionsDataset(TimeSeriesDataset):
         return [
             PrewhereProcessor(),
             NestedFieldConditionOptimizer(
-                "tags", "_tags_flattened", "start_ts", BEGINNING_OF_TIME
+                "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME
             ),
             NestedFieldConditionOptimizer(
-                "contexts", "_contexts_flattened", "start_ts", BEGINNING_OF_TIME
+                "contexts",
+                "_contexts_flattened",
+                {"start_ts", "finish_ts"},
+                BEGINNING_OF_TIME,
             ),
         ]
