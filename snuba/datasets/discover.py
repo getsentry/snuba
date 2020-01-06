@@ -289,12 +289,15 @@ class DiscoverDataset(TimeSeriesDataset):
                 post_processors={
                     TRANSACTIONS: [
                         NestedFieldConditionOptimizer(
-                            "tags", "_tags_flattened", "timestamp", BEGINNING_OF_TIME
+                            "tags",
+                            "_tags_flattened",
+                            {"start_ts", "finish_ts", "timestamp"},
+                            BEGINNING_OF_TIME,
                         ),
                         NestedFieldConditionOptimizer(
                             "contexts",
                             "_contexts_flattened",
-                            "timestamp",
+                            {"start_ts", "finish_ts", "timestamp"},
                             BEGINNING_OF_TIME,
                         ),
                     ]
