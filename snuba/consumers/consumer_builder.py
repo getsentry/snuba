@@ -11,12 +11,14 @@ from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import (
+    CommitCodec,
     KafkaConsumer,
-    KafkaConsumerWithCommitLog,
     KafkaPayload,
+    KafkaProducer,
     TransportError,
     build_kafka_consumer_configuration,
 )
+from snuba.utils.streams.synchronized import ConsumerWithCommitLog
 from snuba.utils.streams.types import Topic
 
 
@@ -120,19 +122,16 @@ class ConsumerBuilder:
         )
 
         codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-        if self.commit_log_topic is None:
-            consumer = KafkaConsumer(
-                configuration,
-                codec=codec,
-                commit_retry_policy=self.__commit_retry_policy,
-            )
-        else:
-            consumer = KafkaConsumerWithCommitLog(
-                configuration,
-                codec=codec,
-                producer=self.producer,
-                commit_log_topic=Topic(self.commit_log_topic),
-                commit_retry_policy=self.__commit_retry_policy,
+
+        consumer = KafkaConsumer(
+            configuration, codec=codec, commit_retry_policy=self.__commit_retry_policy,
+        )
+
+        if self.commit_log_topic is not None:
+            consumer = ConsumerWithCommitLog(
+                consumer,
+                KafkaProducer(configuration, codec=CommitCodec()),  # FIXME
+                Topic(self.commit_log_topic),
             )
 
         return BatchingConsumer(

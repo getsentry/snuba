@@ -289,6 +289,8 @@ def test_commit_codec() -> None:
 
 
 def test_commit_log_consumer(topic: Topic) -> None:
+    raise NotImplementedError  # FIXME
+
     # XXX: This would be better as an integration test (or at least a test
     # against an abstract Producer interface) instead of against a test against
     # a mock.

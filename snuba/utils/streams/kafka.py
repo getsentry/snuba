@@ -30,6 +30,7 @@ from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.codecs import Codec
 from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.producer import MessageDetails, Producer
+from snuba.utils.streams.synchronized import Commit
 from snuba.utils.streams.types import (
     ConsumerError,
     EndOfPartition,
@@ -568,85 +569,6 @@ def build_kafka_consumer_configuration(
     }
 
 
-@dataclass(frozen=True)
-class Commit:
-    __slots__ = ["group", "partition", "offset"]
-
-    group: str
-    partition: Partition
-    offset: int
-
-
-class CommitCodec(Codec[KafkaPayload, Commit]):
-    def encode(self, value: Commit) -> KafkaPayload:
-        return KafkaPayload(
-            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
-                "utf-8"
-            ),
-            f"{value.offset}".encode("utf-8"),
-        )
-
-    def decode(self, value: KafkaPayload) -> Commit:
-        key = value.key
-        if not isinstance(key, bytes):
-            raise TypeError("payload key must be a bytes object")
-
-        val = value.value
-        if not isinstance(val, bytes):
-            raise TypeError("payload value must be a bytes object")
-
-        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
-        offset = int(val.decode("utf-8"))
-        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
-
-
-class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
-    def __init__(
-        self,
-        configuration: Mapping[str, Any],
-        codec: Codec[KafkaPayload, TPayload],
-        *,
-        producer: ConfluentProducer,
-        commit_log_topic: Topic,
-        commit_retry_policy: Optional[RetryPolicy] = None,
-    ) -> None:
-        super().__init__(configuration, codec, commit_retry_policy=commit_retry_policy)
-        self.__producer = producer
-        self.__commit_log_topic = commit_log_topic
-        self.__group_id = configuration["group.id"]
-
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
-        self.__producer.poll(0.0)
-        return super().poll(timeout)
-
-    def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
-    ) -> None:
-        if error is not None:
-            raise Exception(error.str())
-
-    def commit_offsets(self) -> Mapping[Partition, int]:
-        offsets = super().commit_offsets()
-
-        codec = CommitCodec()
-        for partition, offset in offsets.items():
-            payload = codec.encode(Commit(self.__group_id, partition, offset))
-            self.__producer.produce(
-                self.__commit_log_topic.name,
-                key=payload.key,
-                value=payload.value,
-                on_delivery=self.__commit_message_delivery_callback,
-            )
-
-        return offsets
-
-    def close(self, timeout: Optional[float] = None) -> None:
-        super().close()
-        messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
-        if messages > 0:
-            raise TimeoutError(f"{messages} commit log messages pending delivery")
-
-
 class KafkaProducer(Producer[TPayload]):
     def __init__(
         self, configuration: Mapping[str, Any], codec: Codec[KafkaPayload, TPayload]
@@ -713,3 +635,26 @@ class KafkaProducer(Producer[TPayload]):
     def close(self) -> Future[None]:
         self.__shutdown_requested.set()
         return self.__result
+
+
+class CommitCodec(Codec[KafkaPayload, Commit]):
+    def encode(self, value: Commit) -> KafkaPayload:
+        return KafkaPayload(
+            f"{value.partition.topic.name}:{value.partition.index}:{value.group}".encode(
+                "utf-8"
+            ),
+            f"{value.offset}".encode("utf-8"),
+        )
+
+    def decode(self, value: KafkaPayload) -> Commit:
+        key = value.key
+        if not isinstance(key, bytes):
+            raise TypeError("payload key must be a bytes object")
+
+        val = value.value
+        if not isinstance(val, bytes):
+            raise TypeError("payload value must be a bytes object")
+
+        topic_name, partition_index, group = key.decode("utf-8").split(":", 3)
+        offset = int(val.decode("utf-8"))
+        return Commit(group, Partition(Topic(topic_name), int(partition_index)), offset)
