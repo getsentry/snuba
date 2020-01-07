@@ -7,7 +7,6 @@ from typing import Any, Mapping, Type
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
-from snuba.query.query import Query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
 from snuba.request.request_settings import (
@@ -71,10 +70,10 @@ class RequestSchema:
     def build_with_extensions(
         cls,
         extensions: Mapping[str, QueryExtension],
-        settings_class: Type[RequestSettings] = HTTPRequestSettings,
+        settings_class: Type[RequestSettings],
     ) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
-        settings_schema = SETTINGS_SCHEMA[settings_class]
+        settings_schema = SETTINGS_SCHEMAS[settings_class]
         extensions_schemas = {
             extension_key: extension.get_schema()
             for extension_key, extension in extensions.items()
@@ -139,7 +138,7 @@ class RequestSchema:
         return self.__generate_template_impl(self.__composite_schema)
 
 
-SETTINGS_SCHEMA = {
+SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
     HTTPRequestSettings: {
         "type": "object",
         "properties": {
