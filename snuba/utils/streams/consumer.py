@@ -19,6 +19,29 @@ from snuba.utils.streams.types import (
 logger = logging.getLogger(__name__)
 
 
+class ConsumerError(Exception):
+    """
+    Base class for exceptions that are raised during consumption.
+
+    Subclasses may extend this class to disambiguate errors that are specific
+    to their implementation.
+    """
+
+
+class EndOfPartition(ConsumerError):
+    """
+    Raised when there are no more messages to consume from the partition.
+    """
+
+    def __init__(self, partition: Partition, offset: int):
+        # The partition that the consumer has reached the end of.
+        self.partition = partition
+
+        # The next unconsumed offset in the partition (where there is currently
+        # no message.)
+        self.offset = offset
+
+
 class Consumer(Generic[TPayload], ABC):
     """
     This abstract class provides an interface for consuming messages from a
