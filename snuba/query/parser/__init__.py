@@ -9,7 +9,7 @@ from snuba.query.expressions import Expression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
 from snuba.query.query import OrderBy, OrderByDirection, Query
-from snuba.util import is_function, tuplify
+from snuba.util import is_function, to_list, tuplify
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,8 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
         )
 
     groupby_exprs = [
-        parse_expression(tuplify(group_by)) for group_by in body.get("groupby", [])
+        parse_expression(tuplify(group_by))
+        for group_by in to_list(body.get("groupby", []))
     ]
     select_exprs = [
         parse_expression(tuplify(select)) for select in body.get("selected_columns", [])
@@ -72,7 +73,7 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
     having_expr = parse_conditions_to_expr(body.get("having", []), dataset, arrayjoin)
 
     orderby_exprs = []
-    for orderby in body.get("orderby", []):
+    for orderby in to_list(body.get("orderby", [])):
         if isinstance(orderby, str):
             match = NEGATE_RE.match(orderby)
             assert match is not None, f"Invalid Order By clause {orderby}"
