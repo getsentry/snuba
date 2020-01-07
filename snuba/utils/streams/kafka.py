@@ -15,6 +15,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Union,
 )
 
 from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
@@ -677,19 +678,31 @@ class KafkaProducer(Producer[TPayload]):
                 )
             )
 
-    def produce(self, topic: Topic, payload: TPayload) -> Future[MessageDetails]:
+    def produce(
+        self, destination: Union[Topic, Partition], payload: TPayload
+    ) -> Future[MessageDetails]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
+
+        if isinstance(destination, Topic):
+            kwargs = {"topic": destination.name}
+        elif isinstance(destination, Partition):
+            kwargs = {
+                "topic": destination.topic.name,
+                "partition": destination.index,
+            }
+        else:
+            raise TypeError("invalid destination type")
 
         future: Future[MessageDetails] = Future()
         future.set_running_or_notify_cancel()
         try:
             encoded = self.__codec.encode(payload)
             self.__producer.produce(
-                topic.name,
                 value=encoded.value,
                 key=encoded.key,
                 on_delivery=partial(self.__delivery_callback, future),
+                **kwargs,
             )
         except Exception as error:
             future.set_exception(error)

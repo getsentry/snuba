@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from typing import Generic, NamedTuple
+from typing import Generic, NamedTuple, Union
 
 from snuba.utils.streams.types import Partition, TPayload, Topic
 
@@ -14,12 +14,12 @@ class MessageDetails(NamedTuple):
 
 class Producer(Generic[TPayload], ABC):
     @abstractmethod
-    def produce(self, topic: Topic, payload: TPayload) -> Future[MessageDetails]:
+    def produce(
+        self, destination: Union[Topic, Partition], payload: TPayload
+    ) -> Future[MessageDetails]:
         """
-        Produce to a topic.
+        Produce to a topic or partition.
         """
-        # TODO: This also needs to be able to target a specific partition --
-        # maybe by accepting Union[Topic, Partition] as the destination?
         raise NotImplementedError
 
     @abstractmethod
