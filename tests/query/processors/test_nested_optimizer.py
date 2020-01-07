@@ -38,6 +38,20 @@ test_data = [
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
                 ["c", "=", "3"],
+                ["finish_ts", ">", "2019-12-18T06:35:17"],
+            ]
+        },
+        [
+            ["c", "=", "3"],
+            ["finish_ts", ">", "2019-12-18T06:35:17"],
+            ["tags_map", "LIKE", "%|test.tag=1|%"],
+        ],
+    ),  # One simple tag condition, different timestamp
+    (
+        {
+            "conditions": [
+                ["tags[test.tag]", "=", "1"],
+                ["c", "=", "3"],
                 ["start_ts", ">", "2019-01-01T06:35:17"],
             ]
         },
@@ -184,7 +198,7 @@ def test_nested_optimizer(query_body, expected_condition) -> None:
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
         flattened_col="tags_map",
-        start_ts_col="start_ts",
+        timestamp_cols={"start_ts", "finish_ts"},
         beginning_of_time=datetime(2019, 12, 11, 0, 0, 0),
     )
     processor.process_query(query, request_settings)
