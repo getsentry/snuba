@@ -106,10 +106,6 @@ class RequestSchema:
         return Request(
             query,
             self.__setting_class(**settings),
-            query,
-            RequestSettings(
-                settings["turbo"], settings["consistent"], settings["debug"]
-            ),
             extensions,
             referrer,
         )
