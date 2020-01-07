@@ -685,12 +685,13 @@ class KafkaProducer(Producer[TPayload]):
             raise RuntimeError("producer has been closed")
 
         if isinstance(destination, Topic):
-            kwargs = {"topic": destination.name}
+            produce = partial(self.__producer.produce, topic=destination.name)
         elif isinstance(destination, Partition):
-            kwargs = {
-                "topic": destination.topic.name,
-                "partition": destination.index,
-            }
+            produce = partial(
+                self.__producer.produce,
+                topic=destination.topic.name,
+                partition=destination.index,
+            )
         else:
             raise TypeError("invalid destination type")
 
@@ -698,11 +699,10 @@ class KafkaProducer(Producer[TPayload]):
         future.set_running_or_notify_cancel()
         try:
             encoded = self.__codec.encode(payload)
-            self.__producer.produce(
+            produce(
                 value=encoded.value,
                 key=encoded.key,
                 on_delivery=partial(self.__delivery_callback, future),
-                **kwargs,
             )
         except Exception as error:
             future.set_exception(error)
