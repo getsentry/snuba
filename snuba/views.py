@@ -24,7 +24,6 @@ from snuba.api.query import (
     RawQueryException,
 )
 from snuba.consumer import KafkaMessageMetadata
-from snuba.query.schema import SETTINGS_SCHEMA
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -34,7 +33,7 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -272,7 +271,7 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(dataset.get_extensions())
+        schema = RequestSchema.build_with_extensions(dataset.get_extensions(), HTTPRequestSettings)
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4,),
@@ -288,7 +287,7 @@ def dataset_query(dataset, body, timer):
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
 
-    schema = RequestSchema.build_with_extensions(dataset.get_extensions())
+    schema = RequestSchema.build_with_extensions(dataset.get_extensions(), HTTPRequestSettings)
     query_result = run_query(
         dataset,
         validate_request_content(body, schema, timer, dataset, http_request.referrer),
@@ -339,7 +338,7 @@ def sdk_distribution(*, timer: Timer):
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
-            SETTINGS_SCHEMA,
+            SETTINGS_SCHEMAS[HTTPRequestSettings],
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,

@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import itertools
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Type
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
-from snuba.query.query import Query
-from snuba.query.schema import GENERIC_QUERY_SCHEMA, SETTINGS_SCHEMA
+from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import (
+    HTTPRequestSettings,
+    RequestSettings,
+    SubscriptionRequestSettings,
+)
 from snuba.schemas import Schema, validate_jsonschema
 
 
@@ -20,6 +23,7 @@ class RequestSchema:
         query_schema: Schema,
         settings_schema: Schema,
         extensions_schemas: Mapping[str, Schema],
+        settings_class: Type[RequestSettings] = HTTPRequestSettings,
     ):
         self.__query_schema = query_schema
         self.__settings_schema = settings_schema
@@ -32,6 +36,7 @@ class RequestSchema:
             "definitions": {},
             "additionalProperties": False,
         }
+        self.__setting_class = settings_class
 
         for schema in itertools.chain(
             [self.__query_schema, self.__settings_schema],
@@ -63,15 +68,17 @@ class RequestSchema:
 
     @classmethod
     def build_with_extensions(
-        cls, extensions: Mapping[str, QueryExtension]
+        cls,
+        extensions: Mapping[str, QueryExtension],
+        settings_class: Type[RequestSettings],
     ) -> RequestSchema:
         generic_schema = GENERIC_QUERY_SCHEMA
-        settings_schema = SETTINGS_SCHEMA
+        settings_schema = SETTINGS_SCHEMAS[settings_class]
         extensions_schemas = {
             extension_key: extension.get_schema()
             for extension_key, extension in extensions.items()
         }
-        return cls(generic_schema, settings_schema, extensions_schemas)
+        return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
     def validate(self, value, dataset: Dataset, referrer: str) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
@@ -98,9 +105,7 @@ class RequestSchema:
         query = parse_query(query_body, dataset)
         return Request(
             query,
-            RequestSettings(
-                settings["turbo"], settings["consistent"], settings["debug"]
-            ),
+            self.__setting_class(**settings),
             extensions,
             referrer,
         )
@@ -127,3 +132,26 @@ class RequestSchema:
 
     def generate_template(self) -> Any:
         return self.__generate_template_impl(self.__composite_schema)
+
+
+SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
+    HTTPRequestSettings: {
+        "type": "object",
+        "properties": {
+            # Never add FINAL to queries, enable sampling
+            "turbo": {"type": "boolean", "default": False},
+            # Force queries to hit the first shard replica, ensuring the query
+            # sees data that was written before the query. This burdens the
+            # first replica, so should only be used when absolutely necessary.
+            "consistent": {"type": "boolean", "default": False},
+            "debug": {"type": "boolean", "default": False},
+        },
+        "additionalProperties": False,
+    },
+    # Subscriptions have no customizable settings.
+    SubscriptionRequestSettings: {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
