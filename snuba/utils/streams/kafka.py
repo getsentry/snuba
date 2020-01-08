@@ -690,10 +690,11 @@ class KafkaProducer(Producer[TPayload]):
         else:
             raise TypeError("invalid destination type")
 
+        encoded = self.__codec.encode(payload)
+
         future: Future[MessageDetails] = Future()
         future.set_running_or_notify_cancel()
         try:
-            encoded = self.__codec.encode(payload)
             produce(
                 value=encoded.value,
                 key=encoded.key,
