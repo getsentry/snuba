@@ -8,8 +8,8 @@ from typing import (
     Sequence,
 )
 
-from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic, TPayload
+from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
 epoch = datetime(2019, 12, 19)
