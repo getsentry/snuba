@@ -125,8 +125,8 @@ def test_simple_column_expr():
 
     group_id_body = deepcopy(query)
     assert (
-        column_expr(dataset, "events.issue", group_id_body, ParsingContext())
-        == "(nullIf(events.group_id, 0) AS `events.issue`)"
+        column_expr(dataset, "events.group_id", group_id_body, ParsingContext())
+        == "(nullIf(events.group_id, 0) AS `events.group_id`)"
     )
 
     # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where a number was expected.

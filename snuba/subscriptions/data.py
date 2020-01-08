@@ -6,6 +6,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.query import Aggregation
 from snuba.query.types import Condition
 from snuba.request import Request
+from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.utils.metrics.timer import Timer
 from snuba.views import validate_request_content
@@ -32,7 +33,10 @@ class Subscription:
         :param timestamp: Date that the query should run up until
         :param offset: Maximum offset we should query for
         """
-        schema = RequestSchema.build_with_extensions(dataset.get_extensions())
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(),
+            SubscriptionRequestSettings,
+        )
         return validate_request_content(
             {
                 'project': self.project_id,

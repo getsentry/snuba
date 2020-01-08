@@ -1,14 +1,15 @@
 import pytest
 
+from snuba.utils.streams.consumer import Consumer, ConsumerError
 from snuba.utils.streams.dummy import DummyConsumer
-from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 def test_working_offsets() -> None:
     topic = Topic("example")
     partition = Partition(topic, 0)
 
-    consumer = DummyConsumer({partition: [0]})
+    consumer: Consumer[int] = DummyConsumer({partition: [0]})
     consumer.subscribe([topic])
 
     # NOTE: This will eventually need to be controlled by a generalized
