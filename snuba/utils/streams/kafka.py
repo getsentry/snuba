@@ -694,14 +694,11 @@ class KafkaProducer(Producer[TPayload]):
 
         future: Future[MessageDetails] = Future()
         future.set_running_or_notify_cancel()
-        try:
-            produce(
-                value=encoded.value,
-                key=encoded.key,
-                on_delivery=partial(self.__delivery_callback, future),
-            )
-        except Exception as error:
-            future.set_exception(error)
+        produce(
+            value=encoded.value,
+            key=encoded.key,
+            on_delivery=partial(self.__delivery_callback, future),
+        )
         return future
 
     def close(self) -> Future[None]:
