@@ -10,7 +10,7 @@ from typing import (
 )
 
 from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
@@ -121,6 +121,31 @@ class TickConsumer(Consumer[Tick]):
         )
 
         return result
+
+    def tell(self) -> Mapping[Partition, int]:
+        # If there is no previous message for a partition, return the current
+        # consumer offset, otherwise return the previous message offset (which
+        # will be the next offset returned for that partition) to make the
+        # behavior of the consumer consistent with what would typically be
+        # expected by the caller.
+        return {
+            partition: (
+                self.__previous_messages[partition].offset
+                if partition in self.__previous_messages
+                else offset
+            )
+            for partition, offset in self.__consumer.tell().items()
+        }
+
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
+        if offsets.keys() - self.__consumer.tell().keys():
+            raise ConsumerError("cannot seek on unassigned partitions")
+
+        for partition in offsets:
+            if partition in self.__previous_messages:
+                del self.__previous_messages[partition]
+
+        return self.__consumer.seek(offsets)
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         return self.__consumer.stage_offsets(offsets)
