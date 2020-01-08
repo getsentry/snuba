@@ -10,6 +10,9 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.query_processor import QueryProcessor
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
 
@@ -89,3 +92,9 @@ class GroupedMessageDataset(CdcDataset):
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ["project_id"]
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            BasicFunctionsProcessor(),
+            PrewhereProcessor(),
+        ]

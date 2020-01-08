@@ -22,6 +22,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
@@ -282,6 +283,7 @@ class DiscoverDataset(TimeSeriesDataset):
         discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
 
         return [
+            BasicFunctionsProcessor(),
             DatasetSelector(
                 discover_source=discover_source,
                 events_columns=self.__events_columns,
