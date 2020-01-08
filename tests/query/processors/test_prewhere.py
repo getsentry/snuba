@@ -13,7 +13,7 @@ test_data = [
         {"conditions": [[["positionCaseInsensitive", ["message", "abc"]], "!=", 0]]},
         [
             "event_id",
-            "issue",
+            "group_id",
             "tags[sentry:release]",
             "message",
             "environment",

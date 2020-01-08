@@ -109,7 +109,7 @@ An example query body might look like:
         "from_date": "2011-07-01T19:54:15",
         "to_date": "2018-07-06T19:54:15"
         "granularity": 3600,
-        "groupby": ["issue", "time"],
+        "groupby": ["group_id", "time"],
         "having": [],
         "issues": [],
     }
@@ -304,16 +304,16 @@ Queries with sampling are stable. Ie the same query with the same sampling
 factor over the same data should consistently return the exact same result.
 
 
-### Issues / Groups
+### Groups / Issues
 
-Snuba provides a magic column `issue` that can be used to group events by issue.
+Snuba provides a magic column `group_id` that can be used to group events by issue.
 
 Because events can be reassigned to different issues through merging, and
 because snuba does not support updates, we cannot store the issue id for an
-event in snuba. If you want to filter or group by `issue`, you need to pass a
-list of `issues` into the query.  This list is a mapping from issue ids to the
+event in snuba. If you want to filter or group by `group_id`, you need to pass a
+list of `group_ids` into the query.  This list is a mapping from issue ids to the
 event `primary_hash`es in that issue. Snuba automatically expands this mapping
-into the query so that filters/grouping on `issue` will just work.
+into the query so that filters/grouping on `group_id` will just work.
 
 ### Tags
 
