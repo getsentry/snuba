@@ -78,3 +78,6 @@ REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 
 TURBO_SAMPLE_RATE = 0.1
+
+# Number of queries each subscription consumer can run concurrently.
+SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES = 10
