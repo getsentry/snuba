@@ -1,7 +1,7 @@
 import logging
 
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -56,7 +56,7 @@ def raw_query(
     query: DictClickhouseQuery,
     reader: Reader[ClickhouseQuery],
     timer: Timer,
-    stats: MutableMapping[str, Any] = None,
+    stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
