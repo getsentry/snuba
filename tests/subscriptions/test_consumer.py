@@ -1,9 +1,9 @@
 import pytest
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
-from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.consumer import Consumer, ConsumerError
 from snuba.utils.streams.dummy import DummyConsumer, epoch
-from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
 

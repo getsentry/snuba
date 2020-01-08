@@ -9,8 +9,8 @@ from typing import (
     Sequence,
 )
 
-from snuba.utils.streams.consumer import Consumer
-from snuba.utils.streams.types import ConsumerError, Message, Partition, Topic
+from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
