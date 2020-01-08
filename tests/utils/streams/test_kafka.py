@@ -6,6 +6,7 @@ from concurrent.futures import wait
 from confluent_kafka.admin import AdminClient, NewTopic
 from contextlib import closing
 
+from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import (
     Commit,
@@ -17,8 +18,6 @@ from snuba.utils.streams.kafka import (
     as_kafka_configuration_bool,
 )
 from snuba.utils.streams.types import (
-    ConsumerError,
-    EndOfPartition,
     Message,
     Partition,
     Topic,
@@ -52,7 +51,7 @@ def build_producer() -> KafkaProducer[KafkaPayload]:
 
 
 def test_consumer_backend(topic: Topic) -> None:
-    def build_consumer() -> KafkaConsumer[KafkaPayload]:
+    def build_consumer() -> Consumer[KafkaPayload]:
         codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
         return KafkaConsumer(
             {
@@ -204,7 +203,7 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
         producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer = KafkaConsumer(
+    consumer: Consumer[KafkaPayload] = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "earliest",
@@ -231,7 +230,7 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
         producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer = KafkaConsumer(
+    consumer: Consumer[KafkaPayload] = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "latest",
@@ -262,7 +261,7 @@ def test_auto_offset_reset_error(topic: Topic) -> None:
         producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer = KafkaConsumer(
+    consumer: Consumer[KafkaPayload] = KafkaConsumer(
         {
             **configuration,
             "auto.offset.reset": "error",
@@ -295,7 +294,7 @@ def test_commit_log_consumer(topic: Topic) -> None:
     commit_log_producer = FakeConfluentKafkaProducer()
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer = KafkaConsumerWithCommitLog(
+    consumer: Consumer[KafkaPayload] = KafkaConsumerWithCommitLog(
         {
             **configuration,
             "auto.offset.reset": "earliest",

@@ -8,7 +8,7 @@ from typing import (
     Sequence,
 )
 
-from snuba.utils.streams.consumer import Consumer
+from snuba.utils.streams.consumer import Consumer, ConsumerError
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 
@@ -75,16 +75,27 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
+            messages = self.__messages[partition]
             try:
-                payload = self.__messages[partition][offset]
+                payload = messages[offset]
             except IndexError:
-                pass
+                if not offset == len(messages):
+                    raise ConsumerError("invalid offset")
             else:
                 message = Message(partition, offset, payload, epoch)
                 self.__offsets[partition] = message.get_next_offset()
                 return message
 
         return None
+
+    def tell(self) -> Mapping[Partition, int]:
+        return self.__offsets
+
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
+        if offsets.keys() - self.__offsets.keys():
+            raise ConsumerError("cannot seek on unassigned partitions")
+
+        self.__offsets.update(offsets)
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         assert not self.__closed

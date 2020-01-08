@@ -151,10 +151,10 @@ def test_referenced_columns():
     # Other fields, including expressions in selected columns
     body = {
         "arrayjoin": "tags_key",
-        "groupby": ["time", "issue"],
+        "groupby": ["time", "group_id"],
         "orderby": "-time",
         "selected_columns": [
-            "issue",
+            "group_id",
             "time",
             ["foo", ["c", ["bar", ["d"]]]],  # foo(c, bar(d))
         ],
@@ -162,7 +162,7 @@ def test_referenced_columns():
     }
     query = Query(body, source)
     assert query.get_all_referenced_columns() == set(
-        ["tags_key", "tags_value", "time", "issue", "c", "d"]
+        ["tags_key", "tags_value", "time", "group_id", "c", "d"]
     )
     assert query.get_columns_referenced_in_conditions() == set([])
     assert query.get_columns_referenced_in_having() == set([])
