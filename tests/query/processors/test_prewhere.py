@@ -5,7 +5,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 
 test_data = [
@@ -53,7 +53,7 @@ def test_prewhere(query_body, keys, new_conditions, prewhere_conditions) -> None
     settings.MAX_PREWHERE_CONDITIONS = 2
     query = Query(query_body, TableSource("my_table", ColumnSet([]), None, keys),)
 
-    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
     processor = PrewhereProcessor()
     processor.process_query(query, request_settings)
 
