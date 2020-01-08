@@ -60,6 +60,9 @@ def parse_datetime(value: str, alignment: int = 1) -> datetime:
 
 def function_expr(fn: str, args_expr: str = "") -> str:
     """
+    DEPRECATED. Please do not add anything else here. In order to manipulate the
+    query, create a QueryProcessor and register it into your dataset.
+
     Generate an expression for a given function name and an already-evaluated
     args expression. This is a place to define convenience functions that evaluate
     to more complex expressions.
