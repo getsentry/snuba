@@ -21,7 +21,6 @@ kfk = None
 
 ratelimit_prefix = "snuba-ratelimit:"
 query_lock_prefix = "snuba-query-lock:"
-query_cache_prefix = "snuba-query-cache:"
 config_hash = "snuba-config"
 config_history_hash = "snuba-config-history"
 config_changes_list = "snuba-config-changes"
@@ -257,15 +256,3 @@ def get_queries() -> Sequence[Mapping[str, Optional[Any]]]:
         logger.exception(ex)
 
     return queries
-
-
-def get_result(query_id: str) -> Any:
-    key = "{}{}".format(query_cache_prefix, query_id)
-    result = rds.get(key)
-    return result and json.loads(result)
-
-
-def set_result(query_id: str, result: Mapping[str, Optional[Any]]) -> Any:
-    timeout = get_config("cache_expiry_sec", 1)
-    key = "{}{}".format(query_cache_prefix, query_id)
-    return rds.set(key, json.dumps(result), ex=timeout)
