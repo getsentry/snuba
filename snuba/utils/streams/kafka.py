@@ -19,8 +19,8 @@ from confluent_kafka import Message as ConfluentMessage
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka import TopicPartition as ConfluentTopicPartition
 
+from snuba.utils.codecs import Codec
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
-from snuba.utils.streams.codecs import Codec
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 

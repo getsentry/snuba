@@ -5,8 +5,8 @@ import pytest
 from confluent_kafka import Producer as ConfluentProducer
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import (
     Commit,
     CommitCodec,
