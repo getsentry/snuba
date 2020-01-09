@@ -381,34 +381,35 @@ class EventsProcessor(MessageProcessor):
         frame_linenos = []
         frame_stack_levels = []
 
-        stack_level = 0
-        for stack in stacks:
-            if stack is None:
-                continue
-
-            stack_types.append(_unicodify(stack.get("type", None)))
-            stack_values.append(_unicodify(stack.get("value", None)))
-
-            mechanism = stack.get("mechanism", None) or {}
-            stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
-            stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
-
-            frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
-            for frame in frames:
-                if frame is None:
+        if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
+            stack_level = 0
+            for stack in stacks:
+                if stack is None:
                     continue
 
-                frame_abs_paths.append(_unicodify(frame.get("abs_path", None)))
-                frame_filenames.append(_unicodify(frame.get("filename", None)))
-                frame_packages.append(_unicodify(frame.get("package", None)))
-                frame_modules.append(_unicodify(frame.get("module", None)))
-                frame_functions.append(_unicodify(frame.get("function", None)))
-                frame_in_app.append(frame.get("in_app", None))
-                frame_colnos.append(_collapse_uint32(frame.get("colno", None)))
-                frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
-                frame_stack_levels.append(stack_level)
+                stack_types.append(_unicodify(stack.get("type", None)))
+                stack_values.append(_unicodify(stack.get("value", None)))
 
-            stack_level += 1
+                mechanism = stack.get("mechanism", None) or {}
+                stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
+                stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
+
+                frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
+                for frame in frames:
+                    if frame is None:
+                        continue
+
+                    frame_abs_paths.append(_unicodify(frame.get("abs_path", None)))
+                    frame_filenames.append(_unicodify(frame.get("filename", None)))
+                    frame_packages.append(_unicodify(frame.get("package", None)))
+                    frame_modules.append(_unicodify(frame.get("module", None)))
+                    frame_functions.append(_unicodify(frame.get("function", None)))
+                    frame_in_app.append(frame.get("in_app", None))
+                    frame_colnos.append(_collapse_uint32(frame.get("colno", None)))
+                    frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
+                    frame_stack_levels.append(stack_level)
+
+                stack_level += 1
 
         output["exception_stacks.type"] = stack_types
         output["exception_stacks.value"] = stack_values
