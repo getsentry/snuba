@@ -3,15 +3,15 @@ from unittest.mock import Mock
 
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
-from snuba.subscriptions.executor import Executor
+from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.types import Interval
 from tests.subscriptions import BaseSubscriptionTest
 
 
-class TestExecutor(BaseSubscriptionTest):
+class TestSubscriptionExecutor(BaseSubscriptionTest):
     def test(self):
-        executor = Executor(self.dataset)
+        executor = SubscriptionExecutor(self.dataset)
         subscription = Subscription(
             id="hello",
             project_id=self.project_id,
