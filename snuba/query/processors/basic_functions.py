@@ -1,12 +1,12 @@
 from dataclasses import replace
 
-from snuba.query.query import Query
 from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
     FunctionCall,
     Literal,
 )
+from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
@@ -18,7 +18,7 @@ class BasicFunctionsProcessor(QueryProcessor):
     This exists only to preserve the current Snuba syntax and only works on the new AST.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_functions(exp: Expression) -> Expression:
             if isinstance(exp, FunctionCall):
                 if exp.function_name == "uniq":
