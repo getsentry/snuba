@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Sequence
 
+from snuba.api.views import validate_request_content
 from snuba.datasets.dataset import Dataset
 from snuba.query.query import Aggregation
 from snuba.query.types import Condition
@@ -9,7 +10,6 @@ from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.utils.metrics.timer import Timer
-from snuba.views import validate_request_content
 
 SUBSCRIPTION_REFERRER = "subscription"
 

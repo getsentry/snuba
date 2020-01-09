@@ -14,7 +14,7 @@ from snuba.state import safe_dumps
 class TestState(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestState, self).setup_method(test_method)
-        from snuba.views import application
+        from snuba.api.views import application
 
         assert application.testing == True
         self.app = application.test_client()

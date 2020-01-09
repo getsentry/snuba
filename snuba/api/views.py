@@ -8,8 +8,6 @@ from flask import Flask, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
@@ -43,9 +41,6 @@ from snuba.utils.streams.types import Message, Partition, Topic
 
 
 logger = logging.getLogger("snuba.api")
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
-)
 
 
 class QueryResult(NamedTuple):
@@ -94,12 +89,6 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
-
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
-    release=os.getenv("SNUBA_RELEASE"),
-)
 
 
 @application.errorhandler(BadRequest)

@@ -29,7 +29,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "--master",
                 "--manage-script-name",
                 "--wsgi-file",
-                "snuba/views.py",
+                "snuba/wsgi.py",
                 "--http",
                 "0.0.0.0:1218",
                 "--http-keepalive",
