@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from snuba import settings
 from snuba.api.query import ClickhouseQueryResult, parse_and_run_query
 from snuba.datasets.dataset import Dataset
 from snuba.subscriptions.consumer import Tick
@@ -19,11 +18,9 @@ class SubscriptionExecutor:
     to make the query, and the result is then returned as a `Future`.
     """
 
-    def __init__(self, dataset: Dataset):
+    def __init__(self, dataset: Dataset, executor_pool: ThreadPoolExecutor):
         self.__dataset = dataset
-        self.__executor_pool = ThreadPoolExecutor(
-            max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
-        )
+        self.__executor_pool = executor_pool
 
     def execute(
         self, task: ScheduledTask[Subscription], tick: Tick, timer: Timer

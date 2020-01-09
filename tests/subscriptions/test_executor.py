@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 
+from concurrent.futures import ThreadPoolExecutor
+
+from snuba import settings
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.executor import SubscriptionExecutor
@@ -11,7 +14,12 @@ from tests.subscriptions import BaseSubscriptionTest
 
 class TestSubscriptionExecutor(BaseSubscriptionTest):
     def test(self):
-        executor = SubscriptionExecutor(self.dataset)
+        executor = SubscriptionExecutor(
+            self.dataset,
+            ThreadPoolExecutor(
+                max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
+            ),
+        )
         subscription = Subscription(
             id="hello",
             project_id=self.project_id,
