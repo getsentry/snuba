@@ -529,28 +529,29 @@ class KafkaConsumer(Consumer[TPayload]):
         self.__state = KafkaConsumerState.CLOSED
 
 
-DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
-DEFAULT_QUEUED_MIN_MESSAGES = 10000
-
-
 def build_kafka_consumer_configuration(
     bootstrap_servers: Sequence[str],
     group_id: str,
     auto_offset_reset: str = "error",
-    queued_max_messages_kbytes: int = DEFAULT_QUEUED_MAX_MESSAGE_KBYTES,
-    queued_min_messages: int = DEFAULT_QUEUED_MIN_MESSAGES,
+    queued_max_messages_kbytes: Optional[int] = None,
+    queued_min_messages: Optional[int] = None,
 ) -> Mapping[str, Any]:
-    return {
+    configuration = {
         "enable.auto.commit": False,
         "enable.auto.offset.store": False,
         "bootstrap.servers": ",".join(bootstrap_servers),
         "group.id": group_id,
         "auto.offset.reset": auto_offset_reset,
-        # overridden to reduce memory usage when there's a large backlog
-        "queued.max.messages.kbytes": queued_max_messages_kbytes,
-        "queued.min.messages": queued_min_messages,
         "enable.partition.eof": False,
     }
+
+    if queued_max_messages_kbytes is not None:
+        configuration["queued.max.messages.kbytes"] = queued_max_messages_kbytes
+
+    if queued_min_messages is not None:
+        configuration["queued.min.messages"] = queued_min_messages
+
+    return configuration
 
 
 @dataclass(frozen=True)
