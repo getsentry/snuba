@@ -42,8 +42,9 @@ class Subscription:
         return validate_request_content(
             {
                 "project": self.project_id,
-                "conditions": self.conditions
-                + [[["ifnull", ["offset", 0]], "<=", offset]],
+                "conditions": (
+                    self.conditions + [[["ifnull", ["offset", 0]], "<=", offset]]
+                ),
                 "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
