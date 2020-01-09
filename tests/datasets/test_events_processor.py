@@ -172,9 +172,7 @@ class TestEventsProcessor(BaseEventsTest):
             "platform": "the_platform",
             "search_message": "the search message",
         }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-        }
+        data = {"received": int(calendar.timegm(now.timetuple()))}
         output = {}
         enforce_table_writer(
             self.dataset
@@ -244,7 +242,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_end_delete_groups(self):
@@ -254,7 +252,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_start_merge(self):
@@ -274,7 +272,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_start_unmerge(self):
@@ -284,7 +282,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_end_unmerge(self):
@@ -294,7 +292,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_start_delete_tag(self):
@@ -304,7 +302,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_v2_end_delete_tag(self):
@@ -314,7 +312,7 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(message) == ProcessedMessage(
-            action=ProcessorAction.REPLACE, data=[(str(project_id), message)],
+            action=ProcessorAction.REPLACE, data=[(str(project_id), message)]
         )
 
     def test_extract_sdk(self):
@@ -382,9 +380,7 @@ class TestEventsProcessor(BaseEventsTest):
 
     def test_extract_tags_empty_string(self):
         # verify our text field extraction doesn't coerce '' to None
-        tags = {
-            "environment": "",
-        }
+        tags = {"environment": ""}
         output = {}
 
         enforce_table_writer(
@@ -498,7 +494,10 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extra_output["contexts.key"], extra_output["contexts.value"] = extract_extra_contexts(contexts)
+        (
+            extra_output["contexts.key"],
+            extra_output["contexts.value"],
+        ) = extract_extra_contexts(contexts)
 
         assert extra_output == {
             "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],
@@ -524,11 +523,7 @@ class TestEventsProcessor(BaseEventsTest):
         }
 
     def test_extract_geo(self):
-        geo = {
-            "country_code": "US",
-            "city": "San Francisco",
-            "region": "CA",
-        }
+        geo = {"country_code": "US", "city": "San Francisco", "region": "CA"}
         output = {}
 
         enforce_table_writer(

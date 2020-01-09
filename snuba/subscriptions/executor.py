@@ -22,7 +22,7 @@ class SubscriptionExecutor:
     def __init__(self, dataset: Dataset):
         self.__dataset = dataset
         self.__executor_pool = ThreadPoolExecutor(
-            max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES,
+            max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
         )
 
     def execute(
@@ -30,17 +30,16 @@ class SubscriptionExecutor:
     ) -> Future[ClickhouseQueryResult]:
         try:
             request = task.task.build_request(
-                self.__dataset,
-                tick.timestamps.upper,
-                tick.offsets.upper,
-                timer,
+                self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer
             )
         except Exception as e:
-            future = Future()
+            future = Future[ClickhouseQueryResult]()
             future.set_exception(e)
         else:
-            future = self.__executor_pool.submit(parse_and_run_query, self.__dataset, request, timer)
+            future = self.__executor_pool.submit(
+                parse_and_run_query, self.__dataset, request, timer
+            )
         return future
 
-    def close(self):
+    def close(self) -> None:
         self.__executor_pool.shutdown()

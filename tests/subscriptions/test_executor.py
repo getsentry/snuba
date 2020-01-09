@@ -23,14 +23,13 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
         now = datetime.utcnow()
         task = ScheduledTask(now, subscription)
         tick = Tick(
-            offsets=Interval(1, 2),
-            timestamps=Interval(now - timedelta(minutes=1), now),
+            offsets=Interval(1, 2), timestamps=Interval(now - timedelta(minutes=1), now)
         )
 
         future = executor.execute(task, tick, Mock())
         result = future.result()
 
-        assert result['data'][0]['count'] == 10
+        assert result["data"][0]["count"] == 10
 
         tick = Tick(
             offsets=Interval(5000, 5001),
@@ -39,4 +38,4 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
         future = executor.execute(task, tick, Mock())
         result = future.result()
 
-        assert result['data'][0]['count'] == 0
+        assert result["data"][0]["count"] == 0

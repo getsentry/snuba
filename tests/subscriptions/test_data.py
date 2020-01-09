@@ -16,6 +16,8 @@ class TestBuildRequest(BaseSubscriptionTest):
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
         )
-        request = subscription.build_request(self.dataset, datetime.utcnow(), 100, Mock())
+        request = subscription.build_request(
+            self.dataset, datetime.utcnow(), 100, Mock()
+        )
         result = parse_and_run_query(self.dataset, request, Mock())
-        assert result['data'][0]['count'] == 10
+        assert result["data"][0]["count"] == 10

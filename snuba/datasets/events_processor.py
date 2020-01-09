@@ -169,7 +169,7 @@ class EventsProcessor(MessageProcessor):
         if processed is None:
             return None
 
-        return ProcessedMessage(action=action_type, data=[processed],)
+        return ProcessedMessage(action=action_type, data=[processed])
 
     def process_insert(self, message, metadata=None):
         processed = {"deleted": 0}

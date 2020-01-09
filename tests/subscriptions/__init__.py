@@ -32,14 +32,18 @@ class BaseSubscriptionTest(BaseEventsTest):
                         "project_id": self.project_id,
                         "event_id": uuid.uuid4().hex,
                         "deleted": 0,
-                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime(
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        ),
                         "message": "a message",
                         "platform": self.platforms[tick % len(self.platforms)],
                         "primary_hash": uuid.uuid4().hex,
                         "group_id": tick,
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
-                            "received": calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                            "received": calendar.timegm(
+                                (self.base_time + timedelta(minutes=tick)).timetuple()
+                            )
                         },
                     }
                 )
