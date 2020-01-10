@@ -1,5 +1,6 @@
 from typing import Mapping, Optional, Sequence
 
+from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, Literal, FunctionCall
 
 
@@ -51,9 +52,7 @@ class BooleanFunctions:
 def __set_condition(
     alias: Optional[str], function: str, lhs: Expression, rhs: Sequence[Literal]
 ) -> Expression:
-    return binary_condition(
-        alias, function, lhs, FunctionCall(None, "tuple", tuple(rhs)),
-    )
+    return binary_condition(alias, function, lhs, literals_tuple(None, rhs))
 
 
 def in_condition(
