@@ -1,6 +1,6 @@
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Sequence
 
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import Expression, Literal, FunctionCall
 
 
 class ConditionFunctions:
@@ -46,6 +46,26 @@ class BooleanFunctions:
     NOT = "not"
     AND = "and"
     OR = "or"
+
+
+def __set_condition(
+    alias: Optional[str], function: str, lhs: Expression, rhs: Sequence[Literal]
+) -> Expression:
+    return binary_condition(
+        alias, function, lhs, FunctionCall(None, "tuple", tuple(rhs)),
+    )
+
+
+def in_condition(
+    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
+) -> Expression:
+    return __set_condition(alias, ConditionFunctions.IN, lhs, rhs,)
+
+
+def not_in_condition(
+    alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
+) -> Expression:
+    return __set_condition(alias, ConditionFunctions.NOT_IN, lhs, rhs,)
 
 
 def binary_condition(
