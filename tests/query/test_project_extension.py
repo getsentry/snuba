@@ -18,20 +18,24 @@ from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
 
 
-def build_in(projects: Sequence[int]) -> Expression:
+def build_in(project_column: str, projects: Sequence[int]) -> Expression:
     return FunctionCall(
         None,
         "in",
         (
-            Column(None, "project_id", None),
+            Column(None, project_column, None),
             FunctionCall(None, "tuple", tuple([Literal(None, p) for p in projects])),
         ),
     )
 
 
 project_extension_test_data = [
-    ({"project": 2}, [("project_id", "IN", [2])], build_in([2]),),
-    ({"project": [2, 3]}, [("project_id", "IN", [2, 3])], build_in([2, 3]),),
+    ({"project": 2}, [("project_id", "IN", [2])], build_in("project_id", [2]),),
+    (
+        {"project": [2, 3]},
+        [("project_id", "IN", [2, 3])],
+        build_in("project_id", [2, 3]),
+    ),
 ]
 
 
@@ -119,7 +123,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         )
 
         assert self.query.get_conditions() == [("project_id", "IN", [2])]
-        assert self.query.get_condition_from_ast() == build_in([2])
+        assert self.query.get_condition_from_ast() == build_in("project_id", [2])
 
     def test_without_turbo_with_projects_needing_final(self):
         request_settings = HTTPRequestSettings()
@@ -130,7 +134,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         )
 
         assert self.query.get_conditions() == [("project_id", "IN", [2])]
-        assert self.query.get_condition_from_ast() == build_in([2])
+        assert self.query.get_condition_from_ast() == build_in("project_id", [2])
         assert self.query.get_final()
 
     def test_without_turbo_without_projects_needing_final(self):
@@ -141,7 +145,7 @@ class TestProjectExtensionWithGroups(BaseTest):
         )
 
         assert self.query.get_conditions() == [("project_id", "IN", [2])]
-        assert self.query.get_condition_from_ast() == build_in([2])
+        assert self.query.get_condition_from_ast() == build_in("project_id", [2])
         assert not self.query.get_final()
 
     def test_when_there_are_not_many_groups_to_exclude(self):
@@ -180,7 +184,7 @@ class TestProjectExtensionWithGroups(BaseTest):
                         ),
                     ),
                 ),
-                build_in([2]),
+                build_in("project_id", [2]),
             ),
         )
         assert not self.query.get_final()
@@ -195,5 +199,5 @@ class TestProjectExtensionWithGroups(BaseTest):
         )
 
         assert self.query.get_conditions() == [("project_id", "IN", [2])]
-        assert self.query.get_condition_from_ast() == build_in([2])
+        assert self.query.get_condition_from_ast() == build_in("project_id", [2])
         assert self.query.get_final()

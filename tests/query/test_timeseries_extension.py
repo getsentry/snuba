@@ -18,20 +18,22 @@ from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
 
 
-def build_time_condition(from_date: datetime, to_date: datetime) -> Expression:
+def build_time_condition(
+    time_columns: str, from_date: datetime, to_date: datetime
+) -> Expression:
     return binary_condition(
         None,
         BooleanFunctions.AND,
         binary_condition(
             None,
             ConditionFunctions.GTE,
-            Column(None, "timestamp", None),
+            Column(None, time_columns, None),
             Literal(None, from_date),
         ),
         binary_condition(
             None,
             ConditionFunctions.LT,
-            Column(None, "timestamp", None),
+            Column(None, time_columns, None),
             Literal(None, to_date),
         ),
     )
@@ -48,7 +50,9 @@ test_data = [
             ("timestamp", ">=", "2019-09-19T10:00:00"),
             ("timestamp", "<", "2019-09-19T12:00:00"),
         ],
-        build_time_condition(datetime(2019, 9, 19, 10), datetime(2019, 9, 19, 12)),
+        build_time_condition(
+            "timestamp", datetime(2019, 9, 19, 10), datetime(2019, 9, 19, 12)
+        ),
         3600,
     ),
     (
@@ -61,7 +65,9 @@ test_data = [
             ("timestamp", ">=", "2019-09-18T12:00:00"),
             ("timestamp", "<", "2019-09-19T12:00:00"),
         ],
-        build_time_condition(datetime(2019, 9, 18, 12), datetime(2019, 9, 19, 12)),
+        build_time_condition(
+            "timestamp", datetime(2019, 9, 18, 12), datetime(2019, 9, 19, 12)
+        ),
         3600,
     ),
     (
@@ -74,7 +80,9 @@ test_data = [
             ("timestamp", "<", "2019-09-19T12:00:34"),
         ],
         build_time_condition(
-            datetime(2019, 9, 19, 10, 5, 30), datetime(2019, 9, 19, 12, 0, 34)
+            "timestamp",
+            datetime(2019, 9, 19, 10, 5, 30),
+            datetime(2019, 9, 19, 12, 0, 34),
         ),
         60,
     ),
