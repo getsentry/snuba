@@ -650,9 +650,19 @@ class KafkaProducer(Producer[TPayload]):
         self.__producer = ConfluentProducer(configuration)
         self.__shutdown_requested = Event()
 
+        # The worker must execute in a separate thread to ensure that callbacks
+        # are fired -- otherwise trying to produce "synchronously" via
+        # ``produce(...).result()`` could result in a deadlock.
         self.__result = execute(self.__worker)
 
     def __worker(self) -> None:
+        """
+        Continuously polls the producer to ensure that delivery callbacks are
+        triggered (which correspondingly set the result values on the
+        ``Future`` instances returned by ``produce``.) This function exits
+        after a shutdown request has been issued (via ``close``) and all
+        in-flight messages have been delivered.
+        """
         while not self.__shutdown_requested.is_set():
             self.__producer.poll(0.1)
         self.__producer.flush()
