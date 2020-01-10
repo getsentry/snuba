@@ -8,7 +8,6 @@ from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
 
 from snuba import settings, state
-from snuba.api.split import split_query
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
@@ -26,6 +25,7 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")

@@ -16,13 +16,6 @@ import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
-from snuba.api.query import (
-    clickhouse_ro,
-    clickhouse_rw,
-    ClickhouseQueryResult,
-    parse_and_run_query,
-    RawQueryException,
-)
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -40,6 +33,13 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.query import (
+    clickhouse_ro,
+    clickhouse_rw,
+    ClickhouseQueryResult,
+    parse_and_run_query,
+    RawQueryException,
+)
 
 
 logger = logging.getLogger("snuba.api")
