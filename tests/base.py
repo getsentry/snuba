@@ -141,7 +141,7 @@ class BaseEventsTest(BaseDatasetTest):
 class BaseApiTest(BaseEventsTest):
     def setup_method(self, test_method, dataset_name="events"):
         super().setup_method(test_method, dataset_name)
-        from snuba.views import application
+        from snuba.web.views import application
 
         assert application.testing is True
         application.config["PROPAGATE_EXCEPTIONS"] = False
