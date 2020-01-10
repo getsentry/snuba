@@ -7,9 +7,9 @@ from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
+from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
-from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,

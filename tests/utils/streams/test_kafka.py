@@ -6,8 +6,8 @@ from concurrent.futures import wait
 from confluent_kafka.admin import AdminClient, NewTopic
 from contextlib import closing
 
+from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.codecs import PassthroughCodec
 from snuba.utils.streams.kafka import (
     Commit,
     CommitCodec,
