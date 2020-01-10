@@ -43,7 +43,10 @@ class HTTPRequestSettings(RequestSettings):
     parameters to be customized, defaults to using global rate limits and allows
     additional rate limits to be added.
     """
-    def __init__(self, turbo: bool = False, consistent: bool = False, debug: bool = False) -> None:
+
+    def __init__(
+        self, turbo: bool = False, consistent: bool = False, debug: bool = False
+    ) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -70,6 +73,7 @@ class SubscriptionRequestSettings(RequestSettings):
     Settings that are applied to Requests initiated via Subscriptions. Hard code most
     parameters and skips all rate limiting.
     """
+
     def get_turbo(self) -> bool:
         return False
 

@@ -19,6 +19,7 @@ class Subscription:
     """
     Represents the state of a subscription.
     """
+
     id: str
     project_id: int
     conditions: Sequence[Condition]
@@ -26,7 +27,9 @@ class Subscription:
     time_window: timedelta
     resolution: timedelta
 
-    def build_request(self, dataset: Dataset, timestamp: datetime, offset: int, timer: Timer) -> Request:
+    def build_request(
+        self, dataset: Dataset, timestamp: datetime, offset: int, timer: Timer
+    ) -> Request:
         """
         Returns a Request that can be used to run a query via `parse_and_run_query`.
         :param dataset: The Dataset to build the request for
@@ -34,16 +37,17 @@ class Subscription:
         :param offset: Maximum offset we should query for
         """
         schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(),
-            SubscriptionRequestSettings,
+            dataset.get_extensions(), SubscriptionRequestSettings,
         )
         return validate_request_content(
             {
-                'project': self.project_id,
-                'conditions': self.conditions + [[["ifnull", ["offset", 0]], "<=", offset]],
-                'aggregations': self.aggregations,
-                'from_date': (timestamp - self.time_window).isoformat(),
-                'to_date': timestamp.isoformat(),
+                "project": self.project_id,
+                "conditions": (
+                    self.conditions + [[["ifnull", ["offset", 0]], "<=", offset]]
+                ),
+                "aggregations": self.aggregations,
+                "from_date": (timestamp - self.time_window).isoformat(),
+                "to_date": timestamp.isoformat(),
             },
             schema,
             timer,
