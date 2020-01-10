@@ -1,6 +1,6 @@
 import re
 
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from snuba.query.expressions import (
     Column,
@@ -59,7 +59,7 @@ def parse_aggregation(
         param_list = []
 
     if not isinstance(column, (list, tuple)):
-        columns = (column,)
+        columns: Iterable[Any] = (column,)
     else:
         columns = column
 
