@@ -3,6 +3,12 @@ from typing import Any, Mapping, Tuple
 
 from snuba import state
 from snuba.util import parse_datetime
+from snuba.query.conditions import (
+    binary_condition,
+    BooleanFunctions,
+    ConditionFunctions,
+)
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.query_processor import ExtensionQueryProcessor
 from snuba.query.query import Query
@@ -45,6 +51,24 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 (self.__timestamp_column, ">=", from_date.isoformat()),
                 (self.__timestamp_column, "<", to_date.isoformat()),
             ]
+        )
+        query.add_condition_to_ast(
+            binary_condition(
+                None,
+                BooleanFunctions.AND,
+                binary_condition(
+                    None,
+                    ConditionFunctions.GTE,
+                    Column(None, self.__timestamp_column, None),
+                    Literal(None, from_date),
+                ),
+                binary_condition(
+                    None,
+                    ConditionFunctions.LT,
+                    Column(None, self.__timestamp_column, None),
+                    Literal(None, to_date),
+                ),
+            )
         )
 
 

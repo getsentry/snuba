@@ -20,6 +20,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
+from snuba.query.conditions import binary_condition, BooleanFunctions
 from snuba.query.expressions import Expression
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
@@ -211,6 +212,14 @@ class Query:
 
     def add_conditions(self, conditions: Sequence[Condition],) -> None:
         self.__extend_sequence("conditions", conditions)
+
+    def add_condition_to_ast(self, condition: Expression) -> None:
+        if not self.__condition:
+            self.__condition = condition
+        else:
+            self.__condition = binary_condition(
+                None, BooleanFunctions.AND, condition, self.__condition
+            )
 
     def get_prewhere(self) -> Sequence[Condition]:
         """
