@@ -38,5 +38,5 @@ class SubscriptionExecutor:
             )
         return future
 
-    def close(self):
+    def close(self) -> None:
         self.__executor_pool.shutdown()
