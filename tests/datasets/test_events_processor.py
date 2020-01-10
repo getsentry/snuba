@@ -637,13 +637,15 @@ class TestEventsProcessor(BaseEventsTest):
                 "value": "/ by zero",
             }
         ]
-        output = {}
+
+        output = {"project_id": 1}
 
         enforce_table_writer(
             self.dataset
         ).get_stream_loader().get_processor().extract_stacktraces(output, stacks)
 
         assert output == {
+            "project_id": 1,
             "exception_frames.abs_path": [
                 u"Thread.java",
                 u"ExecJavaMojo.java",
