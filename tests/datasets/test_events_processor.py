@@ -498,7 +498,10 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extra_output["contexts.key"], extra_output["contexts.value"] = extract_extra_contexts(contexts)
+        (
+            extra_output["contexts.key"],
+            extra_output["contexts.value"],
+        ) = extract_extra_contexts(contexts)
 
         assert extra_output == {
             "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],
@@ -634,13 +637,15 @@ class TestEventsProcessor(BaseEventsTest):
                 "value": "/ by zero",
             }
         ]
-        output = {}
+
+        output = {"project_id": 1}
 
         enforce_table_writer(
             self.dataset
         ).get_stream_loader().get_processor().extract_stacktraces(output, stacks)
 
         assert output == {
+            "project_id": 1,
             "exception_frames.abs_path": [
                 u"Thread.java",
                 u"ExecJavaMojo.java",

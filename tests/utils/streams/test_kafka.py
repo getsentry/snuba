@@ -2,8 +2,9 @@ import uuid
 from typing import Iterator, Mapping, Sequence
 
 import pytest
-from confluent_kafka import Producer as ConfluentProducer
+from concurrent.futures import wait
 from confluent_kafka.admin import AdminClient, NewTopic
+from contextlib import closing
 
 from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
@@ -13,6 +14,7 @@ from snuba.utils.streams.kafka import (
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
+    KafkaProducer,
     as_kafka_configuration_bool,
 )
 from snuba.utils.streams.types import (
@@ -43,6 +45,11 @@ def topic() -> Iterator[Topic]:
         assert future.result() is None
 
 
+def build_producer() -> KafkaProducer[KafkaPayload]:
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
+    return KafkaProducer(configuration, codec=codec)
+
+
 def test_consumer_backend(topic: Topic) -> None:
     def build_consumer() -> Consumer[KafkaPayload]:
         codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
@@ -59,11 +66,15 @@ def test_consumer_backend(topic: Topic) -> None:
             codec=codec,
         )
 
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    for i in range(2):
-        producer.produce(topic.name, value=value)
-    assert producer.flush(5.0) == 0
+    with closing(build_producer()) as producer:
+        value = uuid.uuid1().hex.encode("utf-8")
+        assert (
+            wait(
+                [producer.produce(topic, KafkaPayload(None, value)) for i in range(2)],
+                timeout=5.0,
+            ).not_done
+            == set()
+        )
 
     consumer = build_consumer()
 
@@ -187,10 +198,9 @@ def test_consumer_backend(topic: Topic) -> None:
 
 
 def test_auto_offset_reset_earliest(topic: Topic) -> None:
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic.name, value=value)
-    assert producer.flush(5.0) == 0
+    with closing(build_producer()) as producer:
+        value = uuid.uuid1().hex.encode("utf-8")
+        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer: Consumer[KafkaPayload] = KafkaConsumer(
@@ -215,10 +225,9 @@ def test_auto_offset_reset_earliest(topic: Topic) -> None:
 
 
 def test_auto_offset_reset_latest(topic: Topic) -> None:
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic.name, value=value)
-    assert producer.flush(5.0) == 0
+    with closing(build_producer()) as producer:
+        value = uuid.uuid1().hex.encode("utf-8")
+        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer: Consumer[KafkaPayload] = KafkaConsumer(
@@ -247,10 +256,9 @@ def test_auto_offset_reset_latest(topic: Topic) -> None:
 
 
 def test_auto_offset_reset_error(topic: Topic) -> None:
-    producer = ConfluentProducer(configuration)
-    value = uuid.uuid1().hex.encode("utf-8")
-    producer.produce(topic.name, value=value)
-    assert producer.flush(5.0) == 0
+    with closing(build_producer()) as producer:
+        value = uuid.uuid1().hex.encode("utf-8")
+        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     consumer: Consumer[KafkaPayload] = KafkaConsumer(
@@ -303,9 +311,8 @@ def test_commit_log_consumer(topic: Topic) -> None:
 
     consumer.subscribe([topic])
 
-    producer = ConfluentProducer(configuration)
-    producer.produce(topic.name)
-    assert producer.flush(5.0) == 0
+    with closing(build_producer()) as producer:
+        producer.produce(topic, KafkaPayload(None, b"")).result(5.0)
 
     message = consumer.poll(10.0)  # XXX: getting the subscription is slow
     assert isinstance(message, Message)

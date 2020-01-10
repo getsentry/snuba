@@ -172,4 +172,3 @@ GENERIC_QUERY_SCHEMA = {
         },
     },
 }
-
