@@ -8,7 +8,6 @@ from typing import (
     Generic,
     Iterator,
     Optional,
-    Sequence,
     TypeVar,
     Tuple,
     Union,
