@@ -147,12 +147,7 @@ def split_query(query_func):
             request = copy.deepcopy(request)
 
             event_ids = list(
-                set(
-                    [
-                        event[column_split_spec.id_column]
-                        for event in result["data"]
-                    ]
-                )
+                set([event[column_split_spec.id_column] for event in result["data"]])
             )
             request.query.add_conditions(
                 [(column_split_spec.id_column, "IN", event_ids)]

@@ -15,6 +15,9 @@ from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
 
@@ -63,3 +66,9 @@ class OutcomesRawDataset(TimeSeriesDataset):
 
     def get_prewhere_keys(self) -> Sequence[str]:
         return ["project_id", "org_id"]
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            BasicFunctionsProcessor(),
+            PrewhereProcessor(),
+        ]

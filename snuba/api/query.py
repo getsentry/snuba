@@ -1,7 +1,7 @@
 import logging
 
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -10,10 +10,11 @@ from flask import request as http_request
 from snuba import settings, state
 from snuba.api.split import split_query
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.state.rate_limit import (
     RateLimitAggregator,
@@ -53,15 +54,14 @@ class RawQueryException(Exception):
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
-    client: ClickhousePool,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
-    stats: MutableMapping[str, Any] = None,
+    stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    from snuba.clickhouse.native import NativeDriverReader
 
     stats = stats or {}
     use_cache, use_deduper, uc_max = state.get_configs(
@@ -132,7 +132,7 @@ def raw_query(
                         query_settings["max_threads"] = 1
 
                     try:
-                        result = NativeDriverReader(client).execute(
+                        result = reader.execute(
                             query,
                             query_settings,
                             # All queries should already be deduplicated at this point
@@ -296,7 +296,9 @@ def parse_and_run_query(
             )
         except Exception:
             logger.exception("Failed to format ast query")
-        result = raw_query(request, query, clickhouse_ro, timer, stats)
+        result = raw_query(
+            request, query, NativeDriverReader(clickhouse_ro), timer, stats
+        )
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:

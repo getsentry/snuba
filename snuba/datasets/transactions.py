@@ -31,6 +31,7 @@ from snuba.datasets.transactions_processor import (
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
@@ -244,6 +245,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            BasicFunctionsProcessor(),
             PrewhereProcessor(),
             NestedFieldConditionOptimizer(
                 "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME

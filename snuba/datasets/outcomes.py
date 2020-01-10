@@ -28,6 +28,7 @@ from snuba.datasets.schemas.tables import (
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -180,5 +181,6 @@ class OutcomesDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            BasicFunctionsProcessor(),
             PrewhereProcessor(),
         ]
