@@ -43,7 +43,7 @@ class BaseSubscriptionTest(BaseEventsTest):
                         "data": {
                             "received": calendar.timegm(
                                 (self.base_time + timedelta(minutes=tick)).timetuple()
-                            )
+                            ),
                         },
                     }
                 )

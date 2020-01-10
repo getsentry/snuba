@@ -27,10 +27,10 @@ class SubscriptionExecutor:
     ) -> Future[ClickhouseQueryResult]:
         try:
             request = task.task.build_request(
-                self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer
+                self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer,
             )
         except Exception as e:
-            future = Future[ClickhouseQueryResult]()
+            future: Future[ClickhouseQueryResult] = Future()
             future.set_exception(e)
         else:
             future = self.__executor_pool.submit(
@@ -38,5 +38,5 @@ class SubscriptionExecutor:
             )
         return future
 
-    def close(self) -> None:
+    def close(self):
         self.__executor_pool.shutdown()

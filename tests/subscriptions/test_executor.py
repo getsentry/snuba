@@ -31,7 +31,8 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
         now = datetime.utcnow()
         task = ScheduledTask(now, subscription)
         tick = Tick(
-            offsets=Interval(1, 2), timestamps=Interval(now - timedelta(minutes=1), now)
+            offsets=Interval(1, 2),
+            timestamps=Interval(now - timedelta(minutes=1), now),
         )
 
         future = executor.execute(task, tick, Mock())
