@@ -18,7 +18,7 @@ from snuba.util import is_function, QUOTED_LITERAL_RE
 # into Snuba functions.
 # This regex provides some very basic support to decompose those expressions.
 AGGR_CLICKHOUSE_FUNCTION_RE = re.compile(
-    r"^(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\s*\((?P<params>[\w\,\.\s]*)\)$"
+    r"^(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\((?P<params>[\w\,\.\s]*)\)$"
 )
 
 
