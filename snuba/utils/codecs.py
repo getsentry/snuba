@@ -1,5 +1,6 @@
+import json
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 
 TEncoded = TypeVar("TEncoded")
@@ -26,3 +27,11 @@ class PassthroughCodec(Generic[T], Codec[T, T]):
 
     def decode(self, value: T) -> T:
         return value
+
+
+class JSONCodec(Codec[str, Any]):
+    def encode(self, value: Any) -> str:
+        return json.dumps(value)
+
+    def decode(self, value: str) -> Any:
+        return json.loads(value)

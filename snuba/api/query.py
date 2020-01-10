@@ -16,12 +16,15 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
+from snuba.redis import redis_client
+from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
     PROJECT_RATE_LIMIT_NAME,
 )
 from snuba.util import create_metrics, force_bytes
+from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 
 logger = logging.getLogger("snuba.query")
@@ -49,6 +52,9 @@ class RawQueryException(Exception):
         self.timer = timer
         self.sql = sql
         self.meta = meta
+
+
+cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 
 
 def raw_query(
@@ -88,7 +94,7 @@ def raw_query(
     with state.deduper(query_id if use_deduper else None) as is_dupe:
         timer.mark("dedupe_wait")
 
-        result = state.get_result(query_id) if use_cache else None
+        result = cache.get(query_id) if use_cache else None
         timer.mark("cache_get")
 
         stats.update(
@@ -151,7 +157,7 @@ def raw_query(
                         )
 
                         if use_cache:
-                            state.set_result(query_id, result)
+                            cache.set(query_id, result)
                             timer.mark("cache_set")
 
                     except BaseException as ex:
