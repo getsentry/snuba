@@ -35,14 +35,18 @@ class TestApi(BaseEventsTest):
                         "project_id": self.project_id,
                         "event_id": uuid.uuid4().hex,
                         "deleted": 0,
-                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+                        "datetime": (self.base_time + timedelta(minutes=tick)).strftime(
+                            "%Y-%m-%dT%H:%M:%S.%fZ"
+                        ),
                         "message": "a message",
                         "platform": self.platforms[tick % len(self.platforms)],
                         "primary_hash": uuid.uuid4().hex,
                         "group_id": tick,
                         "retention_days": settings.DEFAULT_RETENTION_DAYS,
                         "data": {
-                            "received": calendar.timegm((self.base_time + timedelta(minutes=tick)).timetuple()),
+                            "received": calendar.timegm(
+                                (self.base_time + timedelta(minutes=tick)).timetuple()
+                            ),
                         },
                     }
                 )
@@ -58,6 +62,8 @@ class TestApi(BaseEventsTest):
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
         )
-        request = subscription.build_request(self.dataset, datetime.utcnow(), 100, Mock())
+        request = subscription.build_request(
+            self.dataset, datetime.utcnow(), 100, Mock()
+        )
         result = parse_and_run_query(self.dataset, request, Mock())
-        assert result['data'][0]['count'] == 10
+        assert result["data"][0]["count"] == 10

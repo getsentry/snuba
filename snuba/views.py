@@ -271,7 +271,9 @@ def unqualified_query_view(*, timer: Timer):
 def dataset_query_view(*, dataset_name: str, timer: Timer):
     dataset = get_dataset(dataset_name)
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(dataset.get_extensions(), HTTPRequestSettings)
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings
+        )
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4,),
@@ -287,7 +289,9 @@ def dataset_query(dataset, body, timer):
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
 
-    schema = RequestSchema.build_with_extensions(dataset.get_extensions(), HTTPRequestSettings)
+    schema = RequestSchema.build_with_extensions(
+        dataset.get_extensions(), HTTPRequestSettings
+    )
     query_result = run_query(
         dataset,
         validate_request_content(body, schema, timer, dataset, http_request.referrer),

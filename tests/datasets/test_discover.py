@@ -31,7 +31,9 @@ test_data = [
 
 class TestDiscover(BaseDatasetTest):
     @pytest.mark.parametrize("query_body, expected_dataset", test_data)
-    def test_data_source(self, query_body: MutableMapping[str, Any], expected_dataset: str):
+    def test_data_source(
+        self, query_body: MutableMapping[str, Any], expected_dataset: str
+    ):
         query = Query(query_body, get_dataset_source("discover"))
 
         request_settings = HTTPRequestSettings()
