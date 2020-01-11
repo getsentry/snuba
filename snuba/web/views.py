@@ -285,7 +285,7 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer: Timer) -> Response:
+def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
     return format_result(
