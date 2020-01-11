@@ -397,7 +397,7 @@ if application.debug or application.testing:
 
     _ensured = {}
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         if not force and _ensured.get(dataset, False):
             return
 
@@ -495,5 +495,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         pass
