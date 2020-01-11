@@ -308,7 +308,11 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
     try:
         return QueryResult(
-            {**parse_and_run_query(dataset, request, timer), "timing": timer}, 200
+            {
+                **parse_and_run_query(dataset, request, timer),
+                "timing": timer.for_json(),
+            },
+            200,
         )
     except RawQueryException as e:
         return QueryResult(
@@ -316,7 +320,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
                 "error": {"type": e.err_type, "message": e.message, **e.meta},
                 "sql": e.sql,
                 "stats": e.stats,
-                "timing": timer,
+                "timing": timer.for_json(),
             },
             429 if e.err_type == "rate-limited" else 500,
         )
@@ -331,7 +335,7 @@ def format_result(result: QueryResult) -> Response:
         return obj
 
     return Response(
-        json.dumps(result.result, for_json=True, default=json_default),
+        json.dumps(result.result, default=json_default),
         result.status,
         {"Content-Type": "application/json"},
     )
