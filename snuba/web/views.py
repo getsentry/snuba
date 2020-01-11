@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from typing import NamedTuple
 
-from flask import Flask, redirect, render_template, request as http_request
+from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
@@ -285,30 +285,23 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer: Timer):
+def dataset_query(dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
-
-    schema = RequestSchema.build_with_extensions(
-        dataset.get_extensions(), HTTPRequestSettings
-    )
-    query_result = run_query(
-        dataset,
-        validate_request_content(body, schema, timer, dataset, http_request.referrer),
-        timer,
-    )
-
-    def json_default(obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        elif isinstance(obj, UUID):
-            return str(obj)
-        return obj
-
-    return (
-        json.dumps(query_result.result, for_json=True, default=json_default),
-        query_result.status,
-        {"Content-Type": "application/json"},
+    return format_result(
+        run_query(
+            dataset,
+            validate_request_content(
+                body,
+                RequestSchema.build_with_extensions(
+                    dataset.get_extensions(), HTTPRequestSettings
+                ),
+                timer,
+                dataset,
+                http_request.referrer,
+            ),
+            timer,
+        )
     )
 
 
@@ -329,13 +322,28 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
         )
 
 
+def format_result(result: QueryResult) -> Response:
+    def json_default(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, UUID):
+            return str(obj)
+        return obj
+
+    return Response(
+        json.dumps(result.result, for_json=True, default=json_default),
+        result.status,
+        {"Content-Type": "application/json"},
+    )
+
+
 # Special internal endpoints that compute global aggregate data that we want to
 # use internally.
 
 
 @application.route("/internal/sdk-stats", methods=["POST"])
 @util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer):
+def sdk_distribution(*, timer: Timer) -> Response:
     dataset = get_dataset("events")
     request = validate_request_content(
         parse_request_body(http_request),
@@ -358,17 +366,7 @@ def sdk_distribution(*, timer: Timer):
     }
 
     ensure_table_exists(dataset)
-
-    query_result = run_query(dataset, request, timer)
-    return (
-        json.dumps(
-            query_result.result,
-            for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
-        ),
-        query_result.status,
-        {"Content-Type": "application/json"},
-    )
+    return format_result(run_query(dataset, request, timer))
 
 
 @application.route("/subscriptions", methods=["POST"])
