@@ -237,7 +237,7 @@ def parse_request_body(http_request):
 
 
 def validate_request_content(
-    body, schema: RequestSchema, timer, dataset: Dataset, referrer: str
+    body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
 ) -> Request:
     with sentry_sdk.start_span(
         description="validate_request_content", op="validate"
@@ -285,7 +285,7 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer):
+def dataset_query(dataset, body, timer: Timer):
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
 
@@ -314,7 +314,9 @@ def dataset_query(dataset, body, timer):
 
 def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
     try:
-        return QueryResult(parse_and_run_query(dataset, request, timer), 200)
+        return QueryResult(
+            {**parse_and_run_query(dataset, request, timer), "timing": timer}, 200
+        )
     except RawQueryException as e:
         error = {
             "type": e.err_type,
@@ -325,7 +327,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
             "error": error,
             "sql": e.sql,
             "stats": e.stats,
-            "timing": e.timer,
+            "timing": timer,
         }
         return QueryResult(result, 429 if e.err_type == "rate-limited" else 500)
 

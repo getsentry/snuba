@@ -38,18 +38,11 @@ ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 class RawQueryException(Exception):
     def __init__(
-        self,
-        err_type: str,
-        message: str,
-        stats: Mapping[str, Any],
-        timer: Timer,
-        sql: str,
-        **meta
+        self, err_type: str, message: str, stats: Mapping[str, Any], sql: str, **meta
     ):
         self.err_type = err_type
         self.message = message
         self.stats = stats
-        self.timer = timer
         self.sql = sql
         self.meta = meta
 
@@ -176,7 +169,6 @@ def raw_query(
                             err_type=err_type,
                             message=error,
                             stats=stats,
-                            timer=timer,
                             sql=sql,
                             **meta,
                         )
@@ -188,7 +180,6 @@ def raw_query(
                     err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
-                    timer=timer,
                     sql=sql,
                     detail=str(ex),
                 )
@@ -196,8 +187,6 @@ def raw_query(
     stats = log_query_and_update_stats(
         request, sql, timer, stats, "success", query_settings
     )
-
-    result["timing"] = timer
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result["stats"] = stats
