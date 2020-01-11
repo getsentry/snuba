@@ -318,18 +318,15 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
             {**parse_and_run_query(dataset, request, timer), "timing": timer}, 200
         )
     except RawQueryException as e:
-        error = {
-            "type": e.err_type,
-            "message": e.message,
-        }
-        error.update(e.meta)
-        result = {
-            "error": error,
-            "sql": e.sql,
-            "stats": e.stats,
-            "timing": timer,
-        }
-        return QueryResult(result, 429 if e.err_type == "rate-limited" else 500)
+        return QueryResult(
+            {
+                "error": {"type": e.err_type, "message": e.message, **e.meta},
+                "sql": e.sql,
+                "stats": e.stats,
+                "timing": timer,
+            },
+            429 if e.err_type == "rate-limited" else 500,
+        )
 
 
 # Special internal endpoints that compute global aggregate data that we want to
