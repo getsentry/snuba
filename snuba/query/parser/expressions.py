@@ -1,5 +1,7 @@
-import re
+from dataclasses import replace
 
+from parsimonious.grammar import Grammar, NodeVisitor
+from parsimonious.nodes import Node
 from typing import Any, Iterable, Optional
 
 from snuba.query.expressions import (
@@ -12,14 +14,81 @@ from snuba.query.expressions import (
 from snuba.query.parser.functions import parse_function_to_expr
 from snuba.util import is_function, QUOTED_LITERAL_RE
 
-# We still have some cases were people pass clickhouse expressions in the
-# aggregate clause of the Snuba query since snuba does not reject them.
-# In order to process the aggregate first we need to turn those expressions
-# into Snuba functions.
-# This regex provides some very basic support to decompose those expressions.
-AGGR_CLICKHOUSE_FUNCTION_RE = re.compile(
-    r"^(?P<name>[a-zA-Z_][a-zA-Z0-9_]*)\((?P<params>[\w\,\.\s]*)\)$"
+minimal_clickhouse_grammar = Grammar(
+    r"""
+# This root element is needed because of the ambiguity of the aggregation
+# function field which can mean a clickhouse function expression or the simple
+# name of a clickhouse function.
+root_element    = function_call / function_name
+expression      = function_call / simple_term
+parameters_list = parameter* (expression)
+parameter       = expression space* comma space*
+function_call   = function_name open_paren parameters_list? close_paren (open_paren parameters_list? close_paren)?
+simple_term     = quoted_literal / numeric_literal / column_name
+literal         = ~r"[a-zA-Z0-9_\.:-]+"
+quoted_literal  = "'" string_literal "'"
+string_literal  = ~r"[a-zA-Z0-9_\.:-]+"
+numeric_literal = ~r"-?[0-9]+(\.[0-9]+)?"
+column_name     = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
+function_name   = ~r"[a-zA-Z_][a-zA-Z0-9_]*"
+open_paren      = "("
+close_paren     = ")"
+space           = " "
+comma           = ","
+"""
 )
+
+
+class ClickhouseVisitor(NodeVisitor):
+    def visit_function_name(self, node, visited_children):
+        return node.text
+
+    def visit_column_name(self, node, visited_children):
+        return Column(None, node.text, None)
+
+    def visit_numeric_literal(self, node, visited_children):
+        try:
+            return Literal(None, int(node.text))
+        except Exception:
+            return Literal(None, float(node.text))
+
+    def visit_quoted_literal(self, node, visited_children):
+        _, val, _ = visited_children
+        return Literal(None, val.text)
+
+    def visit_parameter(self, node, visited_children):
+        param, _, _, _, = visited_children
+        return param
+
+    def visit_parameters_list(self, node, visited_children):
+        left_section, right_section = visited_children
+        ret = []
+        if not isinstance(left_section, Node):
+            if not isinstance(left_section, (list, tuple)):
+                ret = [left_section]
+            else:
+                ret = [p for p in left_section]
+        ret.append(right_section)
+        return ret
+
+    def visit_function_call(self, node, visited_children):
+        name, _, params1, _, params2 = visited_children
+        param_list1 = tuple(params1)
+        internal_f = FunctionCall(None, name, param_list1)
+        if isinstance(params2, Node) and params2.text == "":
+            return internal_f
+
+        _, param_list2, _ = params2
+        if isinstance(param_list2, (list, tuple)) and len(param_list2) > 0:
+            param_list2 = tuple(param_list2)
+        else:
+            param_list2 = ()
+        return CurriedFunctionCall(None, internal_f, param_list2)
+
+    def generic_visit(self, node, visited_children):
+        if isinstance(visited_children, list) and len(visited_children) == 1:
+            return visited_children[0]
+        return visited_children or node
 
 
 def parse_expression(val: Any) -> Expression:
@@ -42,21 +111,15 @@ def parse_expression(val: Any) -> Expression:
 def parse_aggregation(
     aggregation_function: str, column: Any, alias: Optional[str]
 ) -> Expression:
-    m = AGGR_CLICKHOUSE_FUNCTION_RE.match(aggregation_function)
-    if m:
-        func_name = m.group("name")
-        param_string = m.group("params") or ""
-        param_list = [
-            # We are not going to try to make complex parsing of what someone passes
-            # where they should not. These are literals. And they will be escaped accordingly
-            # IF someone passes a column name or another function, it won't work.
-            parse_expression(p.strip())
-            for p in param_string.split(",")
-            if p.strip()
-        ]
-    else:
-        func_name = aggregation_function
-        param_list = []
+    """
+    Aggregations, unfortunately, support both Snuba syntax and a subset
+    of Clickhosue syntax. In order to preserve this behavior and still build
+    a meaningful AST when parsing the query, we need to do some parsing of
+    the clickhouse expression. (not that we should support this, but it is
+    used in production).
+    """
+    expression_tree = minimal_clickhouse_grammar.parse(aggregation_function)
+    parsed_expression = ClickhouseVisitor().visit(expression_tree)
 
     if not isinstance(column, (list, tuple)):
         columns: Iterable[Any] = (column,)
@@ -65,14 +128,19 @@ def parse_aggregation(
 
     columns_expr = [parse_expression(column) for column in columns if column]
 
-    if param_list and columns_expr:
-        # This is a curried function
-        return CurriedFunctionCall(
-            alias,
-            FunctionCall(None, func_name, tuple(param_list)),
-            tuple(columns_expr),
-        )
+    if isinstance(parsed_expression, str):
+        # Simple aggregation with snuba syntax ["count", ["c1", "c2"]]
+        return FunctionCall(alias, parsed_expression, tuple(columns_expr))
+    elif (
+        # Simple Clickhouse expression with no snuba syntax
+        # ["ifNull(count(somthing), something)", None, None]
+        isinstance(parsed_expression, (FunctionCall, CurriedFunctionCall))
+        and not columns_expr
+    ):
+        return replace(parsed_expression, alias=alias)
+    elif isinstance(parsed_expression, FunctionCall) and columns_expr:
+        # Mix of clickhouse syntax and snuba syntax that generates a CurriedFunction
+        # ["f(a)", "b", None]
+        return CurriedFunctionCall(alias, parsed_expression, tuple(columns_expr),)
     else:
-        return FunctionCall(
-            alias, func_name, tuple(columns_expr) if columns_expr else tuple(param_list)
-        )
+        raise ValueError(f"Invalid aggregation format {aggregation_function} {column}")
