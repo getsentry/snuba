@@ -6,9 +6,7 @@ from unittest import TestCase
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba.utils.codecs import Codec
-from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
-from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 
@@ -42,7 +40,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             assert key == name
             assert future.result() is None
 
-    def get_consumer(self, group: str) -> Consumer[int]:
+    def get_consumer(self, group: str) -> KafkaConsumer[int]:
         return KafkaConsumer(
             {
                 **self.configuration,
@@ -56,7 +54,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             self.codec,
         )
 
-    def get_producer(self) -> Producer[int]:
+    def get_producer(self) -> KafkaProducer[int]:
         return KafkaProducer(self.configuration, self.codec)
 
 
