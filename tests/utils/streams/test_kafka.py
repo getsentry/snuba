@@ -1,13 +1,16 @@
 import contextlib
 import uuid
+from contextlib import closing
 from typing import Iterator
 from unittest import TestCase
 
+import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba.utils.codecs import Codec
+from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
-from snuba.utils.streams.types import Topic
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 
 
@@ -40,11 +43,13 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             assert key == name
             assert future.result() is None
 
-    def get_consumer(self, group: str) -> KafkaConsumer[int]:
+    def get_consumer(
+        self, group: str, auto_offset_reset: str = "earliest"
+    ) -> KafkaConsumer[int]:
         return KafkaConsumer(
             {
                 **self.configuration,
-                "auto.offset.reset": "earliest",
+                "auto.offset.reset": auto_offset_reset,
                 "enable.auto.commit": "false",
                 "enable.auto.offset.store": "false",
                 "enable.partition.eof": "true",
@@ -57,92 +62,53 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     def get_producer(self) -> KafkaProducer[int]:
         return KafkaProducer(self.configuration, self.codec)
 
+    def test_auto_offset_reset_earliest(self) -> None:
+        with self.get_topic() as topic:
+            with closing(self.get_producer()) as producer:
+                producer.produce(topic, 0).result(5.0)
+
+            with closing(
+                self.get_consumer("test", auto_offset_reset="earliest")
+            ) as consumer:
+                consumer.subscribe([topic])
+
+                message = consumer.poll(10.0)
+                assert isinstance(message, Message)
+                assert message.offset == 0
+
+    def test_auto_offset_reset_latest(self) -> None:
+        with self.get_topic() as topic:
+            with closing(self.get_producer()) as producer:
+                producer.produce(topic, 0).result(5.0)
+
+            with closing(
+                self.get_consumer("test", auto_offset_reset="latest")
+            ) as consumer:
+                consumer.subscribe([topic])
+
+                try:
+                    consumer.poll(10.0)  # XXX: getting the subcription is slow
+                except EndOfPartition as error:
+                    assert error.partition == Partition(topic, 0)
+                    assert error.offset == 1
+                else:
+                    raise AssertionError("expected EndOfPartition error")
+
+    def test_auto_offset_reset_error(self) -> None:
+        with self.get_topic() as topic:
+            with closing(self.get_producer()) as producer:
+                producer.produce(topic, 0).result(5.0)
+
+            with closing(
+                self.get_consumer("test", auto_offset_reset="error")
+            ) as consumer:
+                consumer.subscribe([topic])
+
+                with pytest.raises(ConsumerError):
+                    consumer.poll(10.0)  # XXX: getting the subcription is slow
+
 
 """
-def test_auto_offset_reset_earliest(topic: Topic) -> None:
-    with closing(build_producer()) as producer:
-        value = uuid.uuid1().hex.encode("utf-8")
-        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
-
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer: Consumer[KafkaPayload] = KafkaConsumer(
-        {
-            **configuration,
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "false",
-            "enable.partition.eof": "true",
-            "group.id": "test-earliest",
-        },
-        codec=codec,
-    )
-
-    consumer.subscribe([topic])
-
-    message = consumer.poll(10.0)
-    assert isinstance(message, Message)
-    assert message.offset == 0
-
-    consumer.close()
-
-
-def test_auto_offset_reset_latest(topic: Topic) -> None:
-    with closing(build_producer()) as producer:
-        value = uuid.uuid1().hex.encode("utf-8")
-        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
-
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer: Consumer[KafkaPayload] = KafkaConsumer(
-        {
-            **configuration,
-            "auto.offset.reset": "latest",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "false",
-            "enable.partition.eof": "true",
-            "group.id": "test-latest",
-        },
-        codec=codec,
-    )
-
-    consumer.subscribe([topic])
-
-    try:
-        consumer.poll(10.0)  # XXX: getting the subcription is slow
-    except EndOfPartition as error:
-        assert error.partition == Partition(topic, 0)
-        assert error.offset == 1
-    else:
-        raise AssertionError("expected EndOfPartition error")
-
-    consumer.close()
-
-
-def test_auto_offset_reset_error(topic: Topic) -> None:
-    with closing(build_producer()) as producer:
-        value = uuid.uuid1().hex.encode("utf-8")
-        producer.produce(topic, KafkaPayload(None, value)).result(5.0)
-
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer: Consumer[KafkaPayload] = KafkaConsumer(
-        {
-            **configuration,
-            "auto.offset.reset": "error",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "false",
-            "enable.partition.eof": "true",
-            "group.id": "test-error",
-        },
-        codec=codec,
-    )
-
-    consumer.subscribe([topic])
-
-    with pytest.raises(ConsumerError):
-        consumer.poll(10.0)  # XXX: getting the subcription is slow
-
-    consumer.close()
-
-
 def test_commit_codec() -> None:
     codec = CommitCodec()
     commit = Commit("group", Partition(Topic("topic"), 0), 0)
