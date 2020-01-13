@@ -9,9 +9,18 @@ from confluent_kafka.admin import AdminClient, NewTopic
 
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
-from snuba.utils.streams.kafka import KafkaConsumer, KafkaPayload, KafkaProducer
+from snuba.utils.streams.kafka import (
+    Commit,
+    CommitCodec,
+    KafkaConsumer,
+    KafkaConsumerWithCommitLog,
+    KafkaPayload,
+    KafkaProducer,
+    as_kafka_configuration_bool,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
+from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 class TestCodec(Codec[KafkaPayload, int]):
@@ -107,55 +116,55 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 with pytest.raises(ConsumerError):
                     consumer.poll(10.0)  # XXX: getting the subcription is slow
 
+    def test_commit_log_consumer(self) -> None:
+        # XXX: This would be better as an integration test (or at least a test
+        # against an abstract Producer interface) instead of against a test against
+        # a mock.
+        commit_log_producer = FakeConfluentKafkaProducer()
 
-"""
+        consumer: KafkaConsumer[int] = KafkaConsumerWithCommitLog(
+            {
+                **self.configuration,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": "false",
+                "enable.auto.offset.store": "false",
+                "enable.partition.eof": "true",
+                "group.id": "test",
+                "session.timeout.ms": 10000,
+            },
+            codec=self.codec,
+            producer=commit_log_producer,
+            commit_log_topic=Topic("commit-log"),
+        )
+
+        with self.get_topic() as topic, closing(consumer) as consumer:
+            consumer.subscribe([topic])
+
+            with closing(self.get_producer()) as producer:
+                producer.produce(topic, 0).result(5.0)
+
+            message = consumer.poll(10.0)  # XXX: getting the subscription is slow
+            assert isinstance(message, Message)
+
+            consumer.stage_offsets({message.partition: message.get_next_offset()})
+
+            assert consumer.commit_offsets() == {
+                Partition(topic, 0): message.get_next_offset()
+            }
+
+            assert len(commit_log_producer.messages) == 1
+            commit_message = commit_log_producer.messages[0]
+            assert commit_message.topic() == "commit-log"
+
+            assert CommitCodec().decode(
+                KafkaPayload(commit_message.key(), commit_message.value())
+            ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+
+
 def test_commit_codec() -> None:
     codec = CommitCodec()
     commit = Commit("group", Partition(Topic("topic"), 0), 0)
     assert codec.decode(codec.encode(commit)) == commit
-
-
-def test_commit_log_consumer(topic: Topic) -> None:
-    # XXX: This would be better as an integration test (or at least a test
-    # against an abstract Producer interface) instead of against a test against
-    # a mock.
-    commit_log_producer = FakeConfluentKafkaProducer()
-
-    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
-    consumer: Consumer[KafkaPayload] = KafkaConsumerWithCommitLog(
-        {
-            **configuration,
-            "auto.offset.reset": "earliest",
-            "enable.auto.commit": "false",
-            "enable.auto.offset.store": "false",
-            "enable.partition.eof": "true",
-            "group.id": "test",
-            "session.timeout.ms": 10000,
-        },
-        codec=codec,
-        producer=commit_log_producer,
-        commit_log_topic=Topic("commit-log"),
-    )
-
-    consumer.subscribe([topic])
-
-    with closing(build_producer()) as producer:
-        producer.produce(topic, KafkaPayload(None, b"")).result(5.0)
-
-    message = consumer.poll(10.0)  # XXX: getting the subscription is slow
-    assert isinstance(message, Message)
-
-    consumer.stage_offsets({message.partition: message.get_next_offset()})
-
-    assert consumer.commit_offsets() == {Partition(topic, 0): message.get_next_offset()}
-
-    assert len(commit_log_producer.messages) == 1
-    commit_message = commit_log_producer.messages[0]
-    assert commit_message.topic() == "commit-log"
-
-    assert CommitCodec().decode(
-        KafkaPayload(commit_message.key(), commit_message.value())
-    ) == Commit("test", Partition(topic, 0), message.get_next_offset())
 
 
 def test_as_kafka_configuration_bool():
@@ -190,4 +199,3 @@ def test_as_kafka_configuration_bool():
 
     with pytest.raises(TypeError):
         assert as_kafka_configuration_bool(0.0)
-"""
