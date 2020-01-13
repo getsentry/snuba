@@ -56,6 +56,10 @@ test_data = [
         ),
     ),  # apdex formula
     (
+        ["f('asd')", "", "apdex_score"],
+        FunctionCall("apdex_score", "f", (Literal(None, "asd"),),),
+    ),  # string literals
+    (
         ["toUInt64(plus(multiply(log(times_seen), 600), last_seen))", None, None],
         FunctionCall(
             None,
