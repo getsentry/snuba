@@ -167,7 +167,7 @@ def test_commit_codec() -> None:
     assert codec.decode(codec.encode(commit)) == commit
 
 
-def test_as_kafka_configuration_bool():
+def test_as_kafka_configuration_bool() -> None:
     assert as_kafka_configuration_bool(False) == False
     assert as_kafka_configuration_bool("false") == False
     assert as_kafka_configuration_bool("FALSE") == False
