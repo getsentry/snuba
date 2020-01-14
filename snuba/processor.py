@@ -1,5 +1,6 @@
 import ipaddress
 import re
+from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from hashlib import md5
@@ -23,12 +24,13 @@ class ProcessedMessage(NamedTuple):
     data: Sequence[Any]
 
 
-class MessageProcessor:
+class MessageProcessor(ABC):
     """
     The Processor is responsible for converting an incoming message body from the
     event stream into a row or statement to be inserted or executed against clickhouse.
     """
 
+    @abstractmethod
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
