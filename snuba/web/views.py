@@ -375,8 +375,8 @@ def sdk_distribution(*, timer: Timer) -> Response:
     return format_result(run_query(dataset, request, timer))
 
 
-@application.route("/subscriptions", methods=["POST"])
-def create_subscription():
+@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
+def create_subscription(*, dataset: Dataset):
     return (
         json.dumps({"subscription_id": uuid1().hex}),
         202,
@@ -384,13 +384,10 @@ def create_subscription():
     )
 
 
-@application.route("/subscriptions/<uuid>/renew", methods=["POST"])
-def renew_subscription(uuid):
-    return "ok", 202, {"Content-Type": "text/plain"}
-
-
-@application.route("/subscriptions/<uuid>", methods=["DELETE"])
-def delete_subscription(uuid):
+@application.route(
+    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
+)
+def delete_subscription(*, dataset: Dataset, partition: int, key: str):
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
