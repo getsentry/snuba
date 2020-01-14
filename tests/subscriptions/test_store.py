@@ -1,15 +1,11 @@
 import json
 from datetime import timedelta
 
-import pytest
-
 from snuba.redis import redis_client
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.store import (
-    RedisPayload,
     RedisSubscriptionStore,
     SubscriptionCodec,
-    SubscriptionDoesNotExist,
 )
 from tests.base import BaseTest
 from tests.subscriptions import BaseSubscriptionTest
@@ -28,28 +24,19 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         )
 
     def build_store(self, key="1") -> RedisSubscriptionStore:
-        return RedisSubscriptionStore(key, redis_client)
+        return RedisSubscriptionStore(redis_client, key)
 
     def test_create(self):
         store = self.build_store()
-        key = store.create(self.subscription)
-        assert store.get(key) == self.subscription
-
-    def test_get(self):
-        store = self.build_store()
-        with pytest.raises(SubscriptionDoesNotExist):
-            store.get("hello")
-
-        key = store.create(self.subscription)
-        assert store.get(key) == self.subscription
+        store.create(self.subscription)
+        assert store.all() == [self.subscription]
 
     def test_delete(self):
         store = self.build_store()
         key = store.create(self.subscription)
-        assert store.get(key) == self.subscription
+        assert store.all() == [self.subscription]
         store.delete(key)
-        with pytest.raises(SubscriptionDoesNotExist):
-            store.get(key)
+        assert store.all() == []
 
     def test_all(self):
         store = self.build_store()
@@ -73,10 +60,9 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     def test_partitions(self):
         store_1 = self.build_store("1")
         store_2 = self.build_store("2")
-        key = store_1.create(self.subscription)
-        with pytest.raises(SubscriptionDoesNotExist):
-            store_2.get(key)
-        assert store_1.get(key)
+        store_1.create(self.subscription)
+        assert store_2.all() == []
+        assert store_1.all() == [self.subscription]
 
         new_subscription = Subscription(
             id="what",
@@ -86,14 +72,9 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
             time_window=timedelta(minutes=400),
             resolution=timedelta(minutes=2),
         )
-        new_key = store_2.create(new_subscription)
-        assert store_1.get(key) == self.subscription
-        with pytest.raises(SubscriptionDoesNotExist):
-            assert store_1.get(new_key)
-
-        assert store_2.get(new_key) == new_subscription
-        with pytest.raises(SubscriptionDoesNotExist):
-            assert store_2.get(key)
+        store_2.create(new_subscription)
+        assert store_1.all() == [self.subscription]
+        assert store_2.all() == [new_subscription]
 
 
 class TestSubscriptionCodec(BaseTest):
@@ -117,8 +98,7 @@ class TestSubscriptionCodec(BaseTest):
         subscription = self.build_subscription()
 
         payload = codec.encode(subscription)
-        assert payload.key == subscription.id
-        data = json.loads(payload.value.decode("utf-8"))
+        data = json.loads(payload.decode("utf-8"))
         assert data["id"] == subscription.id
         assert data["project_id"] == subscription.project_id
         assert data["conditions"] == subscription.conditions
@@ -137,5 +117,5 @@ class TestSubscriptionCodec(BaseTest):
             "time_window": int(subscription.time_window.total_seconds()),
             "resolution": int(subscription.resolution.total_seconds()),
         }
-        payload = RedisPayload(subscription.id, json.dumps(data).encode("utf-8"))
+        payload = json.dumps(data).encode("utf-8")
         assert codec.decode(payload) == subscription
