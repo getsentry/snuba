@@ -55,19 +55,21 @@ class ConsumerBuilder:
             self.bootstrap_servers = bootstrap_servers
 
         stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
-        self.raw_topic = raw_topic or stream_loader.get_default_topic().name
-        default_replacement_topic_name = (
-            stream_loader.get_replacement_topic().name
-            if stream_loader.get_replacement_topic()
-            else None
+        self.raw_topic = (
+            Topic(raw_topic)
+            if raw_topic is not None
+            else stream_loader.get_default_topic()
         )
-        self.replacements_topic = replacements_topic or default_replacement_topic_name
-        default_commit_log_topic_name = (
-            stream_loader.get_commit_log_topic().topic_name
-            if stream_loader.get_commit_log_topic()
-            else None
+        self.replacements_topic = (
+            Topic(replacements_topic)
+            if replacements_topic is not None
+            else stream_loader.get_replacement_topic()
         )
-        self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
+        self.commit_log_topic = (
+            Topic(commit_log_topic)
+            if commit_log_topic is not None
+            else stream_loader.get_commit_log_topic()
+        )
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
@@ -131,13 +133,13 @@ class ConsumerBuilder:
                 configuration,
                 codec=codec,
                 producer=self.producer,
-                commit_log_topic=Topic(self.commit_log_topic),
+                commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
         return BatchingConsumer(
             consumer,
-            Topic(self.raw_topic),
+            self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,

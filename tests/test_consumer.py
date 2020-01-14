@@ -34,10 +34,7 @@ class TestConsumer(BaseEventsTest):
             .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
-            self.dataset,
-            FakeConfluentKafkaProducer(),
-            replacement_topic.name,
-            self.metrics,
+            self.dataset, FakeConfluentKafkaProducer(), replacement_topic, self.metrics,
         )
         batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
@@ -53,10 +50,7 @@ class TestConsumer(BaseEventsTest):
             .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
-            self.dataset,
-            FakeConfluentKafkaProducer(),
-            replacement_topic.name,
-            self.metrics,
+            self.dataset, FakeConfluentKafkaProducer(), replacement_topic, self.metrics,
         )
 
         event = self.event
@@ -83,7 +77,7 @@ class TestConsumer(BaseEventsTest):
             .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
-            self.dataset, producer, replacement_topic.name, self.metrics
+            self.dataset, producer, replacement_topic, self.metrics
         )
 
         test_worker.flush_batch(
