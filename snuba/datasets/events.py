@@ -14,7 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader, KafkaTopic
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
@@ -263,9 +263,9 @@ class EventsDataset(TimeSeriesDataset):
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
                 processor=EventsProcessor(promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="event-replacements",
-                commit_log_topic="snuba-commit-log",
+                default_topic=KafkaTopic("events"),
+                replacement_topic=KafkaTopic("event-replacements"),
+                commit_log_topic=KafkaTopic("snuba-commit-log"),
             ),
         )
 

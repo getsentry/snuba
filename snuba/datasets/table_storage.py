@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import json
 import rapidjson
 
@@ -10,11 +9,10 @@ from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BatchWriter
+from snuba.utils.streams.types import Topic
 
 
-@dataclass(frozen=True)
-class KafkaTopicSpec:
-    topic_name: str
+class KafkaTopic(Topic):
     replication_factor: int = 1
     partitions_number: int = 1
 
@@ -28,38 +26,37 @@ class KafkaStreamLoader:
     def __init__(
         self,
         processor: MessageProcessor,
-        default_topic: str,
-        replacement_topic: Optional[str] = None,
-        commit_log_topic: Optional[str] = None,
+        default_topic: KafkaTopic,
+        replacement_topic: Optional[KafkaTopic] = None,
+        commit_log_topic: Optional[KafkaTopic] = None,
     ) -> None:
         self.__processor = processor
-        self.__default_topic_spec = KafkaTopicSpec(topic_name=default_topic)
-        self.__replacement_topic_spec = (
-            KafkaTopicSpec(topic_name=replacement_topic) if replacement_topic else None
-        )
-        self.__commit_log_topic_spec = (
-            KafkaTopicSpec(topic_name=commit_log_topic) if commit_log_topic else None
-        )
+        self.__default_topic = default_topic
+        self.__replacement_topic = replacement_topic
+        self.__commit_log_topic = commit_log_topic
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
 
-    def get_default_topic_spec(self) -> KafkaTopicSpec:
-        return self.__default_topic_spec
+    def get_default_topic(self) -> KafkaTopic:
+        return self.__default_topic
 
-    def get_replacement_topic_spec(self) -> Optional[KafkaTopicSpec]:
-        return self.__replacement_topic_spec
+    def get_replacement_topic(self) -> Optional[KafkaTopic]:
+        return self.__replacement_topic
 
-    def get_commit_log_topic_spec(self) -> Optional[KafkaTopicSpec]:
-        return self.__commit_log_topic_spec
+    def get_commit_log_topic(self) -> Optional[KafkaTopic]:
+        return self.__commit_log_topic
 
-    def get_all_topic_specs(self) -> Sequence[KafkaTopicSpec]:
-        ret = [self.__default_topic_spec]
-        if self.__replacement_topic_spec:
-            ret.append(self.__replacement_topic_spec)
-        if self.__commit_log_topic_spec:
-            ret.append(self.__commit_log_topic_spec)
-        return ret
+    def get_all_topics(self) -> Sequence[KafkaTopic]:
+        return [
+            topic
+            for topic in [
+                self.__default_topic,
+                self.__replacement_topic,
+                self.__commit_log_topic,
+            ]
+            if topic is not None
+        ]
 
 
 class TableWriter:

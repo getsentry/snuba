@@ -63,12 +63,12 @@ def bootstrap(
             table_writer = dataset.get_table_writer()
             if table_writer:
                 stream_loader = table_writer.get_stream_loader()
-                for topic_spec in stream_loader.get_all_topic_specs():
+                for topic in stream_loader.get_all_topics():
                     topics.append(
                         NewTopic(
-                            topic_spec.topic_name,
-                            num_partitions=topic_spec.partitions_number,
-                            replication_factor=topic_spec.replication_factor,
+                            topic.name,
+                            num_partitions=topic.partitions_number,
+                            replication_factor=topic.replication_factor,
                         )
                     )
 

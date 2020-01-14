@@ -31,12 +31,12 @@ class TestConsumer(BaseEventsTest):
         replacement_topic = (
             enforce_table_writer(self.dataset)
             .get_stream_loader()
-            .get_replacement_topic_spec()
+            .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
             self.dataset,
             FakeConfluentKafkaProducer(),
-            replacement_topic.topic_name,
+            replacement_topic.name,
             self.metrics,
         )
         batch = [test_worker.process_message(message)]
@@ -50,12 +50,12 @@ class TestConsumer(BaseEventsTest):
         replacement_topic = (
             enforce_table_writer(self.dataset)
             .get_stream_loader()
-            .get_replacement_topic_spec()
+            .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
             self.dataset,
             FakeConfluentKafkaProducer(),
-            replacement_topic.topic_name,
+            replacement_topic.name,
             self.metrics,
         )
 
@@ -80,10 +80,10 @@ class TestConsumer(BaseEventsTest):
         replacement_topic = (
             enforce_table_writer(self.dataset)
             .get_stream_loader()
-            .get_replacement_topic_spec()
+            .get_replacement_topic()
         )
         test_worker = ConsumerWorker(
-            self.dataset, producer, replacement_topic.topic_name, self.metrics
+            self.dataset, producer, replacement_topic.name, self.metrics
         )
 
         test_worker.flush_batch(

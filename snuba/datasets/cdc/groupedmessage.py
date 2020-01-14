@@ -9,7 +9,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader, KafkaTopic
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
@@ -82,7 +82,7 @@ class GroupedMessageDataset(CdcDataset):
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
                     processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
-                    default_topic="cdc",
+                    default_topic=KafkaTopic("cdc"),
                 ),
                 postgres_table=self.POSTGRES_TABLE,
             ),

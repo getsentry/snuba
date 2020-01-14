@@ -123,11 +123,11 @@ def replacer(
     )
 
     stream_loader = enforce_table_writer(dataset).get_stream_loader()
-    default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+    default_replacement_topic = stream_loader.get_replacement_topic()
     assert (
-        default_replacement_topic_spec is not None
+        default_replacement_topic is not None
     ), f"Dataset {dataset} does not have a replacement topic."
-    replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
+    replacements_topic = replacements_topic or default_replacement_topic.name
 
     metrics = util.create_metrics(
         dogstatsd_host, dogstatsd_port, "snuba.replacer", tags={"group": consumer_group}

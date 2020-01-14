@@ -25,7 +25,7 @@ from snuba.datasets.schemas.tables import (
     SummingMergeTreeSchema,
     MaterializedViewSchema,
 )
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader, KafkaTopic
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -158,7 +158,7 @@ class OutcomesDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=write_schema,
             stream_loader=KafkaStreamLoader(
-                processor=OutcomesProcessor(), default_topic="outcomes",
+                processor=OutcomesProcessor(), default_topic=KafkaTopic("outcomes"),
             ),
         )
 

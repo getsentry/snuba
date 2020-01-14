@@ -17,7 +17,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader, KafkaTopic
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
@@ -176,7 +176,8 @@ class TransactionsDataset(TimeSeriesDataset):
             table_writer=TransactionsTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
-                    processor=TransactionsMessageProcessor(), default_topic="events",
+                    processor=TransactionsMessageProcessor(),
+                    default_topic=KafkaTopic("events"),
                 ),
             ),
             time_group_columns={
