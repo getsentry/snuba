@@ -48,10 +48,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
         ClickhousePool().execute(statement)
 
     consumer = ConsumerWorker(
-        dataset=dataset,
-        producer=None,
-        replacements_topic=None,
-        metrics=DummyMetricsBackend(),
+        dataset=dataset, producer=None, metrics=DummyMetricsBackend(),
     )
 
     messages = get_messages(events_file)

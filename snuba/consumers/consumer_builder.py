@@ -155,8 +155,8 @@ class ConsumerBuilder:
             ConsumerWorker(
                 self.dataset,
                 producer=self.producer,
-                replacements_topic=self.replacements_topic,
                 metrics=self.metrics,
+                replacements_topic=self.replacements_topic,
             )
         )
 

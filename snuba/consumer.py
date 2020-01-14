@@ -31,13 +31,13 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self,
         dataset,
         producer,
-        replacements_topic: Optional[Topic],
         metrics: MetricsBackend,
+        replacements_topic: Optional[Topic] = None,
     ):
         self.__dataset = dataset
         self.producer = producer
-        self.replacements_topic = replacements_topic
         self.metrics = metrics
+        self.replacements_topic = replacements_topic
         self.__writer = enforce_table_writer(dataset).get_writer(
             {"load_balancing": "in_order", "insert_distributed_sync": 1}
         )
