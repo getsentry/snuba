@@ -109,6 +109,9 @@ class StreamsTestMixin(ABC):
 
             consumer.close()
 
+            # Make sure all public methods (except ``close```) error if called
+            # after the consumer has been closed.
+
             with pytest.raises(RuntimeError):
                 consumer.subscribe([topic])
 
@@ -136,7 +139,7 @@ class StreamsTestMixin(ABC):
             with pytest.raises(RuntimeError):
                 consumer.commit_offsets()
 
-            consumer.close()
+            consumer.close()  # should be safe, even if the consumer is already closed
 
             consumer = self.get_consumer(group)
 
