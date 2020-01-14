@@ -40,6 +40,7 @@ from snuba.web.query import (
     parse_and_run_query,
     RawQueryException,
 )
+from snuba.web.converters import DatasetConverter
 
 
 logger = logging.getLogger("snuba.api")
@@ -94,6 +95,8 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
+application.url_map.converters["dataset"] = DatasetConverter
+
 
 sentry_sdk.init(
     dsn=settings.SENTRY_DSN,
@@ -266,10 +269,9 @@ def unqualified_query_view(*, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<dataset_name>/query", methods=["GET", "POST"])
+@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
 @util.time_request("query")
-def dataset_query_view(*, dataset_name: str, timer: Timer):
-    dataset = get_dataset(dataset_name)
+def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -415,11 +417,10 @@ if application.debug or application.testing:
 
         _ensured[dataset] = True
 
-    @application.route("/tests/<dataset_name>/insert", methods=["POST"])
-    def write(dataset_name):
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
@@ -442,9 +443,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/eventstream", methods=["POST"])
-    def eventstream(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
+    def eventstream(*, dataset: Dataset):
         ensure_table_exists(dataset)
         record = json.loads(http_request.data)
 
@@ -479,9 +479,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/drop", methods=["POST"])
-    def drop(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
+    def drop(*, dataset: Dataset):
         for statement in dataset.get_dataset_schemas().get_drop_statements():
             clickhouse_rw.execute(statement)
 
