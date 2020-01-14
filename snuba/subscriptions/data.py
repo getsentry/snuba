@@ -9,7 +9,7 @@ from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.utils.metrics.timer import Timer
-from snuba.views import validate_request_content
+from snuba.web.views import validate_request_content
 
 SUBSCRIPTION_REFERRER = "subscription"
 

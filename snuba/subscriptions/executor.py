@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from snuba.api.query import ClickhouseQueryResult, parse_and_run_query
 from snuba.datasets.dataset import Dataset
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query import ClickhouseQueryResult, parse_and_run_query
 
 
 class SubscriptionExecutor:

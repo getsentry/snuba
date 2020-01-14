@@ -8,7 +8,6 @@ from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
 
 from snuba import settings, state
-from snuba.api.split import split_query
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
@@ -26,6 +25,7 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")
@@ -38,18 +38,11 @@ ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 class RawQueryException(Exception):
     def __init__(
-        self,
-        err_type: str,
-        message: str,
-        stats: Mapping[str, Any],
-        timer: Timer,
-        sql: str,
-        **meta
+        self, err_type: str, message: str, stats: Mapping[str, Any], sql: str, **meta
     ):
         self.err_type = err_type
         self.message = message
         self.stats = stats
-        self.timer = timer
         self.sql = sql
         self.meta = meta
 
@@ -176,7 +169,6 @@ def raw_query(
                             err_type=err_type,
                             message=error,
                             stats=stats,
-                            timer=timer,
                             sql=sql,
                             **meta,
                         )
@@ -188,7 +180,6 @@ def raw_query(
                     err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
-                    timer=timer,
                     sql=sql,
                     detail=str(ex),
                 )
@@ -196,8 +187,6 @@ def raw_query(
     stats = log_query_and_update_stats(
         request, sql, timer, stats, "success", query_settings
     )
-
-    result["timing"] = timer
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result["stats"] = stats
