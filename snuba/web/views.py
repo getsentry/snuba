@@ -33,6 +33,7 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
     clickhouse_ro,
     clickhouse_rw,
@@ -40,7 +41,6 @@ from snuba.web.query import (
     parse_and_run_query,
     RawQueryException,
 )
-from snuba.web.converters import DatasetConverter
 
 
 logger = logging.getLogger("snuba.api")
