@@ -1,11 +1,11 @@
 import ipaddress
 import re
-
 from datetime import datetime
 from enum import Enum
 from hashlib import md5
-import simplejson as json
 from typing import Any, NamedTuple, Optional, Sequence, Union
+
+import simplejson as json
 
 from snuba.util import force_bytes
 
