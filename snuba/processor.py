@@ -1,7 +1,7 @@
 import ipaddress
 import re
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from hashlib import md5
 from typing import Any, NamedTuple, Optional, Sequence, Union
@@ -55,13 +55,18 @@ def _as_dict_safe(value):
     return rv
 
 
-def _collapse_uint32(n):
-    if (n is None) or (n < 0) or (n > MAX_UINT32):
+def _collapse_uint32(n) -> Optional[int]:
+    if n is None:
         return None
+
+    n = int(n)
+    if (n < 0) or (n > MAX_UINT32):
+        return None
+
     return n
 
 
-def _boolify(s):
+def _boolify(s) -> Optional[bool]:
     if s is None:
         return None
 
@@ -78,24 +83,20 @@ def _boolify(s):
     return None
 
 
-def _floatify(s):
-    if not s:
+def _floatify(s) -> Optional[float]:
+    if s is None:
         return None
 
     if isinstance(s, float):
         return s
 
     try:
-        s = float(s)
+        return float(s)
     except (ValueError, TypeError):
         return None
-    else:
-        return s
-
-    return None
 
 
-def _unicodify(s):
+def _unicodify(s) -> Optional[str]:
     if s is None:
         return None
 
@@ -105,19 +106,22 @@ def _unicodify(s):
     return str(s).encode("utf8", errors="backslashreplace").decode("utf8")
 
 
-def _hashify(h):
+def _hashify(h: str) -> str:
     if HASH_RE.match(h):
         return h
     return md5(force_bytes(h)).hexdigest()
 
 
-def _ensure_valid_date(dt):
+epoch = datetime(1970, 1, 1)
+
+
+def _ensure_valid_date(dt: Optional[datetime]) -> Optional[datetime]:
     if dt is None:
         return None
-    seconds = (dt - datetime(1970, 1, 1)).total_seconds()
+    seconds = (dt - epoch).total_seconds()
     if _collapse_uint32(seconds) is None:
         return None
-    return dt
+    return epoch + timedelta(seconds=seconds)
 
 
 def _ensure_valid_ip(
