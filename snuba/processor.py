@@ -59,11 +59,11 @@ def _collapse_uint32(n) -> Optional[int]:
     if n is None:
         return None
 
-    n = int(n)
-    if (n < 0) or (n > MAX_UINT32):
+    i = int(n)
+    if (i < 0) or (i > MAX_UINT32):
         return None
 
-    return n
+    return i
 
 
 def _boolify(s) -> Optional[bool]:
