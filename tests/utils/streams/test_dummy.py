@@ -1,8 +1,24 @@
+import contextlib
 import pytest
+from typing import Iterator
+from unittest import TestCase
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError
-from snuba.utils.streams.dummy import DummyConsumer
+from snuba.utils.streams.dummy import DummyConsumer, DummyProducer
 from snuba.utils.streams.types import Message, Partition, Topic
+from tests.utils.streams.mixins import StreamsTestMixin
+
+
+class DummyStreamsTestCase(StreamsTestMixin, TestCase):
+    @contextlib.contextmanager
+    def get_topic(self) -> Iterator[Topic]:
+        yield Topic("test")
+
+    def get_consumer(self, group: str) -> DummyConsumer[int]:
+        return DummyConsumer()
+
+    def get_producer(self) -> DummyProducer[int]:
+        return DummyProducer()
 
 
 def test_working_offsets() -> None:

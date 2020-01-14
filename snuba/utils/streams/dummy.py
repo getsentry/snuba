@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from concurrent.futures import Future
 from datetime import datetime
 from typing import (
     Callable,
@@ -6,11 +9,12 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Union,
 )
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.producer import MessageDetails, Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
-
 
 epoch = datetime(2019, 12, 19)
 
@@ -115,3 +119,13 @@ class DummyConsumer(Consumer[TPayload]):
     def close(self, timeout: Optional[float] = None) -> None:
         self.__closed = True
         self.close_calls += 1
+
+
+class DummyProducer(Producer[TPayload]):
+    def produce(
+        self, destination: Union[Topic, Partition], payload: TPayload
+    ) -> Future[MessageDetails]:
+        raise NotImplementedError
+
+    def close(self) -> Future[None]:
+        raise NotImplementedError
