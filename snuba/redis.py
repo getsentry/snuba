@@ -1,10 +1,14 @@
 from __future__ import absolute_import
 
+from typing import Union
+
 from redis.client import StrictRedis
 from redis.exceptions import BusyLoadingError, ConnectionError
 from rediscluster import StrictRedisCluster
 
 from snuba import settings
+
+RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
 
 class RetryingStrictRedisCluster(StrictRedisCluster):
