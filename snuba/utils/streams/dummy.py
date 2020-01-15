@@ -29,7 +29,9 @@ class DummyBroker(Generic[TPayload]):
 
 
 class DummyConsumer(Consumer[TPayload]):
-    def __init__(self, broker: DummyBroker[TPayload]) -> None:
+    def __init__(
+        self, broker: DummyBroker[TPayload], enable_end_of_partition: bool = False
+    ) -> None:
         self.__broker = broker
 
         self.__subscription: Sequence[Topic] = []
@@ -41,6 +43,7 @@ class DummyConsumer(Consumer[TPayload]):
         # The offset that a the last ``EndOfPartition`` exception that was
         # raised at. To maintain consistency with the Confluent consumer, this
         # is only sent once per (partition, offset) pair.
+        self.__enable_end_of_partition = enable_end_of_partition
         self.__last_eof_at: MutableMapping[Partition, int] = {}
 
         self.commit_offsets_calls = 0
@@ -100,7 +103,10 @@ class DummyConsumer(Consumer[TPayload]):
                 payload = messages[offset]
             except IndexError:
                 if offset == len(messages):
-                    if offset > self.__last_eof_at.get(partition, 0):
+                    if (
+                        self.__enable_end_of_partition
+                        and offset > self.__last_eof_at.get(partition, 0)
+                    ):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
                 else:

@@ -22,7 +22,7 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
         yield Topic("test")
 
     def get_consumer(self, group: str) -> DummyConsumer[int]:
-        return DummyConsumer(self.broker)
+        return DummyConsumer(self.broker, enable_end_of_partition=True)
 
     def get_producer(self) -> DummyProducer[int]:
         return DummyProducer(self.broker)
