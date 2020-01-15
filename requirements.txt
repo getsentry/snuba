@@ -44,6 +44,7 @@ MarkupSafe==1.0
 mccabe==0.6.1
 more-itertools==4.2.0
 packaging==17.1
+parsimonious==0.8.1
 parso==0.2.1
 pathlib2==2.3.2
 pathtools==0.1.2
