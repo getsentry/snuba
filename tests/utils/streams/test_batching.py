@@ -54,7 +54,7 @@ class TestConsumer(object):
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
         topic = Topic("topic")
-        broker = DummyBroker({topic: [[]]})
+        broker: DummyBroker[int] = DummyBroker({topic: [[]]})
         consumer: DummyConsumer[int] = DummyConsumer(broker)
 
         worker = FakeWorker()
