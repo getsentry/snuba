@@ -25,6 +25,7 @@ class DummyBroker(Generic[TPayload]):
         self, topics: Mapping[Topic, Sequence[MutableSequence[TPayload]]]
     ) -> None:
         self.topics = topics
+        self.offsets: MutableMapping[Partition, int] = {}
 
 
 class DummyConsumer(Consumer[TPayload]):
@@ -36,7 +37,6 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
-        self.__committed_offsets: MutableMapping[Partition, int] = {}
 
         self.commit_offsets_calls = 0
         self.close_calls = 0
@@ -68,7 +68,7 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Handle offset reset more realistically.
         self.__offsets = {
-            partition: self.__committed_offsets.get(partition, 0)
+            partition: self.__broker.offsets.get(partition, 0)
             for partition in assignment
         }
 
@@ -131,7 +131,7 @@ class DummyConsumer(Consumer[TPayload]):
             raise RuntimeError("consumer is closed")
 
         offsets = {**self.__staged_offsets}
-        self.__committed_offsets.update(offsets)
+        self.__broker.offsets.update(offsets)
         self.__staged_offsets.clear()
 
         self.commit_offsets_calls += 1
