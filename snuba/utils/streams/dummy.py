@@ -49,7 +49,8 @@ class DummyConsumer(Consumer[TPayload]):
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        assert not self.__closed
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
 
         self.__subscription = topics
 
@@ -76,8 +77,15 @@ class DummyConsumer(Consumer[TPayload]):
         if on_assign is not None:
             on_assign(self.__offsets)
 
+    def unsubscribe(self) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        self.subscribe([])
+
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
-        assert not self.__closed
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
 
         # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
@@ -95,21 +103,32 @@ class DummyConsumer(Consumer[TPayload]):
         return None
 
     def tell(self) -> Mapping[Partition, int]:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
         return self.__offsets
 
     def seek(self, offsets: Mapping[Partition, int]) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
         if offsets.keys() - self.__offsets.keys():
             raise ConsumerError("cannot seek on unassigned partitions")
 
         self.__offsets.update(offsets)
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
-        assert not self.__closed
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        if offsets.keys() - self.__offsets.keys():
+            raise ConsumerError("cannot stage offsets for unassigned partitions")
 
         self.__staged_offsets.update(offsets)
 
     def commit_offsets(self) -> Mapping[Partition, int]:
-        assert not self.__closed
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
 
         offsets = {**self.__staged_offsets}
         self.__committed_offsets.update(offsets)
