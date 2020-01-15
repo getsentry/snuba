@@ -2,13 +2,13 @@ import pytest
 from typing import Any, Mapping
 
 from snuba import state
-from snuba.api.split import split_query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
+from snuba.web.split import split_query
 
 
 def setup_function(function):

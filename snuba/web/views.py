@@ -4,25 +4,16 @@ import time
 from datetime import datetime
 from typing import NamedTuple
 
-from flask import Flask, redirect, render_template, request as http_request
+from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
-from snuba.api.query import (
-    clickhouse_ro,
-    clickhouse_rw,
-    ClickhouseQueryResult,
-    parse_and_run_query,
-    RawQueryException,
-)
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -40,12 +31,16 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.query import (
+    clickhouse_ro,
+    clickhouse_rw,
+    ClickhouseQueryResult,
+    parse_and_run_query,
+    RawQueryException,
+)
 
 
 logger = logging.getLogger("snuba.api")
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
-)
 
 
 class QueryResult(NamedTuple):
@@ -94,12 +89,6 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
-
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
-    release=os.getenv("SNUBA_RELEASE"),
-)
 
 
 @application.errorhandler(BadRequest)
@@ -156,7 +145,7 @@ def send_css(path):
 
 
 @application.route("/img/<path:path>")
-@application.route("/snuba/static/img/<path:path>")
+@application.route("/snuba/web/static/img/<path:path>")
 def send_img(path):
     return application.send_static_file(os.path.join("img", path))
 
@@ -237,7 +226,7 @@ def parse_request_body(http_request):
 
 
 def validate_request_content(
-    body, schema: RequestSchema, timer, dataset: Dataset, referrer: str
+    body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
 ) -> Request:
     with sentry_sdk.start_span(
         description="validate_request_content", op="validate"
@@ -285,19 +274,48 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer):
+def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
-
-    schema = RequestSchema.build_with_extensions(
-        dataset.get_extensions(), HTTPRequestSettings
+    return format_result(
+        run_query(
+            dataset,
+            validate_request_content(
+                body,
+                RequestSchema.build_with_extensions(
+                    dataset.get_extensions(), HTTPRequestSettings
+                ),
+                timer,
+                dataset,
+                http_request.referrer,
+            ),
+            timer,
+        )
     )
-    query_result = run_query(
-        dataset,
-        validate_request_content(body, schema, timer, dataset, http_request.referrer),
-        timer,
-    )
 
+
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+    try:
+        return QueryResult(
+            {
+                **parse_and_run_query(dataset, request, timer),
+                "timing": timer.for_json(),
+            },
+            200,
+        )
+    except RawQueryException as e:
+        return QueryResult(
+            {
+                "error": {"type": e.err_type, "message": e.message, **e.meta},
+                "sql": e.sql,
+                "stats": e.stats,
+                "timing": timer.for_json(),
+            },
+            429 if e.err_type == "rate-limited" else 500,
+        )
+
+
+def format_result(result: QueryResult) -> Response:
     def json_default(obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -305,29 +323,11 @@ def dataset_query(dataset, body, timer):
             return str(obj)
         return obj
 
-    return (
-        json.dumps(query_result.result, for_json=True, default=json_default),
-        query_result.status,
+    return Response(
+        json.dumps(result.result, default=json_default),
+        result.status,
         {"Content-Type": "application/json"},
     )
-
-
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
-    try:
-        return QueryResult(parse_and_run_query(dataset, request, timer), 200)
-    except RawQueryException as e:
-        error = {
-            "type": e.err_type,
-            "message": e.message,
-        }
-        error.update(e.meta)
-        result = {
-            "error": error,
-            "sql": e.sql,
-            "stats": e.stats,
-            "timing": e.timer,
-        }
-        return QueryResult(result, 429 if e.err_type == "rate-limited" else 500)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -336,7 +336,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
 
 @application.route("/internal/sdk-stats", methods=["POST"])
 @util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer):
+def sdk_distribution(*, timer: Timer) -> Response:
     dataset = get_dataset("events")
     request = validate_request_content(
         parse_request_body(http_request),
@@ -359,17 +359,7 @@ def sdk_distribution(*, timer: Timer):
     }
 
     ensure_table_exists(dataset)
-
-    query_result = run_query(dataset, request, timer)
-    return (
-        json.dumps(
-            query_result.result,
-            for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
-        ),
-        query_result.status,
-        {"Content-Type": "application/json"},
-    )
+    return format_result(run_query(dataset, request, timer))
 
 
 @application.route("/subscriptions", methods=["POST"])
@@ -397,7 +387,7 @@ if application.debug or application.testing:
 
     _ensured = {}
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         if not force and _ensured.get(dataset, False):
             return
 
@@ -495,5 +485,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         pass

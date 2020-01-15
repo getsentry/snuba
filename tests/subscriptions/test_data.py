@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock
 
-from snuba.api.query import parse_and_run_query
 from snuba.subscriptions.data import Subscription
+from snuba.web.query import parse_and_run_query
 from tests.subscriptions import BaseSubscriptionTest
 
 
