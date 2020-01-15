@@ -13,7 +13,7 @@ from typing import (
     Union,
 )
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import MessageDetails, Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
@@ -37,6 +37,11 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
+
+        # The offset that a the last ``EndOfPartition`` exception that was
+        # raised at. To maintain consistency with the Confluent consumer, this
+        # is only sent once per (partition, offset) pair.
+        self.__last_eof_at: MutableMapping[Partition, int] = {}
 
         self.commit_offsets_calls = 0
         self.close_calls = 0
@@ -73,6 +78,7 @@ class DummyConsumer(Consumer[TPayload]):
         }
 
         self.__staged_offsets.clear()
+        self.__last_eof_at.clear()
 
         if on_assign is not None:
             on_assign(self.__offsets)
@@ -93,7 +99,11 @@ class DummyConsumer(Consumer[TPayload]):
             try:
                 payload = messages[offset]
             except IndexError:
-                if not offset == len(messages):
+                if offset == len(messages):
+                    if offset > self.__last_eof_at.get(partition, 0):
+                        self.__last_eof_at[partition] = offset
+                        raise EndOfPartition(partition, offset)
+                else:
                     raise ConsumerError("invalid offset")
             else:
                 message = Message(partition, offset, payload, epoch)
