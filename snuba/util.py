@@ -253,10 +253,13 @@ def decode_part_str(part_str: str) -> Part:
     return Part(date, int(retention_days))
 
 
-def force_bytes(s: Any) -> Any:
+def force_bytes(s: Union[bytes, str]) -> bytes:
     if isinstance(s, bytes):
         return s
-    return s.encode("utf-8", "replace")
+    elif isinstance(s, str):
+        return s.encode("utf-8", "replace")
+    else:
+        raise TypeError(f"cannot convert {type(s).__name__} to bytes")
 
 
 @contextmanager
