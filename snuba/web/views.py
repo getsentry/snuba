@@ -1,12 +1,11 @@
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import NamedTuple
 
 from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
-from uuid import uuid1
 import sentry_sdk
 import simplejson as json
 from werkzeug.exceptions import BadRequest
@@ -26,6 +25,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
+from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -91,7 +91,6 @@ application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
-
 
 
 @application.errorhandler(BadRequest)
@@ -364,12 +363,36 @@ def sdk_distribution(*, timer: Timer) -> Response:
     return format_result(run_query(dataset, request, timer))
 
 
+SUBSCRIPTION_SEPARATOR = "/"
+
+
+def build_external_subscription_id(partition_id: str, subscription_id: str) -> str:
+    return "{}{}{}".format(partition_id, SUBSCRIPTION_SEPARATOR, subscription_id)
+
+
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
-def create_subscription(*, dataset: Dataset):
-    partition = 0
-    key = uuid1().hex
+@util.time_request("subscription")
+def create_subscription(*, dataset: Dataset, timer: Timer):
+    data = parse_request_body(http_request)
+    # TODO: Add json schema and validate
+    # TODO: Check for valid queries with fields that are invalid for subscriptions.  For
+    # example date fields and aggregates.
+    partition_id, subscription = SubscriptionCreator(dataset).create(
+        data["project_id"],
+        data["conditions"],
+        data["aggregations"],
+        timedelta(minutes=data["time_window"]),
+        timedelta(minutes=data["resolution"]),
+        timer,
+    )
     return (
-        json.dumps({"subscription_id": f"{partition}/{key}"}),
+        json.dumps(
+            {
+                "subscription_id": build_external_subscription_id(
+                    partition_id, subscription.id
+                )
+            }
+        ),
         202,
         {"Content-Type": "application/json"},
     )
