@@ -31,6 +31,7 @@ from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
     clickhouse_ro,
     clickhouse_rw,
@@ -89,6 +90,8 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
+application.url_map.converters["dataset"] = DatasetConverter
+
 
 
 @application.errorhandler(BadRequest)
@@ -255,10 +258,9 @@ def unqualified_query_view(*, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<dataset_name>/query", methods=["GET", "POST"])
+@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
 @util.time_request("query")
-def dataset_query_view(*, dataset_name: str, timer: Timer):
-    dataset = get_dataset(dataset_name)
+def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -362,8 +364,8 @@ def sdk_distribution(*, timer: Timer) -> Response:
     return format_result(run_query(dataset, request, timer))
 
 
-@application.route("/subscriptions", methods=["POST"])
-def create_subscription():
+@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
+def create_subscription(*, dataset: Dataset):
     return (
         json.dumps({"subscription_id": uuid1().hex}),
         202,
@@ -371,13 +373,10 @@ def create_subscription():
     )
 
 
-@application.route("/subscriptions/<uuid>/renew", methods=["POST"])
-def renew_subscription(uuid):
-    return "ok", 202, {"Content-Type": "text/plain"}
-
-
-@application.route("/subscriptions/<uuid>", methods=["DELETE"])
-def delete_subscription(uuid):
+@application.route(
+    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
+)
+def delete_subscription(*, dataset: Dataset, partition: int, key: str):
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
@@ -404,11 +403,10 @@ if application.debug or application.testing:
 
         _ensured[dataset] = True
 
-    @application.route("/tests/<dataset_name>/insert", methods=["POST"])
-    def write(dataset_name):
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
@@ -431,9 +429,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/eventstream", methods=["POST"])
-    def eventstream(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
+    def eventstream(*, dataset: Dataset):
         ensure_table_exists(dataset)
         record = json.loads(http_request.data)
 
@@ -468,9 +465,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/drop", methods=["POST"])
-    def drop(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
+    def drop(*, dataset: Dataset):
         for statement in dataset.get_dataset_schemas().get_drop_statements():
             clickhouse_rw.execute(statement)
 
