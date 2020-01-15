@@ -8,8 +8,6 @@ from flask import Flask, Response, redirect, render_template, request as http_re
 from markdown import markdown
 from uuid import uuid1
 import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
@@ -44,9 +42,6 @@ from snuba.web.query import (
 
 
 logger = logging.getLogger("snuba.api")
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
-)
 
 
 class QueryResult(NamedTuple):
@@ -97,12 +92,6 @@ application.testing = settings.TESTING
 application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 
-
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
-    release=os.getenv("SNUBA_RELEASE"),
-)
 
 
 @application.errorhandler(BadRequest)
