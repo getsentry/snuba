@@ -19,6 +19,29 @@ from snuba.utils.streams.types import (
 logger = logging.getLogger(__name__)
 
 
+class ConsumerError(Exception):
+    """
+    Base class for exceptions that are raised during consumption.
+
+    Subclasses may extend this class to disambiguate errors that are specific
+    to their implementation.
+    """
+
+
+class EndOfPartition(ConsumerError):
+    """
+    Raised when there are no more messages to consume from the partition.
+    """
+
+    def __init__(self, partition: Partition, offset: int):
+        # The partition that the consumer has reached the end of.
+        self.partition = partition
+
+        # The next unconsumed offset in the partition (where there is currently
+        # no message.)
+        self.offset = offset
+
+
 class Consumer(Generic[TPayload], ABC):
     """
     This abstract class provides an interface for consuming messages from a
@@ -68,6 +91,33 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractmethod
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def tell(self) -> Mapping[Partition, int]:
+        """
+        Return the working offsets for all currently assigned positions.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def seek(self, offsets: Mapping[Partition, int]) -> None:
+        """
+        Update the working offsets for the provided partitions.
+
+        When using this method, it is possible to set a partition to an
+        invalid offset without an immediate error. (Examples of invalid
+        offsets include an offset that is too low and has already been
+        dropped by the broker due to data retention policies, or an offset
+        that is too high which is not yet associated with a message.) Since
+        this method only updates the local working offset (and does not
+        communicate with the broker), setting an invalid offset will cause a
+        subsequent ``poll`` call to raise an exception, even though the call
+        to ``seek`` succeeded.
+
+        If any provided partitions are not in the assignment set, an
+        exception will be raised and no offsets will be modified.
+        """
         raise NotImplementedError
 
     @abstractmethod

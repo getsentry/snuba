@@ -2,14 +2,13 @@ import pytest
 from typing import Any, Mapping
 
 from snuba import state
-from snuba.api.split import split_query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
-from snuba.views import QueryResult
 from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
+from snuba.web.split import split_query
 
 
 def setup_function(function):
@@ -42,7 +41,7 @@ def test_no_split(dataset_name: str):
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
-    request = Request(query, RequestSettings(False, False, False), {}, "tests")
+    request = Request(query, HTTPRequestSettings(), {}, "tests")
 
     do_query(events, request, None)
 
@@ -114,7 +113,7 @@ def test_col_split(
 
     request = Request(
         query,
-        RequestSettings(False, False, False),
+        HTTPRequestSettings(),
         {
             "project": {"project": 1},
             "timeseries": {

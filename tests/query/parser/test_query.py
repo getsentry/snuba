@@ -108,6 +108,18 @@ test_cases = [
             ],
         ),
     ),  # Order by with functions
+    (
+        {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[Column(None, "column1", None)],
+            condition=None,
+            groupby=[Column(None, "column1", None)],
+            having=None,
+            order_by=[OrderBy(OrderByDirection.DESC, Column(None, "column1", None))],
+        ),
+    ),  # Order and group by provided as string
 ]
 
 

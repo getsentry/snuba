@@ -17,7 +17,7 @@ class TestReplacer(BaseEventsTest):
     def setup_method(self, test_method):
         super(TestReplacer, self).setup_method(test_method)
 
-        from snuba.views import application
+        from snuba.web.views import application
 
         assert application.testing is True
 
@@ -41,7 +41,7 @@ class TestReplacer(BaseEventsTest):
         args = {
             "project": [project_id],
             "aggregations": [["count()", "", "count"]],
-            "groupby": ["issue"],
+            "groupby": ["group_id"],
         }
 
         if group_id:
@@ -223,7 +223,7 @@ class TestReplacer(BaseEventsTest):
         self.event["group_id"] = 1
         self.write_raw_events(self.event)
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "issue": 1}]
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
 
@@ -259,7 +259,7 @@ class TestReplacer(BaseEventsTest):
         self.event["group_id"] = 1
         self.write_raw_events(self.event)
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "issue": 1}]
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
 
@@ -289,7 +289,7 @@ class TestReplacer(BaseEventsTest):
         processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
-        assert self._issue_count(1) == [{"count": 1, "issue": 2}]
+        assert self._issue_count(1) == [{"count": 1, "group_id": 2}]
 
     def test_unmerge_insert(self):
         self.event["project_id"] = self.project_id
@@ -297,7 +297,7 @@ class TestReplacer(BaseEventsTest):
         self.event["primary_hash"] = "a" * 32
         self.write_raw_events(self.event)
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "issue": 1}]
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
 
@@ -328,7 +328,7 @@ class TestReplacer(BaseEventsTest):
         processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
-        assert self._issue_count(self.project_id) == [{"count": 1, "issue": 2}]
+        assert self._issue_count(self.project_id) == [{"count": 1, "group_id": 2}]
 
     def test_delete_tag_promoted_insert(self):
         self.event["project_id"] = self.project_id
@@ -350,14 +350,14 @@ class TestReplacer(BaseEventsTest):
                             "conditions": [["tags[browser.name]", "=", "foo"]]
                             if not total
                             else [],
-                            "groupby": ["issue"],
+                            "groupby": ["group_id"],
                         }
                     ),
                 ).data
             )["data"]
 
-        assert _issue_count() == [{"count": 1, "issue": 1}]
-        assert _issue_count(total=True) == [{"count": 1, "issue": 1}]
+        assert _issue_count() == [{"count": 1, "group_id": 1}]
+        assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
         timestamp = datetime.now(tz=pytz.utc)
 
@@ -385,7 +385,7 @@ class TestReplacer(BaseEventsTest):
         self.replacer.flush_batch([processed])
 
         assert _issue_count() == []
-        assert _issue_count(total=True) == [{"count": 1, "issue": 1}]
+        assert _issue_count(total=True) == [{"count": 1, "group_id": 1}]
 
     def test_query_time_flags(self):
         project_ids = [1, 2]

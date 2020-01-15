@@ -259,7 +259,7 @@ class TestApi(BaseApiTest):
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -272,8 +272,8 @@ class TestApi(BaseApiTest):
                     {
                         "project": 1,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "=", 100]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "=", 100]],
                     }
                 ),
             ).data
@@ -288,8 +288,8 @@ class TestApi(BaseApiTest):
                     {
                         "project": 1,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "IN", [100, 200]]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "IN", [100, 200]]],
                     }
                 ),
             ).data
@@ -415,13 +415,13 @@ class TestApi(BaseApiTest):
                     {
                         "project": 2,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [[], ["issue", "IN", self.group_ids[:5]]],
+                        "groupby": "group_id",
+                        "conditions": [[], ["group_id", "IN", self.group_ids[:5]]],
                     }
                 ),
             ).data
         )
-        assert set([d["issue"] for d in result["data"]]) == set([self.group_ids[4]])
+        assert set([d["group_id"] for d in result["data"]]) == set([self.group_ids[4]])
 
         result = json.loads(
             self.app.post(
@@ -642,7 +642,7 @@ class TestApi(BaseApiTest):
         settings.MAX_PREWHERE_CONDITIONS = 1
         prewhere_keys = [
             "event_id",
-            "issue",
+            "group_id",
             "tags[sentry:release]",
             "message",
             "environment",
@@ -749,7 +749,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": "project_id",
-                        "aggregations": [["topK(4)", "issue", "aggregate"]],
+                        "aggregations": [["topK(4)", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -767,7 +767,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": "project_id",
-                        "aggregations": [["uniq", "issue", "aggregate"]],
+                        "aggregations": [["uniq", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -781,7 +781,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": ["project_id", "time"],
-                        "aggregations": [["uniq", "issue", "aggregate"]],
+                        "aggregations": [["uniq", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -981,15 +981,15 @@ class TestApi(BaseApiTest):
                     {
                         "project": 2,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "=", 0], ["issue", "=", 1]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "=", 0], ["group_id", "=", 1]],
                     }
                 ),
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert "issue = 0" in response["sql"]
-        assert "issue = 1" in response["sql"]
+        assert "group_id = 0" in response["sql"]
+        assert "group_id = 1" in response["sql"]
 
     def test_sampling_expansion(self):
         response = json.loads(
@@ -1096,7 +1096,7 @@ class TestApi(BaseApiTest):
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -1256,7 +1256,7 @@ class TestApi(BaseApiTest):
             "project": project_id,
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
-            "conditions": [["issue", "=", group_id]],
+            "conditions": [["group_id", "=", group_id]],
         }
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
         assert result["data"] == [{"count": 1, "project_id": project_id}]
@@ -1667,8 +1667,8 @@ class TestApi(BaseApiTest):
                     "project": [2],
                     "selected_columns": ["timestamp"],
                     "conditions": [
-                        ["issue", "IN", [2, 1]],
-                        [["isNull", ["issue"]], "=", 1],
+                        ["group_id", "IN", [2, 1]],
+                        [["isNull", ["group_id"]], "=", 1],
                     ],
                     "debug": True,
                 }
@@ -1682,7 +1682,7 @@ class TestApi(BaseApiTest):
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -1693,7 +1693,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
         expected_uuid = uuid.uuid1()
 
-        with patch("snuba.views.uuid1") as uuid4:
+        with patch("snuba.web.views.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
             resp = self.app.post("/subscriptions")
 

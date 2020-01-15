@@ -103,6 +103,7 @@ class TableWriter:
             lambda row: json.dumps(row, default=default).encode("utf-8"),
             options,
             table_name,
+            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
     def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:

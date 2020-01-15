@@ -1,27 +1,31 @@
 import logging
 
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
 
 from snuba import settings, state
-from snuba.api.split import split_query
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
+from snuba.redis import redis_client
+from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
     PROJECT_RATE_LIMIT_NAME,
 )
 from snuba.util import create_metrics, force_bytes
+from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")
@@ -34,34 +38,29 @@ ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 class RawQueryException(Exception):
     def __init__(
-        self,
-        err_type: str,
-        message: str,
-        stats: Mapping[str, Any],
-        timer: Timer,
-        sql: str,
-        **meta
+        self, err_type: str, message: str, stats: Mapping[str, Any], sql: str, **meta
     ):
         self.err_type = err_type
         self.message = message
         self.stats = stats
-        self.timer = timer
         self.sql = sql
         self.meta = meta
+
+
+cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 
 
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
-    client: ClickhousePool,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
-    stats: MutableMapping[str, Any] = None,
+    stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
-    from snuba.clickhouse.native import NativeDriverReader
 
     stats = stats or {}
     use_cache, use_deduper, uc_max = state.get_configs(
@@ -88,7 +87,7 @@ def raw_query(
     with state.deduper(query_id if use_deduper else None) as is_dupe:
         timer.mark("dedupe_wait")
 
-        result = state.get_result(query_id) if use_cache else None
+        result = cache.get(query_id) if use_cache else None
         timer.mark("cache_get")
 
         stats.update(
@@ -132,7 +131,7 @@ def raw_query(
                         query_settings["max_threads"] = 1
 
                     try:
-                        result = NativeDriverReader(client).execute(
+                        result = reader.execute(
                             query,
                             query_settings,
                             # All queries should already be deduplicated at this point
@@ -151,7 +150,7 @@ def raw_query(
                         )
 
                         if use_cache:
-                            state.set_result(query_id, result)
+                            cache.set(query_id, result)
                             timer.mark("cache_set")
 
                     except BaseException as ex:
@@ -170,7 +169,6 @@ def raw_query(
                             err_type=err_type,
                             message=error,
                             stats=stats,
-                            timer=timer,
                             sql=sql,
                             **meta,
                         )
@@ -182,7 +180,6 @@ def raw_query(
                     err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
-                    timer=timer,
                     sql=sql,
                     detail=str(ex),
                 )
@@ -190,8 +187,6 @@ def raw_query(
     stats = log_query_and_update_stats(
         request, sql, timer, stats, "success", query_settings
     )
-
-    result["timing"] = timer
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result["stats"] = stats
@@ -296,7 +291,9 @@ def parse_and_run_query(
             )
         except Exception:
             logger.exception("Failed to format ast query")
-        result = raw_query(request, query, clickhouse_ro, timer, stats)
+        result = raw_query(
+            request, query, NativeDriverReader(clickhouse_ro), timer, stats
+        )
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
