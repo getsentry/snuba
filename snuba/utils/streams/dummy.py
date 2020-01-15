@@ -4,6 +4,7 @@ from concurrent.futures import Future
 from datetime import datetime
 from typing import (
     Callable,
+    Generic,
     Mapping,
     MutableMapping,
     MutableSequence,
@@ -19,12 +20,16 @@ from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 epoch = datetime(2019, 12, 19)
 
 
+class DummyBroker(Generic[TPayload]):
+    def __init__(
+        self, topics: Mapping[Topic, Sequence[MutableSequence[TPayload]]]
+    ) -> None:
+        self.topics = topics
+
+
 class DummyConsumer(Consumer[TPayload]):
-    def __init__(self, messages: Mapping[Partition, Sequence[TPayload]]) -> None:
-        # TODO: The message data needs to include the timestamp.
-        self.__messages: Mapping[Partition, MutableSequence[TPayload]] = {
-            partition: list(payloads) for partition, payloads in messages.items()
-        }
+    def __init__(self, broker: DummyBroker[TPayload]) -> None:
+        self.__broker = broker
 
         self.__subscription: Sequence[Topic] = []
         self.__assignment: Optional[Sequence[Partition]] = None
@@ -38,10 +43,6 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__closed = False
 
-    def extend(self, messages: Mapping[Partition, Sequence[TPayload]]) -> None:
-        for partition, payloads in messages.items():
-            self.__messages[partition].extend(payloads)
-
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -52,11 +53,12 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__subscription = topics
 
-        assignment: Sequence[Partition] = [
-            partition
-            for partition in self.__messages
-            if any(partition in topic for topic in topics)
-        ]
+        assignment: MutableSequence[Partition] = []
+        for topic, partitions in self.__broker.topics.items():
+            if topic not in topics:
+                continue
+
+            assignment.extend([Partition(topic, i) for i in range(len(partitions))])
 
         if self.__assignment is not None and on_revoke is not None:
             on_revoke(self.__assignment)
@@ -79,7 +81,7 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
-            messages = self.__messages[partition]
+            messages = self.__broker.topics[partition.topic][partition.index]
             try:
                 payload = messages[offset]
             except IndexError:
@@ -122,10 +124,37 @@ class DummyConsumer(Consumer[TPayload]):
 
 
 class DummyProducer(Producer[TPayload]):
+    def __init__(self, broker: DummyBroker[TPayload]) -> None:
+        self.__broker = broker
+
+        self.__closed = False
+
     def produce(
         self, destination: Union[Topic, Partition], payload: TPayload
     ) -> Future[MessageDetails]:
-        raise NotImplementedError
+        assert not self.__closed
+
+        partition: Partition
+        if isinstance(destination, Topic):
+            partition = Partition(destination, 0)  # TODO: Randomize?
+        elif isinstance(destination, Partition):
+            partition = destination
+        else:
+            raise TypeError("invalid destination type")
+
+        messages = self.__broker.topics[partition.topic][partition.index]
+        offset = len(messages)
+        messages.append(payload)
+
+        future: Future[MessageDetails] = Future()
+        future.set_running_or_notify_cancel()
+        future.set_result(MessageDetails(partition, offset))
+        return future
 
     def close(self) -> Future[None]:
-        raise NotImplementedError
+        self.__closed = True
+
+        future: Future[None] = Future()
+        future.set_running_or_notify_cancel()
+        future.set_result(None)
+        return future

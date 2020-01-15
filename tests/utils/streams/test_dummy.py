@@ -4,28 +4,36 @@ from typing import Iterator
 from unittest import TestCase
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError
-from snuba.utils.streams.dummy import DummyConsumer, DummyProducer
+from snuba.utils.streams.dummy import (
+    DummyBroker,
+    DummyConsumer,
+    DummyProducer,
+)
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 
 
 class DummyStreamsTestCase(StreamsTestMixin, TestCase):
+
+    broker: DummyBroker[int] = DummyBroker({Topic("test"): [[]]})
+
     @contextlib.contextmanager
     def get_topic(self) -> Iterator[Topic]:
         yield Topic("test")
 
     def get_consumer(self, group: str) -> DummyConsumer[int]:
-        return DummyConsumer()
+        return DummyConsumer(self.broker)
 
     def get_producer(self) -> DummyProducer[int]:
-        return DummyProducer()
+        return DummyProducer(self.broker)
 
 
 def test_working_offsets() -> None:
     topic = Topic("example")
     partition = Partition(topic, 0)
+    broker = DummyBroker({topic: [[0]]})
 
-    consumer: Consumer[int] = DummyConsumer({partition: [0]})
+    consumer: Consumer[int] = DummyConsumer(broker)
     consumer.subscribe([topic])
 
     # NOTE: This will eventually need to be controlled by a generalized
