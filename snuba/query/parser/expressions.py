@@ -148,7 +148,7 @@ def parse_aggregation(
 ) -> Expression:
     """
     Aggregations, unfortunately, support both Snuba syntax and a subset
-    of Clickhosue syntax. In order to preserve this behavior and still build
+    of ClickHosue syntax. In order to preserve this behavior and still build
     a meaningful AST when parsing the query, we need to do some parsing of
     the clickhouse expression. (not that we should support this, but it is
     used in production).
