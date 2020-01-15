@@ -25,7 +25,10 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
-from snuba.subscriptions.subscription import SubscriptionCreator
+from snuba.subscriptions.subscription import (
+    InvalidSubscriptionError,
+    SubscriptionCreator,
+)
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -364,6 +367,16 @@ def sdk_distribution(*, timer: Timer) -> Response:
 
 
 SUBSCRIPTION_SEPARATOR = "/"
+
+
+@application.errorhandler(InvalidSubscriptionError)
+def handle_subscription_error(exception: InvalidSubscriptionError):
+    data = {"error": {"type": "subscription", "message": str(exception)}}
+    return (
+        json.dumps(data, indent=4),
+        400,
+        {"Content-Type": "application/json"},
+    )
 
 
 def build_external_subscription_id(partition_id: str, subscription_id: str) -> str:

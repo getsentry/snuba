@@ -44,7 +44,7 @@ class Subscription:
         )
         extra_conditions = []
         if offset is not None:
-            extra_conditions = [["ifnull", ["offset", 0]], "<=", offset]
+            extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
         return validate_request_content(
             {
                 "project": self.project_id,
