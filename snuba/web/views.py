@@ -366,8 +366,10 @@ def sdk_distribution(*, timer: Timer) -> Response:
 
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 def create_subscription(*, dataset: Dataset):
+    partition = 0
+    key = uuid1().hex
     return (
-        json.dumps({"subscription_id": uuid1().hex}),
+        json.dumps({"subscription_id": f"{partition}/{key}"}),
         202,
         {"Content-Type": "application/json"},
     )

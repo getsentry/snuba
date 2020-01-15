@@ -1699,7 +1699,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
         assert resp.status_code == 202
         data = json.loads(resp.data)
-        assert data == {"subscription_id": expected_uuid.hex}  # TODO
+        assert data == {"subscription_id": f"0/{expected_uuid.hex}"}  # TODO
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
