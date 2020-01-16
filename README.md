@@ -38,6 +38,7 @@ A quick way to get these services running is to set up sentry, then use:
     workon snuba
     make install-python-dependencies
     make install-librdkafka
+    make setup-git
 
     # Run API server
     snuba api
