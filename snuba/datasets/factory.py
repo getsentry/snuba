@@ -62,9 +62,10 @@ def get_dataset(name: str) -> Dataset:
 
 
 def get_dataset_name(dataset: Dataset) -> str:
-    if dataset not in DATASETS_NAME_LOOKUP:
-        raise InvalidDatasetError("Dataset name not specified")
-    return DATASETS_NAME_LOOKUP[dataset]
+    try:
+        return DATASETS_NAME_LOOKUP[dataset]
+    except KeyError as error:
+        raise InvalidDatasetError("Dataset name not specified") from error
 
 
 def get_enabled_dataset_names() -> Sequence[str]:
