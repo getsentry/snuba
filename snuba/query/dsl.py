@@ -11,17 +11,17 @@ def literals_tuple(alias: Optional[str], literals: Sequence[Literal]):
 
 
 # arithmetic function
-def plus(lhs: Expression, rhs: Expression, alias: Optional[str]):
+def plus(lhs: Expression, rhs: Expression, alias: Optional[str] = None):
     return FunctionCall(alias, "plus", (lhs, rhs))
 
 
-def minus(lhs: Expression, rhs: Expression, alias: Optional[str]):
+def minus(lhs: Expression, rhs: Expression, alias: Optional[str] = None):
     return FunctionCall(alias, "minus", (lhs, rhs))
 
 
-def multiply(lhs: Expression, rhs: Expression, alias: Optional[str]):
+def multiply(lhs: Expression, rhs: Expression, alias: Optional[str] = None):
     return FunctionCall(alias, "multiply", (lhs, rhs))
 
 
-def div(lhs: Expression, rhs: Expression, alias: Optional[str]):
+def div(lhs: Expression, rhs: Expression, alias: Optional[str] = None):
     return FunctionCall(alias, "div", (lhs, rhs))
