@@ -24,6 +24,7 @@ from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     SummingMergeTreeSchema,
     MaterializedViewSchema,
+    MigrationSchemaColumn,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
@@ -39,6 +40,52 @@ WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
 WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
+
+
+def outcomes_write_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+    if "size" not in current_schema:
+        ret.append(f"ALTER TABLE {clickhouse_table} ADD COLUMN size Nullable(UInt32)")
+
+    return ret
+
+
+def outcomes_read_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+    if "bytes_received" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received Nullable(UInt64)"
+        )
+
+    return ret
+
+
+def outcomes_mv_migrations(
+    clickhouse_table: str,
+    current_schema: Mapping[str, MigrationSchemaColumn],
+    table_definition: str = None,
+) -> Sequence[str]:
+    # Add/remove known migrations
+    ret = []
+
+    if table_definition is None:
+        return ret
+
+    if "bytes_received" not in current_schema:
+        ret.extend(
+            (
+                f"""RENAME TABLE {clickhouse_table} TO old_{clickhouse_table}""",
+                table_definition,
+                f"""DETACH TABLE old_{clickhouse_table}""",
+            )
+        )
+    return ret
 
 
 class OutcomesProcessor(MessageProcessor):
