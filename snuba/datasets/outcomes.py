@@ -48,7 +48,7 @@ def outcomes_write_migrations(
     # Add/remove known migrations
     ret = []
     if "size" not in current_schema:
-        ret.append(f"ALTER TABLE {clickhouse_table} ADD COLUMN size UInt32")
+        ret.append(f"ALTER TABLE {clickhouse_table} ADD COLUMN size Nullable(UInt32)")
 
     return ret
 
@@ -59,7 +59,9 @@ def outcomes_read_migrations(
     # Add/remove known migrations
     ret = []
     if "bytes_received" not in current_schema:
-        ret.append(f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received UInt64")
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN bytes_received Nullable(UInt64)"
+        )
 
     return ret
 
