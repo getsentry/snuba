@@ -44,7 +44,6 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
-                ("size", UInt(32)),
             ]
         )
 

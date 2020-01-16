@@ -25,9 +25,6 @@ class DatasetSchemas(object):
     def get_read_schema(self) -> Schema:
         return self.__read_schema
 
-    def get_intermediary_schemas(self) -> Sequence[Schema]:
-        return self.__intermediary_schemas
-
     def __get_unique_schemas(self) -> Sequence[Schema]:
         unique_schemas: List[Schema] = []
 
