@@ -18,7 +18,13 @@ from typing import (
     Union,
 )
 
-from confluent_kafka import OFFSET_BEGINNING, OFFSET_END, OFFSET_INVALID, OFFSET_STORED
+from confluent_kafka import (
+    OFFSET_BEGINNING,
+    OFFSET_END,
+    OFFSET_INVALID,
+    OFFSET_STORED,
+    TIMESTAMP_NOT_AVAILABLE,
+)
 from confluent_kafka import Consumer as ConfluentConsumer
 from confluent_kafka import KafkaError
 from confluent_kafka import Message as ConfluentMessage
@@ -29,7 +35,7 @@ from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import MessageDetails, Producer
+from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
@@ -681,23 +687,33 @@ class KafkaProducer(Producer[TPayload]):
 
     def __delivery_callback(
         self,
-        future: Future[MessageDetails],
+        future: Future[Message[TPayload]],
+        payload: TPayload,
         error: KafkaError,
         message: ConfluentMessage,
     ) -> None:
         if error is not None:
             future.set_exception(TransportError(error))
         else:
-            future.set_result(
-                MessageDetails(
-                    Partition(Topic(message.topic()), message.partition()),
-                    message.offset(),
+            try:
+                timestamp_type, timestamp_value = message.timestamp()
+                if timestamp_type is TIMESTAMP_NOT_AVAILABLE:
+                    raise ValueError("timestamp not available")
+
+                future.set_result(
+                    Message(
+                        Partition(Topic(message.topic()), message.partition()),
+                        message.offset(),
+                        payload,
+                        datetime.utcfromtimestamp(timestamp_value / 1000.0),
+                    )
                 )
-            )
+            except Exception as error:
+                future.set_exception(error)
 
     def produce(
         self, destination: Union[Topic, Partition], payload: TPayload
-    ) -> Future[MessageDetails]:
+    ) -> Future[Message[TPayload]]:
         if self.__shutdown_requested.is_set():
             raise RuntimeError("producer has been closed")
 
@@ -714,12 +730,12 @@ class KafkaProducer(Producer[TPayload]):
 
         encoded = self.__codec.encode(payload)
 
-        future: Future[MessageDetails] = Future()
+        future: Future[Message[TPayload]] = Future()
         future.set_running_or_notify_cancel()
         produce(
             value=encoded.value,
             key=encoded.key,
-            on_delivery=partial(self.__delivery_callback, future),
+            on_delivery=partial(self.__delivery_callback, future, payload),
         )
         return future
 

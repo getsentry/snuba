@@ -2,21 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from concurrent.futures import Future
-from typing import Generic, NamedTuple, Union
+from typing import Generic, Union
 
-from snuba.utils.streams.types import Partition, TPayload, Topic
-
-
-class MessageDetails(NamedTuple):
-    partition: Partition
-    offset: int
+from snuba.utils.streams.types import Message, Partition, TPayload, Topic
 
 
 class Producer(Generic[TPayload], ABC):
     @abstractmethod
     def produce(
         self, destination: Union[Topic, Partition], payload: TPayload
-    ) -> Future[MessageDetails]:
+    ) -> Future[Message[TPayload]]:
         """
         Produce to a topic or partition.
         """

@@ -15,7 +15,7 @@ from typing import (
 )
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import MessageDetails, Producer
+from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 epoch = datetime(2019, 12, 19)
@@ -185,7 +185,7 @@ class DummyProducer(Producer[TPayload]):
 
     def produce(
         self, destination: Union[Topic, Partition], payload: TPayload
-    ) -> Future[MessageDetails]:
+    ) -> Future[Message[TPayload]]:
         assert not self.__closed
 
         partition: Partition
@@ -200,9 +200,9 @@ class DummyProducer(Producer[TPayload]):
         offset = len(messages)
         messages.append(payload)
 
-        future: Future[MessageDetails] = Future()
+        future: Future[Message[TPayload]] = Future()
         future.set_running_or_notify_cancel()
-        future.set_result(MessageDetails(partition, offset))
+        future.set_result(Message(partition, offset, payload, epoch))
         return future
 
     def close(self) -> Future[None]:

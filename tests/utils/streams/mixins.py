@@ -7,7 +7,7 @@ from typing import ContextManager, Mapping, Optional, Sequence
 import pytest
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
-from snuba.utils.streams.producer import MessageDetails, Producer
+from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.assertions import assert_changes, assert_does_not_change
 
@@ -30,7 +30,7 @@ class StreamsTestMixin(ABC):
 
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                messages: Sequence[MessageDetails] = [
+                messages: Sequence[Message[int]] = [
                     future.result(timeout=5.0)
                     for future in [producer.produce(topic, i) for i in range(2)]
                 ]
@@ -163,12 +163,16 @@ class StreamsTestMixin(ABC):
     def test_working_offsets(self) -> None:
         with self.get_topic() as topic:
             with closing(self.get_producer()) as producer:
-                (partition, offset) = producer.produce(topic, 0).result(timeout=5.0)
+                messages = [producer.produce(topic, 0).result(5.0)]
 
             def on_assign(partitions: Mapping[Partition, int]) -> None:
                 # NOTE: This will eventually need to be controlled by a generalized
                 # consumer auto offset reset setting.
-                assert partitions == consumer.tell() == {partition: offset}
+                assert (
+                    partitions
+                    == consumer.tell()
+                    == {messages[0].partition: messages[0].offset}
+                )
 
             consumer = self.get_consumer("group")
             consumer.subscribe([topic], on_assign=on_assign)
@@ -182,59 +186,61 @@ class StreamsTestMixin(ABC):
             else:
                 raise Exception("assignment never received")
 
-            assert isinstance(message, Message)
-            assert message.offset == offset
+            assert message == messages[0]
 
             # The first call to ``poll`` should raise ``EndOfPartition``. It
             # should be otherwise be safe to try to read the first missing
             # offset (index) in the partition.
             with assert_does_not_change(
-                consumer.tell, {partition: message.get_next_offset()}
+                consumer.tell, {message.partition: message.get_next_offset()}
             ), pytest.raises(EndOfPartition):
                 consumer.poll(1.0) is None
 
             # It should be otherwise be safe to try to read the first missing
             # offset (index) in the partition.
             with assert_does_not_change(
-                consumer.tell, {partition: message.get_next_offset()}
+                consumer.tell, {message.partition: message.get_next_offset()}
             ):
                 assert consumer.poll(1.0) is None
 
             with assert_changes(
                 consumer.tell,
-                {partition: message.get_next_offset()},
-                {partition: offset},
+                {message.partition: message.get_next_offset()},
+                {message.partition: message.offset},
             ):
-                consumer.seek({partition: offset})
+                consumer.seek({message.partition: message.offset})
 
-            message = consumer.poll(1.0)
-            assert isinstance(message, Message)
-            assert message.offset == offset
+            with assert_changes(
+                consumer.tell,
+                {message.partition: message.offset},
+                {message.partition: message.get_next_offset()},
+            ):
+                assert consumer.poll(1.0) == messages[0]
 
             # Seeking beyond the first missing index should work but subsequent
             # reads should error. (We don't know if this offset is valid or not
             # until we try to fetch a message.)
             with assert_changes(
                 consumer.tell,
-                {partition: message.get_next_offset()},
-                {partition: message.get_next_offset() + 1},
+                {message.partition: message.get_next_offset()},
+                {message.partition: message.get_next_offset() + 1},
             ):
-                consumer.seek({partition: message.get_next_offset() + 1})
+                consumer.seek({message.partition: message.get_next_offset() + 1})
 
             # Offsets should not be advanced after a failed poll.
             with assert_does_not_change(
-                consumer.tell, {partition: message.get_next_offset() + 1}
+                consumer.tell, {message.partition: message.get_next_offset() + 1}
             ), pytest.raises(ConsumerError):
                 consumer.poll(1.0)
 
             # Trying to seek on an unassigned partition should error.
             with assert_does_not_change(
-                consumer.tell, {partition: message.get_next_offset() + 1}
+                consumer.tell, {message.partition: message.get_next_offset() + 1}
             ), pytest.raises(ConsumerError):
-                consumer.seek({partition: 0, Partition(topic, -1): 0})
+                consumer.seek({message.partition: 0, Partition(topic, -1): 0})
 
             # Trying to seek to a negative offset should error.
             with assert_does_not_change(
-                consumer.tell, {partition: message.get_next_offset() + 1}
+                consumer.tell, {message.partition: message.get_next_offset() + 1}
             ), pytest.raises(ConsumerError):
-                consumer.seek({partition: -1})
+                consumer.seek({message.partition: -1})
