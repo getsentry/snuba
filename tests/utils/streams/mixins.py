@@ -165,8 +165,6 @@ class StreamsTestMixin(ABC):
                 (partition, offset) = producer.produce(topic, 0).result(timeout=5.0)
 
             def on_assign(partitions: Mapping[Partition, int]) -> None:
-                return
-
                 # NOTE: This will eventually need to be controlled by a generalized
                 # consumer auto offset reset setting.
                 assert partitions == consumer.tell() == {partition: offset}
