@@ -22,7 +22,7 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
         yield Topic("test")
 
     def get_consumer(self, group: str) -> DummyConsumer[int]:
-        return DummyConsumer(self.broker, enable_end_of_partition=True)
+        return DummyConsumer(self.broker, group, enable_end_of_partition=True)
 
     def get_producer(self) -> DummyProducer[int]:
         return DummyProducer(self.broker)
@@ -33,7 +33,7 @@ def test_working_offsets() -> None:
     partition = Partition(topic, 0)
     broker = DummyBroker({topic: [[0]]})
 
-    consumer: Consumer[int] = DummyConsumer(broker)
+    consumer: Consumer[int] = DummyConsumer(broker, "group")
     consumer.subscribe([topic])
 
     # NOTE: This will eventually need to be controlled by a generalized

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from concurrent.futures import Future
 from datetime import datetime
 from typing import (
@@ -25,14 +26,20 @@ class DummyBroker(Generic[TPayload]):
         self, topics: Mapping[Topic, Sequence[MutableSequence[TPayload]]]
     ) -> None:
         self.topics = topics
-        self.offsets: MutableMapping[Partition, int] = {}
+        self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(
+            dict
+        )
 
 
 class DummyConsumer(Consumer[TPayload]):
     def __init__(
-        self, broker: DummyBroker[TPayload], enable_end_of_partition: bool = False
+        self,
+        broker: DummyBroker[TPayload],
+        group: str,
+        enable_end_of_partition: bool = False,
     ) -> None:
         self.__broker = broker
+        self.__group = group
 
         self.__subscription: Sequence[Topic] = []
         self.__assignment: Optional[Sequence[Partition]] = None
@@ -76,7 +83,7 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Handle offset reset more realistically.
         self.__offsets = {
-            partition: self.__broker.offsets.get(partition, 0)
+            partition: self.__broker.offsets[self.__group].get(partition, 0)
             for partition in assignment
         }
 
@@ -147,7 +154,7 @@ class DummyConsumer(Consumer[TPayload]):
             raise RuntimeError("consumer is closed")
 
         offsets = {**self.__staged_offsets}
-        self.__broker.offsets.update(offsets)
+        self.__broker.offsets[self.__group].update(offsets)
         self.__staged_offsets.clear()
 
         self.commit_offsets_calls += 1

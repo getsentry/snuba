@@ -11,7 +11,7 @@ def test_tick_consumer() -> None:
     topic = Topic("messages")
 
     inner_consumer: Consumer[int] = DummyConsumer(
-        DummyBroker({topic: [[0, 1, 2], [0]]})
+        DummyBroker({topic: [[0, 1, 2], [0]]}), "group",
     )
 
     consumer = TickConsumer(inner_consumer)

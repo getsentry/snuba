@@ -29,7 +29,9 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 class TestConsumer(object):
     def test_batch_size(self) -> None:
         topic = Topic("topic")
-        consumer: DummyConsumer[int] = DummyConsumer(DummyBroker({topic: [[1, 2, 3]]}))
+        consumer: DummyConsumer[int] = DummyConsumer(
+            DummyBroker({topic: [[1, 2, 3]]}), "group"
+        )
 
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
@@ -55,7 +57,7 @@ class TestConsumer(object):
     def test_batch_time(self, mock_time: Any) -> None:
         topic = Topic("topic")
         broker: DummyBroker[int] = DummyBroker({topic: [[]]})
-        consumer: DummyConsumer[int] = DummyConsumer(broker)
+        consumer: DummyConsumer[int] = DummyConsumer(broker, " group")
 
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
