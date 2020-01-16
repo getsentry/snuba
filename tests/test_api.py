@@ -24,7 +24,7 @@ class TestApi(BaseApiTest):
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
-        self.environments = [u"prød", "test"]  # 2 environments
+        self.environments = ["prød", "test"]  # 2 environments
         self.platforms = ["a", "b", "c", "d", "e", "f"]  # 6 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -1084,12 +1084,12 @@ class TestApi(BaseApiTest):
                         "granularity": 3600,
                         "groupby": ["environment"],
                         "aggregations": [["count()", "", "count"]],
-                        "conditions": [["environment", "IN", [u"prød"]]],
+                        "conditions": [["environment", "IN", ["prød"]]],
                     }
                 ),
             ).data
         )
-        assert result["data"][0] == {"environment": u"prød", "count": 90}
+        assert result["data"][0] == {"environment": "prød", "count": 90}
 
     def test_query_timing(self):
         result = json.loads(
@@ -1204,7 +1204,7 @@ class TestApi(BaseApiTest):
 
         # all `test` events first as we sorted DESC by (the prefix of) environment
         assert all(d["environment"] == "test" for d in result["data"][:90])
-        assert all(d["environment"] == u"prød" for d in result["data"][90:])
+        assert all(d["environment"] == "prød" for d in result["data"][90:])
 
         # within a value of environment, timestamps should be sorted ascending
         test_timestamps = [d["time"] for d in result["data"][:90]]

@@ -120,7 +120,10 @@ class TestOutcomesApi(BaseApiTest):
             data=json.dumps(
                 {
                     "dataset": "outcomes",
-                    "aggregations": [["sum", "times_seen", "sum_times"], ["sum", "bytes_received", "sum_bytes"]],
+                    "aggregations": [
+                        ["sum", "times_seen", "sum_times"],
+                        ["sum", "bytes_received", "sum_bytes"],
+                    ],
                     "from_date": from_date,
                     "selected_columns": [],
                     "to_date": to_date,
