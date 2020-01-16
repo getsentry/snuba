@@ -1695,20 +1695,14 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
         with patch("snuba.web.views.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
-            resp = self.app.post("/subscriptions")
+            resp = self.app.post("/events/subscriptions")
 
         assert resp.status_code == 202
         data = json.loads(resp.data)
-        assert data == {"subscription_id": expected_uuid.hex}
-
-
-class TestRenewSubscriptionApi(BaseApiTest):
-    def test(self):
-        resp = self.app.post("/subscriptions/{}/renew".format(uuid.uuid4().hex))
-        assert resp.status_code == 202
+        assert data == {"subscription_id": f"0/{expected_uuid.hex}"}  # TODO
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
     def test(self):
-        resp = self.app.delete("/subscriptions/{}".format(uuid.uuid4().hex))
+        resp = self.app.delete(f"/events/subscriptions/1/{uuid.uuid4().hex}")
         assert resp.status_code == 202
