@@ -131,12 +131,22 @@ class DummyConsumer(Consumer[TPayload]):
 
         return self.__offsets
 
+    def __validate_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        invalid_offsets: Mapping[Partition, int] = {
+            partition: offset for partition, offset in offsets.items() if offset < 0
+        }
+
+        if invalid_offsets:
+            raise ConsumerError(f"invalid offsets: {invalid_offsets!r}")
+
     def seek(self, offsets: Mapping[Partition, int]) -> None:
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
         if offsets.keys() - self.__offsets.keys():
             raise ConsumerError("cannot seek on unassigned partitions")
+
+        self.__validate_offsets(offsets)
 
         self.__offsets.update(offsets)
 
@@ -146,6 +156,8 @@ class DummyConsumer(Consumer[TPayload]):
 
         if offsets.keys() - self.__offsets.keys():
             raise ConsumerError("cannot stage offsets for unassigned partitions")
+
+        self.__validate_offsets(offsets)
 
         self.__staged_offsets.update(offsets)
 

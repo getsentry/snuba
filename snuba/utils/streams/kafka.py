@@ -379,7 +379,17 @@ class KafkaConsumer(Consumer[TPayload]):
 
         return self.__offsets
 
+    def __validate_offsets(self, offsets: Mapping[Partition, int]) -> None:
+        invalid_offsets: Mapping[Partition, int] = {
+            partition: offset for partition, offset in offsets.items() if offset < 0
+        }
+
+        if invalid_offsets:
+            raise ConsumerError(f"invalid offsets: {invalid_offsets!r}")
+
     def __seek(self, offsets: Mapping[Partition, int]) -> None:
+        self.__validate_offsets(offsets)
+
         if self.__state is KafkaConsumerState.ASSIGNING:
             # Calling ``seek`` on the Confluent consumer from an assignment
             # callback will throw an "Erroneous state" error. Instead,
@@ -464,6 +474,8 @@ class KafkaConsumer(Consumer[TPayload]):
 
         if offsets.keys() - self.__offsets.keys():
             raise ConsumerError("cannot stage offsets for unassigned partitions")
+
+        self.__validate_offsets(offsets)
 
         # TODO: Maybe log a warning if these offsets exceed the current
         # offsets, since that's probably a side effect of an incorrect usage

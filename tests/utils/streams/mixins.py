@@ -222,3 +222,9 @@ class StreamsTestMixin(ABC):
 
             # ``seek`` should be atomic -- either all updates are applied or none are.
             assert consumer.tell() == {partition: message.get_next_offset() + 1}
+
+            # Trying to seek to a negative offset should error.
+            with pytest.raises(ConsumerError):
+                consumer.seek({partition: -1})
+
+            assert consumer.tell() == {partition: message.get_next_offset() + 1}
