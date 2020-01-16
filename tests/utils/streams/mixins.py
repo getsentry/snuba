@@ -157,3 +157,59 @@ class StreamsTestMixin(ABC):
                 raise AssertionError("expected EndOfPartition error")
 
             consumer.close()
+
+    def test_working_offsets(self) -> None:
+        with self.get_topic() as topic:
+            with closing(self.get_producer()) as producer:
+                (partition, offset) = producer.produce(topic, 0).result(timeout=5.0)
+
+            consumer = self.get_consumer("group")
+            consumer.subscribe([topic])
+
+            # Wait for the subscription to be fulfilled.
+            raise NotImplementedError
+
+            # NOTE: This will eventually need to be controlled by a generalized
+            # consumer auto offset reset setting.
+            assert consumer.tell() == {partition: offset}
+
+            message = consumer.poll()
+            assert isinstance(message, Message)
+            assert message.offset == offset
+            assert consumer.tell() == {partition: message.get_next_offset()}
+
+            # The first call to ``poll`` should raise ``EndOfPartition``. It
+            # should be otherwise be safe to try to read the first missing
+            # offset (index) in the partition.
+            with pytest.raises(EndOfPartition):
+                consumer.poll() is None
+
+            # It should be otherwise be safe to try to read the first missing
+            # offset (index) in the partition.
+            assert consumer.poll() is None
+
+            consumer.seek({partition: offset})
+            assert consumer.tell() == {partition: offset}
+
+            message = consumer.poll()
+            assert isinstance(message, Message)
+            assert message.offset == offset
+            assert consumer.tell() == {partition: message.get_next_offset()}
+
+            # Seeking beyond the first missing index should work, but subsequent reads
+            # should error.
+            consumer.seek({partition: message.get_next_offset() + 1})
+            assert consumer.tell() == {partition: message.get_next_offset() + 1}
+
+            with pytest.raises(ConsumerError):
+                consumer.poll()
+
+            # Offsets should not be advanced after a failed poll.
+            assert consumer.tell() == {partition: message.get_next_offset() + 1}
+
+            # Trying to seek on an unassigned partition should error.
+            with pytest.raises(ConsumerError):
+                consumer.seek({partition: 0, Partition(topic, -1): 0})
+
+            # ``seek`` should be atomic -- either all updates are applied or none are.
+            assert consumer.tell() == {partition: message.get_next_offset() + 1}
