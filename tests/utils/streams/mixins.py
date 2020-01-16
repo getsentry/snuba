@@ -1,7 +1,8 @@
+import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import closing
-from typing import ContextManager, Mapping, Sequence
+from typing import ContextManager, Mapping, Optional, Sequence
 
 import pytest
 
@@ -163,17 +164,25 @@ class StreamsTestMixin(ABC):
             with closing(self.get_producer()) as producer:
                 (partition, offset) = producer.produce(topic, 0).result(timeout=5.0)
 
+            def on_assign(partitions: Mapping[Partition, int]) -> None:
+                return
+
+                # NOTE: This will eventually need to be controlled by a generalized
+                # consumer auto offset reset setting.
+                assert partitions == consumer.tell() == {partition: offset}
+
             consumer = self.get_consumer("group")
-            consumer.subscribe([topic])
+            consumer.subscribe([topic], on_assign=on_assign)
 
-            # Wait for the subscription to be fulfilled.
-            raise NotImplementedError
+            for i in range(5):
+                message: Optional[Message[int]] = consumer.poll(1.0)
+                if message is not None:
+                    break
+                else:
+                    time.sleep(1.0)
+            else:
+                raise Exception("assignment never received")
 
-            # NOTE: This will eventually need to be controlled by a generalized
-            # consumer auto offset reset setting.
-            assert consumer.tell() == {partition: offset}
-
-            message = consumer.poll()
             assert isinstance(message, Message)
             assert message.offset == offset
             assert consumer.tell() == {partition: message.get_next_offset()}
@@ -182,16 +191,16 @@ class StreamsTestMixin(ABC):
             # should be otherwise be safe to try to read the first missing
             # offset (index) in the partition.
             with pytest.raises(EndOfPartition):
-                consumer.poll() is None
+                consumer.poll(1.0) is None
 
             # It should be otherwise be safe to try to read the first missing
             # offset (index) in the partition.
-            assert consumer.poll() is None
+            assert consumer.poll(1.0) is None
 
             consumer.seek({partition: offset})
             assert consumer.tell() == {partition: offset}
 
-            message = consumer.poll()
+            message = consumer.poll(1.0)
             assert isinstance(message, Message)
             assert message.offset == offset
             assert consumer.tell() == {partition: message.get_next_offset()}
@@ -202,7 +211,7 @@ class StreamsTestMixin(ABC):
             assert consumer.tell() == {partition: message.get_next_offset() + 1}
 
             with pytest.raises(ConsumerError):
-                consumer.poll()
+                consumer.poll(1.0)
 
             # Offsets should not be advanced after a failed poll.
             assert consumer.tell() == {partition: message.get_next_offset() + 1}
