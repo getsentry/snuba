@@ -61,7 +61,7 @@ def get_dataset(name: str) -> Dataset:
     return dataset
 
 
-def get_dataset_name(dataset: Dataset):
+def get_dataset_name(dataset: Dataset) -> str:
     if dataset not in DATASETS_NAME_LOOKUP:
         raise InvalidDatasetError("Dataset name not specified")
     return DATASETS_NAME_LOOKUP[dataset]
