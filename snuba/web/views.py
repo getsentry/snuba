@@ -93,7 +93,6 @@ application.debug = settings.DEBUG
 application.url_map.converters["dataset"] = DatasetConverter
 
 
-
 @application.errorhandler(BadRequest)
 def handle_bad_request(exception: BadRequest):
     cause = getattr(exception, "__cause__", None)
