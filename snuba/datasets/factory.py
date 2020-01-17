@@ -6,6 +6,7 @@ from snuba.datasets.table_storage import TableWriter
 
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
+DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
 DATASET_NAMES: Set[str] = {
     "events",
@@ -53,10 +54,18 @@ def get_dataset(name: str) -> Dataset:
 
     try:
         dataset = DATASETS_IMPL[name] = dataset_factories[name]()
+        DATASETS_NAME_LOOKUP[dataset] = name
     except KeyError as error:
         raise InvalidDatasetError(f"dataset {name!r} does not exist") from error
 
     return dataset
+
+
+def get_dataset_name(dataset: Dataset) -> str:
+    try:
+        return DATASETS_NAME_LOOKUP[dataset]
+    except KeyError as error:
+        raise InvalidDatasetError("Dataset name not specified") from error
 
 
 def get_enabled_dataset_names() -> Sequence[str]:

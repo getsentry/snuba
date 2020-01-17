@@ -9,8 +9,6 @@ from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
 
-import functools
-
 
 class TableSource(RelationalSource):
     """
@@ -332,6 +330,7 @@ class MaterializedViewSchema(TableSchema):
                 self.__get_local_destination_table_name(),
             ),
         )
+<<<<<<< HEAD
 
     def get_migration_statements(
         self,
@@ -340,3 +339,5 @@ class MaterializedViewSchema(TableSchema):
             super().get_migration_statements(),
             table_definition=self.get_local_table_definition().statement,
         )
+=======
+>>>>>>> master
