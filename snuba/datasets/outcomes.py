@@ -22,9 +22,9 @@ from snuba.processor import (
 )
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
+    MigrationSchemaColumn,
     SummingMergeTreeSchema,
     MaterializedViewSchema,
-    MigrationSchemaColumn,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
@@ -102,6 +102,7 @@ class OutcomesProcessor(MessageProcessor):
             "outcome": value["outcome"],
             "reason": _unicodify(value.get("reason")),
             "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
+            "size": value.get("size"),
         }
 
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
@@ -122,6 +123,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
+                ("size", Nullable(UInt(32))),
             ]
         )
 
@@ -133,6 +135,7 @@ class OutcomesDataset(TimeSeriesDataset):
             order_by="(org_id, project_id, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 16384},
+            migration_function=outcomes_write_migrations,
         )
 
         read_columns = ColumnSet(
@@ -144,6 +147,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(String())),
                 ("times_seen", UInt(64)),
+                ("bytes_received", Nullable(UInt(64))),
             ]
         )
 
@@ -154,6 +158,7 @@ class OutcomesDataset(TimeSeriesDataset):
             order_by="(org_id, project_id, key_id, outcome, reason, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 256},
+            migration_function=outcomes_read_migrations,
         )
 
         materialized_view_columns = ColumnSet(
@@ -165,7 +170,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", String()),
                 ("times_seen", UInt(64)),
-                ("bytes_received", UInt(64)),
+                ("bytes_received", Nullable(UInt(64))),
             ]
         )
 
@@ -180,7 +185,8 @@ class OutcomesDataset(TimeSeriesDataset):
                    toStartOfHour(timestamp) AS timestamp,
                    outcome,
                    ifNull(reason, 'none') AS reason,
-                   count() AS times_seen
+                   count() AS times_seen,
+                   sum(size) AS bytes_received
                FROM %(source_table_name)s
                GROUP BY org_id, project_id, key_id, timestamp, outcome, reason
                """
@@ -195,6 +201,7 @@ class OutcomesDataset(TimeSeriesDataset):
             local_destination_table_name=READ_LOCAL_TABLE_NAME,
             dist_source_table_name=WRITE_DIST_TABLE_NAME,
             dist_destination_table_name=READ_DIST_TABLE_NAME,
+            migration_function=outcomes_mv_migrations,
         )
 
         dataset_schemas = DatasetSchemas(

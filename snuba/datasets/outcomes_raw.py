@@ -28,7 +28,6 @@ def outcomes_raw_migrations(
     ret = []
     if "size" not in current_schema:
         ret.append(f"ALTER TABLE {clickhouse_table} ADD COLUMN size Nullable(UInt32)")
-        pass
 
     return ret
 
@@ -44,6 +43,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", LowCardinality(Nullable(String()))),
                 ("event_id", Nullable(UUID())),
+                ("size", Nullable(UInt(32))),
             ]
         )
 

@@ -24,6 +24,7 @@ class TestOutcomesApi(BaseApiTest):
         project_id: int,
         num_outcomes: int,
         outcome: int,
+        size: int,
         time_since_base: timedelta,
     ) -> None:
         outcomes = []
@@ -36,6 +37,7 @@ class TestOutcomesApi(BaseApiTest):
                     {
                         "project_id": project_id,
                         "event_id": uuid.uuid4().hex,
+                        "size": size,
                         "timestamp": (self.base_time + time_since_base).strftime(
                             "%Y-%m-%dT%H:%M:%S.%fZ"
                         ),
@@ -62,6 +64,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=5,
             outcome=0,
+            size=65536,
             time_since_base=timedelta(minutes=1),
         )
         self.generate_outcomes(
@@ -69,6 +72,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=5,
             outcome=0,
+            size=65536,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
@@ -76,6 +80,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=2,
             num_outcomes=10,
             outcome=0,
+            size=65536,
             time_since_base=timedelta(minutes=30),
         )
         self.generate_outcomes(
@@ -83,6 +88,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=10,
             outcome=0,
+            size=65536,
             time_since_base=timedelta(minutes=61),
         )
 
@@ -92,6 +98,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=1,
+            size=65536,
             time_since_base=timedelta(minutes=1),
         )
 
@@ -101,6 +108,7 @@ class TestOutcomesApi(BaseApiTest):
             project_id=1,
             num_outcomes=1,
             outcome=0,
+            size=65536,
             time_since_base=timedelta(minutes=(self.skew_minutes + 60)),
         )
 
@@ -112,7 +120,10 @@ class TestOutcomesApi(BaseApiTest):
             data=json.dumps(
                 {
                     "dataset": "outcomes",
-                    "aggregations": [["sum", "times_seen", "aggregate"]],
+                    "aggregations": [
+                        ["sum", "times_seen", "sum_times"],
+                        ["sum", "bytes_received", "sum_bytes"],
+                    ],
                     "from_date": from_date,
                     "selected_columns": [],
                     "to_date": to_date,
@@ -126,5 +137,6 @@ class TestOutcomesApi(BaseApiTest):
         data = json.loads(response.data)
         assert response.status_code == 200
         assert len(data["data"]) == 3
-        assert all([row["aggregate"] == 10 for row in data["data"]])
+        assert all([row["sum_times"] == 10 for row in data["data"]])
+        assert all([row["sum_bytes"] == 10 * 65536 for row in data["data"]])
         assert sorted([row["project_id"] for row in data["data"]]) == [1, 1, 2]
