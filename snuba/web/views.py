@@ -6,7 +6,6 @@ from typing import NamedTuple
 
 from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
-from uuid import uuid1
 import sentry_sdk
 import simplejson as json
 from werkzeug.exceptions import BadRequest
@@ -26,6 +25,9 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
+from snuba.subscriptions.data import InvalidSubscriptionError
+from snuba.subscriptions.store import SubscriptionCodec
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionIdentifier
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -363,12 +365,36 @@ def sdk_distribution(*, timer: Timer) -> Response:
     return format_result(run_query(dataset, request, timer))
 
 
-@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
-def create_subscription(*, dataset: Dataset):
-    partition = 0
-    key = uuid1().hex
+SUBSCRIPTION_SEPARATOR = "/"
+
+
+@application.errorhandler(InvalidSubscriptionError)
+def handle_subscription_error(exception: InvalidSubscriptionError):
+    data = {"error": {"type": "subscription", "message": str(exception)}}
     return (
-        json.dumps({"subscription_id": f"{partition}/{key}"}),
+        json.dumps(data, indent=4),
+        400,
+        {"Content-Type": "application/json"},
+    )
+
+
+def build_external_subscription_id(identifier: SubscriptionIdentifier) -> str:
+    return "{}{}{}".format(
+        identifier.partition_id, SUBSCRIPTION_SEPARATOR, identifier.subscription_id
+    )
+
+
+@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
+@util.time_request("subscription")
+def create_subscription(*, dataset: Dataset, timer: Timer):
+    subscription = SubscriptionCodec().decode(http_request.data)
+    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
+    # example date fields and aggregates.
+    subscription_identifier = SubscriptionCreator(dataset).create(subscription, timer,)
+    return (
+        json.dumps(
+            {"subscription_id": build_external_subscription_id(subscription_identifier)}
+        ),
         202,
         {"Content-Type": "application/json"},
     )
