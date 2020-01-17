@@ -95,6 +95,9 @@ class TickConsumer(Consumer[Tick]):
             topics, on_assign=on_assign, on_revoke=revocation_callback
         )
 
+    def unsubscribe(self) -> None:
+        self.__consumer.unsubscribe()
+
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[Tick]]:
         message = self.__consumer.poll(timeout)
         if message is None:
