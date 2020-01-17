@@ -3,7 +3,9 @@ import logging
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
+from confluent_kafka import Producer as ConfluentKafkaProducer
 
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -25,11 +27,11 @@ class InvalidActionType(Exception):
 class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def __init__(
         self,
-        dataset,
-        producer,
+        dataset: Dataset,
+        producer: Optional[ConfluentKafkaProducer],
         replacements_topic: Optional[Topic],
         metrics: MetricsBackend,
-    ):
+    ) -> None:
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
