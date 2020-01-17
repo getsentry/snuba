@@ -170,7 +170,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 ("outcome", UInt(8)),
                 ("reason", String()),
                 ("times_seen", UInt(64)),
-                # ("bytes_received", UInt(64)),
+                ("bytes_received", UInt(64)),
             ]
         )
 

@@ -4,6 +4,7 @@ from typing import Sequence
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.migrate import run
 
 
 @click.command()
@@ -106,6 +107,7 @@ def bootstrap(
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)
+        run_migrations = False
         for statement in dataset.get_dataset_schemas().get_create_statements():
             if statement.table_name not in existing_tables:
                 # This hack is needed since ClickHouse would try to execute the
@@ -116,4 +118,8 @@ def bootstrap(
                 ClickhousePool().execute(statement.statement)
             else:
                 logger.debug("Skipping existing table %s", statement.table_name)
+                run_migrations = True
+        if run_migrations:
+            logger.debug("Running missing migrations for dataset %s", name)
+            run(ClickhousePool(), dataset)
         logger.info("Tables for dataset %s created.", name)
