@@ -1,20 +1,13 @@
-from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid1
 
 from snuba.datasets.dataset import Dataset
 from snuba.redis import redis_client
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import Subscription, SubscriptionIdentifier
 from snuba.subscriptions.partitioner import DatasetSubscriptionPartitioner
 from snuba.subscriptions.store import RedisSubscriptionStore
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import parse_and_run_query
-
-
-@dataclass(frozen=True)
-class SubscriptionIdentifier:
-    partition_id: int
-    subscription_id: str
 
 
 class SubscriptionCreator:

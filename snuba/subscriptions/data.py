@@ -19,6 +19,12 @@ class InvalidSubscriptionError(Exception):
 
 
 @dataclass(frozen=True)
+class SubscriptionIdentifier:
+    partition_id: int
+    subscription_id: str
+
+
+@dataclass(frozen=True)
 class Subscription:
     """
     Represents the state of a subscription.
