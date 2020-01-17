@@ -285,13 +285,13 @@ class DiscoverDataset(TimeSeriesDataset):
 
         return [
             BasicFunctionsProcessor(),
-            ApdexProcessor(),
             DatasetSelector(
                 discover_source=discover_source,
                 events_columns=self.__events_columns,
                 transactions_columns=self.__transactions_columns,
                 post_processors={
                     TRANSACTIONS: [
+                        ApdexProcessor(),
                         NestedFieldConditionOptimizer(
                             "tags",
                             "_tags_flattened",
