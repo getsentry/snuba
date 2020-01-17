@@ -29,7 +29,7 @@ class Subscription:
     time_window: timedelta
     resolution: timedelta
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.time_window < timedelta(minutes=1):
             raise InvalidSubscriptionError(
                 "Time window must be greater than or equal to 1 minute"
