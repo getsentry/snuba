@@ -8,6 +8,7 @@ from snuba.query.types import Condition
 from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
+from snuba.request.validation import validate_request_content
 from snuba.utils.metrics.timer import Timer
 
 SUBSCRIPTION_REFERRER = "subscription"
@@ -48,10 +49,6 @@ class Subscription:
         :param timestamp: Date that the query should run up until
         :param offset: Maximum offset we should query for
         """
-        # XXX: We should move this somewhere better so that we don't need to import from
-        # web.views here.
-        from snuba.web.views import validate_request_content
-
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), SubscriptionRequestSettings,
         )

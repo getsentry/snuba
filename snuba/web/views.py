@@ -25,6 +25,7 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
+from snuba.request.validation import validate_request_content
 from snuba.subscriptions.data import InvalidSubscriptionError
 from snuba.subscriptions.store import SubscriptionCodec
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionIdentifier
@@ -227,23 +228,6 @@ def parse_request_body(http_request):
             return json.loads(http_request.data)
         except json.errors.JSONDecodeError as error:
             raise BadRequest(str(error)) from error
-
-
-def validate_request_content(
-    body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
-) -> Request:
-    with sentry_sdk.start_span(
-        description="validate_request_content", op="validate"
-    ) as span:
-        try:
-            request = schema.validate(body, dataset, referrer)
-            span.set_data("snuba_query", request.body)
-        except jsonschema.ValidationError as error:
-            raise BadRequest(str(error)) from error
-
-        timer.mark("validate_schema")
-
-    return request
 
 
 @application.route("/query", methods=["GET", "POST"])
