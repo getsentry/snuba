@@ -1,19 +1,15 @@
 import collections
 import logging
-import simplejson as json
-
 from typing import Any, Mapping, Optional, Sequence
 
+import simplejson as json
+
 from snuba.datasets.factory import enforce_table_writer
-from snuba.processor import (
-    ProcessedMessage,
-    ProcessorAction,
-)
+from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import Message
-
+from snuba.utils.streams.types import Message, Topic
 
 logger = logging.getLogger("snuba.consumer")
 
@@ -27,7 +23,13 @@ class InvalidActionType(Exception):
 
 
 class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
-    def __init__(self, dataset, producer, replacements_topic, metrics: MetricsBackend):
+    def __init__(
+        self,
+        dataset,
+        producer,
+        replacements_topic: Optional[Topic],
+        metrics: MetricsBackend,
+    ):
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
@@ -90,7 +92,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         if replacements:
             for key, replacement in replacements:
                 self.producer.produce(
-                    self.replacements_topic,
+                    self.replacements_topic.name,
                     key=str(key).encode("utf-8"),
                     value=json.dumps(replacement).encode("utf-8"),
                     on_delivery=self.delivery_callback,
