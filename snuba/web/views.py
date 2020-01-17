@@ -451,9 +451,7 @@ if application.debug or application.testing:
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
 
-            worker = ConsumerWorker(
-                dataset, producer=None, replacements_topic=None, metrics=metrics
-            )
+            worker = ConsumerWorker(dataset, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
 

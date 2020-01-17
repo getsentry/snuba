@@ -28,14 +28,16 @@ class TestConsumer(BaseEventsTest):
             datetime.now(),
         )
 
-        replacement_topic = Topic(
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-            .topic_name
-        )
         test_worker = ConsumerWorker(
-            self.dataset, FakeConfluentKafkaProducer(), replacement_topic, self.metrics,
+            self.dataset,
+            producer=FakeConfluentKafkaProducer(),
+            replacements_topic=Topic(
+                enforce_table_writer(self.dataset)
+                .get_stream_loader()
+                .get_replacement_topic_spec()
+                .topic_name
+            ),
+            metrics=self.metrics,
         )
         batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
@@ -45,14 +47,16 @@ class TestConsumer(BaseEventsTest):
         ) == [(self.event["project_id"], self.event["event_id"], 123, 456)]
 
     def test_skip_too_old(self):
-        replacement_topic = Topic(
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-            .topic_name
-        )
         test_worker = ConsumerWorker(
-            self.dataset, FakeConfluentKafkaProducer(), replacement_topic, self.metrics,
+            self.dataset,
+            producer=FakeConfluentKafkaProducer(),
+            replacements_topic=Topic(
+                enforce_table_writer(self.dataset)
+                .get_stream_loader()
+                .get_replacement_topic_spec()
+                .topic_name
+            ),
+            metrics=self.metrics,
         )
 
         event = self.event
@@ -73,14 +77,16 @@ class TestConsumer(BaseEventsTest):
 
     def test_produce_replacement_messages(self):
         producer = FakeConfluentKafkaProducer()
-        replacement_topic = Topic(
-            enforce_table_writer(self.dataset)
-            .get_stream_loader()
-            .get_replacement_topic_spec()
-            .topic_name
-        )
         test_worker = ConsumerWorker(
-            self.dataset, producer, replacement_topic, self.metrics
+            self.dataset,
+            producer=producer,
+            replacements_topic=Topic(
+                enforce_table_writer(self.dataset)
+                .get_stream_loader()
+                .get_replacement_topic_spec()
+                .topic_name
+            ),
+            metrics=self.metrics,
         )
 
         test_worker.flush_batch(

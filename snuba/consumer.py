@@ -28,9 +28,9 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def __init__(
         self,
         dataset: Dataset,
-        producer: Optional[ConfluentKafkaProducer],
-        replacements_topic: Optional[Topic],
         metrics: MetricsBackend,
+        producer: Optional[ConfluentKafkaProducer] = None,
+        replacements_topic: Optional[Topic] = None,
     ) -> None:
         self.__dataset = dataset
         self.producer = producer
