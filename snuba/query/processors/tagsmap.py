@@ -8,7 +8,7 @@ from typing import Optional, List, NamedTuple, Set
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.datasets.transactions_processor import escape_field
+from snuba.datasets.events_processor import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function, parse_datetime

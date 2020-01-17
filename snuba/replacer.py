@@ -381,6 +381,34 @@ def process_delete_tag(message, dataset) -> Optional[Replacement]:
         + where
     )
 
+    # This obnoxious amount backslashes is sadly required.
+    # replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
+    # means running this on Clickhouse:
+    # replaceRegexpAll(tuple.1, '(\\||\\=|\\\\)', '\\\\\\1')
+    # The (\\||\\=|\\\\) pattern should be actually this: (\||\=|\\). The additional
+    # backslashes are because of Clickhouse escaping.
+    flattened_column_template = """
+concat(
+    '|',
+    arrayStringConcat(
+        arrayMap(tuple -> concat(
+                replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
+                '=',
+                replaceRegexpAll(tuple.2, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
+            ),
+            arraySort(
+                arrayFilter(
+                    tuple -> tuple.1 != %s,
+                    arrayMap((k, v) -> tuple(k, v), `tags.key`, `tags.value`)
+                )
+            )
+        ),
+        '||'
+    ),
+    '|'
+)
+"""
+
     select_columns = []
     all_columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
     for col in all_columns:
@@ -396,6 +424,8 @@ def process_delete_tag(message, dataset) -> Optional[Replacement]:
                 "arrayMap(x -> arrayElement(`tags.value`, x), arrayFilter(x -> x != indexOf(`tags.key`, %s), arrayEnumerate(`tags.value`)))"
                 % escape_string(tag)
             )
+        elif col.flattened == "_tags_flattened":
+            select_columns.append(flattened_column_template % escape_string(tag))
         else:
             select_columns.append(col.escaped)
 
