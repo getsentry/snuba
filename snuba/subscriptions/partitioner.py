@@ -19,7 +19,7 @@ class DatasetSubscriptionPartitioner(SubscriptionPartitioner):
     PARTITION_COUNT = 64
 
     def __init__(self, dataset: Dataset):
-        self.dataset = dataset
+        self.__dataset = dataset
 
     def build_partition_id(self, subscription: Subscription) -> int:
         # TODO: Use something from the dataset to determine the number of partitions

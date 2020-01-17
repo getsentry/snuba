@@ -30,7 +30,9 @@ class SubscriptionCreator:
         self, subscription: Subscription, timer: Timer
     ) -> SubscriptionIdentifier:
         # We want to test the query out here to make sure it's valid and can run
-        request = subscription.build_request(self.dataset, datetime.now(), None, timer,)
+        request = subscription.build_request(
+            self.dataset, datetime.utcnow(), None, timer,
+        )
         parse_and_run_query(self.dataset, request, timer)
         partition_id = DatasetSubscriptionPartitioner(self.dataset).build_partition_id(
             subscription
