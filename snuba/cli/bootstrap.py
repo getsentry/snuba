@@ -100,11 +100,20 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
+    clickhouse_tables = ClickhousePool().execute("show tables")
+    existing_tables = [row[0] for row in clickhouse_tables]
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)
         for statement in dataset.get_dataset_schemas().get_create_statements():
-            logger.debug("Executing:\n%s", statement.statement)
-            ClickhousePool().execute(statement.statement)
+            if statement.table_name not in existing_tables:
+                # This hack is needed since ClickHouse would try to execute the
+                # SELECT statement that defines a Materialized View even if the View
+                # exists. This may require the migrate script to run instead to make
+                # the SELECT statement work.
+                logger.debug("Executing:\n%s", statement.statement)
+                ClickhousePool().execute(statement.statement)
+            else:
+                logger.debug("Skipping existing table %s", statement.table_name)
         logger.info("Tables for dataset %s created.", name)
