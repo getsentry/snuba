@@ -8,7 +8,7 @@ from tests.subscriptions import BaseSubscriptionTest
 class TestBuildRequest(BaseSubscriptionTest):
     def test(self):
         subscription = Subscription(
-            "test", 123, [], [], timedelta(minutes=10), timedelta(minutes=1)
+            123, [], [], timedelta(minutes=10), timedelta(minutes=1)
         )
         partitioner = DatasetSubscriptionPartitioner(self.dataset)
-        assert partitioner.build_partition_id(subscription) == "18"
+        assert partitioner.build_partition_id(subscription) == 18

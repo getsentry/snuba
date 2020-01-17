@@ -13,18 +13,31 @@ from snuba.utils.metrics.timer import Timer
 SUBSCRIPTION_REFERRER = "subscription"
 
 
+class InvalidSubscriptionError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class Subscription:
     """
     Represents the state of a subscription.
     """
 
-    id: str
     project_id: int
     conditions: Sequence[Condition]
     aggregations: Sequence[Aggregation]
     time_window: timedelta
     resolution: timedelta
+
+    def __post_init__(self):
+        if self.time_window < timedelta(minutes=1):
+            raise InvalidSubscriptionError(
+                "Time window must be greater than or equal to 1 minute"
+            )
+        if self.resolution < timedelta(minutes=1):
+            raise InvalidSubscriptionError(
+                "Resolution must be greater than or equal to 1 minute"
+            )
 
     def build_request(
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
@@ -42,13 +55,13 @@ class Subscription:
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), SubscriptionRequestSettings,
         )
-        extra_conditions = []
+        extra_conditions: Sequence[Condition] = []
         if offset is not None:
             extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
         return validate_request_content(
             {
                 "project": self.project_id,
-                "conditions": self.conditions + extra_conditions,
+                "conditions": [*self.conditions, *extra_conditions],
                 "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),

@@ -1702,10 +1702,10 @@ class TestCreateSubscriptionApi(BaseApiTest):
                         "project_id": 1,
                         "conditions": [["platform", "IN", ["a"]]],
                         "aggregations": [["count()", "", "count"]],
-                        "time_window": 10,
-                        "resolution": 1,
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
                     }
-                ),
+                ).encode("utf-8"),
             )
 
         assert resp.status_code == 202

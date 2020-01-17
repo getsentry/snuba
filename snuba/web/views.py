@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import NamedTuple
 
 from flask import Flask, Response, redirect, render_template, request as http_request
@@ -25,10 +25,9 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
-from snuba.subscriptions.subscription import (
-    InvalidSubscriptionError,
-    SubscriptionCreator,
-)
+from snuba.subscriptions.data import InvalidSubscriptionError
+from snuba.subscriptions.store import SubscriptionCodec
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionIdentifier
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -379,32 +378,22 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
     )
 
 
-def build_external_subscription_id(partition_id: str, subscription_id: str) -> str:
-    return "{}{}{}".format(partition_id, SUBSCRIPTION_SEPARATOR, subscription_id)
+def build_external_subscription_id(identifier: SubscriptionIdentifier) -> str:
+    return "{}{}{}".format(
+        identifier.partition_id, SUBSCRIPTION_SEPARATOR, identifier.subscription_id
+    )
 
 
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
-    data = parse_request_body(http_request)
-    # TODO: Add json schema and validate
-    # TODO: Check for valid queries with fields that are invalid for subscriptions.  For
+    subscription = SubscriptionCodec().decode(http_request.data)
+    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
-    partition_id, subscription = SubscriptionCreator(dataset).create(
-        data["project_id"],
-        data["conditions"],
-        data["aggregations"],
-        timedelta(minutes=data["time_window"]),
-        timedelta(minutes=data["resolution"]),
-        timer,
-    )
+    subscription_identifier = SubscriptionCreator(dataset).create(subscription, timer,)
     return (
         json.dumps(
-            {
-                "subscription_id": build_external_subscription_id(
-                    partition_id, subscription.id
-                )
-            }
+            {"subscription_id": build_external_subscription_id(subscription_identifier)}
         ),
         202,
         {"Content-Type": "application/json"},
