@@ -105,6 +105,6 @@ def bootstrap(
 
         logger.debug("Creating tables for dataset %s", name)
         for statement in dataset.get_dataset_schemas().get_create_statements():
-            logger.debug("Executing:\n%s", statement)
-            ClickhousePool().execute(statement)
+            logger.debug("Executing:\n%s", statement.statement)
+            ClickhousePool().execute(statement.statement)
         logger.info("Tables for dataset %s created.", name)
