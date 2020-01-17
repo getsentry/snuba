@@ -26,8 +26,8 @@ from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
+from snuba.subscriptions.codecs import SubscriptionCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionIdentifier
-from snuba.subscriptions.store import SubscriptionCodec
 from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
