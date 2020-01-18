@@ -1,10 +1,11 @@
+from uuid import UUID
 from typing import Collection, Tuple
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.redis import RedisClientType
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import PartitionId, SubscriptionData, SubscriptionKey
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
 class RedisSubscriptionDataStore:
@@ -23,25 +24,25 @@ class RedisSubscriptionDataStore:
         self.codec = SubscriptionDataCodec()
         self.__key = f"subscriptions:{get_dataset_name(dataset)}:{partition_id}"
 
-    def create(self, key: SubscriptionKey, data: SubscriptionData) -> None:
+    def create(self, key: UUID, data: SubscriptionData) -> None:
         """
         Stores subscription data in Redis. Will overwrite any existing
         subscriptions with the same id.
         """
-        self.client.hset(self.__key, key.encode("utf-8"), self.codec.encode(data))
+        self.client.hset(self.__key, key.hex.encode("utf-8"), self.codec.encode(data))
 
-    def delete(self, key: SubscriptionKey) -> None:
+    def delete(self, key: UUID) -> None:
         """
         Removes a subscription from the Redis store.
         """
-        self.client.hdel(self.__key, key.encode("utf-8"))
+        self.client.hdel(self.__key, key.hex.encode("utf-8"))
 
-    def all(self) -> Collection[Tuple[SubscriptionKey, SubscriptionData]]:
+    def all(self) -> Collection[Tuple[UUID, SubscriptionData]]:
         """
         Fetches all subscriptions from the store.
         :return: A collection of `Subscriptions`.
         """
         return [
-            (SubscriptionKey(key.decode("utf-8")), self.codec.decode(val))
+            (UUID(key.decode("utf-8")), self.codec.decode(val))
             for key, val in self.client.hgetall(self.__key).items()
         ]

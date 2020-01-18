@@ -6,7 +6,6 @@ from snuba.redis import redis_client
 from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
-    SubscriptionKey,
 )
 from snuba.subscriptions.partitioner import DatasetSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
@@ -29,7 +28,7 @@ class SubscriptionCreator:
         parse_and_run_query(self.dataset, request, timer)
         identifier = SubscriptionIdentifier(
             DatasetSubscriptionDataPartitioner(self.dataset).build_partition_id(data),
-            SubscriptionKey(uuid1().hex),
+            uuid1(),
         )
         RedisSubscriptionDataStore(
             redis_client, self.dataset, identifier.partition

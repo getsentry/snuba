@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock
+from uuid import uuid1
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -10,7 +11,6 @@ from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
-    SubscriptionKey,
 )
 from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask
@@ -27,7 +27,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
             ),
         )
         subscription = Subscription(
-            SubscriptionIdentifier(PartitionId(0), SubscriptionKey("key")),
+            SubscriptionIdentifier(PartitionId(0), uuid1()),
             SubscriptionData(
                 project_id=self.project_id,
                 conditions=[["platform", "IN", ["a"]]],
