@@ -33,6 +33,6 @@ class SubscriptionCreator:
         RedisSubscriptionDataStore(
             redis_client, self.dataset, identifier.partition
         ).create(
-            identifier.key, data,
+            identifier.uuid, data,
         )
         return identifier

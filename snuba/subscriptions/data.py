@@ -25,7 +25,7 @@ PartitionId = NewType("PartitionId", int)
 @dataclass(frozen=True)
 class SubscriptionIdentifier:
     partition: PartitionId
-    key: UUID
+    uuid: UUID
 
 
 @dataclass(frozen=True)

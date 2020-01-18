@@ -367,7 +367,9 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     # example date fields and aggregates.
     identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
-        json.dumps({"subscription_id": f"{identifier.partition}/{identifier.key.hex}"}),
+        json.dumps(
+            {"subscription_id": f"{identifier.partition}/{identifier.uuid.hex}"}
+        ),
         202,
         {"Content-Type": "application/json"},
     )
