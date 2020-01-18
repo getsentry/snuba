@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import NewType, Optional, Sequence
+from typing import NamedTuple, NewType, Optional, Sequence
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.query import Aggregation
@@ -78,3 +78,8 @@ class SubscriptionData:
             dataset,
             SUBSCRIPTION_REFERRER,
         )
+
+
+class Subscription(NamedTuple):
+    identifier: SubscriptionIdentifier
+    data: SubscriptionData
