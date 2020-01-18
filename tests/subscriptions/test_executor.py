@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from snuba import settings
 from snuba.subscriptions.consumer import Tick
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.types import Interval
@@ -20,7 +20,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
                 max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
             ),
         )
-        subscription = Subscription(
+        subscription = SubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],

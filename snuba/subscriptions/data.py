@@ -25,7 +25,7 @@ class SubscriptionIdentifier:
 
 
 @dataclass(frozen=True)
-class Subscription:
+class SubscriptionData:
     """
     Represents the state of a subscription.
     """

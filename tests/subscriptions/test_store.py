@@ -1,15 +1,15 @@
 from datetime import timedelta
 
 from snuba.redis import redis_client
-from snuba.subscriptions.data import Subscription
-from snuba.subscriptions.store import RedisSubscriptionStore
+from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
-    def subscription(self) -> Subscription:
-        return Subscription(
+    def subscription(self) -> SubscriptionData:
+        return SubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -17,8 +17,8 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
             resolution=timedelta(minutes=1),
         )
 
-    def build_store(self, key="1") -> RedisSubscriptionStore:
-        return RedisSubscriptionStore(redis_client, self.dataset, key)
+    def build_store(self, key="1") -> RedisSubscriptionDataStore:
+        return RedisSubscriptionDataStore(redis_client, self.dataset, key)
 
     def test_create(self):
         store = self.build_store()
@@ -40,7 +40,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         subscription_id = "something"
         store.create(subscription_id, self.subscription)
         assert store.all() == [(subscription_id, self.subscription)]
-        new_subscription = Subscription(
+        new_subscription = SubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],
@@ -62,7 +62,7 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         assert store_2.all() == []
         assert store_1.all() == [(subscription_id, self.subscription)]
 
-        new_subscription = Subscription(
+        new_subscription = SubscriptionData(
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],

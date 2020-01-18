@@ -1,12 +1,12 @@
 import json
 from datetime import timedelta
 
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import SubscriptionData
 from snuba.utils.codecs import Codec
 
 
-class SubscriptionCodec(Codec[bytes, Subscription]):
-    def encode(self, value: Subscription) -> bytes:
+class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
+    def encode(self, value: SubscriptionData) -> bytes:
         return json.dumps(
             {
                 "project_id": value.project_id,
@@ -17,9 +17,9 @@ class SubscriptionCodec(Codec[bytes, Subscription]):
             }
         ).encode("utf-8")
 
-    def decode(self, value: bytes) -> Subscription:
+    def decode(self, value: bytes) -> SubscriptionData:
         data = json.loads(value.decode("utf-8"))
-        return Subscription(
+        return SubscriptionData(
             project_id=data["project_id"],
             conditions=data["conditions"],
             aggregations=data["aggregations"],

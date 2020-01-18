@@ -2,16 +2,16 @@ from abc import abstractmethod, ABC
 from binascii import crc32
 
 from snuba.datasets.dataset import Dataset
-from snuba.subscriptions.data import Subscription
+from snuba.subscriptions.data import SubscriptionData
 
 
-class SubscriptionPartitioner(ABC):
+class SubscriptionDataPartitioner(ABC):
     @abstractmethod
-    def build_partition_id(self, subscription: Subscription) -> int:
+    def build_partition_id(self, data: SubscriptionData) -> int:
         pass
 
 
-class DatasetSubscriptionPartitioner(SubscriptionPartitioner):
+class DatasetSubscriptionDataPartitioner(SubscriptionDataPartitioner):
     """
     Partitions a subscription based on the Dataset that we're going to store it in.
     """
@@ -21,8 +21,6 @@ class DatasetSubscriptionPartitioner(SubscriptionPartitioner):
     def __init__(self, dataset: Dataset):
         self.__dataset = dataset
 
-    def build_partition_id(self, subscription: Subscription) -> int:
+    def build_partition_id(self, data: SubscriptionData) -> int:
         # TODO: Use something from the dataset to determine the number of partitions
-        return (
-            crc32(str(subscription.project_id).encode("utf-8")) % self.PARTITION_COUNT
-        )
+        return crc32(str(data.project_id).encode("utf-8")) % self.PARTITION_COUNT
