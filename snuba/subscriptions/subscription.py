@@ -3,7 +3,11 @@ from uuid import uuid1
 
 from snuba.datasets.dataset import Dataset
 from snuba.redis import redis_client
-from snuba.subscriptions.data import SubscriptionData, SubscriptionIdentifier
+from snuba.subscriptions.data import (
+    SubscriptionData,
+    SubscriptionIdentifier,
+    SubscriptionKey,
+)
 from snuba.subscriptions.partitioner import DatasetSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
@@ -21,15 +25,15 @@ class SubscriptionCreator:
 
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
         # We want to test the query out here to make sure it's valid and can run
-        request = data.build_request(self.dataset, datetime.utcnow(), None, timer,)
+        request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
         parse_and_run_query(self.dataset, request, timer)
-        partition_id = DatasetSubscriptionDataPartitioner(
-            self.dataset
-        ).build_partition_id(data)
-        subscription_id = uuid1().hex
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, str(partition_id)
-        ).create(
-            subscription_id, data,
+        identifier = SubscriptionIdentifier(
+            DatasetSubscriptionDataPartitioner(self.dataset).build_partition_id(data),
+            SubscriptionKey(uuid1().hex),
         )
-        return SubscriptionIdentifier(partition_id, subscription_id)
+        RedisSubscriptionDataStore(
+            redis_client, self.dataset, identifier.partition
+        ).create(
+            identifier.key, data,
+        )
+        return identifier

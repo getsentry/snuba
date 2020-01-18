@@ -4,7 +4,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.redis import RedisClientType
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData, SubscriptionKey
 
 
 class RedisSubscriptionDataStore:
@@ -16,36 +16,32 @@ class RedisSubscriptionDataStore:
 
     KEY_TEMPLATE = "subscriptions:{}:{}"
 
-    def __init__(self, client: RedisClientType, dataset: Dataset, key: str):
+    def __init__(
+        self, client: RedisClientType, dataset: Dataset, partition_id: PartitionId
+    ):
         self.client = client
-        self.dataset = dataset
-        self.key = key
         self.codec = SubscriptionDataCodec()
+        self.__key = f"subscriptions:{get_dataset_name(dataset)}:{partition_id}"
 
-    @property
-    def _key(self) -> str:
-        return self.KEY_TEMPLATE.format(get_dataset_name(self.dataset), self.key)
-
-    def create(self, subscription_id: str, data: SubscriptionData) -> None:
+    def create(self, key: SubscriptionKey, data: SubscriptionData) -> None:
         """
         Stores subscription data in Redis. Will overwrite any existing
         subscriptions with the same id.
         """
-        payload = self.codec.encode(data)
-        self.client.hset(self._key, subscription_id.encode("utf-8"), payload)
+        self.client.hset(self.__key, key.encode("utf-8"), self.codec.encode(data))
 
-    def delete(self, subscription_id: str) -> None:
+    def delete(self, key: SubscriptionKey) -> None:
         """
         Removes a subscription from the Redis store.
         """
-        self.client.hdel(self._key, subscription_id)
+        self.client.hdel(self.__key, key.encode("utf-8"))
 
-    def all(self) -> Collection[Tuple[str, SubscriptionData]]:
+    def all(self) -> Collection[Tuple[SubscriptionKey, SubscriptionData]]:
         """
         Fetches all subscriptions from the store.
         :return: A collection of `Subscriptions`.
         """
         return [
-            (key.decode("utf-8"), self.codec.decode(val))
-            for key, val in self.client.hgetall(self._key).items()
+            (SubscriptionKey(key.decode("utf-8")), self.codec.decode(val))
+            for key, val in self.client.hgetall(self.__key).items()
         ]

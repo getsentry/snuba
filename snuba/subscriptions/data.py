@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import NewType, Optional, Sequence
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.query import Aggregation
@@ -18,10 +18,14 @@ class InvalidSubscriptionError(Exception):
     pass
 
 
+PartitionId = NewType("PartitionId", int)
+SubscriptionKey = NewType("SubscriptionKey", str)
+
+
 @dataclass(frozen=True)
 class SubscriptionIdentifier:
-    partition_id: int
-    subscription_id: str
+    partition: PartitionId
+    key: SubscriptionKey
 
 
 @dataclass(frozen=True)

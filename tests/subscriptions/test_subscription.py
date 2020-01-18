@@ -23,7 +23,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
         )
         identifier = creator.create(subscription, Mock())
         RedisSubscriptionDataStore(
-            redis_client, self.dataset, str(identifier.partition_id),
+            redis_client, self.dataset, identifier.partition,
         ).all()[0][1] == subscription
 
     def test_invalid_condition_column(self):

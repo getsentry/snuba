@@ -13,7 +13,6 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
-from snuba.web.views import SUBSCRIPTION_SEPARATOR
 from tests.base import BaseApiTest
 
 
@@ -1711,9 +1710,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert resp.status_code == 202
         data = json.loads(resp.data)
         assert data == {
-            "subscription_id": "{}{}{}".format(
-                55, SUBSCRIPTION_SEPARATOR, expected_uuid.hex
-            )
+            "subscription_id": f"55/{expected_uuid.hex}",
         }
 
     def test_time_error(self):

@@ -2,12 +2,12 @@ from abc import abstractmethod, ABC
 from binascii import crc32
 
 from snuba.datasets.dataset import Dataset
-from snuba.subscriptions.data import SubscriptionData
+from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
 class SubscriptionDataPartitioner(ABC):
     @abstractmethod
-    def build_partition_id(self, data: SubscriptionData) -> int:
+    def build_partition_id(self, data: SubscriptionData) -> PartitionId:
         pass
 
 
@@ -21,6 +21,8 @@ class DatasetSubscriptionDataPartitioner(SubscriptionDataPartitioner):
     def __init__(self, dataset: Dataset):
         self.__dataset = dataset
 
-    def build_partition_id(self, data: SubscriptionData) -> int:
+    def build_partition_id(self, data: SubscriptionData) -> PartitionId:
         # TODO: Use something from the dataset to determine the number of partitions
-        return crc32(str(data.project_id).encode("utf-8")) % self.PARTITION_COUNT
+        return PartitionId(
+            crc32(str(data.project_id).encode("utf-8")) % self.PARTITION_COUNT
+        )
