@@ -161,8 +161,27 @@ class TestUtil(BaseTest):
 
         conditions = tuplify([[["notEmpty", ["tags_key"]], "=", 1]])
         assert (
-            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            conditions_expr(
+                dataset,
+                conditions,
+                Query({"conditions": [[["notEmpty", ["tags_key"]], "=", 1]]}, source),
+                ParsingContext(),
+            )
             == "notEmpty((arrayJoin(tags.key) AS tags_key)) = 1"
+        )
+
+        conditions = tuplify([[["notEmpty", ["tags_key[tag1,tag2]"]], "=", 1]])
+        assert (
+            conditions_expr(
+                dataset,
+                conditions,
+                Query(
+                    {"conditions": [[["notEmpty", ["tags_key[tag1,tag2]"]], "=", 1]]},
+                    source,
+                ),
+                ParsingContext(),
+            )
+            == "notEmpty((arrayJoin(arrayFilter(tag -> tag IN ('tag1','tag2'), tags.key)) AS `tags_key[tag1,tag2]`)) = 1"
         )
 
         conditions = tuplify(

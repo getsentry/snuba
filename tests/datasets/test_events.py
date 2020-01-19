@@ -35,9 +35,21 @@ class TestEventsDataset(BaseEventsTest):
         )
 
         # All tag keys expression
+        q = Query({"granularity": 86400, "selected_columns": ["tags_key"]}, source,)
+        assert column_expr(self.dataset, "tags_key", q, ParsingContext()) == (
+            "(arrayJoin(tags.key) AS tags_key)"
+        )
+
+        # Selected tags
+        q = Query(
+            {"granularity": 86400, "selected_columns": ["tags_key[tags1, tags2]"]},
+            source,
+        )
         assert column_expr(
-            self.dataset, "tags_key", deepcopy(query), ParsingContext()
-        ) == ("(arrayJoin(tags.key) AS tags_key)")
+            self.dataset, "tags_key[tags1, tags2]", q, ParsingContext()
+        ) == (
+            "(arrayJoin(arrayFilter(tag -> tag IN ('tags1','tags2'), tags.key)) AS `tags_key[tags1, tags2]`)"
+        )
 
         # If we are going to use both tags_key and tags_value, expand both
         tag_group_body = {"groupby": ["tags_key", "tags_value"]}
@@ -46,6 +58,19 @@ class TestEventsDataset(BaseEventsTest):
         ) == (
             "(((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) "
             "AS all_tags))[1] AS tags_key)"
+        )
+
+        # If we are going to use both tags_key and tags_value with select
+        tag_group_body = {"groupby": ["tags_key[tag1, tag2]", "tags_value"]}
+        q = Query(tag_group_body, source)
+        p = ParsingContext()
+        assert column_expr(self.dataset, "tags_key[tag1, tag2]", q, p,) == (
+            "(((arrayJoin(arrayFilter(pair -> pair[1] IN ('tag1','tag2'), arrayMap((x,y) -> [x,y], tags.key, tags.value))) "
+            "AS all_tags))[1] AS `tags_key[tag1, tag2]`)"
+        )
+        assert (
+            column_expr(self.dataset, "tags_value", q, p)
+            == "((all_tags)[2] AS tags_value)"
         )
 
         assert (
