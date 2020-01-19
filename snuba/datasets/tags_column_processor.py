@@ -57,7 +57,8 @@ class TagColumnProcessor:
         matched = NESTED_COL_EXPR_RE.match(column_name)
         if matched and matched[1] in ["tags", "contexts"]:
             return self.__tag_expr(column_name, table_alias)
-        elif column_name in ["tags_key", "tags_value"]:
+        elif column_name.startswith("tags_key") or column_name == "tags_value":
+            # TODO: Should we support contexts?
             return self.__tags_expr(column_name, query, parsing_context, table_alias)
         return None
 
@@ -92,7 +93,7 @@ class TagColumnProcessor:
                 return qualified_column(self.__string_col(actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
-        return u"{col}.value[indexOf({col}.key, {tag})]".format(
+        return "{col}.value[indexOf({col}.key, {tag})]".format(
             **{"col": qualified_column(col, table_alias), "tag": escape_literal(tag)}
         )
 
@@ -107,7 +108,7 @@ class TagColumnProcessor:
         Return an expression that array-joins on tags to produce an output with one
         row per tag.
         """
-        assert column_name in ["tags_key", "tags_value"]
+        assert column_name.startswith("tags_key") or column_name == "tags_value"
         col, k_or_v = column_name.split("_", 1)
         nested_tags_only = state.get_config("nested_tags_only", 1)
 
@@ -119,31 +120,47 @@ class TagColumnProcessor:
         else:
             promoted = self.__promoted_columns[col]
             col_map = self.__column_tag_map[col]
-            key_list = u"arrayConcat([{}], {}.key)".format(
-                u", ".join(u"'{}'".format(col_map.get(p, p)) for p in promoted),
+            key_list = "arrayConcat([{}], {}.key)".format(
+                ", ".join("'{}'".format(col_map.get(p, p)) for p in promoted),
                 qualified_col,
             )
-            val_list = u"arrayConcat([{}], {}.value)".format(
+            val_list = "arrayConcat([{}], {}.value)".format(
                 ", ".join(self.__string_col(p) for p in promoted), qualified_col
             )
 
         qualified_key = qualified_column("tags_key", table_alias)
         qualified_value = qualified_column("tags_value", table_alias)
-        cols_used = query.get_all_referenced_columns() & set(
-            [qualified_key, qualified_value]
-        )
+        cols_used = [
+            col
+            for col in query.get_all_referenced_columns()
+            if col.startswith(qualified_key) or col == qualified_value
+        ]
+        match = NESTED_COL_EXPR_RE.match(k_or_v)
+        if match:
+            parameters = match.group(2)
+            filter_tags = map(lambda tag: f"'{tag.strip()}'", parameters.split(","))
+            filter_tags = ",".join(filter_tags)
+            filtering_expression = (
+                f"arrayFilter(pair -> pair[1] IN ({filter_tags}), %s)"
+            )
+        else:
+            filtering_expression = None
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.
-            expr = (u"arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))").format(
-                key_list, val_list
-            )
+            mapping = f"arrayMap((x,y) -> [x,y], {key_list}, {val_list})"
+            if filtering_expression:
+                filtering = filtering_expression % mapping
+            else:
+                filtering = mapping
+
+            expr = f"arrayJoin({filtering})"
 
             # put the all_tags expression in the alias cache so we can use the alias
             # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
             # expanding the whole tags expression again.
             expr = alias_expr(expr, "all_tags", parsing_context)
-            return u"({})[{}]".format(expr, 1 if k_or_v == "key" else 2)
+            return "({})[{}]".format(expr, 1 if k_or_v.startswith("key") else 2)
         else:
             # If we are only ever going to use one of tags_key or tags_value, don't
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
