@@ -9,6 +9,7 @@ from tests.subscriptions import BaseSubscriptionTest
 class TestBuildRequest(BaseSubscriptionTest):
     def test_conditions(self):
         subscription = Subscription(
+            id="hello",
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
