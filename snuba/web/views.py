@@ -432,8 +432,7 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_table_exists(dataset)
-        record = json.loads(http_request.data)
+        ensure_table_exists(dataset)        record = json.loads(http_request.data)
 
         version = record[0]
         if version != 2:
