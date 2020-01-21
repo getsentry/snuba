@@ -23,13 +23,15 @@ def migrate(*, log_level: str, dataset_name: Optional[str]) -> None:
     logging.basicConfig(
         level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
     )
+
+    if not local_dataset_mode():
+        logger.error("The migration tool can only work on local dataset mode.")
+        sys.exit(1)
+
     dataset_names = [dataset_name] if dataset_name else DATASET_NAMES
     for name in dataset_names:
         dataset = get_dataset(name)
         logger.info("Migrating dataset %s", name)
-        if not local_dataset_mode():
-            logger.error("The migration tool can only work on local dataset mode.")
-            sys.exit(1)
 
         clickhouse = Client(
             host=settings.CLICKHOUSE_HOST, port=settings.CLICKHOUSE_PORT,
