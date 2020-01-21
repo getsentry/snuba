@@ -24,7 +24,9 @@ from snuba.datasets.events_processor import (
 from snuba.util import create_metrics
 
 
-metrics = create_metrics("snuba.transactions.processor")
+metrics = create_metrics(
+    settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.transactions.processor"
+)
 
 
 UNKNOWN_SPAN_STATUS = 2

@@ -276,26 +276,18 @@ def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
             setattr(settings, k, v)
 
 
-def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
-    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
-    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
-    Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
-    """
+def create_metrics(
+    host: str, port: int, prefix: str, tags: Optional[Tags] = None
+) -> MetricsBackend:
+    """Create a DogStatsd object with the specified prefix and tags. Prefixes
+    must start with `snuba.<category>`, for example: `snuba.processor`."""
+    from datadog import DogStatsd
+    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
+
     bits = prefix.split(".", 2)
     assert (
         len(bits) >= 2 and bits[0] == "snuba"
     ), "prefix must be like `snuba.<category>`"
-
-    host = settings.DOGSTATSD_HOST
-    port = settings.DOGSTATSD_PORT
-
-    if host is None or port is None:
-        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-
-        return DummyMetricsBackend()
-
-    from datadog import DogStatsd
-    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
         DogStatsd(

@@ -42,6 +42,8 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
+        dogstatsd_host: str,
+        dogstatsd_port: int,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.dataset = get_dataset(dataset_name)
@@ -92,7 +94,10 @@ class ConsumerBuilder:
         )
 
         self.metrics = util.create_metrics(
-            "snuba.consumer", tags={"group": group_id, "dataset": self.dataset_name},
+            dogstatsd_host,
+            dogstatsd_port,
+            "snuba.consumer",
+            tags={"group": group_id, "dataset": self.dataset_name},
         )
 
         self.max_batch_size = max_batch_size

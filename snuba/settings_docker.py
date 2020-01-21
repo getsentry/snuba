@@ -12,7 +12,3 @@ REDIS_PORT = int(env("REDIS_PORT", 6379))
 REDIS_PASSWORD = env("REDIS_PASSWORD")
 REDIS_DB = int(env("REDIS_DB", 1))
 USE_REDIS_CLUSTER = False
-
-# Dogstatsd Options
-DOGSTATSD_HOST = None
-DOGSTATSD_PORT = None
