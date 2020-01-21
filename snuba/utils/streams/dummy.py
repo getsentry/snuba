@@ -11,6 +11,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Union,
 )
 
@@ -46,6 +47,8 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
+
+        self.__paused: Set[Partition] = set()
 
         # The offset that a the last ``EndOfPartition`` exception that was
         # raised at. To maintain consistency with the Confluent consumer, this
@@ -105,6 +108,9 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
+            if partition in self.__paused:
+                continue  # skip paused partitions
+
             messages = self.__broker.topics[partition.topic][partition.index]
             try:
                 payload = messages[offset]
@@ -124,6 +130,25 @@ class DummyConsumer(Consumer[TPayload]):
                 return message
 
         return None
+
+    def pause(self, partitions: Sequence[Partition]) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot pause unassigned partitions")
+
+        self.__paused.update(partitions)
+
+    def resume(self, partitions: Sequence[Partition]) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot resume unassigned partitions")
+
+        for partition in partitions:
+            self.__paused.discard(partition)
 
     def tell(self) -> Mapping[Partition, int]:
         if self.__closed:

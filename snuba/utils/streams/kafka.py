@@ -441,6 +441,9 @@ class KafkaConsumer(Consumer[TPayload]):
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot pause unassigned partitions")
+
         self.__consumer.pause(
             [
                 ConfluentTopicPartition(partition.topic.name, partition.index)
@@ -466,6 +469,9 @@ class KafkaConsumer(Consumer[TPayload]):
         """
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
+
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot resume unassigned partitions")
 
         self.__consumer.resume(
             [
