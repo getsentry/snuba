@@ -143,7 +143,8 @@ class DummyConsumer(Consumer[TPayload]):
                 if offset == len(messages):
                     if (
                         self.__enable_end_of_partition
-                        and offset > self.__last_eof_at.get(partition, 0)
+                        and partition not in self.__last_eof_at
+                        or offset > self.__last_eof_at[partition]
                     ):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
