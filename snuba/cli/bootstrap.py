@@ -57,7 +57,7 @@ def bootstrap(
                     raise
                 time.sleep(1)
 
-        topics = dict()
+        topics = {}
         for name in DATASET_NAMES:
             dataset = get_dataset(name)
             table_writer = dataset.get_table_writer()
