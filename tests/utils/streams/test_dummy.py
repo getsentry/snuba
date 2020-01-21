@@ -1,4 +1,5 @@
 import contextlib
+import uuid
 from typing import Iterator
 from unittest import TestCase
 
@@ -13,11 +14,13 @@ from tests.utils.streams.mixins import StreamsTestMixin
 
 class DummyStreamsTestCase(StreamsTestMixin, TestCase):
     def setUp(self) -> None:
-        self.broker: DummyBroker[int] = DummyBroker({Topic("test"): [[]]})
+        self.broker: DummyBroker[int] = DummyBroker({})
 
     @contextlib.contextmanager
-    def get_topic(self) -> Iterator[Topic]:
-        yield Topic("test")
+    def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
+        topic = Topic(uuid.uuid1().hex)
+        self.broker.topics[topic] = [[] for i in range(partitions)]
+        yield topic
 
     def get_consumer(self, group: str) -> DummyConsumer[int]:
         return DummyConsumer(self.broker, group, enable_end_of_partition=True)

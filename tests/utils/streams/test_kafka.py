@@ -37,11 +37,11 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
     codec = TestCodec()
 
     @contextlib.contextmanager
-    def get_topic(self) -> Iterator[Topic]:
+    def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
         name = f"test-{uuid.uuid1().hex}"
         client = AdminClient(self.configuration)
         [[key, future]] = client.create_topics(
-            [NewTopic(name, num_partitions=1, replication_factor=1)]
+            [NewTopic(name, num_partitions=partitions, replication_factor=1)]
         ).items()
         assert key == name
         assert future.result() is None

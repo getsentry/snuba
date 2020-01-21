@@ -24,7 +24,7 @@ epoch = datetime(2019, 12, 19)
 
 class DummyBroker(Generic[TPayload]):
     def __init__(
-        self, topics: Mapping[Topic, Sequence[MutableSequence[TPayload]]]
+        self, topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]]
     ) -> None:
         self.topics = topics
         self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(

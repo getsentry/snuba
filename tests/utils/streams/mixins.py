@@ -14,7 +14,7 @@ from tests.assertions import assert_changes, assert_does_not_change
 
 class StreamsTestMixin(ABC):
     @abstractmethod
-    def get_topic(self) -> ContextManager[Topic]:
+    def get_topic(self, partitions: int = 1) -> ContextManager[Topic]:
         raise NotImplementedError
 
     @abstractmethod
