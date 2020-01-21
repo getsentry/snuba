@@ -1,6 +1,6 @@
 import contextlib
 import uuid
-from typing import Iterator
+from typing import Iterator, Optional
 from unittest import TestCase
 
 import pytest
@@ -25,10 +25,12 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
         yield topic
 
     def get_consumer(
-        self, group: str, enable_end_of_partition: bool = True
+        self, group: Optional[str] = None, enable_end_of_partition: bool = True
     ) -> DummyConsumer[int]:
         return DummyConsumer(
-            self.broker, group, enable_end_of_partition=enable_end_of_partition
+            self.broker,
+            group if group is not None else uuid.uuid1().hex,
+            enable_end_of_partition=enable_end_of_partition,
         )
 
     def get_producer(self) -> DummyProducer[int]:

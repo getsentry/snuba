@@ -1,7 +1,7 @@
 import contextlib
 import uuid
 from contextlib import closing
-from typing import Iterator
+from typing import Iterator, Optional
 from unittest import TestCase
 
 import pytest
@@ -54,7 +54,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
 
     def get_consumer(
         self,
-        group: str,
+        group: Optional[str] = None,
         enable_end_of_partition: bool = True,
         auto_offset_reset: str = "earliest",
     ) -> KafkaConsumer[int]:
@@ -65,7 +65,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 "enable.auto.commit": "false",
                 "enable.auto.offset.store": "false",
                 "enable.partition.eof": enable_end_of_partition,
-                "group.id": group,
+                "group.id": group if group is not None else uuid.uuid1().hex,
                 "session.timeout.ms": 10000,
             },
             self.codec,
@@ -79,9 +79,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             with closing(self.get_producer()) as producer:
                 producer.produce(topic, 0).result(5.0)
 
-            with closing(
-                self.get_consumer("test", auto_offset_reset="earliest")
-            ) as consumer:
+            with closing(self.get_consumer(auto_offset_reset="earliest")) as consumer:
                 consumer.subscribe([topic])
 
                 message = consumer.poll(10.0)
@@ -93,9 +91,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             with closing(self.get_producer()) as producer:
                 producer.produce(topic, 0).result(5.0)
 
-            with closing(
-                self.get_consumer("test", auto_offset_reset="latest")
-            ) as consumer:
+            with closing(self.get_consumer(auto_offset_reset="latest")) as consumer:
                 consumer.subscribe([topic])
 
                 try:
@@ -111,9 +107,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             with closing(self.get_producer()) as producer:
                 producer.produce(topic, 0).result(5.0)
 
-            with closing(
-                self.get_consumer("test", auto_offset_reset="error")
-            ) as consumer:
+            with closing(self.get_consumer(auto_offset_reset="error")) as consumer:
                 consumer.subscribe([topic])
 
                 with pytest.raises(ConsumerError):
