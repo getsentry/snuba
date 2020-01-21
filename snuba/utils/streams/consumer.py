@@ -98,6 +98,26 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def pause(self, partitions: Sequence[Partition]) -> None:
+        """
+        Pause consuming from the provided partitions.
+
+        If any provided partitions are not in the assignment set, an
+        exception will be raised and no parittions will be paused.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def resume(self, partitions: Sequence[Partition]) -> None:
+        """
+        Resume consuming from the provided partitions.
+
+        If any provided partitions are not in the assignment set, an
+        exception will be raised and no parittions will be resumed.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def tell(self) -> Mapping[Partition, int]:
         """
         Return the working offsets for all currently assigned positions.
