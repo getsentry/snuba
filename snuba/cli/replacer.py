@@ -61,6 +61,12 @@ from snuba.environment import setup_logging, setup_sentry
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--optimize",
+    is_flag=True,
+    default=False,
+    help="Run optimize after each replacement.",
+)
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -73,6 +79,7 @@ def replacer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: Optional[str] = None,
+    optimize: bool,
 ) -> None:
 
     from snuba import util
@@ -133,7 +140,7 @@ def replacer(
             codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics, optimize=optimize),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
