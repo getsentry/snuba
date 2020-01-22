@@ -152,6 +152,17 @@ class TagColumnProcessor:
     def __extract_top_level_tag_conditions(
         self, condition: Expression
     ) -> Sequence[str]:
+        """
+        Finds the top level conditions that include tags_key in an expression.
+        For top level condition. In Snuba conditions are expressed in layers, the top level
+        ones are in AND, the nested ones are in OR and so on.
+        We can only apply the arrayFilter optimization to tag keys conditions that are not in
+        OR with other columns. To simplify the problem, we only consider those conditions that
+        are included in the first level of the query:
+        [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
+        [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
+        """
+
         if (
             is_binary_condition(condition, ConditionFunctions.EQ)
             and isinstance(condition.parameters[0], Column)
@@ -179,7 +190,12 @@ class TagColumnProcessor:
         return []
 
     def __get_filter_tags(self, query: Query) -> Sequence[str]:
-        if not state.get_config("ast_tag_processor_enabled", 1):
+        """
+        Identifies the tag names we can apply the arrayFilter optimization on.
+        Which means: if the tags_key column is in the select clause and there are
+        one or more top level conditions on the tags_key column.
+        """
+        if not state.get_config("ast_tag_processor_enabled", 0):
             return []
 
         select_clause = query.get_selected_columns_from_ast() or []
@@ -205,9 +221,12 @@ class TagColumnProcessor:
 
         cond_tags_key = extract_tags_from_condition(query.get_condition_from_ast())
         if cond_tags_key is None:
+            # This means we found an OR. Cowardly we give up even though there could
+            # be cases where this condition is still optimizable.
             return []
         having_tags_key = extract_tags_from_condition(query.get_having_from_ast())
         if having_tags_key is None:
+            # Same as above
             return []
 
         return cond_tags_key + having_tags_key
