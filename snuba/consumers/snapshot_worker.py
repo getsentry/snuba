@@ -1,13 +1,14 @@
 import logging
+from typing import Any, Mapping, Optional, Set
 
 from confluent_kafka import Producer
-from typing import Any, Optional, Mapping, Set
 
 from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
-from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.datasets.dataset import Dataset
 from snuba.snapshots import SnapshotId
+from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.streams.types import Topic
 
 logger = logging.getLogger("snuba.snapshot-consumer")
 
@@ -38,7 +39,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
         metrics: MetricsBackend,
-        replacements_topic: Optional[str] = None,
+        replacements_topic: Optional[Topic] = None,
     ) -> None:
         super().__init__(
             dataset=dataset,
