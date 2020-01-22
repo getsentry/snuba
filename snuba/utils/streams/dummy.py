@@ -30,6 +30,37 @@ class DummyBroker(Generic[TPayload]):
         self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(
             dict
         )
+        # The active subscriptions are stored by consumer group as a mapping
+        # between the consumer and it's subscribed topics.
+        self.subscriptions: MutableMapping[
+            str, MutableMapping[DummyConsumer[TPayload], Sequence[Topic]]
+        ] = defaultdict(dict)
+
+    def subscribe(
+        self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
+    ) -> Sequence[Partition]:
+        if self.subscriptions[consumer.group]:
+            # XXX: Consumer group balancing is not currently implemented.
+            if consumer not in self.subcriptions[consumer.group]:
+                raise NotImplementedError
+
+            # XXX: Updating an existing subscription is currently not implemented.
+            if self.subscriptions[consumer.group][consumer] != topics:
+                raise NotImplementedError
+
+        self.subscriptions[consumer.group][consumer] = topics
+
+        assignment: MutableSequence[Partition] = []
+
+        for topic in self.topics.keys() & set(topics):
+            assignment.extend(
+                [Partition(topic, index) for index in range(len(self.topics[topic]))]
+            )
+
+        return assignment
+
+    def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> None:
+        del self.subscriptions[consumer.group][consumer]
 
 
 class DummyConsumer(Consumer[TPayload]):
@@ -61,6 +92,10 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__closed = False
 
+    @property
+    def group(self) -> str:
+        return self.__group
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -70,24 +105,10 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        self.__subscription = topics
-
-        assignment: MutableSequence[Partition] = []
-        for topic, partitions in self.__broker.topics.items():
-            if topic not in topics:
-                continue
-
-            assignment.extend([Partition(topic, i) for i in range(len(partitions))])
-
-        if self.__assignment is not None and on_revoke is not None:
-            on_revoke(self.__assignment)
-
-        self.__assignment = assignment
-
         # TODO: Handle offset reset more realistically.
         self.__offsets = {
             partition: self.__broker.offsets[self.__group].get(partition, 0)
-            for partition in assignment
+            for partition in self.__broker.subscribe(self, topics)
         }
 
         self.__staged_offsets.clear()
@@ -100,7 +121,11 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        self.subscribe([])
+        self.__broker.unsubscribe(self)
+
+        self.__offsets = {}
+        self.__staged_offsets.clear()
+        self.__last_eof_at.clear()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         if self.__closed:
