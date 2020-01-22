@@ -104,12 +104,12 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             )
         return None
 
-    def __find_tags(self, expression: Expression) -> bool:
+    def __has_tags(self, expression: Expression) -> bool:
         for node in expression:
-            if isinstance(node, Column) and node.column_name.startswith(
-                self.__nested_col
-            ):
-                return True
+            if isinstance(node, Column):
+                tag = NESTED_COL_EXPR_RE.match(node.column_name)
+                if tag and tag[1] == self.__nested_col:
+                    return True
         return False
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -148,25 +148,21 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         # Do not use flattened tags if tags are being unpacked anyway. In that case
         # using flattened tags only implies loading an additional column thus making
         # the query heavier and slower
-        if query.get_arrayjoin_from_ast() and self.__find_tags(
+        if query.get_arrayjoin_from_ast() and self.__has_tags(
             query.get_arrayjoin_from_ast()
         ):
             return
         if query.get_groupby_from_ast():
             for expression in query.get_groupby_from_ast():
-                if self.__find_tags(expression):
+                if self.__has_tags(expression):
                     return
-        if query.get_having_from_ast() and self.__find_tags(
-            query.get_having_from_ast()
-        ):
+        if query.get_having_from_ast() and self.__has_tags(query.get_having_from_ast()):
             return
-        if not query.get_groupby_from_ast():
-            # If we are not grouping by, the order by can be impactful for this use case
-            # as well. If we have a group by, the order by may not be unpacking all tags.
-            if query.get_orderby_from_ast():
-                for orderby in query.get_orderby_from_ast():
-                    if self.__find_tags(orderby.node):
-                        return
+
+        if query.get_orderby_from_ast():
+            for orderby in query.get_orderby_from_ast():
+                if self.__has_tags(orderby.node):
+                    return
 
         new_conditions = []
         positive_like_expression: List[str] = []
