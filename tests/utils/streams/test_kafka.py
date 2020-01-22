@@ -53,7 +53,10 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             assert future.result() is None
 
     def get_consumer(
-        self, group: str, auto_offset_reset: str = "earliest"
+        self,
+        group: str,
+        enable_end_of_partition: bool = True,
+        auto_offset_reset: str = "earliest",
     ) -> KafkaConsumer[int]:
         return KafkaConsumer(
             {
@@ -61,7 +64,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 "auto.offset.reset": auto_offset_reset,
                 "enable.auto.commit": "false",
                 "enable.auto.offset.store": "false",
-                "enable.partition.eof": "true",
+                "enable.partition.eof": enable_end_of_partition,
                 "group.id": group,
                 "session.timeout.ms": 10000,
             },

@@ -22,8 +22,12 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
         self.broker.topics[topic] = [[] for i in range(partitions)]
         yield topic
 
-    def get_consumer(self, group: str) -> DummyConsumer[int]:
-        return DummyConsumer(self.broker, group, enable_end_of_partition=True)
+    def get_consumer(
+        self, group: str, enable_end_of_partition: bool = True
+    ) -> DummyConsumer[int]:
+        return DummyConsumer(
+            self.broker, group, enable_end_of_partition=enable_end_of_partition
+        )
 
     def get_producer(self) -> DummyProducer[int]:
         return DummyProducer(self.broker)

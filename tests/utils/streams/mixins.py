@@ -18,7 +18,9 @@ class StreamsTestMixin(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_consumer(self, group: str) -> Consumer[int]:
+    def get_consumer(
+        self, group: str, enable_end_of_partition: bool = True
+    ) -> Consumer[int]:
         raise NotImplementedError
 
     @abstractmethod
