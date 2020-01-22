@@ -83,6 +83,12 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     type=int,
     help="Port to send DogStatsD metrics to.",
 )
+@click.option(
+    "--optimize",
+    is_flag=True,
+    default=False,
+    help="Run optimize after each replacement.",
+)
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -99,8 +105,8 @@ def replacer(
     log_level: str,
     dogstatsd_host: str,
     dogstatsd_port: int,
+    optimize: bool,
 ) -> None:
-
     import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
@@ -162,7 +168,7 @@ def replacer(
             codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics, optimize=optimize),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

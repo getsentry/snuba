@@ -109,7 +109,11 @@ class Replacement:
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
-        self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
+        self,
+        clickhouse: ClickhousePool,
+        dataset: Dataset,
+        metrics: MetricsBackend,
+        optimize: bool = False,
     ) -> None:
         self.clickhouse = clickhouse
         self.dataset = dataset
@@ -121,6 +125,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.__required_columns = [
             col.escaped for col in dataset.get_required_columns()
         ]
+        self.optimize = optimize
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         message = json.loads(message.payload.value)
@@ -152,6 +157,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         return processed
 
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
+        needs_optimize = False
         for replacement in batch:
             query_args = {
                 **replacement.query_args,
@@ -171,11 +177,16 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             # query_time_flags == (type, project_id, [...data...])
             flag_type, project_id = replacement.query_time_flags[:2]
-            if flag_type == NEEDS_FINAL:
-                set_project_needs_final(project_id)
-            elif flag_type == EXCLUDE_GROUPS:
-                group_ids = replacement.query_time_flags[2]
-                set_project_exclude_groups(project_id, group_ids)
+
+            if not self.optimize:
+                if flag_type == NEEDS_FINAL:
+                    set_project_needs_final(project_id)
+                elif flag_type == EXCLUDE_GROUPS:
+                    group_ids = replacement.query_time_flags[2]
+                    set_project_exclude_groups(project_id, group_ids)
+
+            elif flag_type in {NEEDS_FINAL, EXCLUDE_GROUPS}:
+                needs_optimize = True
 
             t = time.time()
             query = replacement.insert_query_template % query_args
@@ -185,6 +196,20 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             logger.info("Replacing %s rows took %sms" % (count, duration))
             self.metrics.timing("replacements.count", count)
             self.metrics.timing("replacements.duration", duration)
+
+        if self.optimize and needs_optimize:
+            from snuba.optimize import run_optimize
+
+            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            num_dropped = run_optimize(
+                self.clickhouse,
+                "default",
+                enforce_table_writer(self.dataset).get_schema().get_local_table_name(),
+                before=today,
+            )
+            logger.info(
+                "Optimized %s partitions on %s" % (num_dropped, self.clickhouse.host)
+            )
 
 
 def process_delete_groups(message, required_columns) -> Optional[Replacement]:
