@@ -15,7 +15,6 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
     @property
     def subscription(self) -> Subscription:
         return Subscription(
-            id="hello",
             project_id=self.project_id,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -24,63 +23,66 @@ class TestRedisSubscriptionStore(BaseSubscriptionTest):
         )
 
     def build_store(self, key="1") -> RedisSubscriptionStore:
-        return RedisSubscriptionStore(redis_client, key)
+        return RedisSubscriptionStore(redis_client, self.dataset, key)
 
     def test_create(self):
         store = self.build_store()
-        store.create(self.subscription)
-        assert store.all() == [self.subscription]
+        subscription_id = "something"
+        store.create(subscription_id, self.subscription)
+        assert store.all() == [(subscription_id, self.subscription)]
 
     def test_delete(self):
         store = self.build_store()
-        key = store.create(self.subscription)
-        assert store.all() == [self.subscription]
-        store.delete(key)
+        subscription_id = "something"
+        store.create(subscription_id, self.subscription)
+        assert store.all() == [(subscription_id, self.subscription)]
+        store.delete(subscription_id)
         assert store.all() == []
 
     def test_all(self):
         store = self.build_store()
         assert store.all() == []
-        store.create(self.subscription)
-        assert store.all() == [self.subscription]
+        subscription_id = "something"
+        store.create(subscription_id, self.subscription)
+        assert store.all() == [(subscription_id, self.subscription)]
         new_subscription = Subscription(
-            id="what",
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],
             time_window=timedelta(minutes=400),
             resolution=timedelta(minutes=2),
         )
-        store.create(new_subscription)
-        assert sorted(store.all(), key=lambda row: row.id) == [
-            self.subscription,
-            new_subscription,
+        new_subscription_id = "what"
+        store.create(new_subscription_id, new_subscription)
+        assert sorted(store.all(), key=lambda row: row[0]) == [
+            (subscription_id, self.subscription),
+            (new_subscription_id, new_subscription),
         ]
 
     def test_partitions(self):
         store_1 = self.build_store("1")
         store_2 = self.build_store("2")
-        store_1.create(self.subscription)
+        subscription_id = "something"
+        store_1.create(subscription_id, self.subscription)
         assert store_2.all() == []
-        assert store_1.all() == [self.subscription]
+        assert store_1.all() == [(subscription_id, self.subscription)]
 
         new_subscription = Subscription(
-            id="what",
             project_id=self.project_id,
             conditions=[["platform", "IN", ["b"]]],
             aggregations=[["count()", "", "something"]],
             time_window=timedelta(minutes=400),
             resolution=timedelta(minutes=2),
         )
-        store_2.create(new_subscription)
-        assert store_1.all() == [self.subscription]
-        assert store_2.all() == [new_subscription]
+        new_subscription_id = "what"
+        store_2.create(new_subscription_id, new_subscription)
+        assert store_1.all() == [(subscription_id, self.subscription)]
+        assert store_2.all() == [(new_subscription_id, new_subscription)]
 
 
 class TestSubscriptionCodec(BaseTest):
     def build_subscription(self) -> Subscription:
         return Subscription(
-            id="hello",
             project_id=5,
             conditions=[["platform", "IN", ["a"]]],
             aggregations=[["count()", "", "count"]],
@@ -99,7 +101,6 @@ class TestSubscriptionCodec(BaseTest):
 
         payload = codec.encode(subscription)
         data = json.loads(payload.decode("utf-8"))
-        assert data["id"] == subscription.id
         assert data["project_id"] == subscription.project_id
         assert data["conditions"] == subscription.conditions
         assert data["aggregations"] == subscription.aggregations
@@ -110,7 +111,6 @@ class TestSubscriptionCodec(BaseTest):
         codec = SubscriptionCodec()
         subscription = self.build_subscription()
         data = {
-            "id": subscription.id,
             "project_id": subscription.project_id,
             "conditions": subscription.conditions,
             "aggregations": subscription.aggregations,
