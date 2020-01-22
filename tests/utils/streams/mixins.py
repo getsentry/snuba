@@ -312,15 +312,15 @@ class StreamsTestMixin(ABC):
                 consumer_a.poll(10.0) in messages
             )  # XXX: getting the subcription is slow
 
+            assert len(consumer_a.tell()) == 2
+            assert len(consumer_b.tell()) == 0
+
             # Pause all partitions.
             consumer_a.pause([Partition(topic, 0), Partition(topic, 1)])
 
-            # with (assert_changes(lambda: len(consumer_a.tell()), 2, 1)), (
-            #     assert_changes(lambda: len(consumer_b.tell()), 0, 2)
-            # ):
             consumer_b.subscribe([topic])
             for i in range(10):
-                consumer_a.poll(0)  # attempt to force session timeout
+                assert consumer_a.poll(0) is None  # attempt to force session timeout
                 if consumer_b.poll(1.0) is not None:
                     break
             else:
@@ -330,3 +330,6 @@ class StreamsTestMixin(ABC):
             # well as should have had it's partition resumed during
             # rebalancing.
             assert consumer_a.poll(10.0) is not None
+
+            assert len(consumer_a.tell()) == 1
+            assert len(consumer_b.tell()) == 1
