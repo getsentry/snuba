@@ -102,6 +102,10 @@ class Consumer(Generic[TPayload], ABC):
         """
         Pause consuming from the provided partitions.
 
+        A partition that is paused will be automatically resumed during
+        reassignment. If partitions should remain paused across rebalances,
+        this should be implemented in the assignment callback.
+
         If any provided partitions are not in the assignment set, an
         exception will be raised and no parittions will be paused.
         """
