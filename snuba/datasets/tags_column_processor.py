@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Mapping, Optional, Sequence, Set, Union
+from typing import Any, List, Mapping, Optional, Sequence, Set, Union
 
 from dataclasses import dataclass
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.query.expressions import Column, Expression, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -38,7 +38,7 @@ class ParsedNestedColumn:
     parameter: Optional[str]
 
     @classmethod
-    def parse_column_expression(cls, col_expr: str) -> ParsedNestedColumn:
+    def parse_column_expression(cls, col_expr: str) -> Optional[ParsedNestedColumn]:
         match = NESTED_COL_EXPR_RE.match(col_expr)
         if match:
             col_prefix = match[1]
@@ -149,9 +149,7 @@ class TagColumnProcessor:
             }
         )
 
-    def __extract_top_level_tag_conditions(
-        self, condition: Expression
-    ) -> Sequence[str]:
+    def __extract_top_level_tag_conditions(self, condition: Expression) -> List[str]:
         """
         Finds the top level conditions that include tags_key in an expression.
         For top level condition. In Snuba conditions are expressed in layers, the top level
@@ -163,33 +161,41 @@ class TagColumnProcessor:
         [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
         """
 
-        if (
-            is_binary_condition(condition, ConditionFunctions.EQ)
-            and isinstance(condition.parameters[0], Column)
-            and condition.parameters[0].column_name == "tags_key"
-            and isinstance(condition.parameters[1], Literal)
-        ):
-            return [condition.parameters[1].value]
+        if is_binary_condition(condition, ConditionFunctions.EQ):
+            # This is to make mypy happy.
+            assert isinstance(condition, FunctionCall)
+            if (
+                isinstance(condition.parameters[0], Column)
+                and condition.parameters[0].column_name == "tags_key"
+                and isinstance(condition.parameters[1], Literal)
+            ):
+                # Tags are strings, but mypy does not know that
+                return [str(condition.parameters[1].value)]
 
-        if (
-            is_in_condition(condition)
-            and isinstance(condition.parameters[0], Column)
-            and condition.parameters[0].column_name == "tags_key"
-        ):
-            # The parameters of the inner function `a IN tuple(b,c,d)`
-            literals = condition.parameters[1].parameters
-            return [
-                literal.value for literal in literals if isinstance(literal, Literal)
-            ]
+        if is_in_condition(condition):
+            assert isinstance(condition, FunctionCall)
+            if (
+                isinstance(condition.parameters[0], Column)
+                and condition.parameters[0].column_name == "tags_key"
+            ):
+                # The parameters of the inner function `a IN tuple(b,c,d)`
+                assert isinstance(condition.parameters[1], FunctionCall)
+                literals = condition.parameters[1].parameters
+                return [
+                    str(literal.value)
+                    for literal in literals
+                    if isinstance(literal, Literal)
+                ]
 
         if is_binary_condition(condition, BooleanFunctions.AND):
+            assert isinstance(condition, FunctionCall)
             return self.__extract_top_level_tag_conditions(
                 condition.parameters[0]
             ) + self.__extract_top_level_tag_conditions(condition.parameters[1])
 
         return []
 
-    def __get_filter_tags(self, query: Query) -> Sequence[str]:
+    def __get_filter_tags(self, query: Query) -> List[str]:
         """
         Identifies the tag names we can apply the arrayFilter optimization on.
         Which means: if the tags_key column is in the select clause and there are
@@ -212,7 +218,9 @@ class TagColumnProcessor:
         if not tags_key_found:
             return []
 
-        def extract_tags_from_condition(cond: Optional[Expression]) -> Sequence[str]:
+        def extract_tags_from_condition(
+            cond: Optional[Expression],
+        ) -> Optional[List[str]]:
             if not cond:
                 return []
             if any([is_binary_condition(cond, BooleanFunctions.OR) for cond in cond]):

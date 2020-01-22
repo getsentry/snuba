@@ -56,12 +56,14 @@ def __set_condition(
 
 
 def __is_set_condition(exp: Expression, operator: str) -> bool:
-    return (
-        is_binary_condition(exp, operator)
-        and isinstance(exp.parameters[1], FunctionCall)
-        and exp.parameters[1].function_name == "tuple"
-        and all([isinstance(c, Literal) for c in exp.parameters[1].parameters])
-    )
+    if is_binary_condition(exp, operator):
+        assert isinstance(exp, FunctionCall)
+        return (
+            isinstance(exp.parameters[1], FunctionCall)
+            and exp.parameters[1].function_name == "tuple"
+            and all([isinstance(c, Literal) for c in exp.parameters[1].parameters])
+        )
+    return False
 
 
 def in_condition(
