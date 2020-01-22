@@ -293,3 +293,43 @@ class StreamsTestMixin(ABC):
 
             with pytest.raises(ConsumerError):
                 consumer.pause([Partition(topic, 1)])
+
+    def test_pause_resume_rebalancing(self) -> None:
+        with self.get_topic(2) as topic, closing(
+            self.get_producer()
+        ) as producer, closing(
+            self.get_consumer("group", enable_end_of_partition=False)
+        ) as consumer_a, closing(
+            self.get_consumer("group", enable_end_of_partition=False)
+        ) as consumer_b:
+            messages: Sequence[Message[int]] = [
+                producer.produce(Partition(topic, i), i).result(timeout=5.0)
+                for i in range(2)
+            ]
+
+            consumer_a.subscribe([topic])
+
+            # It doesn't really matter which message is fetched first -- we
+            # just want to know the assignment occurred.
+            assert (
+                consumer_a.poll(10.0) in messages
+            )  # XXX: getting the subcription is slow
+
+            # Pause all partitions.
+            consumer_a.pause([Partition(topic, 0), Partition(topic, 1)])
+
+            # with (assert_changes(lambda: len(consumer_a.tell()), 2, 1)), (
+            #     assert_changes(lambda: len(consumer_b.tell()), 0, 2)
+            # ):
+            consumer_b.subscribe([topic])
+            for i in range(10):
+                consumer_a.poll(0)  # attempt to force session timeout
+                if consumer_b.poll(1.0) is not None:
+                    break
+            else:
+                assert False, "rebalance did not occur"
+
+            # The first consumer should have had its offsets rolled back, as
+            # well as should have had it's partition resumed during
+            # rebalancing.
+            assert consumer_a.poll(10.0) is not None

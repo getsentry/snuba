@@ -3,6 +3,8 @@ import uuid
 from typing import Iterator
 from unittest import TestCase
 
+import pytest
+
 from snuba.utils.streams.dummy import (
     DummyBroker,
     DummyConsumer,
@@ -31,3 +33,9 @@ class DummyStreamsTestCase(StreamsTestMixin, TestCase):
 
     def get_producer(self) -> DummyProducer[int]:
         return DummyProducer(self.broker)
+
+    @pytest.mark.xfail(
+        strict=True, reason="rebalancing not implemented", raises=NotImplementedError
+    )
+    def test_pause_resume_rebalancing(self) -> None:
+        return super().test_pause_resume_rebalancing()

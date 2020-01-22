@@ -41,7 +41,7 @@ class DummyBroker(Generic[TPayload]):
     ) -> Sequence[Partition]:
         if self.subscriptions[consumer.group]:
             # XXX: Consumer group balancing is not currently implemented.
-            if consumer not in self.subcriptions[consumer.group]:
+            if consumer not in self.subscriptions[consumer.group]:
                 raise NotImplementedError
 
             # XXX: Updating an existing subscription is currently not implemented.
