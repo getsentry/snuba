@@ -163,19 +163,6 @@ class TagColumnProcessor:
             }
         )
 
-    def __has_tags_key(self, select_clause: Sequence[Expression]) -> bool:
-        for exp in select_clause:
-            tags_key_found = any(
-                [
-                    col.column_name == "tags_key"
-                    for col in select_clause
-                    if isinstance(col, Column)
-                ]
-            )
-            if tags_key_found:
-                return True
-        return False
-
     def __extract_top_level_tag_conditions(
         self, condition: Expression
     ) -> Sequence[str]:
@@ -210,7 +197,15 @@ class TagColumnProcessor:
             return []
 
         select_clause = query.get_selected_columns_from_ast() or []
-        tags_key_found = self.__has_tags_key(select_clause)
+
+        tags_key_found = any(
+            [
+                col.column_name == "tags_key"
+                for expression in select_clause
+                for col in expression
+                if isinstance(col, Column)
+            ]
+        )
 
         if not tags_key_found:
             return []
@@ -241,6 +236,9 @@ class TagColumnProcessor:
         """
         Return an expression that array-joins on tags to produce an output with one
         row per tag.
+
+        It can also apply an arrayFilter in the arrayJoin if an equivalent condition
+        is found in the query in order to reduce the size of the arrayJoin.
         """
         col, k_or_v = parsed_col.col_name.split("_", 1)
         nested_tags_only = state.get_config("nested_tags_only", 1)
@@ -263,15 +261,9 @@ class TagColumnProcessor:
 
         qualified_key = qualified_column("tags_key", table_alias)
         qualified_value = qualified_column("tags_value", table_alias)
-        cols_used = [
-            col
-            for col in query.get_all_referenced_columns()
-            if col.startswith(qualified_key) or col == qualified_value
-        ]
-        assert len(cols_used) in (
-            1,
-            2,
-        ), f"Invalid tag query, found these columns in the query {cols_used}"
+        cols_used = query.get_all_referenced_columns() & set(
+            [qualified_key, qualified_value]
+        )
 
         filter_tags = ",".join([f"'{tag}'" for tag in self.__get_filter_tags(query)])
         if len(cols_used) == 2:
@@ -292,7 +284,7 @@ class TagColumnProcessor:
             # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
             # expanding the whole tags expression again.
             expr = alias_expr(expr, "all_tags", parsing_context)
-            return "({})[{}]".format(expr, 1 if k_or_v.startswith("key") else 2)
+            return "({})[{}]".format(expr, 1 if k_or_v == "key" else 2)
         else:
             # If we are only ever going to use one of tags_key or tags_value, don't
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
