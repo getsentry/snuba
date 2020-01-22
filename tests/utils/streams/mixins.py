@@ -285,9 +285,6 @@ class StreamsTestMixin(ABC):
             consumer.resume([Partition(topic, 0)])
             assert consumer.poll(5.0) == messages[0]
 
-            # TODO: Test that partitions are resumed after rebalance or
-            # resetting subscriptions.
-
             with pytest.raises(ConsumerError):
                 consumer.resume([Partition(topic, 1)])
 
