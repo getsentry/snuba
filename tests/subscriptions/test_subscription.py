@@ -68,6 +68,18 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 Mock(),
             )
 
+        with raises(InvalidSubscriptionError):
+            creator.create(
+                Subscription(
+                    123,
+                    [["platfo", "IN", ["a"]]],
+                    [["count()", "", "count"]],
+                    timedelta(hours=48),
+                    timedelta(minutes=1),
+                ),
+                Mock(),
+            )
+
     def test_invalid_resolution(self):
         creator = SubscriptionCreator(self.dataset)
         with raises(InvalidSubscriptionError):
