@@ -1,5 +1,6 @@
-from typing import Sequence
+from typing import Optional, Sequence
 
+from snuba import state
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -56,37 +57,30 @@ class TagsProcessor(QueryProcessor):
         return []
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+        if not state.get_config("ast_tag_processor_enabled", 0):
+            return
+
         select_clause = query.get_selected_columns_from_ast() or []
         tags_key_found = self.__has_tags_key(select_clause)
 
         if not tags_key_found:
             return
 
-        tag_keys = []
-        if query.get_condition_from_ast():
-            if any(
-                [
-                    is_binary_condition(cond, BooleanFunctions.OR)
-                    for cond in query.get_condition_from_ast()
-                ]
-            ):
-                return
+        def extract_tags_from_condition(cond: Optional[Expression]) -> Sequence[str]:
+            if not cond:
+                return []
+            if any([is_binary_condition(cond, BooleanFunctions.OR) for cond in cond]):
+                return None
+            return self.__extract_top_level_tag_conditions(cond)
 
-            tag_keys.extend(
-                self.__extract_top_level_tag_conditions(query.get_condition_from_ast())
-            )
-        if query.get_having_from_ast():
-            if any(
-                [
-                    is_binary_condition(cond, BooleanFunctions.OR)
-                    for cond in query.get_having_from_ast()
-                ]
-            ):
-                return
+        cond_tags_key = extract_tags_from_condition(query.get_condition_from_ast())
+        if cond_tags_key is None:
+            return
+        having_tags_key = extract_tags_from_condition(query.get_having_from_ast())
+        if having_tags_key is None:
+            return
 
-            tag_keys.extend(
-                self.__extract_top_level_tag_conditions(query.get_having_from_ast())
-            )
+        tag_keys = cond_tags_key + having_tags_key
 
         if not tag_keys:
             return

@@ -1,4 +1,5 @@
 import pytest
+from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
 from snuba.query.processors.tags_processor import TagsProcessor
@@ -131,6 +132,7 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_body", test_data)
 def test_tags_processor(query_body, expected_body) -> None:
+    state.set_config("ast_tag_processor_enabled", 1)
     query = parse_query(query_body, get_dataset("transactions"))
     request_settings = HTTPRequestSettings()
     processor = TagsProcessor()
