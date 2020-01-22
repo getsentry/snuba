@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import re
+
+from typing import Optional
+
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence, Set, Union
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.query.expressions import Column, Expression, Literal
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    is_binary_condition,
+    is_in_condition,
+)
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
@@ -17,7 +27,7 @@ from snuba.util import (
 
 # A column name like "tags[url]"
 NESTED_COL_EXPR_RE = re.compile(
-    r"^([a-zA-Z0-9_\.]+)(?:\[((?:(?:[a-zA-Z0-9_\.\,:-]+)\s*)+)\])?$"
+    r"^([a-zA-Z0-9_\.]+)(?:\[((?:(?:[a-zA-Z0-9_\.:-]+)\s*)+)\])?$"
 )
 
 
@@ -29,32 +39,30 @@ class ParsedNestedColumn:
     """
 
     col_name: str
-    parameters: Sequence[str]
+    parameter: Optional[str]
 
     @classmethod
     def parse_column_expression(cls, col_expr: str) -> ParsedNestedColumn:
         match = NESTED_COL_EXPR_RE.match(col_expr)
         if match:
             col_prefix = match[1]
-            params_string = match[2]
-            params: Sequence[str] = []
-            if params_string:
-                params = list(map(lambda p: f"{p.strip()}", params_string.split(",")))
+            param_string = match[2]
+
+            if col_prefix not in ("tags", "contexts", "tags_key", "tags_value"):
+                return None
+
             if col_prefix in ("tags", "contexts"):
-                assert len(params) == 1
-                return ParsedNestedColumn(col_prefix, params)
-            if col_prefix == "tags_key":
-                return ParsedNestedColumn(col_prefix, params)
-            if col_prefix in ("tags_value",):
-                assert len(params) == 0
-                return ParsedNestedColumn(col_prefix, params)
+                assert param_string
+
+            if col_prefix in ("tags_key", "tags_value"):
+                assert not param_string
+
+            return ParsedNestedColumn(col_prefix, param_string)
+
         return None
 
     def is_all_tags_keys(self) -> bool:
-        return self.col_name == "tags_key" and not self.parameters
-
-    def is_selected_tags_keys(self) -> bool:
-        return self.col_name == "tags_key" and self.parameters
+        return self.col_name == "tags_key"
 
     def is_single_tag(self) -> bool:
         return self.col_name == "tags"
@@ -109,11 +117,7 @@ class TagColumnProcessor:
             return None
         if parsed_col.is_single_context() or parsed_col.is_single_tag():
             return self.__tag_expr(parsed_col, table_alias)
-        elif (
-            parsed_col.is_all_tags_keys()
-            or parsed_col.is_all_tags_values()
-            or parsed_col.is_selected_tags_keys()
-        ):
+        elif parsed_col.is_all_tags_keys() or parsed_col.is_all_tags_values():
             # TODO: Should we support contexts?
             return self.__tags_expr(parsed_col, query, parsing_context, table_alias)
         # We should never get here if we got an instance of ParsedNestedColumn
@@ -143,8 +147,8 @@ class TagColumnProcessor:
         "promoted" to a top level column, or whether we have to look in the tags map.
         """
         # For promoted tags, return the column name.
-        assert len(parsed_col.parameters) == 1
-        tag_name = parsed_col.parameters[0]
+        assert parsed_col.parameter
+        tag_name = parsed_col.parameter
         col = parsed_col.col_name
         if col in self.__promoted_columns:
             actual_tag = self.__get_tag_column_map()[col].get(tag_name, tag_name)
@@ -158,6 +162,74 @@ class TagColumnProcessor:
                 "tag": escape_literal(tag_name),
             }
         )
+
+    def __has_tags_key(self, select_clause: Sequence[Expression]) -> bool:
+        for exp in select_clause:
+            tags_key_found = any(
+                [
+                    col.column_name == "tags_key"
+                    for col in select_clause
+                    if isinstance(col, Column)
+                ]
+            )
+            if tags_key_found:
+                return True
+        return False
+
+    def __extract_top_level_tag_conditions(
+        self, condition: Expression
+    ) -> Sequence[str]:
+        if (
+            is_binary_condition(condition, ConditionFunctions.EQ)
+            and isinstance(condition.parameters[0], Column)
+            and condition.parameters[0].column_name == "tags_key"
+            and isinstance(condition.parameters[1], Literal)
+        ):
+            return [condition.parameters[1].value]
+
+        if (
+            is_in_condition(condition)
+            and isinstance(condition.parameters[0], Column)
+            and condition.parameters[0].column_name == "tags_key"
+        ):
+            # The parameters of the inner function `a IN tuple(b,c,d)`
+            literals = condition.parameters[1].parameters
+            return [
+                literal.value for literal in literals if isinstance(literal, Literal)
+            ]
+
+        if is_binary_condition(condition, BooleanFunctions.AND):
+            return self.__extract_top_level_tag_conditions(
+                condition.parameters[0]
+            ) + self.__extract_top_level_tag_conditions(condition.parameters[1])
+
+        return []
+
+    def __get_filter_tags(self, query: Query) -> Sequence[str]:
+        if not state.get_config("ast_tag_processor_enabled", 0):
+            return []
+
+        select_clause = query.get_selected_columns_from_ast() or []
+        tags_key_found = self.__has_tags_key(select_clause)
+
+        if not tags_key_found:
+            return []
+
+        def extract_tags_from_condition(cond: Optional[Expression]) -> Sequence[str]:
+            if not cond:
+                return []
+            if any([is_binary_condition(cond, BooleanFunctions.OR) for cond in cond]):
+                return None
+            return self.__extract_top_level_tag_conditions(cond)
+
+        cond_tags_key = extract_tags_from_condition(query.get_condition_from_ast())
+        if cond_tags_key is None:
+            return []
+        having_tags_key = extract_tags_from_condition(query.get_having_from_ast())
+        if having_tags_key is None:
+            return []
+
+        return cond_tags_key + having_tags_key
 
     def __tags_expr(
         self,
@@ -201,12 +273,12 @@ class TagColumnProcessor:
             2,
         ), f"Invalid tag query, found these columns in the query {cols_used}"
 
-        filter_tags = ",".join([f"'{param}'" for param in parsed_col.parameters])
+        filter_tags = ",".join([f"'{tag}'" for tag in self.__get_filter_tags(query)])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.
             mapping = f"arrayMap((x,y) -> [x,y], {key_list}, {val_list})"
-            if parsed_col.is_selected_tags_keys():
+            if filter_tags:
                 filtering_expression = (
                     f"arrayFilter(pair -> pair[1] IN ({filter_tags}), %s)"
                 )
@@ -225,7 +297,7 @@ class TagColumnProcessor:
             # If we are only ever going to use one of tags_key or tags_value, don't
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
-            if parsed_col.is_selected_tags_keys():
+            if filter_tags:
                 return (
                     f"arrayJoin(arrayFilter(tag -> tag IN ({filter_tags}), {key_list}))"
                 )
