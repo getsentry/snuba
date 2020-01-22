@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import re
 
-from typing import Optional
+from typing import Any, Mapping, Optional, Sequence, Set, Union
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Sequence, Set, Union
-
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
@@ -26,9 +24,7 @@ from snuba.util import (
 )
 
 # A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(
-    r"^([a-zA-Z0-9_\.]+)(?:\[((?:(?:[a-zA-Z0-9_\.:-]+)\s*)+)\])?$"
-)
+NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 @dataclass(frozen=True)
@@ -48,30 +44,20 @@ class ParsedNestedColumn:
             col_prefix = match[1]
             param_string = match[2]
 
-            if col_prefix not in ("tags", "contexts", "tags_key", "tags_value"):
-                return None
-
             if col_prefix in ("tags", "contexts"):
                 assert param_string
-
-            if col_prefix in ("tags_key", "tags_value"):
-                assert not param_string
-
             return ParsedNestedColumn(col_prefix, param_string)
+
+        if col_expr in ("tags_key", "tags_value"):
+            return ParsedNestedColumn(col_expr, None)
 
         return None
 
-    def is_all_tags_keys(self) -> bool:
-        return self.col_name == "tags_key"
+    def is_joined_column(self) -> bool:
+        return self.col_name in ("tags_key", "tags_value")
 
-    def is_single_tag(self) -> bool:
-        return self.col_name == "tags"
-
-    def is_single_context(self) -> bool:
-        return self.col_name == "contexts"
-
-    def is_all_tags_values(self) -> bool:
-        return self.col_name == "tags_value"
+    def is_single_column(self) -> bool:
+        return self.col_name in ("tags", "contexts")
 
 
 class TagColumnProcessor:
@@ -115,9 +101,9 @@ class TagColumnProcessor:
         parsed_col = ParsedNestedColumn.parse_column_expression(column_name)
         if not parsed_col:
             return None
-        if parsed_col.is_single_context() or parsed_col.is_single_tag():
+        if parsed_col.is_single_column():
             return self.__tag_expr(parsed_col, table_alias)
-        elif parsed_col.is_all_tags_keys() or parsed_col.is_all_tags_values():
+        elif parsed_col.is_joined_column():
             # TODO: Should we support contexts?
             return self.__tags_expr(parsed_col, query, parsing_context, table_alias)
         # We should never get here if we got an instance of ParsedNestedColumn
@@ -193,7 +179,7 @@ class TagColumnProcessor:
         return []
 
     def __get_filter_tags(self, query: Query) -> Sequence[str]:
-        if not state.get_config("ast_tag_processor_enabled", 0):
+        if not state.get_config("ast_tag_processor_enabled", 1):
             return []
 
         select_clause = query.get_selected_columns_from_ast() or []
