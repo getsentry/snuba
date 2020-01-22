@@ -13,7 +13,7 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
-
+from snuba.web.views import SUBSCRIPTION_SEPARATOR
 from tests.base import BaseApiTest
 
 
@@ -1693,16 +1693,57 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
         expected_uuid = uuid.uuid1()
 
-        with patch("snuba.web.views.uuid1") as uuid4:
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
-            resp = self.app.post("/events/subscriptions")
+            resp = self.app.post(
+                "{}/subscriptions".format(self.dataset_name),
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "conditions": [["platform", "IN", ["a"]]],
+                        "aggregations": [["count()", "", "count"]],
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                    }
+                ).encode("utf-8"),
+            )
 
         assert resp.status_code == 202
         data = json.loads(resp.data)
-        assert data == {"subscription_id": f"0/{expected_uuid.hex}"}  # TODO
+        assert data == {
+            "subscription_id": "{}{}{}".format(
+                55, SUBSCRIPTION_SEPARATOR, expected_uuid.hex
+            )
+        }
+
+    def test_time_error(self):
+        resp = self.app.post(
+            "{}/subscriptions".format(self.dataset_name),
+            data=json.dumps(
+                {
+                    "project_id": 1,
+                    "conditions": [["platform", "IN", ["a"]]],
+                    "aggregations": [["count()", "", "count"]],
+                    "time_window": 0,
+                    "resolution": 1,
+                }
+            ),
+        )
+
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Time window must be greater than or equal to 1 minute",
+                "type": "subscription",
+            }
+        }
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
     def test(self):
-        resp = self.app.delete(f"/events/subscriptions/1/{uuid.uuid4().hex}")
-        assert resp.status_code == 202
+        resp = self.app.delete(
+            f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}"
+        )
+        print(f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}")
+        assert resp.status_code == 202, resp
