@@ -270,19 +270,31 @@ class StreamsTestMixin(ABC):
 
             # Calling ``seek`` should have a side effect, even if no messages
             # are consumed before calling ``pause``.
-            consumer.seek({Partition(topic, 0): messages[3].offset})
-            consumer.pause([Partition(topic, 0)])
-            assert consumer.poll(1.0) is None
-            consumer.resume([Partition(topic, 0)])
+            with assert_changes(
+                consumer.tell,
+                {Partition(topic, 0): messages[1].get_next_offset()},
+                {Partition(topic, 0): messages[3].offset},
+            ):
+                consumer.seek({Partition(topic, 0): messages[3].offset})
+                consumer.pause([Partition(topic, 0)])
+                assert consumer.poll(1.0) is None
+                consumer.resume([Partition(topic, 0)])
+
             assert consumer.poll(5.0) == messages[3]
 
             # It is still allowable to call ``seek`` on a paused partition.
             # When consumption resumes, we would expect to see the side effect
             # of that seek.
             consumer.pause([Partition(topic, 0)])
-            consumer.seek({Partition(topic, 0): messages[0].offset})
-            assert consumer.poll(1.0) is None
-            consumer.resume([Partition(topic, 0)])
+            with assert_changes(
+                consumer.tell,
+                {Partition(topic, 0): messages[3].get_next_offset()},
+                {Partition(topic, 0): messages[0].offset},
+            ):
+                consumer.seek({Partition(topic, 0): messages[0].offset})
+                assert consumer.poll(1.0) is None
+                consumer.resume([Partition(topic, 0)])
+
             assert consumer.poll(5.0) == messages[0]
 
             with pytest.raises(ConsumerError):
