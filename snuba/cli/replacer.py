@@ -72,17 +72,6 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-@click.option(
-    "--dogstatsd-host",
-    default=settings.DOGSTATSD_HOST,
-    help="Host to send DogStatsD metrics to.",
-)
-@click.option(
-    "--dogstatsd-port",
-    default=settings.DOGSTATSD_PORT,
-    type=int,
-    help="Port to send DogStatsD metrics to.",
-)
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -97,8 +86,6 @@ def replacer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: str,
-    dogstatsd_host: str,
-    dogstatsd_port: int,
 ) -> None:
 
     import sentry_sdk
@@ -129,9 +116,7 @@ def replacer(
     ), f"Dataset {dataset} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, "snuba.replacer", tags={"group": consumer_group}
-    )
+    metrics = util.create_metrics("snuba.replacer", tags={"group": consumer_group})
 
     client_settings = {
         # Replacing existing rows requires reconstructing the entire tuple for each

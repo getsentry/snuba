@@ -45,6 +45,11 @@ class SubscriptionData:
             raise InvalidSubscriptionError(
                 "Time window must be greater than or equal to 1 minute"
             )
+        elif self.time_window > timedelta(hours=24):
+            raise InvalidSubscriptionError(
+                "Time window must be less than or equal to 24 hours"
+            )
+
         if self.resolution < timedelta(minutes=1):
             raise InvalidSubscriptionError(
                 "Resolution must be greater than or equal to 1 minute"

@@ -237,6 +237,10 @@ class Float(ColumnType):
         return "Float{}".format(self.size)
 
 
+class Date(ColumnType):
+    pass
+
+
 class DateTime(ColumnType):
     pass
 
