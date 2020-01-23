@@ -89,10 +89,11 @@ def bootstrap(
     from snuba.clickhouse.native import ClickhousePool
 
     attempts = 0
+    conn = ClickhousePool()
     while True:
         try:
             logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
-            ClickhousePool().execute("SELECT 1")
+            conn.execute("SELECT 1")
             break
         except Exception as e:
             logger.error(
@@ -107,8 +108,7 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
-    clickhouse_tables = ClickhousePool().execute("show tables")
-    existing_tables = [row[0] for row in clickhouse_tables]
+    existing_tables = {row[0] for row in conn.execute("show tables")}
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
 
@@ -116,16 +116,20 @@ def bootstrap(
         run_migrations = False
         for statement in dataset.get_dataset_schemas().get_create_statements():
             if statement.table_name not in existing_tables:
-                # This hack is needed since ClickHouse would try to execute the
-                # SELECT statement that defines a Materialized View even if the View
-                # exists. This may require the migrate script to run instead to make
-                # the SELECT statement work.
+                # This is a hack to deal with Materialized views.
+                # All our DDL create statements are in the for of CREATE IF NOT EXISTS
+                # This works well for all tables, except for Materialized views.
+                # It seems Clockhouse parses the SQL query that defines the view even if
+                # the materialized view already exists.
+                # This breaks if we are making a change to the mat view schema.
+                # In that case we cannot run the CREATE statement if the matview already
+                # exists before we ensure all migrations have ran.
                 logger.debug("Executing:\n%s", statement.statement)
-                ClickhousePool().execute(statement.statement)
+                conn.execute(statement.statement)
             else:
                 logger.debug("Skipping existing table %s", statement.table_name)
                 run_migrations = True
         if run_migrations:
             logger.debug("Running missing migrations for dataset %s", name)
-            run(ClickhousePool(), dataset)
+            run(conn, dataset)
         logger.info("Tables for dataset %s created.", name)
