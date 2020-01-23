@@ -23,8 +23,6 @@ from snuba.processor import (
 
 logger = logging.getLogger("snuba.processor")
 
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
-
 
 def extract_base(output, message):
     output["event_id"] = message["event_id"]
@@ -93,6 +91,9 @@ def enforce_retention(message, timestamp):
     return retention_days
 
 
+ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
+
+
 def escape_field(field: str) -> str:
     """
     We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
@@ -102,7 +103,7 @@ def escape_field(field: str) -> str:
     return field.translate(ESCAPE_TRANSLATION)
 
 
-def merge_nested_field(keys: Sequence[str], values: Sequence[str]) -> str:
+def flatten_nested_field(keys: Sequence[str], values: Sequence[str]) -> str:
     # We need to guarantee the content of the merged string is sorted otherwise we
     # will not be able to run a LIKE operation over multiple fields at the same time.
     # Tags are pre sorted, but it seems contexts are not, so to make this generic
@@ -112,7 +113,7 @@ def merge_nested_field(keys: Sequence[str], values: Sequence[str]) -> str:
     # The result is going to be:
     # |tag:val||tag:val|
     # This gives the guarantee we will always have a delimiter on both side of the
-    # tag pair, thus we can univocally identify a tag with a LIKE expression even if
+    # tag pair, thus we can unequivocally identify a tag with a LIKE expression even if
     # the value or the tag name in the query is a substring of a real tag.
     return "".join(str_pairs)
 
@@ -236,7 +237,7 @@ class EventsProcessor(MessageProcessor):
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = merge_nested_field(
+        processed["_tags_flattened"] = flatten_nested_field(
             processed["tags.key"], processed["tags.value"]
         )
 

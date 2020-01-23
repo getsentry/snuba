@@ -20,7 +20,7 @@ from snuba.datasets.events_processor import (
     extract_extra_contexts,
     extract_extra_tags,
     extract_user,
-    merge_nested_field,
+    flatten_nested_field,
 )
 from snuba.util import create_metrics
 
@@ -107,7 +107,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = merge_nested_field(
+        processed["_tags_flattened"] = flatten_nested_field(
             processed["tags.key"], processed["tags.value"]
         )
 
@@ -127,7 +127,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
-        processed["_contexts_flattened"] = merge_nested_field(
+        processed["_contexts_flattened"] = flatten_nested_field(
             processed["contexts.key"], processed["contexts.value"]
         )
 
