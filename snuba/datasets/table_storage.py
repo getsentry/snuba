@@ -86,7 +86,9 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(self, options=None, table_name=None) -> BatchWriter:
+    def get_writer(
+        self, options=None, table_name=None, rapid_json_serialize=False
+    ) -> BatchWriter:
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
@@ -100,7 +102,11 @@ class TableWriter:
             self.__table_schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: json.dumps(row, default=default).encode("utf-8"),
+            lambda row: (
+                rapidjson.dumps(row, default=default)
+                if rapid_json_serialize
+                else json.dumps(row, default=default)
+            ).encode("utf-8"),
             options,
             table_name,
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
