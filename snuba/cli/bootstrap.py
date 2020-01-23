@@ -116,14 +116,19 @@ def bootstrap(
         run_migrations = False
         for statement in dataset.get_dataset_schemas().get_create_statements():
             if statement.table_name not in existing_tables:
-                # This is a hack to deal with Materialized views.
-                # All our DDL create statements are in the for of CREATE IF NOT EXISTS
-                # This works well for all tables, except for Materialized views.
-                # It seems Clockhouse parses the SQL query that defines the view even if
-                # the materialized view already exists.
-                # This breaks if we are making a change to the mat view schema.
-                # In that case we cannot run the CREATE statement if the matview already
-                # exists before we ensure all migrations have ran.
+                # This is a hack to deal with updates to Materialized views.
+                # It seems that ClickHouse would parse the SELECT statement that defines a
+                # materialized view even if the view already exists and the CREATE statement
+                # includes the IF NOT EXISTS clause.
+                # When we add a column to a matview, though, we will be in a state where, by
+                # running bootstrap, ClickHouse will parse the SQL statement to try to create
+                # the view and fail because the column does not exist yet on the underlying table,
+                # since the migration on the underlying table has not ran yet.
+                # Migrations are per dataset so they can only run after the bootstrap of an
+                # entire dataset has run. So we would have bootstrap depending on migration
+                # and migration depending on bootstrap.
+                # In order to break this dependency we skip bootstrap DDL calls here if the
+                # table/view already exists, so it is always safe to run bootstrap first.
                 logger.debug("Executing:\n%s", statement.statement)
                 conn.execute(statement.statement)
             else:
