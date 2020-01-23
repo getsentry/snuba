@@ -341,6 +341,9 @@ class StreamsTestMixin(ABC):
 
             # Pause all partitions.
             consumer_a.pause([Partition(topic, 0), Partition(topic, 1)])
+            assert set(consumer_a.paused()) == set(
+                [Partition(topic, 0), Partition(topic, 1)]
+            )
 
             consumer_b.subscribe([topic])
             for i in range(10):
@@ -353,6 +356,7 @@ class StreamsTestMixin(ABC):
             # The first consumer should have had its offsets rolled back, as
             # well as should have had it's partition resumed during
             # rebalancing.
+            assert consumer_a.paused() == []
             assert consumer_a.poll(10.0) is not None
 
             assert len(consumer_a.tell()) == 1
