@@ -1,5 +1,6 @@
-from confluent_kafka import KafkaError, KafkaException, Producer
 from typing import Optional, Sequence
+
+from confluent_kafka import KafkaError, KafkaException, Producer
 
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
@@ -41,8 +42,6 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
-        dogstatsd_host: str,
-        dogstatsd_port: int,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
         self.dataset = get_dataset(dataset_name)
@@ -55,19 +54,32 @@ class ConsumerBuilder:
             self.bootstrap_servers = bootstrap_servers
 
         stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
-        self.raw_topic = raw_topic or stream_loader.get_default_topic_spec().topic_name
-        default_replacement_topic_name = (
-            stream_loader.get_replacement_topic_spec().topic_name
-            if stream_loader.get_replacement_topic_spec()
-            else None
-        )
-        self.replacements_topic = replacements_topic or default_replacement_topic_name
-        default_commit_log_topic_name = (
-            stream_loader.get_commit_log_topic_spec().topic_name
-            if stream_loader.get_commit_log_topic_spec()
-            else None
-        )
-        self.commit_log_topic = commit_log_topic or default_commit_log_topic_name
+
+        self.raw_topic: Topic
+        if raw_topic is not None:
+            self.raw_topic = Topic(raw_topic)
+        else:
+            self.raw_topic = Topic(stream_loader.get_default_topic_spec().topic_name)
+
+        self.replacements_topic: Optional[Topic]
+        if replacements_topic is not None:
+            self.replacements_topic = Topic(replacements_topic)
+        else:
+            replacement_topic_spec = stream_loader.get_replacement_topic_spec()
+            if replacement_topic_spec is not None:
+                self.replacements_topic = Topic(replacement_topic_spec.topic_name)
+            else:
+                self.replacements_topic = None
+
+        self.commit_log_topic: Optional[Topic]
+        if commit_log_topic is not None:
+            self.commit_log_topic = Topic(commit_log_topic)
+        else:
+            commit_log_topic_spec = stream_loader.get_commit_log_topic_spec()
+            if commit_log_topic_spec is not None:
+                self.commit_log_topic = Topic(commit_log_topic_spec.topic_name)
+            else:
+                self.commit_log_topic = None
 
         # XXX: This can result in a producer being built in cases where it's
         # not actually required.
@@ -80,10 +92,7 @@ class ConsumerBuilder:
         )
 
         self.metrics = util.create_metrics(
-            dogstatsd_host,
-            dogstatsd_port,
-            "snuba.consumer",
-            tags={"group": group_id, "dataset": self.dataset_name},
+            "snuba.consumer", tags={"group": group_id, "dataset": self.dataset_name},
         )
 
         self.max_batch_size = max_batch_size
@@ -131,13 +140,13 @@ class ConsumerBuilder:
                 configuration,
                 codec=codec,
                 producer=self.producer,
-                commit_log_topic=Topic(self.commit_log_topic),
+                commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,
             )
 
         return BatchingConsumer(
             consumer,
-            Topic(self.raw_topic),
+            self.raw_topic,
             worker=worker,
             max_batch_size=self.max_batch_size,
             max_batch_time=self.max_batch_time_ms,

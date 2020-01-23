@@ -28,7 +28,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
-metrics = create_metrics(settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.api")
+metrics = create_metrics("snuba.api")
 
 clickhouse_rw = ClickhousePool()
 clickhouse_ro = ClickhousePool(client_settings={"readonly": True})

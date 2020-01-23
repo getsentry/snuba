@@ -1,7 +1,9 @@
 import json
 from datetime import timedelta
-from typing import Collection
+from typing import Collection, Tuple
 
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
 from snuba.redis import RedisClientType
 from snuba.subscriptions.data import Subscription
 from snuba.utils.codecs import Codec
@@ -11,7 +13,6 @@ class SubscriptionCodec(Codec[bytes, Subscription]):
     def encode(self, value: Subscription) -> bytes:
         return json.dumps(
             {
-                "id": value.id,
                 "project_id": value.project_id,
                 "conditions": value.conditions,
                 "aggregations": value.aggregations,
@@ -23,7 +24,6 @@ class SubscriptionCodec(Codec[bytes, Subscription]):
     def decode(self, value: bytes) -> Subscription:
         data = json.loads(value.decode("utf-8"))
         return Subscription(
-            id=data["id"],
             project_id=data["project_id"],
             conditions=data["conditions"],
             aggregations=data["aggregations"],
@@ -39,27 +39,25 @@ class RedisSubscriptionStore:
     defined by the `key` constructor param.
     """
 
-    KEY_TEMPLATE = "subscriptions:{}"
+    KEY_TEMPLATE = "subscriptions:{}:{}"
 
-    def __init__(self, client: RedisClientType, key: str):
+    def __init__(self, client: RedisClientType, dataset: Dataset, key: str):
         self.client = client
+        self.dataset = dataset
         self.key = key
         self.codec = SubscriptionCodec()
 
     @property
     def _key(self) -> str:
-        return self.KEY_TEMPLATE.format(self.key)
+        return self.KEY_TEMPLATE.format(get_dataset_name(self.dataset), self.key)
 
-    def create(self, subscription: Subscription) -> str:
+    def create(self, subscription_id: str, subscription: Subscription) -> None:
         """
         Stores a `Subscription` in Redis. Will overwrite any existing `Subscriptions`
         with the same id.
-        :param subscription:
-        :return: A str representing the id of the subscription
         """
         payload = self.codec.encode(subscription)
-        self.client.hset(self._key, subscription.id, payload)
-        return subscription.id
+        self.client.hset(self._key, subscription_id.encode("utf-8"), payload)
 
     def delete(self, subscription_id: str) -> None:
         """
@@ -67,11 +65,12 @@ class RedisSubscriptionStore:
         """
         self.client.hdel(self._key, subscription_id)
 
-    def all(self) -> Collection[Subscription]:
+    def all(self) -> Collection[Tuple[str, Subscription]]:
         """
         Fetches all `Subscriptions` from the store
         :return: A collection of `Subscriptions`.
         """
         return [
-            self.codec.decode(val) for val in self.client.hgetall(self._key).values()
+            (key.decode("utf-8"), self.codec.decode(val))
+            for key, val in self.client.hgetall(self._key).items()
         ]
