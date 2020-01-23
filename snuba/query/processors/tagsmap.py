@@ -104,7 +104,9 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             )
         return None
 
-    def __has_tags(self, expression: Expression) -> bool:
+    def __has_tags(self, expression: Optional[Expression]) -> bool:
+        if not expression:
+            return False
         for node in expression:
             if isinstance(node, Column):
                 tag = NESTED_COL_EXPR_RE.match(node.column_name)
@@ -148,20 +150,18 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         # Do not use flattened tags if tags are being unpacked anyway. In that case
         # using flattened tags only implies loading an additional column thus making
         # the query heavier and slower
-        if query.get_arrayjoin_from_ast() and self.__has_tags(
-            query.get_arrayjoin_from_ast()
-        ):
+        if self.__has_tags(query.get_arrayjoin_from_ast()):
             return
         if query.get_groupby_from_ast():
             for expression in query.get_groupby_from_ast():
                 if self.__has_tags(expression):
                     return
-        if query.get_having_from_ast() and self.__has_tags(query.get_having_from_ast()):
+        if self.__has_tags(query.get_having_from_ast()):
             return
 
         if query.get_orderby_from_ast():
             for orderby in query.get_orderby_from_ast():
-                if self.__has_tags(orderby.node):
+                if self.__has_tags(orderby.expression):
                     return
 
         new_conditions = []

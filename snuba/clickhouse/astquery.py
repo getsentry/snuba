@@ -111,7 +111,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         order_clause = ""
         if self.__orderby:
             orderby = [
-                f"{e.node.accept(formatter)} {e.direction.value}"
+                f"{e.expression.accept(formatter)} {e.direction.value}"
                 for e in self.__orderby
             ]
             order_clause = f"ORDER BY {', '.join(orderby)}"
