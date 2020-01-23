@@ -62,8 +62,11 @@ class TransactionsTableWriter(TableWriter):
         self,
         options: Optional[MutableMapping[str, Any]] = None,
         table_name: Optional[str] = None,
+        rapidjson_serialize=False,
     ) -> BatchWriter:
-        return super().get_writer(self.__update_options(options), table_name,)
+        return super().get_writer(
+            self.__update_options(options), table_name, rapidjson_serialize
+        )
 
     def get_bulk_writer(
         self,
