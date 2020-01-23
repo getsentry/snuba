@@ -21,7 +21,6 @@ from snuba.datasets.schemas.tables import (
     ReplacingMergeTreeSchema,
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
