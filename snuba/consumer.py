@@ -32,8 +32,8 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
-        rapid_json_deserialize: bool = False,
-        rapid_json_serialize: bool = False,
+        rapidjson_deserialize: bool = False,
+        rapidjson_serialize: bool = False,
     ) -> None:
         self.__dataset = dataset
         self.producer = producer
@@ -41,9 +41,9 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.metrics = metrics
         self.__writer = enforce_table_writer(dataset).get_writer(
             {"load_balancing": "in_order", "insert_distributed_sync": 1},
-            rapid_json_serialize=rapid_json_serialize,
+            rapidjson_serialize=rapidjson_serialize,
         )
-        self.__rapid_json_deserialize = rapid_json_deserialize
+        self.__rapidjson_deserialize = rapidjson_deserialize
 
     def process_message(
         self, message: Message[KafkaPayload]
@@ -51,7 +51,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
-        if self.__rapid_json_deserialize:
+        if self.__rapidjson_deserialize:
             value = rapidjson.loads(message.payload.value)
         else:
             value = json.loads(message.payload.value)
