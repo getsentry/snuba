@@ -70,7 +70,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
         with raises(InvalidSubscriptionError):
             creator.create(
-                Subscription(
+                SubscriptionData(
                     123,
                     [["platfo", "IN", ["a"]]],
                     [["count()", "", "count"]],
