@@ -78,6 +78,11 @@ def events_migrations(
             "ALTER TABLE %s ADD COLUMN location Nullable(String)" % clickhouse_table
         )
 
+    if "_tags_flattened" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT '' AFTER tags"
+        )
+
     return ret
 
 
@@ -193,6 +198,7 @@ class EventsDataset(TimeSeriesDataset):
             + [
                 # other tags
                 ("tags", Nested([("key", String()), ("value", String())])),
+                ("_tags_flattened", String()),
                 # other context
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 # http interface

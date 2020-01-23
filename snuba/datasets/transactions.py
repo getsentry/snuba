@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
+    Date,
     DateTime,
     IPv4,
     IPv6,
@@ -31,6 +32,7 @@ from snuba.datasets.transactions_processor import (
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -84,12 +86,14 @@ def transactions_migrations(
 
     if "sdk_name" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_name String DEFAULT ''" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN sdk_name LowCardinality(String) DEFAULT ''"
+            % clickhouse_table
         )
 
     if "sdk_version" not in current_schema:
         ret.append(
-            "ALTER TABLE %s ADD COLUMN sdk_version String DEFAULT ''" % clickhouse_table
+            "ALTER TABLE %s ADD COLUMN sdk_version LowCardinality(String) DEFAULT ''"
+            % clickhouse_table
         )
 
     if "transaction_status" not in current_schema:
@@ -107,6 +111,37 @@ def transactions_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN _contexts_flattened String DEFAULT ''"
         )
 
+    if "_start_date" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _start_date Date MATERIALIZED toDate(start_ts) AFTER start_ms"
+        )
+
+    if "_finish_date" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _finish_date Date MATERIALIZED toDate(finish_ts) AFTER finish_ms"
+        )
+
+    if "user_hash" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN user_hash UInt64 MATERIALIZED cityHash64(user) AFTER user"
+        )
+
+    low_cardinality_cols = [
+        "transaction_name",
+        "release",
+        "dist",
+        "sdk_name",
+        "sdk_version",
+        "environment",
+    ]
+    for col_name in low_cardinality_cols:
+        col = current_schema.get(col_name)
+        if col and not col.column_type.startswith("LowCardinality"):
+            new_type = f"LowCardinality({col.column_type})"
+            ret.append(
+                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {new_type} {col.default_type} {col.default_expr}"
+            )
+
     return ret
 
 
@@ -118,7 +153,7 @@ class TransactionsDataset(TimeSeriesDataset):
                 ("event_id", UUID()),
                 ("trace_id", UUID()),
                 ("span_id", UInt(64)),
-                ("transaction_name", String()),
+                ("transaction_name", LowCardinality(String())),
                 (
                     "transaction_hash",
                     Materialized(UInt(64), "cityHash64(transaction_name)",),
@@ -127,21 +162,24 @@ class TransactionsDataset(TimeSeriesDataset):
                 ("transaction_status", WithDefault(UInt(8), UNKNOWN_SPAN_STATUS)),
                 ("start_ts", DateTime()),
                 ("start_ms", UInt(16)),
+                ("_start_date", Materialized(Date(), "toDate(start_ts)"),),
                 ("finish_ts", DateTime()),
                 ("finish_ms", UInt(16)),
+                ("_finish_date", Materialized(Date(), "toDate(finish_ts)"),),
                 ("duration", UInt(32)),
                 ("platform", LowCardinality(String())),
-                ("environment", Nullable(String())),
-                ("release", Nullable(String())),
-                ("dist", Nullable(String())),
+                ("environment", LowCardinality(Nullable(String()))),
+                ("release", LowCardinality(Nullable(String()))),
+                ("dist", LowCardinality(Nullable(String()))),
                 ("ip_address_v4", Nullable(IPv4())),
                 ("ip_address_v6", Nullable(IPv6())),
                 ("user", WithDefault(String(), "''",)),
+                ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
                 ("user_id", Nullable(String())),
                 ("user_name", Nullable(String())),
                 ("user_email", Nullable(String())),
-                ("sdk_name", WithDefault(String(), "''")),
-                ("sdk_version", WithDefault(String(), "''")),
+                ("sdk_name", WithDefault(LowCardinality(String()), "''")),
+                ("sdk_version", WithDefault(LowCardinality(String()), "''")),
                 ("tags", Nested([("key", String()), ("value", String())])),
                 ("_tags_flattened", String()),
                 ("contexts", Nested([("key", String()), ("value", String())])),
@@ -159,8 +197,8 @@ class TransactionsDataset(TimeSeriesDataset):
             dist_table_name="transactions_dist",
             mandatory_conditions=[],
             prewhere_candidates=["event_id", "project_id"],
-            order_by="(project_id, toStartOfDay(start_ts), transaction_hash, start_ts, start_ms, trace_id, span_id)",
-            partition_by="(retention_days, toMonday(start_ts))",
+            order_by="(project_id, _finish_date, transaction_name, cityHash64(span_id))",
+            partition_by="(retention_days, toMonday(_finish_date))",
             version_column="deleted",
             sample_expr=None,
             migration_function=transactions_migrations,
@@ -249,6 +287,7 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            ApdexProcessor(),
             PrewhereProcessor(),
             NestedFieldConditionOptimizer(
                 "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME
