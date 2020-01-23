@@ -106,8 +106,8 @@ class Consumer(Generic[TPayload], ABC):
         reassignment. If partitions should remain paused across rebalances,
         this should be implemented in the assignment callback.
 
-        If any provided partitions are not in the assignment set, an
-        exception will be raised and no parittions will be paused.
+        If any of the provided partitions are not in the assignment set, an
+        exception will be raised and no partitions will be paused.
         """
         raise NotImplementedError
 
@@ -116,8 +116,8 @@ class Consumer(Generic[TPayload], ABC):
         """
         Resume consuming from the provided partitions.
 
-        If any provided partitions are not in the assignment set, an
-        exception will be raised and no parittions will be resumed.
+        If any of the provided partitions are not in the assignment set, an
+        exception will be raised and no partitions will be resumed.
         """
         raise NotImplementedError
 
