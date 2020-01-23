@@ -44,7 +44,7 @@ class OrderByDirection(Enum):
 @dataclass(frozen=True)
 class OrderBy:
     direction: OrderByDirection
-    node: Expression
+    expression: Expression
 
 
 class Query:
@@ -128,7 +128,9 @@ class Query:
             self.__condition or [],
             chain.from_iterable(self.__groupby),
             self.__having or [],
-            chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
+            chain.from_iterable(
+                map(lambda orderby: orderby.expression, self.__order_by)
+            ),
         )
 
     def transform_expressions(self, func: Callable[[Expression], Expression],) -> None:
@@ -158,7 +160,9 @@ class Query:
         self.__having = self.__having.transform(func) if self.__having else None
         self.__order_by = list(
             map(
-                lambda clause: replace(clause, node=clause.node.transform(func)),
+                lambda clause: replace(
+                    clause, expression=clause.expression.transform(func)
+                ),
                 self.__order_by,
             )
         )
