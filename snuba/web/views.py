@@ -4,12 +4,9 @@ import time
 from datetime import datetime
 from typing import NamedTuple
 
-from flask import Flask, redirect, render_template, request as http_request
+from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
-from uuid import uuid1
 import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
@@ -28,11 +25,16 @@ from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
+from snuba.request.validation import validate_request_content
+from snuba.subscriptions.data import InvalidSubscriptionError
+from snuba.subscriptions.store import SubscriptionCodec
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionIdentifier
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
     clickhouse_ro,
     clickhouse_rw,
@@ -43,9 +45,6 @@ from snuba.web.query import (
 
 
 logger = logging.getLogger("snuba.api")
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
-)
 
 
 class QueryResult(NamedTuple):
@@ -94,12 +93,7 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
-
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
-    release=os.getenv("SNUBA_RELEASE"),
-)
+application.url_map.converters["dataset"] = DatasetConverter
 
 
 @application.errorhandler(BadRequest)
@@ -156,7 +150,7 @@ def send_css(path):
 
 
 @application.route("/img/<path:path>")
-@application.route("/snuba/static/img/<path:path>")
+@application.route("/snuba/web/static/img/<path:path>")
 def send_img(path):
     return application.send_static_file(os.path.join("img", path))
 
@@ -236,23 +230,6 @@ def parse_request_body(http_request):
             raise BadRequest(str(error)) from error
 
 
-def validate_request_content(
-    body, schema: RequestSchema, timer, dataset: Dataset, referrer: str
-) -> Request:
-    with sentry_sdk.start_span(
-        description="validate_request_content", op="validate"
-    ) as span:
-        try:
-            request = schema.validate(body, dataset, referrer)
-            span.set_data("snuba_query", request.body)
-        except jsonschema.ValidationError as error:
-            raise BadRequest(str(error)) from error
-
-        timer.mark("validate_schema")
-
-    return request
-
-
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer):
@@ -266,10 +243,9 @@ def unqualified_query_view(*, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<dataset_name>/query", methods=["GET", "POST"])
+@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
 @util.time_request("query")
-def dataset_query_view(*, dataset_name: str, timer: Timer):
-    dataset = get_dataset(dataset_name)
+def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
         schema = RequestSchema.build_with_extensions(
             dataset.get_extensions(), HTTPRequestSettings
@@ -285,19 +261,48 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer):
+def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
-
-    schema = RequestSchema.build_with_extensions(
-        dataset.get_extensions(), HTTPRequestSettings
+    return format_result(
+        run_query(
+            dataset,
+            validate_request_content(
+                body,
+                RequestSchema.build_with_extensions(
+                    dataset.get_extensions(), HTTPRequestSettings
+                ),
+                timer,
+                dataset,
+                http_request.referrer,
+            ),
+            timer,
+        )
     )
-    query_result = run_query(
-        dataset,
-        validate_request_content(body, schema, timer, dataset, http_request.referrer),
-        timer,
-    )
 
+
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+    try:
+        return QueryResult(
+            {
+                **parse_and_run_query(dataset, request, timer),
+                "timing": timer.for_json(),
+            },
+            200,
+        )
+    except RawQueryException as e:
+        return QueryResult(
+            {
+                "error": {"type": e.err_type, "message": e.message, **e.meta},
+                "sql": e.sql,
+                "stats": e.stats,
+                "timing": timer.for_json(),
+            },
+            429 if e.err_type == "rate-limited" else 500,
+        )
+
+
+def format_result(result: QueryResult) -> Response:
     def json_default(obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -305,29 +310,11 @@ def dataset_query(dataset, body, timer):
             return str(obj)
         return obj
 
-    return (
-        json.dumps(query_result.result, for_json=True, default=json_default),
-        query_result.status,
+    return Response(
+        json.dumps(result.result, default=json_default),
+        result.status,
         {"Content-Type": "application/json"},
     )
-
-
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
-    try:
-        return QueryResult(parse_and_run_query(dataset, request, timer), 200)
-    except RawQueryException as e:
-        error = {
-            "type": e.err_type,
-            "message": e.message,
-        }
-        error.update(e.meta)
-        result = {
-            "error": error,
-            "sql": e.sql,
-            "stats": e.stats,
-            "timing": e.timer,
-        }
-        return QueryResult(result, 429 if e.err_type == "rate-limited" else 500)
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -336,7 +323,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
 
 @application.route("/internal/sdk-stats", methods=["POST"])
 @util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer):
+def sdk_distribution(*, timer: Timer) -> Response:
     dataset = get_dataset("events")
     request = validate_request_content(
         parse_request_body(http_request),
@@ -359,35 +346,48 @@ def sdk_distribution(*, timer: Timer):
     }
 
     ensure_table_exists(dataset)
+    return format_result(run_query(dataset, request, timer))
 
-    query_result = run_query(dataset, request, timer)
+
+SUBSCRIPTION_SEPARATOR = "/"
+
+
+@application.errorhandler(InvalidSubscriptionError)
+def handle_subscription_error(exception: InvalidSubscriptionError):
+    data = {"error": {"type": "subscription", "message": str(exception)}}
     return (
-        json.dumps(
-            query_result.result,
-            for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
-        ),
-        query_result.status,
+        json.dumps(data, indent=4),
+        400,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/subscriptions", methods=["POST"])
-def create_subscription():
+def build_external_subscription_id(identifier: SubscriptionIdentifier) -> str:
+    return "{}{}{}".format(
+        identifier.partition_id, SUBSCRIPTION_SEPARATOR, identifier.subscription_id
+    )
+
+
+@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
+@util.time_request("subscription")
+def create_subscription(*, dataset: Dataset, timer: Timer):
+    subscription = SubscriptionCodec().decode(http_request.data)
+    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
+    # example date fields and aggregates.
+    subscription_identifier = SubscriptionCreator(dataset).create(subscription, timer,)
     return (
-        json.dumps({"subscription_id": uuid1().hex}),
+        json.dumps(
+            {"subscription_id": build_external_subscription_id(subscription_identifier)}
+        ),
         202,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/subscriptions/<uuid>/renew", methods=["POST"])
-def renew_subscription(uuid):
-    return "ok", 202, {"Content-Type": "text/plain"}
-
-
-@application.route("/subscriptions/<uuid>", methods=["DELETE"])
-def delete_subscription(uuid):
+@application.route(
+    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
+)
+def delete_subscription(*, dataset: Dataset, partition: int, key: str):
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
@@ -397,7 +397,7 @@ if application.debug or application.testing:
 
     _ensured = {}
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         if not force and _ensured.get(dataset, False):
             return
 
@@ -414,11 +414,10 @@ if application.debug or application.testing:
 
         _ensured[dataset] = True
 
-    @application.route("/tests/<dataset_name>/insert", methods=["POST"])
-    def write(dataset_name):
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
@@ -441,9 +440,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/eventstream", methods=["POST"])
-    def eventstream(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
+    def eventstream(*, dataset: Dataset):
         ensure_table_exists(dataset)
         record = json.loads(http_request.data)
 
@@ -463,9 +461,7 @@ if application.debug or application.testing:
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
 
-            worker = ConsumerWorker(
-                dataset, producer=None, replacements_topic=None, metrics=metrics
-            )
+            worker = ConsumerWorker(dataset, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
 
@@ -478,9 +474,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/drop", methods=["POST"])
-    def drop(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
+    def drop(*, dataset: Dataset):
         for statement in dataset.get_dataset_schemas().get_drop_statements():
             clickhouse_rw.execute(statement)
 
@@ -495,5 +490,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         pass

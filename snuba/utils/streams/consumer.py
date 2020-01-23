@@ -90,6 +90,10 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def unsubscribe(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         raise NotImplementedError
 

@@ -47,12 +47,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     for statement in dataset.get_dataset_schemas().get_create_statements():
         ClickhousePool().execute(statement)
 
-    consumer = ConsumerWorker(
-        dataset=dataset,
-        producer=None,
-        replacements_topic=None,
-        metrics=DummyMetricsBackend(),
-    )
+    consumer = ConsumerWorker(dataset, metrics=DummyMetricsBackend())
 
     messages = get_messages(events_file)
     messages = chain(*([messages] * repeat))

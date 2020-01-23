@@ -1,4 +1,4 @@
-<img src="/snuba/static/img/snuba.svg" width="150" height="71"/>
+<img src="/snuba/web/static/img/snuba.svg" width="150" height="71"/>
 
 A service providing fast event searching, filtering and aggregation on arbitrary fields.
 
@@ -38,6 +38,7 @@ A quick way to get these services running is to set up sentry, then use:
     workon snuba
     make install-python-dependencies
     make install-librdkafka
+    make setup-git
 
     # Run API server
     snuba api
