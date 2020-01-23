@@ -1,52 +1,26 @@
-import pytest
+import contextlib
+from typing import Iterator
+from unittest import TestCase
 
-from snuba.utils.streams.consumer import Consumer, ConsumerError
-from snuba.utils.streams.dummy import DummyConsumer
-from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.utils.streams.dummy import (
+    DummyBroker,
+    DummyConsumer,
+    DummyProducer,
+)
+from snuba.utils.streams.types import Topic
+from tests.utils.streams.mixins import StreamsTestMixin
 
 
-def test_working_offsets() -> None:
-    topic = Topic("example")
-    partition = Partition(topic, 0)
+class DummyStreamsTestCase(StreamsTestMixin, TestCase):
+    def setUp(self) -> None:
+        self.broker: DummyBroker[int] = DummyBroker({Topic("test"): [[]]})
 
-    consumer: Consumer[int] = DummyConsumer({partition: [0]})
-    consumer.subscribe([topic])
+    @contextlib.contextmanager
+    def get_topic(self) -> Iterator[Topic]:
+        yield Topic("test")
 
-    # NOTE: This will eventually need to be controlled by a generalized
-    # consumer auto offset reset setting.
-    assert consumer.tell() == {partition: 0}
+    def get_consumer(self, group: str) -> DummyConsumer[int]:
+        return DummyConsumer(self.broker, group, enable_end_of_partition=True)
 
-    message = consumer.poll()
-    assert isinstance(message, Message)
-    assert message.offset == 0
-    assert consumer.tell() == {partition: 1}
-
-    # It should be safe to try to read the first missing offset (index) in the
-    # partition.
-    assert consumer.poll() is None
-
-    consumer.seek({partition: 0})
-    assert consumer.tell() == {partition: 0}
-
-    message = consumer.poll()
-    assert isinstance(message, Message)
-    assert message.offset == 0
-    assert consumer.tell() == {partition: 1}
-
-    # Seeking beyond the first missing index should work, but subsequent reads
-    # should error.
-    consumer.seek({partition: 2})
-    assert consumer.tell() == {partition: 2}
-
-    with pytest.raises(ConsumerError):
-        consumer.poll()
-
-    # Offsets should not be advanced after a failed poll.
-    assert consumer.tell() == {partition: 2}
-
-    # Trying to seek on an unassigned partition should error.
-    with pytest.raises(ConsumerError):
-        consumer.seek({partition: 0, Partition(topic, -1): 0})
-
-    # ``seek`` should be atomic -- either all updates are applied or none are.
-    assert consumer.tell() == {partition: 2}
+    def get_producer(self) -> DummyProducer[int]:
+        return DummyProducer(self.broker)
