@@ -68,17 +68,6 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 )
 @click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
 @click.option(
-    "--dogstatsd-host",
-    default=settings.DOGSTATSD_HOST,
-    help="Host to send DogStatsD metrics to.",
-)
-@click.option(
-    "--dogstatsd-port",
-    default=settings.DOGSTATSD_PORT,
-    type=int,
-    help="Port to send DogStatsD metrics to.",
-)
-@click.option(
     "--stateful-consumer",
     default=False,
     type=bool,
@@ -99,8 +88,6 @@ def consumer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: str,
-    dogstatsd_host: str,
-    dogstatsd_port: int,
     stateful_consumer: bool,
 ) -> None:
 
@@ -125,8 +112,6 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        dogstatsd_host=dogstatsd_host,
-        dogstatsd_port=dogstatsd_port,
     )
 
     if stateful_consumer:
