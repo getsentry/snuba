@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
+from snuba.query.expressions import Column, Expression
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.transactions_processor import escape_field
@@ -103,6 +104,16 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             )
         return None
 
+    def __has_tags(self, expression: Optional[Expression]) -> bool:
+        if not expression:
+            return False
+        for node in expression:
+            if isinstance(node, Column):
+                tag = NESTED_COL_EXPR_RE.match(node.column_name)
+                if tag and tag[1] == self.__nested_col:
+                    return True
+        return False
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         conditions = query.get_conditions()
         if not conditions:
@@ -135,6 +146,23 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                         return
             if not apply_optimization:
                 return
+
+        # Do not use flattened tags if tags are being unpacked anyway. In that case
+        # using flattened tags only implies loading an additional column thus making
+        # the query heavier and slower
+        if self.__has_tags(query.get_arrayjoin_from_ast()):
+            return
+        if query.get_groupby_from_ast():
+            for expression in query.get_groupby_from_ast():
+                if self.__has_tags(expression):
+                    return
+        if self.__has_tags(query.get_having_from_ast()):
+            return
+
+        if query.get_orderby_from_ast():
+            for orderby in query.get_orderby_from_ast():
+                if self.__has_tags(orderby.expression):
+                    return
 
         new_conditions = []
         positive_like_expression: List[str] = []
