@@ -22,6 +22,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -284,6 +285,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 transactions_columns=self.__transactions_columns,
                 post_processors={
                     TRANSACTIONS: [
+                        ApdexProcessor(),
                         NestedFieldConditionOptimizer(
                             "tags",
                             "_tags_flattened",
