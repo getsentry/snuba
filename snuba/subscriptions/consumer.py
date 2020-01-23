@@ -131,6 +131,9 @@ class TickConsumer(Consumer[Tick]):
     def resume(self, partitions: Sequence[Partition]) -> None:
         self.__consumer.resume(partitions)
 
+    def paused(self) -> Sequence[Partition]:
+        return self.__consumer.paused()
+
     def tell(self) -> Mapping[Partition, int]:
         # If there is no previous message for a partition, return the current
         # consumer offset, otherwise return the previous message offset (which
