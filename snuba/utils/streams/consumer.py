@@ -98,6 +98,43 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def pause(self, partitions: Sequence[Partition]) -> None:
+        """
+        Pause consuming from the provided partitions.
+
+        A partition that is paused will be automatically resumed during
+        reassignment. This ensures that the behavior is consistent during
+        rebalances, regardless of whether or not this consumer retains
+        ownership of the partition. (If this partition was assigned to a
+        different consumer in the consumer group during a rebalance, that
+        consumer would not have knowledge of whether or not the partition was
+        previously paused and would start consuming from the partition.) If
+        partitions should remain paused across rebalances, this should be
+        implemented in the assignment callback.
+
+        If any of the provided partitions are not in the assignment set, an
+        exception will be raised and no partitions will be paused.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def resume(self, partitions: Sequence[Partition]) -> None:
+        """
+        Resume consuming from the provided partitions.
+
+        If any of the provided partitions are not in the assignment set, an
+        exception will be raised and no partitions will be resumed.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
+    def paused(self) -> Sequence[Partition]:
+        """
+        Return the currently paused partitions.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def tell(self) -> Mapping[Partition, int]:
         """
         Return the working offsets for all currently assigned positions.
