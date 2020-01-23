@@ -6,33 +6,12 @@ import simplejson as json
 
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.replacer import FLATTENED_COLUMN_TEMPLATE
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.base import BaseEventsTest
-
-FLATTENED_COLUMN_TEMPLATE = """
-concat(
-    '|',
-    arrayStringConcat(
-        arrayMap(tuple -> concat(
-                replaceRegexpAll(tuple.1, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1'),
-                '=',
-                replaceRegexpAll(tuple.2, '(\\\\||\\\\=|\\\\\\\\)', '\\\\\\\\\\\\1')
-            ),
-            arraySort(
-                arrayFilter(
-                    tuple -> tuple.1 != %s,
-                    arrayMap((k, v) -> tuple(k, v), `tags.key`, `tags.value`)
-                )
-            )
-        ),
-        '||'
-    ),
-    '|'
-)
-"""
 
 
 class TestReplacer(BaseEventsTest):
