@@ -4,7 +4,15 @@ from typing import Optional
 
 import uuid
 
-from snuba import settings
+from snuba.datasets.events_format import (
+    enforce_retention,
+    extract_base,
+    extract_extra_contexts,
+    extract_extra_tags,
+    extract_user,
+    flatten_nested_field,
+)
+
 from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
@@ -13,14 +21,6 @@ from snuba.processor import (
     _ensure_valid_date,
     _ensure_valid_ip,
     _unicodify,
-)
-from snuba.datasets.events_processor import (
-    enforce_retention,
-    extract_base,
-    extract_extra_contexts,
-    extract_extra_tags,
-    extract_user,
-    flatten_nested_field,
 )
 from snuba.util import create_metrics
 
