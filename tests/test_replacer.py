@@ -460,7 +460,6 @@ class TestReplacer(BaseEventsTest):
         processed = self.replacer.process_message(message)
         self.replacer.flush_batch([processed])
 
-        print(_fetch_flattened_tags())
         assert _fetch_flattened_tags() == [
             {
                 "tags.key": ["browser|name", "notbrowser", "notbrowser2"],
