@@ -1,8 +1,11 @@
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, Iterator, TypeVar
+from typing import Dict, Generic, Iterator, NamedTuple, NewType, TypeVar
+from uuid import UUID
 
+from snuba.subscriptions.data import Subscription as SubscriptionData
 from snuba.utils.types import Interval
 
 
@@ -39,3 +42,47 @@ class Scheduler(ABC, Generic[TTask]):
         ascending order.
         """
         raise NotImplementedError
+
+
+# XXX: This is all temporary until we get these types properly introduced
+PartitionId = NewType("PartitionId", int)
+
+
+@dataclass(frozen=True)
+class SubscriptionIdentifier:
+    partition: PartitionId
+    uuid: UUID
+
+
+class Subscription(NamedTuple):
+    identifier: SubscriptionIdentifier
+    data: SubscriptionData
+
+
+class SubscriptionScheduler(Scheduler[Subscription]):
+    def __init__(self) -> None:
+        self.__subscriptions: Dict[UUID, Subscription] = {}
+
+    def set(self, value: Subscription) -> None:
+        self.__subscriptions[value.identifier.uuid] = value
+
+    def delete(self, key: UUID) -> None:
+        self.__subscriptions.pop(key, None)
+
+    def clear(self) -> None:
+        # XXX: Not part of the standard interface. Since we want to periodically clear
+        # the cache, whatever is managing this should probably clear and refetch
+        self.__subscriptions = {}
+
+    def find(
+        self, interval: Interval[datetime]
+    ) -> Iterator[ScheduledTask[Subscription]]:
+        for uuid, subscription in self.__subscriptions.items():
+            resolution = subscription.data.resolution.total_seconds()
+            for i in range(
+                math.ceil(interval.lower.timestamp() / resolution),
+                math.ceil(interval.upper.timestamp() / resolution),
+            ):
+                yield ScheduledTask(
+                    datetime.fromtimestamp(i * resolution), subscription,
+                )
