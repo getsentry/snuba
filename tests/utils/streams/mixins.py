@@ -309,11 +309,18 @@ class StreamsTestMixin(ABC):
 
             assert consumer.poll(5.0) == messages[0]
 
-            with pytest.raises(ConsumerError):
-                consumer.resume([Partition(topic, 1)])
+            with assert_does_not_change(consumer.paused, []), pytest.raises(
+                ConsumerError
+            ):
+                consumer.pause([Partition(topic, 0), Partition(topic, 1)])
 
-            with pytest.raises(ConsumerError):
-                consumer.pause([Partition(topic, 1)])
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
+
+            with assert_does_not_change(
+                consumer.paused, [Partition(topic, 0)]
+            ), pytest.raises(ConsumerError):
+                consumer.resume([Partition(topic, 0), Partition(topic, 1)])
 
     def test_pause_resume_rebalancing(self) -> None:
         with self.get_topic(2) as topic, closing(
