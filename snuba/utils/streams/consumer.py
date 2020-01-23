@@ -122,6 +122,13 @@ class Consumer(Generic[TPayload], ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def paused(self) -> Sequence[Partition]:
+        """
+        Return the currently paused partitions.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def tell(self) -> Mapping[Partition, int]:
         """
         Return the working offsets for all currently assigned positions.

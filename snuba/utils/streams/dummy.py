@@ -175,6 +175,12 @@ class DummyConsumer(Consumer[TPayload]):
         for partition in partitions:
             self.__paused.discard(partition)
 
+    def paused(self) -> Sequence[Partition]:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        return [*self.__paused]
+
     def tell(self) -> Mapping[Partition, int]:
         if self.__closed:
             raise RuntimeError("consumer is closed")

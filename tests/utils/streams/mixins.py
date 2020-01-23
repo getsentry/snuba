@@ -80,7 +80,11 @@ class StreamsTestMixin(ABC):
 
             consumer.pause([Partition(topic, 0)])
 
+            assert consumer.paused() == [Partition(topic, 0)]
+
             consumer.resume([Partition(topic, 0)])
+
+            assert consumer.paused() == []
 
             message = consumer.poll(1.0)
             assert isinstance(message, Message)
@@ -133,6 +137,9 @@ class StreamsTestMixin(ABC):
 
             with pytest.raises(RuntimeError):
                 consumer.resume([Partition(topic, 0)])
+
+            with pytest.raises(RuntimeError):
+                consumer.paused()
 
             with pytest.raises(RuntimeError):
                 consumer.stage_offsets({})
@@ -258,14 +265,19 @@ class StreamsTestMixin(ABC):
             consumer.subscribe([topic])
 
             assert consumer.poll(10.0) == messages[0]
+            assert consumer.paused() == []
 
             # XXX: Unfortunately, there is really no way to prove that this
             # consumer would return the message other than by waiting a while.
-            consumer.pause([Partition(topic, 0)])
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
+
             assert consumer.poll(1.0) is None
 
             # We should pick up where we left off when we resume the partition.
-            consumer.resume([Partition(topic, 0)])
+            with assert_changes(consumer.paused, [Partition(topic, 0)], []):
+                consumer.resume([Partition(topic, 0)])
+
             assert consumer.poll(5.0) == messages[1]
 
             # Calling ``seek`` should have a side effect, even if no messages
