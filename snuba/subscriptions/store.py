@@ -1,3 +1,4 @@
+import abc
 import json
 from datetime import timedelta
 from typing import Collection, Tuple
@@ -32,7 +33,32 @@ class SubscriptionCodec(Codec[bytes, Subscription]):
         )
 
 
-class RedisSubscriptionStore:
+class SubscriptionStore(abc.ABC):
+    @abc.abstractmethod
+    def create(self, subscription_id: str, subscription: Subscription) -> None:
+        """
+        Creates a `Subscription` in the store. Will overwrite any existing `Subscriptions`
+        with the same id.
+        """
+        pass
+
+    @abc.abstractmethod
+    def delete(self, subscription_id: str) -> None:
+        """
+        Removes a `Subscription` from the store.
+        """
+        pass
+
+    @abc.abstractmethod
+    def all(self) -> Collection[Tuple[str, Subscription]]:
+        """
+        Fetches all `Subscriptions` from the store
+        :return: A collection of `Subscriptions`.
+        """
+        pass
+
+
+class RedisSubscriptionStore(SubscriptionStore):
     """
     A Redis backed store for Subscriptions. Stores subscriptions using
     `SubscriptionCodec`. Each instance of the store operates on a partition of data,

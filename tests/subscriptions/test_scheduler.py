@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Collection, Tuple
 
+from snuba.redis import redis_client
 from snuba.subscriptions.scheduler import (
     PartitionId,
     ScheduledTask,
@@ -10,18 +11,20 @@ from snuba.subscriptions.scheduler import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
+from snuba.subscriptions.store import RedisSubscriptionStore
 from snuba.utils.types import Interval
 from tests.base import BaseTest
 
 
 class TestSubscriptionScheduler(BaseTest):
-    def setup_method(self, test_method, dataset_name=None) -> None:
+    def setup_method(self, test_method, dataset_name="events") -> None:
         super().setup_method(test_method, dataset_name)
         self.now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+        self.partition_id = PartitionId(1)
 
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
-            SubscriptionIdentifier(PartitionId(1), uuid.uuid4()),
+            SubscriptionIdentifier(self.partition_id, uuid.uuid4()),
             SubscriptionData(1, [], [], timedelta(minutes=1), resolution),
         )
 
@@ -31,47 +34,29 @@ class TestSubscriptionScheduler(BaseTest):
     def sort_key(self, task: ScheduledTask[Subscription]) -> Tuple[datetime, uuid.UUID]:
         return task.timestamp, task.task.identifier.uuid
 
-    def test_delete(self) -> None:
-        scheduler = SubscriptionScheduler()
-        subscription = self.build_subscription(timedelta(minutes=1))
-        scheduler.set(subscription)
-        expected = [ScheduledTask(self.now, subscription)]
-
-        assert (
-            list(
-                scheduler.find(
-                    self.build_interval(timedelta(minutes=0), timedelta(minutes=1))
-                )
-            )
-            == expected
-        )
-        scheduler.delete(subscription.identifier.uuid)
-        assert (
-            list(
-                scheduler.find(
-                    self.build_interval(timedelta(minutes=0), timedelta(minutes=1))
-                )
-            )
-            == []
-        )
-
     def run_test(
         self,
         subscriptions: Collection[Subscription],
         start: timedelta,
         end: timedelta,
         expected: Collection[ScheduledTask[Subscription]],
+        sort_key=None,
     ) -> None:
-        scheduler = SubscriptionScheduler()
-        for subscription in subscriptions:
-            scheduler.set(subscription)
-
-        assert (
-            sorted(
-                list(scheduler.find(self.build_interval(start, end))), key=self.sort_key
-            )
-            == expected
+        store = RedisSubscriptionStore(
+            redis_client, self.dataset, str(self.partition_id),
         )
+        for subscription in subscriptions:
+            store.create(subscription.identifier.uuid.hex, subscription.data)
+
+        scheduler = SubscriptionScheduler(
+            store, self.partition_id, timedelta(minutes=1)
+        )
+
+        result = list(scheduler.find(self.build_interval(start, end)))
+        if sort_key:
+            result.sort(key=sort_key)
+
+        assert result == expected
 
     def test_simple(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
@@ -101,6 +86,8 @@ class TestSubscriptionScheduler(BaseTest):
             end=timedelta(minutes=1),
             expected=[ScheduledTask(self.now, subscription)],
         )
+
+    def test_subscription_resolution_larger_than_tiny_interval(self) -> None:
         subscription = self.build_subscription(timedelta(minutes=1))
         self.run_test(
             [subscription],
@@ -125,4 +112,5 @@ class TestSubscriptionScheduler(BaseTest):
             start=timedelta(minutes=-10),
             end=timedelta(minutes=0),
             expected=expected,
+            sort_key=self.sort_key,
         )

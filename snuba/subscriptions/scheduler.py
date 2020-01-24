@@ -1,11 +1,12 @@
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Dict, Generic, Iterator, NamedTuple, NewType, TypeVar
+from datetime import datetime, timedelta
+from typing import Generic, Iterator, List, NamedTuple, NewType, TypeVar
 from uuid import UUID
 
 from snuba.subscriptions.data import Subscription as SubscriptionData
+from snuba.subscriptions.store import SubscriptionStore
 from snuba.utils.types import Interval
 
 
@@ -60,29 +61,38 @@ class Subscription(NamedTuple):
 
 
 class SubscriptionScheduler(Scheduler[Subscription]):
-    def __init__(self) -> None:
-        self.__subscriptions: Dict[UUID, Subscription] = {}
+    def __init__(
+        self, store: SubscriptionStore, partition_id: PartitionId, cache_ttl: timedelta
+    ) -> None:
+        self.__store = store
+        self.__cache_ttl = cache_ttl
+        self.__partition_id = partition_id
+        self.__subscriptions: List[Subscription] = []
+        self.__last_refresh = None
 
-    def set(self, value: Subscription) -> None:
-        self.__subscriptions[value.identifier.uuid] = value
-
-    def delete(self, key: UUID) -> None:
-        self.__subscriptions.pop(key, None)
-
-    def clear(self) -> None:
-        # XXX: Not part of the standard interface. Since we want to periodically clear
-        # the cache, whatever is managing this should probably clear and refetch
-        self.__subscriptions = {}
+    def __get_subscriptions(self, current_time) -> List[Subscription]:
+        if (
+            self.__last_refresh is None
+            or (current_time - self.__last_refresh) > self.__cache_ttl
+        ):
+            self.__subscriptions = [
+                Subscription(
+                    SubscriptionIdentifier(self.__partition_id, UUID(uuid)), data
+                )
+                for uuid, data in self.__store.all()
+            ]
+            self.__last_refresh = current_time
+        return self.__subscriptions
 
     def find(
         self, interval: Interval[datetime]
     ) -> Iterator[ScheduledTask[Subscription]]:
-        for uuid, subscription in self.__subscriptions.items():
-            resolution = subscription.data.resolution.total_seconds()
-            for i in range(
-                math.ceil(interval.lower.timestamp() / resolution),
-                math.ceil(interval.upper.timestamp() / resolution),
-            ):
-                yield ScheduledTask(
-                    datetime.fromtimestamp(i * resolution), subscription,
-                )
+        subscriptions = self.__get_subscriptions(interval.lower)
+        for i in range(
+            math.ceil(interval.lower.timestamp()),
+            math.ceil(interval.upper.timestamp()),
+        ):
+            for subscription in subscriptions:
+                resolution = int(subscription.data.resolution.total_seconds())
+                if i % resolution == 0:
+                    yield ScheduledTask(datetime.fromtimestamp(i), subscription)
