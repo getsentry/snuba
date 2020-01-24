@@ -1,7 +1,7 @@
 from typing import Optional, List, Sequence, Union
 
 from snuba.datasets.schemas import Schema
-from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
+from snuba.datasets.schemas.tables import DDLStatement, TableSchema, WritableTableSchema
 
 
 class DatasetSchemas(object):
@@ -39,14 +39,14 @@ class DatasetSchemas(object):
 
         return unique_schemas
 
-    def get_create_statements(self) -> Sequence[str]:
+    def get_create_statements(self) -> Sequence[DDLStatement]:
         return [
             schema.get_local_table_definition()
             for schema in self.__get_unique_schemas()
             if isinstance(schema, TableSchema)
         ]
 
-    def get_drop_statements(self) -> Sequence[str]:
+    def get_drop_statements(self) -> Sequence[DDLStatement]:
         return [
             schema.get_local_drop_table_statement()
             for schema in self.__get_unique_schemas()

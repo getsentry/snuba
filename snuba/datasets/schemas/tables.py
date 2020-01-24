@@ -47,6 +47,11 @@ class MigrationSchemaColumn(NamedTuple):
     default_expr: Optional[str]
 
 
+class DDLStatement(NamedTuple):
+    table_name: str
+    statement: str
+
+
 class TableSchema(Schema, ABC):
     """
     Represent a table-like schema. This means it represents either
@@ -110,11 +115,14 @@ class TableSchema(Schema, ABC):
         )
         return self._make_test_table(table_name)
 
-    def get_local_drop_table_statement(self) -> str:
-        return "DROP TABLE IF EXISTS %s" % self.get_local_table_name()
+    def get_local_drop_table_statement(self) -> DDLStatement:
+        return DDLStatement(
+            self.get_local_table_name(),
+            "DROP TABLE IF EXISTS %s" % self.get_local_table_name(),
+        )
 
     @abstractmethod
-    def get_local_table_definition(self) -> str:
+    def get_local_table_definition(self) -> DDLStatement:
         """
         Returns the DDL statement to create the local table.
         """
@@ -206,9 +214,12 @@ class MergeTreeSchema(WritableTableSchema):
             "name": name,
         }
 
-    def get_local_table_definition(self) -> str:
-        return self.__get_table_definition(
-            self.get_local_table_name(), self.__get_local_engine()
+    def get_local_table_definition(self) -> DDLStatement:
+        return DDLStatement(
+            self.get_local_table_name(),
+            self.__get_table_definition(
+                self.get_local_table_name(), self.__get_local_engine()
+            ),
         )
 
 
@@ -310,9 +321,12 @@ class MaterializedViewSchema(TableSchema):
             % {"source_table_name": source_table_name}
         )
 
-    def get_local_table_definition(self) -> str:
-        return self.__get_table_definition(
+    def get_local_table_definition(self) -> DDLStatement:
+        return DDLStatement(
             self.get_local_table_name(),
-            self.__get_local_source_table_name(),
-            self.__get_local_destination_table_name(),
+            self.__get_table_definition(
+                self.get_local_table_name(),
+                self.__get_local_source_table_name(),
+                self.__get_local_destination_table_name(),
+            ),
         )
