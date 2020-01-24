@@ -3,6 +3,7 @@ import logging
 from typing import Any, Mapping, Optional, Sequence
 
 import simplejson as json
+import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.datasets.dataset import Dataset
@@ -31,14 +32,18 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
+        rapidjson_deserialize: bool = False,
+        rapidjson_serialize: bool = False,
     ) -> None:
         self.__dataset = dataset
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
         self.__writer = enforce_table_writer(dataset).get_writer(
-            {"load_balancing": "in_order", "insert_distributed_sync": 1}
+            {"load_balancing": "in_order", "insert_distributed_sync": 1},
+            rapidjson_serialize=rapidjson_serialize,
         )
+        self.__rapidjson_deserialize = rapidjson_deserialize
 
     def process_message(
         self, message: Message[KafkaPayload]
@@ -46,7 +51,10 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         # TODO: consider moving this inside the processor so we can do a quick
         # processing of messages we want to filter out without fully parsing the
         # json.
-        value = json.loads(message.payload.value)
+        if self.__rapidjson_deserialize:
+            value = rapidjson.loads(message.payload.value)
+        else:
+            value = json.loads(message.payload.value)
         metadata = KafkaMessageMetadata(
             offset=message.offset, partition=message.partition.index
         )

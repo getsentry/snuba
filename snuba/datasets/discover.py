@@ -22,6 +22,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -255,12 +256,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("transaction_hash", Nullable(UInt(64))),
                 ("transaction_op", Nullable(String())),
                 ("transaction_status", Nullable(UInt(8))),
-                # TODO: Time columns below will need to be aligned more closely to the
-                # names in events once we figure out how timeseries queries will work
-                ("start_ts", Nullable(DateTime())),
-                ("start_ms", Nullable(UInt(16))),
-                ("finish_ts", Nullable(DateTime())),
-                ("finish_ms", Nullable(UInt(16))),
                 ("duration", Nullable(UInt(32))),
             ]
         )
@@ -276,7 +271,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 write_schema=None,
             ),
             time_group_columns={},
-            time_parse_columns=["timestamp", "start_ts", "finish_ts"],
+            time_parse_columns=["timestamp"],
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
@@ -290,16 +285,17 @@ class DiscoverDataset(TimeSeriesDataset):
                 transactions_columns=self.__transactions_columns,
                 post_processors={
                     TRANSACTIONS: [
+                        ApdexProcessor(),
                         NestedFieldConditionOptimizer(
                             "tags",
                             "_tags_flattened",
-                            {"start_ts", "finish_ts", "timestamp"},
+                            {"timestamp"},
                             BEGINNING_OF_TIME,
                         ),
                         NestedFieldConditionOptimizer(
                             "contexts",
                             "_contexts_flattened",
-                            {"start_ts", "finish_ts", "timestamp"},
+                            {"timestamp"},
                             BEGINNING_OF_TIME,
                         ),
                     ]
