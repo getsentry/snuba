@@ -141,9 +141,8 @@ class DummyConsumer(Consumer[TPayload]):
                 payload = messages[offset]
             except IndexError:
                 if offset == len(messages):
-                    if (
-                        self.__enable_end_of_partition
-                        and partition not in self.__last_eof_at
+                    if self.__enable_end_of_partition and (
+                        partition not in self.__last_eof_at
                         or offset > self.__last_eof_at[partition]
                     ):
                         self.__last_eof_at[partition] = offset
