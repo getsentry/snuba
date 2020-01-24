@@ -88,7 +88,7 @@ RUN set -ex; \
     rm -rf /var/lib/apt/lists/*; \
     \
     # Temporary fix until a version of python:3.7-slim with pip 20.0.2 is out
-    pip install pip>=20.0.2; \
+    pip install "pip>=20.0.2"; \
     make install-python-dependencies; \
     mkdir /tmp/uwsgi-dogstatsd; \
     wget -O - https://github.com/DataDog/uwsgi-dogstatsd/archive/bc56a1b5e7ee9e955b7a2e60213fc61323597a78.tar.gz \
