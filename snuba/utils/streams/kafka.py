@@ -37,7 +37,9 @@ from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
+from snuba.utils.streams.synchronized import Commit
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
+
 
 logger = logging.getLogger(__name__)
 
@@ -616,15 +618,6 @@ def build_kafka_consumer_configuration(
         "queued.min.messages": queued_min_messages,
         "enable.partition.eof": False,
     }
-
-
-@dataclass(frozen=True)
-class Commit:
-    __slots__ = ["group", "partition", "offset"]
-
-    group: str
-    partition: Partition
-    offset: int
 
 
 class CommitCodec(Codec[KafkaPayload, Commit]):
