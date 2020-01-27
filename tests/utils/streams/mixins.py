@@ -19,7 +19,7 @@ class StreamsTestMixin(ABC):
 
     @abstractmethod
     def get_consumer(
-        self, group: str, enable_end_of_partition: bool = True
+        self, group: Optional[str] = None, enable_end_of_partition: bool = True
     ) -> Consumer[int]:
         raise NotImplementedError
 
@@ -183,7 +183,7 @@ class StreamsTestMixin(ABC):
                     == {messages[0].partition: messages[0].offset}
                 )
 
-            consumer = self.get_consumer("group")
+            consumer = self.get_consumer()
             consumer.subscribe([topic], on_assign=on_assign)
 
             for i in range(5):
@@ -256,7 +256,7 @@ class StreamsTestMixin(ABC):
 
     def test_pause_resume(self) -> None:
         with self.get_topic() as topic, closing(
-            self.get_consumer("group")
+            self.get_consumer()
         ) as consumer, closing(self.get_producer()) as producer:
             messages: Sequence[Message[int]] = [
                 producer.produce(topic, i).result(timeout=5.0) for i in range(5)

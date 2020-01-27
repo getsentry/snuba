@@ -4,6 +4,7 @@ from typing import Sequence
 
 from snuba import settings
 from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.migrate import run
 
 
 @click.command()
@@ -88,10 +89,11 @@ def bootstrap(
     from snuba.clickhouse.native import ClickhousePool
 
     attempts = 0
+    conn = ClickhousePool()
     while True:
         try:
             logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
-            ClickhousePool().execute("SELECT 1")
+            conn.execute("SELECT 1")
             break
         except Exception as e:
             logger.error(
@@ -106,11 +108,33 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
+    existing_tables = {row[0] for row in conn.execute("show tables")}
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)
+        run_migrations = False
         for statement in dataset.get_dataset_schemas().get_create_statements():
-            logger.debug("Executing:\n%s", statement)
-            ClickhousePool().execute(statement)
+            if statement.table_name not in existing_tables:
+                # This is a hack to deal with updates to Materialized views.
+                # It seems that ClickHouse would parse the SELECT statement that defines a
+                # materialized view even if the view already exists and the CREATE statement
+                # includes the IF NOT EXISTS clause.
+                # When we add a column to a matview, though, we will be in a state where, by
+                # running bootstrap, ClickHouse will parse the SQL statement to try to create
+                # the view and fail because the column does not exist yet on the underlying table,
+                # since the migration on the underlying table has not ran yet.
+                # Migrations are per dataset so they can only run after the bootstrap of an
+                # entire dataset has run. So we would have bootstrap depending on migration
+                # and migration depending on bootstrap.
+                # In order to break this dependency we skip bootstrap DDL calls here if the
+                # table/view already exists, so it is always safe to run bootstrap first.
+                logger.debug("Executing:\n%s", statement.statement)
+                conn.execute(statement.statement)
+            else:
+                logger.debug("Skipping existing table %s", statement.table_name)
+                run_migrations = True
+        if run_migrations:
+            logger.debug("Running missing migrations for dataset %s", name)
+            run(conn, dataset)
         logger.info("Tables for dataset %s created.", name)
