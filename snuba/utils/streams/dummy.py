@@ -11,6 +11,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Union,
 )
 
@@ -23,12 +24,43 @@ epoch = datetime(2019, 12, 19)
 
 class DummyBroker(Generic[TPayload]):
     def __init__(
-        self, topics: Mapping[Topic, Sequence[MutableSequence[TPayload]]]
+        self, topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]]
     ) -> None:
         self.topics = topics
         self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(
             dict
         )
+        # The active subscriptions are stored by consumer group as a mapping
+        # between the consumer and it's subscribed topics.
+        self.subscriptions: MutableMapping[
+            str, MutableMapping[DummyConsumer[TPayload], Sequence[Topic]]
+        ] = defaultdict(dict)
+
+    def subscribe(
+        self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
+    ) -> Sequence[Partition]:
+        if self.subscriptions[consumer.group]:
+            # XXX: Consumer group balancing is not currently implemented.
+            if consumer not in self.subscriptions[consumer.group]:
+                raise NotImplementedError
+
+            # XXX: Updating an existing subscription is currently not implemented.
+            if self.subscriptions[consumer.group][consumer] != topics:
+                raise NotImplementedError
+
+        self.subscriptions[consumer.group][consumer] = topics
+
+        assignment: MutableSequence[Partition] = []
+
+        for topic in self.topics.keys() & set(topics):
+            assignment.extend(
+                [Partition(topic, index) for index in range(len(self.topics[topic]))]
+            )
+
+        return assignment
+
+    def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> None:
+        del self.subscriptions[consumer.group][consumer]
 
 
 class DummyConsumer(Consumer[TPayload]):
@@ -47,6 +79,8 @@ class DummyConsumer(Consumer[TPayload]):
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
 
+        self.__paused: Set[Partition] = set()
+
         # The offset that a the last ``EndOfPartition`` exception that was
         # raised at. To maintain consistency with the Confluent consumer, this
         # is only sent once per (partition, offset) pair.
@@ -58,6 +92,10 @@ class DummyConsumer(Consumer[TPayload]):
 
         self.__closed = False
 
+    @property
+    def group(self) -> str:
+        return self.__group
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -67,24 +105,10 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        self.__subscription = topics
-
-        assignment: MutableSequence[Partition] = []
-        for topic, partitions in self.__broker.topics.items():
-            if topic not in topics:
-                continue
-
-            assignment.extend([Partition(topic, i) for i in range(len(partitions))])
-
-        if self.__assignment is not None and on_revoke is not None:
-            on_revoke(self.__assignment)
-
-        self.__assignment = assignment
-
         # TODO: Handle offset reset more realistically.
         self.__offsets = {
             partition: self.__broker.offsets[self.__group].get(partition, 0)
-            for partition in assignment
+            for partition in self.__broker.subscribe(self, topics)
         }
 
         self.__staged_offsets.clear()
@@ -97,7 +121,11 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        self.subscribe([])
+        self.__broker.unsubscribe(self)
+
+        self.__offsets = {}
+        self.__staged_offsets.clear()
+        self.__last_eof_at.clear()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
         if self.__closed:
@@ -105,14 +133,17 @@ class DummyConsumer(Consumer[TPayload]):
 
         # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
+            if partition in self.__paused:
+                continue  # skip paused partitions
+
             messages = self.__broker.topics[partition.topic][partition.index]
             try:
                 payload = messages[offset]
             except IndexError:
                 if offset == len(messages):
-                    if (
-                        self.__enable_end_of_partition
-                        and offset > self.__last_eof_at.get(partition, 0)
+                    if self.__enable_end_of_partition and (
+                        partition not in self.__last_eof_at
+                        or offset > self.__last_eof_at[partition]
                     ):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
@@ -124,6 +155,31 @@ class DummyConsumer(Consumer[TPayload]):
                 return message
 
         return None
+
+    def pause(self, partitions: Sequence[Partition]) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot pause unassigned partitions")
+
+        self.__paused.update(partitions)
+
+    def resume(self, partitions: Sequence[Partition]) -> None:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot resume unassigned partitions")
+
+        for partition in partitions:
+            self.__paused.discard(partition)
+
+    def paused(self) -> Sequence[Partition]:
+        if self.__closed:
+            raise RuntimeError("consumer is closed")
+
+        return [*self.__paused]
 
     def tell(self) -> Mapping[Partition, int]:
         if self.__closed:

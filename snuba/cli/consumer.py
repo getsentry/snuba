@@ -73,6 +73,18 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     type=bool,
     help="Runs a stateful consumer (that manages snapshots) instead of a basic one.",
 )
+@click.option(
+    "--rapidjson-deserialize",
+    default=False,
+    type=bool,
+    help="Uses rapidjson to deserialize messages",
+)
+@click.option(
+    "--rapidjson-serialize",
+    default=False,
+    type=bool,
+    help="Uses rapidjson to serialize messages",
+)
 def consumer(
     *,
     raw_events_topic: Optional[str],
@@ -89,6 +101,8 @@ def consumer(
     queued_min_messages: int,
     log_level: str,
     stateful_consumer: bool,
+    rapidjson_deserialize: bool,
+    rapidjson_serialize: bool,
 ) -> None:
 
     import sentry_sdk
@@ -112,6 +126,8 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
+        rapidjson_deserialize=rapidjson_deserialize,
+        rapidjson_serialize=rapidjson_serialize,
     )
 
     if stateful_consumer:

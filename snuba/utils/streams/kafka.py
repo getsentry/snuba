@@ -15,6 +15,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Union,
 )
 
@@ -179,6 +180,7 @@ class KafkaConsumer(Consumer[TPayload]):
 
         self.__offsets: MutableMapping[Partition, int] = {}
         self.__staged_offsets: MutableMapping[Partition, int] = {}
+        self.__paused: Set[Partition] = set()
 
         self.__commit_retry_policy = commit_retry_policy
 
@@ -251,6 +253,20 @@ class KafkaConsumer(Consumer[TPayload]):
                     Partition(Topic(i.topic), i.partition): i.offset for i in assignment
                 }
                 self.__seek(offsets)
+
+                # Ensure that all partitions are resumed on assignment to avoid
+                # carrying over state from a previous assignment.
+                self.__consumer.resume(
+                    [
+                        ConfluentTopicPartition(
+                            partition.topic.name, partition.index, offset
+                        )
+                        for partition, offset in offsets.items()
+                    ]
+                )
+
+                for partition in offsets:
+                    self.__paused.discard(partition)
             except Exception:
                 self.__state = KafkaConsumerState.ERROR
                 raise
@@ -293,6 +309,8 @@ class KafkaConsumer(Consumer[TPayload]):
                             "failed to delete offset for unknown partition: %r",
                             partition,
                         )
+
+                    self.__paused.discard(partition)
 
                 self.__state = KafkaConsumerState.CONSUMING
 
@@ -441,12 +459,17 @@ class KafkaConsumer(Consumer[TPayload]):
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot pause unassigned partitions")
+
         self.__consumer.pause(
             [
                 ConfluentTopicPartition(partition.topic.name, partition.index)
                 for partition in partitions
             ]
         )
+
+        self.__paused.update(partitions)
 
         # XXX: Seeking to a specific partition offset and immediately pausing
         # that partition causes the seek to be ignored for some reason.
@@ -467,12 +490,24 @@ class KafkaConsumer(Consumer[TPayload]):
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
             raise InvalidState(self.__state)
 
+        if set(partitions) - self.__offsets.keys():
+            raise ConsumerError("cannot resume unassigned partitions")
+
         self.__consumer.resume(
             [
                 ConfluentTopicPartition(partition.topic.name, partition.index)
                 for partition in partitions
             ]
         )
+
+        for partition in partitions:
+            self.__paused.discard(partition)
+
+    def paused(self) -> Sequence[Partition]:
+        if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
+            raise InvalidState(self.__state)
+
+        return [*self.__paused]
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
         if self.__state in {KafkaConsumerState.CLOSED, KafkaConsumerState.ERROR}:
