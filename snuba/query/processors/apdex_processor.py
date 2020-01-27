@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-from snuba.query.dsl import div, multiply, plus
+from snuba.query.dsl import div, multiply, plus, count, countIf
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -31,42 +31,28 @@ class ApdexProcessor(QueryProcessor):
 
                 return div(
                     plus(
-                        FunctionCall(
-                            None,
-                            "countIf",
-                            (
-                                binary_condition(
-                                    None, ConditionFunctions.LTE, column, satisfied,
-                                ),
+                        countIf(
+                            binary_condition(
+                                None, ConditionFunctions.LTE, column, satisfied,
                             ),
                         ),
                         div(
-                            FunctionCall(
-                                None,
-                                "countIf",
-                                (
+                            countIf(
+                                binary_condition(
+                                    None,
+                                    BooleanFunctions.AND,
                                     binary_condition(
-                                        None,
-                                        BooleanFunctions.AND,
-                                        binary_condition(
-                                            None,
-                                            ConditionFunctions.GT,
-                                            column,
-                                            satisfied,
-                                        ),
-                                        binary_condition(
-                                            None,
-                                            ConditionFunctions.LTE,
-                                            column,
-                                            tolerated,
-                                        ),
+                                        None, ConditionFunctions.GT, column, satisfied,
+                                    ),
+                                    binary_condition(
+                                        None, ConditionFunctions.LTE, column, tolerated,
                                     ),
                                 ),
                             ),
                             Literal(None, 2),
                         ),
                     ),
-                    FunctionCall(None, "count", ()),
+                    count(),
                 )
 
             return exp
