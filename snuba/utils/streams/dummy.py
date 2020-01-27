@@ -23,44 +23,76 @@ epoch = datetime(2019, 12, 19)
 
 
 class DummyBroker(Generic[TPayload]):
-    def __init__(
-        self, topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]]
-    ) -> None:
-        self.topics = topics
-        self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(
-            dict
-        )
+    def __init__(self) -> None:
+        self.__topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]] = {}
+
+        self.__offsets: MutableMapping[
+            str, MutableMapping[Partition, int]
+        ] = defaultdict(dict)
+
         # The active subscriptions are stored by consumer group as a mapping
         # between the consumer and it's subscribed topics.
-        self.subscriptions: MutableMapping[
+        self.__subscriptions: MutableMapping[
             str, MutableMapping[DummyConsumer[TPayload], Sequence[Topic]]
         ] = defaultdict(dict)
 
+    def create_topic(self, topic: Topic, partitions: int) -> None:
+        if topic in self.__topics:
+            raise ValueError("topic already exists")
+
+        self.__topics[topic] = [[] for i in range(partitions)]
+
+    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
+        messages = self.__topics[partition.topic][partition.index]
+        offset = len(messages)
+        messages.append(payload)
+        return Message(partition, offset, payload, epoch)
+
     def subscribe(
         self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
-    ) -> Sequence[Partition]:
-        if self.subscriptions[consumer.group]:
+    ) -> Mapping[Partition, int]:
+        if self.__subscriptions[consumer.group]:
             # XXX: Consumer group balancing is not currently implemented.
-            if consumer not in self.subscriptions[consumer.group]:
+            if consumer not in self.__subscriptions[consumer.group]:
                 raise NotImplementedError
 
             # XXX: Updating an existing subscription is currently not implemented.
-            if self.subscriptions[consumer.group][consumer] != topics:
+            if self.__subscriptions[consumer.group][consumer] != topics:
                 raise NotImplementedError
 
-        self.subscriptions[consumer.group][consumer] = topics
+        self.__subscriptions[consumer.group][consumer] = topics
 
-        assignment: MutableSequence[Partition] = []
+        assignment: MutableMapping[Partition, int] = {}
 
-        for topic in self.topics.keys() & set(topics):
-            assignment.extend(
-                [Partition(topic, index) for index in range(len(self.topics[topic]))]
-            )
+        for topic in self.__topics.keys() & set(topics):
+            for index in range(len(self.__topics[topic])):
+                partition = Partition(topic, index)
+                # TODO: Handle offset reset more realistically.
+                assignment[partition] = self.__offsets[consumer.group].get(partition, 0)
 
         return assignment
 
     def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> None:
-        del self.subscriptions[consumer.group][consumer]
+        del self.__subscriptions[consumer.group][consumer]
+
+    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
+        messages = self.__topics[partition.topic][partition.index]
+
+        try:
+            payload = messages[offset]
+        except IndexError:
+            if offset == len(messages):
+                return None
+            else:
+                raise Exception("invalid offset")
+
+        return Message(partition, offset, payload, epoch)
+
+    def commit(
+        self, consumer: DummyConsumer[TPayload], offsets: Mapping[Partition, int]
+    ) -> None:
+        # TODO: This could possibly use more validation?
+        self.__offsets[consumer.group].update(offsets)
 
 
 class DummyConsumer(Consumer[TPayload]):
@@ -105,11 +137,7 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        # TODO: Handle offset reset more realistically.
-        self.__offsets = {
-            partition: self.__broker.offsets[self.__group].get(partition, 0)
-            for partition in self.__broker.subscribe(self, topics)
-        }
+        self.__offsets = self.__broker.subscribe(self, topics)
 
         self.__staged_offsets.clear()
         self.__last_eof_at.clear()
@@ -131,26 +159,23 @@ class DummyConsumer(Consumer[TPayload]):
         if self.__closed:
             raise RuntimeError("consumer is closed")
 
-        # TODO: Throw ``EndOfPartition`` errors.
         for partition, offset in sorted(self.__offsets.items()):
             if partition in self.__paused:
                 continue  # skip paused partitions
 
-            messages = self.__broker.topics[partition.topic][partition.index]
             try:
-                payload = messages[offset]
-            except IndexError:
-                if offset == len(messages):
-                    if self.__enable_end_of_partition and (
-                        partition not in self.__last_eof_at
-                        or offset > self.__last_eof_at[partition]
-                    ):
-                        self.__last_eof_at[partition] = offset
-                        raise EndOfPartition(partition, offset)
-                else:
-                    raise ConsumerError("invalid offset")
+                message = self.__broker.consume(partition, offset)
+            except Exception as e:
+                raise ConsumerError("error consuming mesage") from e
+
+            if message is None:
+                if self.__enable_end_of_partition and (
+                    partition not in self.__last_eof_at
+                    or offset > self.__last_eof_at[partition]
+                ):
+                    self.__last_eof_at[partition] = offset
+                    raise EndOfPartition(partition, offset)
             else:
-                message = Message(partition, offset, payload, epoch)
                 self.__offsets[partition] = message.get_next_offset()
                 return message
 
@@ -222,7 +247,7 @@ class DummyConsumer(Consumer[TPayload]):
             raise RuntimeError("consumer is closed")
 
         offsets = {**self.__staged_offsets}
-        self.__broker.offsets[self.__group].update(offsets)
+        self.__broker.commit(self, offsets)
         self.__staged_offsets.clear()
 
         self.commit_offsets_calls += 1
@@ -252,13 +277,13 @@ class DummyProducer(Producer[TPayload]):
         else:
             raise TypeError("invalid destination type")
 
-        messages = self.__broker.topics[partition.topic][partition.index]
-        offset = len(messages)
-        messages.append(payload)
-
         future: Future[Message[TPayload]] = Future()
         future.set_running_or_notify_cancel()
-        future.set_result(Message(partition, offset, payload, epoch))
+        try:
+            message = self.__broker.produce(partition, payload)
+            future.set_result(message)
+        except Exception as e:
+            future.set_exception(e)
         return future
 
     def close(self) -> Future[None]:
