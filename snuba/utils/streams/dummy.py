@@ -153,7 +153,7 @@ class DummyConsumer(Consumer[TPayload]):
             if self.__closed:
                 raise RuntimeError("consumer is closed")
 
-            self.__offsets = self.__broker.subscribe(self, topics)
+            self.__offsets = {**self.__broker.subscribe(self, topics)}
 
             self.__staged_offsets.clear()
             self.__last_eof_at.clear()
