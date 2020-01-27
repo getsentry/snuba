@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional, Sequence
+from typing import NamedTuple, NewType, Optional, Sequence
+from uuid import UUID
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.query import Aggregation
@@ -18,8 +19,17 @@ class InvalidSubscriptionError(Exception):
     pass
 
 
+PartitionId = NewType("PartitionId", int)
+
+
 @dataclass(frozen=True)
-class Subscription:
+class SubscriptionIdentifier:
+    partition: PartitionId
+    uuid: UUID
+
+
+@dataclass(frozen=True)
+class SubscriptionData:
     """
     Represents the state of a subscription.
     """
@@ -73,3 +83,8 @@ class Subscription:
             dataset,
             SUBSCRIPTION_REFERRER,
         )
+
+
+class Subscription(NamedTuple):
+    identifier: SubscriptionIdentifier
+    data: SubscriptionData
