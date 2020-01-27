@@ -589,6 +589,10 @@ class KafkaConsumer(Consumer[TPayload]):
 
         self.__state = KafkaConsumerState.CLOSED
 
+    @property
+    def closed(self) -> bool:
+        return self.__state is KafkaConsumerState.CLOSED
+
 
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 50000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
