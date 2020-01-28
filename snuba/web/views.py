@@ -1,27 +1,19 @@
 import logging
 import os
 import time
-
 from datetime import datetime
-from flask import Flask, redirect, render_template, request as http_request
+from typing import NamedTuple
+
+from flask import Flask, Response, redirect, render_template, request as http_request
 from markdown import markdown
-from uuid import uuid1
 import sentry_sdk
-from sentry_sdk.integrations.flask import FlaskIntegration
-from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 import simplejson as json
 from werkzeug.exceptions import BadRequest
 import jsonschema
 from uuid import UUID
 
 from snuba import schemas, settings, state, util
-from snuba.api.query import QueryResult, raw_query
-from snuba.api.split import split_query
-from snuba.clickhouse.native import ClickhousePool
-from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.consumer import KafkaMessageMetadata
-from snuba.query.schema import SETTINGS_SCHEMA
-from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
@@ -31,21 +23,34 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
-from snuba.request.schema import RequestSchema
+from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
+from snuba.request.validation import validate_request_content
+from snuba.subscriptions.codecs import SubscriptionDataCodec
+from snuba.subscriptions.data import InvalidSubscriptionError
+from snuba.subscriptions.subscription import SubscriptionCreator
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
+from snuba.web.converters import DatasetConverter
+from snuba.web.query import (
+    clickhouse_ro,
+    clickhouse_rw,
+    ClickhouseQueryResult,
+    parse_and_run_query,
+    RawQueryException,
+)
 
 
 logger = logging.getLogger("snuba.api")
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()), format="%(asctime)s %(message)s"
-)
 
-clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
+
+class QueryResult(NamedTuple):
+    # TODO: Give a better abstraction to QueryResult
+    result: ClickhouseQueryResult
+    status: int
 
 
 try:
@@ -88,12 +93,7 @@ def check_clickhouse():
 application = Flask(__name__, static_url_path="")
 application.testing = settings.TESTING
 application.debug = settings.DEBUG
-
-sentry_sdk.init(
-    dsn=settings.SENTRY_DSN,
-    integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
-    release=os.getenv("SNUBA_RELEASE"),
-)
+application.url_map.converters["dataset"] = DatasetConverter
 
 
 @application.errorhandler(BadRequest)
@@ -150,7 +150,7 @@ def send_css(path):
 
 
 @application.route("/img/<path:path>")
-@application.route("/snuba/static/img/<path:path>")
+@application.route("/snuba/web/static/img/<path:path>")
 def send_img(path):
     return application.send_static_file(os.path.join("img", path))
 
@@ -230,24 +230,6 @@ def parse_request_body(http_request):
             raise BadRequest(str(error)) from error
 
 
-def validate_request_content(
-    body, schema: RequestSchema, timer, dataset: Dataset, referrer: str
-) -> Request:
-    with sentry_sdk.start_span(
-        description="validate_request_content", op="validate"
-    ) as span:
-        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-        try:
-            request = schema.validate(body, source, referrer)
-            span.set_data("snuba_query", request.body)
-        except jsonschema.ValidationError as error:
-            raise BadRequest(str(error)) from error
-
-        timer.mark("validate_schema")
-
-    return request
-
-
 @application.route("/query", methods=["GET", "POST"])
 @util.time_request("query")
 def unqualified_query_view(*, timer: Timer):
@@ -261,12 +243,13 @@ def unqualified_query_view(*, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-@application.route("/<dataset_name>/query", methods=["GET", "POST"])
+@application.route("/<dataset:dataset>/query", methods=["GET", "POST"])
 @util.time_request("query")
-def dataset_query_view(*, dataset_name: str, timer: Timer):
-    dataset = get_dataset(dataset_name)
+def dataset_query_view(*, dataset: Dataset, timer: Timer):
     if http_request.method == "GET":
-        schema = RequestSchema.build_with_extensions(dataset.get_extensions())
+        schema = RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings
+        )
         return render_template(
             "query.html",
             query_template=json.dumps(schema.generate_template(), indent=4,),
@@ -278,17 +261,48 @@ def dataset_query_view(*, dataset_name: str, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-def dataset_query(dataset, body, timer):
+def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
-
-    schema = RequestSchema.build_with_extensions(dataset.get_extensions())
-    query_result = parse_and_run_query(
-        dataset,
-        validate_request_content(body, schema, timer, dataset, http_request.referrer),
-        timer,
+    return format_result(
+        run_query(
+            dataset,
+            validate_request_content(
+                body,
+                RequestSchema.build_with_extensions(
+                    dataset.get_extensions(), HTTPRequestSettings
+                ),
+                timer,
+                dataset,
+                http_request.referrer,
+            ),
+            timer,
+        )
     )
 
+
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+    try:
+        return QueryResult(
+            {
+                **parse_and_run_query(dataset, request, timer),
+                "timing": timer.for_json(),
+            },
+            200,
+        )
+    except RawQueryException as e:
+        return QueryResult(
+            {
+                "error": {"type": e.err_type, "message": e.message, **e.meta},
+                "sql": e.sql,
+                "stats": e.stats,
+                "timing": timer.for_json(),
+            },
+            429 if e.err_type == "rate-limited" else 500,
+        )
+
+
+def format_result(result: QueryResult) -> Response:
     def json_default(obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -296,67 +310,11 @@ def dataset_query(dataset, body, timer):
             return str(obj)
         return obj
 
-    return (
-        json.dumps(query_result.result, for_json=True, default=json_default),
-        query_result.status,
+    return Response(
+        json.dumps(result.result, default=json_default),
+        result.status,
         {"Content-Type": "application/json"},
     )
-
-
-@split_query
-def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
-        request.extensions["timeseries"]
-    )
-
-    extensions = dataset.get_extensions()
-    for name, extension in extensions.items():
-        extension.get_processor().process_query(
-            request.query, request.extensions[name], request.settings
-        )
-
-    request.query.add_conditions(dataset.default_conditions())
-
-    if request.settings.get_turbo():
-        request.query.set_final(False)
-
-    for processor in dataset.get_query_processors():
-        processor.process_query(request.query, request.settings)
-
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
-
-    source = relational_source.format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        # TODO: consider moving the performance logic and the pre_where generation into
-        # ClickhouseQuery since they are Clickhouse specific
-        query = DictClickhouseQuery(dataset, request.query, request.settings)
-    timer.mark("prepare_query")
-
-    stats = {
-        "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": request.referrer,
-        "num_days": (to_date - from_date).days,
-        "sample": request.query.get_sample(),
-    }
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", type(dataset).__name__)
-            scope.span.set_tag("referrer", http_request.referrer)
-
-    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
-        span.set_tag("dataset", type(dataset).__name__)
-        span.set_tag("table", source)
-        result = raw_query(request, query, clickhouse_ro, timer, stats)
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            if "max_threads" in stats:
-                scope.span.set_tag("max_threads", stats["max_threads"])
-
-    return result
 
 
 # Special internal endpoints that compute global aggregate data that we want to
@@ -365,13 +323,13 @@ def parse_and_run_query(dataset, request: Request, timer) -> QueryResult:
 
 @application.route("/internal/sdk-stats", methods=["POST"])
 @util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer):
+def sdk_distribution(*, timer: Timer) -> Response:
     dataset = get_dataset("events")
     request = validate_request_content(
         parse_request_body(http_request),
         RequestSchema(
             schemas.SDK_STATS_BASE_SCHEMA,
-            SETTINGS_SCHEMA,
+            SETTINGS_SCHEMAS[HTTPRequestSettings],
             schemas.SDK_STATS_EXTENSIONS_SCHEMA,
         ),
         timer,
@@ -388,35 +346,39 @@ def sdk_distribution(*, timer: Timer):
     }
 
     ensure_table_exists(dataset)
+    return format_result(run_query(dataset, request, timer))
 
-    query_result = parse_and_run_query(dataset, request, timer)
+
+@application.errorhandler(InvalidSubscriptionError)
+def handle_subscription_error(exception: InvalidSubscriptionError):
+    data = {"error": {"type": "subscription", "message": str(exception)}}
     return (
-        json.dumps(
-            query_result.result,
-            for_json=True,
-            default=lambda obj: obj.isoformat() if isinstance(obj, datetime) else obj,
-        ),
-        query_result.status,
+        json.dumps(data, indent=4),
+        400,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/subscriptions", methods=["POST"])
-def create_subscription():
+@application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
+@util.time_request("subscription")
+def create_subscription(*, dataset: Dataset, timer: Timer):
+    subscription = SubscriptionDataCodec().decode(http_request.data)
+    # TODO: Check for valid queries with fields that are invalid for subscriptions. For
+    # example date fields and aggregates.
+    identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
-        json.dumps({"subscription_id": uuid1().hex}),
+        json.dumps(
+            {"subscription_id": f"{identifier.partition}/{identifier.uuid.hex}"}
+        ),
         202,
         {"Content-Type": "application/json"},
     )
 
 
-@application.route("/subscriptions/<uuid>/renew", methods=["POST"])
-def renew_subscription(uuid):
-    return "ok", 202, {"Content-Type": "text/plain"}
-
-
-@application.route("/subscriptions/<uuid>", methods=["DELETE"])
-def delete_subscription(uuid):
+@application.route(
+    "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
+)
+def delete_subscription(*, dataset: Dataset, partition: int, key: str):
     return "ok", 202, {"Content-Type": "text/plain"}
 
 
@@ -426,7 +388,7 @@ if application.debug or application.testing:
 
     _ensured = {}
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         if not force and _ensured.get(dataset, False):
             return
 
@@ -437,17 +399,16 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for statement in dataset.get_dataset_schemas().get_create_statements():
-            clickhouse_rw.execute(statement)
+            clickhouse_rw.execute(statement.statement)
 
         migrate.run(clickhouse_rw, dataset)
 
         _ensured[dataset] = True
 
-    @application.route("/tests/<dataset_name>/insert", methods=["POST"])
-    def write(dataset_name):
+    @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
+    def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        dataset = get_dataset(dataset_name)
         ensure_table_exists(dataset)
 
         rows = []
@@ -470,9 +431,8 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/eventstream", methods=["POST"])
-    def eventstream(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
+    def eventstream(*, dataset: Dataset):
         ensure_table_exists(dataset)
         record = json.loads(http_request.data)
 
@@ -480,16 +440,19 @@ if application.debug or application.testing:
         if version != 2:
             raise RuntimeError("Unsupported protocol version: %s" % record)
 
-        message = KafkaMessage(Partition(Topic("topic"), 0), 0, http_request.data,)
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("topic"), 0),
+            0,
+            KafkaPayload(None, http_request.data),
+            datetime.now(),
+        )
 
         type_ = record[1]
         metrics = DummyMetricsBackend()
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
 
-            worker = ConsumerWorker(
-                dataset, producer=None, replacements_topic=None, metrics=metrics
-            )
+            worker = ConsumerWorker(dataset, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
 
@@ -502,11 +465,10 @@ if application.debug or application.testing:
 
         return ("ok", 200, {"Content-Type": "text/plain"})
 
-    @application.route("/tests/<dataset_name>/drop", methods=["POST"])
-    def drop(dataset_name):
-        dataset = get_dataset(dataset_name)
+    @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
+    def drop(*, dataset: Dataset):
         for statement in dataset.get_dataset_schemas().get_drop_statements():
-            clickhouse_rw.execute(statement)
+            clickhouse_rw.execute(statement.statement)
 
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
@@ -519,5 +481,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset, force=False):
+    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         pass

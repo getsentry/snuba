@@ -60,6 +60,9 @@ def parse_datetime(value: str, alignment: int = 1) -> datetime:
 
 def function_expr(fn: str, args_expr: str = "") -> str:
     """
+    DEPRECATED. Please do not add anything else here. In order to manipulate the
+    query, create a QueryProcessor and register it into your dataset.
+
     Generate an expression for a given function name and an already-evaluated
     args expression. This is a place to define convenience functions that evaluate
     to more complex expressions.
@@ -250,10 +253,13 @@ def decode_part_str(part_str: str) -> Part:
     return Part(date, int(retention_days))
 
 
-def force_bytes(s: Any) -> Any:
+def force_bytes(s: Union[bytes, str]) -> bytes:
     if isinstance(s, bytes):
         return s
-    return s.encode("utf-8", "replace")
+    elif isinstance(s, str):
+        return s.encode("utf-8", "replace")
+    else:
+        raise TypeError(f"cannot convert {type(s).__name__} to bytes")
 
 
 @contextmanager
@@ -270,18 +276,30 @@ def settings_override(overrides: Mapping[str, Any]) -> Iterator[None]:
             setattr(settings, k, v)
 
 
-def create_metrics(
-    host: str, port: int, prefix: str, tags: Optional[Tags] = None
-) -> MetricsBackend:
-    """Create a DogStatsd object with the specified prefix and tags. Prefixes
-    must start with `snuba.<category>`, for example: `snuba.processor`."""
-    from datadog import DogStatsd
-    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
-
+def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
+    """Create a DogStatsd object if DOGSTATSD_HOST and DOGSTATSD_PORT are defined,
+    with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
+    Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
+    """
     bits = prefix.split(".", 2)
     assert (
         len(bits) >= 2 and bits[0] == "snuba"
     ), "prefix must be like `snuba.<category>`"
+
+    host = settings.DOGSTATSD_HOST
+    port = settings.DOGSTATSD_PORT
+
+    if host is None and port is None:
+        from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+
+        return DummyMetricsBackend()
+    elif host is None or port is None:
+        raise ValueError(
+            f"DOGSTATSD_HOST and DOGSTATSD_PORT should both be None or not None. Found DOGSTATSD_HOST: {host}, DOGSTATSD_PORT: {port} instead."
+        )
+
+    from datadog import DogStatsd
+    from snuba.utils.metrics.backends.datadog import DatadogMetricsBackend
 
     return DatadogMetricsBackend(
         DogStatsd(

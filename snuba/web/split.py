@@ -4,7 +4,6 @@ import math
 
 from snuba import state, util
 from snuba.datasets.dataset import ColumnSplitSpec
-from snuba.api.query import QueryResult
 from snuba.request import Request
 
 # Every time we find zero results for a given step, expand the search window by
@@ -77,7 +76,6 @@ def split_query(query_func):
         split_end = to_date
         split_start = max(split_end - timedelta(seconds=split_step), from_date)
         total_results = 0
-        status = 0
         while split_start < split_end and total_results < limit:
             request.extensions["timeseries"]["from_date"] = split_start.isoformat()
             request.extensions["timeseries"]["to_date"] = split_end.isoformat()
@@ -90,18 +88,12 @@ def split_query(query_func):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
-            query_result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
-            status = query_result.status
-
-            # If something failed, discard all progress and just return that
-            if status != 200:
-                overall_result = query_result.result
-                break
+            result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
 
             if overall_result is None:
-                overall_result = query_result.result
+                overall_result = result
             else:
-                overall_result["data"].extend(query_result.result["data"])
+                overall_result["data"].extend(result["data"])
 
             if remaining_offset > 0 and len(overall_result["data"]) > 0:
                 to_trim = min(remaining_offset, len(overall_result["data"]))
@@ -111,7 +103,7 @@ def split_query(query_func):
             total_results = len(overall_result["data"])
 
             if total_results < limit:
-                if len(query_result.result["data"]) == 0:
+                if len(result["data"]) == 0:
                     # If we got nothing from the last query, expand the range by a static factor
                     split_step = split_step * STEP_GROWTH
                 else:
@@ -120,7 +112,7 @@ def split_query(query_func):
                     # our last query and its time range, and how many we have left to fetch.
                     remaining = limit - total_results
                     split_step = split_step * math.ceil(
-                        remaining / float(len(query_result.result["data"]))
+                        remaining / float(len(result["data"]))
                     )
 
                 # Set the start and end of the next query based on the new range.
@@ -132,7 +124,7 @@ def split_query(query_func):
                 except OverflowError:
                     split_start = from_date
 
-        return QueryResult(overall_result, status)
+        return overall_result
 
     def col_split(
         dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs
@@ -148,23 +140,14 @@ def split_query(query_func):
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
-        query_result = query_func(dataset, minimal_request, *args, **kwargs)
+        result = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
-        # If something failed, just return
-        if query_result.status != 200:
-            return QueryResult(query_result.result, query_result.status)
-
-        if query_result.result["data"]:
+        if result["data"]:
             request = copy.deepcopy(request)
 
             event_ids = list(
-                set(
-                    [
-                        event[column_split_spec.id_column]
-                        for event in query_result.result["data"]
-                    ]
-                )
+                set([event[column_split_spec.id_column] for event in result["data"]])
             )
             request.query.add_conditions(
                 [(column_split_spec.id_column, "IN", event_ids)]
@@ -176,16 +159,14 @@ def split_query(query_func):
                 set(
                     [
                         event[column_split_spec.project_column]
-                        for event in query_result.result["data"]
+                        for event in result["data"]
                     ]
                 )
             )
             request.extensions["project"]["project"] = project_ids
 
             timestamp_field = column_split_spec.timestamp_column
-            timestamps = [
-                event[timestamp_field] for event in query_result.result["data"]
-            ]
+            timestamps = [event[timestamp_field] for event in result["data"]]
             request.extensions["timeseries"]["from_date"] = util.parse_datetime(
                 min(timestamps)
             ).isoformat()

@@ -11,7 +11,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.conditions import binary_condition
-from snuba.request import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
     (
@@ -146,7 +146,7 @@ test_cases = [
 
 @pytest.mark.parametrize("query, formatted", test_cases)
 def test_format_expressions(query: Query, formatted: str) -> None:
-    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
     clickhouse_query = AstClickhouseQuery(query, request_settings)
     assert clickhouse_query.format_sql() == formatted
 
@@ -178,7 +178,7 @@ def test_format_clickhouse_specific_query() -> None:
     query.set_offset(50)
     query.set_limit(100)
 
-    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
     clickhouse_query = AstClickhouseQuery(query, request_settings)
 
     expected = (

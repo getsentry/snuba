@@ -1,4 +1,4 @@
-<img src="/snuba/static/img/snuba.svg" width="150" height="71"/>
+<img src="/snuba/web/static/img/snuba.svg" width="150" height="71"/>
 
 A service providing fast event searching, filtering and aggregation on arbitrary fields.
 
@@ -6,7 +6,7 @@ A service providing fast event searching, filtering and aggregation on arbitrary
 
 Add/change the following lines in `~/.sentry/sentry.conf.py`:
 
-    SENTRY_SEARCH = 'sentry.search.snuba.SnubaSearchBackend'
+    SENTRY_SEARCH = 'sentry.search.snuba.EventsDatasetSnubaSearchBackend'
     SENTRY_TSDB = 'sentry.tsdb.redissnuba.RedisSnubaTSDB'
     SENTRY_EVENTSTREAM = 'sentry.eventstream.snuba.SnubaEventStream'
 
@@ -38,6 +38,7 @@ A quick way to get these services running is to set up sentry, then use:
     workon snuba
     make install-python-dependencies
     make install-librdkafka
+    make setup-git
 
     # Run API server
     snuba api
@@ -109,7 +110,7 @@ An example query body might look like:
         "from_date": "2011-07-01T19:54:15",
         "to_date": "2018-07-06T19:54:15"
         "granularity": 3600,
-        "groupby": ["issue", "time"],
+        "groupby": ["group_id", "time"],
         "having": [],
         "issues": [],
     }
@@ -304,16 +305,16 @@ Queries with sampling are stable. Ie the same query with the same sampling
 factor over the same data should consistently return the exact same result.
 
 
-### Issues / Groups
+### Groups / Issues
 
-Snuba provides a magic column `issue` that can be used to group events by issue.
+Snuba provides a magic column `group_id` that can be used to group events by issue.
 
 Because events can be reassigned to different issues through merging, and
 because snuba does not support updates, we cannot store the issue id for an
-event in snuba. If you want to filter or group by `issue`, you need to pass a
-list of `issues` into the query.  This list is a mapping from issue ids to the
+event in snuba. If you want to filter or group by `group_id`, you need to pass a
+list of `group_ids` into the query.  This list is a mapping from issue ids to the
 event `primary_hash`es in that issue. Snuba automatically expands this mapping
-into the query so that filters/grouping on `issue` will just work.
+into the query so that filters/grouping on `group_id` will just work.
 
 ### Tags
 

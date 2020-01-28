@@ -13,7 +13,6 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
-
 from tests.base import BaseApiTest
 
 
@@ -24,7 +23,7 @@ class TestApi(BaseApiTest):
 
         # values for test data
         self.project_ids = [1, 2, 3]  # 3 projects
-        self.environments = [u"prød", "test"]  # 2 environments
+        self.environments = ["prød", "test"]  # 2 environments
         self.platforms = ["a", "b", "c", "d", "e", "f"]  # 6 platforms
         self.hashes = [x * 32 for x in "0123456789ab"]  # 12 hashes
         self.group_ids = [int(hsh[:16], 16) for hsh in self.hashes]
@@ -259,7 +258,7 @@ class TestApi(BaseApiTest):
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -272,8 +271,8 @@ class TestApi(BaseApiTest):
                     {
                         "project": 1,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "=", 100]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "=", 100]],
                     }
                 ),
             ).data
@@ -288,8 +287,8 @@ class TestApi(BaseApiTest):
                     {
                         "project": 1,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "IN", [100, 200]]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "IN", [100, 200]]],
                     }
                 ),
             ).data
@@ -415,13 +414,13 @@ class TestApi(BaseApiTest):
                     {
                         "project": 2,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [[], ["issue", "IN", self.group_ids[:5]]],
+                        "groupby": "group_id",
+                        "conditions": [[], ["group_id", "IN", self.group_ids[:5]]],
                     }
                 ),
             ).data
         )
-        assert set([d["issue"] for d in result["data"]]) == set([self.group_ids[4]])
+        assert set([d["group_id"] for d in result["data"]]) == set([self.group_ids[4]])
 
         result = json.loads(
             self.app.post(
@@ -642,7 +641,7 @@ class TestApi(BaseApiTest):
         settings.MAX_PREWHERE_CONDITIONS = 1
         prewhere_keys = [
             "event_id",
-            "issue",
+            "group_id",
             "tags[sentry:release]",
             "message",
             "environment",
@@ -749,7 +748,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": "project_id",
-                        "aggregations": [["topK(4)", "issue", "aggregate"]],
+                        "aggregations": [["topK(4)", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -767,7 +766,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": "project_id",
-                        "aggregations": [["uniq", "issue", "aggregate"]],
+                        "aggregations": [["uniq", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -781,7 +780,7 @@ class TestApi(BaseApiTest):
                     {
                         "project": 3,
                         "groupby": ["project_id", "time"],
-                        "aggregations": [["uniq", "issue", "aggregate"]],
+                        "aggregations": [["uniq", "group_id", "aggregate"]],
                     }
                 ),
             ).data
@@ -981,15 +980,15 @@ class TestApi(BaseApiTest):
                     {
                         "project": 2,
                         "granularity": 3600,
-                        "groupby": "issue",
-                        "conditions": [["issue", "=", 0], ["issue", "=", 1]],
+                        "groupby": "group_id",
+                        "conditions": [["group_id", "=", 0], ["group_id", "=", 1]],
                     }
                 ),
             ).data
         )
         # Issue is expanded once, and alias used subsequently
-        assert "issue = 0" in response["sql"]
-        assert "issue = 1" in response["sql"]
+        assert "group_id = 0" in response["sql"]
+        assert "group_id = 1" in response["sql"]
 
     def test_sampling_expansion(self):
         response = json.loads(
@@ -1084,19 +1083,19 @@ class TestApi(BaseApiTest):
                         "granularity": 3600,
                         "groupby": ["environment"],
                         "aggregations": [["count()", "", "count"]],
-                        "conditions": [["environment", "IN", [u"prød"]]],
+                        "conditions": [["environment", "IN", ["prød"]]],
                     }
                 ),
             ).data
         )
-        assert result["data"][0] == {"environment": u"prød", "count": 90}
+        assert result["data"][0] == {"environment": "prød", "count": 90}
 
     def test_query_timing(self):
         result = json.loads(
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -1204,7 +1203,7 @@ class TestApi(BaseApiTest):
 
         # all `test` events first as we sorted DESC by (the prefix of) environment
         assert all(d["environment"] == "test" for d in result["data"][:90])
-        assert all(d["environment"] == u"prød" for d in result["data"][90:])
+        assert all(d["environment"] == "prød" for d in result["data"][90:])
 
         # within a value of environment, timestamps should be sorted ascending
         test_timestamps = [d["time"] for d in result["data"][:90]]
@@ -1256,7 +1255,7 @@ class TestApi(BaseApiTest):
             "project": project_id,
             "groupby": "project_id",
             "aggregations": [["count()", "", "count"]],
-            "conditions": [["issue", "=", group_id]],
+            "conditions": [["group_id", "=", group_id]],
         }
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
         assert result["data"] == [{"count": 1, "project_id": project_id}]
@@ -1667,8 +1666,8 @@ class TestApi(BaseApiTest):
                     "project": [2],
                     "selected_columns": ["timestamp"],
                     "conditions": [
-                        ["issue", "IN", [2, 1]],
-                        [["isNull", ["issue"]], "=", 1],
+                        ["group_id", "IN", [2, 1]],
+                        [["isNull", ["group_id"]], "=", 1],
                     ],
                     "debug": True,
                 }
@@ -1682,7 +1681,7 @@ class TestApi(BaseApiTest):
             self.app.post(
                 "/query",
                 data=json.dumps(
-                    {"project": 1, "granularity": 3600, "groupby": "issue"}
+                    {"project": 1, "granularity": 3600, "groupby": "group_id"}
                 ),
             ).data
         )
@@ -1693,22 +1692,55 @@ class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
         expected_uuid = uuid.uuid1()
 
-        with patch("snuba.views.uuid1") as uuid4:
+        with patch("snuba.subscriptions.subscription.uuid1") as uuid4:
             uuid4.return_value = expected_uuid
-            resp = self.app.post("/subscriptions")
+            resp = self.app.post(
+                "{}/subscriptions".format(self.dataset_name),
+                data=json.dumps(
+                    {
+                        "project_id": 1,
+                        "conditions": [["platform", "IN", ["a"]]],
+                        "aggregations": [["count()", "", "count"]],
+                        "time_window": int(timedelta(minutes=10).total_seconds()),
+                        "resolution": int(timedelta(minutes=1).total_seconds()),
+                    }
+                ).encode("utf-8"),
+            )
 
         assert resp.status_code == 202
         data = json.loads(resp.data)
-        assert data == {"subscription_id": expected_uuid.hex}
+        assert data == {
+            "subscription_id": f"55/{expected_uuid.hex}",
+        }
 
+    def test_time_error(self):
+        resp = self.app.post(
+            "{}/subscriptions".format(self.dataset_name),
+            data=json.dumps(
+                {
+                    "project_id": 1,
+                    "conditions": [["platform", "IN", ["a"]]],
+                    "aggregations": [["count()", "", "count"]],
+                    "time_window": 0,
+                    "resolution": 1,
+                }
+            ),
+        )
 
-class TestRenewSubscriptionApi(BaseApiTest):
-    def test(self):
-        resp = self.app.post("/subscriptions/{}/renew".format(uuid.uuid4().hex))
-        assert resp.status_code == 202
+        assert resp.status_code == 400
+        data = json.loads(resp.data)
+        assert data == {
+            "error": {
+                "message": "Time window must be greater than or equal to 1 minute",
+                "type": "subscription",
+            }
+        }
 
 
 class TestDeleteSubscriptionApi(BaseApiTest):
     def test(self):
-        resp = self.app.delete("/subscriptions/{}".format(uuid.uuid4().hex))
-        assert resp.status_code == 202
+        resp = self.app.delete(
+            f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}"
+        )
+        print(f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}")
+        assert resp.status_code == 202, resp

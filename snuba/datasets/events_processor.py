@@ -1,16 +1,24 @@
-from datetime import datetime, timedelta
-from typing import Optional, Sequence, Tuple
+from datetime import datetime
+from typing import Optional
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
+from snuba.datasets.events_format import (
+    enforce_retention,
+    extract_base,
+    extract_extra_contexts,
+    extract_extra_tags,
+    extract_user,
+    flatten_nested_field,
+    EventTooOld,
+)
 from snuba.processor import (
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
-    _ensure_valid_ip,
     _floatify,
     _hashify,
     _unicodify,
@@ -21,74 +29,8 @@ from snuba.processor import (
     ProcessedMessage,
 )
 
+
 logger = logging.getLogger("snuba.processor")
-
-
-def extract_base(output, message):
-    output["event_id"] = message["event_id"]
-    project_id = message["project_id"]
-    output["project_id"] = project_id
-    return output
-
-
-def extract_user(output, user):
-    output["user_id"] = _unicodify(user.get("id", None))
-    output["username"] = _unicodify(user.get("username", None))
-    output["email"] = _unicodify(user.get("email", None))
-    ip_addr = _ensure_valid_ip(user.get("ip_address", None))
-    output["ip_address"] = str(ip_addr) if ip_addr is not None else None
-
-
-def extract_extra_tags(tags) -> Tuple[Sequence[str], Sequence[str]]:
-    tag_keys = []
-    tag_values = []
-    for tag_key, tag_value in sorted(tags.items()):
-        value = _unicodify(tag_value)
-        if value:
-            tag_keys.append(_unicodify(tag_key))
-            tag_values.append(value)
-
-    return (tag_keys, tag_values)
-
-
-def extract_extra_contexts(contexts) -> Tuple[Sequence[str], Sequence[str]]:
-    context_keys = []
-    context_values = []
-    valid_types = (int, float, str)
-    for ctx_name, ctx_obj in contexts.items():
-        if isinstance(ctx_obj, dict):
-            ctx_obj.pop("type", None)  # ignore type alias
-            for inner_ctx_name, ctx_value in ctx_obj.items():
-                if isinstance(ctx_value, valid_types):
-                    value = _unicodify(ctx_value)
-                    if value:
-                        ctx_key = f"{ctx_name}.{inner_ctx_name}"
-                        context_keys.append(_unicodify(ctx_key))
-                        context_values.append(_unicodify(ctx_value))
-
-    return (context_keys, context_values)
-
-
-def enforce_retention(message, timestamp):
-    project_id = message["project_id"]
-    retention_days = settings.RETENTION_OVERRIDES.get(project_id)
-    if retention_days is None:
-        retention_days = int(
-            message.get("retention_days") or settings.DEFAULT_RETENTION_DAYS
-        )
-
-    # This is not ideal but it should never happen anyways
-    timestamp = _ensure_valid_date(timestamp)
-    if timestamp is None:
-        timestamp = datetime.utcnow()
-    # TODO: We may need to allow for older events in the future when post
-    # processing triggers are based off of Snuba. Or this branch could be put
-    # behind a "backfill-only" optional switch.
-    if settings.DISCARD_OLD_EVENTS and timestamp < (
-        datetime.utcnow() - timedelta(days=retention_days)
-    ):
-        raise EventTooOld
-    return retention_days
 
 
 class EventsProcessor(MessageProcessor):
@@ -210,6 +152,9 @@ class EventsProcessor(MessageProcessor):
             contexts
         )
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
+        processed["_tags_flattened"] = flatten_nested_field(
+            processed["tags.key"], processed["tags.value"]
+        )
 
         exception = (
             data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
@@ -381,34 +326,35 @@ class EventsProcessor(MessageProcessor):
         frame_linenos = []
         frame_stack_levels = []
 
-        stack_level = 0
-        for stack in stacks:
-            if stack is None:
-                continue
-
-            stack_types.append(_unicodify(stack.get("type", None)))
-            stack_values.append(_unicodify(stack.get("value", None)))
-
-            mechanism = stack.get("mechanism", None) or {}
-            stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
-            stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
-
-            frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
-            for frame in frames:
-                if frame is None:
+        if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
+            stack_level = 0
+            for stack in stacks:
+                if stack is None:
                     continue
 
-                frame_abs_paths.append(_unicodify(frame.get("abs_path", None)))
-                frame_filenames.append(_unicodify(frame.get("filename", None)))
-                frame_packages.append(_unicodify(frame.get("package", None)))
-                frame_modules.append(_unicodify(frame.get("module", None)))
-                frame_functions.append(_unicodify(frame.get("function", None)))
-                frame_in_app.append(frame.get("in_app", None))
-                frame_colnos.append(_collapse_uint32(frame.get("colno", None)))
-                frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
-                frame_stack_levels.append(stack_level)
+                stack_types.append(_unicodify(stack.get("type", None)))
+                stack_values.append(_unicodify(stack.get("value", None)))
 
-            stack_level += 1
+                mechanism = stack.get("mechanism", None) or {}
+                stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
+                stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
+
+                frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
+                for frame in frames:
+                    if frame is None:
+                        continue
+
+                    frame_abs_paths.append(_unicodify(frame.get("abs_path", None)))
+                    frame_filenames.append(_unicodify(frame.get("filename", None)))
+                    frame_packages.append(_unicodify(frame.get("package", None)))
+                    frame_modules.append(_unicodify(frame.get("module", None)))
+                    frame_functions.append(_unicodify(frame.get("function", None)))
+                    frame_in_app.append(frame.get("in_app", None))
+                    frame_colnos.append(_collapse_uint32(frame.get("colno", None)))
+                    frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
+                    frame_stack_levels.append(stack_level)
+
+                stack_level += 1
 
         output["exception_stacks.type"] = stack_types
         output["exception_stacks.value"] = stack_values
@@ -423,7 +369,3 @@ class EventsProcessor(MessageProcessor):
         output["exception_frames.colno"] = frame_colnos
         output["exception_frames.lineno"] = frame_linenos
         output["exception_frames.stack_level"] = frame_stack_levels
-
-
-class EventTooOld(Exception):
-    pass

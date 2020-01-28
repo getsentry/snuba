@@ -10,7 +10,8 @@ from snuba.datasets.factory import get_dataset
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
-from snuba.utils.streams.consumer import KafkaMessage, Partition, Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
@@ -61,9 +62,9 @@ class TestSnapshotWorker:
         ),
     ]
 
-    @pytest.mark.parametrize("message, expected", test_data)
+    @pytest.mark.parametrize("value, expected", test_data)
     def test_send_message(
-        self, message: str, expected: Optional[ProcessedMessage],
+        self, value: str, expected: Optional[ProcessedMessage],
     ) -> None:
         dataset = get_dataset("groupedmessage")
         snapshot_id = uuid1()
@@ -78,7 +79,12 @@ class TestSnapshotWorker:
             metrics=DummyMetricsBackend(strict=True),
         )
 
-        ret = worker.process_message(
-            KafkaMessage(Partition(Topic("topic"), 0), 1, message.encode("utf-8"),)
+        message: Message[KafkaPayload] = Message(
+            Partition(Topic("topic"), 0),
+            1,
+            KafkaPayload(None, value.encode("utf-8")),
+            datetime.now(),
         )
+
+        ret = worker.process_message(message)
         assert ret == expected

@@ -74,9 +74,7 @@ def transform_columns(result: Result) -> Result:
                 if (
                     row[col_name] is not None
                 ):  # The column value can be null/None at times.
-                    row[col_name] = (
-                        row[col_name].replace(tzinfo=tz.tzutc()).isoformat()
-                    )
+                    row[col_name] = row[col_name].replace(tzinfo=tz.tzutc()).isoformat()
         elif DATE_TYPE_RE.match(col_type):
             for row in iterate_rows():
                 if (

@@ -20,6 +20,7 @@ from typing import (
 
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
+from snuba.query.conditions import binary_condition, BooleanFunctions
 from snuba.query.expressions import Expression
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
@@ -43,7 +44,7 @@ class OrderByDirection(Enum):
 @dataclass(frozen=True)
 class OrderBy:
     direction: OrderByDirection
-    node: Expression
+    expression: Expression
 
 
 class Query:
@@ -127,7 +128,9 @@ class Query:
             self.__condition or [],
             chain.from_iterable(self.__groupby),
             self.__having or [],
-            chain.from_iterable(map(lambda orderby: orderby.node, self.__order_by)),
+            chain.from_iterable(
+                map(lambda orderby: orderby.expression, self.__order_by)
+            ),
         )
 
     def transform_expressions(self, func: Callable[[Expression], Expression],) -> None:
@@ -157,7 +160,9 @@ class Query:
         self.__having = self.__having.transform(func) if self.__having else None
         self.__order_by = list(
             map(
-                lambda clause: replace(clause, node=clause.node.transform(func)),
+                lambda clause: replace(
+                    clause, expression=clause.expression.transform(func)
+                ),
                 self.__order_by,
             )
         )
@@ -211,6 +216,14 @@ class Query:
 
     def add_conditions(self, conditions: Sequence[Condition],) -> None:
         self.__extend_sequence("conditions", conditions)
+
+    def add_condition_to_ast(self, condition: Expression) -> None:
+        if not self.__condition:
+            self.__condition = condition
+        else:
+            self.__condition = binary_condition(
+                None, BooleanFunctions.AND, condition, self.__condition
+            )
 
     def get_prewhere(self) -> Sequence[Condition]:
         """

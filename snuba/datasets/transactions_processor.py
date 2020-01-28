@@ -1,10 +1,18 @@
 from datetime import datetime
 from semaphore.consts import SPAN_STATUS_NAME_TO_CODE
-from typing import Optional, Sequence
+from typing import Optional
 
 import uuid
 
-from snuba import settings
+from snuba.datasets.events_format import (
+    enforce_retention,
+    extract_base,
+    extract_extra_contexts,
+    extract_extra_tags,
+    extract_user,
+    flatten_nested_field,
+)
+
 from snuba.processor import (
     _as_dict_safe,
     MessageProcessor,
@@ -14,33 +22,13 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.datasets.events_processor import (
-    enforce_retention,
-    extract_base,
-    extract_extra_contexts,
-    extract_extra_tags,
-    extract_user,
-)
 from snuba.util import create_metrics
 
 
-metrics = create_metrics(
-    settings.DOGSTATSD_HOST, settings.DOGSTATSD_PORT, "snuba.transactions.processor"
-)
+metrics = create_metrics("snuba.transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2
-
-ESCAPE_TRANSLATION = str.maketrans({"\\": "\\\\", "|": "\|", "=": "\="})
-
-
-def escape_field(field: str) -> str:
-    """
-    We have ':' in our tag names. Also we may have '|'. This escapes : and \ so
-    that we can always rebuild the tags from the map. When looking for tags with LIKE
-    there should be no issue. But there may be other cases.
-    """
-    return field.translate(ESCAPE_TRANSLATION)
 
 
 class TransactionsMessageProcessor(MessageProcessor):
@@ -50,20 +38,6 @@ class TransactionsMessageProcessor(MessageProcessor):
         "sentry:user",
         "sentry:dist",
     }
-
-    def __merge_nested_field(self, keys: Sequence[str], values: Sequence[str]) -> str:
-        # We need to guarantee the content of the merged string is sorted otherwise we
-        # will not be able to run a LIKE operation over multiple fields at the same time.
-        # Tags are pre sorted, but it seems contexts are not, so to make this generic
-        # we ensure the invariant is respected here.
-        pairs = sorted(zip(keys, values))
-        pairs = [f"|{escape_field(k)}={escape_field(v)}|" for k, v in pairs]
-        # The result is going to be:
-        # |tag:val||tag:val|
-        # This gives the guarantee we will always have a delimiter on both side of the
-        # tag pair, thus we can univocally identify a tag with a LIKE expression even if
-        # the value or the tag name in the query is a substring of a real tag.
-        return "".join(pairs)
 
     def __extract_timestamp(self, field):
         timestamp = _ensure_valid_date(datetime.utcfromtimestamp(field))
@@ -133,7 +107,7 @@ class TransactionsMessageProcessor(MessageProcessor):
 
         tags = _as_dict_safe(data.get("tags", None))
         processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = self.__merge_nested_field(
+        processed["_tags_flattened"] = flatten_nested_field(
             processed["tags.key"], processed["tags.value"]
         )
 
@@ -153,7 +127,7 @@ class TransactionsMessageProcessor(MessageProcessor):
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
         )
-        processed["_contexts_flattened"] = self.__merge_nested_field(
+        processed["_contexts_flattened"] = flatten_nested_field(
             processed["contexts.key"], processed["contexts.value"]
         )
 
