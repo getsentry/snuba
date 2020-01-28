@@ -10,7 +10,7 @@ DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
 DATASET_NAMES: Set[str] = {
     "events",
-    "events_new",
+    # "events_new",
     "groupassignee",
     "groupedmessage",
     "transactions",
@@ -45,7 +45,7 @@ def get_dataset(name: str) -> Dataset:
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
         "events": EventsDataset,
-        "events_new": ErrorsDataset,
+        # "events_new": ErrorsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
         "groups": Groups,

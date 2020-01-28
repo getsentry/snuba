@@ -182,10 +182,10 @@ class MergeTreeSchema(WritableTableSchema):
 
     def __get_local_engine(self) -> str:
         partition_by_clause = (
-            f"PARTITION BY {self.__partition_by if self.__partition_by else ''}"
+            f"PARTITION BY {self.__partition_by}" if self.__partition_by else ""
         )
-        sample_clause = f"SAMPLE BY {self.__sample_expr if self.__sample_expr else ''}"
-        ttl_clause = f"TTL {self.__ttl_expr if self.__ttl_expr else ''}"
+        sample_clause = f"SAMPLE BY {self.__sample_expr}" if self.__sample_expr else ""
+        ttl_clause = f"TTL {self.__ttl_expr}" if self.__ttl_expr else ""
 
         if self.__settings:
             settings_list = ["%s=%s" % (k, v) for k, v in self.__settings.items()]

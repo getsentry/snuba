@@ -150,18 +150,18 @@ class TestEventsProcessor(BaseEventsTest):
             self.dataset
         ).get_stream_loader().get_processor().extract_common(output, event, data)
         assert output == {
-            "message": u"the message",
+            # "message": u"the message",
             "platform": u"the_platform",
             "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "received": now,
             "culprit": "the culprit",
             "type": "error",
             "version": "6",
-            "modules.name": [u"foo", u"bar", u"baz"],
-            "modules.version": [u"1.0", u"2.0", u""],
+            # "modules.name": [u"foo", u"bar", u"baz"],
+            # "modules.version": [u"1.0", u"2.0", u""],
             "title": "FooError",
             "location": "bar.py",
-            "search_message": None,
+            # "search_message": None,
         }
 
     def test_extract_common_search_message(self):
@@ -176,9 +176,11 @@ class TestEventsProcessor(BaseEventsTest):
             "received": int(calendar.timegm(now.timetuple())),
         }
         output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+        processor.extract_common(output, event, data)
+        processor.extract_custom(output, event, data)
         assert output["search_message"] == "the search message"
 
         # with optional short message
@@ -194,9 +196,11 @@ class TestEventsProcessor(BaseEventsTest):
             "message": "the short message",
         }
         output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+        processor.extract_common(output, event, data)
+        processor.extract_custom(output, event, data)
         assert output["search_message"] == "the search message"
         assert output["message"] == "the short message"
 

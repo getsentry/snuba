@@ -9,10 +9,15 @@ from snuba.processor import (
 )
 
 
-def extract_base(output, message):
-    output["event_id"] = message["event_id"]
+def extract_project_id(output, message):
     project_id = message["project_id"]
     output["project_id"] = project_id
+    return output
+
+
+def extract_base(output, message):
+    output["event_id"] = message["event_id"]
+    extract_project_id(output, message)
     return output
 
 
