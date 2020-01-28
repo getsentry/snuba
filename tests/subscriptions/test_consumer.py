@@ -2,7 +2,7 @@ import pytest
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
 from snuba.utils.streams.consumer import Consumer, ConsumerError
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, epoch
+from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer, epoch
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
@@ -10,9 +10,15 @@ from snuba.utils.types import Interval
 def test_tick_consumer() -> None:
     topic = Topic("messages")
 
-    inner_consumer: Consumer[int] = DummyConsumer(
-        DummyBroker({topic: [[0, 1, 2], [0]]}), "group",
-    )
+    broker: DummyBroker[int] = DummyBroker()
+    broker.create_topic(topic, partitions=2)
+
+    producer: DummyProducer[int] = DummyProducer(broker)
+    for partition, payloads in enumerate([[0, 1, 2], [0]]):
+        for payload in payloads:
+            producer.produce(Partition(topic, partition), payload).result()
+
+    inner_consumer: Consumer[int] = DummyConsumer(broker, "group")
 
     consumer = TickConsumer(inner_consumer)
 

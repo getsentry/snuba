@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from concurrent.futures import Future
 from datetime import datetime
+from threading import Lock, RLock
 from typing import (
     Callable,
     Generic,
@@ -23,44 +24,87 @@ epoch = datetime(2019, 12, 19)
 
 
 class DummyBroker(Generic[TPayload]):
-    def __init__(
-        self, topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]]
-    ) -> None:
-        self.topics = topics
-        self.offsets: MutableMapping[str, MutableMapping[Partition, int]] = defaultdict(
-            dict
-        )
+    def __init__(self) -> None:
+        self.__topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]] = {}
+
+        self.__offsets: MutableMapping[
+            str, MutableMapping[Partition, int]
+        ] = defaultdict(dict)
+
         # The active subscriptions are stored by consumer group as a mapping
         # between the consumer and it's subscribed topics.
-        self.subscriptions: MutableMapping[
+        self.__subscriptions: MutableMapping[
             str, MutableMapping[DummyConsumer[TPayload], Sequence[Topic]]
         ] = defaultdict(dict)
 
+        self.__lock = Lock()
+
+    def create_topic(self, topic: Topic, partitions: int) -> None:
+        with self.__lock:
+            if topic in self.__topics:
+                raise ValueError("topic already exists")
+
+            self.__topics[topic] = [[] for i in range(partitions)]
+
+    def produce(self, partition: Partition, payload: TPayload) -> Message[TPayload]:
+        with self.__lock:
+            messages = self.__topics[partition.topic][partition.index]
+            offset = len(messages)
+            messages.append(payload)
+
+        return Message(partition, offset, payload, epoch)
+
     def subscribe(
         self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
-    ) -> Sequence[Partition]:
-        if self.subscriptions[consumer.group]:
-            # XXX: Consumer group balancing is not currently implemented.
-            if consumer not in self.subscriptions[consumer.group]:
-                raise NotImplementedError
+    ) -> Mapping[Partition, int]:
+        with self.__lock:
+            if self.__subscriptions[consumer.group]:
+                # XXX: Consumer group balancing is not currently implemented.
+                if consumer not in self.__subscriptions[consumer.group]:
+                    raise NotImplementedError
 
-            # XXX: Updating an existing subscription is currently not implemented.
-            if self.subscriptions[consumer.group][consumer] != topics:
-                raise NotImplementedError
+                # XXX: Updating an existing subscription is currently not implemented.
+                if self.__subscriptions[consumer.group][consumer] != topics:
+                    raise NotImplementedError
 
-        self.subscriptions[consumer.group][consumer] = topics
+            self.__subscriptions[consumer.group][consumer] = topics
 
-        assignment: MutableSequence[Partition] = []
+            assignment: MutableMapping[Partition, int] = {}
 
-        for topic in self.topics.keys() & set(topics):
-            assignment.extend(
-                [Partition(topic, index) for index in range(len(self.topics[topic]))]
-            )
+            for topic in self.__topics.keys() & set(topics):
+                for index in range(len(self.__topics[topic])):
+                    partition = Partition(topic, index)
+                    # TODO: Handle offset reset more realistically.
+                    assignment[partition] = self.__offsets[consumer.group].get(
+                        partition, 0
+                    )
 
         return assignment
 
     def unsubscribe(self, consumer: DummyConsumer[TPayload]) -> None:
-        del self.subscriptions[consumer.group][consumer]
+        with self.__lock:
+            del self.__subscriptions[consumer.group][consumer]
+
+    def consume(self, partition: Partition, offset: int) -> Optional[Message[TPayload]]:
+        with self.__lock:
+            messages = self.__topics[partition.topic][partition.index]
+
+            try:
+                payload = messages[offset]
+            except IndexError:
+                if offset == len(messages):
+                    return None
+                else:
+                    raise Exception("invalid offset")
+
+        return Message(partition, offset, payload, epoch)
+
+    def commit(
+        self, consumer: DummyConsumer[TPayload], offsets: Mapping[Partition, int]
+    ) -> None:
+        with self.__lock:
+            # TODO: This could possibly use more validation?
+            self.__offsets[consumer.group].update(offsets)
 
 
 class DummyConsumer(Consumer[TPayload]):
@@ -90,6 +134,9 @@ class DummyConsumer(Consumer[TPayload]):
         self.commit_offsets_calls = 0
         self.close_calls = 0
 
+        # The lock used must be reentrant to avoid deadlocking when calling
+        # methods from assignment callbacks.
+        self.__lock = RLock()
         self.__closed = False
 
     @property
@@ -102,45 +149,44 @@ class DummyConsumer(Consumer[TPayload]):
         on_assign: Optional[Callable[[Mapping[Partition, int]], None]] = None,
         on_revoke: Optional[Callable[[Sequence[Partition]], None]] = None,
     ) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        # TODO: Handle offset reset more realistically.
-        self.__offsets = {
-            partition: self.__broker.offsets[self.__group].get(partition, 0)
-            for partition in self.__broker.subscribe(self, topics)
-        }
+            self.__offsets = {**self.__broker.subscribe(self, topics)}
 
-        self.__staged_offsets.clear()
-        self.__last_eof_at.clear()
+            self.__staged_offsets.clear()
+            self.__last_eof_at.clear()
 
-        if on_assign is not None:
-            on_assign(self.__offsets)
+            if on_assign is not None:
+                on_assign(self.__offsets)
 
     def unsubscribe(self) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        self.__broker.unsubscribe(self)
+            self.__broker.unsubscribe(self)
 
-        self.__offsets = {}
-        self.__staged_offsets.clear()
-        self.__last_eof_at.clear()
+            self.__offsets = {}
+            self.__staged_offsets.clear()
+            self.__last_eof_at.clear()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        # TODO: Throw ``EndOfPartition`` errors.
-        for partition, offset in sorted(self.__offsets.items()):
-            if partition in self.__paused:
-                continue  # skip paused partitions
+            for partition, offset in sorted(self.__offsets.items()):
+                if partition in self.__paused:
+                    continue  # skip paused partitions
 
-            messages = self.__broker.topics[partition.topic][partition.index]
-            try:
-                payload = messages[offset]
-            except IndexError:
-                if offset == len(messages):
+                try:
+                    message = self.__broker.consume(partition, offset)
+                except Exception as e:
+                    raise ConsumerError("error consuming mesage") from e
+
+                if message is None:
                     if self.__enable_end_of_partition and (
                         partition not in self.__last_eof_at
                         or offset > self.__last_eof_at[partition]
@@ -148,44 +194,45 @@ class DummyConsumer(Consumer[TPayload]):
                         self.__last_eof_at[partition] = offset
                         raise EndOfPartition(partition, offset)
                 else:
-                    raise ConsumerError("invalid offset")
-            else:
-                message = Message(partition, offset, payload, epoch)
-                self.__offsets[partition] = message.get_next_offset()
-                return message
+                    self.__offsets[partition] = message.get_next_offset()
+                    return message
 
-        return None
+            return None
 
     def pause(self, partitions: Sequence[Partition]) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        if set(partitions) - self.__offsets.keys():
-            raise ConsumerError("cannot pause unassigned partitions")
+            if set(partitions) - self.__offsets.keys():
+                raise ConsumerError("cannot pause unassigned partitions")
 
-        self.__paused.update(partitions)
+            self.__paused.update(partitions)
 
     def resume(self, partitions: Sequence[Partition]) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        if set(partitions) - self.__offsets.keys():
-            raise ConsumerError("cannot resume unassigned partitions")
+            if set(partitions) - self.__offsets.keys():
+                raise ConsumerError("cannot resume unassigned partitions")
 
-        for partition in partitions:
-            self.__paused.discard(partition)
+            for partition in partitions:
+                self.__paused.discard(partition)
 
     def paused(self) -> Sequence[Partition]:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        return [*self.__paused]
+            return [*self.__paused]
 
     def tell(self) -> Mapping[Partition, int]:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        return self.__offsets
+            return self.__offsets
 
     def __validate_offsets(self, offsets: Mapping[Partition, int]) -> None:
         invalid_offsets: Mapping[Partition, int] = {
@@ -196,73 +243,80 @@ class DummyConsumer(Consumer[TPayload]):
             raise ConsumerError(f"invalid offsets: {invalid_offsets!r}")
 
     def seek(self, offsets: Mapping[Partition, int]) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        if offsets.keys() - self.__offsets.keys():
-            raise ConsumerError("cannot seek on unassigned partitions")
+            if offsets.keys() - self.__offsets.keys():
+                raise ConsumerError("cannot seek on unassigned partitions")
 
-        self.__validate_offsets(offsets)
+            self.__validate_offsets(offsets)
 
-        self.__offsets.update(offsets)
+            self.__offsets.update(offsets)
 
     def stage_offsets(self, offsets: Mapping[Partition, int]) -> None:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        if offsets.keys() - self.__offsets.keys():
-            raise ConsumerError("cannot stage offsets for unassigned partitions")
+            if offsets.keys() - self.__offsets.keys():
+                raise ConsumerError("cannot stage offsets for unassigned partitions")
 
-        self.__validate_offsets(offsets)
+            self.__validate_offsets(offsets)
 
-        self.__staged_offsets.update(offsets)
+            self.__staged_offsets.update(offsets)
 
     def commit_offsets(self) -> Mapping[Partition, int]:
-        if self.__closed:
-            raise RuntimeError("consumer is closed")
+        with self.__lock:
+            if self.__closed:
+                raise RuntimeError("consumer is closed")
 
-        offsets = {**self.__staged_offsets}
-        self.__broker.offsets[self.__group].update(offsets)
-        self.__staged_offsets.clear()
+            offsets = {**self.__staged_offsets}
+            self.__broker.commit(self, offsets)
+            self.__staged_offsets.clear()
 
-        self.commit_offsets_calls += 1
-        return offsets
+            self.commit_offsets_calls += 1
+            return offsets
 
     def close(self, timeout: Optional[float] = None) -> None:
-        self.__closed = True
-        self.close_calls += 1
+        with self.__lock:
+            self.__closed = True
+            self.close_calls += 1
 
 
 class DummyProducer(Producer[TPayload]):
     def __init__(self, broker: DummyBroker[TPayload]) -> None:
         self.__broker = broker
 
+        self.__lock = Lock()
         self.__closed = False
 
     def produce(
         self, destination: Union[Topic, Partition], payload: TPayload
     ) -> Future[Message[TPayload]]:
-        assert not self.__closed
+        with self.__lock:
+            assert not self.__closed
 
-        partition: Partition
-        if isinstance(destination, Topic):
-            partition = Partition(destination, 0)  # TODO: Randomize?
-        elif isinstance(destination, Partition):
-            partition = destination
-        else:
-            raise TypeError("invalid destination type")
+            partition: Partition
+            if isinstance(destination, Topic):
+                partition = Partition(destination, 0)  # TODO: Randomize?
+            elif isinstance(destination, Partition):
+                partition = destination
+            else:
+                raise TypeError("invalid destination type")
 
-        messages = self.__broker.topics[partition.topic][partition.index]
-        offset = len(messages)
-        messages.append(payload)
-
-        future: Future[Message[TPayload]] = Future()
-        future.set_running_or_notify_cancel()
-        future.set_result(Message(partition, offset, payload, epoch))
-        return future
+            future: Future[Message[TPayload]] = Future()
+            future.set_running_or_notify_cancel()
+            try:
+                message = self.__broker.produce(partition, payload)
+                future.set_result(message)
+            except Exception as e:
+                future.set_exception(e)
+            return future
 
     def close(self) -> Future[None]:
-        self.__closed = True
+        with self.__lock:
+            self.__closed = True
 
         future: Future[None] = Future()
         future.set_running_or_notify_cancel()
