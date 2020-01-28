@@ -1,6 +1,9 @@
 import time
 from contextlib import closing
-from typing import TypeVar
+from threading import Event
+from typing import Optional, TypeVar
+
+import pytest
 
 from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
@@ -296,3 +299,57 @@ def test_synchronized_consumer_handles_end_of_partition() -> None:
         )
 
         assert synchronized_consumer.poll(0) == messages[1]
+
+
+def test_synchronized_consumer_worker_crash() -> None:
+    topic = Topic("topic")
+    commit_log_topic = Topic("commit-log")
+
+    broker: DummyBroker[int] = DummyBroker()
+    broker.create_topic(topic, partitions=1)
+    consumer: Consumer[int] = DummyConsumer(broker, "consumer")
+
+    poll_called = Event()
+
+    class BrokenConsumerException(Exception):
+        pass
+
+    class BrokenDummyConsumer(DummyConsumer[Commit]):
+        def poll(self, timeout: Optional[float] = None) -> Optional[Message[Commit]]:
+            try:
+                raise BrokenConsumerException()
+            finally:
+                poll_called.set()
+
+    commit_log_broker: DummyBroker[Commit] = DummyBroker()
+    commit_log_broker.create_topic(commit_log_topic, partitions=1)
+    commit_log_consumer: Consumer[Commit] = BrokenDummyConsumer(
+        commit_log_broker, "commit-log-consumer"
+    )
+
+    synchronized_consumer: Consumer[int] = SynchronizedConsumer(
+        consumer,
+        commit_log_consumer,
+        commit_log_topic=commit_log_topic,
+        commit_log_groups={"leader"},
+    )
+
+    assert poll_called.wait(1.0) is True
+
+    # If the worker thread has exited without a close request, calling ``poll``
+    # should raise an error that originated from the worker thread.
+
+    with pytest.raises(RuntimeError) as e:
+        synchronized_consumer.poll(0.0)
+
+    assert type(e.value.__cause__) is BrokenConsumerException
+
+    # If a close request has been sent, the normal runtime error due to the
+    # closed consumer should be raised instead.
+
+    synchronized_consumer.close()
+
+    with pytest.raises(RuntimeError) as e:
+        synchronized_consumer.poll(0.0)
+
+    assert type(e.value.__cause__) is not BrokenConsumerException

@@ -35,10 +35,6 @@ class SynchronizedConsumer(Consumer[TPayload]):
         ] = Synchronized({group: {} for group in commit_log_groups})
 
         self.__commit_log_worker_stop_requested = Event()
-
-        # TODO: We need to be able to deal with this consumer crashing -- it
-        # should then cause the synchronized consumer to be put in an invalid
-        # state.
         self.__commit_log_worker = execute(self.__run_commit_log_worker)
 
         # The set of partitions that have been paused by the caller/user. This
@@ -78,6 +74,15 @@ class SynchronizedConsumer(Consumer[TPayload]):
 
         self.__commit_log_consumer.close()
 
+    def __check_commit_log_worker_running(self) -> None:
+        if not self.closed and not self.__commit_log_worker.running():
+            try:
+                self.__commit_log_worker.result()
+            except Exception as e:
+                raise RuntimeError("commit log consumer thread crashed") from e
+            else:
+                raise RuntimeError("commit log consumer thread unexpectedly exited")
+
     def subscribe(
         self,
         topics: Sequence[Topic],
@@ -106,6 +111,8 @@ class SynchronizedConsumer(Consumer[TPayload]):
         return self.__consumer.unsubscribe()
 
     def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
+        self.__check_commit_log_worker_running()
+
         # Resume any partitions that can be resumed (where the local
         # offset is less than the remote offset.)
         resume_candidates = set(self.__consumer.paused()) - self.__paused
