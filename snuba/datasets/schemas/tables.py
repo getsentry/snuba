@@ -157,6 +157,7 @@ class MergeTreeSchema(WritableTableSchema):
         order_by: str,
         partition_by: Optional[str],
         sample_expr: Optional[str] = None,
+        ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
@@ -173,6 +174,7 @@ class MergeTreeSchema(WritableTableSchema):
         self.__order_by = order_by
         self.__partition_by = partition_by
         self.__sample_expr = sample_expr
+        self.__ttl_expr = ttl_expr
         self.__settings = settings
 
     def _get_engine_type(self) -> str:
@@ -180,12 +182,10 @@ class MergeTreeSchema(WritableTableSchema):
 
     def __get_local_engine(self) -> str:
         partition_by_clause = (
-            ("PARTITION BY %s" % self.__partition_by) if self.__partition_by else ""
+            f"PARTITION BY {self.__partition_by if self.__partition_by else ''}"
         )
-
-        sample_clause = (
-            ("SAMPLE BY %s" % self.__sample_expr) if self.__sample_expr else ""
-        )
+        sample_clause = f"SAMPLE BY {self.__sample_expr if self.__sample_expr else ''}"
+        ttl_clause = f"TTL {self.__ttl_expr if self.__ttl_expr else ''}"
 
         if self.__settings:
             settings_list = ["%s=%s" % (k, v) for k, v in self.__settings.items()]
@@ -193,18 +193,13 @@ class MergeTreeSchema(WritableTableSchema):
         else:
             settings_clause = ""
 
-        return """
-            %(engine_type)s
-            %(partition_by_clause)s
-            ORDER BY %(order_by)s
-            %(sample_clause)s
-            %(settings_clause)s;""" % {
-            "engine_type": self._get_engine_type(),
-            "order_by": self.__order_by,
-            "partition_by_clause": partition_by_clause,
-            "sample_clause": sample_clause,
-            "settings_clause": settings_clause,
-        }
+        return f"""
+            {self._get_engine_type()}
+            {partition_by_clause}
+            ORDER BY {self.__order_by}
+            {sample_clause}
+            {ttl_clause}
+            {settings_clause};"""
 
     def __get_table_definition(self, name: str, engine: str) -> str:
         return """
@@ -236,6 +231,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         partition_by: str,
         version_column: str,
         sample_expr: Optional[str] = None,
+        ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
@@ -250,6 +246,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             order_by=order_by,
             partition_by=partition_by,
             sample_expr=sample_expr,
+            ttl_expr=ttl_expr,
             settings=settings,
             migration_function=migration_function,
         )
