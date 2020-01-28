@@ -7,6 +7,7 @@ from unittest import TestCase
 import pytest
 from confluent_kafka.admin import AdminClient, NewTopic
 
+from snuba import settings
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
@@ -33,7 +34,7 @@ class TestCodec(Codec[KafkaPayload, int]):
 
 class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
 
-    configuration = {"bootstrap.servers": "127.0.0.1"}
+    configuration = {"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)}
     codec = TestCodec()
 
     @contextlib.contextmanager
