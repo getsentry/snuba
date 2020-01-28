@@ -2,10 +2,9 @@ import pytest
 
 from datetime import datetime
 
-from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas.tables import TableSource
+from snuba.datasets.factory import get_dataset
+from snuba.query.parser import parse_query
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
-from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
@@ -188,12 +187,43 @@ test_data = [
             ["start_ts", ">", "2019-12-18T06:35:17"],
         ],
     ),  # Nested conditions, ignored.
+    (
+        {
+            "groupby": ["tags[another_tag]"],
+            "having": [["tags[yet_another_tag]", "=", "1"]],
+            "conditions": [
+                ["tags[test.tag]", "=", "1"],
+                ["c", "=", "3"],
+                ["start_ts", ">", "2019-12-18T06:35:17"],
+            ],
+        },
+        [
+            ["tags[test.tag]", "=", "1"],
+            ["c", "=", "3"],
+            ["start_ts", ">", "2019-12-18T06:35:17"],
+        ],
+    ),  # Skip using flattened tags if the query requires tags unpacking anyway
+    (
+        {
+            "orderby": ["tags[test.tag]"],
+            "conditions": [
+                ["tags[test.tag]", "=", "1"],
+                ["c", "=", "3"],
+                ["start_ts", ">", "2019-12-18T06:35:17"],
+            ],
+        },
+        [
+            ["tags[test.tag]", "=", "1"],
+            ["c", "=", "3"],
+            ["start_ts", ">", "2019-12-18T06:35:17"],
+        ],
+    ),  # Skip using flattened tags if the query requires tags unpacking anyway
 ]
 
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
-    query = Query(query_body, TableSource("my_table", ColumnSet([]), None, []))
+    query = parse_query(query_body, get_dataset("transactions"))
     request_settings = HTTPRequestSettings()
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",

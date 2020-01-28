@@ -1,8 +1,11 @@
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Generic, Iterator, TypeVar
+from datetime import datetime, timedelta
+from typing import Generic, Iterator, List, Optional, TypeVar
 
+from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
+from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.utils.types import Interval
 
 
@@ -39,3 +42,42 @@ class Scheduler(ABC, Generic[TTask]):
         ascending order.
         """
         raise NotImplementedError
+
+
+class SubscriptionScheduler(Scheduler[Subscription]):
+    def __init__(
+        self,
+        store: SubscriptionDataStore,
+        partition_id: PartitionId,
+        cache_ttl: timedelta,
+    ) -> None:
+        self.__store = store
+        self.__cache_ttl = cache_ttl
+        self.__partition_id = partition_id
+        self.__subscriptions: List[Subscription] = []
+        self.__last_refresh: Optional[datetime] = None
+
+    def __get_subscriptions(self, current_time: datetime) -> List[Subscription]:
+        if (
+            self.__last_refresh is None
+            or (current_time - self.__last_refresh) > self.__cache_ttl
+        ):
+            self.__subscriptions = [
+                Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
+                for uuid, data in self.__store.all()
+            ]
+            self.__last_refresh = current_time
+        return self.__subscriptions
+
+    def find(
+        self, interval: Interval[datetime]
+    ) -> Iterator[ScheduledTask[Subscription]]:
+        subscriptions = self.__get_subscriptions(interval.lower)
+        for timestamp in range(
+            math.ceil(interval.lower.timestamp()),
+            math.ceil(interval.upper.timestamp()),
+        ):
+            for subscription in subscriptions:
+                resolution = int(subscription.data.resolution.total_seconds())
+                if timestamp % resolution == 0:
+                    yield ScheduledTask(datetime.fromtimestamp(timestamp), subscription)

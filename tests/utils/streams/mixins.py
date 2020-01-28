@@ -14,11 +14,13 @@ from tests.assertions import assert_changes, assert_does_not_change
 
 class StreamsTestMixin(ABC):
     @abstractmethod
-    def get_topic(self) -> ContextManager[Topic]:
+    def get_topic(self, partitions: int = 1) -> ContextManager[Topic]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_consumer(self, group: str) -> Consumer[int]:
+    def get_consumer(
+        self, group: Optional[str] = None, enable_end_of_partition: bool = True
+    ) -> Consumer[int]:
         raise NotImplementedError
 
     @abstractmethod
@@ -76,9 +78,13 @@ class StreamsTestMixin(ABC):
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 1): 0})
 
-            # consumer.pause([Partition(topic, 0)])
+            consumer.pause([Partition(topic, 0)])
 
-            # consumer.resume([Partition(topic, 0)])
+            assert consumer.paused() == [Partition(topic, 0)]
+
+            consumer.resume([Partition(topic, 0)])
+
+            assert consumer.paused() == []
 
             message = consumer.poll(1.0)
             assert isinstance(message, Message)
@@ -126,11 +132,14 @@ class StreamsTestMixin(ABC):
             with pytest.raises(RuntimeError):
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            # with pytest.raises(RuntimeError):
-            #     consumer.pause([Partition(topic, 0)])
+            with pytest.raises(RuntimeError):
+                consumer.pause([Partition(topic, 0)])
 
-            # with pytest.raises(RuntimeError):
-            #     consumer.resume([Partition(topic, 0)])
+            with pytest.raises(RuntimeError):
+                consumer.resume([Partition(topic, 0)])
+
+            with pytest.raises(RuntimeError):
+                consumer.paused()
 
             with pytest.raises(RuntimeError):
                 consumer.stage_offsets({})
@@ -174,7 +183,7 @@ class StreamsTestMixin(ABC):
                     == {messages[0].partition: messages[0].offset}
                 )
 
-            consumer = self.get_consumer("group")
+            consumer = self.get_consumer()
             consumer.subscribe([topic], on_assign=on_assign)
 
             for i in range(5):
@@ -244,3 +253,118 @@ class StreamsTestMixin(ABC):
                 consumer.tell, {message.partition: message.get_next_offset() + 1}
             ), pytest.raises(ConsumerError):
                 consumer.seek({message.partition: -1})
+
+    def test_pause_resume(self) -> None:
+        with self.get_topic() as topic, closing(
+            self.get_consumer()
+        ) as consumer, closing(self.get_producer()) as producer:
+            messages: Sequence[Message[int]] = [
+                producer.produce(topic, i).result(timeout=5.0) for i in range(5)
+            ]
+
+            consumer.subscribe([topic])
+
+            assert consumer.poll(10.0) == messages[0]
+            assert consumer.paused() == []
+
+            # XXX: Unfortunately, there is really no way to prove that this
+            # consumer would return the message other than by waiting a while.
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
+
+            assert consumer.poll(1.0) is None
+
+            # We should pick up where we left off when we resume the partition.
+            with assert_changes(consumer.paused, [Partition(topic, 0)], []):
+                consumer.resume([Partition(topic, 0)])
+
+            assert consumer.poll(5.0) == messages[1]
+
+            # Calling ``seek`` should have a side effect, even if no messages
+            # are consumed before calling ``pause``.
+            with assert_changes(
+                consumer.tell,
+                {Partition(topic, 0): messages[1].get_next_offset()},
+                {Partition(topic, 0): messages[3].offset},
+            ):
+                consumer.seek({Partition(topic, 0): messages[3].offset})
+                consumer.pause([Partition(topic, 0)])
+                assert consumer.poll(1.0) is None
+                consumer.resume([Partition(topic, 0)])
+
+            assert consumer.poll(5.0) == messages[3]
+
+            # It is still allowable to call ``seek`` on a paused partition.
+            # When consumption resumes, we would expect to see the side effect
+            # of that seek.
+            consumer.pause([Partition(topic, 0)])
+            with assert_changes(
+                consumer.tell,
+                {Partition(topic, 0): messages[3].get_next_offset()},
+                {Partition(topic, 0): messages[0].offset},
+            ):
+                consumer.seek({Partition(topic, 0): messages[0].offset})
+                assert consumer.poll(1.0) is None
+                consumer.resume([Partition(topic, 0)])
+
+            assert consumer.poll(5.0) == messages[0]
+
+            with assert_does_not_change(consumer.paused, []), pytest.raises(
+                ConsumerError
+            ):
+                consumer.pause([Partition(topic, 0), Partition(topic, 1)])
+
+            with assert_changes(consumer.paused, [], [Partition(topic, 0)]):
+                consumer.pause([Partition(topic, 0)])
+
+            with assert_does_not_change(
+                consumer.paused, [Partition(topic, 0)]
+            ), pytest.raises(ConsumerError):
+                consumer.resume([Partition(topic, 0), Partition(topic, 1)])
+
+    def test_pause_resume_rebalancing(self) -> None:
+        with self.get_topic(2) as topic, closing(
+            self.get_producer()
+        ) as producer, closing(
+            self.get_consumer("group", enable_end_of_partition=False)
+        ) as consumer_a, closing(
+            self.get_consumer("group", enable_end_of_partition=False)
+        ) as consumer_b:
+            messages: Sequence[Message[int]] = [
+                producer.produce(Partition(topic, i), i).result(timeout=5.0)
+                for i in range(2)
+            ]
+
+            consumer_a.subscribe([topic])
+
+            # It doesn't really matter which message is fetched first -- we
+            # just want to know the assignment occurred.
+            assert (
+                consumer_a.poll(10.0) in messages
+            )  # XXX: getting the subcription is slow
+
+            assert len(consumer_a.tell()) == 2
+            assert len(consumer_b.tell()) == 0
+
+            # Pause all partitions.
+            consumer_a.pause([Partition(topic, 0), Partition(topic, 1)])
+            assert set(consumer_a.paused()) == set(
+                [Partition(topic, 0), Partition(topic, 1)]
+            )
+
+            consumer_b.subscribe([topic])
+            for i in range(10):
+                assert consumer_a.poll(0) is None  # attempt to force session timeout
+                if consumer_b.poll(1.0) is not None:
+                    break
+            else:
+                assert False, "rebalance did not occur"
+
+            # The first consumer should have had its offsets rolled back, as
+            # well as should have had it's partition resumed during
+            # rebalancing.
+            assert consumer_a.paused() == []
+            assert consumer_a.poll(10.0) is not None
+
+            assert len(consumer_a.tell()) == 1
+            assert len(consumer_b.tell()) == 1
