@@ -2,7 +2,7 @@ import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generic, Iterator, List, TypeVar
+from typing import Generic, Iterator, List, Optional, TypeVar
 
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
@@ -55,9 +55,9 @@ class SubscriptionScheduler(Scheduler[Subscription]):
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
         self.__subscriptions: List[Subscription] = []
-        self.__last_refresh = None
+        self.__last_refresh: Optional[datetime] = None
 
-    def __get_subscriptions(self, current_time) -> List[Subscription]:
+    def __get_subscriptions(self, current_time: datetime) -> List[Subscription]:
         if (
             self.__last_refresh is None
             or (current_time - self.__last_refresh) > self.__cache_ttl

@@ -4,12 +4,12 @@ from typing import Collection, Tuple
 
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    PartitionId,
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.scheduler import (
-    PartitionId,
     ScheduledTask,
     SubscriptionScheduler,
 )
@@ -45,7 +45,7 @@ class TestSubscriptionScheduler(BaseTest):
         sort_key=None,
     ) -> None:
         store = RedisSubscriptionDataStore(
-            redis_client, self.dataset, str(self.partition_id),
+            redis_client, self.dataset, self.partition_id,
         )
         for subscription in subscriptions:
             store.create(subscription.identifier.uuid, subscription.data)
