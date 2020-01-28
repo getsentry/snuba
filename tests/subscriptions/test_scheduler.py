@@ -3,15 +3,17 @@ from datetime import datetime, timedelta
 from typing import Collection, Tuple
 
 from snuba.redis import redis_client
-from snuba.subscriptions.scheduler import (
-    PartitionId,
-    ScheduledTask,
-    SubscriptionScheduler,
+from snuba.subscriptions.data import (
     Subscription,
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.store import RedisSubscriptionStore
+from snuba.subscriptions.scheduler import (
+    PartitionId,
+    ScheduledTask,
+    SubscriptionScheduler,
+)
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.types import Interval
 from tests.base import BaseTest
 
@@ -42,11 +44,11 @@ class TestSubscriptionScheduler(BaseTest):
         expected: Collection[ScheduledTask[Subscription]],
         sort_key=None,
     ) -> None:
-        store = RedisSubscriptionStore(
+        store = RedisSubscriptionDataStore(
             redis_client, self.dataset, str(self.partition_id),
         )
         for subscription in subscriptions:
-            store.create(subscription.identifier.uuid.hex, subscription.data)
+            store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
             store, self.partition_id, timedelta(minutes=1)

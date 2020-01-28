@@ -9,7 +9,7 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
-class SubscriptionStore(abc.ABC):
+class SubscriptionDataStore(abc.ABC):
     @abc.abstractmethod
     def create(self, subscription_id: str, subscription: SubscriptionData) -> None:
         """
@@ -34,7 +34,7 @@ class SubscriptionStore(abc.ABC):
         pass
 
 
-class RedisSubscriptionDataStore(SubscriptionStore):
+class RedisSubscriptionDataStore(SubscriptionDataStore):
     """
     A Redis backed store for subscription data. Stores subscriptions using
     `SubscriptionDataCodec`. Each instance of the store operates on a

@@ -2,11 +2,10 @@ import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generic, Iterator, List, NamedTuple, NewType, TypeVar
-from uuid import UUID
+from typing import Generic, Iterator, List, TypeVar
 
-from snuba.subscriptions.data import Subscription as SubscriptionData
-from snuba.subscriptions.store import SubscriptionStore
+from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
+from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.utils.types import Interval
 
 
@@ -45,24 +44,12 @@ class Scheduler(ABC, Generic[TTask]):
         raise NotImplementedError
 
 
-# XXX: This is all temporary until we get these types properly introduced
-PartitionId = NewType("PartitionId", int)
-
-
-@dataclass(frozen=True)
-class SubscriptionIdentifier:
-    partition: PartitionId
-    uuid: UUID
-
-
-class Subscription(NamedTuple):
-    identifier: SubscriptionIdentifier
-    data: SubscriptionData
-
-
 class SubscriptionScheduler(Scheduler[Subscription]):
     def __init__(
-        self, store: SubscriptionStore, partition_id: PartitionId, cache_ttl: timedelta
+        self,
+        store: SubscriptionDataStore,
+        partition_id: PartitionId,
+        cache_ttl: timedelta,
     ) -> None:
         self.__store = store
         self.__cache_ttl = cache_ttl
@@ -76,9 +63,7 @@ class SubscriptionScheduler(Scheduler[Subscription]):
             or (current_time - self.__last_refresh) > self.__cache_ttl
         ):
             self.__subscriptions = [
-                Subscription(
-                    SubscriptionIdentifier(self.__partition_id, UUID(uuid)), data
-                )
+                Subscription(SubscriptionIdentifier(self.__partition_id, uuid), data)
                 for uuid, data in self.__store.all()
             ]
             self.__last_refresh = current_time
