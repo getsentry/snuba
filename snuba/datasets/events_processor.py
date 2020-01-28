@@ -95,7 +95,12 @@ class EventsProcessor(EventsProcessorBase):
     ) -> None:
         pass
 
-    def extract_promoted_contexts(self, output, contexts, tags):
+    def extract_promoted_contexts(
+        self,
+        output: MutableMapping[str, Any],
+        contexts: Mapping[str, Any],
+        tags: Mapping[str, Any],
+    ) -> None:
         app_ctx = contexts.get("app", None) or {}
         output["app_device"] = _unicodify(tags.get("app.device", None))
         app_ctx.pop("device_app_hash", None)  # tag=app.device

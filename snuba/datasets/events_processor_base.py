@@ -203,7 +203,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
 
     def process_insert(
         self, event: Mapping[str, Any], metadata: Optional[KafkaMessageMetadata] = None
-    ) -> Mapping[str, Any]:
+    ) -> Optional[Mapping[str, Any]]:
         if not self._should_process(event):
             return None
 
@@ -235,8 +235,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         contexts = data.get("contexts", None) or {}
         self.extract_promoted_contexts(processed, contexts, tags)
         self.extract_contexts_custom(processed, event, contexts, metadata)
-
-        # ========== USER GEO AND REQUEST WERE HERE
 
         processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
             contexts
