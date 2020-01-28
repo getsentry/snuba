@@ -17,6 +17,8 @@ steps:
   env:
   - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
   args:
+  - '-f'
+  - 'docker-compose.gcb.yml'
   - run
   - '--rm'
   - snuba-test
