@@ -11,7 +11,7 @@ from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 class SubscriptionDataStore(abc.ABC):
     @abc.abstractmethod
-    def create(self, subscription_id: UUID, subscription: SubscriptionData) -> None:
+    def create(self, key: UUID, data: SubscriptionData) -> None:
         """
         Creates a `Subscription` in the store. Will overwrite any existing `Subscriptions`
         with the same id.
@@ -19,7 +19,7 @@ class SubscriptionDataStore(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def delete(self, subscription_id: UUID) -> None:
+    def delete(self, key: UUID) -> None:
         """
         Removes a `Subscription` from the store.
         """

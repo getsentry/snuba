@@ -73,11 +73,11 @@ class SubscriptionScheduler(Scheduler[Subscription]):
         self, interval: Interval[datetime]
     ) -> Iterator[ScheduledTask[Subscription]]:
         subscriptions = self.__get_subscriptions(interval.lower)
-        for i in range(
+        for timestamp in range(
             math.ceil(interval.lower.timestamp()),
             math.ceil(interval.upper.timestamp()),
         ):
             for subscription in subscriptions:
                 resolution = int(subscription.data.resolution.total_seconds())
-                if i % resolution == 0:
-                    yield ScheduledTask(datetime.fromtimestamp(i), subscription)
+                if timestamp % resolution == 0:
+                    yield ScheduledTask(datetime.fromtimestamp(timestamp), subscription)
