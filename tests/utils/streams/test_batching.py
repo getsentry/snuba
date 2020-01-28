@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker, BatchingConsumer
-from snuba.utils.streams.dummy import DummyBroker, DummyConsumer
+from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
 from snuba.utils.streams.types import Message, Topic
 
 
@@ -29,9 +29,13 @@ class FakeWorker(AbstractBatchWorker[int, int]):
 class TestConsumer(object):
     def test_batch_size(self) -> None:
         topic = Topic("topic")
-        consumer: DummyConsumer[int] = DummyConsumer(
-            DummyBroker({topic: [[1, 2, 3]]}), "group"
-        )
+        broker: DummyBroker[int] = DummyBroker()
+        broker.create_topic(topic, partitions=1)
+        producer: DummyProducer[int] = DummyProducer(broker)
+        for i in [1, 2, 3]:
+            producer.produce(topic, i).result()
+
+        consumer: DummyConsumer[int] = DummyConsumer(broker, "group")
 
         worker = FakeWorker()
         batching_consumer = BatchingConsumer(
@@ -56,7 +60,10 @@ class TestConsumer(object):
     @patch("time.time")
     def test_batch_time(self, mock_time: Any) -> None:
         topic = Topic("topic")
-        broker: DummyBroker[int] = DummyBroker({topic: [[]]})
+        broker: DummyBroker[int] = DummyBroker()
+        broker.create_topic(topic, partitions=1)
+        producer: DummyProducer[int] = DummyProducer(broker)
+
         consumer: DummyConsumer[int] = DummyConsumer(broker, " group")
 
         worker = FakeWorker()
@@ -71,21 +78,24 @@ class TestConsumer(object):
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 0).timetuple())
 
-        broker.topics[topic][0].extend([1, 2, 3])
+        for i in [1, 2, 3]:
+            producer.produce(topic, i).result()
 
         for _ in range(3):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 1).timetuple())
 
-        broker.topics[topic][0].extend([4, 5, 6])
+        for i in [4, 5, 6]:
+            producer.produce(topic, i).result()
 
         for _ in range(3):
             batching_consumer._run_once()
 
         mock_time.return_value = time.mktime(datetime(2018, 1, 1, 0, 0, 5).timetuple())
 
-        broker.topics[topic][0].extend([7, 8, 9])
+        for i in [7, 8, 9]:
+            producer.produce(topic, i).result()
 
         for _ in range(3):
             batching_consumer._run_once()
