@@ -45,7 +45,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     from snuba.clickhouse.native import ClickhousePool
 
     for statement in dataset.get_dataset_schemas().get_create_statements():
-        ClickhousePool().execute(statement)
+        ClickhousePool().execute(statement.statement)
 
     consumer = ConsumerWorker(dataset, metrics=DummyMetricsBackend())
 

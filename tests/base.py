@@ -54,17 +54,17 @@ class BaseTest(object):
             self.clickhouse = ClickhousePool()
 
             for statement in self.dataset.get_dataset_schemas().get_drop_statements():
-                self.clickhouse.execute(statement)
+                self.clickhouse.execute(statement.statement)
 
             for statement in self.dataset.get_dataset_schemas().get_create_statements():
-                self.clickhouse.execute(statement)
+                self.clickhouse.execute(statement.statement)
 
         redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
             for statement in self.dataset.get_dataset_schemas().get_drop_statements():
-                self.clickhouse.execute(statement)
+                self.clickhouse.execute(statement.statement)
 
         redis_client.flushdb()
 
