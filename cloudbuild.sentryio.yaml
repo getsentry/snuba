@@ -13,6 +13,15 @@ steps:
             '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:latest',
             '.'
         ]
+- name: 'gcr.io/$PROJECT_ID/docker-compose'
+  env:
+  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
+  args:
+  - '-f'
+  - 'docker-compose.gcb.yml'
+  - run
+  - '--rm'
+  - snuba-test
 - name: 'gcr.io/cloud-builders/docker'
   secretEnv: ['DOCKER_PASSWORD']
   entrypoint: 'bash'
