@@ -2,8 +2,11 @@ from snuba.query.conditions import (
     binary_condition,
     BooleanFunctions,
     ConditionFunctions,
+    is_binary_condition,
+    is_in_condition,
 )
-from snuba.query.expressions import FunctionCall, Column, Expression
+from snuba.query.dsl import literals_tuple
+from snuba.query.expressions import FunctionCall, Column, Expression, Literal
 
 
 def test_expressions_from_basic_condition() -> None:
@@ -132,3 +135,19 @@ def test_nested_simple_condition() -> None:
         and1_b,
     ]
     assert ret == expected
+
+
+def test_processing_functions() -> None:
+    in_condition = binary_condition(
+        None,
+        ConditionFunctions.IN,
+        Column(None, "tag_keys", None),
+        literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
+    )
+    assert is_in_condition(in_condition)
+
+    eq_condition = binary_condition(
+        None, ConditionFunctions.EQ, Column(None, "test", None), Literal(None, "1")
+    )
+    assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
+    assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)
