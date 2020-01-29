@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from unittest.mock import Mock
 from uuid import uuid1
 
 from concurrent.futures import ThreadPoolExecutor
@@ -43,7 +42,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
             timestamps=Interval(now - timedelta(minutes=1), now),
         )
 
-        future = executor.execute(task, tick, Mock())
+        future = executor.execute(task, tick)
         result = future.result()
 
         assert result["data"][0]["count"] == 10
@@ -52,7 +51,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
             offsets=Interval(5000, 5001),
             timestamps=Interval(now + timedelta(hours=10), now + timedelta(hours=11)),
         )
-        future = executor.execute(task, tick, Mock())
+        future = executor.execute(task, tick)
         result = future.result()
 
         assert result["data"][0]["count"] == 0
