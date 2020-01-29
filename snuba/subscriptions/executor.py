@@ -25,7 +25,7 @@ class SubscriptionExecutor:
     def execute(
         self, task: ScheduledTask[Subscription], tick: Tick
     ) -> Future[ClickhouseQueryResult]:
-        timer = Timer()
+        timer = Timer("query")
         try:
             request = task.task.data.build_request(
                 self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer,
