@@ -9,10 +9,8 @@ from snuba.subscriptions.data import (
     SubscriptionData,
     SubscriptionIdentifier,
 )
-from snuba.subscriptions.scheduler import (
-    ScheduledTask,
-    SubscriptionScheduler,
-)
+from snuba.subscriptions.scheduler import SubscriptionScheduler
+from snuba.subscriptions.task import ScheduledTask
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.types import Interval
 from tests.base import BaseTest

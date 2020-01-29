@@ -697,7 +697,7 @@ class KafkaProducer(Producer[TPayload]):
     def __init__(
         self, configuration: Mapping[str, Any], codec: Codec[KafkaPayload, TPayload]
     ) -> None:
-        self.__configuretion = configuration
+        self.__configuration = configuration
         self.__codec = codec
 
         self.__producer = ConfluentProducer(configuration)

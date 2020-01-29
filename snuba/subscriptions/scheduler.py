@@ -1,29 +1,12 @@
 import math
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Generic, Iterator, List, Optional, TypeVar
+from typing import Generic, Iterator, List, Optional
 
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
+from snuba.subscriptions.task import ScheduledTask, TTask
 from snuba.utils.types import Interval
-
-
-TTask = TypeVar("TTask")
-
-
-@dataclass(frozen=True)
-class ScheduledTask(Generic[TTask]):
-    """
-    A scheduled task represents a unit of work (a task) that is intended to
-    be executed at (or around) a specific time.
-    """
-
-    # The time that this task was scheduled to execute.
-    timestamp: datetime
-
-    # The task that should be executed.
-    task: TTask
 
 
 class Scheduler(ABC, Generic[TTask]):
