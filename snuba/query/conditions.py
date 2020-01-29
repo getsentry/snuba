@@ -61,7 +61,7 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
         return (
             isinstance(exp.parameters[1], FunctionCall)
             and exp.parameters[1].function_name == "tuple"
-            and all([isinstance(c, Literal) for c in exp.parameters[1].parameters])
+            and all(isinstance(c, Literal) for c in exp.parameters[1].parameters)
         )
     return False
 
@@ -92,7 +92,7 @@ def binary_condition(
     return FunctionCall(alias, function_name, (lhs, rhs))
 
 
-def is_binary_condition(exp: Expression, operator: Optional[str]) -> bool:
+def is_binary_condition(exp: Expression, operator: str) -> bool:
     return (
         isinstance(exp, FunctionCall)
         and exp.function_name == operator
@@ -106,7 +106,7 @@ def unary_condition(
     return FunctionCall(alias, function_name, (operand,))
 
 
-def is_unary_condition(exp: Expression, operator: Optional[str]) -> bool:
+def is_unary_condition(exp: Expression, operator: str) -> bool:
     return (
         isinstance(exp, FunctionCall)
         and exp.function_name == operator

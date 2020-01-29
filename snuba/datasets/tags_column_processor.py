@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, List, Mapping, Optional, Sequence, Set, Union
+from typing import Any, List, Mapping, Optional, Set, Union
 
 from dataclasses import dataclass
 from snuba import state
@@ -35,7 +35,15 @@ class ParsedNestedColumn:
     """
 
     col_name: str
-    parameter: Optional[str]
+    tag_name: Optional[str]
+
+    @classmethod
+    def __is_individual_column(cls, col_name: str) -> bool:
+        return col_name in ("tags", "contexts")
+
+    @classmethod
+    def __is_joined_column(cls, col_name: str) -> bool:
+        return col_name in ("tags_key", "tags_value")
 
     @classmethod
     def parse_column_expression(cls, col_expr: str) -> Optional[ParsedNestedColumn]:
@@ -44,20 +52,20 @@ class ParsedNestedColumn:
             col_prefix = match[1]
             param_string = match[2]
 
-            if col_prefix in ("tags", "contexts"):
-                assert param_string
+            if cls.__is_individual_column(col_prefix):
+                assert param_string, f"Missing tag name from tags expression {col_expr}"
             return ParsedNestedColumn(col_prefix, param_string)
 
-        if col_expr in ("tags_key", "tags_value"):
+        if cls.__is_joined_column(col_expr):
             return ParsedNestedColumn(col_expr, None)
 
         return None
 
     def is_joined_column(self) -> bool:
-        return self.col_name in ("tags_key", "tags_value")
+        return self.__is_joined_column(self.col_name)
 
     def is_single_column(self) -> bool:
-        return self.col_name in ("tags", "contexts")
+        return self.__is_individual_column(self.col_name)
 
 
 class TagColumnProcessor:
@@ -133,8 +141,8 @@ class TagColumnProcessor:
         "promoted" to a top level column, or whether we have to look in the tags map.
         """
         # For promoted tags, return the column name.
-        assert parsed_col.parameter
-        tag_name = parsed_col.parameter
+        assert parsed_col.tag_name
+        tag_name = parsed_col.tag_name
         col = parsed_col.col_name
         if col in self.__promoted_columns:
             actual_tag = self.__get_tag_column_map()[col].get(tag_name, tag_name)
@@ -207,12 +215,10 @@ class TagColumnProcessor:
         select_clause = query.get_selected_columns_from_ast() or []
 
         tags_key_found = any(
-            [
-                col.column_name == "tags_key"
-                for expression in select_clause
-                for col in expression
-                if isinstance(col, Column)
-            ]
+            col.column_name == "tags_key"
+            for expression in select_clause
+            for col in expression
+            if isinstance(col, Column)
         )
 
         if not tags_key_found:
@@ -223,7 +229,7 @@ class TagColumnProcessor:
         ) -> Optional[List[str]]:
             if not cond:
                 return []
-            if any([is_binary_condition(cond, BooleanFunctions.OR) for cond in cond]):
+            if any(is_binary_condition(cond, BooleanFunctions.OR) for cond in cond):
                 return None
             return self.__extract_top_level_tag_conditions(cond)
 
@@ -284,10 +290,9 @@ class TagColumnProcessor:
             # on (key, value) tag tuples.
             mapping = f"arrayMap((x,y) -> [x,y], {key_list}, {val_list})"
             if filter_tags:
-                filtering_expression = (
-                    f"arrayFilter(pair -> pair[1] IN ({filter_tags}), %s)"
+                filtering = (
+                    f"arrayFilter(pair -> pair[1] IN ({filter_tags}), {mapping})"
                 )
-                filtering = filtering_expression % mapping
             else:
                 filtering = mapping
 

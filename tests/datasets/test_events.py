@@ -40,12 +40,6 @@ class TestEventsDataset(BaseEventsTest):
             "(arrayJoin(tags.key) AS tags_key)"
         )
 
-        # Selected tags
-        q = Query(
-            {"granularity": 86400, "selected_columns": ["tags_key[tags1, tags2]"]},
-            source,
-        )
-
         # If we are going to use both tags_key and tags_value, expand both
         tag_group_body = {"groupby": ["tags_key", "tags_value"]}
         assert column_expr(
