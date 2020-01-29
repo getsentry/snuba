@@ -38,10 +38,6 @@ class ParsedNestedColumn:
     tag_name: Optional[str]
 
     @classmethod
-    def __is_individual_column(cls, col_name: str) -> bool:
-        return col_name in ("tags", "contexts")
-
-    @classmethod
     def __is_joined_column(cls, col_name: str) -> bool:
         return col_name in ("tags_key", "tags_value")
 
@@ -49,12 +45,7 @@ class ParsedNestedColumn:
     def parse_column_expression(cls, col_expr: str) -> Optional[ParsedNestedColumn]:
         match = NESTED_COL_EXPR_RE.match(col_expr)
         if match:
-            col_prefix = match[1]
-            param_string = match[2]
-
-            if cls.__is_individual_column(col_prefix):
-                assert param_string, f"Missing tag name from tags expression {col_expr}"
-            return ParsedNestedColumn(col_prefix, param_string)
+            return ParsedNestedColumn(match[1], match[2])
 
         if cls.__is_joined_column(col_expr):
             return ParsedNestedColumn(col_expr, None)
@@ -65,7 +56,7 @@ class ParsedNestedColumn:
         return self.__is_joined_column(self.col_name)
 
     def is_single_column(self) -> bool:
-        return self.__is_individual_column(self.col_name)
+        return self.col_name in ("tags", "contexts")
 
 
 class TagColumnProcessor:
