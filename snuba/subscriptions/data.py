@@ -55,6 +55,9 @@ class SubscriptionData:
                 "Resolution must be greater than or equal to 1 minute"
             )
 
+        if self.resolution.microseconds > 0:
+            raise InvalidSubscriptionError("Resolution does not support microseconds")
+
     def build_request(
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
     ) -> Request:

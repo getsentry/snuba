@@ -1,3 +1,4 @@
+import abc
 from uuid import UUID
 from typing import Collection, Tuple
 
@@ -8,7 +9,32 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
-class RedisSubscriptionDataStore:
+class SubscriptionDataStore(abc.ABC):
+    @abc.abstractmethod
+    def create(self, key: UUID, data: SubscriptionData) -> None:
+        """
+        Creates a `Subscription` in the store. Will overwrite any existing `Subscriptions`
+        with the same id.
+        """
+        pass
+
+    @abc.abstractmethod
+    def delete(self, key: UUID) -> None:
+        """
+        Removes a `Subscription` from the store.
+        """
+        pass
+
+    @abc.abstractmethod
+    def all(self) -> Collection[Tuple[UUID, SubscriptionData]]:
+        """
+        Fetches all `Subscriptions` from the store
+        :return: A collection of `Subscriptions`.
+        """
+        pass
+
+
+class RedisSubscriptionDataStore(SubscriptionDataStore):
     """
     A Redis backed store for subscription data. Stores subscriptions using
     `SubscriptionDataCodec`. Each instance of the store operates on a
