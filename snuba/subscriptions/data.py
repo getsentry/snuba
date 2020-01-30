@@ -84,19 +84,11 @@ class SubscriptionData:
         if offset is not None:
             extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
 
-        # Not sure how useful these aggregates are, but we had them in the initial
-        # result spec. There should only be one partition for these queries, so using
-        # max will be fine too.
-        aggregations = [
-            *self.aggregations,
-            ["max(offset)", "", "max_offset"],
-            ["max(partition)", "", "max_partition"],
-        ]
         return validate_request_content(
             {
                 "project": self.project_id,
                 "conditions": [*self.conditions, *extra_conditions],
-                "aggregations": aggregations,
+                "aggregations": self.aggregations,
                 "from_date": (timestamp - self.time_window).isoformat(),
                 "to_date": timestamp.isoformat(),
             },

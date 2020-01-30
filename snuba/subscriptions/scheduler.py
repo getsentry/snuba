@@ -8,6 +8,7 @@ from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIden
 from snuba.subscriptions.store import SubscriptionDataStore
 from snuba.utils.types import Interval
 
+
 TTask = TypeVar("TTask")
 
 
