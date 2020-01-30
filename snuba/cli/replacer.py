@@ -1,4 +1,3 @@
-import logging
 import signal
 from typing import Optional, Sequence
 
@@ -6,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.environment import setup_logging, setup_sentry
 
 
 @click.command()
@@ -71,7 +71,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -85,10 +85,9 @@ def replacer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: str,
+    log_level: Optional[str] = None,
 ) -> None:
 
-    import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
@@ -102,12 +101,10 @@ def replacer(
     )
     from snuba.utils.streams.types import Topic
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    dataset = get_dataset(dataset_name)
+    setup_logging(log_level)
+    setup_sentry()
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    dataset = get_dataset(dataset_name)
 
     stream_loader = enforce_table_writer(dataset).get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
