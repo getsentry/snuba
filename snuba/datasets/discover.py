@@ -287,10 +287,7 @@ class DiscoverDataset(TimeSeriesDataset):
                     TRANSACTIONS: [
                         ApdexProcessor(),
                         NestedFieldConditionOptimizer(
-                            "tags",
-                            "_tags_flattened",
-                            {"timestamp"},
-                            BEGINNING_OF_TIME,
+                            "tags", "_tags_flattened", {"timestamp"}, BEGINNING_OF_TIME,
                         ),
                         NestedFieldConditionOptimizer(
                             "contexts",
