@@ -1,7 +1,8 @@
 import logging
 
+from dataclasses import dataclass
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, List, Mapping, MutableMapping, Optional
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -47,6 +48,24 @@ class RawQueryException(Exception):
         self.meta = meta
 
 
+@dataclass
+class ClickhouseQueryMetadata:
+    request: Request
+    sql: str
+    timer: Timer
+    stats: MutableMapping[str, Any]
+    status: str
+
+    def to_dict(self):
+        return {
+            "request": self.request,
+            "sql": self.sql,
+            "timer": self.timer,
+            "stats": self.stats,
+            "status": self.status,
+        }
+
+
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 
 
@@ -55,6 +74,7 @@ def raw_query(
     query: DictClickhouseQuery,
     reader: Reader[ClickhouseQuery],
     timer: Timer,
+    query_list: List[ClickhouseQueryMetadata],
     stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
     """
@@ -157,7 +177,13 @@ def raw_query(
                         error = str(ex)
                         logger.exception("Error running query: %s\n%s", sql, error)
                         stats = log_query_and_update_stats(
-                            request, sql, timer, stats, "error", query_settings
+                            request,
+                            sql,
+                            timer,
+                            stats,
+                            "error",
+                            query_list,
+                            query_settings,
                         )
                         meta = {}
                         if isinstance(ex, ClickHouseError):
@@ -174,7 +200,13 @@ def raw_query(
                         )
             except RateLimitExceeded as ex:
                 stats = log_query_and_update_stats(
-                    request, sql, timer, stats, "rate-limited", query_settings
+                    request,
+                    sql,
+                    timer,
+                    stats,
+                    "rate-limited",
+                    query_list,
+                    query_settings,
                 )
                 raise RawQueryException(
                     err_type="rate-limited",
@@ -185,7 +217,7 @@ def raw_query(
                 )
 
     stats = log_query_and_update_stats(
-        request, sql, timer, stats, "success", query_settings
+        request, sql, timer, stats, "success", query_list, query_settings,
     )
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
@@ -201,6 +233,7 @@ def log_query_and_update_stats(
     timer: Timer,
     stats: MutableMapping[str, Any],
     status: str,
+    query_list: List[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
 ) -> MutableMapping:
     """
@@ -208,19 +241,14 @@ def log_query_and_update_stats(
     well as timing information.
     Also updates stats with any relevant information and returns the updated dict.
     """
-
     stats.update(query_settings)
+
     if settings.RECORD_QUERIES:
-        # send to redis
-        state.record_query(
-            {
-                "request": request.body,
-                "sql": sql,
-                "timing": timer,
-                "stats": stats,
-                "status": status,
-            }
+
+        query_metadata = ClickhouseQueryMetadata(
+            request=request.body, sql=sql, timer=timer, stats=stats, status=status
         )
+        query_list.append(query_metadata)
 
         timer.send_metrics_to(
             metrics,
@@ -234,9 +262,38 @@ def log_query_and_update_stats(
     return stats
 
 
-@split_query
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
+) -> ClickhouseQueryResult:
+    """
+    Runs a query, then records the results including metadata about each split.
+    """
+    query_list: List[ClickhouseQueryMetadata] = []
+
+    result = _run_query(
+        dataset=dataset, request=request, timer=timer, query_list=query_list
+    )
+
+    if settings.RECORD_QUERIES:
+        # send to redis
+        state.record_query(
+            {
+                "request": request.body,
+                "timing": query_list[-1].timer,
+                "status": query_list[-1].status,
+                "query_list": [q.as_dict() for q in query_list],
+            }
+        )
+
+    return result
+
+
+@split_query
+def _run_query(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    query_list: List[ClickhouseQueryMetadata],
 ) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
@@ -292,7 +349,7 @@ def parse_and_run_query(
         except Exception:
             logger.exception("Failed to format ast query")
         result = raw_query(
-            request, query, NativeDriverReader(clickhouse_ro), timer, stats
+            request, query, NativeDriverReader(clickhouse_ro), timer, query_list, stats
         )
 
     with sentry_sdk.configure_scope() as scope:
