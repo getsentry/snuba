@@ -13,7 +13,7 @@ from snuba.subscriptions.data import (
     SubscriptionIdentifier,
 )
 from snuba.subscriptions.executor import SubscriptionExecutor
-from snuba.subscriptions.task import ScheduledTask
+from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.types import Interval
 from tests.subscriptions import BaseSubscriptionTest
 

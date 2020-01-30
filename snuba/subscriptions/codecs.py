@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import Future
-from datetime import timedelta
-from typing import Any, NamedTuple
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Mapping, Union
 
-from snuba.subscriptions.data import Subscription, SubscriptionData
-from snuba.subscriptions.task import ScheduledTask
+from snuba.subscriptions.data import (
+    PartitionId,
+    SubscriptionData,
+    SubscriptionIdentifier,
+)
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.kafka import KafkaPayload
 
@@ -34,46 +37,46 @@ class SubscriptionDataCodec(Codec[bytes, SubscriptionData]):
         )
 
 
-# XXX: Temporary types until another pr merges
-Result = Any
+@dataclass(frozen=True)
+class QueryResult:
+    subscription_id: SubscriptionIdentifier
+    timestamp: datetime
+    values: Mapping[str, Union[int, float]]
+    partition: PartitionId
+    offset: int
+    interval: timedelta
 
 
-class SubscriptionResult(NamedTuple):
-    task: ScheduledTask[Subscription]
-    future: Future[Result]
-
-
-class SubscriptionResultCodec(Codec[KafkaPayload, SubscriptionResult]):
-    def encode(self, value: SubscriptionResult) -> KafkaPayload:
-        query_result = value.future.result(timeout=5.0)
+class QueryResultCodec(Codec[KafkaPayload, QueryResult]):
+    def encode(self, value: QueryResult) -> KafkaPayload:
+        subscription_id = str(value.subscription_id)
         return KafkaPayload(
-            # TODO: Not sure if this is right, but we likely want to rely on the same
-            # partition logic as elsewhere, and I believe we partition on project_id as
-            # key
-            str(value.task.task.data.project_id).encode("utf-8"),
+            str(subscription_id).encode("utf-8"),
             json.dumps(
                 {
                     "version": 1,
                     "payload": {
-                        "subscription_id": str(value.task.task.identifier),
-                        "values": {
-                            key: val
-                            for key, val in query_result["data"].items()
-                            if key not in ("max_offset", "max_partition")
-                        },
-                        "timestamp": value.task.timestamp,
-                        # Are these actually useful?
-                        "interval": int(
-                            value.task.task.data.time_window.total_seconds()
-                        ),
-                        "partition": query_result["data"]["max_partition"],
-                        "offset": query_result["data"]["max_offset"],
+                        "subscription_id": str(subscription_id),
+                        "values": value.values,
+                        "timestamp": value.timestamp.timestamp(),
+                        "interval": int(value.interval.total_seconds()),
+                        "partition": value.partition,
+                        "offset": value.offset,
                     },
                 }
             ).encode("utf-8"),
         )
 
-    def decode(self, value: KafkaPayload) -> SubscriptionResult:
-        # Not really possible to decode this back into a `SubscriptionResult`, should
-        # we have a different type of codec that expects this?
-        return json.loads(value.value.decode("utf-8"))
+    def decode(self, value: KafkaPayload) -> QueryResult:
+        data = json.loads(value.value.decode("utf-8"))
+        payload = data["payload"]
+        return QueryResult(
+            subscription_id=SubscriptionIdentifier.from_string(
+                payload["subscription_id"]
+            ),
+            values=payload["values"],
+            timestamp=datetime.fromtimestamp(payload["timestamp"]),
+            interval=timedelta(seconds=payload["interval"]),
+            partition=PartitionId(payload["partition"]),
+            offset=payload["offset"],
+        )
