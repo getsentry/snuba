@@ -17,6 +17,29 @@ class Commit:
 
 
 class SynchronizedConsumer(Consumer[TPayload]):
+    """
+    This class implements a consumer that is can only consume messages that
+    have already been consumed and committed by one or more other consumer
+    groups.
+
+    The consumer groups that are being "followed" are required to publish
+    their offsets to a shared commit log topic. The advancement of the
+    offsets for these consumer groups in the commit log topic controls
+    whether or not the local consumer is allowed to consume messages from its
+    assigned partitions. (This commit log topic works similarly to/was
+    inspired by/essentially duplicates the contents of the Kafka built-in
+    ``__consumer_offsets`` topic, which seems to be intended to be a private
+    API of the Kafka system based on the lack of external documentation.)
+
+    It is important to note that the since the local consumer is only allowed
+    to consume messages that have been consumed and committed by all of the
+    members of the referenced consumer groups, this consumer can only consume
+    messages as fast as the slowest consumer (or in other words, the most
+    latent or lagging consumer) for each partition. If one of these consumers
+    stops consuming messages entirely, this consumer will also stop making
+    progress in those partitions.
+    """
+
     def __init__(
         self,
         consumer: Consumer[TPayload],
