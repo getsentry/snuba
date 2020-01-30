@@ -281,7 +281,7 @@ def parse_and_run_query(
                 "request": request.body,
                 "timing": query_list[-1].timer,
                 "status": query_list[-1].status,
-                "query_list": [q.as_dict() for q in query_list],
+                "query_list": [q.to_dict() for q in query_list],
             }
         )
 
