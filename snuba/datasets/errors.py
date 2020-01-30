@@ -21,7 +21,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -56,7 +56,6 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("level", LowCardinality(String())),
                 # ("logger", Nullable(String())),
                 # ("server_name", Nullable(String())),  # future name: device_id?
-                ("transaction", Nullable(String())),
                 ("environment", LowCardinality(Nullable(String()))),
                 # ("sentry:release", Nullable(String())),
                 ("release", LowCardinality(Nullable(String()))),
@@ -66,6 +65,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("user", WithDefault(String(), "''")),
                 # ("site", Nullable(String())),
                 # ("url", Nullable(String())),
+                ("transaction_name", LowCardinality(String())),
             ]
         )
 
@@ -83,7 +83,6 @@ class ErrorsDataset(TimeSeriesDataset):
         all_columns = (
             required_columns
             + [
-                # required for non-deleted
                 (
                     "event_hash",
                     WithCodecs(
@@ -116,7 +115,6 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("sdk_version", LowCardinality(String())),
                 ("type", LowCardinality(String())),
                 ("version", LowCardinality(String())),
-                ("transaction_name", LowCardinality(String())),
                 (
                     "transaction_hash",
                     Materialized(UInt(64), "cityHash64(transaction_name)"),
@@ -143,7 +141,7 @@ class ErrorsDataset(TimeSeriesDataset):
                         [
                             ("type", String()),
                             ("value", String()),
-                            ("mechanism_type", String()),
+                            ("mechanism_type", Nullable(String())),
                             ("mechanism_handled", UInt(8)),
                         ]
                     ),
@@ -158,7 +156,7 @@ class ErrorsDataset(TimeSeriesDataset):
                             ("function", String()),
                             ("lineno", UInt(32)),
                             ("in_app", UInt(8)),
-                            ("package", String()),
+                            ("package", Nullable(String())),
                             ("module", String()),
                             ("stack_level", UInt(16)),
                         ]
@@ -196,10 +194,7 @@ class ErrorsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_tag_columns),
-                default_topic="events",
-                # replacement_topic="event-replacements",
-                # commit_log_topic="snuba-commit-log",
+                processor=ErrorsProcessor(promoted_tag_columns), default_topic="events",
             ),
         )
 
@@ -264,13 +259,14 @@ class ErrorsDataset(TimeSeriesDataset):
             "tags": {
                 col.flattened: col.flattened.replace("_", ".")
                 for col in self.get_promoted_tag_columns()
-                if col.flattened not in ("release", "dist", "user")
+                if col.flattened not in ("release", "dist", "user", "transaction_name")
             },
             "contexts": {},
         }
         ret["tags"]["release"] = "sentry:release"
         ret["tags"]["dist"] = "sentry:dist"
         ret["tags"]["user"] = "sentry:user"
+        ret["tags"]["transaction_name"] = "transaction"
 
     def get_tag_column_map(self):
         # And a reverse map from the tags the client expects to the database columns

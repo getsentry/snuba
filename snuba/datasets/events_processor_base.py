@@ -82,7 +82,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         self,
         output: MutableMapping[str, Any],
         event: Mapping[str, Any],
-        tags: Mapping[str, Any],
+        contexts: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
     ) -> None:
         raise NotImplementedError
