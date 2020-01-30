@@ -83,7 +83,6 @@ class SubscriptionData:
         extra_conditions: Sequence[Condition] = []
         if offset is not None:
             extra_conditions = [[["ifnull", ["offset", 0]], "<=", offset]]
-
         return validate_request_content(
             {
                 "project": self.project_id,
