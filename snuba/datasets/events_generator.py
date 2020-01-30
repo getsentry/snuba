@@ -8,13 +8,13 @@ from snuba import settings
 from snuba.utils.streams.kafka import KafkaPayload
 
 
-def generate_insertion_event(random: Random) -> KafkaPayload:
-    project_id = random.randint(1, 100)
+def generate_insertion_event(random: Random, scale: int = 1) -> KafkaPayload:
+    project_id = random.randint(1, scale)
     platform = random.choice(["python", "javascript"])
     data = {
         "event_id": UUID(int=random.randint(0, 2 ** 128)).hex,
         "project_id": project_id,
-        "group_id": project_id * 1000 + random.randint(0, 1000),
+        "group_id": ((project_id - 1) * (10 * scale)) + random.randint(0, 10 * scale),
         "datetime": (  # TODO: This could follow a more reasonable distribution than uniform.
             datetime.utcnow() - timedelta(seconds=random.randint(0, 120))
         ).strftime(
@@ -33,4 +33,4 @@ def generate_insertion_event(random: Random) -> KafkaPayload:
 
 if __name__ == "__main__":
     while True:
-        print(generate_insertion_event(Random()))
+        print(generate_insertion_event(Random(), 10000))
