@@ -279,7 +279,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output["title"] = _unicodify(data.get("title", None))
         output["location"] = _unicodify(data.get("location", None))
 
-        # ===== MESSAGE WAS HERE
         module_names = []
         module_versions = []
         modules = data.get("modules", {})
