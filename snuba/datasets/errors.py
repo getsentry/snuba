@@ -65,7 +65,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("user", WithDefault(String(), "''")),
                 # ("site", Nullable(String())),
                 # ("url", Nullable(String())),
-                ("transaction_name", LowCardinality(String())),
+                ("transaction_name", WithDefault(LowCardinality(String()))),
             ]
         )
 
@@ -139,10 +139,10 @@ class ErrorsDataset(TimeSeriesDataset):
                     "exception_stacks",
                     Nested(
                         [
-                            ("type", String()),
-                            ("value", String()),
+                            ("type", Nullable(String())),
+                            ("value", Nullable(String())),
                             ("mechanism_type", Nullable(String())),
-                            ("mechanism_handled", UInt(8)),
+                            ("mechanism_handled", Nullable(UInt(8))),
                         ]
                     ),
                 ),
@@ -150,15 +150,15 @@ class ErrorsDataset(TimeSeriesDataset):
                     "exception_frames",
                     Nested(
                         [
-                            ("abs_path", String()),
-                            ("colno", UInt(32)),
-                            ("filename", String()),
-                            ("function", String()),
-                            ("lineno", UInt(32)),
-                            ("in_app", UInt(8)),
+                            ("abs_path", Nullable(String())),
+                            ("colno", Nullable(UInt(32))),
+                            ("filename", Nullable(String())),
+                            ("function", Nullable(String())),
+                            ("lineno", Nullable(UInt(32))),
+                            ("in_app", Nullable(UInt(8))),
                             ("package", Nullable(String())),
-                            ("module", String()),
-                            ("stack_level", UInt(16)),
+                            ("module", Nullable(String())),
+                            ("stack_level", Nullable(UInt(16))),
                         ]
                     ),
                 ),
