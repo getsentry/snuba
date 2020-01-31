@@ -24,7 +24,7 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.prewhere import CustomPrewhereProcessor, PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
@@ -295,10 +295,11 @@ class DiscoverDataset(TimeSeriesDataset):
                             {"timestamp"},
                             BEGINNING_OF_TIME,
                         ),
-                    ]
+                        PrewhereProcessor(),
+                    ],
+                    EVENTS: [CustomPrewhereProcessor(custom_candidates=["type"])],
                 },
             ),
-            PrewhereProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
