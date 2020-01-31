@@ -1,9 +1,10 @@
 from datetime import datetime
-from uuid import uuid1
+from uuid import UUID, uuid1
 
 from snuba.datasets.dataset import Dataset
 from snuba.redis import redis_client
 from snuba.subscriptions.data import (
+    PartitionId,
     SubscriptionData,
     SubscriptionIdentifier,
 )
@@ -36,3 +37,18 @@ class SubscriptionCreator:
             identifier.uuid, data,
         )
         return identifier
+
+
+class SubscriptionDeleter:
+    """
+    Handles deletion of a `Subscription`, based on its ID and partition.
+    """
+
+    def __init__(self, dataset: Dataset, partition: PartitionId):
+        self.dataset = dataset
+        self.partition = partition
+
+    def delete(self, subscription_id: UUID) -> None:
+        RedisSubscriptionDataStore(redis_client, self.dataset, self.partition).delete(
+            subscription_id
+        )
