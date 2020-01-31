@@ -281,6 +281,7 @@ def parse_and_run_query(
             state.record_query(
                 {
                     "request": request.body,
+                    "referrer": http_request.referrer,
                     "timing": query_list[-1].timer,
                     "status": query_list[-1].status,
                     "query_list": [q.to_dict() for q in query_list],
