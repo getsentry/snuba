@@ -22,7 +22,7 @@ from snuba.datasets.schemas.tables import (
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.prewhere import CustomPrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -398,4 +398,7 @@ class EventsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), PrewhereProcessor()]
+        return [
+            BasicFunctionsProcessor(),
+            CustomPrewhereProcessor(custom_candidates=["type"]),
+        ]
