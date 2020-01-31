@@ -398,7 +398,4 @@ class EventsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            BasicFunctionsProcessor(),
-            PrewhereProcessor(),
-        ]
+        return [BasicFunctionsProcessor(), PrewhereProcessor()]
