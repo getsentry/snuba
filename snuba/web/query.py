@@ -269,21 +269,23 @@ def parse_and_run_query(
     Runs a query, then records the results including metadata about each split.
     """
     query_list: List[ClickhouseQueryMetadata] = []
-
-    result = _run_query(
-        dataset=dataset, request=request, timer=timer, query_list=query_list
-    )
-
-    if settings.RECORD_QUERIES:
-        # send to redis
-        state.record_query(
-            {
-                "request": request.body,
-                "timing": query_list[-1].timer,
-                "status": query_list[-1].status,
-                "query_list": [q.to_dict() for q in query_list],
-            }
+    try:
+        result = _run_query(
+            dataset=dataset, request=request, timer=timer, query_list=query_list
         )
+    except RawQueryException as error:
+        raise error
+    finally:
+        if settings.RECORD_QUERIES:
+            # send to redis
+            state.record_query(
+                {
+                    "request": request.body,
+                    "timing": query_list[-1].timer,
+                    "status": query_list[-1].status,
+                    "query_list": [q.to_dict() for q in query_list],
+                }
+            )
 
     return result
 
