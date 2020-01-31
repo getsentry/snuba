@@ -100,7 +100,7 @@ def test_custom_prewhere(query_body, new_conditions, prewhere_conditions) -> Non
     settings.MAX_PREWHERE_CONDITIONS = 3
     state.set_config("prewhere_custom_key_projects", "[1,3]")
 
-    dataset = get_dataset("transactions")
+    dataset = get_dataset("events")
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
 
