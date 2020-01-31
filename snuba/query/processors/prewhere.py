@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Sequence, Set
+from typing import Optional, Sequence, Set, Tuple
 
 from snuba import settings, state, util
 from snuba.query.conditions import is_in_condition
@@ -23,13 +23,16 @@ class PrewhereProcessor(QueryProcessor):
     """
 
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
-        self.__max_prewhere_conditions: int = max_prewhere_conditions if max_prewhere_conditions is not None else settings.MAX_PREWHERE_CONDITIONS
+        self._max_prewhere_conditions: int = max_prewhere_conditions if max_prewhere_conditions is not None else settings.MAX_PREWHERE_CONDITIONS
 
-    def _get_prewhere_keys(self, query: Query) -> Sequence[str]:
-        return query.get_data_source().get_prewhere_candidates()
+    def _get_prewhere_keys(self, query: Query) -> Tuple[Sequence[str], int]:
+        return (
+            query.get_data_source().get_prewhere_candidates(),
+            self._max_prewhere_conditions,
+        )
 
     def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
-        prewhere_keys = self._get_prewhere_keys(query)
+        prewhere_keys, max_prewhere_conditions = self._get_prewhere_keys(query)
         if not prewhere_keys:
             return
         prewhere_conditions: Sequence[Condition] = []
@@ -61,7 +64,7 @@ class PrewhereProcessor(QueryProcessor):
         )
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][
-                : self.__max_prewhere_conditions
+                :max_prewhere_conditions
             ]
             query.set_conditions(
                 list(filter(lambda cond: cond not in prewhere_conditions, conditions))
@@ -112,6 +115,9 @@ class CustomPrewhereProcessor(PrewhereProcessor):
             projects_in_query = projects_in_query | projects
 
         if any(p in custom_projects for p in projects_in_query):
-            return self.__custom_candidates + candidates
+            return (
+                self.__custom_candidates + candidates,
+                self._max_prewhere_conditions + 1,
+            )
         else:
-            return candidates
+            return (candidates, self._max_prewhere_conditions)
