@@ -92,7 +92,7 @@ def raw_query(
     )
 
     all_confs = state.get_all_configs()
-    query_settings = {
+    query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
