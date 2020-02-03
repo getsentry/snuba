@@ -50,9 +50,10 @@ def test_simple_column_expr():
     )
 
     # All tag keys expression
-    assert column_expr(
-        dataset, "events.tags_key", deepcopy(query), ParsingContext()
-    ) == ("(arrayJoin(events.tags.key) AS `events.tags_key`)")
+    q = Query({"selected_columns": ["events.tags_key"]}, source)
+    assert column_expr(dataset, "events.tags_key", q, ParsingContext()) == (
+        "(arrayJoin(events.tags.key) AS `events.tags_key`)"
+    )
 
     # If we are going to use both tags_key and tags_value, expand both
     tag_group_body = {"groupby": ["events.tags_key", "events.tags_value"]}
@@ -232,8 +233,9 @@ def test_conditions_expr():
     )
 
     conditions = tuplify([[["notEmpty", ["events.tags_key"]], "=", 1]])
+    q = Query({"selected_columns": ["events.tags_key"]}, source)
     assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
+        conditions_expr(dataset, conditions, q, ParsingContext())
         == "notEmpty((arrayJoin(events.tags.key) AS `events.tags_key`)) = 1"
     )
 

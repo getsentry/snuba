@@ -35,9 +35,10 @@ class TestEventsDataset(BaseEventsTest):
         )
 
         # All tag keys expression
-        assert column_expr(
-            self.dataset, "tags_key", deepcopy(query), ParsingContext()
-        ) == ("(arrayJoin(tags.key) AS tags_key)")
+        q = Query({"granularity": 86400, "selected_columns": ["tags_key"]}, source,)
+        assert column_expr(self.dataset, "tags_key", q, ParsingContext()) == (
+            "(arrayJoin(tags.key) AS tags_key)"
+        )
 
         # If we are going to use both tags_key and tags_value, expand both
         tag_group_body = {"groupby": ["tags_key", "tags_value"]}

@@ -26,9 +26,12 @@ from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
-from snuba.subscriptions.data import InvalidSubscriptionError
-from snuba.subscriptions.store import SubscriptionCodec
-from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionIdentifier
+from snuba.subscriptions.codecs import SubscriptionDataCodec
+from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
+from snuba.subscriptions.subscription import (
+    SubscriptionCreator,
+    SubscriptionDeleter,
+)
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -349,9 +352,6 @@ def sdk_distribution(*, timer: Timer) -> Response:
     return format_result(run_query(dataset, request, timer))
 
 
-SUBSCRIPTION_SEPARATOR = "/"
-
-
 @application.errorhandler(InvalidSubscriptionError)
 def handle_subscription_error(exception: InvalidSubscriptionError):
     data = {"error": {"type": "subscription", "message": str(exception)}}
@@ -362,22 +362,16 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
     )
 
 
-def build_external_subscription_id(identifier: SubscriptionIdentifier) -> str:
-    return "{}{}{}".format(
-        identifier.partition_id, SUBSCRIPTION_SEPARATOR, identifier.subscription_id
-    )
-
-
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
-    subscription = SubscriptionCodec().decode(http_request.data)
+    subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
-    subscription_identifier = SubscriptionCreator(dataset).create(subscription, timer,)
+    identifier = SubscriptionCreator(dataset).create(subscription, timer)
     return (
         json.dumps(
-            {"subscription_id": build_external_subscription_id(subscription_identifier)}
+            {"subscription_id": f"{identifier.partition}/{identifier.uuid.hex}"}
         ),
         202,
         {"Content-Type": "application/json"},
@@ -388,6 +382,7 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
+    SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
 

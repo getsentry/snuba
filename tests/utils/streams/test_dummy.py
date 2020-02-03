@@ -16,12 +16,12 @@ from tests.utils.streams.mixins import StreamsTestMixin
 
 class DummyStreamsTestCase(StreamsTestMixin, TestCase):
     def setUp(self) -> None:
-        self.broker: DummyBroker[int] = DummyBroker({})
+        self.broker: DummyBroker[int] = DummyBroker()
 
     @contextlib.contextmanager
     def get_topic(self, partitions: int = 1) -> Iterator[Topic]:
         topic = Topic(uuid.uuid1().hex)
-        self.broker.topics[topic] = [[] for i in range(partitions)]
+        self.broker.create_topic(topic, partitions)
         yield topic
 
     def get_consumer(

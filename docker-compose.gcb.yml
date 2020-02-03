@@ -1,0 +1,61 @@
+---
+version: '3.4'
+services:
+  snuba-test:
+    depends_on:
+      - redis
+      - kafka
+      - clickhouse
+    image: '$SNUBA_IMAGE'
+    volumes:
+      - '.artifacts:/.artifacts'
+    command:
+      - '-m'
+      - 'pytest'
+      - '-vv'
+      - '--cov'
+      - '.'
+      - '--cov-report'
+      - 'xml:/.artifacts/coverage.xml'
+      - '--junit-xml'
+      - '/.artifacts/pytest.junit.xml'
+    environment:
+      SNUBA_SETTINGS: 'ci'
+      CLICKHOUSE_HOST: clickhouse
+      USE_REDIS_CLUSTER: 0
+      REDIS_HOST: 'redis'
+      REDIS_PORT: 6379
+      DEFAULT_BROKERS: 'kafka:9092'
+    entrypoint: python
+  zookeeper:
+    image: 'confluentinc/cp-zookeeper:5.1.2'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: '2181'
+      CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: 'WARN'
+      ZOOKEEPER_TOOLS_LOG4J_LOGLEVEL: 'WARN'
+  kafka:
+    depends_on:
+      - zookeeper
+    image: 'confluentinc/cp-kafka:5.1.2'
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
+      KAFKA_LOG4J_LOGGERS: 'kafka.cluster=WARN,kafka.controller=WARN,kafka.coordinator=WARN,kafka.log=WARN,kafka.server=WARN,kafka.zookeeper=WARN,state.change.logger=WARN'
+      KAFKA_LOG4J_ROOT_LOGLEVEL: 'WARN'
+      KAFKA_TOOLS_LOG4J_LOGLEVEL: 'WARN'
+  clickhouse:
+    image: 'yandex/clickhouse-server:19.11'
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  redis:
+    image: redis:5.0-alpine
+
+networks:
+  default:
+    external:
+      name: cloudbuild
