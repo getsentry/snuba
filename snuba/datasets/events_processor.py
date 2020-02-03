@@ -1,10 +1,10 @@
-from datetime import datetime
-from typing import Optional
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
+from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
@@ -14,6 +14,7 @@ from snuba.datasets.events_format import (
     flatten_nested_field,
     EventTooOld,
 )
+from snuba.datasets.events_processor_base import EventsProcessorBase
 from snuba.processor import (
     _as_dict_safe,
     _boolify,
@@ -33,170 +34,22 @@ from snuba.processor import (
 logger = logging.getLogger("snuba.processor")
 
 
-class EventsProcessor(MessageProcessor):
-    def __init__(self, promoted_tag_columns):
-        self.__promoted_tag_columns = promoted_tag_columns
+class EventsProcessor(EventsProcessorBase):
+    def _should_process(self, event: Mapping[str, Any]) -> bool:
+        return True
 
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        """\
-        Process a raw message into a tuple of (action_type, processed_message):
-        * action_type: one of the sentinel values INSERT or REPLACE
-        * processed_message: dict representing the processed column -> value(s)
+    def _extract_event_id(
+        self, output: MutableMapping[str, Any], event: Mapping[str, Any],
+    ) -> None:
+        output["event_id"] = event["event_id"]
 
-        Returns `None` if the event is too old to be written.
-        """
-        action_type = None
-
-        if isinstance(message, dict):
-            # deprecated unwrapped event message == insert
-            action_type = ProcessorAction.INSERT
-            try:
-                processed = self.process_insert(message, metadata)
-            except EventTooOld:
-                return None
-        elif isinstance(message, (list, tuple)) and len(message) >= 2:
-            version = message[0]
-
-            if version in (0, 1, 2):
-                # version 0: (0, 'insert', data)
-                # version 1: (1, type, data, [state])
-                #   NOTE: types 'delete_groups', 'merge' and 'unmerge' are ignored
-                # version 2: (2, type, data, [state])
-                type_, event = message[1:3]
-                if type_ == "insert":
-                    action_type = ProcessorAction.INSERT
-                    try:
-                        processed = self.process_insert(event, metadata)
-                    except EventTooOld:
-                        return None
-                else:
-                    if version == 0:
-                        raise InvalidMessageType(
-                            "Invalid message type: {}".format(type_)
-                        )
-                    elif version == 1:
-                        if type_ in ("delete_groups", "merge", "unmerge"):
-                            # these didn't contain the necessary data to handle replacements
-                            return None
-                        else:
-                            raise InvalidMessageType(
-                                "Invalid message type: {}".format(type_)
-                            )
-                    elif version == 2:
-                        # we temporarily sent these invalid message types from Sentry
-                        if type_ in ("delete_groups", "merge"):
-                            return None
-
-                        if type_ in (
-                            "start_delete_groups",
-                            "start_merge",
-                            "start_unmerge",
-                            "start_delete_tag",
-                            "end_delete_groups",
-                            "end_merge",
-                            "end_unmerge",
-                            "end_delete_tag",
-                        ):
-                            # pass raw events along to republish
-                            action_type = ProcessorAction.REPLACE
-                            processed = (str(event["project_id"]), message)
-                        else:
-                            raise InvalidMessageType(
-                                "Invalid message type: {}".format(type_)
-                            )
-
-        if action_type is None:
-            raise InvalidMessageVersion("Unknown message format: " + str(message))
-
-        if processed is None:
-            return None
-
-        return ProcessedMessage(action=action_type, data=[processed],)
-
-    def process_insert(self, message, metadata=None):
-        processed = {"deleted": 0}
-        extract_base(processed, message)
-        processed["retention_days"] = enforce_retention(
-            message,
-            datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT),
-        )
-
-        self.extract_required(processed, message)
-
-        data = message.get("data", {})
-        # HACK: https://sentry.io/sentry/snuba/issues/802102397/
-        if not data:
-            logger.error("No data for event: %s", message, exc_info=True)
-            return None
-        self.extract_common(processed, message, data)
-
-        sdk = data.get("sdk", None) or {}
-        self.extract_sdk(processed, sdk)
-
-        tags = _as_dict_safe(data.get("tags", None))
-        self.extract_promoted_tags(processed, tags)
-
-        contexts = data.get("contexts", None) or {}
-        self.extract_promoted_contexts(processed, contexts, tags)
-
-        user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
-        extract_user(processed, user)
-
-        geo = user.get("geo", None) or {}
-        self.extract_geo(processed, geo)
-
-        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
-        self.extract_http(processed, http)
-
-        processed["contexts.key"], processed["contexts.value"] = extract_extra_contexts(
-            contexts
-        )
-        processed["tags.key"], processed["tags.value"] = extract_extra_tags(tags)
-        processed["_tags_flattened"] = flatten_nested_field(
-            processed["tags.key"], processed["tags.value"]
-        )
-
-        exception = (
-            data.get("exception", data.get("sentry.interfaces.Exception", None)) or {}
-        )
-        stacks = exception.get("values", None) or []
-        self.extract_stacktraces(processed, stacks)
-
-        if metadata is not None:
-            processed["offset"] = metadata.offset
-            processed["partition"] = metadata.partition
-
-        return processed
-
-    def extract_required(self, output, message):
-        output["group_id"] = message["group_id"] or 0
-
-        # This is not ideal but it should never happen anyways
-        timestamp = _ensure_valid_date(
-            datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-        )
-        if timestamp is None:
-            timestamp = datetime.utcnow()
-
-        output["timestamp"] = timestamp
-
-    def extract_common(self, output, message, data):
-        # Properties we get from the top level of the message payload
-        output["platform"] = _unicodify(message["platform"])
-        output["primary_hash"] = _hashify(message["primary_hash"])
-
-        # Properties we get from the "data" dict, which is the actual event body.
-        received = _collapse_uint32(int(data["received"]))
-        output["received"] = (
-            datetime.utcfromtimestamp(received) if received is not None else None
-        )
-
-        output["culprit"] = _unicodify(data.get("culprit", None))
-        output["type"] = _unicodify(data.get("type", None))
-        output["version"] = _unicodify(data.get("version", None))
-        output["title"] = _unicodify(data.get("title", None))
-        output["location"] = _unicodify(data.get("location", None))
-
+    def extract_custom(
+        self,
+        output: MutableMapping[str, Any],
+        event: Mapping[str, Any],
+        metadata: Optional[KafkaMessageMetadata] = None,
+    ) -> None:
+        data = event.get("data", {})
         # The following concerns the change to message/search_message
         # There are 2 Scenarios:
         #   Pre-rename:
@@ -213,48 +66,40 @@ class EventsProcessor(MessageProcessor):
         #        - "search_message" value stored in `search_message` column
         #        - "message" value stored in `message` column
         #
-        output["search_message"] = _unicodify(message.get("search_message", None))
+        output["search_message"] = _unicodify(event.get("search_message", None))
         if output["search_message"] is None:
             # Pre-rename scenario, we expect to find "message" at the top level
-            output["message"] = _unicodify(message["message"])
+            output["message"] = _unicodify(event["message"])
         else:
             # Post-rename scenario, we check in case we have the optional
             # "message" in the event body.
             output["message"] = _unicodify(data.get("message", None))
 
-        module_names = []
-        module_versions = []
-        modules = data.get("modules", {})
-        if isinstance(modules, dict):
-            for name, version in modules.items():
-                module_names.append(_unicodify(name))
-                # Being extra careful about a stray (incorrect by spec) `null`
-                # value blowing up the write.
-                module_versions.append(_unicodify(version) or "")
+        # USER REQUEST GEO
+        user = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+        extract_user(output, user)
 
-        output["modules.name"] = module_names
-        output["modules.version"] = module_versions
+        geo = user.get("geo", None) or {}
+        self.extract_geo(output, geo)
 
-    def extract_sdk(self, output, sdk):
-        output["sdk_name"] = _unicodify(sdk.get("name", None))
-        output["sdk_version"] = _unicodify(sdk.get("version", None))
+        http = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        self.extract_http(output, http)
 
-        sdk_integrations = []
-        for i in sdk.get("integrations", None) or ():
-            i = _unicodify(i)
-            if i:
-                sdk_integrations.append(i)
-        output["sdk_integrations"] = sdk_integrations
+    def extract_tags_custom(
+        self,
+        output: MutableMapping[str, Any],
+        event: Mapping[str, Any],
+        tags: Mapping[str, Any],
+        metadata: Optional[KafkaMessageMetadata] = None,
+    ) -> None:
+        pass
 
-    def extract_promoted_tags(self, output, tags):
-        output.update(
-            {
-                col.name: _unicodify(tags.get(col.name, None))
-                for col in self.__promoted_tag_columns
-            }
-        )
-
-    def extract_promoted_contexts(self, output, contexts, tags):
+    def extract_promoted_contexts(
+        self,
+        output: MutableMapping[str, Any],
+        contexts: Mapping[str, Any],
+        tags: Mapping[str, Any],
+    ) -> None:
         app_ctx = contexts.get("app", None) or {}
         output["app_device"] = _unicodify(tags.get("app.device", None))
         app_ctx.pop("device_app_hash", None)  # tag=app.device
@@ -300,6 +145,15 @@ class EventsProcessor(MessageProcessor):
         output["device_online"] = _boolify(device_ctx.pop("online", None))
         output["device_charging"] = _boolify(device_ctx.pop("charging", None))
 
+    def extract_contexts_custom(
+        self,
+        output: MutableMapping[str, Any],
+        event: Mapping[str, Any],
+        tags: Mapping[str, Any],
+        metadata: Optional[KafkaMessageMetadata] = None,
+    ) -> None:
+        pass
+
     def extract_geo(self, output, geo):
         output["geo_country_code"] = _unicodify(geo.get("country_code", None))
         output["geo_region"] = _unicodify(geo.get("region", None))
@@ -309,63 +163,3 @@ class EventsProcessor(MessageProcessor):
         output["http_method"] = _unicodify(http.get("method", None))
         http_headers = _as_dict_safe(http.get("headers", None))
         output["http_referer"] = _unicodify(http_headers.get("Referer", None))
-
-    def extract_stacktraces(self, output, stacks):
-        stack_types = []
-        stack_values = []
-        stack_mechanism_types = []
-        stack_mechanism_handled = []
-
-        frame_abs_paths = []
-        frame_filenames = []
-        frame_packages = []
-        frame_modules = []
-        frame_functions = []
-        frame_in_app = []
-        frame_colnos = []
-        frame_linenos = []
-        frame_stack_levels = []
-
-        if output["project_id"] not in settings.PROJECT_STACKTRACE_BLACKLIST:
-            stack_level = 0
-            for stack in stacks:
-                if stack is None:
-                    continue
-
-                stack_types.append(_unicodify(stack.get("type", None)))
-                stack_values.append(_unicodify(stack.get("value", None)))
-
-                mechanism = stack.get("mechanism", None) or {}
-                stack_mechanism_types.append(_unicodify(mechanism.get("type", None)))
-                stack_mechanism_handled.append(_boolify(mechanism.get("handled", None)))
-
-                frames = (stack.get("stacktrace", None) or {}).get("frames", None) or []
-                for frame in frames:
-                    if frame is None:
-                        continue
-
-                    frame_abs_paths.append(_unicodify(frame.get("abs_path", None)))
-                    frame_filenames.append(_unicodify(frame.get("filename", None)))
-                    frame_packages.append(_unicodify(frame.get("package", None)))
-                    frame_modules.append(_unicodify(frame.get("module", None)))
-                    frame_functions.append(_unicodify(frame.get("function", None)))
-                    frame_in_app.append(frame.get("in_app", None))
-                    frame_colnos.append(_collapse_uint32(frame.get("colno", None)))
-                    frame_linenos.append(_collapse_uint32(frame.get("lineno", None)))
-                    frame_stack_levels.append(stack_level)
-
-                stack_level += 1
-
-        output["exception_stacks.type"] = stack_types
-        output["exception_stacks.value"] = stack_values
-        output["exception_stacks.mechanism_type"] = stack_mechanism_types
-        output["exception_stacks.mechanism_handled"] = stack_mechanism_handled
-        output["exception_frames.abs_path"] = frame_abs_paths
-        output["exception_frames.filename"] = frame_filenames
-        output["exception_frames.package"] = frame_packages
-        output["exception_frames.module"] = frame_modules
-        output["exception_frames.function"] = frame_functions
-        output["exception_frames.in_app"] = frame_in_app
-        output["exception_frames.colno"] = frame_colnos
-        output["exception_frames.lineno"] = frame_linenos
-        output["exception_frames.stack_level"] = frame_stack_levels

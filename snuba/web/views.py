@@ -27,8 +27,11 @@ from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SC
 from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
 from snuba.subscriptions.codecs import SubscriptionDataCodec
-from snuba.subscriptions.data import InvalidSubscriptionError
-from snuba.subscriptions.subscription import SubscriptionCreator
+from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
+from snuba.subscriptions.subscription import (
+    SubscriptionCreator,
+    SubscriptionDeleter,
+)
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -379,6 +382,7 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
+    SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
 

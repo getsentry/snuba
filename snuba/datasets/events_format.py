@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Sequence, Tuple
+from typing import Any, Mapping, MutableMapping, Sequence, Tuple
 
 from snuba import settings
 from snuba.processor import (
@@ -9,10 +9,15 @@ from snuba.processor import (
 )
 
 
+def extract_project_id(
+    output: MutableMapping[str, Any], event: Mapping[str, Any]
+) -> None:
+    output["project_id"] = event["project_id"]
+
+
 def extract_base(output, message):
     output["event_id"] = message["event_id"]
-    project_id = message["project_id"]
-    output["project_id"] = project_id
+    extract_project_id(output, message)
     return output
 
 
