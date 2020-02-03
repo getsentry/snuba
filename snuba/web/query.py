@@ -7,6 +7,7 @@ from typing import Any, Mapping, MutableMapping, MutableSequence, Optional
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
+from functools import partial
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
@@ -55,14 +56,16 @@ class ClickhouseQueryMetadata:
     timer: Timer
     stats: Mapping[str, Any]
     status: str
+    trace_id: str
 
     def to_dict(self):
         return {
             "request": self.request,
             "sql": self.sql,
-            "timer": self.timer.finish(),
+            "timing": self.timer.finish(),
             "stats": self.stats,
             "status": self.status,
+            "trace_id": self.trace_id,
         }
 
 
@@ -76,6 +79,7 @@ def raw_query(
     timer: Timer,
     query_list: MutableSequence[ClickhouseQueryMetadata],
     stats: Optional[MutableMapping[str, Any]] = None,
+    trace_id: str = "",
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
@@ -118,6 +122,17 @@ def raw_query(
                 "cache_hit": bool(result),
             }
         ),
+
+        update_with_status = partial(
+            update_query_list_and_stats,
+            request,
+            sql,
+            timer,
+            stats,
+            query_list,
+            query_settings,
+            trace_id,
+        )
 
         if not result:
             try:
@@ -176,15 +191,7 @@ def raw_query(
                     except BaseException as ex:
                         error = str(ex)
                         logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = log_query_and_update_stats(
-                            request,
-                            sql,
-                            timer,
-                            stats,
-                            "error",
-                            query_list,
-                            query_settings,
-                        )
+                        stats = update_with_status("error")
                         meta = {}
                         if isinstance(ex, ClickHouseError):
                             err_type = "clickhouse"
@@ -199,15 +206,7 @@ def raw_query(
                             **meta,
                         )
             except RateLimitExceeded as ex:
-                stats = log_query_and_update_stats(
-                    request,
-                    sql,
-                    timer,
-                    stats,
-                    "rate-limited",
-                    query_list,
-                    query_settings,
-                )
+                stats = update_with_status("rate-limited")
                 raise RawQueryException(
                     err_type="rate-limited",
                     message="rate limit exceeded",
@@ -216,9 +215,7 @@ def raw_query(
                     detail=str(ex),
                 )
 
-    stats = log_query_and_update_stats(
-        request, sql, timer, stats, "success", query_list, query_settings,
-    )
+    stats = update_with_status("success")
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result["stats"] = stats
@@ -227,14 +224,15 @@ def raw_query(
     return result
 
 
-def log_query_and_update_stats(
+def update_query_list_and_stats(
     request: Request,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    status: str,
     query_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
+    trace_id: str,
+    status: str,
 ) -> MutableMapping:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -243,12 +241,9 @@ def log_query_and_update_stats(
     """
     stats.update(query_settings)
 
-    if settings.RECORD_QUERIES:
-
-        query_metadata = ClickhouseQueryMetadata(
-            request=request.body, sql=sql, timer=timer, stats=stats, status=status
-        )
-        query_list.append(query_metadata)
+    query_list.append(ClickhouseQueryMetadata(
+        request=request.body, sql=sql, timer=timer, stats=stats, status=status, trace_id=trace_id,
+    ))
 
     return stats
 
@@ -355,7 +350,7 @@ def _run_query(
         except Exception:
             logger.exception("Failed to format ast query")
         result = raw_query(
-            request, query, NativeDriverReader(clickhouse_ro), timer, query_list, stats
+            request, query, NativeDriverReader(clickhouse_ro), timer, query_list, stats, span.trace_id,
         )
 
     with sentry_sdk.configure_scope() as scope:
