@@ -1687,6 +1687,24 @@ class TestApi(BaseApiTest):
         )
         assert "deleted = 0" in result["sql"]
 
+    @patch("snuba.settings.RECORD_QUERIES", True)
+    @patch("snuba.state.record_query")
+    def test_record_queries(self, record_query_mock):
+        for use_split, expected_query_count in [(1, 2)]:
+            state.set_config("use_split", use_split)
+            result = json.loads(
+                self.app.post(
+                    "/query",
+                    data=json.dumps(
+                        {"project": 1, "selected_columns": ["event_id", "title", "transaction", "tags[a]", "tags[b]"], "limit": 5}
+                    ),
+                ).data
+            )
+
+            assert len(result["data"]) == 5
+            assert record_query_mock.call_count == 1
+            assert len(record_query_mock.call_args[0][0]["query_list"]) == expected_query_count
+
 
 class TestCreateSubscriptionApi(BaseApiTest):
     def test(self):
