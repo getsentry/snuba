@@ -6,7 +6,7 @@ from pytest import raises
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
-from snuba.subscriptions.subscription import SubscriptionCreator
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.web.query import RawQueryException
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -93,3 +93,24 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                 ),
                 Mock(),
             )
+
+
+class TestSubscriptionDeleter(BaseSubscriptionTest):
+    def test(self):
+        creator = SubscriptionCreator(self.dataset)
+        subscription = SubscriptionData(
+            project_id=1,
+            conditions=[],
+            aggregations=[["count()", "", "count"]],
+            time_window=timedelta(minutes=10),
+            resolution=timedelta(minutes=1),
+        )
+        identifier = creator.create(subscription, Mock())
+        RedisSubscriptionDataStore(
+            redis_client, self.dataset, identifier.partition,
+        ).all()[0][1] == subscription
+
+        SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
+        RedisSubscriptionDataStore(
+            redis_client, self.dataset, identifier.partition,
+        ).all() == []

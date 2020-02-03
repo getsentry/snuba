@@ -39,6 +39,8 @@ if settings.USE_REDIS_CLUSTER:
         startup_nodes=startup_nodes,
         socket_keepalive=True,
         password=settings.REDIS_PASSWORD,
+        # HACK(mattrobenolt): See https://github.com/Grokzen/redis-py-cluster/pull/353
+        max_connections_per_node=True,
     )
 else:
     redis_client = StrictRedis(

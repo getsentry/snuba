@@ -1,9 +1,11 @@
 import logging
+from typing import Optional, Sequence
+
 import click
-from typing import Sequence
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.environment import setup_logging
 from snuba.migrate import run
 
 
@@ -16,9 +18,13 @@ from snuba.migrate import run
 )
 @click.option("--kafka/--no-kafka", default=True)
 @click.option("--force", is_flag=True)
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def bootstrap(
-    *, bootstrap_server: Sequence[str], kafka: bool, force: bool, log_level: str
+    *,
+    bootstrap_server: Sequence[str],
+    kafka: bool,
+    force: bool,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     Warning: Not intended to be used in production yet.
@@ -26,10 +32,9 @@ def bootstrap(
     if not force:
         raise click.ClickException("Must use --force to run")
 
+    setup_logging(log_level)
+
     logger = logging.getLogger("snuba.bootstrap")
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
 
     import time
 

@@ -1,5 +1,6 @@
 *.pyc
 *.swp
+.artifacts
 .coverage
 .mypy_cache/
 .pytest_cache/
