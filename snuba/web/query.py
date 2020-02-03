@@ -2,7 +2,7 @@ import logging
 
 from dataclasses import dataclass
 from hashlib import md5
-from typing import Any, List, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping, MutableSequence, Optional
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -48,12 +48,12 @@ class RawQueryException(Exception):
         self.meta = meta
 
 
-@dataclass
+@dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     request: Request
     sql: str
     timer: Timer
-    stats: MutableMapping[str, Any]
+    stats: Mapping[str, Any]
     status: str
 
     def to_dict(self):
@@ -74,7 +74,7 @@ def raw_query(
     query: DictClickhouseQuery,
     reader: Reader[ClickhouseQuery],
     timer: Timer,
-    query_list: List[ClickhouseQueryMetadata],
+    query_list: MutableSequence[ClickhouseQueryMetadata],
     stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
     """
@@ -233,7 +233,7 @@ def log_query_and_update_stats(
     timer: Timer,
     stats: MutableMapping[str, Any],
     status: str,
-    query_list: List[ClickhouseQueryMetadata],
+    query_list: MutableSequence[ClickhouseQueryMetadata],
     query_settings: Mapping[str, Any],
 ) -> MutableMapping:
     """
@@ -268,13 +268,11 @@ def parse_and_run_query(
     """
     Runs a query, then records the results including metadata about each split.
     """
-    query_list: List[ClickhouseQueryMetadata] = []
+    query_list: MutableSequence[ClickhouseQueryMetadata] = []
     try:
         result = _run_query(
             dataset=dataset, request=request, timer=timer, query_list=query_list
         )
-    except RawQueryException as error:
-        raise error
     finally:
         if settings.RECORD_QUERIES:
             # send to redis
@@ -296,7 +294,7 @@ def _run_query(
     dataset: Dataset,
     request: Request,
     timer: Timer,
-    query_list: List[ClickhouseQueryMetadata],
+    query_list: MutableSequence[ClickhouseQueryMetadata],
 ) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
