@@ -1,28 +1,29 @@
-import logging
 import sys
-import click
-from clickhouse_driver import Client
 from typing import Optional
 
+import click
+from clickhouse_driver import Client
+
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.environment import setup_logging
 from snuba.util import local_dataset_mode
 
 
 @click.command()
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--dataset",
     "dataset_name",
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
 )
-def migrate(*, log_level: str, dataset_name: Optional[str]) -> None:
+def migrate(
+    *, log_level: Optional[str] = None, dataset_name: Optional[str] = None
+) -> None:
     from snuba.migrate import logger, run
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
 
     if not local_dataset_mode():
         logger.error("The migration tool can only work on local dataset mode.")
