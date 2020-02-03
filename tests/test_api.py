@@ -1690,8 +1690,9 @@ class TestApi(BaseApiTest):
     @patch("snuba.settings.RECORD_QUERIES", True)
     @patch("snuba.state.record_query")
     def test_record_queries(self, record_query_mock):
-        for use_split, expected_query_count in [(1, 2)]:
+        for use_split, expected_query_count in [(0, 1), (1, 2)]:
             state.set_config("use_split", use_split)
+            record_query_mock.reset_mock()
             result = json.loads(
                 self.app.post(
                     "/query",

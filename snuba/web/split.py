@@ -15,7 +15,7 @@ STEP_GROWTH = 10
 
 def split_query(query_func):
     def wrapper(dataset, request: Request, *args, **kwargs):
-        use_split = state.get_configs([("use_split", 0)])
+        use_split, = state.get_configs([("use_split", 0)])
         query_limit = request.query.get_limit()
         limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
