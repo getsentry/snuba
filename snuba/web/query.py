@@ -241,9 +241,16 @@ def update_query_list_and_stats(
     """
     stats.update(query_settings)
 
-    query_list.append(ClickhouseQueryMetadata(
-        request=request.body, sql=sql, timer=timer, stats=stats, status=status, trace_id=trace_id,
-    ))
+    query_list.append(
+        ClickhouseQueryMetadata(
+            request=request.body,
+            sql=sql,
+            timer=timer,
+            stats=stats,
+            status=status,
+            trace_id=trace_id,
+        )
+    )
 
     return stats
 
@@ -350,7 +357,13 @@ def _run_query(
         except Exception:
             logger.exception("Failed to format ast query")
         result = raw_query(
-            request, query, NativeDriverReader(clickhouse_ro), timer, query_list, stats, span.trace_id,
+            request,
+            query,
+            NativeDriverReader(clickhouse_ro),
+            timer,
+            query_list,
+            stats,
+            span.trace_id,
         )
 
     with sentry_sdk.configure_scope() as scope:
