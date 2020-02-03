@@ -13,6 +13,7 @@ import uuid
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
 
 
@@ -1739,8 +1740,35 @@ class TestCreateSubscriptionApi(BaseApiTest):
 
 class TestDeleteSubscriptionApi(BaseApiTest):
     def test(self):
-        resp = self.app.delete(
-            f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}"
+        resp = self.app.post(
+            "{}/subscriptions".format(self.dataset_name),
+            data=json.dumps(
+                {
+                    "project_id": 1,
+                    "conditions": [],
+                    "aggregations": [["count()", "", "count"]],
+                    "time_window": int(timedelta(minutes=10).total_seconds()),
+                    "resolution": int(timedelta(minutes=1).total_seconds()),
+                }
+            ).encode("utf-8"),
         )
-        print(f"{self.dataset_name}/subscriptions/1/{uuid.uuid4().hex}")
+
+        assert resp.status_code == 202
+        data = json.loads(resp.data)
+        subscription_id = data["subscription_id"]
+        partition = subscription_id.split("/", 1)[0]
+        assert (
+            len(
+                RedisSubscriptionDataStore(redis_client, self.dataset, partition,).all()
+            )
+            == 1
+        )
+
+        resp = self.app.delete(
+            f"{self.dataset_name}/subscriptions/{data['subscription_id']}"
+        )
         assert resp.status_code == 202, resp
+        assert (
+            RedisSubscriptionDataStore(redis_client, self.dataset, partition,).all()
+            == []
+        )
