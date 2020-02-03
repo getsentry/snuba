@@ -60,7 +60,7 @@ class ClickhouseQueryMetadata:
         return {
             "request": self.request,
             "sql": self.sql,
-            "timer": self.timer,
+            "timer": self.timer.finish(),
             "stats": self.stats,
             "status": self.status,
         }
@@ -250,15 +250,6 @@ def log_query_and_update_stats(
         )
         query_list.append(query_metadata)
 
-        timer.send_metrics_to(
-            metrics,
-            tags={
-                "status": str(status),
-                "referrer": stats.get("referrer", "none"),
-                "final": str(stats.get("final", False)),
-            },
-            mark_tags={"final": str(stats.get("final", False))},
-        )
     return stats
 
 
@@ -275,16 +266,30 @@ def parse_and_run_query(
         )
     finally:
         if settings.RECORD_QUERIES:
-            # send to redis
-            state.record_query(
-                {
-                    "request": request.body,
-                    "referrer": http_request.referrer,
-                    "timing": query_list[-1].timer,
-                    "status": query_list[-1].status,
-                    "query_list": [q.to_dict() for q in query_list],
-                }
-            )
+            if query_list:
+                last_query = query_list[-1]
+                # send to redis
+                state.record_query(
+                    {
+                        "request": request.body,
+                        "referrer": http_request.referrer,
+                        "timing": last_query.timer.finish(),
+                        "status": last_query.status,
+                        "query_list": [q.to_dict() for q in query_list],
+                    }
+                )
+
+                timer.send_metrics_to(
+                    metrics,
+                    tags={
+                        "status": str(last_query.status),
+                        "referrer": last_query.stats.get("referrer", "none"),
+                        "final": str(last_query.stats.get("final", False)),
+                    },
+                    mark_tags={"final": str(last_query.stats.get("final", False))},
+                )
+            else:
+                logger.error("No query was run")
 
     return result
 
