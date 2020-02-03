@@ -11,9 +11,7 @@ class TestBuildRequest(BaseSubscriptionTest):
         data = SubscriptionData(
             123, [], [], timedelta(minutes=10), timedelta(minutes=1)
         )
-        assert (
-            TopicSubscriptionDataPartitioner(
-                KafkaTopicSpec("topic", partitions_number=64)
-            ).build_partition_id(data)
-            == 18
+        partitioner = TopicSubscriptionDataPartitioner(
+            KafkaTopicSpec("topic", partitions_number=64)
         )
+        assert partitioner.build_partition_id(data) == 18
