@@ -3,12 +3,12 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
+from snuba.query.dsl import count, countIf, div, minus, multiply, plus
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
 )
-from snuba.query.dsl import div, multiply, plus, minus, countIf, count
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
@@ -19,8 +19,6 @@ class ImpactProcessor(QueryProcessor):
     Resolves the impact function call into
 
     impact = (1 - (apdex({col}, {satisfied}))) + ((1 - (1 / sqrt(uniq({user_col})))) * 3)
-
-    according to the definition of apdex index: https://en.wikipedia.org/wiki/Apdex
     """
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:

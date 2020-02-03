@@ -3,12 +3,12 @@ from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
 )
+from snuba.query.dsl import count, countIf, div, multiply, plus
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
 )
-from snuba.query.dsl import div, multiply, plus, count, countIf
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
