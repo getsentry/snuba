@@ -255,6 +255,31 @@ def update_query_list_and_stats(
     return stats
 
 
+def record_query(request: Request, timer: Timer, query_list: MutableSequence[ClickhouseQueryMetadata]) -> None:
+    if settings.RECORD_QUERIES:
+        last_query = query_list[-1]
+        # send to redis
+        state.record_query(
+            {
+                "request": request.body,
+                "referrer": http_request.referrer,
+                "timing": last_query.timer.finish(),
+                "status": last_query.status,
+                "query_list": [q.to_dict() for q in query_list],
+            }
+        )
+
+        timer.send_metrics_to(
+            metrics,
+            tags={
+                "status": str(last_query.status),
+                "referrer": last_query.stats.get("referrer", "none"),
+                "final": str(last_query.stats.get("final", False)),
+            },
+            mark_tags={"final": str(last_query.stats.get("final", False))},
+        )
+
+
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
 ) -> ClickhouseQueryResult:
@@ -266,32 +291,10 @@ def parse_and_run_query(
         result = _run_query(
             dataset=dataset, request=request, timer=timer, query_list=query_list
         )
-    finally:
-        if settings.RECORD_QUERIES:
-            if query_list:
-                last_query = query_list[-1]
-                # send to redis
-                state.record_query(
-                    {
-                        "request": request.body,
-                        "referrer": http_request.referrer,
-                        "timing": last_query.timer.finish(),
-                        "status": last_query.status,
-                        "query_list": [q.to_dict() for q in query_list],
-                    }
-                )
-
-                timer.send_metrics_to(
-                    metrics,
-                    tags={
-                        "status": str(last_query.status),
-                        "referrer": last_query.stats.get("referrer", "none"),
-                        "final": str(last_query.stats.get("final", False)),
-                    },
-                    mark_tags={"final": str(last_query.stats.get("final", False))},
-                )
-            else:
-                logger.error("No query was run")
+        record_query(request, timer, query_list)
+    except RawQueryException as error:
+        record_query(request, timer, query_list)
+        raise error
 
     return result
 
