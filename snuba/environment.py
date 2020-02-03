@@ -12,9 +12,11 @@ from snuba import settings
 
 
 def setup_logging(level: Optional[str] = None) -> None:
+    if level is None:
+        level = settings.LOG_LEVEL
+
     logging.basicConfig(
-        level=getattr(logging, level, settings.LOG_LEVEL).upper(),
-        format="%(asctime)s %(message)s",
+        level=getattr(logging, level.upper()), format="%(asctime)s %(message)s",
     )
 
 
