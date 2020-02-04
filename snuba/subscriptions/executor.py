@@ -28,7 +28,7 @@ class SubscriptionExecutor:
         timer = Timer("query")
         try:
             request = task.task.data.build_request(
-                self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer,
+                self.__dataset, task.timestamp, tick.offsets.upper, timer,
             )
         except Exception as e:
             future: Future[ClickhouseQueryResult] = Future()
