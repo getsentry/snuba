@@ -1,10 +1,14 @@
 from __future__ import absolute_import
 
+from typing import Union
+
 from redis.client import StrictRedis
 from redis.exceptions import BusyLoadingError, ConnectionError
 from rediscluster import StrictRedisCluster
 
 from snuba import settings
+
+RedisClientType = Union[StrictRedis, StrictRedisCluster]
 
 
 class RetryingStrictRedisCluster(StrictRedisCluster):
@@ -35,6 +39,8 @@ if settings.USE_REDIS_CLUSTER:
         startup_nodes=startup_nodes,
         socket_keepalive=True,
         password=settings.REDIS_PASSWORD,
+        # HACK(mattrobenolt): See https://github.com/Grokzen/redis-py-cluster/pull/353
+        max_connections_per_node=True,
     )
 else:
     redis_client = StrictRedis(

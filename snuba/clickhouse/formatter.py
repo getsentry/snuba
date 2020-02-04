@@ -1,11 +1,15 @@
+from datetime import date, datetime
 from typing import Optional, Sequence
+
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
     Expression,
     ExpressionVisitor,
     FunctionCall,
+    Lambda,
     Literal,
+    Argument,
 )
 from snuba.query.parsing import ParsingContext
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
@@ -58,6 +62,11 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return escape_string(exp.value)
         elif isinstance(exp.value, (int, float)):
             return str(exp.value)
+        elif isinstance(exp.value, datetime):
+            value = exp.value.replace(tzinfo=None, microsecond=0)
+            return "toDateTime('{}')".format(value.isoformat())
+        elif isinstance(exp.value, date):
+            return "toDate('{}')".format(exp.value.isoformat())
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
@@ -81,4 +90,19 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> str:
         int_func = exp.internal_function.accept(self)
         ret = f"{int_func}{self.__visit_params(exp.parameters)}"
+        return self.__alias(ret, exp.alias)
+
+    def __escape_identifier_enforce(self, expr: str) -> str:
+        ret = escape_identifier(expr)
+        # This is for the type checker. escape_identifier can return
+        # None if the input is None. Here the input is not None.
+        assert ret is not None
+        return ret
+
+    def visitArgument(self, exp: Argument) -> str:
+        return self.__escape_identifier_enforce(exp.name)
+
+    def visitLambda(self, exp: Lambda) -> str:
+        parameters = [self.__escape_identifier_enforce(v) for v in exp.parameters]
+        ret = f"({', '.join(parameters)} -> {exp.transformation.accept(self)})"
         return self.__alias(ret, exp.alias)

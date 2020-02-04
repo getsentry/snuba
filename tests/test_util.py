@@ -68,6 +68,18 @@ class TestUtil(BaseTest):
             == "a = 1"
         )
 
+        conditions = []
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == ""
+        )
+
+        conditions = [[[]], []]
+        assert (
+            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            == ""
+        )
+
         conditions = [[["a", "=", 1]]]
         assert (
             conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
@@ -149,7 +161,12 @@ class TestUtil(BaseTest):
 
         conditions = tuplify([[["notEmpty", ["tags_key"]], "=", 1]])
         assert (
-            conditions_expr(dataset, conditions, Query({}, source), ParsingContext())
+            conditions_expr(
+                dataset,
+                conditions,
+                Query({"conditions": [[["notEmpty", ["tags_key"]], "=", 1]]}, source),
+                ParsingContext(),
+            )
             == "notEmpty((arrayJoin(tags.key) AS tags_key)) = 1"
         )
 

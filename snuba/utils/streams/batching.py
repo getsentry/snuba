@@ -14,14 +14,8 @@ from typing import (
 )
 
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.consumer import (
-    ConsumerError,
-    KafkaConsumer,
-    KafkaMessage,
-    Partition,
-    Topic,
-)
-
+from snuba.utils.streams.consumer import Consumer, ConsumerError
+from snuba.utils.streams.types import Message, Partition, Topic, TPayload
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +23,13 @@ logger = logging.getLogger(__name__)
 TResult = TypeVar("TResult")
 
 
-class AbstractBatchWorker(ABC, Generic[TResult]):
+class AbstractBatchWorker(ABC, Generic[TPayload, TResult]):
     """The `BatchingConsumer` requires an instance of this class to
     handle user provided work such as processing raw messages and flushing
     processed batches to a custom backend."""
 
     @abstractmethod
-    def process_message(self, message: KafkaMessage) -> Optional[TResult]:
+    def process_message(self, message: Message[TPayload]) -> Optional[TResult]:
         """Called with each raw message, allowing the worker to do
         incremental (preferably local!) work on events. The object returned
         is put into the batch maintained by the `BatchingConsumer`.
@@ -67,7 +61,7 @@ class Offsets:
     hi: int
 
 
-class BatchingConsumer:
+class BatchingConsumer(Generic[TPayload]):
     """The `BatchingConsumer` is an abstraction over the abstract Consumer's main event
     loop. For this reason it uses inversion of control: the user provides an implementation
     for the `AbstractBatchWorker` and then the `BatchingConsumer` handles the rest.
@@ -92,9 +86,9 @@ class BatchingConsumer:
 
     def __init__(
         self,
-        consumer: KafkaConsumer,
+        consumer: Consumer[TPayload],
         topic: Topic,
-        worker: AbstractBatchWorker[TResult],
+        worker: AbstractBatchWorker[TPayload, TResult],
         max_batch_size: int,
         max_batch_time: int,
         metrics: MetricsBackend,
@@ -164,7 +158,7 @@ class BatchingConsumer:
 
         self.shutdown = True
 
-    def _handle_message(self, msg: KafkaMessage) -> None:
+    def _handle_message(self, msg: Message[TPayload]) -> None:
         start = time.time()
 
         # set the deadline only after the first message for this batch is seen
@@ -174,6 +168,8 @@ class BatchingConsumer:
         result = self.worker.process_message(msg)
         if result is not None:
             self.__batch_results.append(result)
+
+        self.consumer.stage_offsets({msg.partition: msg.get_next_offset()})
 
         duration = (time.time() - start) * 1000
         self.__batch_messages_processed_count += 1
@@ -251,5 +247,5 @@ class BatchingConsumer:
         self._reset_batch()
 
     def _commit(self) -> None:
-        offsets = self.consumer.commit()
+        offsets = self.consumer.commit_offsets()
         logger.debug("Committed offsets: %s", offsets)

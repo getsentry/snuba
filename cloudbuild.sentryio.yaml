@@ -1,0 +1,53 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args: [
+    '-c',
+    'docker pull us.gcr.io/$PROJECT_ID/$REPO_NAME:latest || true',
+  ]
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+            'build',
+            '-t', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
+            '--build-arg', 'SNUBA_VERSION_SHA=$COMMIT_SHA',
+            '--cache-from', 'us.gcr.io/$PROJECT_ID/$REPO_NAME:latest',
+            '.'
+        ]
+- name: 'gcr.io/$PROJECT_ID/docker-compose'
+  env:
+  - 'SNUBA_IMAGE=us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA'
+  args:
+  - '-f'
+  - 'docker-compose.gcb.yml'
+  - run
+  - '--rm'
+  - snuba-test
+- name: 'gcr.io/cloud-builders/docker'
+  secretEnv: ['DOCKER_PASSWORD']
+  entrypoint: 'bash'
+  args:
+  - '-e'
+  - '-c'
+  - |
+    # Only tag :latest and push to Docker Hub from master
+    [ "$BRANCH_NAME" != "master" ] && exit 0
+    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA us.gcr.io/$PROJECT_ID/$REPO_NAME:latest
+    docker push us.gcr.io/$PROJECT_ID/$REPO_NAME:latest
+    echo "$$DOCKER_PASSWORD" | docker login --username=sentrybuilder --password-stdin
+    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:$COMMIT_SHA
+    docker push getsentry/snuba:$COMMIT_SHA
+    docker tag us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA getsentry/snuba:latest
+    docker push getsentry/snuba:latest
+images: [
+  'us.gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA',
+  ]
+timeout: 3600s
+secrets:
+- kmsKeyName: projects/sentryio/locations/global/keyRings/service-credentials/cryptoKeys/cloudbuild
+  secretEnv:
+    # This is a personal access token for the sentrybuilder account, encrypted using the
+    # short guide at http://bit.ly/2Pg6uw9
+    DOCKER_PASSWORD: |
+      CiQAE8gN7y3OMxn+a1kofmK4Bi8jQZtdRFj2lYYwaZHVeIIBUzMSTQA9tvn8XCv2vqj6u8CHoeSP
+      TVW9pLvSCorKoeNtOp0eb+6V1yNJW/+JC07DNO1KLbTbodbuza6jKJHU5xeAJ4kGQI78UY5Vu1Gp
+      QcMK

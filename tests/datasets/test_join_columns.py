@@ -50,9 +50,10 @@ def test_simple_column_expr():
     )
 
     # All tag keys expression
-    assert column_expr(
-        dataset, "events.tags_key", deepcopy(query), ParsingContext()
-    ) == ("(arrayJoin(events.tags.key) AS `events.tags_key`)")
+    q = Query({"selected_columns": ["events.tags_key"]}, source)
+    assert column_expr(dataset, "events.tags_key", q, ParsingContext()) == (
+        "(arrayJoin(events.tags.key) AS `events.tags_key`)"
+    )
 
     # If we are going to use both tags_key and tags_value, expand both
     tag_group_body = {"groupby": ["events.tags_key", "events.tags_value"]}
@@ -125,8 +126,8 @@ def test_simple_column_expr():
 
     group_id_body = deepcopy(query)
     assert (
-        column_expr(dataset, "events.issue", group_id_body, ParsingContext())
-        == "(nullIf(events.group_id, 0) AS `events.issue`)"
+        column_expr(dataset, "events.group_id", group_id_body, ParsingContext())
+        == "(nullIf(events.group_id, 0) AS `events.group_id`)"
     )
 
     # turn uniq() into ifNull(uniq(), 0) so it doesn't return null where a number was expected.
@@ -232,8 +233,9 @@ def test_conditions_expr():
     )
 
     conditions = tuplify([[["notEmpty", ["events.tags_key"]], "=", 1]])
+    q = Query({"selected_columns": ["events.tags_key"]}, source)
     assert (
-        conditions_expr(dataset, conditions, deepcopy(query), ParsingContext())
+        conditions_expr(dataset, conditions, q, ParsingContext())
         == "notEmpty((arrayJoin(events.tags.key) AS `events.tags_key`)) = 1"
     )
 

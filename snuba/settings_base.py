@@ -1,4 +1,6 @@
 import os
+from typing import MutableMapping
+
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
@@ -59,6 +61,7 @@ DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
 DEFAULT_QUEUED_MAX_MESSAGE_KBYTES = 10000
 DEFAULT_QUEUED_MIN_MESSAGES = 10000
 DISCARD_OLD_EVENTS = True
+CLICKHOUSE_HTTP_CHUNK_SIZE = 1
 
 DEFAULT_RETENTION_DAYS = 90
 RETENTION_OVERRIDES = {}
@@ -78,3 +81,10 @@ REPLACER_KEY_TTL = 12 * 60 * 60
 REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 
 TURBO_SAMPLE_RATE = 0.1
+
+PROJECT_STACKTRACE_BLACKLIST = set()
+
+# Number of queries each subscription consumer can run concurrently.
+SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES = 10
+
+TOPIC_PARTITION_COUNTS: MutableMapping[str, int] = {}  # (topic name, # of partitions)

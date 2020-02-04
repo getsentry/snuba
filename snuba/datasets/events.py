@@ -21,6 +21,7 @@ from snuba.datasets.schemas.tables import (
     ReplacingMergeTreeSchema,
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
@@ -77,6 +78,11 @@ def events_migrations(
             "ALTER TABLE %s ADD COLUMN location Nullable(String)" % clickhouse_table
         )
 
+    if "_tags_flattened" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN _tags_flattened String DEFAULT '' AFTER tags"
+        )
+
     return ret
 
 
@@ -86,7 +92,7 @@ class EventsDataset(TimeSeriesDataset):
     and the particular quirks of storing and querying them.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         metadata_columns = ColumnSet(
             [
                 # optional stream related data
@@ -192,6 +198,7 @@ class EventsDataset(TimeSeriesDataset):
             + [
                 # other tags
                 ("tags", Nested([("key", String()), ("value", String())])),
+                ("_tags_flattened", String()),
                 # other context
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 # http interface
@@ -243,7 +250,6 @@ class EventsDataset(TimeSeriesDataset):
             mandatory_conditions=[("deleted", "=", 0)],
             prewhere_candidates=[
                 "event_id",
-                "issue",
                 "group_id",
                 "tags[sentry:release]",
                 "message",
@@ -308,7 +314,7 @@ class EventsDataset(TimeSeriesDataset):
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
             return processed_column
-        elif column_name == "issue" or column_name == "group_id":
+        elif column_name == "group_id":
             return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
         elif column_name == "message":
             # Because of the rename from message->search_message without backfill,
@@ -392,4 +398,4 @@ class EventsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [PrewhereProcessor()]
+        return [BasicFunctionsProcessor(), PrewhereProcessor()]

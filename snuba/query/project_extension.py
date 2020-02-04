@@ -1,6 +1,11 @@
 from typing import Sequence
 
 from snuba import settings, util
+from snuba.query.conditions import (
+    in_condition,
+    not_in_condition,
+)
+from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData
@@ -82,6 +87,13 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
 
         if project_ids:
             query.add_conditions([(self.__project_column, "IN", project_ids)])
+            query.add_condition_to_ast(
+                in_condition(
+                    None,
+                    Column(None, self.__project_column, None),
+                    [Literal(None, p) for p in project_ids],
+                )
+            )
 
         request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 
@@ -114,6 +126,15 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
                 else:
                     query.add_conditions(
                         [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
+                    )
+                    query.add_condition_to_ast(
+                        not_in_condition(
+                            None,
+                            FunctionCall(
+                                None, "assumeNotNull", (Column(None, "group_id", None),)
+                            ),
+                            [Literal(None, p) for p in exclude_group_ids],
+                        )
                     )
             else:
                 query.set_final(final)

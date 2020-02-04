@@ -6,7 +6,9 @@ from snuba.query.expressions import (
     CurriedFunctionCall,
     Expression,
     FunctionCall,
+    Lambda,
     Literal,
+    Argument,
 )
 from snuba.query.parsing import ParsingContext
 
@@ -27,12 +29,12 @@ test_expressions = [
         FunctionCall(
             None,
             "f1",
-            [
+            (
                 Column(None, "param1", "table1"),
                 Column(None, "param2", "table1"),
                 Literal(None, None),
                 Literal(None, "test_string"),
-            ],
+            ),
         ),
         "f1(table1.param1, table1.param2, NULL, 'test_string')",
     ),  # Simple function call with columns and literals
@@ -40,7 +42,7 @@ test_expressions = [
         FunctionCall(
             "alias",
             "f1",
-            [Column(None, "param1", "table1"), Column("alias1", "param2", "table1")],
+            (Column(None, "param1", "table1"), Column("alias1", "param2", "table1")),
         ),
         "(f1(table1.param1, (table1.param2 AS alias1)) AS alias)",
     ),  # Function with alias
@@ -48,10 +50,10 @@ test_expressions = [
         FunctionCall(
             None,
             "f1",
-            [
-                FunctionCall(None, "f2", [Column(None, "param1", "table1")]),
-                FunctionCall(None, "f3", [Column(None, "param2", "table1")]),
-            ],
+            (
+                FunctionCall(None, "f2", (Column(None, "param1", "table1"))),
+                FunctionCall(None, "f3", (Column(None, "param2", "table1"))),
+            ),
         ),
         "f1(f2(table1.param1), f3(table1.param2))",
     ),  # Hierarchical function call
@@ -59,24 +61,41 @@ test_expressions = [
         FunctionCall(
             None,
             "f1",
-            [
-                FunctionCall("al1", "f2", [Column(None, "param1", "table1")]),
-                FunctionCall("al2", "f3", [Column(None, "param2", "table1")]),
-            ],
+            (
+                FunctionCall("al1", "f2", (Column(None, "param1", "table1"))),
+                FunctionCall("al2", "f3", (Column(None, "param2", "table1"))),
+            ),
         ),
         "f1((f2(table1.param1) AS al1), (f3(table1.param2) AS al2))",
     ),  # Hierarchical function call with aliases
     (
         CurriedFunctionCall(
             None,
-            FunctionCall(None, "f0", [Column(None, "param1", "table1")]),
-            [
-                FunctionCall(None, "f1", [Column(None, "param2", "table1")]),
+            FunctionCall(None, "f0", (Column(None, "param1", "table1"),)),
+            (
+                FunctionCall(None, "f1", (Column(None, "param2", "table1"),)),
                 Column(None, "param3", "table1"),
-            ],
+            ),
         ),
         "f0(table1.param1)(f1(table1.param2), table1.param3)",
     ),  # Curried function call with hierarchy
+    (
+        FunctionCall(
+            None,
+            "arrayExists",
+            (
+                Lambda(
+                    None,
+                    ("x", "y"),
+                    FunctionCall(
+                        None, "testFunc", (Argument(None, "x"), Argument(None, "y"))
+                    ),
+                ),
+                Column(None, "test", None),
+            ),
+        ),
+        "arrayExists((x, y -> testFunc(x, y)), test)",
+    ),  # Lambda expression
 ]
 
 
@@ -103,11 +122,11 @@ def test_aliases() -> None:
     f = FunctionCall(
         None,
         "f1",
-        [
-            FunctionCall("tag[something]", "tag", [Column(None, "column1", "table1")]),
-            FunctionCall("tag[something]", "tag", [Column(None, "column1", "table1")]),
-            FunctionCall("tag[something]", "tag", [Column(None, "column1", "table1")]),
-        ],
+        (
+            FunctionCall("tag[something]", "tag", (Column(None, "column1", "table1"))),
+            FunctionCall("tag[something]", "tag", (Column(None, "column1", "table1"))),
+            FunctionCall("tag[something]", "tag", (Column(None, "column1", "table1"))),
+        ),
     )
 
     expected = "f1((tag(table1.column1) AS `tag[something]`), `tag[something]`, `tag[something]`)"
@@ -128,7 +147,7 @@ test_escaped = [
         "(table.columns.can AS `alias.cannot.have.dot`)",
     ),  # Escaping is different between columns and aliases
     (
-        FunctionCall(None, "f*&^%$#unction", [Column(None, "column", "table")]),
+        FunctionCall(None, "f*&^%$#unction", (Column(None, "column", "table"))),
         "`f*&^%$#unction`(table.column)",
     ),  # Function names can be escaped. Hopefully it will never happen
 ]

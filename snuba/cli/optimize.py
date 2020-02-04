@@ -1,9 +1,10 @@
-import logging
+from typing import Optional
 
 import click
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.environment import setup_logging
 
 
 @click.command()
@@ -32,7 +33,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NA
     type=int,
     help="Clickhouse connection send/receive timeout, must be long enough for OPTIMIZE to complete.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def optimize(
     *,
     clickhouse_host: str,
@@ -40,15 +41,13 @@ def optimize(
     database: str,
     dataset_name: str,
     timeout: int,
-    log_level: str
+    log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
     from snuba.clickhouse.native import ClickhousePool
     from snuba.optimize import run_optimize, logger
 
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
 
     dataset = get_dataset(dataset_name)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()

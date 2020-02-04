@@ -1,4 +1,3 @@
-import logging
 import signal
 from typing import Optional, Sequence
 
@@ -6,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.environment import setup_logging, setup_sentry
 
 
 @click.command()
@@ -71,18 +71,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
-@click.option(
-    "--dogstatsd-host",
-    default=settings.DOGSTATSD_HOST,
-    help="Host to send DogStatsD metrics to.",
-)
-@click.option(
-    "--dogstatsd-port",
-    default=settings.DOGSTATSD_PORT,
-    type=int,
-    help="Port to send DogStatsD metrics to.",
-)
+@click.option("--log-level", help="Logging level to use.")
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -96,29 +85,26 @@ def replacer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: str,
-    dogstatsd_host: str,
-    dogstatsd_port: int,
+    log_level: Optional[str] = None,
 ) -> None:
 
-    import sentry_sdk
     from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
+    from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
-    from snuba.utils.streams.consumer import (
+    from snuba.utils.streams.kafka import (
         KafkaConsumer,
-        Topic,
+        KafkaPayload,
         TransportError,
         build_kafka_consumer_configuration,
     )
+    from snuba.utils.streams.types import Topic
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
+    setup_logging(log_level)
+    setup_sentry()
+
     dataset = get_dataset(dataset_name)
-
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
 
     stream_loader = enforce_table_writer(dataset).get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
@@ -127,9 +113,7 @@ def replacer(
     ), f"Dataset {dataset} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = util.create_metrics(
-        dogstatsd_host, dogstatsd_port, "snuba.replacer", tags={"group": consumer_group}
-    )
+    metrics = util.create_metrics("snuba.replacer", tags={"group": consumer_group})
 
     client_settings = {
         # Replacing existing rows requires reconstructing the entire tuple for each
@@ -147,6 +131,7 @@ def replacer(
         host=clickhouse_host, port=clickhouse_port, client_settings=client_settings,
     )
 
+    codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     replacer = BatchingConsumer(
         KafkaConsumer(
             build_kafka_consumer_configuration(
@@ -156,6 +141,7 @@ def replacer(
                 queued_max_messages_kbytes=queued_max_messages_kbytes,
                 queued_min_messages=queued_min_messages,
             ),
+            codec=codec,
         ),
         Topic(replacements_topic),
         worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),

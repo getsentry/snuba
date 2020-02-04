@@ -1,5 +1,12 @@
-from snuba.query.conditions import binary_condition, BooleanFunctions, ConditionFunctions
-from snuba.query.expressions import FunctionCall, Column, Expression
+from snuba.query.conditions import (
+    binary_condition,
+    BooleanFunctions,
+    ConditionFunctions,
+    is_binary_condition,
+    is_in_condition,
+)
+from snuba.query.dsl import literals_tuple
+from snuba.query.expressions import FunctionCall, Column, Expression, Literal
 
 
 def test_expressions_from_basic_condition() -> None:
@@ -57,13 +64,10 @@ def test_map_expressions_in_basic_condition() -> None:
     condition = condition.transform(replace_col)
 
     condition_b = binary_condition(
-        None,
-        ConditionFunctions.EQ,
-        FunctionCall(None, "f", [c3]),
-        c2,
+        None, ConditionFunctions.EQ, FunctionCall(None, "f", (c3,)), c2,
     )
     ret = list(condition)
-    expected = [c3, FunctionCall(None, "f", [c3]), c2, condition_b]
+    expected = [c3, FunctionCall(None, "f", (c3,)), c2, condition_b]
 
     assert ret == expected
 
@@ -113,5 +117,37 @@ def test_nested_simple_condition() -> None:
 
     and1 = and1.transform(replace_col)
     ret = list(and1)
-    expected = [c1, cX, co1_b, c3, cX, co2_b, or1_b, c5, cX, co4_b, c7, cX, co5_b, or2_b, and1_b]
+    expected = [
+        c1,
+        cX,
+        co1_b,
+        c3,
+        cX,
+        co2_b,
+        or1_b,
+        c5,
+        cX,
+        co4_b,
+        c7,
+        cX,
+        co5_b,
+        or2_b,
+        and1_b,
+    ]
     assert ret == expected
+
+
+def test_processing_functions() -> None:
+    in_condition = binary_condition(
+        None,
+        ConditionFunctions.IN,
+        Column(None, "tag_keys", None),
+        literals_tuple(None, [Literal(None, "t1"), Literal(None, "t2")]),
+    )
+    assert is_in_condition(in_condition)
+
+    eq_condition = binary_condition(
+        None, ConditionFunctions.EQ, Column(None, "test", None), Literal(None, "1")
+    )
+    assert is_binary_condition(eq_condition, ConditionFunctions.EQ)
+    assert not is_binary_condition(eq_condition, ConditionFunctions.NEQ)

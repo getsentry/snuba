@@ -5,7 +5,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.query import Query
-from snuba.request.request_settings import RequestSettings
+from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
 
 
@@ -15,7 +15,7 @@ def test_organization_extension_query_processing_happy_path():
 
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
     query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])))
-    request_settings = RequestSettings(turbo=False, consistent=False, debug=False)
+    request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
 

@@ -1,9 +1,11 @@
+from abc import ABC, abstractmethod
+
 from typing import Sequence
 
 from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
 
 
-class RequestSettings:
+class RequestSettings(ABC):
     """
     Settings that apply to how the query in the request should be run.
 
@@ -14,7 +16,37 @@ class RequestSettings:
     the formation of the query for projects, but it doesn't appear in the SQL statement.
     """
 
-    def __init__(self, turbo: bool, consistent: bool, debug: bool) -> None:
+    @abstractmethod
+    def get_turbo(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_consistent(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_debug(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        pass
+
+    @abstractmethod
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass
+
+
+class HTTPRequestSettings(RequestSettings):
+    """
+    Settings that are applied to all Requests initiated via the HTTP api. Allows
+    parameters to be customized, defaults to using global rate limits and allows
+    additional rate limits to be added.
+    """
+
+    def __init__(
+        self, turbo: bool = False, consistent: bool = False, debug: bool = False
+    ) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
@@ -34,3 +66,25 @@ class RequestSettings:
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
+
+
+class SubscriptionRequestSettings(RequestSettings):
+    """
+    Settings that are applied to Requests initiated via Subscriptions. Hard code most
+    parameters and skips all rate limiting.
+    """
+
+    def get_turbo(self) -> bool:
+        return False
+
+    def get_consistent(self) -> bool:
+        return True
+
+    def get_debug(self) -> bool:
+        return False
+
+    def get_rate_limit_params(self) -> Sequence[RateLimitParameters]:
+        return []
+
+    def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
+        pass

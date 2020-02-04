@@ -5,6 +5,7 @@ import rapidjson
 from datetime import datetime
 from typing import Optional, Sequence
 
+from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -15,8 +16,8 @@ from snuba.writer import BatchWriter
 @dataclass(frozen=True)
 class KafkaTopicSpec:
     topic_name: str
+    partitions_number: int
     replication_factor: int = 1
-    partitions_number: int = 1
 
 
 class KafkaStreamLoader:
@@ -33,12 +34,29 @@ class KafkaStreamLoader:
         commit_log_topic: Optional[str] = None,
     ) -> None:
         self.__processor = processor
-        self.__default_topic_spec = KafkaTopicSpec(topic_name=default_topic)
+        self.__default_topic_spec = KafkaTopicSpec(
+            topic_name=default_topic,
+            partitions_number=settings.TOPIC_PARTITION_COUNTS.get(default_topic, 1),
+        )
         self.__replacement_topic_spec = (
-            KafkaTopicSpec(topic_name=replacement_topic) if replacement_topic else None
+            KafkaTopicSpec(
+                topic_name=replacement_topic,
+                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
+                    replacement_topic, 1
+                ),
+            )
+            if replacement_topic
+            else None
         )
         self.__commit_log_topic_spec = (
-            KafkaTopicSpec(topic_name=commit_log_topic) if commit_log_topic else None
+            KafkaTopicSpec(
+                topic_name=commit_log_topic,
+                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
+                    commit_log_topic, 1
+                ),
+            )
+            if commit_log_topic
+            else None
         )
 
     def get_processor(self) -> MessageProcessor:
@@ -86,7 +104,9 @@ class TableWriter:
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
 
-    def get_writer(self, options=None, table_name=None) -> BatchWriter:
+    def get_writer(
+        self, options=None, table_name=None, rapidjson_serialize=False
+    ) -> BatchWriter:
         from snuba import settings
         from snuba.clickhouse.http import HTTPBatchWriter
 
@@ -100,9 +120,14 @@ class TableWriter:
             self.__table_schema,
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
-            lambda row: json.dumps(row, default=default).encode("utf-8"),
+            lambda row: (
+                rapidjson.dumps(row, default=default)
+                if rapidjson_serialize
+                else json.dumps(row, default=default)
+            ).encode("utf-8"),
             options,
             table_name,
+            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
     def get_bulk_writer(self, options=None, table_name=None) -> BatchWriter:

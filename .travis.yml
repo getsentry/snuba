@@ -13,7 +13,7 @@ before_install:
   - docker ps -a
 
 script:
-  - docker run -v ~/.artifacts:/.artifacts --net host -e SNUBA_SETTINGS=travis --entrypoint python getsentry/snuba -m pytest -vv --cov . --cov-report="xml:/.artifacts/coverage.xml" --junit-xml="/.artifacts/pytest.junit.xml"
+  - docker run -v ~/.artifacts:/.artifacts --net host -e SNUBA_SETTINGS=ci --entrypoint python getsentry/snuba -m pytest -vv --cov . --cov-report="xml:/.artifacts/coverage.xml" --junit-xml="/.artifacts/pytest.junit.xml"
 
 notifications:
   webhooks:

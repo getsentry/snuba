@@ -134,23 +134,22 @@ class TestEventsProcessor(BaseEventsTest):
             "primary_hash": "a" * 32,
             "message": "the message",
             "platform": "the_platform",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-            "culprit": "the culprit",
-            "type": "error",
-            "version": 6,
-            "title": "FooError",
-            "location": "bar.py",
-            "modules": OrderedDict([("foo", "1.0"), ("bar", "2.0"), ("baz", None)]),
+            "data": {
+                "received": int(calendar.timegm(now.timetuple())),
+                "culprit": "the culprit",
+                "type": "error",
+                "version": 6,
+                "title": "FooError",
+                "location": "bar.py",
+                "modules": OrderedDict([("foo", "1.0"), ("bar", "2.0"), ("baz", None)]),
+            },
         }
         output = {}
 
         enforce_table_writer(
             self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        ).get_stream_loader().get_processor().extract_common(output, event)
         assert output == {
-            "message": u"the message",
             "platform": u"the_platform",
             "primary_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "received": now,
@@ -161,7 +160,6 @@ class TestEventsProcessor(BaseEventsTest):
             "modules.version": [u"1.0", u"2.0", u""],
             "title": "FooError",
             "location": "bar.py",
-            "search_message": None,
         }
 
     def test_extract_common_search_message(self):
@@ -171,14 +169,15 @@ class TestEventsProcessor(BaseEventsTest):
             "message": "the message",
             "platform": "the_platform",
             "search_message": "the search message",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
+            "data": {"received": int(calendar.timegm(now.timetuple()))},
         }
         output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+        processor.extract_common(output, event)
+        processor.extract_custom(output, event)
+
         assert output["search_message"] == "the search message"
 
         # with optional short message
@@ -188,15 +187,17 @@ class TestEventsProcessor(BaseEventsTest):
             "message": "the message",
             "platform": "the_platform",
             "search_message": "the search message",
-        }
-        data = {
-            "received": int(calendar.timegm(now.timetuple())),
-            "message": "the short message",
+            "data": {
+                "received": int(calendar.timegm(now.timetuple())),
+                "message": "the short message",
+            },
         }
         output = {}
-        enforce_table_writer(
-            self.dataset
-        ).get_stream_loader().get_processor().extract_common(output, event, data)
+        processor = (
+            enforce_table_writer(self.dataset).get_stream_loader().get_processor()
+        )
+        processor.extract_common(output, event)
+        processor.extract_custom(output, event)
         assert output["search_message"] == "the search message"
         assert output["message"] == "the short message"
 
@@ -498,7 +499,10 @@ class TestEventsProcessor(BaseEventsTest):
         assert tags == orig_tags
 
         extra_output = {}
-        extra_output["contexts.key"], extra_output["contexts.value"] = extract_extra_contexts(contexts)
+        (
+            extra_output["contexts.key"],
+            extra_output["contexts.value"],
+        ) = extract_extra_contexts(contexts)
 
         assert extra_output == {
             "contexts.key": ["extra.int", "extra.float", "extra.str", "extra.\\ud83c"],
@@ -634,13 +638,15 @@ class TestEventsProcessor(BaseEventsTest):
                 "value": "/ by zero",
             }
         ]
-        output = {}
+
+        output = {"project_id": 1}
 
         enforce_table_writer(
             self.dataset
         ).get_stream_loader().get_processor().extract_stacktraces(output, stacks)
 
         assert output == {
+            "project_id": 1,
             "exception_frames.abs_path": [
                 u"Thread.java",
                 u"ExecJavaMojo.java",
