@@ -11,7 +11,6 @@ from snuba import settings
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
 from snuba.utils.streams.kafka import (
-    Commit,
     CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
@@ -19,6 +18,7 @@ from snuba.utils.streams.kafka import (
     KafkaProducer,
     as_kafka_configuration_bool,
 )
+from snuba.utils.streams.synchronized import Commit
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
 from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
