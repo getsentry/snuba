@@ -3,6 +3,7 @@ from typing import MutableMapping
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_FORMAT = "%(asctime)s %(message)s"
 
 TESTING = False
 DEBUG = True

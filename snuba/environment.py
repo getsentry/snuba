@@ -16,7 +16,7 @@ def setup_logging(level: Optional[str] = None) -> None:
         level = settings.LOG_LEVEL
 
     logging.basicConfig(
-        level=getattr(logging, level.upper()), format="%(asctime)s %(message)s",
+        level=getattr(logging, level.upper()), format=settings.LOG_FORMAT,
     )
 
 
