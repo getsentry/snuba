@@ -61,7 +61,7 @@ class SubscriptionResultCodec(Codec[KafkaPayload, SubscriptionResult]):
                 {
                     "version": 1,
                     "payload": {
-                        "subscription_id": str(subscription_id),
+                        "subscription_id": subscription_id,
                         "values": value.result["data"],
                         "timestamp": value.task.timestamp.timestamp(),
                     },
