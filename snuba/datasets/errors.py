@@ -44,8 +44,8 @@ class ErrorsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         metadata_columns = ColumnSet(
             [
-                ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
                 ("partition", UInt(16)),
+                ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
             ]
         )
 
@@ -53,30 +53,31 @@ class ErrorsDataset(TimeSeriesDataset):
             [
                 # These are the classic tags, they are saved in Snuba exactly as they
                 # appear in the event body.
+                ("environment", LowCardinality(Nullable(String()))),
+                ("release", LowCardinality(Nullable(String()))),
+                ("dist", LowCardinality(Nullable(String()))),
+                ("user", WithDefault(String(), "''")),
+                ("transaction_name", WithDefault(LowCardinality(String()), "''")),
                 ("level", LowCardinality(String())),
                 # ("logger", Nullable(String())),
                 # ("server_name", Nullable(String())),  # future name: device_id?
-                ("environment", LowCardinality(Nullable(String()))),
                 # ("sentry:release", Nullable(String())),
-                ("release", LowCardinality(Nullable(String()))),
                 # ("sentry:dist", Nullable(String())),
-                ("dist", LowCardinality(Nullable(String()))),
                 # ("sentry:user", Nullable(String())),
-                ("user", WithDefault(String(), "''")),
                 # ("site", Nullable(String())),
                 # ("url", Nullable(String())),
-                ("transaction_name", WithDefault(LowCardinality(String()))),
             ]
         )
 
         required_columns = ColumnSet(
             [
-                ("event_id", WithCodecs(UUID(), ["NONE"])),
+                ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
-                ("group_id", UInt(64)),
                 ("timestamp", DateTime()),
-                ("deleted", UInt(8)),
+                ("event_id", WithCodecs(UUID(), ["NONE"])),
                 ("retention_days", UInt(16)),
+                ("deleted", UInt(8)),
+                ("group_id", UInt(64)),
             ]
         )
 
@@ -90,37 +91,36 @@ class ErrorsDataset(TimeSeriesDataset):
                         ["NONE"],
                     ),
                 ),
-                ("event_string", WithCodecs(String(), ["NONE"])),
                 ("platform", LowCardinality(String())),
-                ("message", String()),
-                ("primary_hash", FixedString(32)),
-                ("primary_hash_hex", Materialized(UInt(64), "hex(primary_hash)")),
-                ("received", DateTime()),
-                # ("search_message", Nullable(String())),
-                ("title", String()),
-                ("location", Nullable(String())),
-                # optional user
+                ("ip_address_v4", Nullable(IPv4())),
+                ("ip_address_v6", Nullable(IPv6())),
                 ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
                 ("user_id", Nullable(String())),
                 ("user_name", Nullable(String())),
                 ("user_email", Nullable(String())),
-                ("ip_address_v4", Nullable(IPv4())),
-                ("ip_address_v6", Nullable(IPv6())),
-                # ("ip_address", Nullable(String())),
-                # optional geo
-                # ("geo_country_code", Nullable(String())),
-                # ("geo_region", Nullable(String())),
-                # ("geo_city", Nullable(String())),
                 ("sdk_name", LowCardinality(String())),
                 ("sdk_version", LowCardinality(String())),
-                ("type", LowCardinality(String())),
-                ("version", LowCardinality(String())),
                 (
                     "transaction_hash",
                     Materialized(UInt(64), "cityHash64(transaction_name)"),
                 ),
                 ("span_id", Nullable(UInt(64))),
                 ("trace_id", Nullable(UUID())),
+                ("primary_hash", FixedString(32)),
+                ("primary_hash_hex", Materialized(UInt(64), "hex(primary_hash)")),
+                ("event_string", WithCodecs(String(), ["NONE"])),
+                ("received", DateTime()),
+                ("message", String()),
+                ("title", String()),
+                ("location", Nullable(String())),
+                ("version", LowCardinality(String())),
+                ("type", LowCardinality(String())),
+                # ("search_message", Nullable(String())),
+                # ("ip_address", Nullable(String())),
+                # optional geo
+                # ("geo_country_code", Nullable(String())),
+                # ("geo_region", Nullable(String())),
+                # ("geo_city", Nullable(String())),
             ]
             + metadata_columns
             + promoted_tag_columns
@@ -134,6 +134,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 # http interface
                 # ("http_method", Nullable(String())),
                 # ("http_referer", Nullable(String())),
+                ("culprit", String()),
                 # exception interface
                 (
                     "exception_stacks",
@@ -162,7 +163,6 @@ class ErrorsDataset(TimeSeriesDataset):
                         ]
                     ),
                 ),
-                ("culprit", String()),
                 ("sdk_integrations", Array(String())),
                 ("modules", Nested([("name", String()), ("version", String())])),
             ]
@@ -205,7 +205,6 @@ class ErrorsDataset(TimeSeriesDataset):
             time_parse_columns=("timestamp", "received"),
         )
 
-        self.__metadata_columns = metadata_columns
         self.__promoted_tag_columns = promoted_tag_columns
         self.__required_columns = required_columns
 
