@@ -167,3 +167,7 @@ class TickConsumer(Consumer[Tick]):
 
     def close(self, timeout: Optional[float] = None) -> None:
         return self.__consumer.close(timeout)
+
+    @property
+    def closed(self) -> bool:
+        return self.__consumer.closed

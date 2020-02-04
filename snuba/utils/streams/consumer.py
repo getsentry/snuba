@@ -1,5 +1,5 @@
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from typing import (
     Callable,
     Generic,
@@ -180,4 +180,8 @@ class Consumer(Generic[TPayload], ABC):
 
     @abstractmethod
     def close(self, timeout: Optional[float] = None) -> None:
+        raise NotImplementedError
+
+    @abstractproperty
+    def closed(self) -> bool:
         raise NotImplementedError
