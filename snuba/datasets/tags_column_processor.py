@@ -1,9 +1,20 @@
-import re
-from typing import Any, Mapping, Set, Union
+from __future__ import annotations
 
+import re
+
+from typing import Any, List, Mapping, Optional, Set, Union
+
+from dataclasses import dataclass
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    is_binary_condition,
+    is_in_condition,
+)
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
@@ -14,6 +25,46 @@ from snuba.util import (
 
 # A column name like "tags[url]"
 NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
+
+
+@dataclass(frozen=True)
+class ParsedNestedColumn:
+    """
+    Provides some structure to the tags/contexts column to avoid parsing the string
+    in multiple places around the code.
+    """
+
+    col_name: str
+    tag_name: Optional[str]
+
+    @classmethod
+    def __is_individual_column(cls, col_name: str) -> bool:
+        return col_name in ("tags", "contexts")
+
+    @classmethod
+    def __is_joined_column(cls, col_name: str) -> bool:
+        return col_name in ("tags_key", "tags_value")
+
+    @classmethod
+    def parse_column_expression(cls, col_expr: str) -> Optional[ParsedNestedColumn]:
+        match = NESTED_COL_EXPR_RE.match(col_expr)
+        if match:
+            col_prefix = match[1]
+            param_string = match[2]
+
+            if cls.__is_individual_column(col_prefix):
+                return ParsedNestedColumn(col_prefix, param_string)
+
+        if cls.__is_joined_column(col_expr):
+            return ParsedNestedColumn(col_expr, None)
+
+        return None
+
+    def is_joined_column(self) -> bool:
+        return self.__is_joined_column(self.col_name)
+
+    def is_single_column(self) -> bool:
+        return self.__is_individual_column(self.col_name)
 
 
 class TagColumnProcessor:
@@ -54,12 +105,16 @@ class TagColumnProcessor:
 
         It returns None if the column is not a tag or context.
         """
-        matched = NESTED_COL_EXPR_RE.match(column_name)
-        if matched and matched[1] in ["tags", "contexts"]:
-            return self.__tag_expr(column_name, table_alias)
-        elif column_name in ["tags_key", "tags_value"]:
-            return self.__tags_expr(column_name, query, parsing_context, table_alias)
-        return None
+        parsed_col = ParsedNestedColumn.parse_column_expression(column_name)
+        if not parsed_col:
+            return None
+        if parsed_col.is_single_column():
+            return self.__tag_expr(parsed_col, table_alias)
+        elif parsed_col.is_joined_column():
+            # TODO: Should we support contexts?
+            return self.__tags_expr(parsed_col, query, parsing_context, table_alias)
+        # We should never get here if we got an instance of ParsedNestedColumn
+        raise ValueError(f"Invalid tag/context column structure {column_name}")
 
     def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
         # And a reverse map from the tags the client expects to the database columns
@@ -77,28 +132,121 @@ class TagColumnProcessor:
         else:
             return "toString({})".format(escape_identifier(col))
 
-    def __tag_expr(self, column_name: str, table_alias: str = "",) -> str:
+    def __tag_expr(self, parsed_col: ParsedNestedColumn, table_alias: str = "",) -> str:
         """
         Return an expression for the value of a single named tag.
 
         For tags/contexts, we expand the expression depending on whether the tag is
         "promoted" to a top level column, or whether we have to look in the tags map.
         """
-        col, tag = NESTED_COL_EXPR_RE.match(column_name).group(1, 2)
         # For promoted tags, return the column name.
+        assert parsed_col.tag_name
+        tag_name = parsed_col.tag_name
+        col = parsed_col.col_name
         if col in self.__promoted_columns:
-            actual_tag = self.__get_tag_column_map()[col].get(tag, tag)
+            actual_tag = self.__get_tag_column_map()[col].get(tag_name, tag_name)
             if actual_tag in self.__promoted_columns[col]:
                 return qualified_column(self.__string_col(actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
-        return u"{col}.value[indexOf({col}.key, {tag})]".format(
-            **{"col": qualified_column(col, table_alias), "tag": escape_literal(tag)}
+        return "{col}.value[indexOf({col}.key, {tag})]".format(
+            **{
+                "col": qualified_column(col, table_alias),
+                "tag": escape_literal(tag_name),
+            }
         )
+
+    def __extract_top_level_tag_conditions(self, condition: Expression) -> List[str]:
+        """
+        Finds the top level conditions that include tags_key in an expression.
+        For top level condition. In Snuba conditions are expressed in layers, the top level
+        ones are in AND, the nested ones are in OR and so on.
+        We can only apply the arrayFilter optimization to tag keys conditions that are not in
+        OR with other columns. To simplify the problem, we only consider those conditions that
+        are included in the first level of the query:
+        [['tagskey' '=' 'a'],['col' '=' 'b'],['col2' '=' 'c']]  works
+        [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
+        """
+
+        if is_binary_condition(condition, ConditionFunctions.EQ):
+            # This is to make mypy happy.
+            assert isinstance(condition, FunctionCall)
+            if (
+                isinstance(condition.parameters[0], Column)
+                and condition.parameters[0].column_name == "tags_key"
+                and isinstance(condition.parameters[1], Literal)
+            ):
+                # Tags are strings, but mypy does not know that
+                return [str(condition.parameters[1].value)]
+
+        if is_in_condition(condition):
+            assert isinstance(condition, FunctionCall)
+            if (
+                isinstance(condition.parameters[0], Column)
+                and condition.parameters[0].column_name == "tags_key"
+            ):
+                # The parameters of the inner function `a IN tuple(b,c,d)`
+                assert isinstance(condition.parameters[1], FunctionCall)
+                literals = condition.parameters[1].parameters
+                return [
+                    str(literal.value)
+                    for literal in literals
+                    if isinstance(literal, Literal)
+                ]
+
+        if is_binary_condition(condition, BooleanFunctions.AND):
+            assert isinstance(condition, FunctionCall)
+            return self.__extract_top_level_tag_conditions(
+                condition.parameters[0]
+            ) + self.__extract_top_level_tag_conditions(condition.parameters[1])
+
+        return []
+
+    def __get_filter_tags(self, query: Query) -> List[str]:
+        """
+        Identifies the tag names we can apply the arrayFilter optimization on.
+        Which means: if the tags_key column is in the select clause and there are
+        one or more top level conditions on the tags_key column.
+        """
+        if not state.get_config("ast_tag_processor_enabled", 0):
+            return []
+
+        select_clause = query.get_selected_columns_from_ast() or []
+
+        tags_key_found = any(
+            col.column_name == "tags_key"
+            for expression in select_clause
+            for col in expression
+            if isinstance(col, Column)
+        )
+
+        if not tags_key_found:
+            return []
+
+        def extract_tags_from_condition(
+            cond: Optional[Expression],
+        ) -> Optional[List[str]]:
+            if not cond:
+                return []
+            if any(is_binary_condition(cond, BooleanFunctions.OR) for cond in cond):
+                return None
+            return self.__extract_top_level_tag_conditions(cond)
+
+        cond_tags_key = extract_tags_from_condition(query.get_condition_from_ast())
+        if cond_tags_key is None:
+            # This means we found an OR. Cowardly we give up even though there could
+            # be cases where this condition is still optimizable.
+            return []
+        having_tags_key = extract_tags_from_condition(query.get_having_from_ast())
+        if having_tags_key is None:
+            # Same as above
+            return []
+
+        return cond_tags_key + having_tags_key
 
     def __tags_expr(
         self,
-        column_name: str,
+        parsed_col: ParsedNestedColumn,
         query: Query,
         parsing_context: ParsingContext,
         table_alias: str = "",
@@ -106,9 +254,11 @@ class TagColumnProcessor:
         """
         Return an expression that array-joins on tags to produce an output with one
         row per tag.
+
+        It can also apply an arrayFilter in the arrayJoin if an equivalent condition
+        is found in the query in order to reduce the size of the arrayJoin.
         """
-        assert column_name in ["tags_key", "tags_value"]
-        col, k_or_v = column_name.split("_", 1)
+        col, k_or_v = parsed_col.col_name.split("_", 1)
         nested_tags_only = state.get_config("nested_tags_only", 1)
 
         qualified_col = qualified_column(col, table_alias)
@@ -119,11 +269,11 @@ class TagColumnProcessor:
         else:
             promoted = self.__promoted_columns[col]
             col_map = self.__column_tag_map[col]
-            key_list = u"arrayConcat([{}], {}.key)".format(
-                u", ".join(u"'{}'".format(col_map.get(p, p)) for p in promoted),
+            key_list = "arrayConcat([{}], {}.key)".format(
+                ", ".join("'{}'".format(col_map.get(p, p)) for p in promoted),
                 qualified_col,
             )
-            val_list = u"arrayConcat([{}], {}.value)".format(
+            val_list = "arrayConcat([{}], {}.value)".format(
                 ", ".join(self.__string_col(p) for p in promoted), qualified_col
             )
 
@@ -132,20 +282,33 @@ class TagColumnProcessor:
         cols_used = query.get_all_referenced_columns() & set(
             [qualified_key, qualified_value]
         )
+
+        filter_tags = ",".join([f"'{tag}'" for tag in self.__get_filter_tags(query)])
         if len(cols_used) == 2:
             # If we use both tags_key and tags_value in this query, arrayjoin
             # on (key, value) tag tuples.
-            expr = (u"arrayJoin(arrayMap((x,y) -> [x,y], {}, {}))").format(
-                key_list, val_list
-            )
+            mapping = f"arrayMap((x,y) -> [x,y], {key_list}, {val_list})"
+            if filter_tags:
+                filtering = (
+                    f"arrayFilter(pair -> pair[1] IN ({filter_tags}), {mapping})"
+                )
+            else:
+                filtering = mapping
+
+            expr = f"arrayJoin({filtering})"
 
             # put the all_tags expression in the alias cache so we can use the alias
             # to refer to it next time (eg. 'all_tags[1] AS tags_key'). instead of
             # expanding the whole tags expression again.
             expr = alias_expr(expr, "all_tags", parsing_context)
-            return u"({})[{}]".format(expr, 1 if k_or_v == "key" else 2)
+            return "({})[{}]".format(expr, 1 if k_or_v == "key" else 2)
         else:
             # If we are only ever going to use one of tags_key or tags_value, don't
             # bother creating the k/v tuples to arrayJoin on, or the all_tags alias
             # to re-use as we won't need it.
-            return "arrayJoin({})".format(key_list if k_or_v == "key" else val_list)
+            if filter_tags:
+                return (
+                    f"arrayJoin(arrayFilter(tag -> tag IN ({filter_tags}), {key_list}))"
+                )
+            else:
+                return f"arrayJoin({key_list if k_or_v == 'key' else val_list})"

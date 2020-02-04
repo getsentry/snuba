@@ -182,7 +182,6 @@ def raw_query(
                             with_totals=request.query.has_totals(),
                         )
 
-                        logger.debug(sql)
                         timer.mark("execute")
                         stats.update(
                             {
