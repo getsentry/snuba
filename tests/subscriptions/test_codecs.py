@@ -81,5 +81,5 @@ class TestQueryResultCodec(BaseTest):
         payload = data["payload"]
 
         assert payload["subscription_id"] == str(result.task.task.identifier)
-        assert payload["values"] == result.result["data"]
-        assert payload["timestamp"] == result.task.timestamp.timestamp()
+        assert payload["values"] == result.result
+        assert payload["timestamp"] == result.task.timestamp.isoformat()
