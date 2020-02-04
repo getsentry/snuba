@@ -55,6 +55,7 @@ class RawQueryException(Exception):
         self.sql = sql
         self.meta = meta
 
+
 @dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     sql: str
@@ -72,12 +73,13 @@ class ClickhouseQueryMetadata:
             "trace_id": self.trace_id,
         }
 
+
 @dataclass
 class SnubaQueryMetadata:
     request: Request
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
-    http_referrer: str = ""
+    http_referrer: Optional[str] = ""
 
     def to_dict(self):
         return {
@@ -267,11 +269,7 @@ def update_query_metadata_and_stats(
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
-            sql=sql,
-            timer=timer,
-            stats=stats,
-            status=status,
-            trace_id=trace_id,
+            sql=sql, timer=timer, stats=stats, status=status, trace_id=trace_id,
         )
     )
 
@@ -283,6 +281,7 @@ def record_query(
 ) -> None:
     if settings.RECORD_QUERIES:
         # send to redis
+        query_metadata.http_referrer = http_request.referrer
         state.record_query(query_metadata.to_dict())
 
         final = str(request.query.get_final())
@@ -305,7 +304,11 @@ def parse_and_run_query(
     Runs a query, then records the results including metadata about each split.
     """
     request_copy = copy.deepcopy(request)
-    query_metadata = SnubaQueryMetadata(request=request_copy, timer=timer, query_list=[], http_referrer=http_request.referrer)
+    query_metadata = SnubaQueryMetadata(
+        request=request_copy,
+        timer=timer,
+        query_list=[],
+    )
 
     try:
         result = _run_query(
