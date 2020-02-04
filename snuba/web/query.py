@@ -1,8 +1,15 @@
+import copy
 import logging
 
 from dataclasses import dataclass
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, MutableSequence, Optional
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    Optional,
+)
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -239,6 +246,7 @@ def update_query_list_and_stats(
     well as timing information.
     Also updates stats with any relevant information and returns the updated dict.
     """
+
     stats.update(query_settings)
 
     query_list.append(
@@ -255,9 +263,10 @@ def update_query_list_and_stats(
     return stats
 
 
-def record_query(request: Request, timer: Timer, query_list: MutableSequence[ClickhouseQueryMetadata]) -> None:
+def record_query(
+    request: Request, timer: Timer, query_list: MutableSequence[ClickhouseQueryMetadata]
+) -> None:
     if settings.RECORD_QUERIES:
-        last_query = query_list[-1]
         # send to redis
         state.record_query(
             {
@@ -267,6 +276,7 @@ def record_query(request: Request, timer: Timer, query_list: MutableSequence[Cli
             }
         )
 
+        last_query = query_list[-1]
         timer.send_metrics_to(
             metrics,
             tags={
@@ -285,13 +295,14 @@ def parse_and_run_query(
     Runs a query, then records the results including metadata about each split.
     """
     query_list: MutableSequence[ClickhouseQueryMetadata] = []
+    request_copy = copy.deepcopy(request)
     try:
         result = _run_query(
             dataset=dataset, request=request, timer=timer, query_list=query_list
         )
-        record_query(request, timer, query_list)
+        record_query(request_copy, timer, query_list)
     except RawQueryException as error:
-        record_query(request, timer, query_list)
+        record_query(request_copy, timer, query_list)
         raise error
 
     return result
