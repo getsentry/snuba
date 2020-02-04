@@ -269,6 +269,7 @@ def record_query(
         # send to redis
         state.record_query(
             {
+                "timing": timer.for_json(),
                 "request": request.body,
                 "referrer": http_request.referrer,
                 "query_list": [q.to_dict() for q in query_list],
