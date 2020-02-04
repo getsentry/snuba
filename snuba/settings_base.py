@@ -1,6 +1,9 @@
 import os
+from typing import MutableMapping
+
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_FORMAT = "%(asctime)s %(message)s"
 
 TESTING = False
 DEBUG = True
@@ -84,3 +87,5 @@ PROJECT_STACKTRACE_BLACKLIST = set()
 
 # Number of queries each subscription consumer can run concurrently.
 SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES = 10
+
+TOPIC_PARTITION_COUNTS: MutableMapping[str, int] = {}  # (topic name, # of partitions)
