@@ -1711,7 +1711,7 @@ class TestCreateSubscriptionApi(BaseApiTest):
         assert resp.status_code == 202
         data = json.loads(resp.data)
         assert data == {
-            "subscription_id": f"55/{expected_uuid.hex}",
+            "subscription_id": f"0/{expected_uuid.hex}",
         }
 
     def test_time_error(self):
