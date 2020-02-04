@@ -88,3 +88,8 @@ PROJECT_STACKTRACE_BLACKLIST = set()
 SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES = 10
 
 TOPIC_PARTITION_COUNTS: MutableMapping[str, int] = {}  # (topic name, # of partitions)
+
+TOPIC_PARTITION_CONFIGURATIONS: MutableMapping[str, MutableMapping[str, str]] = {
+    "events": {"message.timestamp.type": "LogAppendTime"},
+    "snuba-commit-log": {"cleanup.policy": "compact"},
+}

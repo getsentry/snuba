@@ -1,9 +1,9 @@
-from dataclasses import dataclass
 import json
-import rapidjson
-
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
+
+import rapidjson
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -18,6 +18,7 @@ class KafkaTopicSpec:
     topic_name: str
     partitions_number: int
     replication_factor: int = 1
+    configuration: Mapping[str, str] = field(default_factory=dict)
 
 
 class KafkaStreamLoader:
@@ -34,29 +35,23 @@ class KafkaStreamLoader:
         commit_log_topic: Optional[str] = None,
     ) -> None:
         self.__processor = processor
-        self.__default_topic_spec = KafkaTopicSpec(
-            topic_name=default_topic,
-            partitions_number=settings.TOPIC_PARTITION_COUNTS.get(default_topic, 1),
-        )
+        self.__default_topic_spec = self.__get_topic_spec(default_topic)
         self.__replacement_topic_spec = (
-            KafkaTopicSpec(
-                topic_name=replacement_topic,
-                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
-                    replacement_topic, 1
-                ),
-            )
-            if replacement_topic
+            self.__get_topic_spec(replacement_topic)
+            if replacement_topic is not None
             else None
         )
         self.__commit_log_topic_spec = (
-            KafkaTopicSpec(
-                topic_name=commit_log_topic,
-                partitions_number=settings.TOPIC_PARTITION_COUNTS.get(
-                    commit_log_topic, 1
-                ),
-            )
-            if commit_log_topic
+            self.__get_topic_spec(commit_log_topic)
+            if commit_log_topic is not None
             else None
+        )
+
+    def __get_topic_spec(self, name: str) -> KafkaTopicSpec:
+        return KafkaTopicSpec(
+            topic_name=name,
+            partitions_number=settings.TOPIC_PARTITION_COUNTS.get(name, 1),
+            configuration=settings.TOPIC_PARTITION_CONFIGURATIONS.get(name, {}),
         )
 
     def get_processor(self) -> MessageProcessor:
