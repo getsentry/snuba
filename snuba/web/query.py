@@ -263,8 +263,6 @@ def record_query(request: Request, timer: Timer, query_list: MutableSequence[Cli
             {
                 "request": request.body,
                 "referrer": http_request.referrer,
-                "timing": last_query.timer.for_json(),
-                "status": last_query.status,
                 "query_list": [q.to_dict() for q in query_list],
             }
         )
