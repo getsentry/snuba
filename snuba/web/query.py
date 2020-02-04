@@ -55,7 +55,6 @@ class RawQueryException(Exception):
         self.sql = sql
         self.meta = meta
 
-
 @dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     sql: str
@@ -73,6 +72,26 @@ class ClickhouseQueryMetadata:
             "trace_id": self.trace_id,
         }
 
+@dataclass
+class SnubaQueryMetadata:
+    request: Request
+    timer: Timer
+    query_list: MutableSequence[ClickhouseQueryMetadata]
+    http_referrer: str = ""
+
+    def to_dict(self):
+        return {
+            "http_referrer": self.http_referrer,
+            "query_list": [q.to_dict() for q in self.query_list],
+            "request": self.request.body,
+            "status": self.status,
+            "timing": self.timer.for_json(),
+        }
+
+    @property
+    def status(self):
+        return self.query_list[-1].status if self.query_list else "none"
+
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 
@@ -82,7 +101,7 @@ def raw_query(
     query: DictClickhouseQuery,
     reader: Reader[ClickhouseQuery],
     timer: Timer,
-    query_list: MutableSequence[ClickhouseQueryMetadata],
+    query_metadata: SnubaQueryMetadata,
     stats: Optional[MutableMapping[str, Any]] = None,
     trace_id: str = "",
 ) -> ClickhouseQueryResult:
@@ -129,12 +148,12 @@ def raw_query(
         ),
 
         update_with_status = partial(
-            update_query_list_and_stats,
+            update_query_metadata_and_stats,
             request,
             sql,
             timer,
             stats,
-            query_list,
+            query_metadata,
             query_settings,
             trace_id,
         )
@@ -228,12 +247,12 @@ def raw_query(
     return result
 
 
-def update_query_list_and_stats(
+def update_query_metadata_and_stats(
     request: Request,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_list: MutableSequence[ClickhouseQueryMetadata],
+    query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
     trace_id: str,
     status: str,
@@ -246,7 +265,7 @@ def update_query_list_and_stats(
 
     stats.update(query_settings)
 
-    query_list.append(
+    query_metadata.query_list.append(
         ClickhouseQueryMetadata(
             sql=sql,
             timer=timer,
@@ -260,26 +279,18 @@ def update_query_list_and_stats(
 
 
 def record_query(
-    request: Request, timer: Timer, query_list: MutableSequence[ClickhouseQueryMetadata]
+    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
 ) -> None:
     if settings.RECORD_QUERIES:
         # send to redis
-        state.record_query(
-            {
-                "timing": timer.for_json(),
-                "request": request.body,
-                "referrer": http_request.referrer,
-                "query_list": [q.to_dict() for q in query_list],
-            }
-        )
+        state.record_query(query_metadata.to_dict())
 
-        last_query = query_list[-1]
         final = str(request.query.get_final())
         referrer = request.referrer or "none"
         timer.send_metrics_to(
             metrics,
             tags={
-                "status": str(last_query.status),
+                "status": query_metadata.status,
                 "referrer": referrer,
                 "final": final,
             },
@@ -293,15 +304,16 @@ def parse_and_run_query(
     """
     Runs a query, then records the results including metadata about each split.
     """
-    query_list: MutableSequence[ClickhouseQueryMetadata] = []
     request_copy = copy.deepcopy(request)
+    query_metadata = SnubaQueryMetadata(request=request_copy, timer=timer, query_list=[], http_referrer=http_request.referrer)
+
     try:
         result = _run_query(
-            dataset=dataset, request=request, timer=timer, query_list=query_list
+            dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
-        record_query(request_copy, timer, query_list)
+        record_query(request_copy, timer, query_metadata)
     except RawQueryException as error:
-        record_query(request_copy, timer, query_list)
+        record_query(request_copy, timer, query_metadata)
         raise error
 
     return result
@@ -312,7 +324,7 @@ def _run_query(
     dataset: Dataset,
     request: Request,
     timer: Timer,
-    query_list: MutableSequence[ClickhouseQueryMetadata],
+    query_metadata: SnubaQueryMetadata,
 ) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
@@ -372,7 +384,7 @@ def _run_query(
             query,
             NativeDriverReader(clickhouse_ro),
             timer,
-            query_list,
+            query_metadata,
             stats,
             span.trace_id,
         )

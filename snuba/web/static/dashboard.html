@@ -244,7 +244,7 @@
                   <div>
                     <h2>Scatter:</h2>
                     <Scatter width={500} height={200} values={this.state.queries}
-                      xacc="timing.timestamp" yacc="timing.duration_ms" cacc="stats.referrer"
+                      xacc="timing.timestamp" yacc="timing.duration_ms" cacc="http_referrer"
                     />
                   </div>
                 </div>
@@ -277,7 +277,7 @@
                       },{
                         Header: 'referrer',
                         width: 400,
-                        accessor: 'referrer'
+                        accessor: 'http_referrer'
                       },{
                         Header: 'ms',
                         width: 70,
