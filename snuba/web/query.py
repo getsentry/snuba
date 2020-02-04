@@ -62,7 +62,7 @@ class ClickhouseQueryMetadata:
         return {
             "request": self.request,
             "sql": self.sql,
-            "timing": self.timer.finish(),
+            "timing": self.timer.for_json(),
             "stats": self.stats,
             "status": self.status,
             "trace_id": self.trace_id,
@@ -263,7 +263,7 @@ def record_query(request: Request, timer: Timer, query_list: MutableSequence[Cli
             {
                 "request": request.body,
                 "referrer": http_request.referrer,
-                "timing": last_query.timer.finish(),
+                "timing": last_query.timer.for_json(),
                 "status": last_query.status,
                 "query_list": [q.to_dict() for q in query_list],
             }
