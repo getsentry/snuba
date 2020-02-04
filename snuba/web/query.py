@@ -276,14 +276,16 @@ def record_query(
         )
 
         last_query = query_list[-1]
+        final = str(request.query.get_final())
+        referrer = request.referrer or "none"
         timer.send_metrics_to(
             metrics,
             tags={
                 "status": str(last_query.status),
-                "referrer": last_query.stats.get("referrer", "none"),
-                "final": str(last_query.stats.get("final", False)),
+                "referrer": referrer,
+                "final": final,
             },
-            mark_tags={"final": str(last_query.stats.get("final", False))},
+            mark_tags={"final": final},
         )
 
 
