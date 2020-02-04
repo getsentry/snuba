@@ -1,13 +1,13 @@
-import logging
 import signal
 from typing import Optional, Sequence
 
 import click
 
 from snuba import settings
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
-from snuba.datasets.cdc import CdcDataset
 from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
 
@@ -66,7 +66,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     type=int,
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 @click.option(
     "--stateful-consumer",
     default=False,
@@ -99,19 +99,15 @@ def consumer(
     auto_offset_reset: str,
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
-    log_level: str,
     stateful_consumer: bool,
     rapidjson_deserialize: bool,
     rapidjson_serialize: bool,
+    log_level: Optional[str] = None,
 ) -> None:
 
-    import sentry_sdk
+    setup_logging(log_level)
+    setup_sentry()
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
     dataset = get_dataset(dataset_name)
 
     consumer_builder = ConsumerBuilder(

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from unittest.mock import Mock
 from uuid import uuid1
 
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +25,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
                 max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
             ),
         )
+
         subscription = Subscription(
             SubscriptionIdentifier(PartitionId(0), uuid1()),
             SubscriptionData(
@@ -36,23 +36,22 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
                 resolution=timedelta(minutes=1),
             ),
         )
+
         now = datetime.utcnow()
-        task = ScheduledTask(now, subscription)
         tick = Tick(
             offsets=Interval(1, 2),
             timestamps=Interval(now - timedelta(minutes=1), now),
         )
 
-        future = executor.execute(task, tick, Mock())
-        result = future.result()
-
+        result = executor.execute(ScheduledTask(now, subscription), tick).result()
         assert result["data"][0]["count"] == 10
 
-        tick = Tick(
-            offsets=Interval(5000, 5001),
-            timestamps=Interval(now + timedelta(hours=10), now + timedelta(hours=11)),
-        )
-        future = executor.execute(task, tick, Mock())
-        result = future.result()
+        result = executor.execute(
+            ScheduledTask(
+                now + timedelta(minutes=self.minutes) + subscription.data.time_window,
+                subscription,
+            ),
+            tick,
+        ).result()
 
         assert result["data"][0]["count"] == 0

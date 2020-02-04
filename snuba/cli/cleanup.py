@@ -1,9 +1,10 @@
-import logging
+from typing import Optional
 
 import click
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.environment import setup_logging
 
 
 @click.command()
@@ -32,7 +33,7 @@ from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NA
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def cleanup(
     *,
     clickhouse_host: str,
@@ -40,21 +41,19 @@ def cleanup(
     dry_run: bool,
     database: str,
     dataset_name: str,
-    log_level: str,
+    log_level: Optional[str] = None,
 ) -> None:
     """
     Deletes stale partitions for ClickHouse tables
     """
+
+    setup_logging(log_level)
 
     from snuba.cleanup import run_cleanup, logger
     from snuba.clickhouse.native import ClickhousePool
 
     dataset = get_dataset(dataset_name)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
-
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
 
     clickhouse = ClickhousePool(clickhouse_host, clickhouse_port)
     num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)

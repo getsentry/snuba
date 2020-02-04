@@ -1,7 +1,7 @@
 from abc import abstractmethod, ABC
 from binascii import crc32
 
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.table_storage import KafkaTopicSpec
 from snuba.subscriptions.data import PartitionId, SubscriptionData
 
 
@@ -11,18 +11,15 @@ class SubscriptionDataPartitioner(ABC):
         pass
 
 
-class DatasetSubscriptionDataPartitioner(SubscriptionDataPartitioner):
+class TopicSubscriptionDataPartitioner(SubscriptionDataPartitioner):
     """
-    Partitions a subscription based on the Dataset that we're going to store it in.
+    Identifies the partition index that contains the source data for a subscription.
     """
 
-    PARTITION_COUNT = 64
-
-    def __init__(self, dataset: Dataset):
-        self.__dataset = dataset
+    def __init__(self, topic: KafkaTopicSpec):
+        self.__topic = topic
 
     def build_partition_id(self, data: SubscriptionData) -> PartitionId:
-        # TODO: Use something from the dataset to determine the number of partitions
         return PartitionId(
-            crc32(str(data.project_id).encode("utf-8")) % self.PARTITION_COUNT
+            crc32(str(data.project_id).encode("utf-8")) % self.__topic.partitions_number
         )

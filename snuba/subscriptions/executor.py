@@ -23,11 +23,12 @@ class SubscriptionExecutor:
         self.__executor_pool = executor_pool
 
     def execute(
-        self, task: ScheduledTask[Subscription], tick: Tick, timer: Timer
+        self, task: ScheduledTask[Subscription], tick: Tick
     ) -> Future[ClickhouseQueryResult]:
+        timer = Timer("query")
         try:
             request = task.task.data.build_request(
-                self.__dataset, tick.timestamps.upper, tick.offsets.upper, timer,
+                self.__dataset, task.timestamp, tick.offsets.upper, timer,
             )
         except Exception as e:
             future: Future[ClickhouseQueryResult] = Future()
