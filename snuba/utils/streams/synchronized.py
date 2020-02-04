@@ -146,7 +146,11 @@ class SynchronizedConsumer(Consumer[TPayload]):
             with self.__remote_offsets.get() as remote_offsets:
                 for partition in resume_candidates:
                     remote_offset = min(
-                        offsets.get(partition, 0) for offsets in remote_offsets.values()
+                        (
+                            offsets.get(partition, 0)
+                            for offsets in remote_offsets.values()
+                        ),
+                        default=0,
                     )
                     if remote_offset > local_offsets[partition]:
                         resume_partitions.append(partition)
@@ -163,7 +167,11 @@ class SynchronizedConsumer(Consumer[TPayload]):
 
         with self.__remote_offsets.get() as remote_offsets:
             remote_offset = min(
-                offsets.get(message.partition, 0) for offsets in remote_offsets.values()
+                (
+                    offsets.get(message.partition, 0)
+                    for offsets in remote_offsets.values()
+                ),
+                default=0,
             )
 
         # Check to make sure the message does not exceed the remote offset. If
