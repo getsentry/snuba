@@ -1,15 +1,16 @@
-import logging
-import click
 import json
+import logging
 from typing import Optional, Sequence
 
+import click
 from confluent_kafka import Producer
 
 from snuba import settings
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.factory import get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
-from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLoaded
+from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
 
 
 @click.command()
@@ -27,25 +28,22 @@ from snuba.stateful_consumer.control_protocol import TransactionData, SnapshotLo
     "--source",
     help="Source of the dump. Depending on the dataset it may have different meaning.",
 )
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def confirm_load(
     *,
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
     dataset_name: str,
     source: Optional[str],
-    log_level: str
+    log_level: Optional[str] = None,
 ) -> None:
     """
     Confirms the snapshot has been loaded by sending the
     snapshot-loaded message on the control topic.
     """
-    import sentry_sdk
 
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
+    setup_sentry()
 
     logger = logging.getLogger("snuba.loaded-snapshot")
     logger.info(
