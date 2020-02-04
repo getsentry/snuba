@@ -81,7 +81,7 @@ from snuba.utils.streams.types import Topic
 )
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--result-topic")
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def subscriptions(
     *,
     dataset_name: str,
@@ -96,7 +96,7 @@ def subscriptions(
     max_batch_time_ms: int,
     schedule_ttl: int,
     result_topic: Optional[str],
-    log_level: str,
+    log_level: Optional[str],
 ) -> None:
     assert result_topic is not None
 
