@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import NamedTuple, Mapping, MutableSequence, Optional, Sequence
+import json
+from typing import Mapping, MutableSequence, Optional, Sequence, NamedTuple
 
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.executor import SubscriptionExecutor
-from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
+from snuba.subscriptions.scheduler import Scheduler, ScheduledTask
+from snuba.utils.codecs import Codec
 from snuba.utils.streams.batching import AbstractBatchWorker
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Topic
 from snuba.web.query import ClickhouseQueryResult
@@ -47,3 +50,24 @@ class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResult]]
         for results in batch:
             for result in results:
                 self.__producer.produce(self.__topic, result).result()
+
+
+class SubscriptionResultCodec(Codec[KafkaPayload, SubscriptionResult]):
+    def encode(self, value: SubscriptionResult) -> KafkaPayload:
+        subscription_id = str(value.task.task.identifier)
+        return KafkaPayload(
+            str(subscription_id).encode("utf-8"),
+            json.dumps(
+                {
+                    "version": 1,
+                    "payload": {
+                        "subscription_id": str(subscription_id),
+                        "values": value.result["data"],
+                        "timestamp": value.task.timestamp.timestamp(),
+                    },
+                }
+            ).encode("utf-8"),
+        )
+
+    def decode(self, value: KafkaPayload) -> SubscriptionResult:
+        raise NotImplementedError
