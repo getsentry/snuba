@@ -77,6 +77,7 @@ class ClickhouseQueryMetadata:
 @dataclass
 class SnubaQueryMetadata:
     request: Request
+    dataset: Dataset
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     http_referrer: Optional[str] = ""
@@ -84,6 +85,7 @@ class SnubaQueryMetadata:
     def to_dict(self):
         return {
             "http_referrer": self.http_referrer,
+            "dataset": str(self.dataset),
             "query_list": [q.to_dict() for q in self.query_list],
             "request": self.request.body,
             "status": self.status,
@@ -306,6 +308,7 @@ def parse_and_run_query(
     request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
         request=request_copy,
+        dataset=dataset,
         timer=timer,
         query_list=[],
     )

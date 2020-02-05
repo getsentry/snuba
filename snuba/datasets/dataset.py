@@ -48,6 +48,9 @@ class Dataset(object):
         self.__dataset_schemas = dataset_schemas
         self.__table_writer = table_writer
 
+    def __str__(self):
+        return "dataset"
+
     def get_dataset_schemas(self) -> DatasetSchemas:
         """
         Returns the collections of schemas for DDL operations and for

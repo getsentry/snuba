@@ -275,6 +275,10 @@
                         id: 'project',
                         accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
                       },{
+                        Header: 'dataset',
+                        width: 120,
+                        accessor: 'dataset'
+                      },{
                         Header: 'referrer',
                         width: 400,
                         accessor: 'http_referrer'

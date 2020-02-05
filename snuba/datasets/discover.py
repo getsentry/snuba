@@ -165,7 +165,6 @@ class DiscoverDataset(TimeSeriesDataset):
     Transactions into a standard format and sends a query to one of the 2 tables
     depending on the conditions detected.
     """
-
     def __init__(self) -> None:
         self.__common_columns = ColumnSet(
             [
@@ -273,6 +272,9 @@ class DiscoverDataset(TimeSeriesDataset):
             time_group_columns={},
             time_parse_columns=["timestamp"],
         )
+
+    def __str__(self):
+        return "discover"
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
