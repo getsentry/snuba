@@ -1,19 +1,14 @@
 services:
   - docker
-  - redis-server
 
 dist: xenial
 
 before_install:
-  - docker run -d --network host --name zookeeper -e ZOOKEEPER_CLIENT_PORT=2181 confluentinc/cp-zookeeper:4.1.0
-  - docker run -d --network host --name kafka -e KAFKA_ZOOKEEPER_CONNECT=localhost:2181 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 confluentinc/cp-kafka:4.1.0
-  - docker run -d --net host --name clickhouse-server --ulimit nofile=262144:262144 yandex/clickhouse-server:19.11
-  - make travis-start-redis-cluster
+  - docker network create --attachable cloudbuild
   - docker build -t getsentry/snuba .
-  - docker ps -a
 
 script:
-  - docker run -v ~/.artifacts:/.artifacts --net host -e SNUBA_SETTINGS=ci --entrypoint python getsentry/snuba -m pytest -vv --cov . --cov-report="xml:/.artifacts/coverage.xml" --junit-xml="/.artifacts/pytest.junit.xml"
+  - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
 
 notifications:
   webhooks:
