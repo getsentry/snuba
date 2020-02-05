@@ -1,0 +1,7 @@
+docs
+scripts
+cloudbuild.*
+docker-compose.*
+CODEOWNERS
+Makefile
+conftest.py
