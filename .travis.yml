@@ -4,7 +4,7 @@ services:
 dist: xenial
 
 before_install:
-  - docker pull getsentry/sentry:latest || true
+  - docker pull getsentry/snuba:latest || true
   - docker build -t getsentry/snuba . --cache-from getsentry/sentry:latest
   - docker network create --attachable cloudbuild
 
