@@ -22,5 +22,5 @@ notifications:
     on_error: always
 after_script:
   - npm install -g @zeus-ci/cli
-  - $(npm bin -g)/zeus upload -t "application/x-junit+xml" ~/.artifacts/*.junit.xml
-  - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" ~/.artifacts/coverage.xml
+  - $(npm bin -g)/zeus upload -t "application/x-junit+xml" .artifacts/*.junit.xml
+  - $(npm bin -g)/zeus upload -t "application/x-cobertura+xml" .artifacts/coverage.xml
