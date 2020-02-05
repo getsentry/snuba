@@ -138,7 +138,7 @@ def subscriptions(
                     KafkaConsumer(
                         build_kafka_consumer_configuration(
                             bootstrap_servers,
-                            uuid.uuid1().hex,
+                            f"subscriptions-commit-log-{uuid.uuid1().hex}",
                             auto_offset_reset="earliest",
                         ),
                         CommitCodec(),
