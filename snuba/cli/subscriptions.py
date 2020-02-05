@@ -98,6 +98,8 @@ def subscriptions(
     result_topic: Optional[str],
     log_level: Optional[str],
 ) -> None:
+    """Evaluates subscribed queries for a dataset."""
+
     assert result_topic is not None
 
     setup_logging(log_level)
