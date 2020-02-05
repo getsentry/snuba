@@ -4,8 +4,9 @@ services:
 dist: xenial
 
 before_install:
+  - docker pull getsentry/sentry:latest || true
+  - docker build -t getsentry/snuba . --cache-from getsentry/sentry:latest
   - docker network create --attachable cloudbuild
-  - docker build -t getsentry/snuba .
 
 script:
   - SNUBA_IMAGE=getsentry/snuba docker-compose -f docker-compose.gcb.yml run --rm snuba-test
