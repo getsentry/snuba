@@ -303,7 +303,7 @@ def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
 ) -> ClickhouseQueryResult:
     """
-    Runs a query, then records the results including metadata about each split.
+    Runs a query, then records the metadata about each split query that was run.
     """
     request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
