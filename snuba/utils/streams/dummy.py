@@ -283,6 +283,10 @@ class DummyConsumer(Consumer[TPayload]):
             self.__closed = True
             self.close_calls += 1
 
+    @property
+    def closed(self) -> bool:
+        return self.__closed
+
 
 class DummyProducer(Producer[TPayload]):
     def __init__(self, broker: DummyBroker[TPayload]) -> None:
