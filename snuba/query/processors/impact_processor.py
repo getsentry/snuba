@@ -1,9 +1,4 @@
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
-from snuba.query.dsl import count, countIf, div, minus, multiply, plus
+from snuba.query.dsl import div, minus, multiply, plus
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
@@ -11,6 +6,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.helpers import apdex
 from snuba.request.request_settings import RequestSettings
 
 
@@ -27,44 +23,10 @@ class ImpactProcessor(QueryProcessor):
                 assert len(exp.parameters) == 3
                 column = exp.parameters[0]
                 satisfied = exp.parameters[1]
-                tolerated = multiply(satisfied, Literal(None, 4))
                 user_column = exp.parameters[2]
 
                 return plus(
-                    minus(
-                        Literal(None, 1),
-                        div(
-                            plus(
-                                countIf(
-                                    binary_condition(
-                                        None, ConditionFunctions.LTE, column, satisfied,
-                                    ),
-                                ),
-                                div(
-                                    countIf(
-                                        binary_condition(
-                                            None,
-                                            BooleanFunctions.AND,
-                                            binary_condition(
-                                                None,
-                                                ConditionFunctions.GT,
-                                                column,
-                                                satisfied,
-                                            ),
-                                            binary_condition(
-                                                None,
-                                                ConditionFunctions.LTE,
-                                                column,
-                                                tolerated,
-                                            ),
-                                        ),
-                                    ),
-                                    Literal(None, 2),
-                                ),
-                            ),
-                            count(),
-                        ),
-                    ),
+                    minus(Literal(None, 1), apdex(column, satisfied)),
                     multiply(
                         minus(
                             Literal(None, 1),

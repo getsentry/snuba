@@ -32,5 +32,11 @@ def count(column: Optional[Column] = None, alias: Optional[str] = None):
     return FunctionCall(alias, "count", (column,) if column else ())
 
 
-def countIf(condition: Expression, alias: Optional[str] = None):
-    return FunctionCall(alias, "countIf", (condition,))
+def countIf(
+    condition: FunctionCall,
+    column: Optional[Column] = None,
+    alias: Optional[str] = None,
+):
+    return FunctionCall(
+        alias, "countIf", (condition, column) if column else (condition,)
+    )
