@@ -5,7 +5,7 @@ dist: xenial
 
 before_install:
   - docker pull getsentry/snuba:latest || true
-  - docker build -t getsentry/snuba . --cache-from getsentry/sentry:latest
+  - docker build -t getsentry/snuba . --cache-from getsentry/snuba:latest
   - docker network create --attachable cloudbuild
 
 script:
