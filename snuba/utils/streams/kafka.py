@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import ChainMap
 from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,6 +36,7 @@ from confluent_kafka import TopicPartition as ConfluentTopicPartition
 from snuba.utils.codecs import Codec
 from snuba.utils.concurrent import execute
 from snuba.utils.retries import NoRetryPolicy, RetryPolicy
+from snuba.utils.streams.cluster import Cluster
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.synchronized import Commit
@@ -64,6 +66,37 @@ class KafkaPayload:
 
     key: Optional[bytes]
     value: bytes
+
+
+class KafkaCluster(Cluster[KafkaPayload]):
+    def __init__(self, bootstrap_servers: Sequence[str]) -> None:
+        defaults = {
+            "bootstrap.servers": ",".join(bootstrap_servers),
+        }
+
+        self.__consumer_configuration = ChainMap(
+            {
+                "auto.offset.reset": "earliest",  # XXX
+                "enable.auto.commit": False,
+                "enable.auto.offset.store": False,
+                "enable.partition.eof": False,
+            },
+            defaults,
+        )
+
+        self.__producer_configuration = ChainMap(
+            {"partitioner": "consistent"}, defaults
+        )
+
+    def consumer(
+        self, codec: Codec[KafkaPayload, TPayload], group: str
+    ) -> Consumer[TPayload]:
+        return KafkaConsumer(
+            {**self.__consumer_configuration, "group.id": group}, codec
+        )
+
+    def producer(self, codec: Codec[KafkaPayload, TPayload]) -> Producer[TPayload]:
+        return KafkaProducer({**self.__producer_configuration}, codec)
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
