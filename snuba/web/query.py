@@ -59,7 +59,7 @@ class RawQueryException(Exception):
 @dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     sql: str
-    timer: Timer
+    timing: Mapping[str, Any]
     stats: Mapping[str, Any]
     status: str
     trace_id: str
@@ -67,7 +67,7 @@ class ClickhouseQueryMetadata:
     def to_dict(self):
         return {
             "sql": self.sql,
-            "timing": self.timer.for_json(),
+            "timing": self.timing,
             "stats": self.stats,
             "status": self.status,
             "trace_id": self.trace_id,
@@ -271,7 +271,7 @@ def update_query_metadata_and_stats(
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
-            sql=sql, timer=timer, stats=stats, status=status, trace_id=trace_id,
+            sql=sql, timing=timer.for_json(), stats=stats, status=status, trace_id=trace_id,
         )
     )
 
