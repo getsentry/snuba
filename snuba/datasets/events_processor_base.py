@@ -36,9 +36,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
     Base class for events and errors processors.
     """
 
-    def __init__(self, promoted_tag_columns: ColumnSet):
-        self._promoted_tag_columns = promoted_tag_columns
-
     @abstractmethod
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -55,6 +52,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         event: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
+    ) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def extract_promoted_tags(
+        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
     ) -> None:
         raise NotImplementedError
 

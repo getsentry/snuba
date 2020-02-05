@@ -20,6 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorsProcessor(EventsProcessorBase):
+    def __init__(self, promoted_tag_columns: Mapping[str, str]):
+        self._promoted_tag_columns = promoted_tag_columns
+
+    def extract_promoted_tags(
+        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
+    ) -> None:
+        output.update(
+            {
+                col_name: _unicodify(tags.get(tag_name, None))
+                for tag_name, col_name in self._promoted_tag_columns.items()
+            }
+        )
+
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         return event["data"].get("type") != "transaction"
 
@@ -51,6 +64,7 @@ class ErrorsProcessor(EventsProcessorBase):
         output["user_id"] = user_data["user_id"]
         output["user_email"] = user_data["email"]
         output["message"] = _unicodify(event["message"])
+        output["org_id"] = event["organization_id"]
 
     def extract_tags_custom(
         self,

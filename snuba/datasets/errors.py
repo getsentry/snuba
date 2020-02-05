@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence, Set, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -42,48 +42,12 @@ class ErrorsDataset(TimeSeriesDataset):
     """
 
     def __init__(self) -> None:
-        metadata_columns = ColumnSet(
-            [
-                ("partition", UInt(16)),
-                ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
-            ]
-        )
-
-        promoted_tag_columns = ColumnSet(
-            [
-                # These are the classic tags, they are saved in Snuba exactly as they
-                # appear in the event body.
-                ("environment", LowCardinality(Nullable(String()))),
-                ("release", LowCardinality(Nullable(String()))),
-                ("dist", LowCardinality(Nullable(String()))),
-                ("user", WithDefault(String(), "''")),
-                ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-                ("level", LowCardinality(String())),
-                # ("logger", Nullable(String())),
-                # ("server_name", Nullable(String())),  # future name: device_id?
-                # ("sentry:release", Nullable(String())),
-                # ("sentry:dist", Nullable(String())),
-                # ("sentry:user", Nullable(String())),
-                # ("site", Nullable(String())),
-                # ("url", Nullable(String())),
-            ]
-        )
-
-        required_columns = ColumnSet(
+        all_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
                 ("timestamp", DateTime()),
                 ("event_id", WithCodecs(UUID(), ["NONE"])),
-                ("retention_days", UInt(16)),
-                ("deleted", UInt(8)),
-                ("group_id", UInt(64)),
-            ]
-        )
-
-        all_columns = (
-            required_columns
-            + [
                 (
                     "event_hash",
                     WithCodecs(
@@ -92,50 +56,45 @@ class ErrorsDataset(TimeSeriesDataset):
                     ),
                 ),
                 ("platform", LowCardinality(String())),
+                ("environment", LowCardinality(Nullable(String()))),
+                ("release", LowCardinality(Nullable(String()))),
+                ("dist", LowCardinality(Nullable(String()))),
                 ("ip_address_v4", Nullable(IPv4())),
                 ("ip_address_v6", Nullable(IPv6())),
+                ("user", WithDefault(String(), "''")),
                 ("user_hash", Materialized(UInt(64), "cityHash64(user)"),),
                 ("user_id", Nullable(String())),
                 ("user_name", Nullable(String())),
                 ("user_email", Nullable(String())),
                 ("sdk_name", LowCardinality(String())),
                 ("sdk_version", LowCardinality(String())),
+                ("tags", Nested([("key", String()), ("value", String())])),
+                ("_tags_flattened", String()),
+                ("contexts", Nested([("key", String()), ("value", String())])),
+                ("_contexts_flattened", String()),
+                ("transaction_name", WithDefault(LowCardinality(String()), "''")),
                 (
                     "transaction_hash",
                     Materialized(UInt(64), "cityHash64(transaction_name)"),
                 ),
                 ("span_id", Nullable(UInt(64))),
                 ("trace_id", Nullable(UUID())),
+                ("partition", UInt(16)),
+                ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
+                ("retention_days", UInt(16)),
+                ("deleted", UInt(8)),
+                ("group_id", UInt(64)),
                 ("primary_hash", FixedString(32)),
                 ("primary_hash_hex", Materialized(UInt(64), "hex(primary_hash)")),
                 ("event_string", WithCodecs(String(), ["NONE"])),
                 ("received", DateTime()),
                 ("message", String()),
                 ("title", String()),
+                ("culprit", String()),
+                ("level", LowCardinality(String())),
                 ("location", Nullable(String())),
                 ("version", LowCardinality(String())),
                 ("type", LowCardinality(String())),
-                # ("search_message", Nullable(String())),
-                # ("ip_address", Nullable(String())),
-                # optional geo
-                # ("geo_country_code", Nullable(String())),
-                # ("geo_region", Nullable(String())),
-                # ("geo_city", Nullable(String())),
-            ]
-            + metadata_columns
-            + promoted_tag_columns
-            + [
-                # other tags
-                ("tags", Nested([("key", String()), ("value", String())])),
-                ("_tags_flattened", String()),
-                # other context
-                ("contexts", Nested([("key", String()), ("value", String())])),
-                ("_contexts_flattened", String()),
-                # http interface
-                # ("http_method", Nullable(String())),
-                # ("http_referer", Nullable(String())),
-                ("culprit", String()),
-                # exception interface
                 (
                     "exception_stacks",
                     Nested(
@@ -168,6 +127,15 @@ class ErrorsDataset(TimeSeriesDataset):
             ]
         )
 
+        self.__promoted_tag_columns = {
+            "environment": "environment",
+            "sentry:release": "release",
+            "sentry:dist": "dist",
+            "sentry:user": "user",
+            "transaction": "transaction_name",
+            "level": "level",
+        }
+
         schema = ReplacingMergeTreeSchema(
             columns=all_columns,
             local_table_name="errors_local",
@@ -181,7 +149,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 "environment",
                 "project_id",
             ],
-            order_by="(project_id, toStartOfDay(timestamp), primary_hash, event_hash)",
+            order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
             partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
             version_column="deleted",
             sample_expr="event_hash",
@@ -194,7 +162,8 @@ class ErrorsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(promoted_tag_columns), default_topic="events",
+                processor=ErrorsProcessor(self.__promoted_tag_columns),
+                default_topic="events",
             ),
         )
 
@@ -204,9 +173,6 @@ class ErrorsDataset(TimeSeriesDataset):
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
-
-        self.__promoted_tag_columns = promoted_tag_columns
-        self.__required_columns = required_columns
 
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns,
@@ -235,54 +201,17 @@ class ErrorsDataset(TimeSeriesDataset):
             column_name, query, parsing_context, table_alias
         )
 
-    def get_promoted_tag_columns(self):
-        return self.__promoted_tag_columns
-
-    def get_required_columns(self):
-        return self.__required_columns
-
-    def _get_promoted_columns(self):
-        # The set of columns, and associated keys that have been promoted
-        # to the top level table namespace.
+    def _get_promoted_columns(self) -> Mapping[str, Set[str]]:
         return {
-            "tags": frozenset(
-                col.flattened for col in (self.get_promoted_tag_columns())
-            ),
+            "tags": frozenset(self.__promoted_tag_columns.values()),
             "contexts": frozenset(),
         }
 
-    def _get_column_tag_map(self):
-        # For every applicable promoted column,  a map of translations from the column
-        # name  we save in the database to the tag we receive in the query.
-        ret = {
-            "tags": {
-                col.flattened: col.flattened.replace("_", ".")
-                for col in self.get_promoted_tag_columns()
-                if col.flattened not in ("release", "dist", "user", "transaction_name")
-            },
-            "contexts": {},
-        }
-        ret["tags"]["release"] = "sentry:release"
-        ret["tags"]["dist"] = "sentry:dist"
-        ret["tags"]["user"] = "sentry:user"
-        ret["tags"]["transaction_name"] = "transaction"
-
-    def get_tag_column_map(self):
+    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         # And a reverse map from the tags the client expects to the database columns
         return {
-            col: dict(map(reversed, trans.items()))
-            for col, trans in self._get_column_tag_map().items()
-        }
-
-    def get_promoted_tags(self):
-        # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
-        # and they can/will use a promoted column.
-        return {
-            col: [
-                self._get_column_tag_map()[col].get(x, x)
-                for x in self._get_promoted_columns()[col]
-            ]
-            for col in self._get_promoted_columns()
+            "tags": map(reversed, self.__promoted_tag_columns.items()),
+            "contexts": {},
         }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
