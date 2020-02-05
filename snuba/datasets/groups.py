@@ -109,7 +109,7 @@ class Groups(TimeSeriesDataset):
             ],
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "groups"
 
     def column_expr(

@@ -67,7 +67,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
             time_parse_columns=("timestamp",),
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "outcomes_raw"
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

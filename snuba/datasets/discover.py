@@ -273,7 +273,7 @@ class DiscoverDataset(TimeSeriesDataset):
             time_parse_columns=["timestamp"],
         )
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "discover"
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
