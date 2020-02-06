@@ -1,5 +1,4 @@
 from datetime import datetime
-import pytz
 from uuid import UUID
 
 from snuba.datasets.errors_processor import ErrorsProcessor
