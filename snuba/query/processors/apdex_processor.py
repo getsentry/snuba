@@ -4,7 +4,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.helpers import apdex
+from snuba.query.processors.performance_expressions import apdex
 from snuba.request.request_settings import RequestSettings
 
 
