@@ -90,16 +90,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
     ) -> None:
         raise NotImplementedError
 
-    def extract_promoted_tags(
-        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
-    ) -> None:
-        output.update(
-            {
-                col.name: _unicodify(tags.get(col.name, None))
-                for col in self._promoted_tag_columns
-            }
-        )
-
     def extract_required(
         self, output: MutableMapping[str, Any], event: Mapping[str, Any]
     ) -> None:
