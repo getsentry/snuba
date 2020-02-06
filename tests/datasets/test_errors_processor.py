@@ -45,6 +45,24 @@ def test_error_processor() -> None:
                     "ip_address": "127.0.0.1",
                     "id": "still_me",
                     "email": "me@myself.org",
+                    "geo": {
+                        "country_code": "XY",
+                        "region": "fake_region",
+                        "city": "fake_city",
+                    },
+                },
+                "request": {
+                    "url": "http://127.0.0.1:/query",
+                    "headers": [
+                        ["Accept-Encoding", "identity"],
+                        ["Content-Length", "398"],
+                        ["Host", "127.0.0.1:"],
+                        ["Referer", "tagstore.something"],
+                        ["Trace", "8fa73032d-1"],
+                    ],
+                    "data": "",
+                    "method": "POST",
+                    "env": {"SERVER_PORT": "1010", "SERVER_NAME": "snuba",},
                 },
                 "_relay_processed": True,
                 "breadcrumbs": {
@@ -224,9 +242,29 @@ def test_error_processor() -> None:
             "|runtime=CPython 3.7.6||runtime.name=CPython|"
             "|sentry:release=4d23338017cdee67daf25f2c87b2f5ff81aef984||sentry:user=this_is_me||server_name=snuba|"
         ),
-        "contexts.key": ["runtime.version", "runtime.name", "runtime.build"],
-        "contexts.value": ["3.7.6", "CPython", "3.7.6"],
+        "contexts.key": [
+            "runtime.version",
+            "runtime.name",
+            "runtime.build",
+            "geo.country_code",
+            "geo.region",
+            "geo.city",
+            "request.http_method",
+            "request.http_referer",
+        ],
+        "contexts.value": [
+            "3.7.6",
+            "CPython",
+            "3.7.6",
+            "XY",
+            "fake_region",
+            "fake_city",
+            "POST",
+            "tagstore.something",
+        ],
         "_contexts_flattened": (
+            "|geo.city=fake_city||geo.country_code=XY||geo.region=fake_region|"
+            "|request.http_method=POST||request.http_referer=tagstore.something|"
             "|runtime.build=3.7.6||runtime.name=CPython||runtime.version=3.7.6|"
         ),
         "partition": 1,

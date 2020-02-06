@@ -12,6 +12,7 @@ from snuba.datasets.events_format import (
 )
 from snuba.datasets.events_processor_base import EventsProcessorBase
 from snuba.processor import (
+    _as_dict_safe,
     _ensure_valid_ip,
     _unicodify,
 )
@@ -50,19 +51,37 @@ class ErrorsProcessor(EventsProcessorBase):
     ) -> None:
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
+
         user_data = {}
         extract_user(user_data, user_dict)
-        ip_address = _ensure_valid_ip(user_data["ip_address"])
+        output["user_name"] = user_data["username"]
+        output["user_id"] = user_data["user_id"]
+        output["user_email"] = user_data["email"]
 
+        ip_address = _ensure_valid_ip(user_data["ip_address"])
         if ip_address:
             if ip_address.version == 4:
                 output["ip_address_v4"] = str(ip_address)
             elif ip_address.version == 6:
                 output["ip_address_v6"] = str(ip_address)
 
-        output["user_name"] = user_data["username"]
-        output["user_id"] = user_data["user_id"]
-        output["user_email"] = user_data["email"]
+        contexts = _as_dict_safe(data.get("contexts", None))
+        geo = user_dict.get("geo", {})
+        if "geo" not in contexts and isinstance(geo, dict):
+            contexts["geo"] = geo
+
+        request = data.get("request", data.get("sentry.interfaces.Http", None)) or {}
+        if "request" not in contexts and isinstance(request, dict):
+            http = {}
+            http["http_method"] = _unicodify(request.get("method", None))
+            http_headers = _as_dict_safe(request.get("headers", None))
+            http["http_referer"] = _unicodify(http_headers.get("Referer", None))
+            contexts["request"] = http
+
+        # _as_dict_safe may not return a reference to the entry in the data
+        # dictionary in some cases.
+        data["contexts"] = contexts
+
         output["message"] = _unicodify(event["message"])
         output["org_id"] = event["organization_id"]
 
