@@ -20,7 +20,7 @@ def test_error_processor() -> None:
             "platform": "python",
             "message": "",
             "datetime": "2020-01-30T22:48:49.894703Z",
-            "primary_hash": "d41d8cd98f00b204e9800998ecf8427e",
+            "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
             "data": {
                 "event_id": "dcb9d002cac548c795d1c9adbfc68040",
                 "project_id": 300688,
@@ -38,7 +38,7 @@ def test_error_processor() -> None:
                     ["server_name", "snuba"],
                     ["environment", "dev"],
                     ["sentry:user", "this_is_me"],
-                    ["sentry:release", "4d23338017cdee67daf25f2c87b2f5ff81aef984"],
+                    ["sentry:release", "4d23338017cdee67daf25f2c"],
                 ],
                 "user": {
                     "username": "me",
@@ -72,7 +72,7 @@ def test_error_processor() -> None:
                             "level": "info",
                             "timestamp": 1580424519.772524,
                             "data": {"asctime": "2020-01-30 22:48:39,772"},
-                            "message": "New partitions assigned: {Partition(topic=Topic(name='events'), index=22): 1959057800, Partition(topic=Topic(name='events'), index=23): 1294189553, Partition(topic=Topic(name='events'), index=24): 1192835511, Partition(topic=Topic(name='events'), index=25): 1208032264, Partition(topic=Topic(name='events'), index=26): 1387920774, Partition(topic=Topic(name='events'), index=27): 1180709992, Partition(topic=Topic(name='events'), index=28): 1312057099, Partition(topic=Topic(name='events'), index=29): 1736163...",
+                            "message": "New partitions assigned: {}",
                             "type": "default",
                         },
                         {
@@ -207,7 +207,7 @@ def test_error_processor() -> None:
         "platform": "python",
         "dist": None,
         "environment": "dev",
-        "release": "4d23338017cdee67daf25f2c87b2f5ff81aef984",
+        "release": "4d23338017cdee67daf25f2c",
         "ip_address_v4": "127.0.0.1",
         "user": "this_is_me",
         "user_name": "me",
@@ -233,14 +233,14 @@ def test_error_processor() -> None:
             "excepthook",
             "CPython 3.7.6",
             "CPython",
-            "4d23338017cdee67daf25f2c87b2f5ff81aef984",
+            "4d23338017cdee67daf25f2c",
             "this_is_me",
             "snuba",
         ],
         "_tags_flattened": (
             "|environment=dev||handled=no||level=error||mechanism=excepthook|"
             "|runtime=CPython 3.7.6||runtime.name=CPython|"
-            "|sentry:release=4d23338017cdee67daf25f2c87b2f5ff81aef984||sentry:user=this_is_me||server_name=snuba|"
+            "|sentry:release=4d23338017cdee67daf25f2c||sentry:user=this_is_me||server_name=snuba|"
         ),
         "contexts.key": [
             "runtime.version",
@@ -272,7 +272,7 @@ def test_error_processor() -> None:
         "retention_days": 90,
         "deleted": 0,
         "group_id": 100,
-        "primary_hash": "d41d8cd98f00b204e9800998ecf8427e",
+        "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
         "event_string": "dcb9d002cac548c795d1c9adbfc68040",
         "received": datetime.utcfromtimestamp(1580424529),
         "message": "",
