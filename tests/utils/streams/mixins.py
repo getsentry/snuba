@@ -112,7 +112,8 @@ class StreamsTestMixin(ABC):
             with pytest.raises(ConsumerError):
                 consumer.seek({Partition(topic, 0): messages[0].offset})
 
-            consumer.close()
+            with assert_changes(lambda: consumer.closed, False, True):
+                consumer.close()
 
             # Make sure all public methods (except ``close```) error if called
             # after the consumer has been closed.

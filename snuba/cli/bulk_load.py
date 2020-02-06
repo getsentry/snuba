@@ -4,7 +4,8 @@ from typing import Optional
 import click
 
 from snuba import settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset, DATASET_NAMES
+from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
 
@@ -21,20 +22,16 @@ from snuba.writer import BufferedWriterWrapper
     help="Source of the dump. Depending on the dataset it may have different meaning.",
 )
 @click.option("--dest-table", help="Clickhouse destination table.")
-@click.option("--log-level", default=settings.LOG_LEVEL, help="Logging level to use.")
+@click.option("--log-level", help="Logging level to use.")
 def bulk_load(
     *,
     dataset_name: Optional[str],
     dest_table: Optional[str],
     source: Optional[str],
-    log_level: str,
+    log_level: Optional[str] = None,
 ) -> None:
-    import sentry_sdk
-
-    sentry_sdk.init(dsn=settings.SENTRY_DSN)
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()), format="%(asctime)s %(message)s"
-    )
+    setup_logging(log_level)
+    setup_sentry()
 
     logger = logging.getLogger("snuba.load-snapshot")
     logger.info(

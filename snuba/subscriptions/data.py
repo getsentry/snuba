@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import NamedTuple, NewType, Optional, Sequence
@@ -26,6 +28,14 @@ PartitionId = NewType("PartitionId", int)
 class SubscriptionIdentifier:
     partition: PartitionId
     uuid: UUID
+
+    def __str__(self) -> str:
+        return f"{self.partition}/{self.uuid.hex}"
+
+    @classmethod
+    def from_string(cls, value: str) -> SubscriptionIdentifier:
+        partition, uuid = value.split("/")
+        return cls(PartitionId(int(partition)), UUID(uuid))
 
 
 @dataclass(frozen=True)
