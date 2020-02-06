@@ -208,7 +208,6 @@ class ErrorsDataset(TimeSeriesDataset):
         }
 
     def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        # And a reverse map from the tags the client expects to the database columns
         return {
             "tags": map(reversed, self.__promoted_tag_columns.items()),
             "contexts": {},
