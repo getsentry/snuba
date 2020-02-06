@@ -1,0 +1,17 @@
+.git
+*/.gitignore
+docs
+scripts
+cloudbuild.*
+docker-compose.*
+CODEOWNERS
+Makefile
+conftest.py
+*.pyc
+*.swp
+.artifacts
+.coverage
+.mypy_cache/
+.pytest_cache/
+htmlcov/
+snuba.egg-info/
