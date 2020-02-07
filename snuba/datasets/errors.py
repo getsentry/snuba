@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Set, Union
+from typing import FrozenSet, Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -154,7 +154,7 @@ class ErrorsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr="event_hash",
             ttl_expr="timestamp + toIntervalDay(retention_days)",
-            settings={"index_granularity": 8192},
+            settings={"index_granularity": "8192"},
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
@@ -201,7 +201,7 @@ class ErrorsDataset(TimeSeriesDataset):
             column_name, query, parsing_context, table_alias
         )
 
-    def _get_promoted_columns(self) -> Mapping[str, Set[str]]:
+    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
         return {
             "tags": frozenset(self.__promoted_tag_columns.values()),
             "contexts": frozenset(),
@@ -209,7 +209,7 @@ class ErrorsDataset(TimeSeriesDataset):
 
     def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         return {
-            "tags": map(reversed, self.__promoted_tag_columns.items()),
+            "tags": {col: tag for tag, col in self.__promoted_tag_columns.items()},
             "contexts": {},
         }
 

@@ -35,7 +35,9 @@ class ErrorsProcessor(EventsProcessorBase):
         )
 
     def _should_process(self, event: Mapping[str, Any]) -> bool:
-        return event["data"].get("type") != "transaction"
+        # This is to convince mypy that we actually return a bool
+        data: Mapping[str, Any] = event["data"]
+        return data.get("type") != "transaction"
 
     def _extract_event_id(
         self, output: MutableMapping[str, Any], event: Mapping[str, Any],
@@ -52,7 +54,7 @@ class ErrorsProcessor(EventsProcessorBase):
         data = event.get("data", {})
         user_dict = data.get("user", data.get("sentry.interfaces.User", None)) or {}
 
-        user_data = {}
+        user_data: MutableMapping[str, Any] = {}
         extract_user(user_data, user_dict)
         output["user_name"] = user_data["username"]
         output["user_id"] = user_data["user_id"]
