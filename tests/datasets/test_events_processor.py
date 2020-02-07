@@ -13,7 +13,7 @@ from snuba.processor import (
     ProcessedMessage,
     ProcessorAction,
 )
-from snuba.datasets.events_processor import (
+from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
     extract_extra_contexts,
