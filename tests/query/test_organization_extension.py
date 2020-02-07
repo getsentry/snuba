@@ -3,6 +3,8 @@ from jsonschema.exceptions import ValidationError
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query.conditions import binary_condition, ConditionFunctions
+from snuba.query.expressions import Column, Literal
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
@@ -20,6 +22,9 @@ def test_organization_extension_query_processing_happy_path():
     extension.get_processor().process_query(query, valid_data, request_settings)
 
     assert query.get_conditions() == [("org_id", "=", 2)]
+    assert query.get_condition_from_ast() == binary_condition(
+        None, ConditionFunctions.EQ, Column(None, "org_id", None), Literal(None, 2)
+    )
 
 
 def test_invalid_data_does_not_validate():

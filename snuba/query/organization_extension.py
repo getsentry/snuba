@@ -1,6 +1,8 @@
-from snuba.query.extensions import QueryExtension
+from snuba.query.conditions import binary_condition, ConditionFunctions
+from snuba.query.expressions import Column, Literal
+from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
 from snuba.query.query import Query
-from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
+from snuba.query.query_processor import ExtensionData
 from snuba.request.request_settings import RequestSettings
 
 
@@ -25,6 +27,14 @@ class OrganizationExtensionProcessor(ExtensionQueryProcessor):
     ) -> None:
         organization_id = extension_data["organization"]
         query.add_conditions([("org_id", "=", organization_id)])
+        query.add_condition_to_ast(
+            binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                Column(None, "org_id", None),
+                Literal(None, organization_id),
+            )
+        )
 
 
 class OrganizationExtension(QueryExtension):
