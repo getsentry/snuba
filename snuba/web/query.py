@@ -66,7 +66,6 @@ class ClickhouseQueryMetadata:
     def to_dict(self):
         return {
             "sql": self.sql,
-            "timing": self.timing,
             "stats": self.stats,
             "status": self.status,
             "trace_id": self.trace_id,
