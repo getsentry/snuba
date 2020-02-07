@@ -86,6 +86,10 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
+    def visitNestedColumn(self, exp: NestedColumn) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
     def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
@@ -137,6 +141,21 @@ class Column(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visitColumn(self)
+
+
+@dataclass(frozen=True)
+class NestedColumn(Column):
+    """
+    Represents a structured column in our query like tag[something].
+    Our query language supports accessing elements of a nested column by key, so,
+    having a specific AST construct, allows for a cleaner query processing of these
+    columns.
+    """
+
+    key: str
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitNestedColumn(self)
 
 
 @dataclass(frozen=True)
