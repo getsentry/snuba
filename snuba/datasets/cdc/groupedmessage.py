@@ -90,9 +90,6 @@ class GroupedMessageDataset(CdcDataset):
             postgres_table=self.POSTGRES_TABLE,
         )
 
-    def __str__(self) -> str:
-        return "groupedmessage"
-
     def get_prewhere_keys(self) -> Sequence[str]:
         return ["project_id"]
 

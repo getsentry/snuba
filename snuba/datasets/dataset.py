@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from typing import Any, Optional, Mapping, NamedTuple, Sequence, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
@@ -27,7 +26,7 @@ class ColumnSplitSpec(NamedTuple):
         return [self.id_column, self.project_column, self.timestamp_column]
 
 
-class Dataset(ABC):
+class Dataset(object):
     """
     A dataset represent one or multiple entities in the Snuba data model.
     The class is a facade to access the components used to write on the
@@ -48,10 +47,6 @@ class Dataset(ABC):
     ) -> None:
         self.__dataset_schemas = dataset_schemas
         self.__table_writer = table_writer
-
-    @abstractmethod
-    def __str__(self):
-        raise NotImplementedError
 
     def get_dataset_schemas(self) -> DatasetSchemas:
         """

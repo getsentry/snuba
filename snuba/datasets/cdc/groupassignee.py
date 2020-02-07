@@ -84,9 +84,6 @@ class GroupAssigneeDataset(CdcDataset):
             postgres_table=self.POSTGRES_TABLE,
         )
 
-    def __str__(self) -> str:
-        return "groupassignee"
-
     def get_prewhere_keys(self) -> Sequence[str]:
         return ["project_id", "group_id"]
 

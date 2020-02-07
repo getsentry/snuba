@@ -21,6 +21,7 @@ from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
@@ -83,7 +84,7 @@ class SnubaQueryMetadata:
     def to_dict(self):
         return {
             "http_referrer": self.http_referrer,
-            "dataset": str(self.dataset),
+            "dataset": get_dataset_name(self.dataset),
             "query_list": [q.to_dict() for q in self.query_list],
             "request": self.request.body,
             "status": self.status,

@@ -294,9 +294,6 @@ class EventsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-    def __str__(self) -> str:
-        return "events"
-
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(
             id_column="event_id",

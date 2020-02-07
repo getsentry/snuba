@@ -227,9 +227,6 @@ class TransactionsDataset(TimeSeriesDataset):
             time_parse_columns=("start_ts", "finish_ts"),
         )
 
-    def __str__(self) -> str:
-        return "transactions"
-
     def _get_promoted_columns(self):
         # TODO: Support promoted tags
         return {
