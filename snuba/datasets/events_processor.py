@@ -1,33 +1,17 @@
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional
 
 import logging
 import _strptime  # NOQA fixes _strptime deferred import issue
 
-from snuba import settings
+from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.events_format import (
-    enforce_retention,
-    extract_base,
-    extract_extra_contexts,
-    extract_extra_tags,
-    extract_user,
-    flatten_nested_field,
-    EventTooOld,
-)
+from snuba.datasets.events_format import extract_user
 from snuba.datasets.events_processor_base import EventsProcessorBase
 from snuba.processor import (
     _as_dict_safe,
     _boolify,
-    _collapse_uint32,
-    _ensure_valid_date,
     _floatify,
-    _hashify,
     _unicodify,
-    InvalidMessageType,
-    InvalidMessageVersion,
-    MessageProcessor,
-    ProcessorAction,
-    ProcessedMessage,
 )
 
 
@@ -35,6 +19,19 @@ logger = logging.getLogger("snuba.processor")
 
 
 class EventsProcessor(EventsProcessorBase):
+    def __init__(self, promoted_tag_columns: ColumnSet):
+        self._promoted_tag_columns = promoted_tag_columns
+
+    def extract_promoted_tags(
+        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
+    ) -> None:
+        output.update(
+            {
+                col.name: _unicodify(tags.get(col.name, None))
+                for col in self._promoted_tag_columns
+            }
+        )
+
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         return True
 
