@@ -40,6 +40,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         raise NotImplementedError
 
+    def _replacements_enabled(self) -> bool:
+        """
+        Allow the errors dataset to disble replacements until we build them.
+        """
+        return True
+
     @abstractmethod
     def _extract_event_id(
         self, output: MutableMapping[str, Any], event: Mapping[str, Any],
@@ -178,9 +184,12 @@ class EventsProcessorBase(MessageProcessor, ABC):
                             "end_unmerge",
                             "end_delete_tag",
                         ):
-                            # pass raw events along to republish
-                            action_type = ProcessorAction.REPLACE
-                            processed = (str(event["project_id"]), message)
+                            if not self._replacements_enabled():
+                                return None
+                            else:
+                                # pass raw events along to republish
+                                action_type = ProcessorAction.REPLACE
+                                processed = (str(event["project_id"]), message)
                         else:
                             raise InvalidMessageType(
                                 "Invalid message type: {}".format(type_)
