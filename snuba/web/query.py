@@ -73,7 +73,7 @@ class ClickhouseQueryMetadata:
         }
 
 
-@dataclass
+@dataclass(frozen=True)
 class SnubaQueryMetadata:
     request: Request
     dataset: Dataset
