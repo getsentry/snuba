@@ -264,6 +264,20 @@ class DateTime(ColumnType):
     pass
 
 
+class Enum(ColumnType):
+    def __init__(self, values: Sequence[Tuple[str, int]]) -> None:
+        self.values = values
+
+    def __repr__(self) -> str:
+        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+
+    def __eq__(self, other) -> bool:
+        return self.__class__ == other.__class__ and self.values == other.values
+
+    def for_schema(self) -> str:
+        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+
+
 class ColumnSet:
     """\
     A set of columns, unique by column name.

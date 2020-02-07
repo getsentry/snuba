@@ -161,6 +161,15 @@ class BatchingConsumer(Generic[TPayload]):
     def _handle_message(self, msg: Message[TPayload]) -> None:
         start = time.time()
 
+        self.__metrics.timing(
+            "receive_latency",
+            (start - msg.timestamp.timestamp()) * 1000,
+            tags={
+                "topic": msg.partition.topic.name,
+                "partition": str(msg.partition.index),
+            },
+        )
+
         # set the deadline only after the first message for this batch is seen
         if not self.__batch_deadline:
             self.__batch_deadline = self.max_batch_time / 1000.0 + start
