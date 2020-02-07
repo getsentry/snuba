@@ -79,11 +79,11 @@ class SnubaQueryMetadata:
     dataset: Dataset
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
-    http_referrer: Optional[str] = ""
+    referrer: Optional[str] = ""
 
     def to_dict(self):
         return {
-            "http_referrer": self.http_referrer,
+            "referrer": self.referrer,
             "dataset": get_dataset_name(self.dataset),
             "query_list": [q.to_dict() for q in self.query_list],
             "request": self.request.body,
@@ -282,7 +282,6 @@ def record_query(
 ) -> None:
     if settings.RECORD_QUERIES:
         # send to redis
-        query_metadata.http_referrer = http_request.referrer
         state.record_query(query_metadata.to_dict())
 
         final = str(request.query.get_final())
@@ -310,6 +309,7 @@ def parse_and_run_query(
         dataset=dataset,
         timer=timer,
         query_list=[],
+        referrer=request.referrer,
     )
 
     try:
