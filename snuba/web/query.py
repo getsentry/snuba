@@ -59,7 +59,6 @@ class RawQueryException(Exception):
 @dataclass(frozen=True)
 class ClickhouseQueryMetadata:
     sql: str
-    timing: Mapping[str, Any]
     stats: Mapping[str, Any]
     status: str
     trace_id: str
@@ -271,7 +270,7 @@ def update_query_metadata_and_stats(
 
     query_metadata.query_list.append(
         ClickhouseQueryMetadata(
-            sql=sql, timing=timer.for_json(), stats=stats, status=status, trace_id=trace_id,
+            sql=sql, stats=stats, status=status, trace_id=trace_id,
         )
     )
 
