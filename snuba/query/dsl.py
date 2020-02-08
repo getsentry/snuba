@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
@@ -8,6 +8,13 @@ from snuba.query.expressions import Expression, FunctionCall, Literal
 
 def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> FunctionCall:
     return FunctionCall(alias, "tuple", tuple(literals))
+
+
+# Array functions
+def array_element(
+    alias: Optional[str], array_col: Column, index: Expression
+) -> FunctionCall:
+    return FunctionCall(alias, "arrayElement", (index,))
 
 
 # arithmetic function
