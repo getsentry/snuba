@@ -339,6 +339,9 @@ class EventsDataset(TimeSeriesDataset):
     def get_required_columns(self):
         return self.__required_columns
 
+    def get_all_columns(self) -> ColumnSet:
+        return self.__all_columns
+
     def _get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
