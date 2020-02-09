@@ -20,6 +20,7 @@ class SingleTagProcessor(QueryProcessor):
         nested_column_names: Set[str],
         columns: ColumnSet,
         promoted_columns: Mapping[str, Set[str]],
+        tags_column_map: Mapping[str, Mapping[str, str]],
     ) -> None:
         # Keeps the names of the nested columns to expand
         self.__nested_column_names = nested_column_names
@@ -30,6 +31,9 @@ class SingleTagProcessor(QueryProcessor):
         # can be 'tags' or 'contexts'. The values is a set of flattened
         # columns.
         self.__promoted_columns = promoted_columns
+        # Keeps a dictionary of the mapping between promoted tags and the
+        # columns that represent them
+        self.__tags_column_map = tags_column_map
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_column(exp: Expression) -> Expression:
@@ -42,9 +46,7 @@ class SingleTagProcessor(QueryProcessor):
             key_name = exp.key
             col_name = exp.column_name
             if col_name in self.__promoted_columns:
-                actual_key = self.__get_tag_column_map()[col_name].get(
-                    key_name, key_name
-                )
+                actual_key = self.__tags_column_map[col_name].get(key_name, key_name)
                 if actual_key in self.__promoted_columns[col_name]:
                     col_type = self.__columns.get(actual_key, None)
                     col_type = str(col_type) if col_type else None
@@ -54,7 +56,7 @@ class SingleTagProcessor(QueryProcessor):
                         and "String" in col_type
                         and "FixedString" not in col_type
                     ):
-                        Column(alias, actual_key, None)
+                        return Column(alias, actual_key, None)
                     else:
                         return FunctionCall(
                             alias, "toString", Column(None, actual_key, None)
@@ -63,11 +65,11 @@ class SingleTagProcessor(QueryProcessor):
             # For the rest, return an expression that looks it up in the nested tags.
             return array_element(
                 alias,
-                Column(None, col_name, None),
+                Column(None, f"{col_name}.value", None),
                 FunctionCall(
                     None,
                     "indexOf",
-                    (Column(None, col_name, None), Literal(None, key_name)),
+                    (Column(None, f"{col_name}.key", None), Literal(None, key_name)),
                 ),
             )
 

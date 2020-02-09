@@ -28,6 +28,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.single_tag_expr import SingleTagProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
 
@@ -166,7 +167,7 @@ class EventsDataset(TimeSeriesDataset):
             ]
         )
 
-        all_columns = (
+        self.__all_columns = (
             required_columns
             + [
                 # required for non-deleted
@@ -244,7 +245,7 @@ class EventsDataset(TimeSeriesDataset):
 
         sample_expr = "cityHash64(toString(event_id))"
         schema = ReplacingMergeTreeSchema(
-            columns=all_columns,
+            columns=self.__all_columns,
             local_table_name="sentry_local",
             dist_table_name="sentry_dist",
             mandatory_conditions=[("deleted", "=", 0)],
@@ -289,7 +290,7 @@ class EventsDataset(TimeSeriesDataset):
         self.__required_columns = required_columns
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
+            columns=self.__all_columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
@@ -398,4 +399,13 @@ class EventsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), PrewhereProcessor()]
+        return [
+            BasicFunctionsProcessor(),
+            PrewhereProcessor(),
+            SingleTagProcessor(
+                nested_column_names={"tags", "contexts"},
+                columns=self.__all_columns,
+                promoted_columns=self._get_promoted_columns(),
+                tags_column_map=self.get_tag_column_map(),
+            ),
+        ]
