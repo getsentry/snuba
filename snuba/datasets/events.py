@@ -14,22 +14,22 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
 )
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query_processor import QueryProcessor
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.single_tag_expr import SingleTagProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
