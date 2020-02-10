@@ -662,9 +662,11 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         self, commit: Commit, future: Future[Commit]
     ) -> None:
         try:
-            future.result()
+            message = future.result()
         except Exception:
             logger.warning("Failed to produce commit record: %r", commit, exc_info=True)
+        else:
+            logger.debug("Produced commit record: %r", message)
 
     def commit_offsets(self) -> Mapping[Partition, int]:
         offsets = super().commit_offsets()
