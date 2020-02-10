@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
+from typing import Any, FrozenSet, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -231,14 +231,14 @@ class TransactionsDataset(TimeSeriesDataset):
     def get_all_columns(self) -> ColumnSet:
         return self.__columns
 
-    def _get_promoted_columns(self):
+    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
         # TODO: Support promoted tags
         return {
             "tags": frozenset(),
             "contexts": frozenset(),
         }
 
-    def _get_column_tag_map(self):
+    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         # TODO: Support promoted tags
         return {
             "tags": {},
@@ -313,6 +313,6 @@ class TransactionsDataset(TimeSeriesDataset):
                 nested_column_names={"tags", "contexts"},
                 columns=self.__columns,
                 promoted_columns=self._get_promoted_columns(),
-                tags_column_map=self.get_tag_column_map(),
+                key_column_map=self.get_tag_column_map(),
             ),
         ]
