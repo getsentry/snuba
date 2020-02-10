@@ -10,6 +10,7 @@ from confluent_kafka.admin import AdminClient, NewTopic
 from snuba import settings
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.consumer import ConsumerError, EndOfPartition
+from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
 from snuba.utils.streams.kafka import (
     CommitCodec,
     KafkaConsumer,
@@ -21,7 +22,6 @@ from snuba.utils.streams.kafka import (
 from snuba.utils.streams.synchronized import Commit
 from snuba.utils.streams.types import Message, Partition, Topic
 from tests.utils.streams.mixins import StreamsTestMixin
-from tests.backends.confluent_kafka import FakeConfluentKafkaProducer
 
 
 class TestCodec(Codec[KafkaPayload, int]):
@@ -115,10 +115,15 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                     consumer.poll(10.0)  # XXX: getting the subcription is slow
 
     def test_commit_log_consumer(self) -> None:
-        # XXX: This would be better as an integration test (or at least a test
-        # against an abstract Producer interface) instead of against a test against
-        # a mock.
-        commit_log_producer = FakeConfluentKafkaProducer()
+        commit_log_topic = Topic("commit-log")
+
+        dummy_broker: DummyBroker[Commit] = DummyBroker()
+        dummy_broker.create_topic(commit_log_topic, partitions=1)
+
+        commit_log_consumer = DummyConsumer(dummy_broker, group="commit-log")
+        commit_log_consumer.subscribe([commit_log_topic])
+
+        commit_log_producer = DummyProducer(dummy_broker)
 
         consumer: KafkaConsumer[int] = KafkaConsumerWithCommitLog(
             {
@@ -132,7 +137,7 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
             },
             codec=self.codec,
             producer=commit_log_producer,
-            commit_log_topic=Topic("commit-log"),
+            commit_log_topic=commit_log_topic,
         )
 
         with self.get_topic() as topic, closing(consumer) as consumer:
@@ -150,13 +155,12 @@ class KafkaStreamsTestCase(StreamsTestMixin, TestCase):
                 Partition(topic, 0): message.get_next_offset()
             }
 
-            assert len(commit_log_producer.messages) == 1
-            commit_message = commit_log_producer.messages[0]
-            assert commit_message.topic() == "commit-log"
-
-            assert CommitCodec().decode(
-                KafkaPayload(commit_message.key(), commit_message.value())
-            ) == Commit("test", Partition(topic, 0), message.get_next_offset())
+            commit_message = commit_log_consumer.poll(0)
+            assert commit_message is not None
+            assert commit_message.partition.topic == commit_log_topic
+            assert commit_message.payload == Commit(
+                "test", Partition(topic, 0), message.get_next_offset()
+            )
 
 
 def test_commit_codec() -> None:
