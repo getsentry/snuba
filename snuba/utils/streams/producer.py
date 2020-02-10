@@ -21,5 +21,8 @@ class Producer(Generic[TPayload], ABC):
     def close(self) -> Future[None]:
         """
         Close the producer.
+
+        This method returns a ``Future`` that will have its result set when
+        there are no more messages in flight.
         """
         raise NotImplementedError
