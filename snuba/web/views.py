@@ -23,7 +23,8 @@ from snuba.datasets.factory import (
 )
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
-from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
+from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.schema import RequestSchema, SETTINGS_SCHEMAS
 from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -60,20 +61,20 @@ try:
     import uwsgi
 except ImportError:
 
-    def check_down_file_exists():
+    def check_down_file_exists() -> bool:
         return False
 
 
 else:
 
-    def check_down_file_exists():
+    def check_down_file_exists() -> bool:
         try:
             return os.stat("/tmp/snuba.down").st_mtime > uwsgi.started_on
         except OSError:
             return False
 
 
-def check_clickhouse():
+def check_clickhouse() -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """

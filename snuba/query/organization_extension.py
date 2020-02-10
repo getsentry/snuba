@@ -1,6 +1,6 @@
-from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
+from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
-from snuba.query.query_processor import ExtensionData
+from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

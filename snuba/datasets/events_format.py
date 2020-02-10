@@ -21,7 +21,7 @@ def extract_base(output, message):
     return output
 
 
-def extract_user(output, user):
+def extract_user(output: MutableMapping[str, Any], user: Mapping[str, Any]) -> None:
     output["user_id"] = _unicodify(user.get("id", None))
     output["username"] = _unicodify(user.get("username", None))
     output["email"] = _unicodify(user.get("email", None))
