@@ -707,9 +707,21 @@ class KafkaProducer(Producer[TPayload]):
         after a shutdown request has been issued (via ``close``) and all
         in-flight messages have been delivered.
         """
+        logger.debug("Starting worker thread for %r...", self)
+
         while not self.__shutdown_requested.is_set():
             self.__producer.poll(0.1)
-        self.__producer.flush()
+
+        logger.debug(
+            "Shutdown request received, waiting for %s in-flight messages to be delivered...",
+            len(self.__producer),
+        )
+
+        remaining: int = self.__producer.flush(1.0)
+        while remaining:
+            logger.debug("Still waiting for %s in-flight messages...", remaining)
+        else:
+            logger.debug("%s in-flight messages remaining, exiting...", remaining)
 
     def __delivery_callback(
         self,
