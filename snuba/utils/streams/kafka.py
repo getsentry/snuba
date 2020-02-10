@@ -649,7 +649,7 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         configuration: Mapping[str, Any],
         codec: Codec[KafkaPayload, TPayload],
         *,
-        producer: ConfluentProducer,
+        producer: Producer[Commit],
         commit_log_topic: Topic,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -658,36 +658,24 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
         self.__commit_log_topic = commit_log_topic
         self.__group_id = configuration["group.id"]
 
-    def poll(self, timeout: Optional[float] = None) -> Optional[Message[TPayload]]:
-        self.__producer.poll(0.0)
-        return super().poll(timeout)
-
     def __commit_message_delivery_callback(
-        self, error: Optional[KafkaError], message: ConfluentMessage
+        self, commit: Commit, future: Future[Commit]
     ) -> None:
-        if error is not None:
-            raise Exception(error.str())
+        try:
+            future.result()
+        except Exception:
+            logger.warning("Failed to produce commit record: %r", commit, exc_info=True)
 
     def commit_offsets(self) -> Mapping[Partition, int]:
         offsets = super().commit_offsets()
 
-        codec = CommitCodec()
         for partition, offset in offsets.items():
-            payload = codec.encode(Commit(self.__group_id, partition, offset))
-            self.__producer.produce(
-                self.__commit_log_topic.name,
-                key=payload.key,
-                value=payload.value,
-                on_delivery=self.__commit_message_delivery_callback,
+            commit = Commit(self.__group_id, partition, offset)
+            self.__producer.produce(self.__commit_log_topic, commit).add_done_callback(
+                partial(self.__commit_message_delivery_callback, commit)
             )
 
         return offsets
-
-    def close(self, timeout: Optional[float] = None) -> None:
-        super().close()
-        messages: int = self.__producer.flush(*[timeout] if timeout is not None else [])
-        if messages > 0:
-            raise TimeoutError(f"{messages} commit log messages pending delivery")
 
 
 class KafkaProducer(Producer[TPayload]):
