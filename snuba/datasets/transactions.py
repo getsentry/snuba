@@ -33,6 +33,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
+from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.single_tag_expr import SingleTagProcessor
@@ -299,6 +300,7 @@ class TransactionsDataset(TimeSeriesDataset):
         return [
             BasicFunctionsProcessor(),
             ApdexProcessor(),
+            ImpactProcessor(),
             PrewhereProcessor(),
             NestedFieldConditionOptimizer(
                 "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME

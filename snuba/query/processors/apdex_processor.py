@@ -1,16 +1,10 @@
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
 from snuba.query.expressions import (
     Expression,
     FunctionCall,
-    Literal,
 )
-from snuba.query.dsl import div, multiply, plus
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.performance_expressions import apdex
 from snuba.request.request_settings import RequestSettings
 
 
@@ -27,47 +21,7 @@ class ApdexProcessor(QueryProcessor):
                 assert len(exp.parameters) == 2
                 column = exp.parameters[0]
                 satisfied = exp.parameters[1]
-                tolerated = multiply(satisfied, Literal(None, 4))
-
-                return div(
-                    plus(
-                        FunctionCall(
-                            None,
-                            "countIf",
-                            (
-                                binary_condition(
-                                    None, ConditionFunctions.LTE, column, satisfied,
-                                ),
-                            ),
-                        ),
-                        div(
-                            FunctionCall(
-                                None,
-                                "countIf",
-                                (
-                                    binary_condition(
-                                        None,
-                                        BooleanFunctions.AND,
-                                        binary_condition(
-                                            None,
-                                            ConditionFunctions.GT,
-                                            column,
-                                            satisfied,
-                                        ),
-                                        binary_condition(
-                                            None,
-                                            ConditionFunctions.LTE,
-                                            column,
-                                            tolerated,
-                                        ),
-                                    ),
-                                ),
-                            ),
-                            Literal(None, 2),
-                        ),
-                    ),
-                    FunctionCall(None, "count", ()),
-                )
+                return apdex(column, satisfied)
 
             return exp
 

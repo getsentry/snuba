@@ -36,29 +36,6 @@ def get_time_series_extension_properties(
 Schema = Mapping[str, Any]  # placeholder for JSON schema
 
 
-SDK_STATS_BASE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "groupby": {
-            "type": "array",
-            "items": {
-                # at the moment the only additional thing you can group by is project_id
-                "enum": ["project_id"]
-            },
-            "default": [],
-        },
-    },
-    "additionalProperties": False,
-}
-
-SDK_STATS_EXTENSIONS_SCHEMA = {
-    "timeseries": get_time_series_extension_properties(
-        default_granularity=86400,  # SDK stats query defaults to 1-day bucketing
-        default_window=timedelta(days=1),
-    ),
-}
-
-
 def validate_jsonschema(value, schema, set_defaults=True):
     """
     Validates a value against the provided schema, returning the validated
