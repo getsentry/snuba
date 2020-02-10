@@ -677,6 +677,10 @@ class KafkaConsumerWithCommitLog(KafkaConsumer[TPayload]):
 
         return offsets
 
+    def close(self, timeout: Optional[float] = None) -> None:
+        super().close()
+        self.__producer.close().result(timeout)
+
 
 class KafkaProducer(Producer[TPayload]):
     def __init__(
