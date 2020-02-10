@@ -35,6 +35,9 @@ QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
 SAFE_FUNCTION_RE = re.compile(r"-?[a-zA-Z_][a-zA-Z0-9_]*$")
 TOPK_FUNCTION_RE = re.compile(r"^top([1-9]\d*)$")
 APDEX_FUNCTION_RE = re.compile(r"^apdex\(\s*([^,]+)+\s*,\s*([\d]+)+\s*\)$")
+IMPACT_FUNCTION_RE = re.compile(
+    r"^impact\(\s*([^,]+)+\s*,\s*([\d]+)+\s*,\s*([^,]+)+\s*\)$"
+)
 
 
 def local_dataset_mode() -> bool:
@@ -77,7 +80,19 @@ def function_expr(fn: str, args_expr: str = "") -> str:
                 tolerated=int(match.group(2)) * 4,
             )
         raise ValueError("Invalid format for apdex()")
+    elif fn.startswith("impact("):
+        match = IMPACT_FUNCTION_RE.match(fn)
+        if match:
+            apdex = "(countIf({col} <= {satisfied}) + (countIf(({col} > {satisfied}) AND ({col} <= {tolerated})) / 2)) / count()".format(
+                col=escape_identifier(match.group(1)),
+                satisfied=match.group(2),
+                tolerated=int(match.group(2)) * 4,
+            )
 
+            return "(1 - {apdex}) + ((1 - (1 / sqrt(uniq({user_col})))) * 3)".format(
+                apdex=apdex, user_col=escape_identifier(match.group(3)),
+            )
+        raise ValueError("Invalid format for impact()")
     # For functions with no args, (or static args) we allow them to already
     # include them as part of the function name, eg, "count()" or "sleep(1)"
     if not args_expr and fn.endswith(")"):

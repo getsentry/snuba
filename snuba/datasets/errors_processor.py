@@ -100,7 +100,10 @@ class ErrorsProcessor(EventsProcessorBase):
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
         output["user"] = tags.get("sentry:user", "")
-        output["transaction_name"] = tags.get("transaction", "")
+        # The table has an empty string default, but the events coming from eventstream
+        # often have transaction_name set to NULL, so we need to replace that with
+        # an empty string.
+        output["transaction_name"] = tags.get("transaction", "") or ""
 
     def extract_contexts_custom(
         self,
