@@ -4,5 +4,6 @@
 .coverage
 .mypy_cache/
 .pytest_cache/
+.venv/
 htmlcov/
 snuba.egg-info/
