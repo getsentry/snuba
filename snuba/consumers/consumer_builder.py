@@ -1,6 +1,7 @@
-from typing import Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
-from confluent_kafka import KafkaError, KafkaException, Producer
+from confluent_kafka import KafkaError, KafkaException
+from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba import settings, util
 from snuba.consumer import ConsumerWorker
@@ -12,9 +13,11 @@ from snuba.utils.codecs import PassthroughCodec
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.kafka import (
+    CommitCodec,
     KafkaConsumer,
     KafkaConsumerWithCommitLog,
     KafkaPayload,
+    KafkaProducer,
     TransportError,
     build_kafka_consumer_configuration,
 )
@@ -83,15 +86,11 @@ class ConsumerBuilder:
             else:
                 self.commit_log_topic = None
 
-        # XXX: This can result in a producer being built in cases where it's
-        # not actually required.
-        self.producer = Producer(
-            {
-                "bootstrap.servers": ",".join(self.bootstrap_servers),
-                "partitioner": "consistent",
-                "message.max.bytes": 50000000,  # 50MB, default is 1MB
-            }
-        )
+        self.__kafka_producer_configuration: Mapping[str, Any] = {
+            "bootstrap.servers": ",".join(self.bootstrap_servers),
+            "partitioner": "consistent",
+            "message.max.bytes": 50000000,  # 50MB, default is 1MB
+        }
 
         self.metrics = util.create_metrics(
             "snuba.consumer", tags={"group": group_id, "dataset": self.dataset_name},
@@ -143,7 +142,9 @@ class ConsumerBuilder:
             consumer = KafkaConsumerWithCommitLog(
                 configuration,
                 codec=codec,
-                producer=self.producer,
+                producer=KafkaProducer(
+                    self.__kafka_producer_configuration, CommitCodec()
+                ),
                 commit_log_topic=self.commit_log_topic,
                 commit_retry_policy=self.__commit_retry_policy,
             )
@@ -165,7 +166,7 @@ class ConsumerBuilder:
         return self.__build_consumer(
             ConsumerWorker(
                 self.dataset,
-                producer=self.producer,
+                producer=ConfluentKafkaProducer(self.__kafka_producer_configuration),
                 replacements_topic=self.replacements_topic,
                 metrics=self.metrics,
                 rapidjson_deserialize=self.__rapidjson_deserialize,
@@ -181,7 +182,7 @@ class ConsumerBuilder:
         """
         worker = SnapshotAwareWorker(
             dataset=self.dataset,
-            producer=self.producer,
+            producer=ConfluentKafkaProducer(self.__kafka_producer_configuration),
             snapshot_id=snapshot_id,
             transaction_data=transaction_data,
             metrics=self.metrics,
