@@ -512,3 +512,16 @@ class TestUtil(BaseTest):
         assert exprs == [
             "((countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 1200)) / 2)) / count() AS apdex_score)"
         ]
+
+    @pytest.mark.parametrize("dataset", DATASETS)
+    def test_impact_expression(self, dataset):
+        body = {"aggregations": [["impact(duration, 300, user)", "", "impact_score"]]}
+        parsing_context = ParsingContext()
+        source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
+        exprs = [
+            column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
+            for (agg, col, alias) in body["aggregations"]
+        ]
+        assert exprs == [
+            "((1 - (countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 1200)) / 2)) / count()) + ((1 - (1 / sqrt(uniq(user)))) * 3) AS impact_score)"
+        ]
