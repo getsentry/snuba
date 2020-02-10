@@ -12,7 +12,7 @@ from werkzeug.exceptions import BadRequest
 import jsonschema
 from uuid import UUID
 
-from snuba import schemas, settings, state, util
+from snuba import settings, state, util
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -24,7 +24,7 @@ from snuba.datasets.factory import (
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.request.schema import RequestSchema, SETTINGS_SCHEMAS
+from snuba.request.schema import RequestSchema
 from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
 from snuba.subscriptions.codecs import SubscriptionDataCodec
@@ -319,38 +319,6 @@ def format_result(result: QueryResult) -> Response:
         result.status,
         {"Content-Type": "application/json"},
     )
-
-
-# Special internal endpoints that compute global aggregate data that we want to
-# use internally.
-
-
-@application.route("/internal/sdk-stats", methods=["POST"])
-@util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer) -> Response:
-    dataset = get_dataset("events")
-    request = validate_request_content(
-        parse_request_body(http_request),
-        RequestSchema(
-            schemas.SDK_STATS_BASE_SCHEMA,
-            SETTINGS_SCHEMAS[HTTPRequestSettings],
-            schemas.SDK_STATS_EXTENSIONS_SCHEMA,
-        ),
-        timer,
-        dataset,
-        http_request.referrer,
-    )
-
-    request.query.set_aggregations(
-        [["uniq", "project_id", "projects"], ["count()", None, "count"]]
-    )
-    request.query.add_groupby(["sdk_name", "rtime"])
-    request.extensions["project"] = {
-        "project": [],
-    }
-
-    ensure_table_exists(dataset)
-    return format_result(run_query(dataset, request, timer))
 
 
 @application.errorhandler(InvalidSubscriptionError)
