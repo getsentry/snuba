@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, List, Mapping, Optional, Set, Union
+from typing import Any, Iterable, List, Mapping, Optional, Union
 
 from dataclasses import dataclass
 from snuba import state
@@ -77,7 +77,7 @@ class TagColumnProcessor:
     def __init__(
         self,
         columns: ColumnSet,
-        promoted_columns: Mapping[str, Set[str]],
+        promoted_columns: Mapping[str, Iterable[str]],
         column_tag_map: Mapping[str, Mapping[str, str]],
     ) -> None:
         # The ColumnSet of the dataset. Used to format promoted
