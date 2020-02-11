@@ -21,6 +21,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -126,16 +127,16 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("modules", Nested([("name", String()), ("version", String())])),
             ]
         )
-
-        self.__promoted_tag_columns = {
-            "environment": "environment",
-            "sentry:release": "release",
-            "sentry:dist": "dist",
-            "sentry:user": "user",
-            "transaction": "transaction_name",
-            "level": "level",
-        }
-
+        promoted_tags_columns = PromotedColumnSpec(
+            {
+                "environment": "environment",
+                "sentry:release": "release",
+                "sentry:dist": "dist",
+                "sentry:user": "user",
+                "transaction": "transaction_name",
+                "level": "level",
+            }
+        )
         schema = ReplacingMergeTreeSchema(
             columns=all_columns,
             local_table_name="errors_local",
@@ -149,6 +150,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 "environment",
                 "project_id",
             ],
+            promoted_columns_spec={"tags": promoted_tags_columns},
             order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
             partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
             version_column="deleted",
@@ -158,11 +160,10 @@ class ErrorsDataset(TimeSeriesDataset):
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(self.__promoted_tag_columns),
+                processor=ErrorsProcessor(promoted_tags_columns),
                 default_topic="events",
             ),
         )
@@ -202,16 +203,22 @@ class ErrorsDataset(TimeSeriesDataset):
         )
 
     def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        return {
-            "tags": frozenset(self.__promoted_tag_columns.values()),
-            "contexts": frozenset(),
-        }
+        specs = (
+            self.get_dataset_schemas()
+            .get_read_schema()
+            .get_data_source()
+            .get_promoted_columns_spec()
+        )
+        return map(lambda spec: frozenset(spec.get_columns()), specs)
 
     def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        return {
-            "tags": {col: tag for tag, col in self.__promoted_tag_columns.items()},
-            "contexts": {},
-        }
+        specs = (
+            self.get_dataset_schemas()
+            .get_read_schema()
+            .get_data_source()
+            .get_promoted_columns_spec()
+        )
+        return map(lambda spec: spec.get_column_tag_map(), specs)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

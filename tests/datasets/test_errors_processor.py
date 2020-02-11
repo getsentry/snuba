@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import ProcessorAction
 
@@ -311,15 +312,18 @@ def test_error_processor() -> None:
     }
 
     meta = KafkaMessageMetadata(offset=2, partition=1)
+
     processor = ErrorsProcessor(
-        {
-            "environment": "environment",
-            "sentry:release": "release",
-            "sentry:dist": "dist",
-            "sentry:user": "user",
-            "transaction": "transaction_name",
-            "level": "level",
-        }
+        PromotedColumnSpec(
+            {
+                "environment": "environment",
+                "sentry:release": "release",
+                "sentry:dist": "dist",
+                "sentry:user": "user",
+                "transaction": "transaction_name",
+                "level": "level",
+            }
+        )
     )
     ret = processor.process_message(error, meta)
 
