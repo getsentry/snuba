@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import (
@@ -192,6 +193,11 @@ class TransactionsDataset(TimeSeriesDataset):
             ]
         )
 
+        specs = {
+            "tags": PromotedColumnSpec({}),
+            "contexts": PromotedColumnSpec({}),
+        }
+
         schema = ReplacingMergeTreeSchema(
             columns=columns,
             local_table_name="transactions_local",
@@ -203,14 +209,19 @@ class TransactionsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=None,
             migration_function=transactions_migrations,
+            promoted_columns_spec=specs,
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         self.__tags_processor = TagColumnProcessor(
             columns=columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            promoted_columns=map(
+                lambda spec: (spec[0], frozenset(spec[1].get_columns())), specs.items()
+            ),
+            column_tag_map=map(
+                lambda spec: (spec[0], spec[1].get_column_tag_map()), specs.items()
+            ),
         )
 
         super().__init__(
@@ -227,20 +238,6 @@ class TransactionsDataset(TimeSeriesDataset):
             },
             time_parse_columns=("start_ts", "finish_ts"),
         )
-
-    def _get_promoted_columns(self):
-        # TODO: Support promoted tags
-        return {
-            "tags": frozenset(),
-            "contexts": frozenset(),
-        }
-
-    def _get_column_tag_map(self):
-        # TODO: Support promoted tags
-        return {
-            "tags": {},
-            "contexts": {},
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

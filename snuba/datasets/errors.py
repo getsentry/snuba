@@ -209,7 +209,9 @@ class ErrorsDataset(TimeSeriesDataset):
             .get_data_source()
             .get_promoted_columns_spec()
         )
-        return map(lambda spec: frozenset(spec.get_columns()), specs)
+        return map(
+            lambda spec: (spec[0], frozenset(spec[1].get_columns())), specs.items()
+        )
 
     def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         specs = (
@@ -218,7 +220,7 @@ class ErrorsDataset(TimeSeriesDataset):
             .get_data_source()
             .get_promoted_columns_spec()
         )
-        return map(lambda spec: spec.get_column_tag_map(), specs)
+        return map(lambda spec: (spec[0], spec[1].get_column_tag_map()), specs.items())
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
