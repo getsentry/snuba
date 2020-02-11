@@ -1,5 +1,6 @@
 import pytest
 
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from tests.datasets.schemas.join_examples import (
     simple_join_structure,
     complex_join_structure,
@@ -21,3 +22,10 @@ test_data = [
 @pytest.mark.parametrize("structure, expected", test_data)
 def test_join_source(structure, expected):
     assert structure.format_from() == expected
+
+
+def test_promoted_spec():
+    assert simple_join_structure.get_promoted_columns_spec() == {
+        "t1.t1c3": PromotedColumnSpec({"tag": "t1.t1c1"}),
+        "t2.t2c3": PromotedColumnSpec({"tag": "t2.t2c1"}),
+    }

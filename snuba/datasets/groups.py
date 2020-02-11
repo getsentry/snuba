@@ -60,6 +60,7 @@ class Groups(TimeSeriesDataset):
                     qualified_column(col, self.GROUPS_ALIAS)
                     for col in groupedmessage_source.get_prewhere_candidates()
                 ],
+                promoted_columns_spec={},
                 alias=self.GROUPS_ALIAS,
             ),
             right_node=TableJoinNode(
@@ -72,6 +73,7 @@ class Groups(TimeSeriesDataset):
                     qualified_column(col, self.EVENTS_ALIAS)
                     for col in events_source.get_prewhere_candidates()
                 ],
+                promoted_columns_spec=events_source.get_promoted_columns_spec(),
                 alias=self.EVENTS_ALIAS,
             ),
             mapping=[

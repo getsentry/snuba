@@ -5,6 +5,7 @@ from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
@@ -22,11 +23,13 @@ class TableSource(RelationalSource):
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, str]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
         self.__mandatory_conditions = mandatory_conditions or []
         self.__prewhere_candidates = prewhere_candidates or []
+        self.__promoted_columns_spec = promoted_columns_spec or {}
 
     def format_from(self) -> str:
         return self.__table_name
@@ -39,6 +42,9 @@ class TableSource(RelationalSource):
 
     def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
+
+    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
+        return self.__promoted_columns_spec
 
 
 class MigrationSchemaColumn(NamedTuple):

@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.transactions import BEGINNING_OF_TIME
 from snuba.query.extensions import QueryExtension
@@ -106,6 +107,11 @@ class DiscoverSource(RelationalSource):
         if self.__table_source:
             return self.__table_source.get_prewhere_candidates()
         return []
+
+    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
+        if self.__table_source:
+            return self.__table_source.get_promoted_columns_spec()
+        return {}
 
 
 class DatasetSelector(QueryProcessor):

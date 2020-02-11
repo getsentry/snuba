@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping, List, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.query.types import Condition
 
 
@@ -65,6 +66,18 @@ class RelationalSource(ABC):
         have to be applied table by table.
         """
         return True
+
+    @abstractmethod
+    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
+        """
+        When present, this property specifies the mapping that happens between values in
+        nested (dictionary style) columns and real columns, such mapping is generally
+        provided as an optimization to avoid unpacking nested columns during queries.
+        A relational source can provide one PromotedColumnSpec per nested column that
+        it needs to define. The key of the mapping is the nested column and the value
+        is the spec.
+        """
+        raise NotImplementedError
 
 
 class Schema(ABC):
