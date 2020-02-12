@@ -401,7 +401,7 @@ class KafkaConsumer(Consumer[TPayload]):
             else:
                 raise ConsumerError(str(error))
 
-        headers: Optional[Sequence[Tuple[str, bytes]]] = message.headers()
+        headers: Optional[Headers] = message.headers()
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
