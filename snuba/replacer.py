@@ -387,8 +387,15 @@ def process_delete_tag(message, dataset) -> Optional[Replacement]:
 
     assert isinstance(tag, str)
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = dataset.get_tag_column_map()["tags"].get(tag, tag)
-    is_promoted = tag in dataset.get_promoted_tags()["tags"]
+    promoted_col_spec = (
+        dataset.get_dataset_schemas()
+        .get_read_schema()
+        .get_data_source()
+        .get_promoted_columns_spec()
+    )
+    spec = promoted_col_spec.get("tags")
+    tag_column_name = spec.tag_column_mapping.get(tag, tag) if spec is not None else None
+    is_promoted = tag in spec.get_tags() if spec is not None else False
 
     where = """\
         WHERE project_id = %(project_id)s
