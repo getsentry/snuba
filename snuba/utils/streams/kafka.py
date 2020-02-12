@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import Future
-from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import partial
@@ -59,13 +58,30 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-@dataclass(frozen=True)
-class KafkaPayload:
-    __slots__ = ["key", "value", "headers"]
+Headers = Sequence[Tuple[str, bytes]]
 
-    key: Optional[bytes]
-    value: bytes
-    headers: Sequence[Tuple[str, bytes]]
+
+class KafkaPayload:
+    __slots__ = ["__key", "__value", "__headers"]
+
+    def __init__(
+        self, key: Optional[bytes], value: bytes, headers: Optional[Headers] = None
+    ) -> None:
+        self.__key = key
+        self.__value = value
+        self.__headers = headers if headers is not None else []
+
+    @property
+    def key(self) -> Optional[bytes]:
+        return self.__key
+
+    @property
+    def value(self) -> bytes:
+        return self.__value
+
+    @property
+    def headers(self) -> Headers:
+        return self.__headers
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
