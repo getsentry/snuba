@@ -16,6 +16,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
     Union,
 )
 
@@ -60,10 +61,11 @@ class InvalidState(RuntimeError):
 
 @dataclass(frozen=True)
 class KafkaPayload:
-    __slots__ = ["key", "value"]
+    __slots__ = ["key", "value", "headers"]
 
     key: Optional[bytes]
     value: bytes
+    headers: Sequence[Tuple[str, bytes]]
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
