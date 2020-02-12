@@ -1,5 +1,6 @@
-from datetime import timedelta
-from typing import Mapping, Sequence
+import uuid
+from datetime import timedelta, datetime
+from typing import Mapping, Sequence, Optional
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.clickhouse.columns import (
@@ -9,11 +10,19 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
+    Enum,
     Float,
     UUID,
 )
-from snuba.datasets.schemas.tables import MergeTreeSchema
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.processor import (
+    MessageProcessor,
+    ProcessorAction,
+    ProcessedMessage,
+    _ensure_valid_date,
+)
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -21,6 +30,32 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+
+
+class SessionsProcessor(MessageProcessor):
+    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+        action_type = ProcessorAction.INSERT
+        processed = {
+            "session_id": str(uuid.UUID(message["session_id"])),
+            "seq": message["seq"],
+            "org_id": message["org_id"],
+            "project_id": message["project_id"],
+            "retention_days": message["retention_days"],
+            "deleted": 0,
+            "sample_rate": message["sample_rate"],
+            "duration": message["duration"],
+            "status": message["status"],
+            "timestamp": _ensure_valid_date(
+                datetime.fromtimestamp(message["timestamp"])
+            ),
+            "started": _ensure_valid_date(datetime.fromtimestamp(message["started"])),
+            "release": message.get("release"),
+            "environment": message.get("environment"),
+            "os": message.get("os"),
+            "os_version": message.get("os_version"),
+            "device_family": message.get("device_family"),
+        }
+        return ProcessedMessage(action=action_type, data=[processed])
 
 
 class SessionDataset(TimeSeriesDataset):
@@ -36,7 +71,10 @@ class SessionDataset(TimeSeriesDataset):
                 ("deleted", UInt(8)),
                 ("sample_rate", Float(32)),
                 ("duration", Float(64)),
-                ("status", UInt(8)),
+                (
+                    "status",
+                    Enum([("ok", 0), ("exited", 1), ("crashed", 2), ("abnormal", 3)]),
+                ),
                 ("timestamp", DateTime()),
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
@@ -52,9 +90,7 @@ class SessionDataset(TimeSeriesDataset):
             local_table_name="sessions_local",
             dist_table_name="sessions_dist",
             mandatory_conditions=[("deleted", "=", 0)],
-            prewhere_candidates=[
-                "project_id",
-            ],
+            prewhere_candidates=["project_id"],
             order_by="(project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
             partition_by="(toMonday(timestamp))",
             version_column="seq",
@@ -62,13 +98,12 @@ class SessionDataset(TimeSeriesDataset):
             settings={"index_granularity": 16384},
         )
 
-        dataset_schemas = DatasetSchemas(schema=schema, schema=schema)
+        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema)
 
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=SessionsProcessor(),
-                default_topic="sessions",
+                processor=SessionsProcessor(), default_topic="sessions",
             ),
         )
 
