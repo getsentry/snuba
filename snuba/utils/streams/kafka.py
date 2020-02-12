@@ -385,10 +385,17 @@ class KafkaConsumer(Consumer[TPayload]):
             else:
                 raise ConsumerError(str(error))
 
+        headers: Optional[Sequence[Tuple[str, bytes]]] = message.headers()
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.decode(KafkaPayload(message.key(), message.value())),
+            self.__codec.decode(
+                KafkaPayload(
+                    message.key(),
+                    message.value(),
+                    headers if headers is not None else [],
+                )
+            ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
@@ -769,6 +776,7 @@ class KafkaProducer(Producer[TPayload]):
         produce(
             value=encoded.value,
             key=encoded.key,
+            headers=encoded.headers,
             on_delivery=partial(self.__delivery_callback, future, payload),
         )
         return future
