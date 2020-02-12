@@ -14,12 +14,13 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
 )
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -242,6 +243,20 @@ class EventsDataset(TimeSeriesDataset):
             ]
         )
 
+        promoted_tags_mapping = {
+            col.flattened: col.flattened for col in promoted_tag_columns
+        }
+        promtoed_tags_context_mapping = {
+            col.flattened.replace("_", "."): col.flattened
+            for col in promoted_context_tag_columns
+        }
+        promoted_tags_mapping.update(promtoed_tags_context_mapping)
+        promoted_tags_spec = PromotedColumnSpec(promoted_tags_mapping)
+
+        promoted_contexts_spec = PromotedColumnSpec(
+            {col.flattened: col.flattened for col in promoted_context_columns}
+        )
+
         sample_expr = "cityHash64(toString(event_id))"
         schema = ReplacingMergeTreeSchema(
             columns=all_columns,
@@ -261,6 +276,10 @@ class EventsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=sample_expr,
             migration_function=events_migrations,
+            promoted_columns_spec={
+                "tags": promoted_tags_spec,
+                "contexts": promoted_contexts_spec,
+            },
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
@@ -283,15 +302,14 @@ class EventsDataset(TimeSeriesDataset):
         )
 
         self.__metadata_columns = metadata_columns
-        self.__promoted_tag_columns = promoted_tag_columns
-        self.__promoted_context_tag_columns = promoted_context_tag_columns
-        self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
+        self.__promoted_tags_spec = promoted_tags_spec
+        self.__promoted_contexts_spec = promoted_contexts_spec
 
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            promoted_columns=self.__get_promoted_columns(),
+            column_tag_map=self.__get_column_tag_map(),
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -326,63 +344,38 @@ class EventsDataset(TimeSeriesDataset):
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
 
-    def get_promoted_tag_columns(self):
-        return self.__promoted_tag_columns
-
-    def _get_promoted_context_tag_columns(self):
-        return self.__promoted_context_tag_columns
-
-    def _get_promoted_context_columns(self):
-        return self.__promoted_context_columns
-
     def get_required_columns(self):
         return self.__required_columns
 
-    def _get_promoted_columns(self):
+    def __get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
         return {
-            "tags": frozenset(
-                col.flattened
-                for col in (
-                    self.get_promoted_tag_columns()
-                    + self._get_promoted_context_tag_columns()
-                )
-            ),
-            "contexts": frozenset(
-                col.flattened for col in self._get_promoted_context_columns()
-            ),
+            "tags": frozenset(self.__promoted_tags_spec.get_columns()),
+            "contexts": frozenset(self.__promoted_contexts_spec.get_columns()),
         }
 
-    def _get_column_tag_map(self):
+    def __get_column_tag_map(self):
         # For every applicable promoted column,  a map of translations from the column
         # name  we save in the database to the tag we receive in the query.
-        promoted_context_tag_columns = self._get_promoted_context_tag_columns()
-
         return {
-            "tags": {
-                col.flattened: col.flattened.replace("_", ".")
-                for col in promoted_context_tag_columns
-            },
-            "contexts": {},
+            "tags": self.__promoted_tags_spec.get_column_tag_map(),
+            "contexts": self.__promoted_contexts_spec.get_column_tag_map(),
         }
 
     def get_tag_column_map(self):
         # And a reverse map from the tags the client expects to the database columns
         return {
-            col: dict(map(reversed, trans.items()))
-            for col, trans in self._get_column_tag_map().items()
+            "tags": self.__promoted_tags_spec.tag_column_mapping,
+            "contexts": self.__promoted_contexts_spec.tag_column_mapping,
         }
 
     def get_promoted_tags(self):
         # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
         # and they can/will use a promoted column.
         return {
-            col: [
-                self._get_column_tag_map()[col].get(x, x)
-                for x in self._get_promoted_columns()[col]
-            ]
-            for col in self._get_promoted_columns()
+            "tags": self.__promoted_tags_spec.get_tags(),
+            "contexts": self.__promoted_contexts_spec.get_tags(),
         }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
