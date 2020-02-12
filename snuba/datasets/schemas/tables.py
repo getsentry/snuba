@@ -23,7 +23,7 @@ class TableSource(RelationalSource):
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        promoted_columns_spec: Optional[Mapping[str, str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
@@ -80,7 +80,7 @@ class TableSchema(Schema, ABC):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ):
         self.__migration_function = (
             migration_function if migration_function else lambda table, schema: []
@@ -173,7 +173,7 @@ class MergeTreeSchema(WritableTableSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
@@ -249,7 +249,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
@@ -293,7 +293,7 @@ class MaterializedViewSchema(TableSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, str]] = None,
+        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         super().__init__(
             columns=columns,
