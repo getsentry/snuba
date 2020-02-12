@@ -127,16 +127,18 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("modules", Nested([("name", String()), ("version", String())])),
             ]
         )
-        promoted_tags_columns = PromotedColumnSpec(
-            {
-                "environment": "environment",
-                "sentry:release": "release",
-                "sentry:dist": "dist",
-                "sentry:user": "user",
-                "transaction": "transaction_name",
-                "level": "level",
-            }
-        )
+        promoted_tags_spec = {
+            "tags": PromotedColumnSpec(
+                {
+                    "environment": "environment",
+                    "sentry:release": "release",
+                    "sentry:dist": "dist",
+                    "sentry:user": "user",
+                    "transaction": "transaction_name",
+                    "level": "level",
+                }
+            )
+        }
         schema = ReplacingMergeTreeSchema(
             columns=all_columns,
             local_table_name="errors_local",
@@ -150,7 +152,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 "environment",
                 "project_id",
             ],
-            promoted_columns_spec={"tags": promoted_tags_columns},
+            promoted_columns_spec=promoted_tags_spec,
             order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
             partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
             version_column="deleted",
@@ -163,7 +165,7 @@ class ErrorsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(promoted_tags_columns),
+                processor=ErrorsProcessor(promoted_tags_spec["tags"]),
                 default_topic="events",
             ),
         )
@@ -176,9 +178,7 @@ class ErrorsDataset(TimeSeriesDataset):
         )
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            columns=all_columns, promoted_columns_spec=promoted_tags_spec,
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -201,26 +201,6 @@ class ErrorsDataset(TimeSeriesDataset):
         return processed_column or super().column_expr(
             column_name, query, parsing_context, table_alias
         )
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        specs = (
-            self.get_dataset_schemas()
-            .get_read_schema()
-            .get_data_source()
-            .get_promoted_columns_spec()
-        )
-        return map(
-            lambda spec: (spec[0], frozenset(spec[1].get_columns())), specs.items()
-        )
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        specs = (
-            self.get_dataset_schemas()
-            .get_read_schema()
-            .get_data_source()
-            .get_promoted_columns_spec()
-        )
-        return map(lambda spec: (spec[0], spec[1].get_column_tag_map()), specs.items())
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

@@ -193,7 +193,7 @@ class TransactionsDataset(TimeSeriesDataset):
             ]
         )
 
-        specs = {
+        promoted_columns_specs = {
             "tags": PromotedColumnSpec({}),
             "contexts": PromotedColumnSpec({}),
         }
@@ -209,19 +209,13 @@ class TransactionsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=None,
             migration_function=transactions_migrations,
-            promoted_columns_spec=specs,
+            promoted_columns_spec=promoted_columns_specs,
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         self.__tags_processor = TagColumnProcessor(
-            columns=columns,
-            promoted_columns=map(
-                lambda spec: (spec[0], frozenset(spec[1].get_columns())), specs.items()
-            ),
-            column_tag_map=map(
-                lambda spec: (spec[0], spec[1].get_column_tag_map()), specs.items()
-            ),
+            columns=columns, promoted_columns_spec=promoted_columns_specs,
         )
 
         super().__init__(

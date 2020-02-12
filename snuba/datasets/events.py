@@ -251,11 +251,12 @@ class EventsDataset(TimeSeriesDataset):
             for col in promoted_context_tag_columns
         }
         promoted_tags_mapping.update(promtoed_tags_context_mapping)
-        promoted_tags_spec = PromotedColumnSpec(promoted_tags_mapping)
-
-        promoted_contexts_spec = PromotedColumnSpec(
-            {col.flattened: col.flattened for col in promoted_context_columns}
-        )
+        promoted_columns_spec = {
+            "tags": PromotedColumnSpec(promoted_tags_mapping),
+            "contexts": PromotedColumnSpec(
+                {col.flattened: col.flattened for col in promoted_context_columns}
+            ),
+        }
 
         sample_expr = "cityHash64(toString(event_id))"
         schema = ReplacingMergeTreeSchema(
@@ -276,10 +277,7 @@ class EventsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=sample_expr,
             migration_function=events_migrations,
-            promoted_columns_spec={
-                "tags": promoted_tags_spec,
-                "contexts": promoted_contexts_spec,
-            },
+            promoted_columns_spec=promoted_columns_spec,
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
@@ -303,13 +301,9 @@ class EventsDataset(TimeSeriesDataset):
 
         self.__metadata_columns = metadata_columns
         self.__required_columns = required_columns
-        self.__promoted_tags_spec = promoted_tags_spec
-        self.__promoted_contexts_spec = promoted_contexts_spec
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
-            promoted_columns=self.__get_promoted_columns(),
-            column_tag_map=self.__get_column_tag_map(),
+            columns=all_columns, promoted_columns_spec=promoted_columns_spec
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -346,37 +340,6 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_required_columns(self):
         return self.__required_columns
-
-    def __get_promoted_columns(self):
-        # The set of columns, and associated keys that have been promoted
-        # to the top level table namespace.
-        return {
-            "tags": frozenset(self.__promoted_tags_spec.get_columns()),
-            "contexts": frozenset(self.__promoted_contexts_spec.get_columns()),
-        }
-
-    def __get_column_tag_map(self):
-        # For every applicable promoted column,  a map of translations from the column
-        # name  we save in the database to the tag we receive in the query.
-        return {
-            "tags": self.__promoted_tags_spec.get_column_tag_map(),
-            "contexts": self.__promoted_contexts_spec.get_column_tag_map(),
-        }
-
-    def get_tag_column_map(self):
-        # And a reverse map from the tags the client expects to the database columns
-        return {
-            "tags": self.__promoted_tags_spec.tag_column_mapping,
-            "contexts": self.__promoted_contexts_spec.tag_column_mapping,
-        }
-
-    def get_promoted_tags(self):
-        # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
-        # and they can/will use a promoted column.
-        return {
-            "tags": self.__promoted_tags_spec.get_tags(),
-            "contexts": self.__promoted_contexts_spec.get_tags(),
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

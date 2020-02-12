@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.conditions import (
     BooleanFunctions,
@@ -77,19 +78,14 @@ class TagColumnProcessor:
     def __init__(
         self,
         columns: ColumnSet,
-        promoted_columns: Mapping[str, Set[str]],
-        column_tag_map: Mapping[str, Mapping[str, str]],
+        promoted_columns_spec: Mapping[str, PromotedColumnSpec],
     ) -> None:
         # The ColumnSet of the dataset. Used to format promoted
         # columns with the right type.
         self.__columns = columns
-        # Keeps a dictionary of promoted columns. The key of the mapping
-        # can be 'tags' or 'contexts'. The values is a set of flattened
-        # columns.
-        self.__promoted_columns = promoted_columns
-        # A mapping between column representing promoted tags and the
-        # corresponding tag.
-        self.__column_tag_map = column_tag_map
+        # The promoted columns specs that define which columns are promoted
+        # and how do tags/contexts map to columns.
+        self.__promoted_columns_spec = promoted_columns_spec
 
     def process_column_expression(
         self,
@@ -116,13 +112,6 @@ class TagColumnProcessor:
         # We should never get here if we got an instance of ParsedNestedColumn
         raise ValueError(f"Invalid tag/context column structure {column_name}")
 
-    def __get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
-        # And a reverse map from the tags the client expects to the database columns
-        return {
-            col: dict(map(reversed, trans.items()))
-            for col, trans in self.__column_tag_map.items()
-        }
-
     def __string_col(self, col: str) -> str:
         col_type = self.__columns.get(col, None)
         col_type = str(col_type) if col_type else None
@@ -143,9 +132,11 @@ class TagColumnProcessor:
         assert parsed_col.tag_name
         tag_name = parsed_col.tag_name
         col = parsed_col.col_name
-        if col in self.__promoted_columns:
-            actual_tag = self.__get_tag_column_map()[col].get(tag_name, tag_name)
-            if actual_tag in self.__promoted_columns[col]:
+        if col in self.__promoted_columns_spec:
+            actual_tag = self.__promoted_columns_spec[col].tag_column_mapping.get(
+                tag_name, tag_name
+            )
+            if actual_tag in self.__promoted_columns_spec[col].get_columns():
                 return qualified_column(self.__string_col(actual_tag), table_alias)
 
         # For the rest, return an expression that looks it up in the nested tags.
@@ -267,8 +258,8 @@ class TagColumnProcessor:
             key_list = "{}.key".format(qualified_col)
             val_list = "{}.value".format(qualified_col)
         else:
-            promoted = self.__promoted_columns[col]
-            col_map = self.__column_tag_map[col]
+            promoted = self.__promoted_columns_spec[col].get_columns()
+            col_map = self.__promoted_columns_spec[col].get_column_tag_map()
             key_list = "arrayConcat([{}], {}.key)".format(
                 ", ".join("'{}'".format(col_map.get(p, p)) for p in promoted),
                 qualified_col,
