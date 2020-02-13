@@ -241,6 +241,11 @@ def parse_and_run_query(
         request.extensions["timeseries"]
     )
 
+    if (
+        request.query.get_sample() is not None and request.query.get_sample() != 1.0
+    ) and not request.settings.get_turbo():
+        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
+
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
         extension.get_processor().process_query(
