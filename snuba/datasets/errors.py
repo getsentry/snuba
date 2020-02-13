@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -176,6 +176,8 @@ class ErrorsDataset(TimeSeriesDataset):
             time_parse_columns=("timestamp", "received"),
         )
 
+        self.__promoted_columns_spec = promoted_tags_spec
+
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns, promoted_columns_spec=promoted_tags_spec,
         )
@@ -186,6 +188,9 @@ class ErrorsDataset(TimeSeriesDataset):
             project_column="project_id",
             timestamp_column="timestamp",
         )
+
+    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
+        return self.__promoted_columns_spec
 
     def column_expr(
         self,
