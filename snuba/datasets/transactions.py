@@ -209,7 +209,6 @@ class TransactionsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=None,
             migration_function=transactions_migrations,
-            promoted_columns_spec=promoted_columns_specs,
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)

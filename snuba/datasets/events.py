@@ -277,7 +277,6 @@ class EventsDataset(TimeSeriesDataset):
             version_column="deleted",
             sample_expr=sample_expr,
             migration_function=events_migrations,
-            promoted_columns_spec=promoted_columns_spec,
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
@@ -301,7 +300,7 @@ class EventsDataset(TimeSeriesDataset):
 
         self.__metadata_columns = metadata_columns
         self.__required_columns = required_columns
-
+        self.__promoted_columns_spec = promoted_columns_spec
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns, promoted_columns_spec=promoted_columns_spec
         )
@@ -312,6 +311,9 @@ class EventsDataset(TimeSeriesDataset):
             project_column="project_id",
             timestamp_column="timestamp",
         )
+
+    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
+        return self.__promoted_columns_spec
 
     def column_expr(
         self,

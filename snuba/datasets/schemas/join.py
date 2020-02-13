@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import ChainMap
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Mapping, NamedTuple, Optional, Sequence
 
 
 from snuba.clickhouse.columns import ColumnSet, QualifiedColumnSet
-from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.types import Condition
@@ -83,14 +82,10 @@ class TableJoinNode(TableSource, JoinNode):
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]],
         prewhere_candidates: Optional[Sequence[str]],
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]],
         alias: str,
     ) -> None:
-        super().__init__(
-            table_name, columns, mandatory_conditions, prewhere_candidates,
-        )
+        super().__init__(table_name, columns, mandatory_conditions, prewhere_candidates)
         self.__alias = alias
-        self.__promoted_columns_spec = promoted_columns_spec
 
     def format_from(self) -> str:
         return f"{super().format_from()} {self.__alias}"
@@ -103,19 +98,6 @@ class TableJoinNode(TableSource, JoinNode):
         Individual tables support SAMPLE
         """
         return True
-
-    def get_promoted_columns_spec(self) -> Mapping[str, str]:
-        def map_spec(spec: PromotedColumnSpec) -> PromotedColumnSpec:
-            new_mapping = {
-                tag: f"{self.__alias}.{col}"
-                for tag, col in spec.tag_column_mapping.items()
-            }
-            return replace(spec, tag_column_mapping=new_mapping)
-
-        return {
-            f"{self.__alias}.{column}": map_spec(spec)
-            for column, spec in self.__promoted_columns_spec.items()
-        }
 
 
 @dataclass(frozen=True)
@@ -171,12 +153,6 @@ class JoinClause(JoinNode):
         join.
         """
         return self.left_node.get_prewhere_candidates()
-
-    def get_promoted_columns_spec(self) -> Mapping[str, str]:
-        ret = {}
-        ret.update(self.left_node.get_promoted_columns_spec())
-        ret.update(self.right_node.get_promoted_columns_spec())
-        return ret
 
 
 class JoinedSchema(Schema):

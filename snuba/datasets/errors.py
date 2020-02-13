@@ -152,7 +152,6 @@ class ErrorsDataset(TimeSeriesDataset):
                 "environment",
                 "project_id",
             ],
-            promoted_columns_spec=promoted_tags_spec,
             order_by="(org_id, project_id, toStartOfDay(timestamp), primary_hash_hex, event_hash)",
             partition_by="(toMonday(timestamp), if(retention_days = 30, 30, 90))",
             version_column="deleted",

@@ -5,7 +5,6 @@ from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
@@ -23,13 +22,11 @@ class TableSource(RelationalSource):
         columns: ColumnSet,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         self.__table_name = table_name
         self.__columns = columns
         self.__mandatory_conditions = mandatory_conditions or []
         self.__prewhere_candidates = prewhere_candidates or []
-        self.__promoted_columns_spec = promoted_columns_spec or {}
 
     def format_from(self) -> str:
         return self.__table_name
@@ -42,9 +39,6 @@ class TableSource(RelationalSource):
 
     def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
-
-    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
-        return self.__promoted_columns_spec
 
 
 class MigrationSchemaColumn(NamedTuple):
@@ -80,7 +74,6 @@ class TableSchema(Schema, ABC):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ):
         self.__migration_function = (
             migration_function if migration_function else lambda table, schema: []
@@ -88,11 +81,7 @@ class TableSchema(Schema, ABC):
         self.__local_table_name = local_table_name
         self.__dist_table_name = dist_table_name
         self.__table_source = TableSource(
-            self.get_table_name(),
-            columns,
-            mandatory_conditions,
-            prewhere_candidates,
-            promoted_columns_spec,
+            self.get_table_name(), columns, mandatory_conditions, prewhere_candidates,
         )
 
     def get_data_source(self) -> TableSource:
@@ -173,7 +162,6 @@ class MergeTreeSchema(WritableTableSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ):
         super(MergeTreeSchema, self).__init__(
             columns=columns,
@@ -182,7 +170,6 @@ class MergeTreeSchema(WritableTableSchema):
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
-            promoted_columns_spec=promoted_columns_spec,
         )
         self.__order_by = order_by
         self.__partition_by = partition_by
@@ -249,7 +236,6 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
             columns=columns,
@@ -263,7 +249,6 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             ttl_expr=ttl_expr,
             settings=settings,
             migration_function=migration_function,
-            promoted_columns_spec=promoted_columns_spec,
         )
         self.__version_column = version_column
 
@@ -293,7 +278,6 @@ class MaterializedViewSchema(TableSchema):
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
-        promoted_columns_spec: Optional[Mapping[str, PromotedColumnSpec]] = None,
     ) -> None:
         super().__init__(
             columns=columns,
@@ -302,7 +286,6 @@ class MaterializedViewSchema(TableSchema):
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
-            promoted_columns_spec=promoted_columns_spec,
         )
 
         # Make sure the caller has provided a source_table_name in the query
