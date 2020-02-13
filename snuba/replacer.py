@@ -3,7 +3,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 import simplejson as json
 
@@ -11,7 +11,7 @@ from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.factory import enforce_table_writer, get_dataset_name
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -29,17 +29,19 @@ EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
 
-def get_project_exclude_groups_key(project_id):
-    return "project_exclude_groups:%s" % project_id
+def get_project_exclude_groups_key(project_id: int, dataset_name: str = "") -> str:
+    return f"project_exclude_groups:{f'{dataset_name}:' if dataset_name else ''}{project_id}"
 
 
-def set_project_exclude_groups(project_id, group_ids):
+def set_project_exclude_groups(
+    project_id: int, group_ids: Sequence[int], dataset_name: str = ""
+) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
 
     now = time.time()
-    key = get_project_exclude_groups_key(project_id)
+    key = get_project_exclude_groups_key(project_id, dataset_name)
     p = redis_client.pipeline()
 
     p.zadd(key, **{str(group_id): now for group_id in group_ids})
@@ -49,17 +51,23 @@ def set_project_exclude_groups(project_id, group_ids):
     p.execute()
 
 
-def get_project_needs_final_key(project_id):
-    return "project_needs_final:%s" % project_id
-
-
-def set_project_needs_final(project_id):
-    return redis_client.set(
-        get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
+def get_project_needs_final_key(project_id: int, dataset_name: str = "") -> str:
+    return (
+        f"project_needs_final:{f'{dataset_name}:' if dataset_name else ''}{project_id}"
     )
 
 
-def get_projects_query_flags(project_ids):
+def set_project_needs_final(project_id: int, dataset_name: str = "") -> str:
+    return redis_client.set(
+        get_project_needs_final_key(project_id, dataset_name),
+        True,
+        ex=settings.REPLACER_KEY_TTL,
+    )
+
+
+def get_projects_query_flags(
+    project_ids: Sequence[int], dataset_name: str = ""
+) -> Tuple[bool, Sequence[int]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -73,13 +81,15 @@ def get_projects_query_flags(project_ids):
     p = redis_client.pipeline()
 
     needs_final_keys = [
-        get_project_needs_final_key(project_id) for project_id in project_ids
+        get_project_needs_final_key(project_id, dataset_name)
+        for project_id in project_ids
     ]
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
     exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id) for project_id in project_ids
+        get_project_exclude_groups_key(project_id, dataset_name)
+        for project_id in project_ids
     ]
     for exclude_groups_key in exclude_groups_keys:
         p.zremrangebyscore(
@@ -171,11 +181,17 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
 
             # query_time_flags == (type, project_id, [...data...])
             flag_type, project_id = replacement.query_time_flags[:2]
+            dataset_name = get_dataset_name(self.dataset)
+            if dataset_name == "events":
+                # Backward compatibility with the old keys already in Redis
+                # We are decommissioning EventsDataset in favor of ErrorsDataset
+                # so we don't really need to do a migration
+                dataset_name = ""
             if flag_type == NEEDS_FINAL:
-                set_project_needs_final(project_id)
+                set_project_needs_final(project_id, dataset_name)
             elif flag_type == EXCLUDE_GROUPS:
                 group_ids = replacement.query_time_flags[2]
-                set_project_exclude_groups(project_id, group_ids)
+                set_project_exclude_groups(project_id, group_ids, dataset_name)
 
             t = time.time()
             query = replacement.insert_query_template % query_args
