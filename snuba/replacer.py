@@ -120,6 +120,13 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             write_schema, ReplacingMergeTreeSchema
         ), "This replacer is only able to deal with replacing merge trees"
         self.__all_column_names = [col.escaped for col in write_schema.get_columns()]
+
+        # This is used to INSERT a tombstone when deleting groups. We need the
+        # list of required columns otherwise the INSERT will fail when we try to
+        # add a NULL int oa nullable field.
+        # We follow the schema we have in code here, which means this may fail if
+        # manual changes have been done to the table on Clickhouse (like making a column
+        # not nullable). Failing in that case seems fair.
         self.__required_columns = write_schema.get_required_columns()
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
