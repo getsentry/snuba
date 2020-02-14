@@ -40,7 +40,7 @@ STATUS_MAPPING = {
     'crashed': 2,
     'abnormal': 3,
 }
-REVERSE_STATUS_MAPPING = {v: k for k: v in STATUS_MAPPING.items()}
+REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
 
 
 class SessionsProcessor(MessageProcessor):
