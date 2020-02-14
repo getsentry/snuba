@@ -12,6 +12,7 @@ from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.processor import InvalidMessageType, InvalidMessageVersion, _hashify
 from snuba.redis import redis_client
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -114,13 +115,12 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         self.clickhouse = clickhouse
         self.dataset = dataset
         self.metrics = metrics
-        self.__all_column_names = [
-            col.escaped
-            for col in enforce_table_writer(dataset).get_schema().get_columns()
-        ]
-        self.__required_columns = [
-            col.escaped for col in dataset.get_required_columns()
-        ]
+        write_schema = enforce_table_writer(dataset).get_schema()
+        assert isinstance(
+            write_schema, ReplacingMergeTreeSchema
+        ), "This replacer is only able to deal with replacing merge trees"
+        self.__all_column_names = [col.escaped for col in write_schema.get_columns()]
+        self.__required_columns = write_schema.get_required_deletion_columns()
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         message = json.loads(message.payload.value)

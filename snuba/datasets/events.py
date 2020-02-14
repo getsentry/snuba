@@ -260,6 +260,14 @@ class EventsDataset(TimeSeriesDataset):
             partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",
             version_column="deleted",
             sample_expr=sample_expr,
+            required_deletion_columns=[
+                "event_id",
+                "project_id",
+                "group_id",
+                "timestamp",
+                "deleted",
+                "retention_days",
+            ],
             migration_function=events_migrations,
         )
 
@@ -334,9 +342,6 @@ class EventsDataset(TimeSeriesDataset):
 
     def _get_promoted_context_columns(self):
         return self.__promoted_context_columns
-
-    def get_required_columns(self):
-        return self.__required_columns
 
     def _get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted

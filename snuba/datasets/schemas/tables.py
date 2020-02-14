@@ -233,6 +233,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
+        required_deletion_columns: Optional[Sequence[str]] = None,
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
@@ -251,9 +252,13 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             migration_function=migration_function,
         )
         self.__version_column = version_column
+        self.__required_deletion_columns = required_deletion_columns or []
 
     def _get_engine_type(self) -> str:
         return "ReplacingMergeTree(%s)" % self.__version_column
+
+    def get_required_deletion_columns(self) -> Sequence[str]:
+        return self.__required_deletion_columns
 
 
 class SummingMergeTreeSchema(MergeTreeSchema):
