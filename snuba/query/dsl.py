@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.expressions import Expression, FunctionCall, Literal, Column
 
 # Add here functions (only stateless stuff) used to make the AST less
 # verbose to build.
@@ -29,3 +29,18 @@ def multiply(
 
 def div(lhs: Expression, rhs: Expression, alias: Optional[str] = None) -> FunctionCall:
     return FunctionCall(alias, "div", (lhs, rhs))
+
+
+# aggregate functions
+def count(column: Optional[Column] = None, alias: Optional[str] = None):
+    return FunctionCall(alias, "count", (column,) if column else ())
+
+
+def countIf(
+    condition: FunctionCall,
+    column: Optional[Column] = None,
+    alias: Optional[str] = None,
+):
+    return FunctionCall(
+        alias, "countIf", (condition, column) if column else (condition,)
+    )

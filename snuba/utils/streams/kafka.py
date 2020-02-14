@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import Future
-from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import partial
@@ -16,6 +15,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
     Union,
 )
 
@@ -58,12 +58,30 @@ class InvalidState(RuntimeError):
         self.__state = state
 
 
-@dataclass(frozen=True)
-class KafkaPayload:
-    __slots__ = ["key", "value"]
+Headers = Sequence[Tuple[str, bytes]]
 
-    key: Optional[bytes]
-    value: bytes
+
+class KafkaPayload:
+    __slots__ = ["__key", "__value", "__headers"]
+
+    def __init__(
+        self, key: Optional[bytes], value: bytes, headers: Optional[Headers] = None
+    ) -> None:
+        self.__key = key
+        self.__value = value
+        self.__headers = headers if headers is not None else []
+
+    @property
+    def key(self) -> Optional[bytes]:
+        return self.__key
+
+    @property
+    def value(self) -> bytes:
+        return self.__value
+
+    @property
+    def headers(self) -> Headers:
+        return self.__headers
 
 
 def as_kafka_configuration_bool(value: Any) -> bool:
@@ -383,10 +401,17 @@ class KafkaConsumer(Consumer[TPayload]):
             else:
                 raise ConsumerError(str(error))
 
+        headers: Optional[Headers] = message.headers()
         result = Message(
             Partition(Topic(message.topic()), message.partition()),
             message.offset(),
-            self.__codec.decode(KafkaPayload(message.key(), message.value())),
+            self.__codec.decode(
+                KafkaPayload(
+                    message.key(),
+                    message.value(),
+                    headers if headers is not None else [],
+                )
+            ),
             datetime.utcfromtimestamp(message.timestamp()[1] / 1000.0),
         )
 
@@ -767,6 +792,7 @@ class KafkaProducer(Producer[TPayload]):
         produce(
             value=encoded.value,
             key=encoded.key,
+            headers=encoded.headers,
             on_delivery=partial(self.__delivery_callback, future, payload),
         )
         return future
