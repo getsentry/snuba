@@ -471,17 +471,28 @@ class TestReplacer(BaseEventsTest):
     def test_query_time_flags(self):
         project_ids = [1, 2]
 
-        assert replacer.get_projects_query_flags(project_ids) == (False, [])
+        assert replacer.get_projects_query_flags(project_ids, "errors") == (False, [])
 
-        replacer.set_project_needs_final(100)
-        assert replacer.get_projects_query_flags(project_ids) == (False, [])
+        replacer.set_project_needs_final(100, "errors")
+        assert replacer.get_projects_query_flags(project_ids, "errors") == (False, [])
 
-        replacer.set_project_needs_final(1)
-        assert replacer.get_projects_query_flags(project_ids) == (True, [])
+        replacer.set_project_needs_final(1, "errors")
+        assert replacer.get_projects_query_flags(project_ids, "errors") == (True, [])
+        assert replacer.get_projects_query_flags(project_ids, "something") == (
+            False,
+            [],
+        )
 
-        replacer.set_project_needs_final(2)
-        assert replacer.get_projects_query_flags(project_ids) == (True, [])
+        replacer.set_project_needs_final(2, "errors")
+        assert replacer.get_projects_query_flags(project_ids, "errors") == (True, [])
 
-        replacer.set_project_exclude_groups(1, [1, 2])
-        replacer.set_project_exclude_groups(2, [3, 4])
-        assert replacer.get_projects_query_flags(project_ids) == (True, [1, 2, 3, 4])
+        replacer.set_project_exclude_groups(1, [1, 2], "errors")
+        replacer.set_project_exclude_groups(2, [3, 4], "errors")
+        assert replacer.get_projects_query_flags(project_ids, "errors") == (
+            True,
+            [1, 2, 3, 4],
+        )
+        assert replacer.get_projects_query_flags(project_ids, "something") == (
+            False,
+            [],
+        )

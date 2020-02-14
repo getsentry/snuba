@@ -110,7 +110,9 @@ class TestProjectExtensionWithGroups(BaseTest):
         raw_data = {"project": 2}
 
         self.extension = ProjectExtension(
-            processor=ProjectWithGroupsProcessor(project_column="project_id")
+            processor=ProjectWithGroupsProcessor(
+                project_column="project_id", dataset_name_for_key="errors"
+            )
         )
         self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
         self.query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)
@@ -127,7 +129,7 @@ class TestProjectExtensionWithGroups(BaseTest):
 
     def test_without_turbo_with_projects_needing_final(self):
         request_settings = HTTPRequestSettings()
-        replacer.set_project_needs_final(2)
+        replacer.set_project_needs_final(2, "errors")
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -151,7 +153,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_not_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 5)
-        replacer.set_project_exclude_groups(2, [100, 101, 102])
+        replacer.set_project_exclude_groups(2, [100, 101, 102], "errors")
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -192,7 +194,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_too_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 2)
-        replacer.set_project_exclude_groups(2, [100, 101, 102])
+        replacer.set_project_exclude_groups(2, [100, 101, 102], "errors")
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings

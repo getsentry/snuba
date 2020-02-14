@@ -107,6 +107,11 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
+    def __init__(self, project_column: str, dataset_name_for_key: str = "") -> None:
+        super().__init__(project_column)
+        # This is used to disambiguate datasets in Redis when reading query flags.
+        self.__dataset_name_for_key = dataset_name_for_key
+
     def do_post_processing(
         self,
         project_ids: Sequence[int],
@@ -114,7 +119,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         request_settings: RequestSettings,
     ) -> None:
         if not request_settings.get_turbo():
-            final, exclude_group_ids = get_projects_query_flags(project_ids)
+            final, exclude_group_ids = get_projects_query_flags(
+                project_ids, self.__dataset_name_for_key
+            )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.
