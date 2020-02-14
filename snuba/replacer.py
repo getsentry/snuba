@@ -120,7 +120,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             write_schema, ReplacingMergeTreeSchema
         ), "This replacer is only able to deal with replacing merge trees"
         self.__all_column_names = [col.escaped for col in write_schema.get_columns()]
-        self.__required_columns = write_schema.get_required_deletion_columns()
+        self.__required_columns = write_schema.get_required_columns()
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         message = json.loads(message.payload.value)

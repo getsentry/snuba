@@ -4,7 +4,13 @@ from abc import ABC, abstractmethod
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import (
+    Array,
+    ColumnSet,
+    ColumnTypeWithModifier,
+    Nullable,
+    WithDefault,
+)
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
@@ -233,7 +239,6 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
-        required_deletion_columns: Optional[Sequence[str]] = None,
         migration_function: Optional[
             Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
         ] = None,
@@ -252,13 +257,36 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             migration_function=migration_function,
         )
         self.__version_column = version_column
-        self.__required_deletion_columns = required_deletion_columns or []
 
     def _get_engine_type(self) -> str:
         return "ReplacingMergeTree(%s)" % self.__version_column
 
-    def get_required_deletion_columns(self) -> Sequence[str]:
-        return self.__required_deletion_columns
+    def get_required_columns(self) -> Sequence[str]:
+        """
+        Returns the list of the columns of this table schema that cannot be left
+        empty when writing an INSERT query.
+
+        This delas with flattened columns (since the default iteration behavior on
+        ColumnSet is to return flattened columns, thus this approach seems more robust).
+        This means there are no Nested columns, only Arrays.
+        """
+        return [
+            col.escaped
+            for col in self.get_data_source().get_columns()
+            if not (
+                isinstance(
+                    col.type, Array
+                )  # Apparently arrays can always be left empty.
+                or isinstance(col.type, Nullable)
+                or (
+                    isinstance(col.type, ColumnTypeWithModifier)
+                    and (
+                        Nullable in col.type.get_all_modifiers()
+                        or WithDefault in col.type.get_all_modifiers()
+                    )
+                )
+            )
+        ]
 
 
 class SummingMergeTreeSchema(MergeTreeSchema):

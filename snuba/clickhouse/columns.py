@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Mapping, Optional, Sequence, Tuple, Union
+from abc import ABC
+from typing import Mapping, Iterable, Optional, Sequence, Type, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
 
@@ -68,9 +69,30 @@ class ColumnType:
         return [FlattenedColumn(None, name, self)]
 
 
-class Nullable(ColumnType):
+class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
+
+    def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
+        def get_nested_modifiers(
+            obj: ColumnType,
+        ) -> Optional[Iterable[Type[ColumnTypeWithModifier]]]:
+            if not isinstance(obj, ColumnTypeWithModifier):
+                return []
+            else:
+                nested_modifiers = get_nested_modifiers(obj.inner_type)
+                if nested_modifiers:
+                    nested_modifiers.append(type(obj))
+                    return nested_modifiers
+                else:
+                    return [type(obj)]
+
+        return get_nested_modifiers(self)
+
+
+class Nullable(ColumnTypeWithModifier):
+    def __init__(self, inner_type: ColumnType) -> None:
+        super().__init__(inner_type)
 
     def __repr__(self) -> str:
         return "Nullable({})".format(repr(self.inner_type))
@@ -82,9 +104,9 @@ class Nullable(ColumnType):
         return "Nullable({})".format(self.inner_type.for_schema())
 
 
-class Materialized(ColumnType):
+class Materialized(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType, expression: str) -> None:
-        self.inner_type = inner_type
+        super().__init__(inner_type)
         self.expression = expression
 
     def __repr__(self) -> str:
@@ -103,9 +125,9 @@ class Materialized(ColumnType):
         )
 
 
-class WithCodecs(ColumnType):
+class WithCodecs(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType, codecs: Sequence[str]) -> None:
-        self.inner_type = inner_type
+        super().__init__(inner_type)
         self.__codecs = codecs
 
     def __repr__(self) -> str:
@@ -122,9 +144,9 @@ class WithCodecs(ColumnType):
         return f"{self.inner_type.for_schema()} CODEC ({', '.join(self.__codecs)})"
 
 
-class WithDefault(ColumnType):
+class WithDefault(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType, default) -> None:
-        self.inner_type = inner_type
+        super().__init__(inner_type)
         self.default = default  # XXX: this is problematic for typing
 
     def __repr__(self) -> str:
@@ -182,9 +204,9 @@ class Nested(ColumnType):
         ]
 
 
-class LowCardinality(ColumnType):
+class LowCardinality(ColumnTypeWithModifier):
     def __init__(self, inner_type: ColumnType) -> None:
-        self.inner_type = inner_type
+        super().__init__(inner_type)
 
     def __repr__(self) -> str:
         return "LowCardinality({})".format(repr(self.inner_type))
@@ -269,13 +291,17 @@ class Enum(ColumnType):
         self.values = values
 
     def __repr__(self) -> str:
-        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+        return "Enum({})".format(
+            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
+        )
 
     def __eq__(self, other) -> bool:
         return self.__class__ == other.__class__ and self.values == other.values
 
     def for_schema(self) -> str:
-        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+        return "Enum({})".format(
+            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
+        )
 
 
 class ColumnSet:

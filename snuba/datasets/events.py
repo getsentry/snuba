@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
+    WithDefault,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
@@ -198,7 +199,7 @@ class EventsDataset(TimeSeriesDataset):
             + [
                 # other tags
                 ("tags", Nested([("key", String()), ("value", String())])),
-                ("_tags_flattened", String()),
+                ("_tags_flattened", WithDefault(String(), "''")),
                 # other context
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 # http interface
@@ -260,14 +261,6 @@ class EventsDataset(TimeSeriesDataset):
             partition_by="(toMonday(timestamp), if(equals(retention_days, 30), 30, 90))",
             version_column="deleted",
             sample_expr=sample_expr,
-            required_deletion_columns=[
-                "event_id",
-                "project_id",
-                "group_id",
-                "timestamp",
-                "deleted",
-                "retention_days",
-            ],
             migration_function=events_migrations,
         )
 

@@ -155,14 +155,6 @@ class ErrorsDataset(TimeSeriesDataset):
             sample_expr="event_hash",
             ttl_expr="timestamp + toIntervalDay(retention_days)",
             settings={"index_granularity": "8192"},
-            required_deletion_columns=[
-                "event_id",
-                "project_id",
-                "group_id",
-                "timestamp",
-                "deleted",
-                "retention_days",
-            ],
         )
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
