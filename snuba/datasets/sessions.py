@@ -22,6 +22,8 @@ from snuba.processor import (
     ProcessorAction,
     ProcessedMessage,
     _ensure_valid_date,
+    _collapse_uint32,
+    MAX_UINT32,
 )
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -32,9 +34,27 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 
 
+STATUS_MAPPING = {
+    'ok': 0,
+    'exited': 1,
+    'crashed': 2,
+    'abnormal': 3,
+}
+REVERSE_STATUS_MAPPING = {v: k for k: v in STATUS_MAPPING.items()}
+
+
 class SessionsProcessor(MessageProcessor):
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
         action_type = ProcessorAction.INSERT
+        if message["duration"] is None:
+            duration = None
+        else:
+            duration = _collapse_uint32(int(message["duration"] * 1000))
+
+        # since duration is not nullable, the max duration means no duration
+        if duration is None:
+            duration = MAX_UINT32
+
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "seq": message["seq"],
@@ -43,8 +63,8 @@ class SessionsProcessor(MessageProcessor):
             "retention_days": message["retention_days"],
             "deleted": 0,
             "sample_rate": message["sample_rate"],
-            "duration": message["duration"],
-            "status": message["status"],
+            "duration": duration,
+            "status": STATUS_MAPPING[message["status"]],
             "timestamp": _ensure_valid_date(
                 datetime.fromtimestamp(message["timestamp"])
             ),
@@ -70,11 +90,8 @@ class SessionDataset(TimeSeriesDataset):
                 ("retention_days", UInt(16)),
                 ("deleted", UInt(8)),
                 ("sample_rate", Float(32)),
-                ("duration", Float(64)),
-                (
-                    "status",
-                    Enum([("ok", 0), ("exited", 1), ("crashed", 2), ("abnormal", 3)]),
-                ),
+                ("duration", UInt(32)),
+                ("status", UInt(8)),
                 ("timestamp", DateTime()),
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
