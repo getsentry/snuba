@@ -11,7 +11,6 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    WithDefault,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
@@ -199,7 +198,7 @@ class EventsDataset(TimeSeriesDataset):
             + [
                 # other tags
                 ("tags", Nested([("key", String()), ("value", String())])),
-                ("_tags_flattened", WithDefault(String(), "''")),
+                ("_tags_flattened", String()),
                 # other context
                 ("contexts", Nested([("key", String()), ("value", String())])),
                 # http interface
@@ -335,6 +334,9 @@ class EventsDataset(TimeSeriesDataset):
 
     def _get_promoted_context_columns(self):
         return self.__promoted_context_columns
+
+    def get_required_columns(self):
+        return self.__required_columns
 
     def _get_promoted_columns(self):
         # The set of columns, and associated keys that have been promoted
