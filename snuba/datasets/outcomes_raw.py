@@ -51,7 +51,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
             columns=read_columns,
             local_table_name="outcomes_raw_local",
             dist_table_name="outcomes_raw_dist",
-            order_by="(org_id, project_id, timestamp)",
+            order_by_expr="(org_id, project_id, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 16384},
             migration_function=outcomes_raw_migrations,

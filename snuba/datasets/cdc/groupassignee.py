@@ -63,7 +63,8 @@ class GroupAssigneeDataset(CdcDataset):
             columns=columns,
             local_table_name="groupassignee_local",
             dist_table_name="groupassignee_dist",
-            order_by="(project_id, group_id)",
+            order_by_expr="(project_id, group_id)",
+            order_by_cols={"project_id", "group_id"},
             partition_by=None,
             version_column="offset",
         )

@@ -83,7 +83,7 @@ class OutcomesDataset(TimeSeriesDataset):
             # TODO: change to outcomes.raw_local when we add multi DB support
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
-            order_by="(org_id, project_id, timestamp)",
+            order_by_expr="(org_id, project_id, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 16384},
         )
@@ -104,7 +104,7 @@ class OutcomesDataset(TimeSeriesDataset):
             columns=read_columns,
             local_table_name=READ_LOCAL_TABLE_NAME,
             dist_table_name=READ_DIST_TABLE_NAME,
-            order_by="(org_id, project_id, key_id, outcome, reason, timestamp)",
+            order_by_expr="(org_id, project_id, key_id, outcome, reason, timestamp)",
             partition_by="(toMonday(timestamp))",
             settings={"index_granularity": 256},
         )

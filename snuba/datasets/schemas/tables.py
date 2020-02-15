@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, NamedTuple, Optional, Sequence
+from typing import Callable, Mapping, NamedTuple, Optional, Sequence, Set
 
 from snuba import settings
-from snuba.clickhouse.columns import (
-    Array,
-    ColumnSet,
-    ColumnTypeWithModifier,
-    Nullable,
-    WithDefault,
-)
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
@@ -160,7 +154,7 @@ class MergeTreeSchema(WritableTableSchema):
         dist_table_name: str,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
+        order_by_expr: str,
         partition_by: Optional[str],
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
@@ -177,7 +171,7 @@ class MergeTreeSchema(WritableTableSchema):
             prewhere_candidates=prewhere_candidates,
             migration_function=migration_function,
         )
-        self.__order_by = order_by
+        self.__order_by = order_by_expr
         self.__partition_by = partition_by
         self.__sample_expr = sample_expr
         self.__ttl_expr = ttl_expr
@@ -233,8 +227,10 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         dist_table_name: str,
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
-        order_by: str,
-        partition_by: str,
+        order_by_expr: str,
+        order_by_cols: Set[str],
+        partition_by: Optional[str] = None,
+        partition_by_cols: Optional[Set[str]] = None,
         version_column: str,
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
@@ -249,7 +245,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             dist_table_name=dist_table_name,
             mandatory_conditions=mandatory_conditions,
             prewhere_candidates=prewhere_candidates,
-            order_by=order_by,
+            order_by_expr=order_by_expr,
             partition_by=partition_by,
             sample_expr=sample_expr,
             ttl_expr=ttl_expr,
@@ -257,36 +253,16 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
             migration_function=migration_function,
         )
         self.__version_column = version_column
+        self.__order_by_cols = order_by_cols
+        self.__partition_by_cols = partition_by_cols or {}
 
     def _get_engine_type(self) -> str:
         return "ReplacingMergeTree(%s)" % self.__version_column
 
-    def get_required_columns(self) -> Sequence[str]:
-        """
-        Returns the list of the columns of this table schema that cannot be left
-        empty when writing an INSERT query.
-
-        This delas with flattened columns (since the default iteration behavior on
-        ColumnSet is to return flattened columns, thus this approach seems more robust).
-        This means there are no Nested columns, only Arrays.
-        """
-        return [
-            col.escaped
-            for col in self.get_data_source().get_columns()
-            if not (
-                isinstance(
-                    col.type, Array
-                )  # Apparently arrays can always be left empty.
-                or isinstance(col.type, Nullable)
-                or (
-                    isinstance(col.type, ColumnTypeWithModifier)
-                    and (
-                        Nullable in col.type.get_all_modifiers()
-                        or WithDefault in col.type.get_all_modifiers()
-                    )
-                )
-            )
-        ]
+    def get_tombstone_required_columns(self) -> Sequence[str]:
+        ret = self.__order_by_cols | self.__partition_by_cols
+        ret.add(self.__version_column)
+        return ret
 
 
 class SummingMergeTreeSchema(MergeTreeSchema):

@@ -24,7 +24,7 @@ table1 = MergeTreeSchema(
     ),
     local_table_name="table1",
     dist_table_name="table1",
-    order_by="",
+    order_by_expr="",
     partition_by="",
 ).get_data_source()
 
@@ -38,7 +38,7 @@ table2 = MergeTreeSchema(
     ),
     local_table_name="table2",
     dist_table_name="table2",
-    order_by="",
+    order_by_expr="",
     partition_by="",
 ).get_data_source()
 
@@ -52,7 +52,7 @@ table3 = MergeTreeSchema(
     ),
     local_table_name="table3",
     dist_table_name="table3",
-    order_by="",
+    order_by_expr="",
     partition_by="",
 ).get_data_source()
 
