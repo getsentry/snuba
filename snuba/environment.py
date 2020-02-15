@@ -9,6 +9,7 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 
 from snuba import settings
+from snuba.clickhouse.native import ClickhousePool
 
 
 def setup_logging(level: Optional[str] = None) -> None:
@@ -26,3 +27,11 @@ def setup_sentry() -> None:
         integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
         release=os.getenv("SNUBA_RELEASE"),
     )
+
+
+clickhouse_rw = ClickhousePool(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_PORT)
+clickhouse_ro = ClickhousePool(
+    settings.CLICKHOUSE_HOST,
+    settings.CLICKHOUSE_PORT,
+    client_settings={"readonly": True},
+)
