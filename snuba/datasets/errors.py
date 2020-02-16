@@ -216,9 +216,7 @@ class ErrorsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", dataset_name_for_key="errors"
-                )
+                processor=ProjectWithGroupsProcessor(project_column="project_id")
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

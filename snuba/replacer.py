@@ -29,19 +29,21 @@ EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
 
-def get_project_exclude_groups_key(project_id: int, dataset_name: str = "") -> str:
-    return f"project_exclude_groups:{f'{dataset_name}:' if dataset_name else ''}{project_id}"
+def get_project_exclude_groups_key(project_id: int, table_name: str = "") -> str:
+    return (
+        f"project_exclude_groups:{f'{table_name}:' if table_name else ''}{project_id}"
+    )
 
 
 def set_project_exclude_groups(
-    project_id: int, group_ids: Sequence[int], dataset_name: str = ""
+    project_id: int, group_ids: Sequence[int], table_name: str = ""
 ) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
 
     now = time.time()
-    key = get_project_exclude_groups_key(project_id, dataset_name)
+    key = get_project_exclude_groups_key(project_id, table_name)
     p = redis_client.pipeline()
 
     p.zadd(key, **{str(group_id): now for group_id in group_ids})
@@ -51,22 +53,20 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def get_project_needs_final_key(project_id: int, dataset_name: str = "") -> str:
-    return (
-        f"project_needs_final:{f'{dataset_name}:' if dataset_name else ''}{project_id}"
-    )
+def get_project_needs_final_key(project_id: int, table_name: str = "") -> str:
+    return f"project_needs_final:{f'{table_name}:' if table_name else ''}{project_id}"
 
 
-def set_project_needs_final(project_id: int, dataset_name: str = "") -> str:
+def set_project_needs_final(project_id: int, table_name: str = "") -> str:
     return redis_client.set(
-        get_project_needs_final_key(project_id, dataset_name),
+        get_project_needs_final_key(project_id, table_name),
         True,
         ex=settings.REPLACER_KEY_TTL,
     )
 
 
 def get_projects_query_flags(
-    project_ids: Sequence[int], dataset_name: str = ""
+    project_ids: Sequence[int], table_name: str = ""
 ) -> Tuple[bool, Sequence[int]]:
     """\
     1. Fetch `needs_final` for each Project
@@ -81,14 +81,14 @@ def get_projects_query_flags(
     p = redis_client.pipeline()
 
     needs_final_keys = [
-        get_project_needs_final_key(project_id, dataset_name)
+        get_project_needs_final_key(project_id, table_name)
         for project_id in project_ids
     ]
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
     exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id, dataset_name)
+        get_project_exclude_groups_key(project_id, table_name)
         for project_id in project_ids
     ]
     for exclude_groups_key in exclude_groups_keys:
@@ -182,16 +182,21 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
             # query_time_flags == (type, project_id, [...data...])
             flag_type, project_id = replacement.query_time_flags[:2]
             dataset_name = get_dataset_name(self.dataset)
-            if dataset_name == "events":
-                # Backward compatibility with the old keys already in Redis
-                # We are decommissioning EventsDataset in favor of ErrorsDataset
-                # so we don't really need to do a migration
-                dataset_name = ""
+            table_name = (
+                enforce_table_writer(self.dataset).get_schema().get_table_name()
+            )
+            # Backward compatibility with the old keys already in Redis, we will let double write
+            # the old key structure and the new one for a while then we can get rid of the old one.
+            compatibility_double_write = dataset_name == "events"
             if flag_type == NEEDS_FINAL:
-                set_project_needs_final(project_id, dataset_name)
+                set_project_needs_final(project_id, table_name)
+                if compatibility_double_write:
+                    set_project_needs_final(project_id, "")
             elif flag_type == EXCLUDE_GROUPS:
                 group_ids = replacement.query_time_flags[2]
-                set_project_exclude_groups(project_id, group_ids, dataset_name)
+                set_project_exclude_groups(project_id, group_ids, table_name)
+                if compatibility_double_write:
+                    set_project_exclude_groups(project_id, group_ids, "")
 
             t = time.time()
             query = replacement.insert_query_template % query_args
