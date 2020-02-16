@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.environment import setup_logging
+from snuba.environment import clickhouse_rw, setup_logging
 from snuba.migrate import run
 
 
@@ -91,14 +91,11 @@ def bootstrap(
             except Exception as e:
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
-    from snuba.clickhouse.native import ClickhousePool
-
     attempts = 0
-    conn = ClickhousePool()
     while True:
         try:
             logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
-            conn.execute("SELECT 1")
+            clickhouse_rw.execute("SELECT 1")
             break
         except Exception as e:
             logger.error(
@@ -113,7 +110,7 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
-    existing_tables = {row[0] for row in conn.execute("show tables")}
+    existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
 
@@ -135,11 +132,11 @@ def bootstrap(
                 # In order to break this dependency we skip bootstrap DDL calls here if the
                 # table/view already exists, so it is always safe to run bootstrap first.
                 logger.debug("Executing:\n%s", statement.statement)
-                conn.execute(statement.statement)
+                clickhouse_rw.execute(statement.statement)
             else:
                 logger.debug("Skipping existing table %s", statement.table_name)
                 run_migrations = True
         if run_migrations:
             logger.debug("Running missing migrations for dataset %s", name)
-            run(conn, dataset)
+            run(clickhouse_rw, dataset)
         logger.info("Tables for dataset %s created.", name)

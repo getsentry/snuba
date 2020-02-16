@@ -1,5 +1,4 @@
 import logging
-
 from hashlib import md5
 from typing import Any, Mapping, MutableMapping, Optional
 
@@ -9,29 +8,29 @@ from flask import request as http_request
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
+from snuba.clickhouse.native import NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.environment import clickhouse_ro
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
-from snuba.request import Request
 from snuba.redis import redis_client
+from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
+    PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
-    PROJECT_RATE_LIMIT_NAME,
 )
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web.split import split_query
 
+
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
 
-clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
 
 ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
