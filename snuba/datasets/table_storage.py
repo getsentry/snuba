@@ -9,6 +9,7 @@ from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BatchWriter
 
@@ -96,10 +97,14 @@ class TableWriter:
     """
 
     def __init__(
-        self, write_schema: WritableTableSchema, stream_loader: KafkaStreamLoader,
+        self,
+        write_schema: WritableTableSchema,
+        stream_loader: KafkaStreamLoader,
+        replacer_processor: Optional[ReplacerProcessor] = None,
     ) -> None:
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
+        self.__replacer_processor = replacer_processor
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -160,3 +165,10 @@ class TableWriter:
 
     def get_stream_loader(self) -> KafkaStreamLoader:
         return self.__stream_loader
+
+    def get_replacer_processor(self) -> Optional[ReplacerProcessor]:
+        """
+        Returns a replacer processor if this table writer knows how to do
+        replacements on the table it manages.
+        """
+        return self.__replacer_processor

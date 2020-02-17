@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.errors_replacer import ErrorsReplacer
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
@@ -263,6 +264,12 @@ class EventsDataset(TimeSeriesDataset):
             migration_function=events_migrations,
         )
 
+        self.__metadata_columns = metadata_columns
+        self.__promoted_tag_columns = promoted_tag_columns
+        self.__promoted_context_tag_columns = promoted_context_tag_columns
+        self.__promoted_context_columns = promoted_context_columns
+        self.__required_columns = required_columns
+
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         table_writer = TableWriter(
@@ -273,6 +280,13 @@ class EventsDataset(TimeSeriesDataset):
                 replacement_topic="event-replacements",
                 commit_log_topic="snuba-commit-log",
             ),
+            replacer_processor=ErrorsReplacer(
+                write_schema=schema,
+                read_schema=schema,
+                required_columns=[col.escaped for col in required_columns],
+                tag_column_map=self.get_tag_column_map(),
+                promoted_tags=self.get_promoted_tags(),
+            ),
         )
 
         super(EventsDataset, self).__init__(
@@ -281,12 +295,6 @@ class EventsDataset(TimeSeriesDataset):
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
-
-        self.__metadata_columns = metadata_columns
-        self.__promoted_tag_columns = promoted_tag_columns
-        self.__promoted_context_tag_columns = promoted_context_tag_columns
-        self.__promoted_context_columns = promoted_context_columns
-        self.__required_columns = required_columns
 
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns,
