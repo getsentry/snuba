@@ -3,7 +3,7 @@ import time
 
 from collections import deque
 from datetime import datetime
-from typing import FrozenSet, Mapping, Optional, Sequence
+from typing import Any, Deque, FrozenSet, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -24,11 +24,11 @@ EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
 
-def get_project_exclude_groups_key(project_id):
+def get_project_exclude_groups_key(project_id: int) -> str:
     return "project_exclude_groups:%s" % project_id
 
 
-def set_project_exclude_groups(project_id, group_ids):
+def set_project_exclude_groups(project_id: int, group_ids: Sequence[int]) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
@@ -44,17 +44,17 @@ def set_project_exclude_groups(project_id, group_ids):
     p.execute()
 
 
-def get_project_needs_final_key(project_id):
+def get_project_needs_final_key(project_id: int) -> str:
     return "project_needs_final:%s" % project_id
 
 
-def set_project_needs_final(project_id):
+def set_project_needs_final(project_id: int) -> Optional[bool]:
     return redis_client.set(
         get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
     )
 
 
-def get_projects_query_flags(project_ids):
+def get_projects_query_flags(project_ids: Sequence[int]) -> Tuple[bool, Sequence[int]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -63,18 +63,18 @@ def get_projects_query_flags(project_ids):
     Returns (needs_final, group_ids_to_exclude)
     """
 
-    project_ids = set(project_ids)
+    s_project_ids = set(project_ids)
     now = time.time()
     p = redis_client.pipeline()
 
     needs_final_keys = [
-        get_project_needs_final_key(project_id) for project_id in project_ids
+        get_project_needs_final_key(project_id) for project_id in s_project_ids
     ]
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
     exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id) for project_id in project_ids
+        get_project_exclude_groups_key(project_id) for project_id in s_project_ids
     ]
     for exclude_groups_key in exclude_groups_keys:
         p.zremrangebyscore(
@@ -86,9 +86,9 @@ def get_projects_query_flags(project_ids):
 
     results = p.execute()
 
-    needs_final = any(results[: len(project_ids)])
+    needs_final = any(results[: len(s_project_ids)])
     exclude_groups = sorted(
-        {int(group_id) for group_id in sum(results[(len(project_ids) + 1) :: 2], [])}
+        {int(group_id) for group_id in sum(results[(len(s_project_ids) + 1) :: 2], [])}
     )
 
     return (needs_final, exclude_groups)
@@ -101,7 +101,7 @@ class ErrorsReplacer(ReplacerProcessor):
         read_schema: TableSchema,
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
-        promoted_tags: Mapping[str, FrozenSet[str]],
+        promoted_tags: Mapping[str, Sequence[str]],
     ) -> None:
         super().__init__(write_schema=write_schema, read_schema=read_schema)
         self.__required_columns = required_columns
@@ -148,7 +148,9 @@ class ErrorsReplacer(ReplacerProcessor):
             set_project_exclude_groups(project_id, group_ids)
 
 
-def process_delete_groups(message, required_columns) -> Optional[Replacement]:
+def process_delete_groups(
+    message: Mapping[str, Any], required_columns: Sequence[str]
+) -> Optional[Replacement]:
     group_ids = message["group_ids"]
     if not group_ids:
         return None
@@ -196,10 +198,12 @@ def process_delete_groups(message, required_columns) -> Optional[Replacement]:
     )
 
 
-SEEN_MERGE_TXN_CACHE = deque(maxlen=100)
+SEEN_MERGE_TXN_CACHE: Deque[str] = deque(maxlen=100)
 
 
-def process_merge(message, all_column_names) -> Optional[Replacement]:
+def process_merge(
+    message: Mapping[str, Any], all_column_names: Sequence[str]
+) -> Optional[Replacement]:
     # HACK: We were sending duplicates of the `end_merge` message from Sentry,
     # this is only for performance of the backlog.
     txn = message.get("transaction_id")
@@ -259,7 +263,9 @@ def process_merge(message, all_column_names) -> Optional[Replacement]:
     )
 
 
-def process_unmerge(message, all_column_names) -> Optional[Replacement]:
+def process_unmerge(
+    message: Mapping[str, Any], all_column_names: Sequence[str]
+) -> Optional[Replacement]:
     hashes = message["hashes"]
     if not hashes:
         return None
@@ -342,10 +348,10 @@ concat(
 
 
 def process_delete_tag(
-    message,
+    message: Mapping[str, Any],
     schema: TableSchema,
     tag_column_map: Mapping[str, Mapping[str, str]],
-    promoted_tags: Mapping[str, FrozenSet[str]],
+    promoted_tags: Mapping[str, Sequence[str]],
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:

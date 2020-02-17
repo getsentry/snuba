@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -334,19 +334,19 @@ class EventsDataset(TimeSeriesDataset):
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
 
-    def get_promoted_tag_columns(self):
+    def get_promoted_tag_columns(self) -> ColumnSet:
         return self.__promoted_tag_columns
 
-    def _get_promoted_context_tag_columns(self):
+    def _get_promoted_context_tag_columns(self) -> ColumnSet:
         return self.__promoted_context_tag_columns
 
-    def _get_promoted_context_columns(self):
+    def _get_promoted_context_columns(self) -> ColumnSet:
         return self.__promoted_context_columns
 
-    def get_required_columns(self):
+    def get_required_columns(self) -> ColumnSet:
         return self.__required_columns
 
-    def _get_promoted_columns(self):
+    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
         # The set of columns, and associated keys that have been promoted
         # to the top level table namespace.
         return {
@@ -362,7 +362,7 @@ class EventsDataset(TimeSeriesDataset):
             ),
         }
 
-    def _get_column_tag_map(self):
+    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
         # For every applicable promoted column,  a map of translations from the column
         # name  we save in the database to the tag we receive in the query.
         promoted_context_tag_columns = self._get_promoted_context_tag_columns()
@@ -375,14 +375,14 @@ class EventsDataset(TimeSeriesDataset):
             "contexts": {},
         }
 
-    def get_tag_column_map(self):
+    def get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
         # And a reverse map from the tags the client expects to the database columns
         return {
             col: dict(map(reversed, trans.items()))
             for col, trans in self._get_column_tag_map().items()
         }
 
-    def get_promoted_tags(self):
+    def get_promoted_tags(self) -> Mapping[str, Sequence[str]]:
         # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
         # and they can/will use a promoted column.
         return {

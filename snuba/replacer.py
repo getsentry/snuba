@@ -24,24 +24,23 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     ) -> None:
         self.clickhouse = clickhouse
         self.metrics = metrics
-        self.__replacer_processor = enforce_table_writer(
-            dataset
-        ).get_replacer_processor()
+        processor = enforce_table_writer(dataset).get_replacer_processor()
         dataset_name = get_dataset_name(dataset)
         assert (
-            self.__replacer_processor
+            processor
         ), f"This dataset writer does not support replacements {dataset_name}"
+        self.__replacer_processor = processor
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
-        message = json.loads(message.payload.value)
-        version = message[0]
+        seq_message = json.loads(message.payload.value)
+        version = seq_message[0]
 
         if version == 2:
             return self.__replacer_processor.process_message(
-                ReplacementMessage(message[1], message[2])
+                ReplacementMessage(seq_message[1], seq_message[2])
             )
         else:
-            raise InvalidMessageVersion("Unknown message format: " + str(message))
+            raise InvalidMessageVersion("Unknown message format: " + str(seq_message))
 
     def flush_batch(self, batch: Sequence[Replacement]) -> None:
         for replacement in batch:
