@@ -23,6 +23,7 @@ from snuba.processor import (
     ProcessedMessage,
     _ensure_valid_date,
     _collapse_uint32,
+    MAX_UINT16,
     MAX_UINT32,
 )
 from snuba.query.extensions import QueryExtension
@@ -35,10 +36,10 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 
 
 STATUS_MAPPING = {
-    'ok': 0,
-    'exited': 1,
-    'crashed': 2,
-    'abnormal': 3,
+    "ok": 0,
+    "exited": 1,
+    "crashed": 2,
+    "abnormal": 3,
 }
 REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
 
@@ -57,12 +58,13 @@ class SessionsProcessor(MessageProcessor):
 
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
+            "distinct_id": str(uuid.UUID(message["distinct_id"])),
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "retention_days": message["retention_days"],
             "deleted": 0,
-            "sample_rate": message["sample_rate"],
+            "sample_rate": int(max(min(message["sample_rate"], 1.0), 0.0) * MAX_UINT16),
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "timestamp": _ensure_valid_date(
@@ -89,7 +91,7 @@ class SessionDataset(TimeSeriesDataset):
                 ("project_id", UInt(64)),
                 ("retention_days", UInt(16)),
                 ("deleted", UInt(8)),
-                ("sample_rate", Float(32)),
+                ("sample_rate", UInt(8)),
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
                 ("timestamp", DateTime()),
