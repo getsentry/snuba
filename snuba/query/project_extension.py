@@ -1,7 +1,6 @@
-from typing import Optional, Sequence
+from typing import Sequence
 
 from snuba import settings, util
-from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import (
     in_condition,
     not_in_condition,
@@ -108,13 +107,11 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
-    def __init__(
-        self, project_column: str, table_name_for_key: Optional[str] = None
-    ) -> None:
+    def __init__(self, project_column: str, replacer_state_name: str) -> None:
         super().__init__(project_column)
         # This is used to disambiguate datasets in Redis when reading query flags.
         # If not present, infer the table name from the query.
-        self.__table_name_for_key = table_name_for_key
+        self.__replacer_state_name = replacer_state_name
 
     def do_post_processing(
         self,
@@ -123,16 +120,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         request_settings: RequestSettings,
     ) -> None:
         if not request_settings.get_turbo():
-            if self.__table_name_for_key is None:
-                table = query.get_data_source()
-                assert isinstance(
-                    table, TableSource
-                ), "We cannot run replacers on structured data sources like joins"
-                table_name = table.get_table_name()
-            else:
-                table_name = self.__table_name_for_key
-
-            final, exclude_group_ids = get_projects_query_flags(project_ids, table_name)
+            final, exclude_group_ids = get_projects_query_flags(
+                project_ids, self.__replacer_state_name
+            )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.

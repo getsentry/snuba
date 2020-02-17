@@ -21,6 +21,7 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.replacer import EVENTS_STATE
 from snuba.util import qualified_column
 
 
@@ -149,7 +150,9 @@ class Groups(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="events.project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="events.project_id", replacer_state_name=EVENTS_STATE
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

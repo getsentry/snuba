@@ -29,6 +29,7 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
+from snuba.replacer import EVENTS_STATE
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
@@ -306,7 +307,9 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id", replacer_state_name=EVENTS_STATE
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

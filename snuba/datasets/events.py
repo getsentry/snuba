@@ -29,6 +29,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.replacer import EVENTS_STATE
 from snuba.util import qualified_column
 
 
@@ -389,7 +390,7 @@ class EventsDataset(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", table_name_for_key=""
+                    project_column="project_id", replacer_state_name=EVENTS_STATE
                 )
             ),
             "timeseries": TimeSeriesExtension(

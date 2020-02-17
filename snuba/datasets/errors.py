@@ -32,6 +32,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.replacer import ERRORS_STATE
 
 
 class ErrorsDataset(TimeSeriesDataset):
@@ -216,7 +217,9 @@ class ErrorsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id", replacer_state_name=ERRORS_STATE
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
