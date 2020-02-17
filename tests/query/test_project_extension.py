@@ -2,9 +2,13 @@ import pytest
 from typing import Sequence
 
 from tests.base import BaseTest
-from snuba import replacer, state
+from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
+from snuba.datasets.errors_replacer import (
+    set_project_exclude_groups,
+    set_project_needs_final,
+)
 from snuba.query.conditions import FunctionCall, BooleanFunctions
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.project_extension import (
@@ -130,7 +134,7 @@ class TestProjectExtensionWithGroups(BaseTest):
 
     def test_without_turbo_with_projects_needing_final(self):
         request_settings = HTTPRequestSettings()
-        replacer.set_project_needs_final(2, EVENTS_STATE)
+        set_project_needs_final(2, EVENTS_STATE)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -154,7 +158,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_not_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 5)
-        replacer.set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
+        set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -195,7 +199,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_too_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 2)
-        replacer.set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
+        set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
