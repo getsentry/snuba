@@ -114,7 +114,7 @@ class TickConsumer(Consumer[Tick]):
                     Interval(previous_message.offset, message.offset),
                     Interval(previous_message.timestamp, message.timestamp),
                 ),
-                previous_message.timestamp,
+                message.timestamp,
             )
         else:
             result = None

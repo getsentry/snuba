@@ -3,16 +3,17 @@ import os
 import time
 from datetime import datetime
 from typing import NamedTuple
-
-from flask import Flask, Response, redirect, render_template, request as http_request
-from markdown import markdown
-import sentry_sdk
-import simplejson as json
-from werkzeug.exceptions import BadRequest
-import jsonschema
 from uuid import UUID
 
-from snuba import schemas, settings, state, util
+import jsonschema
+import sentry_sdk
+import simplejson as json
+from flask import Flask, Response, redirect, render_template
+from flask import request as http_request
+from markdown import markdown
+from werkzeug.exceptions import BadRequest
+
+from snuba import settings, state, util
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -22,16 +23,15 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.request import Request
-from snuba.request.schema import HTTPRequestSettings, RequestSchema, SETTINGS_SCHEMAS
+from snuba.environment import clickhouse_ro, clickhouse_rw
 from snuba.redis import redis_client
+from snuba.request import Request
+from snuba.request.request_settings import HTTPRequestSettings
+from snuba.request.schema import RequestSchema
 from snuba.request.validation import validate_request_content
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
-from snuba.subscriptions.subscription import (
-    SubscriptionCreator,
-    SubscriptionDeleter,
-)
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -39,11 +39,9 @@ from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
-    clickhouse_ro,
-    clickhouse_rw,
     ClickhouseQueryResult,
-    parse_and_run_query,
     RawQueryException,
+    parse_and_run_query,
 )
 
 
@@ -60,20 +58,20 @@ try:
     import uwsgi
 except ImportError:
 
-    def check_down_file_exists():
+    def check_down_file_exists() -> bool:
         return False
 
 
 else:
 
-    def check_down_file_exists():
+    def check_down_file_exists() -> bool:
         try:
             return os.stat("/tmp/snuba.down").st_mtime > uwsgi.started_on
         except OSError:
             return False
 
 
-def check_clickhouse():
+def check_clickhouse() -> bool:
     """
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
@@ -318,38 +316,6 @@ def format_result(result: QueryResult) -> Response:
         result.status,
         {"Content-Type": "application/json"},
     )
-
-
-# Special internal endpoints that compute global aggregate data that we want to
-# use internally.
-
-
-@application.route("/internal/sdk-stats", methods=["POST"])
-@util.time_request("sdk-stats")
-def sdk_distribution(*, timer: Timer) -> Response:
-    dataset = get_dataset("events")
-    request = validate_request_content(
-        parse_request_body(http_request),
-        RequestSchema(
-            schemas.SDK_STATS_BASE_SCHEMA,
-            SETTINGS_SCHEMAS[HTTPRequestSettings],
-            schemas.SDK_STATS_EXTENSIONS_SCHEMA,
-        ),
-        timer,
-        dataset,
-        http_request.referrer,
-    )
-
-    request.query.set_aggregations(
-        [["uniq", "project_id", "projects"], ["count()", None, "count"]]
-    )
-    request.query.add_groupby(["sdk_name", "rtime"])
-    request.extensions["project"] = {
-        "project": [],
-    }
-
-    ensure_table_exists(dataset)
-    return format_result(run_query(dataset, request, timer))
 
 
 @application.errorhandler(InvalidSubscriptionError)

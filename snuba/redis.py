@@ -31,6 +31,8 @@ class RetryingStrictRedisCluster(StrictRedisCluster):
             return super(self.__class__, self).execute_command(*args, **kwargs)
 
 
+redis_client: RedisClientType
+
 if settings.USE_REDIS_CLUSTER:
     startup_nodes = settings.REDIS_CLUSTER_STARTUP_NODES
     if startup_nodes is None:

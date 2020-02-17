@@ -112,6 +112,35 @@ def subscriptions(
             dataset_name, settings.DEFAULT_BROKERS
         )
 
+    loader = enforce_table_writer(dataset).get_stream_loader()
+
+    consumer = TickConsumer(
+        SynchronizedConsumer(
+            KafkaConsumer(
+                build_kafka_consumer_configuration(
+                    bootstrap_servers,
+                    consumer_group,
+                    auto_offset_reset=auto_offset_reset,
+                ),
+                PassthroughCodec(),
+            ),
+            KafkaConsumer(
+                build_kafka_consumer_configuration(
+                    bootstrap_servers,
+                    f"subscriptions-commit-log-{uuid.uuid1().hex}",
+                    auto_offset_reset="earliest",
+                ),
+                CommitCodec(),
+            ),
+            (
+                Topic(commit_log_topic)
+                if commit_log_topic is not None
+                else Topic(loader.get_commit_log_topic_spec().topic_name)
+            ),
+            set(commit_log_groups),
+        )
+    )
+
     producer = KafkaProducer(
         {
             "bootstrap.servers": ",".join(bootstrap_servers),
@@ -121,36 +150,9 @@ def subscriptions(
         SubscriptionResultCodec(),
     )
 
-    loader = enforce_table_writer(dataset).get_stream_loader()
-
-    with closing(producer):
-        consumer = BatchingConsumer(
-            TickConsumer(
-                SynchronizedConsumer(
-                    KafkaConsumer(
-                        build_kafka_consumer_configuration(
-                            bootstrap_servers,
-                            consumer_group,
-                            auto_offset_reset=auto_offset_reset,
-                        ),
-                        PassthroughCodec(),
-                    ),
-                    KafkaConsumer(
-                        build_kafka_consumer_configuration(
-                            bootstrap_servers,
-                            f"subscriptions-commit-log-{uuid.uuid1().hex}",
-                            auto_offset_reset="earliest",
-                        ),
-                        CommitCodec(),
-                    ),
-                    (
-                        Topic(commit_log_topic)
-                        if commit_log_topic is not None
-                        else Topic(loader.get_commit_log_topic_spec().topic_name)
-                    ),
-                    set(commit_log_groups),
-                )
-            ),
+    with closing(consumer), closing(producer):
+        batching_consumer = BatchingConsumer(
+            consumer,
             (
                 Topic(topic)
                 if topic is not None
@@ -189,9 +191,9 @@ def subscriptions(
         )
 
         def handler(signum, frame) -> None:
-            consumer.signal_shutdown()
+            batching_consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
-        consumer.run()
+        batching_consumer.run()
