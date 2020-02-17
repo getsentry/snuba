@@ -24,17 +24,6 @@ from snuba.environment import setup_logging, setup_sentry
     help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
-    help="Clickhouse server to write to.",
-)
-@click.option(
-    "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
-    type=int,
-    help="Clickhouse native port to write to.",
-)
-@click.option(
     "--dataset",
     "dataset_name",
     default="events",
@@ -77,8 +66,6 @@ def replacer(
     replacements_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    clickhouse_host: str,
-    clickhouse_port: int,
     dataset_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -128,7 +115,9 @@ def replacer(
     }
 
     clickhouse = ClickhousePool(
-        host=clickhouse_host, port=clickhouse_port, client_settings=client_settings,
+        settings.CLICKHOUSE_HOST,
+        settings.CLICKHOUSE_PORT,
+        client_settings=client_settings,
     )
 
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
