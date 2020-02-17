@@ -6,6 +6,12 @@ from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 
 
 class ReplacementMessage(NamedTuple):
+    """
+    Represent a generic replacement message (version 2 in our protocol) that we
+    find on the replacement topic.
+    TODO: We should use codecs to encode/decode kafka replacements messages.
+    """
+
     action_type: str  # This is a string to make this class agnostic to the dataset
     data: Mapping[str, Any]
 

@@ -30,7 +30,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         dataset_name = get_dataset_name(dataset)
         assert (
             self.__replacer_processor
-        ), f"This dataset writer does not support a replacer {dataset_name}"
+        ), f"This dataset writer does not support replacements {dataset_name}"
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
         message = json.loads(message.payload.value)

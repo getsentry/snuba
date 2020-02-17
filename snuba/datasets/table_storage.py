@@ -168,7 +168,7 @@ class TableWriter:
 
     def get_replacer_processor(self) -> Optional[ReplacerProcessor]:
         """
-        Returns a replacer processor if this table writer knows how to do
+        Returns a replacement processor if this table writer knows how to do
         replacements on the table it manages.
         """
         return self.__replacer_processor

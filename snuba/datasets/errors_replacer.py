@@ -1,8 +1,8 @@
 import logging
+import time
 
 from collections import deque
 from datetime import datetime
-import time
 from typing import FrozenSet, Mapping, Optional, Sequence
 
 from snuba import settings
