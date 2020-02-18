@@ -4,8 +4,8 @@ from datetime import datetime, timedelta
 import uuid
 
 from snuba import settings
+from snuba.environment import clickhouse_rw
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
 
 
@@ -51,7 +51,7 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.clickhouse = ClickhousePool()
+            self.clickhouse = clickhouse_rw
 
             for statement in self.dataset.get_dataset_schemas().get_drop_statements():
                 self.clickhouse.execute(statement.statement)

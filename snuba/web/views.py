@@ -3,14 +3,15 @@ import os
 import time
 from datetime import datetime
 from typing import NamedTuple
+from uuid import UUID
 
-from flask import Flask, Response, redirect, render_template, request as http_request
-from markdown import markdown
+import jsonschema
 import sentry_sdk
 import simplejson as json
+from flask import Flask, Response, redirect, render_template
+from flask import request as http_request
+from markdown import markdown
 from werkzeug.exceptions import BadRequest
-import jsonschema
-from uuid import UUID
 
 from snuba import settings, state, util
 from snuba.consumer import KafkaMessageMetadata
@@ -22,17 +23,15 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.environment import clickhouse_ro, clickhouse_rw
+from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
-from snuba.redis import redis_client
 from snuba.request.validation import validate_request_content
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
-from snuba.subscriptions.subscription import (
-    SubscriptionCreator,
-    SubscriptionDeleter,
-)
+from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.metrics.timer import Timer
@@ -40,11 +39,9 @@ from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
-    clickhouse_ro,
-    clickhouse_rw,
     ClickhouseQueryResult,
-    parse_and_run_query,
     RawQueryException,
+    parse_and_run_query,
 )
 
 
