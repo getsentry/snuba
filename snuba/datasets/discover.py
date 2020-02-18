@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.transactions import BEGINNING_OF_TIME
@@ -29,7 +30,6 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
-from snuba.replacer import EVENTS_STATE
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
@@ -308,7 +308,8 @@ class DiscoverDataset(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", replacer_state_name=EVENTS_STATE
+                    project_column="project_id",
+                    replacer_state_name=ReplacerState.EVENTS,
                 )
             ),
             "timeseries": TimeSeriesExtension(

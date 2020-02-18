@@ -3,6 +3,7 @@ from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -21,7 +22,6 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.replacer import EVENTS_STATE
 from snuba.util import qualified_column
 
 
@@ -151,7 +151,8 @@ class Groups(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="events.project_id", replacer_state_name=EVENTS_STATE
+                    project_column="events.project_id",
+                    replacer_state_name=ReplacerState.EVENTS,
                 )
             ),
             "timeseries": TimeSeriesExtension(

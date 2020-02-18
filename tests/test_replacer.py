@@ -6,7 +6,7 @@ import simplejson as json
 
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE
+from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE, ReplacerState
 from snuba.datasets import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -481,40 +481,40 @@ class TestReplacer(BaseEventsTest):
     def test_query_time_flags(self):
         project_ids = [1, 2]
 
-        assert errors_replacer.get_projects_query_flags(project_ids, "errors") == (
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
             False,
             [],
         )
 
-        errors_replacer.set_project_needs_final(100, "errors")
-        assert errors_replacer.get_projects_query_flags(project_ids, "errors") == (
+        errors_replacer.set_project_needs_final(100, ReplacerState.ERRORS)
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
             False,
             [],
         )
 
-        errors_replacer.set_project_needs_final(1, "errors")
-        assert errors_replacer.get_projects_query_flags(project_ids, "errors") == (
+        errors_replacer.set_project_needs_final(1, ReplacerState.ERRORS)
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
             True,
             [],
         )
-        assert errors_replacer.get_projects_query_flags(project_ids, "something") == (
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.EVENTS) == (
             False,
             [],
         )
 
-        errors_replacer.set_project_needs_final(2, "errors")
-        assert errors_replacer.get_projects_query_flags(project_ids, "errors") == (
+        errors_replacer.set_project_needs_final(2, ReplacerState.ERRORS)
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
             True,
             [],
         )
 
-        errors_replacer.set_project_exclude_groups(1, [1, 2], "errors")
-        errors_replacer.set_project_exclude_groups(2, [3, 4], "errors")
-        assert errors_replacer.get_projects_query_flags(project_ids, "errors") == (
+        errors_replacer.set_project_exclude_groups(1, [1, 2], ReplacerState.ERRORS)
+        errors_replacer.set_project_exclude_groups(2, [3, 4], ReplacerState.ERRORS)
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
             True,
             [1, 2, 3, 4],
         )
-        assert errors_replacer.get_projects_query_flags(project_ids, "something") == (
+        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.EVENTS) == (
             False,
             [],
         )

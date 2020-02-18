@@ -4,11 +4,12 @@ from typing import Sequence
 from tests.base import BaseTest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.errors_replacer import (
     set_project_exclude_groups,
     set_project_needs_final,
+    ReplacerState,
 )
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import FunctionCall, BooleanFunctions
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.project_extension import (
@@ -18,7 +19,6 @@ from snuba.query.project_extension import (
 )
 from snuba.query.query import Query
 from snuba.query.types import Condition
-from snuba.replacer import EVENTS_STATE
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
 
@@ -116,7 +116,7 @@ class TestProjectExtensionWithGroups(BaseTest):
 
         self.extension = ProjectExtension(
             processor=ProjectWithGroupsProcessor(
-                project_column="project_id", replacer_state_name=EVENTS_STATE
+                project_column="project_id", replacer_state_name=ReplacerState.EVENTS
             )
         )
         self.valid_data = validate_jsonschema(raw_data, self.extension.get_schema())
@@ -134,7 +134,7 @@ class TestProjectExtensionWithGroups(BaseTest):
 
     def test_without_turbo_with_projects_needing_final(self):
         request_settings = HTTPRequestSettings()
-        set_project_needs_final(2, EVENTS_STATE)
+        set_project_needs_final(2, ReplacerState.EVENTS)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -158,7 +158,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_not_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 5)
-        set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
+        set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings
@@ -199,7 +199,7 @@ class TestProjectExtensionWithGroups(BaseTest):
     def test_when_there_are_too_many_groups_to_exclude(self):
         request_settings = HTTPRequestSettings()
         state.set_config("max_group_ids_exclude", 2)
-        set_project_exclude_groups(2, [100, 101, 102], EVENTS_STATE)
+        set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
 
         self.extension.get_processor().process_query(
             self.query, self.valid_data, request_settings

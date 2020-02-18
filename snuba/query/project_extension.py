@@ -9,7 +9,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
-from snuba.datasets.errors_replacer import get_projects_query_flags
+from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME
@@ -107,7 +107,7 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
-    def __init__(self, project_column: str, replacer_state_name: str) -> None:
+    def __init__(self, project_column: str, replacer_state_name: ReplacerState) -> None:
         super().__init__(project_column)
         # This is used to disambiguate datasets in Redis when reading query flags.
         # If not present, infer the table name from the query.

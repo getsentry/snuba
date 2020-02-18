@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.errors_replacer import ErrorsReplacer
+from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
@@ -30,7 +30,6 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
-from snuba.replacer import EVENTS_STATE
 from snuba.util import qualified_column
 
 
@@ -287,6 +286,7 @@ class EventsDataset(TimeSeriesDataset):
                 required_columns=[col.escaped for col in required_columns],
                 tag_column_map=self.get_tag_column_map(),
                 promoted_tags=self.get_promoted_tags(),
+                state_name=ReplacerState.EVENTS,
             ),
         )
 
@@ -398,7 +398,8 @@ class EventsDataset(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="project_id", replacer_state_name=EVENTS_STATE
+                    project_column="project_id",
+                    replacer_state_name=ReplacerState.EVENTS,
                 )
             ),
             "timeseries": TimeSeriesExtension(
