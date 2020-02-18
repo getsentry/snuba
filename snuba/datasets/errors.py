@@ -175,7 +175,7 @@ class ErrorsDataset(TimeSeriesDataset):
             stream_loader=KafkaStreamLoader(
                 processor=ErrorsProcessor(self.__promoted_tag_columns),
                 default_topic="events",
-                replacement_topic="event-replacements",
+                replacement_topic="error-replacements",
             ),
             replacer_processor=ErrorsReplacer(
                 write_schema=schema,
