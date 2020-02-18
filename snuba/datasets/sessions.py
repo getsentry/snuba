@@ -91,7 +91,7 @@ class SessionDataset(TimeSeriesDataset):
                 ("project_id", UInt(64)),
                 ("retention_days", UInt(16)),
                 ("deleted", UInt(8)),
-                ("sample_rate", UInt(8)),
+                ("sample_rate", UInt(16)),
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
                 ("timestamp", DateTime()),
