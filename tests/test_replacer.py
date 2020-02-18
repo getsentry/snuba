@@ -6,7 +6,8 @@ import simplejson as json
 
 from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.replacer import FLATTENED_COLUMN_TEMPLATE
+from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE
+from snuba.datasets import errors_replacer
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
@@ -80,7 +81,7 @@ class TestReplacer(BaseEventsTest):
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
         assert replacement.query_time_flags == (
-            replacer.EXCLUDE_GROUPS,
+            errors_replacer.EXCLUDE_GROUPS,
             self.project_id,
             [1, 2, 3],
         )
@@ -116,7 +117,7 @@ class TestReplacer(BaseEventsTest):
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
         assert replacement.query_time_flags == (
-            replacer.EXCLUDE_GROUPS,
+            errors_replacer.EXCLUDE_GROUPS,
             self.project_id,
             [1, 2],
         )
@@ -153,7 +154,10 @@ class TestReplacer(BaseEventsTest):
             "project_id": self.project_id,
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
-        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (
+            errors_replacer.NEEDS_FINAL,
+            self.project_id,
+        )
 
     def test_delete_promoted_tag_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -186,7 +190,10 @@ class TestReplacer(BaseEventsTest):
             "project_id": self.project_id,
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
-        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (
+            errors_replacer.NEEDS_FINAL,
+            self.project_id,
+        )
 
     def test_delete_unpromoted_tag_process(self):
         timestamp = datetime.now(tz=pytz.utc)
@@ -220,7 +227,10 @@ class TestReplacer(BaseEventsTest):
             "project_id": self.project_id,
             "timestamp": timestamp.strftime(DATETIME_FORMAT),
         }
-        assert replacement.query_time_flags == (replacer.NEEDS_FINAL, self.project_id)
+        assert replacement.query_time_flags == (
+            errors_replacer.NEEDS_FINAL,
+            self.project_id,
+        )
 
     def test_delete_groups_insert(self):
         self.event["project_id"] = self.project_id
@@ -471,17 +481,20 @@ class TestReplacer(BaseEventsTest):
     def test_query_time_flags(self):
         project_ids = [1, 2]
 
-        assert replacer.get_projects_query_flags(project_ids) == (False, [])
+        assert errors_replacer.get_projects_query_flags(project_ids) == (False, [])
 
-        replacer.set_project_needs_final(100)
-        assert replacer.get_projects_query_flags(project_ids) == (False, [])
+        errors_replacer.set_project_needs_final(100)
+        assert errors_replacer.get_projects_query_flags(project_ids) == (False, [])
 
-        replacer.set_project_needs_final(1)
-        assert replacer.get_projects_query_flags(project_ids) == (True, [])
+        errors_replacer.set_project_needs_final(1)
+        assert errors_replacer.get_projects_query_flags(project_ids) == (True, [])
 
-        replacer.set_project_needs_final(2)
-        assert replacer.get_projects_query_flags(project_ids) == (True, [])
+        errors_replacer.set_project_needs_final(2)
+        assert errors_replacer.get_projects_query_flags(project_ids) == (True, [])
 
-        replacer.set_project_exclude_groups(1, [1, 2])
-        replacer.set_project_exclude_groups(2, [3, 4])
-        assert replacer.get_projects_query_flags(project_ids) == (True, [1, 2, 3, 4])
+        errors_replacer.set_project_exclude_groups(1, [1, 2])
+        errors_replacer.set_project_exclude_groups(2, [3, 4])
+        assert errors_replacer.get_projects_query_flags(project_ids) == (
+            True,
+            [1, 2, 3, 4],
+        )
