@@ -27,7 +27,7 @@ from snuba.environment import setup_logging, setup_sentry
     "--dataset",
     "dataset_name",
     default="events",
-    type=click.Choice(["events"]),
+    type=click.Choice(["events", "events_migration"]),
     help="The dataset to consume/run replacements for (currently only events supported)",
 )
 @click.option(

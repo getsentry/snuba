@@ -24,6 +24,7 @@ def wrap_raw_event(event):
         "platform": event["platform"],
         "datetime": event["datetime"],
         "data": event,
+        "organization_id": event["organization_id"],
     }
 
 

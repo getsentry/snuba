@@ -1,5 +1,6 @@
 raw_event = {
     "culprit": "io.sentry.example.Application in main",
+    "organization_id": 3,
     "errors": [],
     "extra": {"Sentry-Threadname": "io.sentry.example.Application.main()"},
     "fingerprint": ["{{ default }}"],
