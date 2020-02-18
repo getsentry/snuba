@@ -16,6 +16,7 @@ DATASET_NAMES: Set[str] = {
     "transactions",
     "outcomes",
     "outcomes_raw",
+    "sessions",
     "discover",
 }
 

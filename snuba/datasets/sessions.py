@@ -122,7 +122,7 @@ class SessionDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=SessionsProcessor(), default_topic="sessions",
+                processor=SessionsProcessor(), default_topic="ingest-sessions",
             ),
         )
 
