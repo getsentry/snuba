@@ -481,40 +481,33 @@ class TestReplacer(BaseEventsTest):
     def test_query_time_flags(self):
         project_ids = [1, 2]
 
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
-            False,
-            [],
-        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (False, [],)
 
         errors_replacer.set_project_needs_final(100, ReplacerState.ERRORS)
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
-            False,
-            [],
-        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (False, [],)
 
         errors_replacer.set_project_needs_final(1, ReplacerState.ERRORS)
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
-            True,
-            [],
-        )
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.EVENTS) == (
-            False,
-            [],
-        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (True, [],)
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.EVENTS
+        ) == (False, [],)
 
         errors_replacer.set_project_needs_final(2, ReplacerState.ERRORS)
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
-            True,
-            [],
-        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (True, [],)
 
         errors_replacer.set_project_exclude_groups(1, [1, 2], ReplacerState.ERRORS)
         errors_replacer.set_project_exclude_groups(2, [3, 4], ReplacerState.ERRORS)
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.ERRORS) == (
-            True,
-            [1, 2, 3, 4],
-        )
-        assert errors_replacer.get_projects_query_flags(project_ids, ReplacerState.EVENTS) == (
-            False,
-            [],
-        )
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.ERRORS
+        ) == (True, [1, 2, 3, 4],)
+        assert errors_replacer.get_projects_query_flags(
+            project_ids, ReplacerState.EVENTS
+        ) == (False, [],)
