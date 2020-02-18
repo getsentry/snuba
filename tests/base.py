@@ -1,6 +1,8 @@
 import calendar
-from hashlib import md5
+
+from copy import deepcopy
 from datetime import datetime, timedelta
+from hashlib import md5
 import uuid
 
 from snuba import settings
@@ -38,7 +40,7 @@ def get_event():
     raw_event["received"] = int(
         calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
     )
-    return wrap_raw_event(raw_event)
+    return wrap_raw_event(deepcopy(raw_event))
 
 
 class BaseTest(object):
@@ -119,7 +121,6 @@ class BaseEventsTest(BaseDatasetTest):
                 .process_message(event)
             )
             out.extend(processed.data)
-
         return self.write_processed_records(out)
 
     def write_processed_events(self, events):

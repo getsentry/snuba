@@ -2,6 +2,7 @@ raw_event = {
     "culprit": "io.sentry.example.Application in main",
     "organization_id": 3,
     "errors": [],
+    "title": "Exception!",
     "extra": {"Sentry-Threadname": "io.sentry.example.Application.main()"},
     "fingerprint": ["{{ default }}"],
     "id": "bce76c2473324fa387b33564eacf34a0",

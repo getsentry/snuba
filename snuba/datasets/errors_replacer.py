@@ -138,7 +138,7 @@ class ErrorsReplacer(ReplacerProcessor):
             for col in write_schema.get_columns()
             if not (
                 isinstance(col.type, ColumnTypeWithModifier)
-                and (Materialized in col.type.get_all_modifiers())
+                and Materialized in col.type.get_all_modifiers()
             )
         ]
         self.__tag_column_map = tag_column_map
@@ -431,8 +431,10 @@ def process_delete_tag(
     all_columns = [
         col
         for col in schema.get_columns()
-        if not isinstance(col.type, ColumnTypeWithModifier)
-        and (Materialized in col.type.get_all_modifiers())
+        if not (
+            isinstance(col.type, ColumnTypeWithModifier)
+            and Materialized in col.type.get_all_modifiers()
+        )
     ]
     select_columns = []
     for col in all_columns:
@@ -449,8 +451,6 @@ def process_delete_tag(
                 % escape_string(tag)
             )
         elif col.flattened == "_tags_flattened":
-            select_columns.append(FLATTENED_COLUMN_TEMPLATE % escape_string(tag))
-        elif col.flattened == "_contexts_flattened":
             select_columns.append(FLATTENED_COLUMN_TEMPLATE % escape_string(tag))
         else:
             select_columns.append(col.escaped)
