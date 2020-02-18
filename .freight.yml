@@ -13,6 +13,8 @@ steps:
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: errors-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: replacer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: transactions-consumer
@@ -20,6 +22,8 @@ steps:
     name: outcomes-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: loadbalancer-outcomes-consumer
+  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+    name: events-subscriptions-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
     name: cdc-consumer
   - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}

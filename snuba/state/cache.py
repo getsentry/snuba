@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Generic, TypeVar
+from typing import Generic, Optional, TypeVar
 
-from snuba.utils.codecs import Codec
+from snuba.redis import RedisClientType
 from snuba.state import get_config
+from snuba.utils.codecs import Codec
 
 
 T = TypeVar("T")
@@ -19,7 +20,9 @@ class Cache(Generic[T], ABC):
 
 
 class RedisCache(Cache[T]):
-    def __init__(self, client, prefix: str, codec: Codec[str, T]) -> None:
+    def __init__(
+        self, client: RedisClientType, prefix: str, codec: Codec[str, T]
+    ) -> None:
         self.__client = client
         self.__prefix = prefix
         self.__codec = codec

@@ -18,8 +18,8 @@ logger = logging.getLogger("snuba.clickhouse")
 class ClickhousePool(object):
     def __init__(
         self,
-        host=settings.CLICKHOUSE_HOST,
-        port=settings.CLICKHOUSE_PORT,
+        host: str,
+        port: int,
         connect_timeout=1,
         send_receive_timeout=300,
         max_pool_size=settings.CLICKHOUSE_MAX_POOL_SIZE,

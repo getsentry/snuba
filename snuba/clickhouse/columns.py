@@ -103,6 +103,25 @@ class Materialized(ColumnType):
         )
 
 
+class WithCodecs(ColumnType):
+    def __init__(self, inner_type: ColumnType, codecs: Sequence[str]) -> None:
+        self.inner_type = inner_type
+        self.__codecs = codecs
+
+    def __repr__(self) -> str:
+        return f"WithCodecs({repr(self.inner_type)}, {', '.join(self.__codecs)})"
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__
+            and self.__codecs == other.__codecs
+            and self.inner_type == other.inner_type
+        )
+
+    def for_schema(self) -> str:
+        return f"{self.inner_type.for_schema()} CODEC ({', '.join(self.__codecs)})"
+
+
 class WithDefault(ColumnType):
     def __init__(self, inner_type: ColumnType, default) -> None:
         self.inner_type = inner_type
@@ -243,6 +262,20 @@ class Date(ColumnType):
 
 class DateTime(ColumnType):
     pass
+
+
+class Enum(ColumnType):
+    def __init__(self, values: Sequence[Tuple[str, int]]) -> None:
+        self.values = values
+
+    def __repr__(self) -> str:
+        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+
+    def __eq__(self, other) -> bool:
+        return self.__class__ == other.__class__ and self.values == other.values
+
+    def for_schema(self) -> str:
+        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
 
 
 class ColumnSet:
