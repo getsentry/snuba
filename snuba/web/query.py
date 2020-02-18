@@ -64,7 +64,7 @@ class ClickhouseQueryMetadata:
     status: str
     trace_id: str
 
-    def to_dict(self):
+    def to_dict(self) -> Mapping[str, Any]:
         return {
             "sql": self.sql,
             "stats": self.stats,
@@ -81,7 +81,7 @@ class SnubaQueryMetadata:
     query_list: MutableSequence[ClickhouseQueryMetadata]
     referrer: Optional[str] = ""
 
-    def to_dict(self):
+    def to_dict(self) -> Mapping[str, Any]:
         return {
             "referrer": self.referrer,
             "dataset": get_dataset_name(self.dataset),
@@ -92,8 +92,8 @@ class SnubaQueryMetadata:
         }
 
     @property
-    def status(self):
-        return self.query_list[-1].status if self.query_list else "none"
+    def status(self) -> str:
+        return self.query_list[-1].status if self.query_list else "error"
 
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
