@@ -24,6 +24,7 @@ class QuerylogProcessor(MessageProcessor):
         cache_hit = []
         sample = []
         max_threads = []
+        duration_ms = []
 
         for query in query_list:
             sql.append(query["sql"])
@@ -32,6 +33,8 @@ class QuerylogProcessor(MessageProcessor):
             cache_hit.append(query["stats"].get("cache_hit", 0))
             sample.append(query["stats"].get("sample", 0))
             max_threads.append(query["stats"].get("max_threads", 0))
+            # TODO: Calculate subquery duration, for now just insert 0s
+            duration_ms.append(0)
 
         return {
             "clickhouse_queries.sql": sql,
@@ -40,6 +43,7 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.cache_hit": cache_hit,
             "clickhouse_queries.sample": [self.get_sample(s) for s in sample],
             "clickhouse_queries.max_threads": max_threads,
+            "clickhouse_queries.duration_ms": duration_ms,
         }
 
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:

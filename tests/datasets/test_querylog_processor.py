@@ -63,5 +63,6 @@ def test_simple():
             "clickhouse_queries.cache_hit": [0],
             "clickhouse_queries.sample": [10.],
             "clickhouse_queries.max_threads": [0],
+            "clickhouse_queries.duration_ms": [0],
         }]
     )

@@ -46,6 +46,7 @@ class QuerylogDataset(TimeSeriesDataset):
                             ("cache_hit", UInt(8)),
                             ("sample", Float(32)),
                             ("max_threads", UInt(8)),
+                            ("duration_ms", UInt(32)),
                         ]
                     ),
                 ),
