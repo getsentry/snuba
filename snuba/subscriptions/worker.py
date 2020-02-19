@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import itertools
 import json
-from typing import Mapping, MutableSequence, Optional, Sequence, NamedTuple
+from concurrent.futures import Future, as_completed
+from typing import Mapping, NamedTuple, Optional, Sequence
 
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.executor import SubscriptionExecutor
-from snuba.subscriptions.scheduler import Scheduler, ScheduledTask
+from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
 from snuba.utils.codecs import Codec
 from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
@@ -15,12 +17,17 @@ from snuba.utils.streams.types import Message, Topic
 from snuba.web.query import ClickhouseQueryResult
 
 
+class SubscriptionResultFuture(NamedTuple):
+    task: ScheduledTask[Subscription]
+    future: Future[ClickhouseQueryResult]
+
+
 class SubscriptionResult(NamedTuple):
     task: ScheduledTask[Subscription]
     result: ClickhouseQueryResult
 
 
-class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResult]]):
+class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFuture]]):
     def __init__(
         self,
         executor: SubscriptionExecutor,
@@ -35,21 +42,40 @@ class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResult]]
 
     def process_message(
         self, message: Message[Tick]
-    ) -> Optional[Sequence[SubscriptionResult]]:
-        results: MutableSequence[SubscriptionResult] = []
-
+    ) -> Optional[Sequence[SubscriptionResultFuture]]:
+        # Schedule all of the queries (tasks) associated with this tick message
+        # for (asynchronous) execution.
+        # NOTE: There is no backpressure here (tasks will be submitted to the
+        # executor as quickly as they are received from the broker) but there
+        # *is* a concurrency limit on the executor. If a much larger number of
+        # queries are scheduled to execute than there is capacity to execute,
+        # waiting for them to complete during ``flush_batch`` may exceed the
+        # consumer poll timeout (or session timeout during consumer
+        # rebalancing) and cause the entire batch to be have to be replayed.
         tick = message.payload
-        for task in self.__schedulers[message.partition.index].find(tick.timestamps):
-            results.append(
-                SubscriptionResult(task, self.__executor.execute(task, tick).result())
-            )
+        return [
+            SubscriptionResultFuture(task, self.__executor.execute(task, tick))
+            for task in self.__schedulers[message.partition.index].find(tick.timestamps)
+        ]
 
-        return results
+    def flush_batch(self, batch: Sequence[Sequence[SubscriptionResultFuture]]) -> None:
+        # Map over the batch, converting the ``SubscriptionResultFuture`` to a
+        # ``SubscriptionResult``. This will block and wait for any unfinished
+        # queries to complete, and raise any exceptions encountered during
+        # query execution. Either the entire batch succeeds, or the entire
+        # batch fails.
+        results = [
+            SubscriptionResult(task, future.result())
+            for task, future in itertools.chain.from_iterable(batch)
+        ]
 
-    def flush_batch(self, batch: Sequence[Sequence[SubscriptionResult]]) -> None:
-        for results in batch:
-            for result in results:
-                self.__producer.produce(self.__topic, result).result()
+        # Produce all of the subscription results asynchronously and wait for
+        # them to complete. Again, either the entire batch succeeds, or the
+        # entire batch fails.
+        for future in as_completed(
+            [self.__producer.produce(self.__topic, result) for result in results]
+        ):
+            future.result()
 
 
 class SubscriptionResultCodec(Codec[KafkaPayload, SubscriptionResult]):

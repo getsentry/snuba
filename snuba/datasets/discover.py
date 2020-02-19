@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.transactions import BEGINNING_OF_TIME
@@ -306,7 +307,9 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id", replacer_state_name=None,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
