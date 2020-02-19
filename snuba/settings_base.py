@@ -85,7 +85,4 @@ TURBO_SAMPLE_RATE = 0.1
 
 PROJECT_STACKTRACE_BLACKLIST = set()
 
-# Number of queries each subscription consumer can run concurrently.
-SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES = 10
-
 TOPIC_PARTITION_COUNTS: MutableMapping[str, int] = {}  # (topic name, # of partitions)
