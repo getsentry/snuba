@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.errors_replacer import ErrorsReplacer
+from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
@@ -286,6 +286,7 @@ class EventsDataset(TimeSeriesDataset):
                 required_columns=[col.escaped for col in required_columns],
                 tag_column_map=self.get_tag_column_map(),
                 promoted_tags=self.get_promoted_tags(),
+                state_name=ReplacerState.EVENTS,
             ),
         )
 
@@ -396,7 +397,12 @@ class EventsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id",
+                    # key migration is on going. As soon as all the keys we are interested
+                    # into in redis are stored with "EVENTS" in the name, we can change this.
+                    replacer_state_name=None,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

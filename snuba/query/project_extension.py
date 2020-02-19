@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba import settings, util
 from snuba.query.conditions import (
@@ -9,7 +9,7 @@ from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.query import Query
 from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
-from snuba.datasets.errors_replacer import get_projects_query_flags
+from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME
@@ -107,6 +107,14 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
+    def __init__(
+        self, project_column: str, replacer_state_name: Optional[ReplacerState]
+    ) -> None:
+        super().__init__(project_column)
+        # This is used to allow us to keep the replacement state in redis for multiple
+        # replacer on multiple tables. replacer_state_name is part of the redis key.
+        self.__replacer_state_name = replacer_state_name
+
     def do_post_processing(
         self,
         project_ids: Sequence[int],
@@ -114,7 +122,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         request_settings: RequestSettings,
     ) -> None:
         if not request_settings.get_turbo():
-            final, exclude_group_ids = get_projects_query_flags(project_ids)
+            final, exclude_group_ids = get_projects_query_flags(
+                project_ids, self.__replacer_state_name
+            )
             if not final and exclude_group_ids:
                 # If the number of groups to exclude exceeds our limit, the query
                 # should just use final instead of the exclusion set.

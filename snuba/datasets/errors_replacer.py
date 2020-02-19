@@ -3,6 +3,7 @@ import time
 
 from collections import deque
 from datetime import datetime
+from enum import Enum
 from typing import Any, Deque, FrozenSet, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
@@ -23,18 +24,33 @@ logger = logging.getLogger(__name__)
 EXCLUDE_GROUPS = object()
 NEEDS_FINAL = object()
 
+"""
+Disambiguate the dataset/storage when there are multiple tables representing errors
+that perform event replacements.
+In theory this will be needed only during the events to errors migration.
+"""
 
-def get_project_exclude_groups_key(project_id: int) -> str:
-    return "project_exclude_groups:%s" % project_id
+
+class ReplacerState(Enum):
+    EVENTS = "events"
+    ERRORS = "errors"
 
 
-def set_project_exclude_groups(project_id: int, group_ids: Sequence[int]) -> None:
+def get_project_exclude_groups_key(
+    project_id: int, state_name: Optional[ReplacerState]
+) -> str:
+    return f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+
+
+def set_project_exclude_groups(
+    project_id: int, group_ids: Sequence[int], state_name: Optional[ReplacerState]
+) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
     the entire ZSET incase it's rarely touched."""
 
     now = time.time()
-    key = get_project_exclude_groups_key(project_id)
+    key = get_project_exclude_groups_key(project_id, state_name)
     p = redis_client.pipeline()
 
     p.zadd(key, **{str(group_id): now for group_id in group_ids})
@@ -44,17 +60,25 @@ def set_project_exclude_groups(project_id: int, group_ids: Sequence[int]) -> Non
     p.execute()
 
 
-def get_project_needs_final_key(project_id: int) -> str:
-    return "project_needs_final:%s" % project_id
+def get_project_needs_final_key(
+    project_id: int, state_name: Optional[ReplacerState]
+) -> str:
+    return f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
 
 
-def set_project_needs_final(project_id: int) -> Optional[bool]:
+def set_project_needs_final(
+    project_id: int, state_name: Optional[ReplacerState]
+) -> Optional[bool]:
     return redis_client.set(
-        get_project_needs_final_key(project_id), True, ex=settings.REPLACER_KEY_TTL
+        get_project_needs_final_key(project_id, state_name),
+        True,
+        ex=settings.REPLACER_KEY_TTL,
     )
 
 
-def get_projects_query_flags(project_ids: Sequence[int]) -> Tuple[bool, Sequence[int]]:
+def get_projects_query_flags(
+    project_ids: Sequence[int], state_name: Optional[ReplacerState]
+) -> Tuple[bool, Sequence[int]]:
     """\
     1. Fetch `needs_final` for each Project
     2. Fetch groups to exclude for each Project
@@ -68,13 +92,15 @@ def get_projects_query_flags(project_ids: Sequence[int]) -> Tuple[bool, Sequence
     p = redis_client.pipeline()
 
     needs_final_keys = [
-        get_project_needs_final_key(project_id) for project_id in s_project_ids
+        get_project_needs_final_key(project_id, state_name)
+        for project_id in s_project_ids
     ]
     for needs_final_key in needs_final_keys:
         p.get(needs_final_key)
 
     exclude_groups_keys = [
-        get_project_exclude_groups_key(project_id) for project_id in s_project_ids
+        get_project_exclude_groups_key(project_id, state_name)
+        for project_id in s_project_ids
     ]
     for exclude_groups_key in exclude_groups_keys:
         p.zremrangebyscore(
@@ -102,12 +128,14 @@ class ErrorsReplacer(ReplacerProcessor):
         required_columns: Sequence[str],
         tag_column_map: Mapping[str, Mapping[str, str]],
         promoted_tags: Mapping[str, Sequence[str]],
+        state_name: ReplacerState,
     ) -> None:
         super().__init__(write_schema=write_schema, read_schema=read_schema)
         self.__required_columns = required_columns
         self.__all_column_names = [col.escaped for col in write_schema.get_columns()]
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
+        self.__state_name = state_name
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -141,11 +169,21 @@ class ErrorsReplacer(ReplacerProcessor):
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> None:
         # query_time_flags == (type, project_id, [...data...])
         flag_type, project_id = replacement.query_time_flags[:2]
+        if self.__state_name == ReplacerState.EVENTS:
+            # Backward compatibility with the old keys already in Redis, we will let double write
+            # the old key structure and the new one for a while then we can get rid of the old one.
+            compatibility_double_write = True
+        else:
+            compatibility_double_write = False
         if flag_type == NEEDS_FINAL:
-            set_project_needs_final(project_id)
+            if compatibility_double_write:
+                set_project_needs_final(project_id, None)
+            set_project_needs_final(project_id, self.__state_name)
         elif flag_type == EXCLUDE_GROUPS:
             group_ids = replacement.query_time_flags[2]
-            set_project_exclude_groups(project_id, group_ids)
+            if compatibility_double_write:
+                set_project_exclude_groups(project_id, group_ids, None)
+            set_project_exclude_groups(project_id, group_ids, self.__state_name)
 
 
 def process_delete_groups(

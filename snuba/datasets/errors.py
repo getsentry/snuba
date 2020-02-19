@@ -21,6 +21,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -216,7 +217,10 @@ class ErrorsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id",
+                    replacer_state_name=ReplacerState.ERRORS,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
