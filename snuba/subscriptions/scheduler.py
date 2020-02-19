@@ -6,6 +6,7 @@ from typing import Generic, Iterator, List, Optional, TypeVar
 
 from snuba.subscriptions.data import PartitionId, Subscription, SubscriptionIdentifier
 from snuba.subscriptions.store import SubscriptionDataStore
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.types import Interval
 
 
@@ -50,10 +51,13 @@ class SubscriptionScheduler(Scheduler[Subscription]):
         store: SubscriptionDataStore,
         partition_id: PartitionId,
         cache_ttl: timedelta,
+        metrics: MetricsBackend,
     ) -> None:
         self.__store = store
         self.__cache_ttl = cache_ttl
         self.__partition_id = partition_id
+        self.__metrics = metrics
+
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
 
@@ -67,6 +71,11 @@ class SubscriptionScheduler(Scheduler[Subscription]):
                 for uuid, data in self.__store.all()
             ]
             self.__last_refresh = current_time
+            self.__metrics.gauge(
+                "schedule_size",
+                len(self.__subscriptions),
+                tags={"partition": str(self.__partition_id)},
+            )
         return self.__subscriptions
 
     def find(
