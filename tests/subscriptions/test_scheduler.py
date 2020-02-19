@@ -11,6 +11,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import ScheduledTask, SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.base import BaseTest
 
@@ -20,6 +21,7 @@ class TestSubscriptionScheduler(BaseTest):
         super().setup_method(test_method, dataset_name)
         self.now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
         self.partition_id = PartitionId(1)
+        self.__metrics = DummyMetricsBackend(strict=True)
 
     def build_subscription(self, resolution: timedelta) -> Subscription:
         return Subscription(
@@ -48,7 +50,7 @@ class TestSubscriptionScheduler(BaseTest):
             store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
-            store, self.partition_id, timedelta(minutes=1)
+            store, self.partition_id, timedelta(minutes=1), self.__metrics,
         )
 
         result = list(scheduler.find(self.build_interval(start, end)))
