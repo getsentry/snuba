@@ -399,7 +399,9 @@ class EventsDataset(TimeSeriesDataset):
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
                     project_column="project_id",
-                    replacer_state_name=ReplacerState.EVENTS,
+                    # key migration is on going. As soon as all the keys we are interested
+                    # into in redis are stored with "EVENTS" in the name, we can change this.
+                    replacer_state_name=None,
                 )
             ),
             "timeseries": TimeSeriesExtension(

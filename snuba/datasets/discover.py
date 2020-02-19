@@ -308,8 +308,7 @@ class DiscoverDataset(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="project_id",
-                    replacer_state_name=ReplacerState.EVENTS,
+                    project_column="project_id", replacer_state_name=None,
                 )
             ),
             "timeseries": TimeSeriesExtension(

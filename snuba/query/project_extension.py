@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba import settings, util
 from snuba.query.conditions import (
@@ -107,10 +107,12 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
     2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
     """
 
-    def __init__(self, project_column: str, replacer_state_name: ReplacerState) -> None:
+    def __init__(
+        self, project_column: str, replacer_state_name: Optional[ReplacerState]
+    ) -> None:
         super().__init__(project_column)
-        # This is used to disambiguate datasets in Redis when reading query flags.
-        # If not present, infer the table name from the query.
+        # This is used to allow us to keep the replacement state in redis for multiple
+        # replacer on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
 
     def do_post_processing(
