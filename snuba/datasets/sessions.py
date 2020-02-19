@@ -23,7 +23,6 @@ from snuba.processor import (
     ProcessedMessage,
     _ensure_valid_date,
     _collapse_uint32,
-    MAX_UINT16,
     MAX_UINT32,
 )
 from snuba.query.extensions import QueryExtension
