@@ -100,7 +100,9 @@ def replacer(
     ), f"Dataset {dataset} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = util.create_metrics("snuba.replacer", tags={"group": consumer_group})
+    metrics = util.create_metrics(
+        "snuba.replacer", tags={"group": consumer_group, "dataset": dataset_name}
+    )
 
     client_settings = {
         # Replacing existing rows requires reconstructing the entire tuple for each
