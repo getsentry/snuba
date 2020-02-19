@@ -40,6 +40,7 @@ STATUS_MAPPING = {
     "exited": 1,
     "crashed": 2,
     "abnormal": 3,
+    "degraded": 4,
 }
 REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
 
@@ -64,7 +65,6 @@ class SessionsProcessor(MessageProcessor):
             "project_id": message["project_id"],
             "retention_days": message["retention_days"],
             "deleted": 0,
-            "sample_rate": int(max(min(message["sample_rate"], 1.0), 0.0) * MAX_UINT16),
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "timestamp": _ensure_valid_date(
@@ -91,7 +91,6 @@ class SessionDataset(TimeSeriesDataset):
                 ("project_id", UInt(64)),
                 ("retention_days", UInt(16)),
                 ("deleted", UInt(8)),
-                ("sample_rate", UInt(16)),
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
                 ("timestamp", DateTime()),
