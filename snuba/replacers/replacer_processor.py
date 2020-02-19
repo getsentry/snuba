@@ -49,7 +49,7 @@ class ReplacerProcessor(ABC):
         return self.__write_schema
 
     def get_read_schema(self) -> TableSchema:
-        return self.__write_schema
+        return self.__read_schema
 
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> None:
         """
