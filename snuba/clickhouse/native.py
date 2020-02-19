@@ -128,7 +128,7 @@ class ClickhousePool(object):
 
 
 class NativeDriverReader(Reader[ClickhouseQuery]):
-    def __init__(self, client) -> None:
+    def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
     def __transform_result(self, result, with_totals: bool) -> Result:
