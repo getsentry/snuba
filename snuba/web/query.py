@@ -18,13 +18,11 @@ from functools import partial
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.environment import clickhouse_ro
+from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Reader
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -102,7 +100,6 @@ cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
-    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: Optional[MutableMapping[str, Any]] = None,
@@ -389,10 +386,10 @@ def _run_query(
             )
         except Exception:
             logger.exception("Failed to format ast query")
+
         result = raw_query(
             request,
             query,
-            NativeDriverReader(clickhouse_ro),
             timer,
             query_metadata,
             stats,
