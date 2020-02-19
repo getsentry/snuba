@@ -11,7 +11,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
     Enum,
-    Float,
     UUID,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
