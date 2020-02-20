@@ -61,7 +61,9 @@ class SubscriptionScheduler(Scheduler[Subscription]):
         self.__subscriptions: List[Subscription] = []
         self.__last_refresh: Optional[datetime] = None
 
-    def __get_subscriptions(self, current_time: datetime) -> List[Subscription]:
+    def __get_subscriptions(self) -> List[Subscription]:
+        current_time = datetime.now()
+
         if (
             self.__last_refresh is None
             or (current_time - self.__last_refresh) > self.__cache_ttl
@@ -72,16 +74,24 @@ class SubscriptionScheduler(Scheduler[Subscription]):
             ]
             self.__last_refresh = current_time
             self.__metrics.gauge(
-                "schedule_size",
+                "schedule.size",
                 len(self.__subscriptions),
                 tags={"partition": str(self.__partition_id)},
             )
+
+        self.__metrics.timing(
+            "schedule.staleness",
+            (current_time - self.__last_refresh).total_seconds() * 1000.0,
+            tags={"partition": str(self.__partition_id)},
+        )
+
         return self.__subscriptions
 
     def find(
         self, interval: Interval[datetime]
     ) -> Iterator[ScheduledTask[Subscription]]:
-        subscriptions = self.__get_subscriptions(interval.lower)
+        subscriptions = self.__get_subscriptions()
+
         for timestamp in range(
             math.ceil(interval.lower.timestamp()),
             math.ceil(interval.upper.timestamp()),
