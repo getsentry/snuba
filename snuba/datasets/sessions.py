@@ -10,7 +10,6 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    Enum,
     UUID,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -71,9 +70,6 @@ class SessionsProcessor(MessageProcessor):
             "started": _ensure_valid_date(datetime.fromtimestamp(message["started"])),
             "release": message.get("release"),
             "environment": message.get("environment"),
-            "os": message.get("os"),
-            "os_version": message.get("os_version"),
-            "device_family": message.get("device_family"),
         }
         return ProcessedMessage(action=action_type, data=[processed])
 
@@ -95,9 +91,6 @@ class SessionDataset(TimeSeriesDataset):
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
                 ("environment", LowCardinality(Nullable(String()))),
-                ("os", LowCardinality(Nullable(String()))),
-                ("os_version", LowCardinality(Nullable(String()))),
-                ("device_family", LowCardinality(Nullable(String()))),
             ]
         )
 
