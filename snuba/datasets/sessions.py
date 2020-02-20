@@ -65,9 +65,9 @@ class SessionsProcessor(MessageProcessor):
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "timestamp": _ensure_valid_date(
-                datetime.fromtimestamp(message["timestamp"])
+                datetime.utcfromtimestamp(message["timestamp"])
             ),
-            "started": _ensure_valid_date(datetime.fromtimestamp(message["started"])),
+            "started": _ensure_valid_date(datetime.utcfromtimestamp(message["started"])),
             "release": message.get("release"),
             "environment": message.get("environment"),
         }
