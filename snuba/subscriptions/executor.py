@@ -10,6 +10,7 @@ from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.backends.abstract import MetricsBackend
+from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import ClickhouseQueryResult, parse_and_run_query
 
@@ -31,6 +32,7 @@ class SubscriptionExecutor:
         self.__dataset = dataset
         self.__executor_pool = executor_pool
         self.__metrics = metrics
+        self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
 
     def __run_query(
         self, scheduled_at: datetime, request: Request, timer: Timer
@@ -38,7 +40,8 @@ class SubscriptionExecutor:
         self.__metrics.timing(
             "executor.latency", (time.time() - scheduled_at.timestamp()) * 1000,
         )
-        return parse_and_run_query(self.__dataset, request, timer)
+        with self.__concurrent_gauge:
+            return parse_and_run_query(self.__dataset, request, timer)
 
     def execute(
         self, task: ScheduledTask[Subscription], tick: Tick
