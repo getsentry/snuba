@@ -1,4 +1,5 @@
 from typing import Any, Mapping, Optional, Sequence, Union
+import uuid
 
 from snuba.processor import MessageProcessor, ProcessedMessage, ProcessorAction
 
@@ -25,6 +26,7 @@ class QuerylogProcessor(MessageProcessor):
         sample = []
         max_threads = []
         duration_ms = []
+        trace_id = []
 
         for query in query_list:
             sql.append(query["sql"])
@@ -33,6 +35,7 @@ class QuerylogProcessor(MessageProcessor):
             cache_hit.append(query["stats"].get("cache_hit", 0))
             sample.append(query["stats"].get("sample", 0))
             max_threads.append(query["stats"].get("max_threads", 0))
+            trace_id.append(str(uuid.UUID(query["trace_id"])))
             # TODO: Calculate subquery duration, for now just insert 0s
             duration_ms.append(0)
 
@@ -43,6 +46,7 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.cache_hit": cache_hit,
             "clickhouse_queries.sample": [self.get_sample(s) for s in sample],
             "clickhouse_queries.max_threads": max_threads,
+            "clickhouse_queries.trace_id": trace_id,
             "clickhouse_queries.duration_ms": duration_ms,
         }
 

@@ -9,8 +9,10 @@ from snuba.clickhouse.columns import (
     LowCardinality,
     Mapping,
     Nested,
+    Nullable,
     String,
     UInt,
+    UUID,
 )
 
 from snuba.datasets.dataset import TimeSeriesDataset
@@ -47,6 +49,7 @@ class QuerylogDataset(TimeSeriesDataset):
                             ("sample", Float(32)),
                             ("max_threads", UInt(8)),
                             ("duration_ms", UInt(32)),
+                            ("trace_id", Nullable(UUID())),
                         ]
                     ),
                 ),
