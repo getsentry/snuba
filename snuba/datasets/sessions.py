@@ -40,6 +40,7 @@ STATUS_MAPPING = {
     "degraded": 4,
 }
 REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
+NIL_UUID = '00000000-0000-0000-0000-000000000000'
 
 
 class SessionsProcessor(MessageProcessor):
@@ -56,7 +57,7 @@ class SessionsProcessor(MessageProcessor):
 
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
-            "distinct_id": str(uuid.UUID(message["distinct_id"])),
+            "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
             "seq": message["seq"],
             "org_id": message["org_id"],
             "project_id": message["project_id"],
