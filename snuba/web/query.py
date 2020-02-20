@@ -1,7 +1,6 @@
 import copy
 import logging
 
-from dataclasses import dataclass
 from hashlib import md5
 from typing import (
     Any,
@@ -20,7 +19,6 @@ from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.redis import redis_client
@@ -35,7 +33,7 @@ from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web.split import split_query
-
+from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
@@ -53,48 +51,6 @@ class RawQueryException(Exception):
         self.stats = stats
         self.sql = sql
         self.meta = meta
-
-
-@dataclass(frozen=True)
-class ClickhouseQueryMetadata:
-    sql: str
-    stats: Mapping[str, Any]
-    status: str
-    trace_id: str
-
-    def to_dict(self) -> Mapping[str, Any]:
-        return {
-            "sql": self.sql,
-            "stats": self.stats,
-            "status": self.status,
-            "trace_id": self.trace_id,
-        }
-
-
-@dataclass(frozen=True)
-class SnubaQueryMetadata:
-    """
-    Metadata about a Snuba query for recording on the querylog dataset
-    """
-    request: Request
-    dataset: Dataset
-    timer: Timer
-    query_list: MutableSequence[ClickhouseQueryMetadata]
-    referrer: Optional[str] = ""
-
-    def to_dict(self) -> Mapping[str, Any]:
-        return {
-            "referrer": self.referrer,
-            "dataset": get_dataset_name(self.dataset),
-            "query_list": [q.to_dict() for q in self.query_list],
-            "request": self.request.body,
-            "status": self.status,
-            "timing": self.timer.for_json(),
-        }
-
-    @property
-    def status(self) -> str:
-        return self.query_list[-1].status if self.query_list else "error"
 
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
