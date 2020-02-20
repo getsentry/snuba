@@ -8,33 +8,33 @@ steps:
   selector:
     label_selector: service=snuba
   containers:
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: api
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: errors-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: errors-replacer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: replacer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: transactions-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: outcomes-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: loadbalancer-outcomes-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: events-subscriptions-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: cdc-consumer
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: cdc-groupassignee-consumer
 - kind: KubernetesCronJob
   selector:
     label_selector: service=snuba
   containers:
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: cleanup
-  - image: us.gcr.io/internal-sentry/github-getsentry-snuba:{sha}
+  - image: us.gcr.io/sentryio/snuba:{sha}
     name: optimize
