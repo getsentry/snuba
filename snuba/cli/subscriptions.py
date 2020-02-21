@@ -124,6 +124,10 @@ def subscriptions(
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
+    metrics = create_metrics(
+        "snuba.subscriptions", tags={"group": consumer_group, "dataset": dataset_name},
+    )
+
     consumer = TickConsumer(
         SynchronizedConsumer(
             KafkaConsumer(
@@ -192,10 +196,7 @@ def subscriptions(
             ),
             max_batch_size,
             max_batch_time_ms,
-            create_metrics(
-                "snuba.subscriptions",
-                tags={"group": consumer_group, "dataset": dataset_name},
-            ),
+            metrics,
         )
 
         def handler(signum, frame) -> None:
