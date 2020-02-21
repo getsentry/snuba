@@ -35,6 +35,7 @@ class QuerylogDataset(TimeSeriesDataset):
                 ("referrer", LowCardinality(String())),
                 ("dataset", LowCardinality(String())),
                 ("projects", Array(UInt(64))),
+                ("organization", Nullable(UInt(64))),
                 ("timestamp", DateTime()),
                 ("duration_ms", UInt(32)),
                 ("status", status_type),

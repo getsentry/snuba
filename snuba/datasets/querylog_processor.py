@@ -62,6 +62,7 @@ class QuerylogProcessor(MessageProcessor):
             "referrer": message["referrer"],
             "dataset": message["dataset"],
             "projects": projects,
+            "organization": None,
             "timestamp": message["timing"]["timestamp"],
             "duration_ms": message["timing"]["duration_ms"],
             "status": message["status"],
