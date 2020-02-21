@@ -1,6 +1,6 @@
 import logging
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -51,14 +51,13 @@ def raw_query(
     request: Request,
     query: DictClickhouseQuery,
     timer: Timer,
-    stats: Optional[MutableMapping[str, Any]] = None,
+    stats: MutableMapping[str, Any],
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
 
-    stats = stats or {}
     use_cache, use_deduper, uc_max = state.get_configs(
         [("use_cache", 0), ("use_deduper", 1), ("uncompressed_cache_max_cols", 5)]
     )
