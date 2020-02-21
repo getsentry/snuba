@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from snuba import settings as snuba_settings
 from snuba import util
-from snuba.query.columns import (
-    column_expr,
-    conditions_expr,
-)
 from snuba.datasets.dataset import Dataset
+from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
@@ -19,7 +17,7 @@ class ClickhouseQuery(ABC):
     """
 
     @abstractmethod
-    def format_sql(self) -> str:
+    def format_sql(self, format: Optional[str] = None) -> str:
         raise NotImplementedError
 
 
@@ -145,6 +143,9 @@ class DictClickhouseQuery(ClickhouseQuery):
             ]
         )
 
-    def format_sql(self) -> str:
+    def format_sql(self, format: Optional[str] = None) -> str:
         """Produces a SQL string from the parameters."""
-        return self.__formatted_query
+        query = self.__formatted_query
+        if format is not None:
+            query = f"{query} FORMAT {format}"
+        return query

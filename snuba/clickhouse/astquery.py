@@ -52,7 +52,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__settings = settings
         self.__formatted_query: Optional[str] = None
 
-    def format_sql(self) -> str:
+    def __get_formatted_query(self) -> str:
         if self.__formatted_query:
             return self.__formatted_query
 
@@ -144,3 +144,9 @@ class AstClickhouseQuery(ClickhouseQuery):
         )
 
         return self.__formatted_query
+
+    def format_sql(self, format: Optional[str] = None) -> str:
+        query = self.__get_formatted_query()
+        if format is not None:
+            query = f"{query} FORMAT {format}"
+        return query
