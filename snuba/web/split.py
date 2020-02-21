@@ -93,17 +93,17 @@ def split_query(query_func):
             if overall_result is None:
                 overall_result = result
             else:
-                overall_result["data"].extend(result["data"])
+                overall_result.rows.extend(result.rows)
 
-            if remaining_offset > 0 and len(overall_result["data"]) > 0:
-                to_trim = min(remaining_offset, len(overall_result["data"]))
-                overall_result["data"] = overall_result["data"][to_trim:]
+            if remaining_offset > 0 and len(overall_result.rows) > 0:
+                to_trim = min(remaining_offset, len(overall_result.rows))
+                overall_result.rows = overall_result.rows[to_trim:]
                 remaining_offset -= to_trim
 
-            total_results = len(overall_result["data"])
+            total_results = len(overall_result.rows)
 
             if total_results < limit:
-                if len(result["data"]) == 0:
+                if len(result.rows) == 0:
                     # If we got nothing from the last query, expand the range by a static factor
                     split_step = split_step * STEP_GROWTH
                 else:
@@ -112,7 +112,7 @@ def split_query(query_func):
                     # our last query and its time range, and how many we have left to fetch.
                     remaining = limit - total_results
                     split_step = split_step * math.ceil(
-                        remaining / float(len(result["data"]))
+                        remaining / float(len(result.rows))
                     )
 
                 # Set the start and end of the next query based on the new range.
@@ -143,11 +143,13 @@ def split_query(query_func):
         result = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
-        if result["data"]:
+        if result.rows:
             request = copy.deepcopy(request)
 
+            column_names = [column.name for column in result.columns]
+            event_id_column_index = column_names.index(column_split_spec.id_column)
             event_ids = list(
-                set([event[column_split_spec.id_column] for event in result["data"]])
+                set([event[event_id_column_index] for event in result.rows])
             )
             request.query.add_conditions(
                 [(column_split_spec.id_column, "IN", event_ids)]
@@ -155,25 +157,23 @@ def split_query(query_func):
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
 
+            project_id_column_index = column_names.index(
+                column_split_spec.project_column
+            )
             project_ids = list(
-                set(
-                    [
-                        event[column_split_spec.project_column]
-                        for event in result["data"]
-                    ]
-                )
+                set([event[project_id_column_index] for event in result.rows])
             )
             request.extensions["project"]["project"] = project_ids
 
-            timestamp_field = column_split_spec.timestamp_column
-            timestamps = [event[timestamp_field] for event in result["data"]]
-            request.extensions["timeseries"]["from_date"] = util.parse_datetime(
-                min(timestamps)
-            ).isoformat()
+            timestamp_column_index = column_names.index(
+                column_split_spec.timestamp_column
+            )
+            timestamps = [event[timestamp_column_index] for event in result.rows]
+            request.extensions["timeseries"]["from_date"] = min(timestamps).isoformat()
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
             request.extensions["timeseries"]["to_date"] = (
-                util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+                max(timestamps) + timedelta(seconds=1)
             ).isoformat()
 
         return query_func(dataset, request, *args, **kwargs)

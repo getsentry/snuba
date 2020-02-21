@@ -8,7 +8,8 @@ from clickhouse_driver import Client, errors
 from snuba import settings
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader, Result, transform_columns
+from snuba.reader import Reader
+from snuba.result import Column, Result
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -131,25 +132,6 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(self, result, with_totals: bool) -> Result:
-        """
-        Transform a native driver response into a response that is
-        structurally similar to a ClickHouse-flavored JSON response.
-        """
-        data, meta = result
-
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-        meta = [{"name": m[0], "type": m[1]} for m in meta]
-
-        if with_totals:
-            assert len(data) > 0
-            totals = data.pop(-1)
-            result = {"data": data, "meta": meta, "totals": totals}
-        else:
-            result = {"data": data, "meta": meta}
-
-        return transform_columns(result)
-
     def execute(
         self,
         query: ClickhouseQuery,
@@ -166,12 +148,12 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
             kwargs["query_id"] = query_id
 
         sql = query.format_sql()
-        return self.__transform_result(
-            self.__client.execute(
-                sql, with_column_types=True, settings=settings, **kwargs
-            ),
-            with_totals=with_totals,
+
+        rows, columns = self.__client.execute(
+            sql, with_column_types=True, settings=settings, **kwargs
         )
+
+        return Result([Column(name, type) for name, type in columns], rows)
 
 
 class NativeDriverBatchWriter(BatchWriter):

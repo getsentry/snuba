@@ -3,11 +3,12 @@ from __future__ import annotations
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from snuba.datasets.dataset import Dataset
+from snuba.result import Result
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import ClickhouseQueryResult, parse_and_run_query
+from snuba.web.query import parse_and_run_query
 
 
 class SubscriptionExecutor:
@@ -22,16 +23,14 @@ class SubscriptionExecutor:
         self.__dataset = dataset
         self.__executor_pool = executor_pool
 
-    def execute(
-        self, task: ScheduledTask[Subscription], tick: Tick
-    ) -> Future[ClickhouseQueryResult]:
+    def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:
         timer = Timer("query")
         try:
             request = task.task.data.build_request(
                 self.__dataset, task.timestamp, tick.offsets.upper, timer,
             )
         except Exception as e:
-            future: Future[ClickhouseQueryResult] = Future()
+            future: Future[Result] = Future()
             future.set_exception(e)
         else:
             future = self.__executor_pool.submit(

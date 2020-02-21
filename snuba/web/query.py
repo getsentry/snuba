@@ -13,6 +13,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.redis import redis_client
+from snuba.result import Result
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
@@ -28,9 +29,6 @@ from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
-
-
-ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
 
 class RawQueryException(Exception):
@@ -52,7 +50,7 @@ def raw_query(
     query: DictClickhouseQuery,
     timer: Timer,
     stats: Optional[MutableMapping[str, Any]] = None,
-) -> ClickhouseQueryResult:
+) -> Result:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -139,8 +137,8 @@ def raw_query(
                         timer.mark("execute")
                         stats.update(
                             {
-                                "result_rows": len(result["data"]),
-                                "result_cols": len(result["meta"]),
+                                "result_rows": len(result.rows),
+                                "result_cols": len(result.columns),
                             }
                         )
 
@@ -183,9 +181,9 @@ def raw_query(
         request, sql, timer, stats, "success", query_settings
     )
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-        result["stats"] = stats
-        result["sql"] = sql
+    # if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+    #     result["stats"] = stats
+    #     result["sql"] = sql
 
     return result
 
@@ -230,9 +228,7 @@ def log_query_and_update_stats(
 
 
 @split_query
-def parse_and_run_query(
-    dataset: Dataset, request: Request, timer: Timer
-) -> ClickhouseQueryResult:
+def parse_and_run_query(dataset: Dataset, request: Request, timer: Timer) -> Result:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )

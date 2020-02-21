@@ -29,6 +29,7 @@ from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import validate_request_content
+from snuba.result import Column, Result
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -39,7 +40,6 @@ from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
-    ClickhouseQueryResult,
     RawQueryException,
     parse_and_run_query,
 )
@@ -49,8 +49,7 @@ logger = logging.getLogger("snuba.api")
 
 
 class QueryResult(NamedTuple):
-    # TODO: Give a better abstraction to QueryResult
-    result: ClickhouseQueryResult
+    result: Result
     status: int
 
 
@@ -284,13 +283,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
 def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
     try:
-        return QueryResult(
-            {
-                **parse_and_run_query(dataset, request, timer),
-                "timing": timer.for_json(),
-            },
-            200,
-        )
+        return QueryResult(parse_and_run_query(dataset, request, timer), 200)
     except RawQueryException as e:
         return QueryResult(
             {
@@ -309,7 +302,17 @@ def format_result(result: QueryResult) -> Response:
             return obj.isoformat()
         elif isinstance(obj, UUID):
             return str(obj)
-        return obj
+        elif isinstance(obj, Column):
+            return {"name": obj.name, "type": obj.type}
+        elif isinstance(obj, Result):
+            return {
+                "meta": obj.columns,
+                "data": [
+                    {column.name: value for column, value in zip(obj.columns, row)}
+                    for row in obj.rows
+                ],
+            }
+        raise TypeError(f"{type(obj)} is not JSON serializable")
 
     return Response(
         json.dumps(result.result, default=json_default),
