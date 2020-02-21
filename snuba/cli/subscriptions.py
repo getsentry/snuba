@@ -176,7 +176,7 @@ def subscriptions(
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
             SubscriptionWorker(
-                SubscriptionExecutor(dataset, executor),
+                SubscriptionExecutor(dataset, executor, metrics),
                 {
                     index: SubscriptionScheduler(
                         RedisSubscriptionDataStore(
@@ -184,6 +184,7 @@ def subscriptions(
                         ),
                         PartitionId(index),
                         cache_ttl=timedelta(seconds=schedule_ttl),
+                        metrics=metrics,
                     )
                     for index in range(
                         partitions
