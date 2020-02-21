@@ -1705,9 +1705,10 @@ class TestApi(BaseApiTest):
 
             assert len(result["data"]) == 5
             assert record_query_mock.call_count == 1
-            assert record_query_mock.call_args[0][0]["dataset"] == "events"
-            assert record_query_mock.call_args[0][0]["referrer"] == "test"
-            assert len(record_query_mock.call_args[0][0]["query_list"]) == expected_query_count
+            metadata = record_query_mock.call_args[0][0].to_dict()
+            assert metadata["dataset"] == "events"
+            assert metadata["referrer"] == "test"
+            assert len(metadata["query_list"]) == expected_query_count
 
 
 class TestCreateSubscriptionApi(BaseApiTest):

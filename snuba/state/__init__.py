@@ -13,7 +13,7 @@ from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.redis import redis_client as rds
-from snuba.web.query_metadata import SnubaQueryMetadata
+from snuba.state.query_metadata import SnubaQueryMetadata
 
 
 logger = logging.getLogger("snuba.state")

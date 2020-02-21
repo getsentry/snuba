@@ -6,7 +6,6 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
-    MutableSequence,
     Optional,
 )
 
@@ -32,8 +31,8 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.state.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
-from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
@@ -238,7 +237,7 @@ def record_query(
 ) -> None:
     if settings.RECORD_QUERIES:
         # send to redis
-        state.record_query(query_metadata.to_dict())
+        state.record_query(query_metadata)
 
         final = str(request.query.get_final())
         referrer = request.referrer or "none"
