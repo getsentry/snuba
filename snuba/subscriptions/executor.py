@@ -12,7 +12,7 @@ from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import ClickhouseQueryResult, parse_and_run_query
+from snuba.web.query import RawQueryResult, parse_and_run_query
 
 
 class SubscriptionExecutor:
@@ -45,14 +45,14 @@ class SubscriptionExecutor:
 
     def execute(
         self, task: ScheduledTask[Subscription], tick: Tick
-    ) -> Future[ClickhouseQueryResult]:
+    ) -> Future[RawQueryResult]:
         timer = Timer("query")
         try:
             request = task.task.data.build_request(
                 self.__dataset, task.timestamp, tick.offsets.upper, timer,
             )
         except Exception as e:
-            future: Future[ClickhouseQueryResult] = Future()
+            future: Future[RawQueryResult] = Future()
             future.set_exception(e)
         else:
             future = self.__executor_pool.submit(

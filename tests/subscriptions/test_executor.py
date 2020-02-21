@@ -41,7 +41,7 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
         )
 
         result = executor.execute(ScheduledTask(now, subscription), tick).result()
-        assert result["data"][0]["count"] == 10
+        assert result.result["data"][0]["count"] == 10
 
         result = executor.execute(
             ScheduledTask(
@@ -51,4 +51,4 @@ class TestSubscriptionExecutor(BaseSubscriptionTest):
             tick,
         ).result()
 
-        assert result["data"][0]["count"] == 0
+        assert result.result["data"][0]["count"] == 0

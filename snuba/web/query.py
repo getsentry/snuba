@@ -1,6 +1,6 @@
 import logging
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Mapping, MutableMapping, NamedTuple
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
@@ -12,6 +12,7 @@ from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -30,7 +31,9 @@ logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
 
 
-ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
+class RawQueryResult(NamedTuple):
+    result: Result
+    extra: Any
 
 
 class RawQueryException(Exception):
@@ -52,7 +55,7 @@ def raw_query(
     query: DictClickhouseQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
-) -> ClickhouseQueryResult:
+) -> RawQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
@@ -182,11 +185,7 @@ def raw_query(
         request, sql, timer, stats, "success", query_settings
     )
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-        result["stats"] = stats
-        result["sql"] = sql
-
-    return result
+    return RawQueryResult(result, {"stats": stats, "sql": sql})
 
 
 def log_query_and_update_stats(
@@ -231,7 +230,7 @@ def log_query_and_update_stats(
 @split_query
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
-) -> ClickhouseQueryResult:
+) -> RawQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )

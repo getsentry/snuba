@@ -14,17 +14,17 @@ from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Topic
-from snuba.web.query import ClickhouseQueryResult
+from snuba.web.query import RawQueryResult
 
 
 class SubscriptionResultFuture(NamedTuple):
     task: ScheduledTask[Subscription]
-    future: Future[ClickhouseQueryResult]
+    future: Future[RawQueryResult]
 
 
 class SubscriptionResult(NamedTuple):
     task: ScheduledTask[Subscription]
-    result: ClickhouseQueryResult
+    result: RawQueryResult
 
 
 class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFuture]]):

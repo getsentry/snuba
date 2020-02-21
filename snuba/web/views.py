@@ -39,8 +39,8 @@ from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
-    ClickhouseQueryResult,
     RawQueryException,
+    RawQueryResult,
     parse_and_run_query,
 )
 
@@ -50,7 +50,7 @@ logger = logging.getLogger("snuba.api")
 
 class QueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
-    result: ClickhouseQueryResult
+    result: RawQueryResult
     status: int
 
 
@@ -284,13 +284,11 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
 def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
     try:
-        return QueryResult(
-            {
-                **parse_and_run_query(dataset, request, timer),
-                "timing": timer.for_json(),
-            },
-            200,
-        )
+        result = parse_and_run_query(dataset, request, timer)
+        payload = {**result.result, "timing": timer.for_json()}
+        if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+            payload.update(result.extra)
+        return QueryResult(payload, 200)
     except RawQueryException as e:
         return QueryResult(
             {
