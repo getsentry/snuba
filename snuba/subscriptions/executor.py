@@ -5,6 +5,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 
 from snuba.datasets.dataset import Dataset
+from snuba.reader import Result
 from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
@@ -12,7 +13,7 @@ from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import RawQueryResult, parse_and_run_query
+from snuba.web.query import parse_and_run_query
 
 
 class SubscriptionExecutor:
@@ -36,23 +37,21 @@ class SubscriptionExecutor:
 
     def __run_query(
         self, scheduled_at: datetime, request: Request, timer: Timer
-    ) -> ClickhouseQueryResult:
+    ) -> Result:
         self.__metrics.timing(
             "executor.latency", (time.time() - scheduled_at.timestamp()) * 1000,
         )
         with self.__concurrent_gauge:
-            return parse_and_run_query(self.__dataset, request, timer)
+            return parse_and_run_query(self.__dataset, request, timer).result
 
-    def execute(
-        self, task: ScheduledTask[Subscription], tick: Tick
-    ) -> Future[RawQueryResult]:
+    def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:
         timer = Timer("query")
         try:
             request = task.task.data.build_request(
                 self.__dataset, task.timestamp, tick.offsets.upper, timer,
             )
         except Exception as e:
-            future: Future[RawQueryResult] = Future()
+            future: Future[Result] = Future()
             future.set_exception(e)
         else:
             future = self.__executor_pool.submit(
