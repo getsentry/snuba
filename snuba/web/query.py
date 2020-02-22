@@ -24,7 +24,6 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.web.split import split_query
 
 
 logger = logging.getLogger("snuba.query")
@@ -227,10 +226,7 @@ def log_query_and_update_stats(
     return stats
 
 
-@split_query
-def parse_and_run_query(
-    dataset: Dataset, request: Request, timer: Timer
-) -> RawQueryResult:
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> RawQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )

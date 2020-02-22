@@ -12,7 +12,7 @@ from snuba.subscriptions.data import (
 from snuba.subscriptions.partitioner import TopicSubscriptionDataPartitioner
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 
 
 class SubscriptionCreator:
@@ -30,7 +30,7 @@ class SubscriptionCreator:
     def create(self, data: SubscriptionData, timer: Timer) -> SubscriptionIdentifier:
         # We want to test the query out here to make sure it's valid and can run
         request = data.build_request(self.dataset, datetime.utcnow(), None, timer)
-        parse_and_run_query(self.dataset, request, timer)
+        run_query(self.dataset, request, timer)
         identifier = SubscriptionIdentifier(
             self.__partitioner.build_partition_id(data), uuid1(),
         )

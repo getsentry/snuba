@@ -13,7 +13,7 @@ from snuba.subscriptions.scheduler import ScheduledTask
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.gauge import Gauge
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 
 
 class SubscriptionExecutor:
@@ -42,7 +42,7 @@ class SubscriptionExecutor:
             "executor.latency", (time.time() - scheduled_at.timestamp()) * 1000,
         )
         with self.__concurrent_gauge:
-            return parse_and_run_query(self.__dataset, request, timer).result
+            return run_query(self.__dataset, request, timer).result
 
     def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:
         timer = Timer("query")

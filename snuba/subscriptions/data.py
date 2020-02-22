@@ -72,7 +72,8 @@ class SubscriptionData:
         self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
     ) -> Request:
         """
-        Returns a Request that can be used to run a query via `parse_and_run_query`.
+        Returns a Request that can be used to run a query via `run_query`.
+
         :param dataset: The Dataset to build the request for
         :param timestamp: Date that the query should run up until
         :param offset: Maximum offset we should query for

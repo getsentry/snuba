@@ -1,10 +1,14 @@
 import copy
-from datetime import timedelta
 import math
+from datetime import timedelta
+from typing import Callable
 
 from snuba import state, util
-from snuba.datasets.dataset import ColumnSplitSpec
+from snuba.datasets.dataset import ColumnSplitSpec, Dataset
 from snuba.request import Request
+from snuba.utils.metrics.timer import Timer
+from snuba.web.query import RawQueryResult
+
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -13,8 +17,8 @@ from snuba.request import Request
 STEP_GROWTH = 10
 
 
-def split_query(query_func):
-    def wrapper(dataset, request: Request, *args, **kwargs):
+def split_query(query_func: Callable[[Dataset, Request, Timer], RawQueryResult]):
+    def wrapper(dataset: Dataset, request: Request, timer: Timer) -> RawQueryResult:
         use_split = state.get_configs([("use_split", 0)])
         query_limit = request.query.get_limit()
         limit = query_limit if query_limit is not None else 0
@@ -39,13 +43,13 @@ def split_query(query_func):
                 and not request.query.get_aggregations()
                 and total_col_count > min_col_count
             ):
-                return col_split(dataset, request, column_split_spec, *args, **kwargs)
+                return col_split(dataset, request, column_split_spec, timer)
             elif orderby[:1] == ["-timestamp"] and remaining_offset < 1000:
-                return time_split(dataset, request, *args, **kwargs)
+                return time_split(dataset, request, timer)
 
-        return query_func(dataset, request, *args, **kwargs)
+        return query_func(dataset, request, timer)
 
-    def time_split(dataset, request: Request, *args, **kwargs):
+    def time_split(dataset: Dataset, request: Request, timer: Timer) -> RawQueryResult:
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -90,7 +94,7 @@ def split_query(query_func):
             # iteration, if needed.
             # XXX: The extra data is carried across from the initial response
             # and never updated.
-            result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            result = query_func(dataset, copy.deepcopy(request), timer)
 
             if overall_result is None:
                 overall_result = result
@@ -129,8 +133,11 @@ def split_query(query_func):
         return overall_result
 
     def col_split(
-        dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs
-    ):
+        dataset: Dataset,
+        request: Request,
+        column_split_spec: ColumnSplitSpec,
+        timer: Timer,
+    ) -> RawQueryResult:
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
@@ -142,7 +149,7 @@ def split_query(query_func):
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
-        result = query_func(dataset, minimal_request, *args, **kwargs)
+        result = query_func(dataset, minimal_request, timer)
         del minimal_request
 
         if result.result["data"]:
@@ -183,6 +190,6 @@ def split_query(query_func):
                 util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
             ).isoformat()
 
-        return query_func(dataset, request, *args, **kwargs)
+        return query_func(dataset, request, timer)
 
     return wrapper

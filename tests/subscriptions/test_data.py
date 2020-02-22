@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock
 
 from snuba.subscriptions.data import SubscriptionData
-from snuba.web.query import parse_and_run_query
+from snuba.web.query import run_query
 from tests.subscriptions import BaseSubscriptionTest
 
 
@@ -18,5 +18,5 @@ class TestBuildRequest(BaseSubscriptionTest):
         request = subscription.build_request(
             self.dataset, datetime.utcnow(), 100, Mock()
         )
-        result = parse_and_run_query(self.dataset, request, Mock())
+        result = run_query(self.dataset, request, Mock())
         assert result.result["data"][0]["count"] == 10

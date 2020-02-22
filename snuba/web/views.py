@@ -41,7 +41,7 @@ from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
     RawQueryException,
     RawQueryResult,
-    parse_and_run_query,
+    run_query,
 )
 
 
@@ -266,7 +266,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_table_exists(dataset)
     return format_result(
-        run_query(
+        run_query_and_get_result(
             dataset,
             validate_request_content(
                 body,
@@ -282,9 +282,13 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     )
 
 
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+def run_query_and_get_result(
+    dataset: Dataset, request: Request, timer: Timer
+) -> QueryResult:
+    from snuba.web.split import split_query
+
     try:
-        result = parse_and_run_query(dataset, request, timer)
+        result = split_query(run_query)(dataset, request, timer)
         payload = {**result.result, "timing": timer.for_json()}
         if settings.STATS_IN_RESPONSE or request.settings.get_debug():
             payload.update(result.extra)
