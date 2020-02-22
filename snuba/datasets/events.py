@@ -281,14 +281,7 @@ class EventsDataset(TimeSeriesDataset):
             migration_function=events_migrations,
         )
 
-        self.__metadata_columns = metadata_columns
-        self.__promoted_tag_columns = promoted_tag_columns
-        self.__promoted_context_tag_columns = promoted_context_tag_columns
-        self.__promoted_context_columns = promoted_context_columns
-        self.__required_columns = required_columns
-
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
@@ -301,8 +294,7 @@ class EventsDataset(TimeSeriesDataset):
                 write_schema=schema,
                 read_schema=schema,
                 required_columns=[col.escaped for col in required_columns],
-                tag_column_map=self.get_tag_column_map(),
-                promoted_tags=self.get_promoted_tags(),
+                promoted_column_spec=promoted_columns_spec,
                 state_name=ReplacerState.EVENTS,
             ),
         )
@@ -314,9 +306,6 @@ class EventsDataset(TimeSeriesDataset):
             time_parse_columns=("timestamp", "received"),
         )
 
-        self.__metadata_columns = metadata_columns
-        self.__required_columns = required_columns
-        self.__promoted_columns_spec = promoted_columns_spec
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns, promoted_columns_spec=promoted_columns_spec
         )
@@ -327,9 +316,6 @@ class EventsDataset(TimeSeriesDataset):
             project_column="project_id",
             timestamp_column="timestamp",
         )
-
-    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
-        return self.__promoted_columns_spec
 
     def column_expr(
         self,
@@ -355,9 +341,6 @@ class EventsDataset(TimeSeriesDataset):
             return f"coalesce({search_message}, {message})"
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
-
-    def get_required_columns(self):
-        return self.__required_columns
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {

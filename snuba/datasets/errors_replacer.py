@@ -10,6 +10,7 @@ from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.clickhouse.columns import ColumnTypeWithModifier, Materialized
 from snuba.clickhouse.escaping import escape_identifier, escape_string
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
 from snuba.redis import redis_client
@@ -127,8 +128,7 @@ class ErrorsReplacer(ReplacerProcessor):
         write_schema: WritableTableSchema,
         read_schema: TableSchema,
         required_columns: Sequence[str],
-        tag_column_map: Mapping[str, Mapping[str, str]],
-        promoted_tags: Mapping[str, Sequence[str]],
+        promoted_column_spec: Mapping[str, PromotedColumnSpec],
         state_name: ReplacerState,
     ) -> None:
         super().__init__(write_schema=write_schema, read_schema=read_schema)
@@ -141,8 +141,7 @@ class ErrorsReplacer(ReplacerProcessor):
                 and Materialized in col.type.get_all_modifiers()
             )
         ]
-        self.__tag_column_map = tag_column_map
-        self.__promoted_tags = promoted_tags
+        self.__promoted_column_spec = promoted_column_spec
         self.__state_name = state_name
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
@@ -164,10 +163,7 @@ class ErrorsReplacer(ReplacerProcessor):
             processed = process_unmerge(event, self.__all_column_names)
         elif type_ == "end_delete_tag":
             processed = process_delete_tag(
-                event,
-                self.get_write_schema(),
-                self.__tag_column_map,
-                self.__promoted_tags,
+                event, self.get_write_schema(), self.__promoted_column_spec,
             )
         else:
             raise InvalidMessageType("Invalid message type: {}".format(type_))
@@ -396,8 +392,7 @@ concat(
 def process_delete_tag(
     message: Mapping[str, Any],
     schema: TableSchema,
-    tag_column_map: Mapping[str, Mapping[str, str]],
-    promoted_tags: Mapping[str, Sequence[str]],
+    promoted_column_spec: Mapping[str, PromotedColumnSpec],
 ) -> Optional[Replacement]:
     tag = message["tag"]
     if not tag:
@@ -405,8 +400,11 @@ def process_delete_tag(
 
     assert isinstance(tag, str)
     timestamp = datetime.strptime(message["datetime"], settings.PAYLOAD_DATETIME_FORMAT)
-    tag_column_name = tag_column_map["tags"].get(tag, tag)
-    is_promoted = tag in promoted_tags["tags"]
+    spec = promoted_column_spec.get("tags")
+    tag_column_name = (
+        spec.tag_column_mapping.get(tag, tag) if spec is not None else None
+    )
+    is_promoted = tag in spec.get_tags() if spec is not None else False
 
     where = """\
         WHERE project_id = %(project_id)s

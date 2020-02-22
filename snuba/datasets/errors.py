@@ -184,11 +184,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 write_schema=schema,
                 read_schema=schema,
                 required_columns=required_columns,
-                tag_column_map={"tags": self.__promoted_tag_columns, "contexts": {}},
-                promoted_tags={
-                    "tags": self.__promoted_tag_columns.keys(),
-                    "contexts": {},
-                },
+                promoted_column_spec=promoted_tags_spec,
                 state_name=ReplacerState.ERRORS,
             ),
         )
@@ -200,8 +196,6 @@ class ErrorsDataset(TimeSeriesDataset):
             time_parse_columns=("timestamp", "received"),
         )
 
-        self.__promoted_columns_spec = promoted_tags_spec
-
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns, promoted_columns_spec=promoted_tags_spec,
         )
@@ -212,9 +206,6 @@ class ErrorsDataset(TimeSeriesDataset):
             project_column="project_id",
             timestamp_column="timestamp",
         )
-
-    def get_promoted_columns_spec(self) -> Mapping[str, PromotedColumnSpec]:
-        return self.__promoted_columns_spec
 
     def column_expr(
         self,
