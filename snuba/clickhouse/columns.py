@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Mapping, Optional, Sequence, Tuple, Union
+from itertools import chain
 
 from snuba.clickhouse.escaping import escape_identifier
 
@@ -196,6 +197,29 @@ class LowCardinality(ColumnType):
         return "LowCardinality({})".format(self.inner_type.for_schema())
 
 
+class AggregateFunction(ColumnType):
+    def __init__(self, func, *arg_types: Tuple[ColumnType]) -> None:
+        self.func = func
+        self.arg_types = arg_types
+
+    def __repr__(self) -> str:
+        return "AggregateFunction({})".format(
+            ", ".join(repr(x) for x in chain([self.func], self.arg_types)),
+        )
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__
+            and self.func == other.func
+            and self.arg_types == other.arg_types
+        )
+
+    def for_schema(self) -> str:
+        return "AggregateFunction({})".format(
+            ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
+        )
+
+
 class String(ColumnType):
     pass
 
@@ -269,13 +293,17 @@ class Enum(ColumnType):
         self.values = values
 
     def __repr__(self) -> str:
-        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+        return "Enum({})".format(
+            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
+        )
 
     def __eq__(self, other) -> bool:
         return self.__class__ == other.__class__ and self.values == other.values
 
     def for_schema(self) -> str:
-        return "Enum({})".format(', '.join("'{}' = {}".format(v[0], v[1]) for v in self.values))
+        return "Enum({})".format(
+            ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
+        )
 
 
 class ColumnSet:

@@ -7,12 +7,17 @@ from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
     LowCardinality,
+    AggregateFunction,
     Nullable,
     String,
     UInt,
     UUID,
 )
-from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.schemas.tables import (
+    ReplacingMergeTreeSchema,
+    MaterializedViewSchema,
+    AggregatingMergeTreeSchema,
+)
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.processor import (
@@ -40,7 +45,7 @@ STATUS_MAPPING = {
     "degraded": 4,
 }
 REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
-NIL_UUID = '00000000-0000-0000-0000-000000000000'
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 class SessionsProcessor(MessageProcessor):
@@ -62,13 +67,14 @@ class SessionsProcessor(MessageProcessor):
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "retention_days": message["retention_days"],
-            "deleted": 0,
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "timestamp": _ensure_valid_date(
                 datetime.utcfromtimestamp(message["timestamp"])
             ),
-            "started": _ensure_valid_date(datetime.utcfromtimestamp(message["started"])),
+            "started": _ensure_valid_date(
+                datetime.utcfromtimestamp(message["started"])
+            ),
             "release": message.get("release"),
             "environment": message.get("environment"),
         }
@@ -85,7 +91,6 @@ class SessionDataset(TimeSeriesDataset):
                 ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
                 ("retention_days", UInt(16)),
-                ("deleted", UInt(8)),
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
                 ("timestamp", DateTime()),
@@ -95,23 +100,75 @@ class SessionDataset(TimeSeriesDataset):
             ]
         )
 
-        schema = ReplacingMergeTreeSchema(
+        write_schema = ReplacingMergeTreeSchema(
             columns=all_columns,
-            local_table_name="sessions_local",
-            dist_table_name="sessions_dist",
-            mandatory_conditions=[("deleted", "=", 0)],
-            prewhere_candidates=["project_id"],
-            order_by="(project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
+            local_table_name="sessions_raw_local",
+            dist_table_name="sessions_raw_dist",
+            prewhere_candidates=["project_id", "org_id"],
+            order_by="(org_id, project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
             partition_by="(toMonday(timestamp))",
             version_column="seq",
             sample_expr="cityHash64(toString(session_id))",
             settings={"index_granularity": 16384},
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema)
+        read_columns = ColumnSet(
+            [
+                ("org_id", UInt(64)),
+                ("project_id", UInt(64)),
+                ("started", DateTime()),
+                ("release", LowCardinality(Nullable(String()))),
+                ("environment", LowCardinality(Nullable(String()))),
+                ("uniq_sessions", AggregateFunction("uniq", UUID())),
+                ("uniq_users", AggregateFunction("uniq", UUID())),
+                ("uniq_crashes", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_degraded", AggregateFunction("uniqIf", UUID(), UInt(8))),
+            ]
+        )
+        read_schema = AggregatingMergeTreeSchema(
+            columns=read_columns,
+            local_table_name="sessions_aggr_local",
+            dist_table_name="sessions_aggr_dist",
+            prewhere_candidates=["project_id", "org_id"],
+            order_by="(org_id, project_id, started, release)",
+            partition_by="started",
+            settings={"index_granularity": 16384},
+        )
+        materialized_view = MaterializedViewSchema(
+            local_materialized_view_name="sessions_aggr_daily_mv_local",
+            dist_materialized_view_name="sessions_aggr_daily_mv_dist",
+            prewhere_candidates=["project_id", "org_id"],
+            columns=read_columns,
+            query="""
+                SELECT
+                    org_id,
+                    project_id,
+                    toStartOfDay(started) as started,
+                    release,
+                    environment,
+                    uniqState(session_id) as uniq_sessions,
+                    uniqState(distinct_id) as uniq_users,
+                    uniqIfState(distinct_id, status == 2 OR status == 3) as uniq_crashes,
+                    uniqIfState(distinct_id, status == 4) as uniq_degraded
+                FROM
+                    %(source_table_name)s
+                GROUP BY
+                    org_id, project_id, started, release, environment
+            """,
+            local_source_table_name="sessions_raw_local",
+            local_destination_table_name="sessions_aggr_local",
+            dist_source_table_name="sessions_raw_dist",
+            dist_destination_table_name="sessions_aggr_dist",
+        )
+
+        dataset_schemas = DatasetSchemas(
+            read_schema=read_schema,
+            write_schema=write_schema,
+            intermediary_schemas=[materialized_view],
+        )
 
         table_writer = TableWriter(
-            write_schema=schema,
+            write_schema=write_schema,
             stream_loader=KafkaStreamLoader(
                 processor=SessionsProcessor(), default_topic="ingest-sessions",
             ),
