@@ -1,5 +1,4 @@
 import logging
-
 from hashlib import md5
 from typing import Any, Mapping, MutableMapping, Optional
 
@@ -9,29 +8,27 @@ from flask import request as http_request
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Reader
-from snuba.request import Request
 from snuba.redis import redis_client
+from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
+    PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
-    PROJECT_RATE_LIMIT_NAME,
 )
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web.split import split_query
 
+
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
 
-clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
 
 ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
@@ -53,7 +50,6 @@ cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
-    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: Optional[MutableMapping[str, Any]] = None,
 ) -> ClickhouseQueryResult:
@@ -241,6 +237,11 @@ def parse_and_run_query(
         request.extensions["timeseries"]
     )
 
+    if (
+        request.query.get_sample() is not None and request.query.get_sample() != 1.0
+    ) and not request.settings.get_turbo():
+        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
+
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
         extension.get_processor().process_query(
@@ -290,9 +291,7 @@ def parse_and_run_query(
             )
         except Exception:
             logger.exception("Failed to format ast query")
-        result = raw_query(
-            request, query, NativeDriverReader(clickhouse_ro), timer, stats
-        )
+        result = raw_query(request, query, timer, stats)
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -14,6 +14,8 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas.tables import (
@@ -279,6 +281,12 @@ class EventsDataset(TimeSeriesDataset):
             migration_function=events_migrations,
         )
 
+        self.__metadata_columns = metadata_columns
+        self.__promoted_tag_columns = promoted_tag_columns
+        self.__promoted_context_tag_columns = promoted_context_tag_columns
+        self.__promoted_context_columns = promoted_context_columns
+        self.__required_columns = required_columns
+
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         table_writer = TableWriter(
@@ -288,6 +296,14 @@ class EventsDataset(TimeSeriesDataset):
                 default_topic="events",
                 replacement_topic="event-replacements",
                 commit_log_topic="snuba-commit-log",
+            ),
+            replacer_processor=ErrorsReplacer(
+                write_schema=schema,
+                read_schema=schema,
+                required_columns=[col.escaped for col in required_columns],
+                tag_column_map=self.get_tag_column_map(),
+                promoted_tags=self.get_promoted_tags(),
+                state_name=ReplacerState.EVENTS,
             ),
         )
 
@@ -346,7 +362,12 @@ class EventsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id",
+                    # key migration is on going. As soon as all the keys we are interested
+                    # into in redis are stored with "EVENTS" in the name, we can change this.
+                    replacer_state_name=None,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

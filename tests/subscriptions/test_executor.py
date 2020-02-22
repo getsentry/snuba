@@ -3,7 +3,6 @@ from uuid import uuid1
 
 from concurrent.futures import ThreadPoolExecutor
 
-from snuba import settings
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
@@ -13,6 +12,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.subscriptions import BaseSubscriptionTest
 
@@ -20,10 +20,7 @@ from tests.subscriptions import BaseSubscriptionTest
 class TestSubscriptionExecutor(BaseSubscriptionTest):
     def test(self):
         executor = SubscriptionExecutor(
-            self.dataset,
-            ThreadPoolExecutor(
-                max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
-            ),
+            self.dataset, ThreadPoolExecutor(), DummyMetricsBackend(strict=True)
         )
 
         subscription = Subscription(

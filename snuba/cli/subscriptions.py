@@ -1,3 +1,4 @@
+import logging
 import signal
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,9 @@ from snuba.utils.streams.kafka import (
 )
 from snuba.utils.streams.synchronized import SynchronizedConsumer
 from snuba.utils.streams.types import Topic
+
+
+logger = logging.getLogger(__name__)
 
 
 @click.command()
@@ -79,6 +83,11 @@ from snuba.utils.streams.types import Topic
     type=int,
     help="Max length of time to buffer messages in memory before writing to Kafka.",
 )
+@click.option(
+    "--max-query-workers",
+    type=int,
+    help="Maximum number of worker threads to use for concurrent query execution",
+)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--result-topic")
 @click.option("--log-level", help="Logging level to use.")
@@ -94,6 +103,7 @@ def subscriptions(
     bootstrap_servers: Sequence[str],
     max_batch_size: int,
     max_batch_time_ms: int,
+    max_query_workers: Optional[int],
     schedule_ttl: int,
     result_topic: Optional[str],
     log_level: Optional[str],
@@ -113,6 +123,10 @@ def subscriptions(
         )
 
     loader = enforce_table_writer(dataset).get_stream_loader()
+
+    metrics = create_metrics(
+        "snuba.subscriptions", tags={"group": consumer_group, "dataset": dataset_name},
+    )
 
     consumer = TickConsumer(
         SynchronizedConsumer(
@@ -150,7 +164,10 @@ def subscriptions(
         SubscriptionResultCodec(),
     )
 
-    with closing(consumer), closing(producer):
+    executor = ThreadPoolExecutor(max_workers=max_query_workers)
+    logger.debug("Starting %r with %s workers...", executor, executor._max_workers)
+
+    with closing(consumer), executor, closing(producer):
         batching_consumer = BatchingConsumer(
             consumer,
             (
@@ -159,12 +176,7 @@ def subscriptions(
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
             SubscriptionWorker(
-                SubscriptionExecutor(
-                    dataset,
-                    ThreadPoolExecutor(
-                        max_workers=settings.SUBSCRIPTIONS_MAX_CONCURRENT_QUERIES
-                    ),
-                ),
+                SubscriptionExecutor(dataset, executor, metrics),
                 {
                     index: SubscriptionScheduler(
                         RedisSubscriptionDataStore(
@@ -172,6 +184,7 @@ def subscriptions(
                         ),
                         PartitionId(index),
                         cache_ttl=timedelta(seconds=schedule_ttl),
+                        metrics=metrics,
                     )
                     for index in range(
                         partitions
@@ -184,10 +197,7 @@ def subscriptions(
             ),
             max_batch_size,
             max_batch_time_ms,
-            create_metrics(
-                "snuba.subscriptions",
-                tags={"group": consumer_group, "dataset": dataset_name},
-            ),
+            metrics,
         )
 
         def handler(signum, frame) -> None:
