@@ -37,6 +37,13 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 
 
+WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
+WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
+READ_LOCAL_TABLE_NAME = "sessions_hourly_local"
+READ_DIST_TABLE_NAME = "sessions_hourly_dist"
+READ_LOCAL_MV_NAME = "sessions_hourly_mv_local"
+READ_DIST_MV_NAME = "sessions_hourly_mv_dist"
+
 STATUS_MAPPING = {
     "ok": 0,
     "exited": 1,
@@ -64,6 +71,7 @@ class SessionsProcessor(MessageProcessor):
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
             "seq": message["seq"],
+            "deleted": 0,
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "retention_days": message["retention_days"],
@@ -93,6 +101,11 @@ class SessionDataset(TimeSeriesDataset):
                 ("retention_days", UInt(16)),
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
+                ("errors", UInt(16)),
+                # note here that deleted is really only an indicator so we can
+                # figure out which values can be discarded.  Deleting of values
+                # does not update the materializations.
+                ("deleted", UInt(8)),
                 ("timestamp", DateTime()),
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
@@ -102,8 +115,8 @@ class SessionDataset(TimeSeriesDataset):
 
         write_schema = ReplacingMergeTreeSchema(
             columns=all_columns,
-            local_table_name="sessions_raw_local",
-            dist_table_name="sessions_raw_dist",
+            local_table_name=WRITE_LOCAL_TABLE_NAME,
+            dist_table_name=WRITE_DIST_TABLE_NAME,
             prewhere_candidates=["project_id", "org_id"],
             order_by="(org_id, project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
             partition_by="(toMonday(timestamp))",
@@ -119,46 +132,67 @@ class SessionDataset(TimeSeriesDataset):
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
                 ("environment", LowCardinality(Nullable(String()))),
-                ("uniq_sessions", AggregateFunction("uniq", UUID())),
+                (
+                    "duration",
+                    AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
+                ),
+                ("uniq_sessions", AggregateFunction("countIf", UUID(), UInt(8))),
                 ("uniq_users", AggregateFunction("uniq", UUID())),
-                ("uniq_crashes", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_degraded", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_sessions_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                (
+                    "uniq_sessions_abnormal",
+                    AggregateFunction("uniqIf", UUID(), UInt(8)),
+                ),
+                ("uniq_sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
             ]
         )
         read_schema = AggregatingMergeTreeSchema(
             columns=read_columns,
-            local_table_name="sessions_aggr_local",
-            dist_table_name="sessions_aggr_dist",
+            local_table_name=READ_LOCAL_TABLE_NAME,
+            dist_table_name=READ_DIST_TABLE_NAME,
             prewhere_candidates=["project_id", "org_id"],
             order_by="(org_id, project_id, started, release)",
-            partition_by="started",
+            partition_by="(toMonday(started))",
             settings={"index_granularity": 16384},
         )
         materialized_view = MaterializedViewSchema(
-            local_materialized_view_name="sessions_aggr_daily_mv_local",
-            dist_materialized_view_name="sessions_aggr_daily_mv_dist",
+            local_materialized_view_name=READ_LOCAL_MV_NAME,
+            dist_materialized_view_name=READ_DIST_MV_NAME,
             prewhere_candidates=["project_id", "org_id"],
             columns=read_columns,
             query="""
                 SELECT
                     org_id,
                     project_id,
-                    toStartOfDay(started) as started,
+                    toStartOfHour(started) as started,
                     release,
                     environment,
-                    uniqState(session_id) as uniq_sessions,
+                    quantilesIfState(0.5, 0.9)(
+                        duration,
+                        duration <> 4294967295 AND status == 1
+                    ) as duration,
+                    countIfState(session_id, seq == 0) as uniq_sessions,
                     uniqState(distinct_id) as uniq_users,
-                    uniqIfState(distinct_id, status == 2 OR status == 3) as uniq_crashes,
-                    uniqIfState(distinct_id, status == 4) as uniq_degraded
+                    uniqIfState(session_id, status == 2) as uniq_sessions_crashed,
+                    uniqIfState(session_id, status == 3) as uniq_sessions_abnormal,
+                    uniqIfState(session_id, errors > 0) as uniq_sessions_errored,
+                    uniqIfState(distinct_id, status == 2) as uniq_users_crashed,
+                    uniqIfState(distinct_id, status == 3) as uniq_users_abnormal,
+                    uniqIfState(distinct_id, errors > 0) as uniq_users_errored
                 FROM
                     %(source_table_name)s
+                WHERE
+                    deleted == 0
                 GROUP BY
                     org_id, project_id, started, release, environment
             """,
-            local_source_table_name="sessions_raw_local",
-            local_destination_table_name="sessions_aggr_local",
-            dist_source_table_name="sessions_raw_dist",
-            dist_destination_table_name="sessions_aggr_dist",
+            local_source_table_name=WRITE_LOCAL_TABLE_NAME,
+            local_destination_table_name=READ_LOCAL_TABLE_NAME,
+            dist_source_table_name=WRITE_DIST_TABLE_NAME,
+            dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
         dataset_schemas = DatasetSchemas(
