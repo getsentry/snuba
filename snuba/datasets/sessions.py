@@ -35,6 +35,8 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+from snuba.query.query import Query
+from snuba.query.parsing import ParsingContext
 
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -236,3 +238,31 @@ class SessionDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             PrewhereProcessor(),
         ]
+
+    def column_expr(
+        self,
+        column_name,
+        query: Query,
+        parsing_context: ParsingContext,
+        table_alias: str = "",
+    ):
+        full_col = super().column_expr(column_name, query, parsing_context, table_alias)
+        func = None
+        if column_name == "duration":
+            func = "quantilesIfMerge(0.5, 0.9)"
+        elif column_name == "uniq_sessions":
+            func = "countIfMerge"
+        elif column_name == "uniq_users":
+            func = "uniqMerge"
+        elif column_name in (
+            "uniq_sessions_crashed",
+            "uniq_sessions_abnormal",
+            "uniq_sessions_errored",
+            "uniq_users_crashed",
+            "uniq_users_abnormal",
+            "uniq_users_errored",
+        ):
+            func = "uniqIfMerge"
+        if func is not None:
+            return "%s(%s)" % (func, full_col)
+        return full_col
