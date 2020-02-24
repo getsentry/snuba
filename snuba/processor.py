@@ -56,6 +56,17 @@ def _as_dict_safe(value):
     return rv
 
 
+def _collapse_uint16(n) -> Optional[int]:
+    if n is None:
+        return None
+
+    i = int(n)
+    if (i < 0) or (i > MAX_UINT16):
+        return None
+
+    return i
+
+
 def _collapse_uint32(n) -> Optional[int]:
     if n is None:
         return None

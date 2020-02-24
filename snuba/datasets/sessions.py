@@ -25,6 +25,7 @@ from snuba.processor import (
     ProcessorAction,
     ProcessedMessage,
     _ensure_valid_date,
+    _collapse_uint16,
     _collapse_uint32,
     MAX_UINT32,
 )
@@ -79,6 +80,7 @@ class SessionsProcessor(MessageProcessor):
             "retention_days": message["retention_days"],
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
+            "errors": _collapse_uint16(message["errors"]) or 0,
             "timestamp": _ensure_valid_date(
                 datetime.utcfromtimestamp(message["timestamp"])
             ),
