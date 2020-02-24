@@ -16,9 +16,11 @@ def _run_schema(conn, schema):
 
     def get_schema():
         return {
-            column_name: MigrationSchemaColumn(column_type, default_type, default_expr)
-            for column_name, column_type, default_type, default_expr in [
-                cols[:4]
+            column_name: MigrationSchemaColumn(
+                column_type, default_type, default_expr, codec_expr
+            )
+            for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
+                cols[:6]
                 for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
             ]
         }
@@ -31,8 +33,7 @@ def _run_schema(conn, schema):
         conn.execute(statement)
 
     # Refresh after alters
-    local_schema = get_schema()
-    refreshed_schema = {col: col_desc[0] for col, col_desc in local_schema.items()}
+    refreshed_schema = get_schema()
 
     # Warn user about any *other* schema diffs
     differences = schema.get_column_differences(refreshed_schema)

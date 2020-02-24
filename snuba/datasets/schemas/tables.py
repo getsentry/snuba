@@ -5,7 +5,7 @@ from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.schemas import RelationalSource, Schema
+from snuba.datasets.schemas import MigrationSchemaColumn, RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
 
@@ -39,12 +39,6 @@ class TableSource(RelationalSource):
 
     def get_prewhere_candidates(self) -> Sequence[str]:
         return self.__prewhere_candidates
-
-
-class MigrationSchemaColumn(NamedTuple):
-    column_type: str
-    default_type: Optional[str]
-    default_expr: Optional[str]
 
 
 class DDLStatement(NamedTuple):

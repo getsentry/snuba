@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping, List, Sequence
+import re
+from typing import Mapping, List, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.query.types import Condition
+
+
+class MigrationSchemaColumn(NamedTuple):
+    column_type: str
+    default_type: Optional[str]
+    default_expr: Optional[str]
+    codec_expr: Optional[str]
 
 
 class RelationalSource(ABC):
@@ -92,13 +100,15 @@ class Schema(ABC):
     def get_columns(self) -> ColumnSet:
         return self.get_data_source().get_columns()
 
-    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+    def get_column_differences(
+        self, expected_columns: Mapping[str, MigrationSchemaColumn]
+    ) -> List[str]:
         """
         Returns a list of differences between the expected_columns and the columns described in the schema.
         """
         errors: List[str] = []
 
-        for column_name, column_type in expected_columns.items():
+        for column_name, column_desc in expected_columns.items():
             if column_name not in self.get_columns():
                 errors.append(
                     "Column '%s' exists in local ClickHouse but not in schema!"
@@ -107,6 +117,8 @@ class Schema(ABC):
                 continue
 
             expected_type = self.get_columns()[column_name].type.for_schema()
+
+            column_type = self.__get_column_type(column_desc)
             if column_type != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
@@ -114,3 +126,23 @@ class Schema(ABC):
                 )
 
         return errors
+
+    def __get_column_type(self, column: MigrationSchemaColumn):
+        (column_type, default_type, default_expr, codec_expr) = column
+
+        column_type_expr = column_type
+
+        if default_type and default_expr:
+            # Strip the cast function if there is one
+            DEFAULT_EXPR_RE = re.compile(r"^CAST\((.*), (.*)\)$", re.IGNORECASE)
+            match = DEFAULT_EXPR_RE.match(default_expr)
+            if match:
+                default_expr = match.groups()[0]
+            column_type_expr = column_type_expr + " {} {}".format(
+                default_type, default_expr
+            )
+
+        if codec_expr:
+            column_type_expr = "{} CODEC ({})".format(column_type_expr, codec_expr)
+
+        return column_type_expr
