@@ -401,7 +401,7 @@ class EventsDataset(TimeSeriesDataset):
                     project_column="project_id",
                     # key migration is on going. As soon as all the keys we are interested
                     # into in redis are stored with "EVENTS" in the name, we can change this.
-                    replacer_state_name=None,
+                    replacer_state_name=ReplacerState.EVENTS,
                 )
             ),
             "timeseries": TimeSeriesExtension(

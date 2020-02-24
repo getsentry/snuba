@@ -37,14 +37,12 @@ class ReplacerState(Enum):
     ERRORS = "errors"
 
 
-def get_project_exclude_groups_key(
-    project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_exclude_groups:{f'{state_name.value}:' if state_name else ''}{project_id}"
+def get_project_exclude_groups_key(project_id: int, state_name: ReplacerState) -> str:
+    return f"project_exclude_groups:{state_name.value}:{project_id}"
 
 
 def set_project_exclude_groups(
-    project_id: int, group_ids: Sequence[int], state_name: Optional[ReplacerState]
+    project_id: int, group_ids: Sequence[int], state_name: ReplacerState
 ) -> None:
     """Add {group_id: now, ...} to the ZSET for each `group_id` to exclude,
     remove outdated entries based on `settings.REPLACER_KEY_TTL`, and expire
@@ -61,14 +59,12 @@ def set_project_exclude_groups(
     p.execute()
 
 
-def get_project_needs_final_key(
-    project_id: int, state_name: Optional[ReplacerState]
-) -> str:
-    return f"project_needs_final:{f'{state_name.value}:' if state_name else ''}{project_id}"
+def get_project_needs_final_key(project_id: int, state_name: ReplacerState) -> str:
+    return f"project_needs_final:{state_name.value}:{project_id}"
 
 
 def set_project_needs_final(
-    project_id: int, state_name: Optional[ReplacerState]
+    project_id: int, state_name: ReplacerState
 ) -> Optional[bool]:
     return redis_client.set(
         get_project_needs_final_key(project_id, state_name),
@@ -78,7 +74,7 @@ def set_project_needs_final(
 
 
 def get_projects_query_flags(
-    project_ids: Sequence[int], state_name: Optional[ReplacerState]
+    project_ids: Sequence[int], state_name: ReplacerState
 ) -> Tuple[bool, Sequence[int]]:
     """\
     1. Fetch `needs_final` for each Project
@@ -177,20 +173,10 @@ class ErrorsReplacer(ReplacerProcessor):
     def pre_replacement(self, replacement: Replacement, matching_records: int) -> None:
         # query_time_flags == (type, project_id, [...data...])
         flag_type, project_id = replacement.query_time_flags[:2]
-        if self.__state_name == ReplacerState.EVENTS:
-            # Backward compatibility with the old keys already in Redis, we will let double write
-            # the old key structure and the new one for a while then we can get rid of the old one.
-            compatibility_double_write = True
-        else:
-            compatibility_double_write = False
         if flag_type == NEEDS_FINAL:
-            if compatibility_double_write:
-                set_project_needs_final(project_id, None)
             set_project_needs_final(project_id, self.__state_name)
         elif flag_type == EXCLUDE_GROUPS:
             group_ids = replacement.query_time_flags[2]
-            if compatibility_double_write:
-                set_project_exclude_groups(project_id, group_ids, None)
             set_project_exclude_groups(project_id, group_ids, self.__state_name)
 
 

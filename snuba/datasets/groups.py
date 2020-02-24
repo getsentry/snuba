@@ -151,7 +151,8 @@ class Groups(TimeSeriesDataset):
         return {
             "project": ProjectExtension(
                 processor=ProjectWithGroupsProcessor(
-                    project_column="events.project_id", replacer_state_name=None,
+                    project_column="events.project_id",
+                    replacer_state_name=ReplacerState.EVENTS,
                 )
             ),
             "timeseries": TimeSeriesExtension(
