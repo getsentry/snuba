@@ -141,7 +141,7 @@ class SessionDataset(TimeSeriesDataset):
                     AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
                 ),
                 ("uniq_sessions", AggregateFunction("countIf", UUID(), UInt(8))),
-                ("uniq_users", AggregateFunction("uniqIf", UUID())),
+                ("uniq_users", AggregateFunction("uniqIf", UUID(), UInt(8))),
                 ("uniq_sessions_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
                 (
                     "uniq_sessions_abnormal",
