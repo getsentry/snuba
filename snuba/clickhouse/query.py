@@ -17,8 +17,20 @@ class ClickhouseQuery(ABC):
     """
 
     @abstractmethod
-    def format_sql(self, format: Optional[str] = None) -> str:
+    def _format_query_impl(self) -> str:
+        """
+        Produces the SQL representation of this query without the ``FORMAT``
+        clause. Not intended to be used by external callers, but must be
+        implemented by subclasses to enable ``format_sql`` to function.
+        """
         raise NotImplementedError
+
+    def format_sql(self, format: Optional[str] = None) -> str:
+        """Produces the SQL representation of this query."""
+        query = self._format_query_impl()
+        if format is not None:
+            query = f"{query} FORMAT {format}"
+        return query
 
 
 class DictClickhouseQuery(ClickhouseQuery):
@@ -48,14 +60,14 @@ class DictClickhouseQuery(ClickhouseQuery):
             column_expr(dataset, util.tuplify(colname), query, parsing_context)
             for colname in column_names
         ]
-        select_clause = u"SELECT {}".format(
+        select_clause = "SELECT {}".format(
             ", ".join(group_exprs + aggregate_exprs + selected_cols)
         )
 
-        from_clause = u"FROM {}".format(query.get_data_source().format_from())
+        from_clause = "FROM {}".format(query.get_data_source().format_from())
 
         if query.get_final():
-            from_clause = u"{} FINAL".format(from_clause)
+            from_clause = "{} FINAL".format(from_clause)
 
         if not query.get_data_source().supports_sample():
             sample_rate = None
@@ -68,21 +80,21 @@ class DictClickhouseQuery(ClickhouseQuery):
                 sample_rate = None
 
         if sample_rate:
-            from_clause = u"{} SAMPLE {}".format(from_clause, sample_rate)
+            from_clause = "{} SAMPLE {}".format(from_clause, sample_rate)
 
         join_clause = ""
         if query.get_arrayjoin():
-            join_clause = u"ARRAY JOIN {}".format(query.get_arrayjoin())
+            join_clause = "ARRAY JOIN {}".format(query.get_arrayjoin())
 
         where_clause = ""
         if query.get_conditions():
-            where_clause = u"WHERE {}".format(
+            where_clause = "WHERE {}".format(
                 conditions_expr(dataset, query.get_conditions(), query, parsing_context)
             )
 
         prewhere_clause = ""
         if query.get_prewhere():
-            prewhere_clause = u"PREWHERE {}".format(
+            prewhere_clause = "PREWHERE {}".format(
                 conditions_expr(dataset, query.get_prewhere(), query, parsing_context)
             )
 
@@ -100,7 +112,7 @@ class DictClickhouseQuery(ClickhouseQuery):
         having_conditions = query.get_having()
         if having_conditions:
             assert groupby, "found HAVING clause with no GROUP BY"
-            having_clause = u"HAVING {}".format(
+            having_clause = "HAVING {}".format(
                 conditions_expr(dataset, having_conditions, query, parsing_context)
             )
 
@@ -111,10 +123,10 @@ class DictClickhouseQuery(ClickhouseQuery):
                 for ob in util.to_list(query.get_orderby())
             ]
             orderby = [
-                u"{} {}".format(ob.lstrip("-"), "DESC" if ob.startswith("-") else "ASC")
+                "{} {}".format(ob.lstrip("-"), "DESC" if ob.startswith("-") else "ASC")
                 for ob in orderby
             ]
-            order_clause = u"ORDER BY {}".format(", ".join(orderby))
+            order_clause = "ORDER BY {}".format(", ".join(orderby))
 
         limitby_clause = ""
         if query.get_limitby() is not None:
@@ -143,9 +155,5 @@ class DictClickhouseQuery(ClickhouseQuery):
             ]
         )
 
-    def format_sql(self, format: Optional[str] = None) -> str:
-        """Produces a SQL string from the parameters."""
-        query = self.__formatted_query
-        if format is not None:
-            query = f"{query} FORMAT {format}"
-        return query
+    def _format_query_impl(self) -> str:
+        return self.__formatted_query
