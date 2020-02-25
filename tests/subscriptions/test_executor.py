@@ -12,13 +12,16 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.executor import SubscriptionExecutor
 from snuba.subscriptions.scheduler import ScheduledTask
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestSubscriptionExecutor(BaseSubscriptionTest):
     def test(self):
-        executor = SubscriptionExecutor(self.dataset, ThreadPoolExecutor())
+        executor = SubscriptionExecutor(
+            self.dataset, ThreadPoolExecutor(), DummyMetricsBackend(strict=True)
+        )
 
         subscription = Subscription(
             SubscriptionIdentifier(PartitionId(0), uuid1()),

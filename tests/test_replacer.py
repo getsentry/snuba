@@ -17,7 +17,7 @@ from tests.base import BaseEventsTest
 
 class TestReplacer(BaseEventsTest):
     def setup_method(self, test_method):
-        super(TestReplacer, self).setup_method(test_method)
+        super(TestReplacer, self).setup_method(test_method, "events")
 
         from snuba.web.views import application
 

@@ -11,6 +11,7 @@ from snuba.subscriptions.data import (
 )
 from snuba.subscriptions.scheduler import ScheduledTask, SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.types import Interval
 from tests.base import BaseTest
 
@@ -48,7 +49,10 @@ class TestSubscriptionScheduler(BaseTest):
             store.create(subscription.identifier.uuid, subscription.data)
 
         scheduler = SubscriptionScheduler(
-            store, self.partition_id, timedelta(minutes=1)
+            store,
+            self.partition_id,
+            timedelta(minutes=1),
+            DummyMetricsBackend(strict=True),
         )
 
         result = list(scheduler.find(self.build_interval(start, end)))
