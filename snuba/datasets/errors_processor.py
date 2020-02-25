@@ -24,9 +24,6 @@ class ErrorsProcessor(EventsProcessorBase):
     def __init__(self, promoted_tag_columns: Mapping[str, str]):
         self._promoted_tag_columns = promoted_tag_columns
 
-    def _replacements_enabled(self) -> bool:
-        return False
-
     def extract_promoted_tags(
         self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
     ) -> None:
