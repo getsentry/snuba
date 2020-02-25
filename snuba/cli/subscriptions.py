@@ -166,6 +166,7 @@ def subscriptions(
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
     logger.debug("Starting %r with %s workers...", executor, executor._max_workers)
+    metrics.gauge("executor.workers", executor._max_workers)
 
     with closing(consumer), executor, closing(producer):
         batching_consumer = BatchingConsumer(
@@ -176,7 +177,7 @@ def subscriptions(
                 else Topic(loader.get_default_topic_spec().topic_name)
             ),
             SubscriptionWorker(
-                SubscriptionExecutor(dataset, executor),
+                SubscriptionExecutor(dataset, executor, metrics),
                 {
                     index: SubscriptionScheduler(
                         RedisSubscriptionDataStore(
@@ -184,6 +185,7 @@ def subscriptions(
                         ),
                         PartitionId(index),
                         cache_ttl=timedelta(seconds=schedule_ttl),
+                        metrics=metrics,
                     )
                     for index in range(
                         partitions
