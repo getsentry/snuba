@@ -230,7 +230,6 @@ def record_query(query_metadata: SnubaQueryMetadata) -> None:
     global kfk
     max_redis_queries = 200
     try:
-
         data = safe_dumps(query_metadata.to_dict())
         rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
             queries_list, 0, max_redis_queries - 1
