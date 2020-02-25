@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Mapping, MutableSequence, Optional
 
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset_name
 from snuba.request import Request
 from snuba.utils.metrics.timer import Timer
 
@@ -28,8 +26,9 @@ class SnubaQueryMetadata:
     """
     Metadata about a Snuba query for recording on the querylog dataset
     """
+
     request: Request
-    dataset: Dataset
+    dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
     referrer: Optional[str] = ""
@@ -37,7 +36,7 @@ class SnubaQueryMetadata:
     def to_dict(self) -> Mapping[str, Any]:
         return {
             "referrer": self.referrer,
-            "dataset": get_dataset_name(self.dataset),
+            "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],
             "request": self.request.body,
             "status": self.status,

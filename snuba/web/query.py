@@ -18,6 +18,7 @@ from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.redis import redis_client
@@ -261,7 +262,7 @@ def parse_and_run_query(
     request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
         request=request_copy,
-        dataset=dataset,
+        dataset=get_dataset_name(dataset),
         timer=timer,
         query_list=[],
         referrer=request.referrer,
