@@ -166,6 +166,7 @@ def subscriptions(
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
     logger.debug("Starting %r with %s workers...", executor, executor._max_workers)
+    metrics.gauge("executor.workers", executor._max_workers)
 
     with closing(consumer), executor, closing(producer):
         batching_consumer = BatchingConsumer(
