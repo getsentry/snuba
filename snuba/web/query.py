@@ -32,7 +32,7 @@ from snuba.state.rate_limit import (
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.state.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
+from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
@@ -237,8 +237,11 @@ def record_query(
     request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
 ) -> None:
     if settings.RECORD_QUERIES:
-        # send to redis
-        state.record_query(query_metadata)
+        # Send to redis
+        # We convert this to a dict before passing it to state in order to avoid a
+        # circular dependency, where state would depend on the higher level
+        # QueryMetadata class
+        state.record_query(query_metadata.to_dict())
 
         final = str(request.query.get_final())
         referrer = request.referrer or "none"

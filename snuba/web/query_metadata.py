@@ -24,7 +24,7 @@ class ClickhouseQueryMetadata:
 @dataclass(frozen=True)
 class SnubaQueryMetadata:
     """
-    Metadata about a Snuba query for recording on the querylog dataset
+    Metadata about a Snuba query for recording on the querylog dataset.
     """
 
     request: Request

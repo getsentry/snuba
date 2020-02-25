@@ -13,7 +13,6 @@ from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.redis import redis_client as rds
-from snuba.state.query_metadata import SnubaQueryMetadata
 
 
 logger = logging.getLogger("snuba.state")
@@ -226,11 +225,11 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def record_query(query_metadata: SnubaQueryMetadata) -> None:
+def record_query(query_metadata: Mapping[str, Any]) -> None:
     global kfk
     max_redis_queries = 200
     try:
-        data = safe_dumps(query_metadata.to_dict())
+        data = safe_dumps(query_metadata)
         rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
             queries_list, 0, max_redis_queries - 1
         ).execute()
