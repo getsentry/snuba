@@ -1,37 +1,43 @@
+import copy
 import logging
 
 from hashlib import md5
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import (
+    Any,
+    Mapping,
+    MutableMapping,
+    Optional,
+)
 
 import sentry_sdk
 from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
+from functools import partial
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery, DictClickhouseQuery
+from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import get_dataset_name
+from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Reader
-from snuba.request import Request
 from snuba.redis import redis_client
+from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
+    PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
     RateLimitExceeded,
-    PROJECT_RATE_LIMIT_NAME,
 )
 from snuba.util import create_metrics, force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
 
-clickhouse_rw = ClickhousePool()
-clickhouse_ro = ClickhousePool(client_settings={"readonly": True})
 
 ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
 
@@ -53,9 +59,10 @@ cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
-    reader: Reader[ClickhouseQuery],
     timer: Timer,
+    query_metadata: SnubaQueryMetadata,
     stats: Optional[MutableMapping[str, Any]] = None,
+    trace_id: str = "",
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
@@ -68,7 +75,7 @@ def raw_query(
     )
 
     all_confs = state.get_all_configs()
-    query_settings = {
+    query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
@@ -98,6 +105,17 @@ def raw_query(
                 "cache_hit": bool(result),
             }
         ),
+
+        update_with_status = partial(
+            update_query_metadata_and_stats,
+            request,
+            sql,
+            timer,
+            stats,
+            query_metadata,
+            query_settings,
+            trace_id,
+        )
 
         if not result:
             try:
@@ -155,9 +173,7 @@ def raw_query(
                     except BaseException as ex:
                         error = str(ex)
                         logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = log_query_and_update_stats(
-                            request, sql, timer, stats, "error", query_settings
-                        )
+                        stats = update_with_status("error")
                         meta = {}
                         if isinstance(ex, ClickHouseError):
                             err_type = "clickhouse"
@@ -172,9 +188,7 @@ def raw_query(
                             **meta,
                         )
             except RateLimitExceeded as ex:
-                stats = log_query_and_update_stats(
-                    request, sql, timer, stats, "rate-limited", query_settings
-                )
+                stats = update_with_status("rate-limited")
                 raise RawQueryException(
                     err_type="rate-limited",
                     message="rate limit exceeded",
@@ -183,9 +197,7 @@ def raw_query(
                     detail=str(ex),
                 )
 
-    stats = log_query_and_update_stats(
-        request, sql, timer, stats, "success", query_settings
-    )
+    stats = update_with_status("success")
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
         result["stats"] = stats
@@ -194,13 +206,15 @@ def raw_query(
     return result
 
 
-def log_query_and_update_stats(
+def update_query_metadata_and_stats(
     request: Request,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    status: str,
+    query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
+    trace_id: str,
+    status: str,
 ) -> MutableMapping:
     """
     If query logging is enabled then logs details about the query and its status, as
@@ -209,37 +223,81 @@ def log_query_and_update_stats(
     """
 
     stats.update(query_settings)
-    if settings.RECORD_QUERIES:
-        # send to redis
-        state.record_query(
-            {
-                "request": request.body,
-                "sql": sql,
-                "timing": timer,
-                "stats": stats,
-                "status": status,
-            }
-        )
 
-        timer.send_metrics_to(
-            metrics,
-            tags={
-                "status": str(status),
-                "referrer": stats.get("referrer", "none"),
-                "final": str(stats.get("final", False)),
-            },
-            mark_tags={"final": str(stats.get("final", False))},
+    query_metadata.query_list.append(
+        ClickhouseQueryMetadata(
+            sql=sql, stats=stats, status=status, trace_id=trace_id,
         )
+    )
+
     return stats
 
 
-@split_query
+def record_query(
+    request: Request, timer: Timer, query_metadata: SnubaQueryMetadata
+) -> None:
+    if settings.RECORD_QUERIES:
+        # Send to redis
+        # We convert this to a dict before passing it to state in order to avoid a
+        # circular dependency, where state would depend on the higher level
+        # QueryMetadata class
+        state.record_query(query_metadata.to_dict())
+
+        final = str(request.query.get_final())
+        referrer = request.referrer or "none"
+        timer.send_metrics_to(
+            metrics,
+            tags={
+                "status": query_metadata.status,
+                "referrer": referrer,
+                "final": final,
+            },
+            mark_tags={"final": final},
+        )
+
+
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
+) -> ClickhouseQueryResult:
+    """
+    Runs a query, then records the metadata about each split query that was run.
+    """
+    request_copy = copy.deepcopy(request)
+    query_metadata = SnubaQueryMetadata(
+        request=request_copy,
+        dataset=get_dataset_name(dataset),
+        timer=timer,
+        query_list=[],
+        referrer=request.referrer,
+    )
+
+    try:
+        result = _run_query(
+            dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
+        )
+        record_query(request_copy, timer, query_metadata)
+    except RawQueryException as error:
+        record_query(request_copy, timer, query_metadata)
+        raise error
+
+    return result
+
+
+@split_query
+def _run_query(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
 ) -> ClickhouseQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
+
+    if (
+        request.query.get_sample() is not None and request.query.get_sample() != 1.0
+    ) and not request.settings.get_turbo():
+        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
@@ -290,8 +348,14 @@ def parse_and_run_query(
             )
         except Exception:
             logger.exception("Failed to format ast query")
+
         result = raw_query(
-            request, query, NativeDriverReader(clickhouse_ro), timer, stats
+            request,
+            query,
+            timer,
+            query_metadata,
+            stats,
+            span.trace_id,
         )
 
     with sentry_sdk.configure_scope() as scope:

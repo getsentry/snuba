@@ -21,6 +21,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
+from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -159,11 +160,33 @@ class ErrorsDataset(TimeSeriesDataset):
 
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
+        required_columns = [
+            "org_id",
+            "event_id",
+            "project_id",
+            "group_id",
+            "timestamp",
+            "deleted",
+            "retention_days",
+        ]
+
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
                 processor=ErrorsProcessor(self.__promoted_tag_columns),
                 default_topic="events",
+                replacement_topic="errors-replacements",
+            ),
+            replacer_processor=ErrorsReplacer(
+                write_schema=schema,
+                read_schema=schema,
+                required_columns=required_columns,
+                tag_column_map={"tags": self.__promoted_tag_columns, "contexts": {}},
+                promoted_tags={
+                    "tags": self.__promoted_tag_columns.keys(),
+                    "contexts": {},
+                },
+                state_name=ReplacerState.ERRORS,
             ),
         )
 
@@ -216,7 +239,10 @@ class ErrorsDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id",
+                    replacer_state_name=ReplacerState.ERRORS,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,

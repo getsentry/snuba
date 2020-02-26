@@ -1,11 +1,13 @@
 import calendar
-from hashlib import md5
+
+from copy import deepcopy
 from datetime import datetime, timedelta
+from hashlib import md5
 import uuid
 
 from snuba import settings
+from snuba.environment import clickhouse_rw
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.clickhouse.native import ClickhousePool
 from snuba.redis import redis_client
 
 
@@ -24,6 +26,7 @@ def wrap_raw_event(event):
         "platform": event["platform"],
         "datetime": event["datetime"],
         "data": event,
+        "organization_id": event["organization_id"],
     }
 
 
@@ -37,7 +40,7 @@ def get_event():
     raw_event["received"] = int(
         calendar.timegm((timestamp - timedelta(seconds=1)).timetuple())
     )
-    return wrap_raw_event(raw_event)
+    return wrap_raw_event(deepcopy(raw_event))
 
 
 class BaseTest(object):
@@ -51,7 +54,7 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.clickhouse = ClickhousePool()
+            self.clickhouse = clickhouse_rw
 
             for statement in self.dataset.get_dataset_schemas().get_drop_statements():
                 self.clickhouse.execute(statement.statement)
@@ -118,7 +121,6 @@ class BaseEventsTest(BaseDatasetTest):
                 .process_message(event)
             )
             out.extend(processed.data)
-
         return self.write_processed_records(out)
 
     def write_processed_events(self, events):
