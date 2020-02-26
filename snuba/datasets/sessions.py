@@ -2,7 +2,6 @@ import uuid
 from datetime import timedelta, datetime
 from typing import Mapping, Sequence, Optional
 
-from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
@@ -13,31 +12,32 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import (
     ReplacingMergeTreeSchema,
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
-from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.processor import (
-    MessageProcessor,
-    ProcessorAction,
-    ProcessedMessage,
-    _ensure_valid_date,
-    _collapse_uint16,
-    _collapse_uint32,
-    MAX_UINT32,
-)
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
+from snuba.query.parsing import ParsingContext
+from snuba.processor import (
+    MAX_UINT32,
+    MessageProcessor,
+    ProcessedMessage,
+    ProcessorAction,
+    _collapse_uint16,
+    _collapse_uint32,
+    _ensure_valid_date,
+)
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query_processor import QueryProcessor
-from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.query import Query
-from snuba.query.parsing import ParsingContext
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
@@ -60,7 +60,6 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 class SessionsProcessor(MessageProcessor):
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        action_type = ProcessorAction.INSERT
         if message["duration"] is None:
             duration = None
         else:
@@ -90,10 +89,10 @@ class SessionsProcessor(MessageProcessor):
             "release": message.get("release"),
             "environment": message.get("environment"),
         }
-        return ProcessedMessage(action=action_type, data=[processed])
+        return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
 
-class SessionDataset(TimeSeriesDataset):
+class SessionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         all_columns = ColumnSet(
             [
@@ -232,9 +231,6 @@ class SessionDataset(TimeSeriesDataset):
             ),
         }
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ["project_id", "org_id"]
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
@@ -254,9 +250,8 @@ class SessionDataset(TimeSeriesDataset):
             func = "quantilesIfMerge(0.5, 0.9)"
         elif column_name == "uniq_sessions":
             func = "countIfMerge"
-        elif column_name == "uniq_users":
-            func = "uniqIfMerge"
         elif column_name in (
+            "uniq_users",
             "uniq_sessions_crashed",
             "uniq_sessions_abnormal",
             "uniq_sessions_errored",
@@ -266,5 +261,5 @@ class SessionDataset(TimeSeriesDataset):
         ):
             func = "uniqIfMerge"
         if func is not None:
-            return "%s(%s)" % (func, full_col)
+            return "{}({})".format(func, full_col)
         return full_col
