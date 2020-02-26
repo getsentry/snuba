@@ -28,7 +28,7 @@ class TestSessionProcessor(BaseTest):
             "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
             "started": started.timestamp(),
             "status": "exited",
-            "timestamp": timestamp.timestamp(),
+            "received": timestamp.timestamp(),
         }
 
         meta = KafkaMessageMetadata(offset=1, partition=2)
@@ -52,6 +52,6 @@ class TestSessionProcessor(BaseTest):
                 "session_id": "8333339f-5675-4f89-a9a0-1c935255ab58",
                 "started": started.replace(tzinfo=None),
                 "status": 1,
-                "timestamp": timestamp.replace(tzinfo=None),
+                "received": timestamp.replace(tzinfo=None),
             }
         ]
