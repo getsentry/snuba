@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import (
@@ -193,6 +194,11 @@ class TransactionsDataset(TimeSeriesDataset):
             ]
         )
 
+        promoted_columns_specs = {
+            "tags": PromotedColumnSpec({}),
+            "contexts": PromotedColumnSpec({}),
+        }
+
         schema = ReplacingMergeTreeSchema(
             columns=self.__columns,
             local_table_name="transactions_local",
@@ -209,9 +215,7 @@ class TransactionsDataset(TimeSeriesDataset):
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         self.__tags_processor = TagColumnProcessor(
-            columns=self.__columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            columns=columns, promoted_columns_spec=promoted_columns_specs,
         )
 
         super().__init__(
@@ -228,30 +232,6 @@ class TransactionsDataset(TimeSeriesDataset):
             },
             time_parse_columns=("start_ts", "finish_ts"),
         )
-
-    def get_all_columns(self) -> ColumnSet:
-        return self.__columns
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        # TODO: Support promoted tags
-        return {
-            "tags": frozenset(),
-            "contexts": frozenset(),
-        }
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        # TODO: Support promoted tags
-        return {
-            "tags": {},
-            "contexts": {},
-        }
-
-    def get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
-        # And a reverse map from the tags the client expects to the database columns
-        return {
-            col: dict(map(reversed, trans.items()))
-            for col, trans in self._get_column_tag_map().items()
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
@@ -314,7 +294,6 @@ class TransactionsDataset(TimeSeriesDataset):
             SingleTagProcessor(
                 nested_column_names={"tags", "contexts"},
                 columns=self.__columns,
-                promoted_columns=self._get_promoted_columns(),
-                key_column_map=self.get_tag_column_map(),
+                promoted_columns_spec=promoted_columns_specs,
             ),
         ]

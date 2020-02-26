@@ -4,7 +4,6 @@ import logging
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     enforce_retention,
@@ -14,6 +13,7 @@ from snuba.datasets.events_format import (
     flatten_nested_field,
     EventTooOld,
 )
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.processor import (
     _as_dict_safe,
     _boolify,
@@ -36,6 +36,19 @@ class EventsProcessorBase(MessageProcessor, ABC):
     Base class for events and errors processors.
     """
 
+    def __init__(self, promoted_tag_columns: PromotedColumnSpec):
+        self._promoted_tag_columns = promoted_tag_columns
+
+    def extract_promoted_tags(
+        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
+    ) -> None:
+        output.update(
+            {
+                col_name: _unicodify(tags.get(tag_name, None))
+                for tag_name, col_name in self._promoted_tag_columns.tag_column_mapping.items()
+            }
+        )
+
     @abstractmethod
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         raise NotImplementedError
@@ -52,12 +65,6 @@ class EventsProcessorBase(MessageProcessor, ABC):
         output: MutableMapping[str, Any],
         event: Mapping[str, Any],
         metadata: Optional[KafkaMessageMetadata] = None,
-    ) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def extract_promoted_tags(
-        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
     ) -> None:
         raise NotImplementedError
 

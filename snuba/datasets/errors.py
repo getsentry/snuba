@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -22,6 +22,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -127,16 +128,18 @@ class ErrorsDataset(TimeSeriesDataset):
                 ("modules", Nested([("name", String()), ("version", String())])),
             ]
         )
-
-        self.__promoted_tag_columns = {
-            "environment": "environment",
-            "sentry:release": "release",
-            "sentry:dist": "dist",
-            "sentry:user": "user",
-            "transaction": "transaction_name",
-            "level": "level",
+        promoted_tags_spec = {
+            "tags": PromotedColumnSpec(
+                {
+                    "environment": "environment",
+                    "sentry:release": "release",
+                    "sentry:dist": "dist",
+                    "sentry:user": "user",
+                    "transaction": "transaction_name",
+                    "level": "level",
+                }
+            )
         }
-
         schema = ReplacingMergeTreeSchema(
             columns=all_columns,
             local_table_name="errors_local",
@@ -173,7 +176,7 @@ class ErrorsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(self.__promoted_tag_columns),
+                processor=ErrorsProcessor(promoted_tags_spec["tags"]),
                 default_topic="events",
                 replacement_topic="errors-replacements",
             ),
@@ -181,11 +184,7 @@ class ErrorsDataset(TimeSeriesDataset):
                 write_schema=schema,
                 read_schema=schema,
                 required_columns=required_columns,
-                tag_column_map={"tags": self.__promoted_tag_columns, "contexts": {}},
-                promoted_tags={
-                    "tags": self.__promoted_tag_columns.keys(),
-                    "contexts": {},
-                },
+                promoted_column_spec=promoted_tags_spec,
                 state_name=ReplacerState.ERRORS,
             ),
         )
@@ -198,9 +197,7 @@ class ErrorsDataset(TimeSeriesDataset):
         )
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            columns=all_columns, promoted_columns_spec=promoted_tags_spec,
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -223,18 +220,6 @@ class ErrorsDataset(TimeSeriesDataset):
         return processed_column or super().column_expr(
             column_name, query, parsing_context, table_alias
         )
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        return {
-            "tags": frozenset(self.__promoted_tag_columns.values()),
-            "contexts": frozenset(),
-        }
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        return {
-            "tags": {col: tag for tag, col in self.__promoted_tag_columns.items()},
-            "contexts": {},
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
