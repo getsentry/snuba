@@ -62,7 +62,7 @@ def raw_query(
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: Optional[MutableMapping[str, Any]] = None,
-    trace_id: str = "",
+    trace_id: Optional[str] = None,
 ) -> ClickhouseQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
@@ -213,7 +213,7 @@ def update_query_metadata_and_stats(
     stats: MutableMapping[str, Any],
     query_metadata: SnubaQueryMetadata,
     query_settings: Mapping[str, Any],
-    trace_id: str,
+    trace_id: Optional[str],
     status: str,
 ) -> MutableMapping:
     """
