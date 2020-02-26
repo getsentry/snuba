@@ -48,7 +48,7 @@ from snuba.web.query import (
 logger = logging.getLogger("snuba.api")
 
 
-class QueryResult(NamedTuple):
+class WebQueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
     result: RawQueryResult
     status: int
@@ -282,15 +282,15 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     )
 
 
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> WebQueryResult:
     try:
         result = parse_and_run_query(dataset, request, timer)
         payload = {**result.result, "timing": timer.for_json()}
         if settings.STATS_IN_RESPONSE or request.settings.get_debug():
             payload.update(result.extra)
-        return QueryResult(payload, 200)
+        return WebQueryResult(payload, 200)
     except RawQueryException as e:
-        return QueryResult(
+        return WebQueryResult(
             {
                 "error": {"type": e.err_type, "message": e.message, **e.meta},
                 "sql": e.sql,
@@ -301,7 +301,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
         )
 
 
-def format_result(result: QueryResult) -> Response:
+def format_result(result: WebQueryResult) -> Response:
     def json_default(obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
