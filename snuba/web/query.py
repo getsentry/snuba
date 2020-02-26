@@ -65,7 +65,7 @@ def raw_query(
     query: DictClickhouseQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    stats: Optional[MutableMapping[str, Any]] = None,
+    stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
 ) -> RawQueryResult:
     """
