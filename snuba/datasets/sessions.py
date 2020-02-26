@@ -80,8 +80,8 @@ class SessionsProcessor(MessageProcessor):
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
             "errors": _collapse_uint16(message["errors"]) or 0,
-            "timestamp": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["timestamp"])
+            "received": _ensure_valid_date(
+                datetime.utcfromtimestamp(message["received"])
             ),
             "started": _ensure_valid_date(
                 datetime.utcfromtimestamp(message["started"])
@@ -109,7 +109,7 @@ class SessionsDataset(TimeSeriesDataset):
                 # figure out which values can be discarded.  Deleting of values
                 # does not update the materializations.
                 ("deleted", UInt(8)),
-                ("timestamp", DateTime()),
+                ("received", DateTime()),
                 ("started", DateTime()),
                 ("release", LowCardinality(Nullable(String()))),
                 ("environment", LowCardinality(Nullable(String()))),
@@ -122,7 +122,7 @@ class SessionsDataset(TimeSeriesDataset):
             dist_table_name=WRITE_DIST_TABLE_NAME,
             prewhere_candidates=["project_id", "org_id"],
             order_by="(org_id, project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
-            partition_by="(toMonday(timestamp))",
+            partition_by="(toMonday(received))",
             version_column="seq",
             sample_expr="cityHash64(toString(session_id))",
             settings={"index_granularity": 16384},
@@ -215,7 +215,7 @@ class SessionsDataset(TimeSeriesDataset):
             dataset_schemas=dataset_schemas,
             table_writer=table_writer,
             time_group_columns={"bucketed_started": "started"},
-            time_parse_columns=("started", "timestamp"),
+            time_parse_columns=("started", "received"),
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
