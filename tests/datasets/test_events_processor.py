@@ -360,15 +360,26 @@ class TestEventsProcessor(BaseEventsTest):
 
         assert output == {
             "sentry:dist": "the_dist",
-            "environment": u"the_enviroment",
-            "level": u"the_level",
-            "logger": u"the_logger",
+            "environment": "the_enviroment",
+            "level": "the_level",
+            "logger": "the_logger",
             "sentry:release": "the_release",
-            "server_name": u"the_servername",
-            "site": u"the_site",
-            "transaction": u"the_transaction",
-            "url": u"the_url",
-            "sentry:user": u"the_user",
+            "server_name": "the_servername",
+            "site": "the_site",
+            "transaction": "the_transaction",
+            "url": "the_url",
+            "sentry:user": "the_user",
+            # Promoted Contexts Tag Columns (which are actually filled in by get_promoted_contexts)
+            "app_device": None,
+            "device": None,
+            "device_family": None,
+            "runtime": None,
+            "runtime_name": None,
+            "browser": None,
+            "browser_name": None,
+            "os": None,
+            "os_name": None,
+            "os_rooted": None,
         }
         assert tags == orig_tags
 

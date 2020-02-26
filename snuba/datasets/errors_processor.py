@@ -5,7 +5,6 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 import uuid
 
 from snuba.consumer import KafkaMessageMetadata
-from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.datasets.events_format import (
     extract_extra_contexts,
     extract_user,
@@ -22,19 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorsProcessor(EventsProcessorBase):
-    def __init__(self, promoted_tag_columns: PromotedColumnSpec):
-        self._promoted_tag_columns = promoted_tag_columns
-
-    def extract_promoted_tags(
-        self, output: MutableMapping[str, Any], tags: Mapping[str, Any],
-    ) -> None:
-        output.update(
-            {
-                col_name: _unicodify(tags.get(tag_name, None))
-                for tag_name, col_name in self._promoted_tag_columns.tag_column_mapping.items()
-            }
-        )
-
     def _should_process(self, event: Mapping[str, Any]) -> bool:
         # This is to convince mypy that we actually return a bool
         data: Mapping[str, Any] = event["data"]

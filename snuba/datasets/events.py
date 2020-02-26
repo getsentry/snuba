@@ -22,7 +22,6 @@ from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
 )
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -285,7 +284,7 @@ class EventsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_tag_columns),
+                processor=EventsProcessor(promoted_columns_spec["tags"]),
                 default_topic="events",
                 replacement_topic="event-replacements",
                 commit_log_topic="snuba-commit-log",

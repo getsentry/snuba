@@ -4,7 +4,7 @@ import time
 from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, FrozenSet, Mapping, Optional, Sequence, Tuple
+from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
