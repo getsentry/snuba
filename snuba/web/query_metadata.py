@@ -10,7 +10,7 @@ class ClickhouseQueryMetadata:
     sql: str
     stats: Mapping[str, Any]
     status: str
-    trace_id: str
+    trace_id: Optional[str] = None
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
@@ -31,7 +31,7 @@ class SnubaQueryMetadata:
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
-    referrer: Optional[str] = ""
+    referrer: Optional[str] = None
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
