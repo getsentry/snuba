@@ -9,7 +9,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    NestedColumn,
+    MappingColumn,
     Argument,
 )
 from snuba.query.parsing import ParsingContext
@@ -79,7 +79,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         ret.append(escape_identifier(exp.column_name) or "")
         return self.__alias("".join(ret), exp.alias)
 
-    def visitNestedColumn(self, exp: NestedColumn) -> str:
+    def visitMappingColumn(self, exp: MappingColumn) -> str:
         raise ValueError(
             f"Clickhouse does not support a dictionary style accessor for nested columns: {exp.column_name}"
         )

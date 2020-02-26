@@ -8,7 +8,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    NestedColumn,
+    MappingColumn,
     Argument,
 )
 
@@ -28,7 +28,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
         self.__visited_nodes.append(exp)
         return [exp]
 
-    def visitNestedColumn(self, exp: NestedColumn) -> List[Expression]:
+    def visitMappingColumn(self, exp: MappingColumn) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
 
@@ -66,7 +66,7 @@ def test_visit_expression():
     literal1 = Literal("al2", "test")
     f1 = FunctionCall("al3", "f1", [col1, literal1])
 
-    col2 = NestedColumn("al4", "c2", "t1", "k1")
+    col2 = MappingColumn("al4", "c2", "t1", "k1")
     literal2 = Literal("al5", "test2")
     f2 = FunctionCall("al6", "f2", [col2, literal2])
 

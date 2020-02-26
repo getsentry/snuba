@@ -86,7 +86,7 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
-    def visitNestedColumn(self, exp: NestedColumn) -> TVisited:
+    def visitMappingColumn(self, exp: MappingColumn) -> TVisited:
         raise NotImplementedError
 
     @abstractmethod
@@ -144,7 +144,7 @@ class Column(Expression):
 
 
 @dataclass(frozen=True)
-class NestedColumn(Column):
+class MappingColumn(Column):
     """
     Represents a structured column in our query like tag[something].
     Our query language supports accessing elements of a nested column by key, so,
@@ -155,7 +155,7 @@ class NestedColumn(Column):
     key: str
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
-        return visitor.visitNestedColumn(self)
+        return visitor.visitMappingColumn(self)
 
 
 @dataclass(frozen=True)

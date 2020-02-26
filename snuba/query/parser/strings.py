@@ -1,5 +1,5 @@
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
-from snuba.query.expressions import Column, Expression, NestedColumn, Literal
+from snuba.query.expressions import Column, Expression, MappingColumn, Literal
 from snuba.util import QUOTED_LITERAL_RE
 
 
@@ -9,7 +9,7 @@ def parse_string(val: str) -> Expression:
         if match:
             col_name = match[1]
             key_name = match[2]
-            return NestedColumn(
+            return MappingColumn(
                 # We pass the original expression as alias so that the query processors
                 # know what the client expects as column name.
                 # TODO: apply alias on all AST nodes created during parsing to make the original

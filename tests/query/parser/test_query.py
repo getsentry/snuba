@@ -6,7 +6,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition
-from snuba.query.expressions import Column, FunctionCall, Literal, NestedColumn
+from snuba.query.expressions import Column, FunctionCall, Literal, MappingColumn
 from snuba.query.parser import parse_query
 from snuba.query.query import OrderBy, OrderByDirection, Query
 
@@ -70,7 +70,7 @@ test_cases = [
             condition=binary_condition(
                 None,
                 "in",
-                NestedColumn("tags[sentry:dist]", "tags", None, "sentry:dist"),
+                MappingColumn("tags[sentry:dist]", "tags", None, "sentry:dist"),
                 FunctionCall(
                     None, "tuple", (Literal(None, "dist1"), Literal(None, "dist2"),),
                 ),
@@ -130,14 +130,14 @@ test_cases = [
             TableSource("events", ColumnSet([])),
             selected_columns=[
                 FunctionCall(
-                    None, "f", (NestedColumn("tags[test2]", "tags", None, "test2"),)
+                    None, "f", (MappingColumn("tags[test2]", "tags", None, "test2"),)
                 ),
                 Column(None, "column1", None),
-                NestedColumn("tags[test]", "tags", None, "test"),
+                MappingColumn("tags[test]", "tags", None, "test"),
             ],
             groupby=[
                 FunctionCall(
-                    None, "f", (NestedColumn("tags[test2]", "tags", None, "test2"),)
+                    None, "f", (MappingColumn("tags[test2]", "tags", None, "test2"),)
                 )
             ],
         ),

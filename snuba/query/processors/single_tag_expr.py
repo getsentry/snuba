@@ -7,7 +7,7 @@ from snuba.query.expressions import (
     Expression,
     FunctionCall,
     Literal,
-    NestedColumn,
+    MappingColumn,
 )
 from snuba.query.dsl import array_element
 from snuba.query.query import Query
@@ -17,7 +17,7 @@ from snuba.request.request_settings import RequestSettings
 
 class SingleTagProcessor(QueryProcessor):
     """
-    Processes NestedColumns that represent tags or contexts (or any dictionary style
+    Processes MappingColumns that represent tags or contexts (or any dictionary style
     nested column) into an expression clickhouse understands.
     The nested column must be defined in the form of:
     `Nested([("key", String()), ("value", String())])`
@@ -43,7 +43,7 @@ class SingleTagProcessor(QueryProcessor):
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_column(exp: Expression) -> Expression:
             if (
-                not isinstance(exp, NestedColumn)
+                not isinstance(exp, MappingColumn)
                 or exp.column_name not in self.__nested_column_names
             ):
                 return exp
