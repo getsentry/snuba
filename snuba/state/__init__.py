@@ -225,11 +225,11 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
-def record_query(data: Mapping[str, Optional[Any]]) -> None:
+def record_query(query_metadata: Mapping[str, Any]) -> None:
     global kfk
     max_redis_queries = 200
     try:
-        data = safe_dumps(data)
+        data = safe_dumps(query_metadata)
         rds.pipeline(transaction=False).lpush(queries_list, data).ltrim(
             queries_list, 0, max_redis_queries - 1
         ).execute()
