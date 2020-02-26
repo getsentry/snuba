@@ -1,6 +1,7 @@
 from typing import Mapping, Iterable
 
 from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.query.expressions import (
     Column,
     Expression,
@@ -28,21 +29,16 @@ class SingleTagProcessor(QueryProcessor):
         self,
         nested_column_names: Iterable[str],
         columns: ColumnSet,
-        promoted_columns: Mapping[str, Iterable[str]],
-        key_column_map: Mapping[str, Mapping[str, str]],
+        promoted_columns_spec: Mapping[str, PromotedColumnSpec],
     ) -> None:
         # Keeps the names of the nested columns to expand
         self.__nested_column_names = nested_column_names
         # The ColumnSet of the dataset. Used to format promoted
         # columns with the right type.
         self.__columns = columns
-        # Keeps a dictionary of promoted columns. The key of the mapping
-        # can be any of the nested column names above. The values is a set
-        # of flattened columns.
-        self.__promoted_columns = promoted_columns
-        # Keeps a dictionary of the mapping between promoted keys in the
-        # nested columns and the related promoted column
-        self.__key_column_map = key_column_map
+        # The promoted columns specs that define which columns are promoted
+        # and how do tags/contexts map to columns.
+        self.__promoted_columns_spec = promoted_columns_spec
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         def process_column(exp: Expression) -> Expression:
@@ -55,11 +51,11 @@ class SingleTagProcessor(QueryProcessor):
             alias = exp.alias
             key_name = exp.key
             col_name = exp.column_name
-            if col_name in self.__promoted_columns:
-                promoted_column_name = self.__key_column_map[col_name].get(
-                    key_name, key_name
-                )
-                if promoted_column_name in self.__promoted_columns[col_name]:
+            if col_name in self.__promoted_columns_spec:
+                promoted_column_name = self.__promoted_columns_spec[
+                    col_name
+                ].tag_column_mapping.get(key_name)
+                if promoted_column_name:
                     col_type = self.__columns.get(promoted_column_name, None)
                     col_type = str(col_type) if col_type else None
 

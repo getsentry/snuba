@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from typing import Any, Iterable, List, Mapping, Optional, Union
+from typing import Any, List, Mapping, Optional, Union
 
 from dataclasses import dataclass
 from snuba import state

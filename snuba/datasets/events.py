@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import (
     Array,
@@ -253,7 +253,7 @@ class EventsDataset(TimeSeriesDataset):
             for col in promoted_context_tag_columns
         }
         promoted_tags_mapping.update(promtoed_tags_context_mapping)
-        promoted_columns_spec = {
+        self.__promoted_columns_spec = {
             "tags": PromotedColumnSpec(promoted_tags_mapping),
             "contexts": PromotedColumnSpec(
                 {col.flattened: col.flattened for col in promoted_context_columns}
@@ -285,7 +285,7 @@ class EventsDataset(TimeSeriesDataset):
         table_writer = TableWriter(
             write_schema=schema,
             stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_columns_spec["tags"]),
+                processor=EventsProcessor(self.__promoted_columns_spec["tags"]),
                 default_topic="events",
                 replacement_topic="event-replacements",
                 commit_log_topic="snuba-commit-log",
@@ -294,7 +294,7 @@ class EventsDataset(TimeSeriesDataset):
                 write_schema=schema,
                 read_schema=schema,
                 required_columns=[col.escaped for col in required_columns],
-                promoted_column_spec=promoted_columns_spec,
+                promoted_column_spec=self.__promoted_columns_spec,
                 state_name=ReplacerState.EVENTS,
             ),
         )
@@ -307,7 +307,8 @@ class EventsDataset(TimeSeriesDataset):
         )
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns, promoted_columns_spec=promoted_columns_spec
+            columns=self.__all_columns,
+            promoted_columns_spec=self.__promoted_columns_spec,
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -366,6 +367,6 @@ class EventsDataset(TimeSeriesDataset):
             SingleTagProcessor(
                 nested_column_names={"tags", "contexts"},
                 columns=self.__all_columns,
-                promoted_columns_spec=promoted_columns_specs,
+                promoted_columns_spec=self.__promoted_columns_spec,
             ),
         ]

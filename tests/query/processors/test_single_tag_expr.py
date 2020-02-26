@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.promoted_columns import PromotedColumnSpec
 from snuba.query.conditions import binary_condition, ConditionFunctions, in_condition
 from snuba.query.dsl import array_element
 from snuba.query.expressions import Column, FunctionCall, Literal
@@ -124,19 +125,14 @@ def test_tags_processor(
         ]
     )
 
-    promoted_cols = {
-        "tags": {"app_device", "device"},
-        "contexts": {"device_family", "runtime"},
-    }
-
     tags_column_map = {
-        "tags": {"app.device": "app_device", "device": "device"},
-        "contexts": {"device.family": "device_family", "runtime": "runtime"},
+        "tags": PromotedColumnSpec({"app.device": "app_device", "device": "device"}),
+        "contexts": PromotedColumnSpec(
+            {"device.family": "device_family", "runtime": "runtime"}
+        ),
     }
 
-    processor = SingleTagProcessor(
-        {"tags", "contexts"}, all_columns, promoted_cols, tags_column_map
-    )
+    processor = SingleTagProcessor({"tags", "contexts"}, all_columns, tags_column_map)
     processor.process_query(query, request_settings)
 
     assert query.get_selected_columns_from_ast() == expect_select

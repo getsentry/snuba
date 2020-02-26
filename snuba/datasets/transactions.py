@@ -194,7 +194,7 @@ class TransactionsDataset(TimeSeriesDataset):
             ]
         )
 
-        promoted_columns_specs = {
+        self.__promoted_columns_specs = {
             "tags": PromotedColumnSpec({}),
             "contexts": PromotedColumnSpec({}),
         }
@@ -215,7 +215,7 @@ class TransactionsDataset(TimeSeriesDataset):
         dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
 
         self.__tags_processor = TagColumnProcessor(
-            columns=columns, promoted_columns_spec=promoted_columns_specs,
+            columns=self.__columns, promoted_columns_spec=self.__promoted_columns_specs,
         )
 
         super().__init__(
@@ -294,6 +294,6 @@ class TransactionsDataset(TimeSeriesDataset):
             SingleTagProcessor(
                 nested_column_names={"tags", "contexts"},
                 columns=self.__columns,
-                promoted_columns_spec=promoted_columns_specs,
+                promoted_columns_spec=self.__promoted_columns_specs,
             ),
         ]
