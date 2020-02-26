@@ -224,7 +224,7 @@ def update_query_metadata_and_stats(
     stats.update(query_settings)
 
     query_metadata.query_list.append(
-        ClickhouseQueryMetadata(sql=sql, stats=stats, status=status, trace_id=trace_id,)
+        ClickhouseQueryMetadata(sql=sql, stats=stats, status=status, trace_id=trace_id)
     )
 
     return stats
@@ -346,7 +346,7 @@ def _run_query(
         except Exception:
             logger.exception("Failed to format ast query")
 
-        result = raw_query(request, query, timer, query_metadata, stats, span.trace_id,)
+        result = raw_query(request, query, timer, query_metadata, stats, span.trace_id)
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
