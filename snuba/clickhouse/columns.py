@@ -68,15 +68,10 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-
-class ColumnTypeWithModifier(ABC, ColumnType):
-    def __init__(self, inner_type: ColumnType) -> None:
-        self.inner_type = inner_type
-
     def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
         def get_nested_modifiers(
             obj: ColumnType,
-        ) -> Optional[Iterable[Type[ColumnTypeWithModifier]]]:
+        ) -> Iterable[Type[ColumnTypeWithModifier]]:
             if not isinstance(obj, ColumnTypeWithModifier):
                 return []
             else:
@@ -88,6 +83,11 @@ class ColumnTypeWithModifier(ABC, ColumnType):
                     return [type(obj)]
 
         return get_nested_modifiers(self)
+
+
+class ColumnTypeWithModifier(ABC, ColumnType):
+    def __init__(self, inner_type: ColumnType) -> None:
+        self.inner_type = inner_type
 
 
 class Nullable(ColumnTypeWithModifier):
