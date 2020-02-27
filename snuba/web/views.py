@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import NamedTuple
+from typing import Any, Mapping, NamedTuple
 from uuid import UUID
 
 import jsonschema
@@ -40,7 +40,6 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
     RawQueryException,
-    RawQueryResult,
     parse_and_run_query,
 )
 
@@ -50,7 +49,7 @@ logger = logging.getLogger("snuba.api")
 
 class WebQueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
-    result: RawQueryResult
+    payload: Mapping[str, Any]
     status: int
 
 
@@ -310,7 +309,7 @@ def format_result(result: WebQueryResult) -> Response:
         return obj
 
     return Response(
-        json.dumps(result.result, default=json_default),
+        json.dumps(result.payload, default=json_default),
         result.status,
         {"Content-Type": "application/json"},
     )
