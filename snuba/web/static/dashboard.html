@@ -244,7 +244,7 @@
                   <div>
                     <h2>Scatter:</h2>
                     <Scatter width={500} height={200} values={this.state.queries}
-                      xacc="stats.num_days" yacc="timing.duration_ms" cacc="stats.referrer"
+                      xacc="timing.timestamp" yacc="timing.duration_ms" cacc="referrer"
                     />
                   </div>
                 </div>
@@ -261,50 +261,52 @@
                     columns={[
                       {
                         Header: 'date',
-                        width:90,
+                        width:120,
                         id: 'date',
                         accessor: row => new Date(row.timing.timestamp * 1000).toLocaleDateString()
                       },{
                         Header: 'time',
-                        width: 110,
+                        width: 120,
                         id: 'time',
                         accessor: row => new Date(row.timing.timestamp * 1000).toLocaleTimeString()
                       },{
                         Header: 'project',
-                        width: 80,
+                        width: 120,
                         id: 'project',
                         accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
                       },{
+                        Header: 'dataset',
+                        width: 120,
+                        accessor: 'dataset'
+                      },{
                         Header: 'referrer',
-                        width: 80,
-                        accessor: 'stats.referrer'
+                        width: 400,
+                        accessor: 'referrer'
                       },{
                         Header: 'ms',
-                        width: 50,
+                        width: 70,
                         accessor: 'timing.duration_ms'
                       },{
                         Header: 'days',
-                        width:50,
-                        accessor: 'stats.num_days'
-                      },{
-                        Header: 'hit',
-                        id: 'hit',
-                        width:35,
-                        accessor: row => row.stats.cache_hit ? 'Y': ''
-                      },{
-                        Header: 'dup',
-                        id: 'dup',
-                        width:42,
-                        accessor: row => row.stats.is_duplicate ? 'Y': ''
+                        width:70,
+                        id: 'days',
+                        accessor: row => (new Date(row.request.to_date).getTime() - new Date(row.request.from_date).getTime()) / (1000 * 3600 * 24)
                       },{
                         Header: 'groupby',
                         width:200,
                         id: 'groupby',
                         accessor: row => (Array.isArray(row.request.groupby) ? row.request.groupby : [row.request.groupby]).join(', ')
                       },{
-                        Header: 'SQL',
-                        accessor: 'sql'
-                      },
+                        Header: 'querycount',
+                        width: 70,
+                        id: 'querycount',
+                        accessor: row => row.query_list && row.query_list.length
+                      },{
+                        Header: 'querylist',
+                        width: 800,
+                        id: 'querylist',
+                        accessor: row => JSON.stringify(row.query_list)
+                      }
                     ]}
                   />
                 </ErrorBoundary>

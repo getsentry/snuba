@@ -8,6 +8,7 @@ from typing import Any, Deque, FrozenSet, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clickhouse.columns import ColumnTypeWithModifier, Materialized
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -132,7 +133,14 @@ class ErrorsReplacer(ReplacerProcessor):
     ) -> None:
         super().__init__(write_schema=write_schema, read_schema=read_schema)
         self.__required_columns = required_columns
-        self.__all_column_names = [col.escaped for col in write_schema.get_columns()]
+        self.__all_column_names = [
+            col.escaped
+            for col in write_schema.get_columns()
+            if not (
+                isinstance(col.type, ColumnTypeWithModifier)
+                and Materialized in col.type.get_all_modifiers()
+            )
+        ]
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
@@ -420,7 +428,14 @@ def process_delete_tag(
         + where
     )
 
-    all_columns = schema.get_columns()
+    all_columns = [
+        col
+        for col in schema.get_columns()
+        if not (
+            isinstance(col.type, ColumnTypeWithModifier)
+            and Materialized in col.type.get_all_modifiers()
+        )
+    ]
     select_columns = []
     for col in all_columns:
         if is_promoted and col.flattened == tag_column_name:
