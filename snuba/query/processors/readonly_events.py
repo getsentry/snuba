@@ -8,7 +8,8 @@ from snuba.request.request_settings import RequestSettings
 class ReadOnlyTableSelector(QueryProcessor):
     """
     Replaces the data source in the query with a TableSource if the table
-    name of the original datasource is the one provided to the constructor.
+    name of the original datasource is the one provided to the constructor,
+    the query is not consistent, and this processor is enabled.
     """
 
     def __init__(self, table_to_replace: str, read_only_table: str) -> None:
