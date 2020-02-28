@@ -7,7 +7,8 @@ from snuba.request.request_settings import RequestSettings
 
 class ReadOnlyTableSelector(QueryProcessor):
     """
-    Replaces the
+    Replaces the data source in the query with a TableSource if the table
+    name of the original datasource is the one provided to the constructor.
     """
 
     def __init__(self, table_to_replace: str, read_only_table: str) -> None:
