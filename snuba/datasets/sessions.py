@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.schemas.tables import (
-    ReplacingMergeTreeSchema,
+    MergeTreeSchema,
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
@@ -86,8 +86,8 @@ class SessionsProcessor(MessageProcessor):
             "started": _ensure_valid_date(
                 datetime.utcfromtimestamp(message["started"])
             ),
-            "release": message.get("release"),
-            "environment": message.get("environment"),
+            "release": message["release"],
+            "environment": message.get("environment") or "",
         }
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
@@ -111,19 +111,17 @@ class SessionsDataset(TimeSeriesDataset):
                 ("deleted", UInt(8)),
                 ("received", DateTime()),
                 ("started", DateTime()),
-                ("release", LowCardinality(Nullable(String()))),
-                ("environment", LowCardinality(Nullable(String()))),
+                ("release", LowCardinality(String())),
+                ("environment", LowCardinality(String())),
             ]
         )
 
-        write_schema = ReplacingMergeTreeSchema(
+        write_schema = MergeTreeSchema(
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
-            prewhere_candidates=["project_id", "org_id"],
             order_by="(org_id, project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
             partition_by="(toMonday(received))",
-            version_column="seq",
             sample_expr="cityHash64(toString(session_id))",
             settings={"index_granularity": 16384},
         )
@@ -133,18 +131,18 @@ class SessionsDataset(TimeSeriesDataset):
                 ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
                 ("started", DateTime()),
-                ("release", LowCardinality(Nullable(String()))),
-                ("environment", LowCardinality(Nullable(String()))),
+                ("release", LowCardinality(String())),
+                ("environment", LowCardinality(String())),
                 (
-                    "duration",
+                    "duration_quantiles",
                     AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
                 ),
                 ("uniq_sessions", AggregateFunction("countIf", UUID(), UInt(8))),
                 ("uniq_users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_sessions_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("uniq_sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8))),
                 (
                     "uniq_sessions_abnormal",
-                    AggregateFunction("uniqIf", UUID(), UInt(8)),
+                    AggregateFunction("countIf", UUID(), UInt(8)),
                 ),
                 ("uniq_sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
                 ("uniq_users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
@@ -157,7 +155,7 @@ class SessionsDataset(TimeSeriesDataset):
             local_table_name=READ_LOCAL_TABLE_NAME,
             dist_table_name=READ_DIST_TABLE_NAME,
             prewhere_candidates=["project_id", "org_id"],
-            order_by="(org_id, project_id, started, release)",
+            order_by="(org_id, project_id, release, environment, started)",
             partition_by="(toMonday(started))",
             settings={"index_granularity": 16384},
         )
@@ -166,21 +164,21 @@ class SessionsDataset(TimeSeriesDataset):
             dist_materialized_view_name=READ_DIST_MV_NAME,
             prewhere_candidates=["project_id", "org_id"],
             columns=read_columns,
-            query="""
+            query=f"""
                 SELECT
                     org_id,
                     project_id,
-                    toStartOfHour(started) as started,
+                    toStartOfHour(started) as hour_started,
                     release,
                     environment,
                     quantilesIfState(0.5, 0.9)(
                         duration,
-                        duration <> 4294967295 AND status == 1
+                        duration <> {MAX_UINT32} AND status == 1
                     ) as duration,
                     countIfState(session_id, seq == 0) as uniq_sessions,
                     uniqIfState(distinct_id, distinct_id != '00000000-0000-0000-0000-000000000000') as uniq_users,
-                    uniqIfState(session_id, status == 2) as uniq_sessions_crashed,
-                    uniqIfState(session_id, status == 3) as uniq_sessions_abnormal,
+                    countIfState(session_id, status == 2) as uniq_sessions_crashed,
+                    countIfState(session_id, status == 3) as uniq_sessions_abnormal,
                     uniqIfState(session_id, errors > 0) as uniq_sessions_errored,
                     uniqIfState(distinct_id, status == 2) as uniq_users_crashed,
                     uniqIfState(distinct_id, status == 3) as uniq_users_abnormal,
@@ -190,7 +188,7 @@ class SessionsDataset(TimeSeriesDataset):
                 WHERE
                     deleted == 0
                 GROUP BY
-                    org_id, project_id, started, release, environment
+                    org_id, project_id, hour_started, release, environment
             """,
             local_source_table_name=WRITE_LOCAL_TABLE_NAME,
             local_destination_table_name=READ_LOCAL_TABLE_NAME,
@@ -246,14 +244,14 @@ class SessionsDataset(TimeSeriesDataset):
     ):
         full_col = super().column_expr(column_name, query, parsing_context, table_alias)
         func = None
-        if column_name == "duration":
+        if column_name == "duration_quantiles":
             func = "quantilesIfMerge(0.5, 0.9)"
-        elif column_name == "uniq_sessions":
+        elif column_name in ("uniq_sessions",
+            "uniq_sessions_crashed",
+            "uniq_sessions_abnormal"):
             func = "countIfMerge"
         elif column_name in (
             "uniq_users",
-            "uniq_sessions_crashed",
-            "uniq_sessions_abnormal",
             "uniq_sessions_errored",
             "uniq_users_crashed",
             "uniq_users_abnormal",
