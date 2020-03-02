@@ -130,7 +130,7 @@ class SessionsDataset(TimeSeriesDataset):
             [
                 ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
-                ("hour_started", DateTime()),
+                ("started", DateTime()),
                 ("release", LowCardinality(String())),
                 ("environment", LowCardinality(String())),
                 (
