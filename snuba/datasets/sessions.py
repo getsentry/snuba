@@ -170,7 +170,7 @@ class SessionsDataset(TimeSeriesDataset):
                     quantilesIfState(0.5, 0.9)(
                         duration,
                         duration <> {MAX_UINT32} AND status == 1
-                    ) as duration,
+                    ) as duration_quantiles,
                     countIfState(session_id, seq == 0) as uniq_sessions,
                     uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as uniq_users,
                     countIfState(session_id, status == 2) as uniq_sessions_crashed,
