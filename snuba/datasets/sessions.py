@@ -72,7 +72,6 @@ class SessionsProcessor(MessageProcessor):
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
             "seq": message["seq"],
-            "deleted": 0,
             "org_id": message["org_id"],
             "project_id": message["project_id"],
             "retention_days": message["retention_days"],
@@ -104,10 +103,6 @@ class SessionsDataset(TimeSeriesDataset):
                 ("duration", UInt(32)),
                 ("status", UInt(8)),
                 ("errors", UInt(16)),
-                # note here that deleted is really only an indicator so we can
-                # figure out which values can be discarded.  Deleting of values
-                # does not update the materializations.
-                ("deleted", UInt(8)),
                 ("received", DateTime()),
                 ("started", DateTime()),
                 ("release", LowCardinality(String())),
@@ -186,8 +181,6 @@ class SessionsDataset(TimeSeriesDataset):
                     uniqIfState(distinct_id, errors > 0) as uniq_users_errored
                 FROM
                     %(source_table_name)s
-                WHERE
-                    deleted == 0
                 GROUP BY
                     org_id, project_id, started, release, environment
             """,
