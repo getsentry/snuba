@@ -2,6 +2,7 @@ from tests.base import BaseEventsTest
 from unittest.mock import patch
 
 from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -14,7 +15,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
             source,
         )
         request_settings = HTTPRequestSettings()
-
+        SamplingRateProcessor().process_query(query, request_settings)
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
@@ -28,6 +29,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
             source,
         )
         request_settings = HTTPRequestSettings(turbo=True)
+        SamplingRateProcessor().process_query(query, request_settings)
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
@@ -39,7 +41,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = HTTPRequestSettings(turbo=True)
-
+        SamplingRateProcessor().process_query(query, request_settings)
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )
@@ -50,7 +52,7 @@ class TestDictClickhouseQuery(BaseEventsTest):
         source = self.dataset.get_dataset_schemas().get_read_schema().get_data_source()
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = HTTPRequestSettings()
-
+        SamplingRateProcessor().process_query(query, request_settings)
         clickhouse_query = DictClickhouseQuery(
             dataset=self.dataset, query=query, settings=request_settings,
         )

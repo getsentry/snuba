@@ -1,6 +1,5 @@
 from typing import Optional
 
-from snuba import settings
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.query.parsing import ParsingContext
@@ -19,7 +18,7 @@ class AstClickhouseQuery(ClickhouseQuery):
     AST.
     """
 
-    def __init__(self, query: Query, settings: RequestSettings,) -> None:
+    def __init__(self, query: Query, settings: RequestSettings) -> None:
         # Snuba query structure
         # Referencing them here directly since it makes it easier
         # to process this query independently from the Snuba Query
@@ -52,6 +51,9 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__settings = settings
         self.__formatted_query: Optional[str] = None
 
+    def get_applied_sampling_rate(self) -> Optional[float]:
+        return self.__sample
+
     def _format_query_impl(self) -> str:
         if self.__formatted_query:
             return self.__formatted_query
@@ -68,18 +70,8 @@ class AstClickhouseQuery(ClickhouseQuery):
         if self.__final:
             from_clause = f"{from_clause} FINAL"
 
-        # TODO: Sampling rate will become one step of Clickhouse query processing
-        if not self.__data_source.supports_sample():
-            sample_rate = None
-        else:
-            if self.__sample:
-                sample_rate = self.__sample
-            elif self.__settings.get_turbo():
-                sample_rate = settings.TURBO_SAMPLE_RATE
-            else:
-                sample_rate = None
-        if sample_rate:
-            from_clause = f"{from_clause} SAMPLE {sample_rate}"
+        if self.__sample is not None:
+            from_clause = f"{from_clause} SAMPLE {self.__sample}"
 
         array_join_clause = ""
         if self.__arrayjoin:

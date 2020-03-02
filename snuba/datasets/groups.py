@@ -19,6 +19,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -177,4 +178,5 @@ class Groups(TimeSeriesDataset):
         return [
             SimpleJoinOptimizer(),
             PrewhereProcessor(),
+            SamplingRateProcessor(),
         ]

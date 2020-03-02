@@ -56,6 +56,7 @@ GENERIC_QUERY_SCHEMA = {
         },
         "arrayjoin": {"$ref": "#/definitions/column_name"},
         "sample": {
+            # DEPRECATED. Replaced by sampling_config in the request settings schema.
             "anyOf": [
                 {"type": "integer", "minimum": 0},
                 {"type": "number", "minimum": 0.0, "maximum": 1.0},

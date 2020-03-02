@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from snuba import settings as snuba_settings
 from snuba import util
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
@@ -31,6 +30,20 @@ class ClickhouseQuery(ABC):
         if format is not None:
             query = f"{query} FORMAT {format}"
         return query
+
+    @abstractmethod
+    def get_applied_sampling_rate(self) -> Optional[float]:
+        """
+        This method probably won't exist when we will have a clickhosue AST,
+        since the format process will simply format the query to SQL without
+        applying any specific logic.
+        The method is used to ensure we do not tweak the the sampling rate provided
+        by the query object while formatting since we need to return it
+        reliably to the user.
+        Or, if for some reason we have to tweak it, at least we have a way
+        to return the value.
+        """
+        raise NotImplementedError
 
 
 class DictClickhouseQuery(ClickhouseQuery):
@@ -69,18 +82,9 @@ class DictClickhouseQuery(ClickhouseQuery):
         if query.get_final():
             from_clause = "{} FINAL".format(from_clause)
 
-        if not query.get_data_source().supports_sample():
-            sample_rate = None
-        else:
-            if query.get_sample():
-                sample_rate = query.get_sample()
-            elif settings.get_turbo():
-                sample_rate = snuba_settings.TURBO_SAMPLE_RATE
-            else:
-                sample_rate = None
-
-        if sample_rate:
-            from_clause = "{} SAMPLE {}".format(from_clause, sample_rate)
+        self.__sample = query.get_sample()
+        if self.__sample is not None:
+            from_clause = "{} SAMPLE {}".format(from_clause, self.__sample)
 
         join_clause = ""
         if query.get_arrayjoin():
@@ -154,6 +158,9 @@ class DictClickhouseQuery(ClickhouseQuery):
                 if c
             ]
         )
+
+    def get_applied_sampling_rate(self) -> Optional[float]:
+        return self.__sample
 
     def _format_query_impl(self) -> str:
         return self.__formatted_query

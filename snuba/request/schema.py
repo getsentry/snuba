@@ -12,6 +12,7 @@ from snuba.request import Request
 from snuba.request.request_settings import (
     HTTPRequestSettings,
     RequestSettings,
+    SamplingMode,
     SubscriptionRequestSettings,
 )
 from snuba.schemas import Schema, validate_jsonschema
@@ -140,6 +141,22 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             # first replica, so should only be used when absolutely necessary.
             "consistent": {"type": "boolean", "default": False},
             "debug": {"type": "boolean", "default": False},
+            "sampling_config": {
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": [mode.value for mode in SamplingMode],
+                    },
+                    "rate": {
+                        "type": "number",
+                        "exclusiveMinimum": 0.0,
+                        "exclusiveMaximum": 1.0,
+                    },
+                },
+                "required": ["mode"],
+                "default": {"mode": "auto"},
+            },
         },
         "additionalProperties": False,
     },

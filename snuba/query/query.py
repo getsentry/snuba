@@ -273,6 +273,9 @@ class Query:
     def get_sample(self) -> Optional[float]:
         return self.__body.get("sample")
 
+    def set_sample(self, rate: Optional[float]) -> None:
+        self.__body["sample"] = rate
+
     def get_limit(self) -> Optional[int]:
         return self.__body.get("limit", None)
 

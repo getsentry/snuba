@@ -30,6 +30,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba import settings
@@ -183,4 +184,5 @@ class OutcomesDataset(TimeSeriesDataset):
         return [
             BasicFunctionsProcessor(),
             PrewhereProcessor(),
+            SamplingRateProcessor(),
         ]

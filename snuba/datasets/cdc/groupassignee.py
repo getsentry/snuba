@@ -11,6 +11,7 @@ from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
@@ -91,4 +92,5 @@ class GroupAssigneeDataset(CdcDataset):
         return [
             BasicFunctionsProcessor(),
             PrewhereProcessor(),
+            SamplingRateProcessor(),
         ]

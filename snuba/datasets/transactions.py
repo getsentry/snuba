@@ -36,6 +36,7 @@ from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
@@ -300,4 +301,5 @@ class TransactionsDataset(TimeSeriesDataset):
                 {"start_ts", "finish_ts"},
                 BEGINNING_OF_TIME,
             ),
+            SamplingRateProcessor(),
         ]

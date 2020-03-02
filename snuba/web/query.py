@@ -326,7 +326,7 @@ def _run_query(
         "final": request.query.get_final(),
         "referrer": request.referrer,
         "num_days": num_days,
-        "sample": request.query.get_sample(),
+        "applied_sampling_rate": request.query.get_sample(),
     }
 
     with sentry_sdk.configure_scope() as scope:

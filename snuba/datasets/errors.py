@@ -27,6 +27,7 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -252,4 +253,4 @@ class ErrorsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), PrewhereProcessor()]
+        return [BasicFunctionsProcessor(), PrewhereProcessor(), SamplingRateProcessor()]

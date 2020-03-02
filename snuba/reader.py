@@ -25,7 +25,12 @@ if TYPE_CHECKING:
     Row = MutableMapping[str, Any]
     Result = TypedDict(
         "Result",
-        {"meta": Sequence[Column], "data": Sequence[Row], "totals": Row},
+        {
+            "meta": Sequence[Column],
+            "data": Sequence[Row],
+            "totals": Row,
+            "applied_sampling_rate": Optional[float],
+        },
         total=False,
     )
 else:

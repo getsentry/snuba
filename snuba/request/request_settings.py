@@ -1,8 +1,64 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
 
-from typing import Sequence
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba.state.rate_limit import get_global_rate_limit_params, RateLimitParameters
+
+
+class SamplingMode(Enum):
+    """
+    The value of this ennum are part of the public schema. Do not change them
+    without ensuring backward compatibility.
+    """
+
+    # No sampling applied.
+    NONE = "none"
+    # A fixes 0 - 1.0 (both exclusive) sampling rate is provided.
+    FIXED = "fixed"
+    # Adaptive sampling rate with aggregation adjustment. In this mode Snuba
+    # tries to guess an appropriate sampling rate depending on several heuristics
+    # including stats on the expected amount of data to query.
+    # Snuba will try its best to adjust the result of aggregations according to
+    # the sampling rate where it makes sense. If an aggregation function is passed
+    # that Snuba does not know how to adjust, Snuba will bail and apply no sampling
+    # so the client will still have datta that is consistent with what requested.
+    ADAPTIVE_ADJUST = "adaptive_adjust"
+    # Adaptive sampling rate without aggregation adjustment. It works like for
+    # adaptive_adjust but Snuba will not apply any adjustment. It is responsibility
+    # of the client to apply the appropriate adjustment.
+    # This gives higher guarantees that sampling will actually be applied.
+    ADAPTIVE_NO_ADJUST = "adaptive_no_adjust"
+    # The old automatic approach that applies a fixed config sampling if in TURBO
+    # mode.
+    AUTO_DEPRECATED = "auto"
+
+
+@dataclass(frozen=True)
+class SamplingConfig:
+    mode: SamplingMode
+    rate: Optional[float]
+
+    def __post_init__(self) -> None:
+        if self.mode != SamplingMode.FIXED:
+            assert (
+                self.rate is None
+            ), f"Sampling mode {self.mode} does not support a fixed rate"
+        else:
+            assert (
+                self.rate is not None
+            ), f"Sampling mode {self.mode} requires a fixed rate"
+
+    @classmethod
+    def build_from_dict(cls, raw_config: Mapping[str, Any]) -> SamplingConfig:
+        return SamplingConfig(SamplingMode(raw_config["mode"]), raw_config.get("rate"))
+
+    @classmethod
+    def build_default(cls) -> SamplingConfig:
+        return SamplingConfig(SamplingMode.AUTO_DEPRECATED, None)
 
 
 class RequestSettings(ABC):
@@ -36,6 +92,10 @@ class RequestSettings(ABC):
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
 
+    @abstractmethod
+    def get_sampling_config(self) -> SamplingConfig:
+        pass
+
 
 class HTTPRequestSettings(RequestSettings):
     """
@@ -45,12 +105,31 @@ class HTTPRequestSettings(RequestSettings):
     """
 
     def __init__(
-        self, turbo: bool = False, consistent: bool = False, debug: bool = False
+        self,
+        turbo: bool = False,
+        consistent: bool = False,
+        debug: bool = False,
+        sampling_config: Optional[Mapping[str, Any]] = None,
     ) -> None:
         self.__turbo = turbo
         self.__consistent = consistent
         self.__debug = debug
         self.__rate_limit_params = [get_global_rate_limit_params()]
+        self.__sampling_config = (
+            SamplingConfig.build_from_dict(sampling_config)
+            if sampling_config
+            else SamplingConfig.build_default()
+        )
+
+        # TODO: Enforce we no other sampling rate except for None can be used
+        # if we are not in turbo mode
+        if self.__sampling_config.mode not in (
+            SamplingMode.NONE,
+            SamplingMode.AUTO_DEPRECATED,
+        ):
+            assert (
+                self.get_turbo()
+            ), "Cannot use adaptive sampling config if not in turbo mode."
 
     def get_turbo(self) -> bool:
         return self.__turbo
@@ -66,6 +145,9 @@ class HTTPRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         self.__rate_limit_params.append(rate_limit_param)
+
+    def get_sampling_config(self) -> SamplingConfig:
+        return self.__sampling_config
 
 
 class SubscriptionRequestSettings(RequestSettings):
@@ -88,3 +170,6 @@ class SubscriptionRequestSettings(RequestSettings):
 
     def add_rate_limit(self, rate_limit_param: RateLimitParameters) -> None:
         pass
+
+    def get_sampling_config(self) -> SamplingConfig:
+        return SamplingConfig.build_default()

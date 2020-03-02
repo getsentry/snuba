@@ -28,6 +28,7 @@ from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
+from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
@@ -304,6 +305,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 },
             ),
             PrewhereProcessor(),
+            SamplingRateProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
