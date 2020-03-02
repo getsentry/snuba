@@ -114,7 +114,7 @@ class SessionsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
-            order_by="(org_id, project_id, toStartOfDay(started))",
+            order_by="(org_id, project_id, started)",
             partition_by="(toMonday(started))",
             settings={"index_granularity": 16384},
         )
