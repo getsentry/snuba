@@ -139,7 +139,10 @@ class SessionsDataset(TimeSeriesDataset):
                 ),
                 ("uniq_sessions", AggregateFunction("countIf", UUID(), UInt(8))),
                 ("uniq_users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8))),
+                (
+                    "uniq_sessions_crashed",
+                    AggregateFunction("countIf", UUID(), UInt(8)),
+                ),
                 (
                     "uniq_sessions_abnormal",
                     AggregateFunction("countIf", UUID(), UInt(8)),
@@ -246,9 +249,11 @@ class SessionsDataset(TimeSeriesDataset):
         func = None
         if column_name == "duration_quantiles":
             func = "quantilesIfMerge(0.5, 0.9)"
-        elif column_name in ("uniq_sessions",
+        elif column_name in (
+            "uniq_sessions",
             "uniq_sessions_crashed",
-            "uniq_sessions_abnormal"):
+            "uniq_sessions_abnormal",
+        ):
             func = "countIfMerge"
         elif column_name in (
             "uniq_users",
