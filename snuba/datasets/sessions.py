@@ -120,10 +120,9 @@ class SessionsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
-            order_by="(org_id, project_id, toStartOfDay(started), cityHash64(toString(session_id)))",
+            order_by="(org_id, project_id, toStartOfDay(started))",
             partition_by="(toMonday(started))",
-            sample_expr="cityHash64(toString(session_id))",
-            settings={"index_granularity": 256},
+            settings={"index_granularity": 16384},
         )
 
         read_columns = ColumnSet(
@@ -160,7 +159,7 @@ class SessionsDataset(TimeSeriesDataset):
             prewhere_candidates=["project_id", "org_id"],
             order_by="(org_id, project_id, release, environment, started)",
             partition_by="(toMonday(started))",
-            settings={"index_granularity": 16384},
+            settings={"index_granularity": 256},
         )
         materialized_view = MaterializedViewSchema(
             local_materialized_view_name=READ_LOCAL_MV_NAME,
