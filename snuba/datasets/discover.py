@@ -14,6 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas import Schema, RelationalSource
 from snuba.datasets.transactions import BEGINNING_OF_TIME
@@ -26,6 +27,7 @@ from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
@@ -297,7 +299,8 @@ class DiscoverDataset(TimeSeriesDataset):
                             {"timestamp"},
                             BEGINNING_OF_TIME,
                         ),
-                    ]
+                    ],
+                    EVENTS: [ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro")],
                 },
             ),
             PrewhereProcessor(),
@@ -306,7 +309,9 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
             "project": ProjectExtension(
-                processor=ProjectWithGroupsProcessor(project_column="project_id")
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id", replacer_state_name=None,
+                )
             ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
