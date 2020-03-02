@@ -52,7 +52,6 @@ STATUS_MAPPING = {
     "exited": 1,
     "crashed": 2,
     "abnormal": 3,
-    "degraded": 4,
 }
 REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
@@ -178,7 +177,7 @@ class SessionsDataset(TimeSeriesDataset):
                         duration <> {MAX_UINT32} AND status == 1
                     ) as duration,
                     countIfState(session_id, seq == 0) as uniq_sessions,
-                    uniqIfState(distinct_id, distinct_id != '00000000-0000-0000-0000-000000000000') as uniq_users,
+                    uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as uniq_users,
                     countIfState(session_id, status == 2) as uniq_sessions_crashed,
                     countIfState(session_id, status == 3) as uniq_sessions_abnormal,
                     uniqIfState(session_id, errors > 0) as uniq_sessions_errored,
