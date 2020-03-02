@@ -120,17 +120,17 @@ class SessionsDataset(TimeSeriesDataset):
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
-            order_by="(org_id, project_id, toDate(started), session_id, cityHash64(toString(session_id)))",
-            partition_by="(toMonday(received))",
+            order_by="(org_id, project_id, toStartOfDay(started), cityHash64(toString(session_id)))",
+            partition_by="(toMonday(started))",
             sample_expr="cityHash64(toString(session_id))",
-            settings={"index_granularity": 16384},
+            settings={"index_granularity": 256},
         )
 
         read_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),
                 ("project_id", UInt(64)),
-                ("started", DateTime()),
+                ("hour_started", DateTime()),
                 ("release", LowCardinality(String())),
                 ("environment", LowCardinality(String())),
                 (
@@ -168,7 +168,7 @@ class SessionsDataset(TimeSeriesDataset):
                 SELECT
                     org_id,
                     project_id,
-                    toStartOfHour(started) as hour_started,
+                    toStartOfHour(started) as started,
                     release,
                     environment,
                     quantilesIfState(0.5, 0.9)(
@@ -188,7 +188,7 @@ class SessionsDataset(TimeSeriesDataset):
                 WHERE
                     deleted == 0
                 GROUP BY
-                    org_id, project_id, hour_started, release, environment
+                    org_id, project_id, started, release, environment
             """,
             local_source_table_name=WRITE_LOCAL_TABLE_NAME,
             local_destination_table_name=READ_LOCAL_TABLE_NAME,
