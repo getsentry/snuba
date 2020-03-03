@@ -30,7 +30,8 @@ logger = logging.getLogger("snuba.migrate")
 
 grammar = Grammar(
     r"""
-    type             = basic_type / uint / float / fixedstring / enum / lowcardinality / nullable / array
+    type             = primitive / lowcardinality / nullable / array
+    primitive        = basic_type / uint / float / fixedstring / enum
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
     uint             = "UInt" uint_size
@@ -45,10 +46,9 @@ grammar = Grammar(
     enum_pair        = quote enum_str quote space equal space enum_val
     enum_str         = ~r"([a-zA-Z0-9]+)"
     enum_val         = ~r"\d+"
-    lowcardinality   = "LowCardinality" inner_type
-    nullable         = "Nullable" inner_type
-    array            = "Array" inner_type
-    inner_type       = ~r"\([a-zA-Z0-9()]+\)"
+    array            = "Array" open_paren (primitive / nullable) close_paren
+    lowcardinality   = "LowCardinality" open_paren (primitive / nullable) close_paren
+    nullable         = "Nullable" open_paren (primitive) close_paren
     open_paren       = "("
     close_paren      = ")"
     equal            = "="
@@ -60,10 +60,6 @@ grammar = Grammar(
 
 
 class Visitor(NodeVisitor):
-    def visit_type(self, node: Node, visited_children: Iterable[ColumnType]) -> ColumnType:
-        (child,) = visited_children
-        return child
-
     def visit_basic_type(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         return {
             "Date": Date,
@@ -104,21 +100,21 @@ class Visitor(NodeVisitor):
         return int(node.text)
 
     def visit_lowcardinality(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
-        return LowCardinality(self.__get_inner_type(node.children[1]))
+        (_lc, _paren, inner_type, _paren) = visited_children
+        return LowCardinality(inner_type)
 
     def visit_nullable(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
-        return Nullable(self.__get_inner_type(node.children[1]))
+        (_null, _paren, inner_type, _paren) = visited_children
+        return Nullable(inner_type)
 
     def visit_array(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
-        return Array(self.__get_inner_type(node.children[1]))
+        (_arr, _paren, inner_type, _paren) = visited_children
+        return Array(inner_type)
 
     def generic_visit(self, node: Node, visited_children: Iterable[Any]) -> Any:
+        if isinstance(visited_children, list) and len(visited_children) == 1:
+            return visited_children[0]
         return visited_children or node
-
-    def __get_inner_type(self, node: Node) -> ColumnType:
-        inner_type = node.text[1:-1]  # Strip open/close parens
-        tree = grammar.parse(inner_type)
-        return Visitor().visit(tree)
 
 
 STRIP_CAST_RE = re.compile(r"^CAST\((.*), (.*)\)$", re.IGNORECASE)
