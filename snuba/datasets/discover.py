@@ -27,6 +27,7 @@ from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.types import Condition
@@ -298,7 +299,8 @@ class DiscoverDataset(TimeSeriesDataset):
                             {"timestamp"},
                             BEGINNING_OF_TIME,
                         ),
-                    ]
+                    ],
+                    EVENTS: [ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro")],
                 },
             ),
             PrewhereProcessor(),

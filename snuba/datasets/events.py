@@ -22,6 +22,7 @@ from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -410,4 +411,8 @@ class EventsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), PrewhereProcessor()]
+        return [
+            ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+            BasicFunctionsProcessor(),
+            PrewhereProcessor(),
+        ]
