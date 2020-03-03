@@ -24,7 +24,6 @@ from snuba.clickhouse.columns import (
     WithCodecs,
     WithDefault,
 )
-from snuba.datasets.schemas.tables import TableSchema
 
 logger = logging.getLogger("snuba.migrate")
 
@@ -122,68 +121,36 @@ class Visitor(NodeVisitor):
         return Visitor().visit(tree)
 
 
-def _run_schema(conn, schema):
-    if not isinstance(schema, TableSchema):
-        return
-    clickhouse_table = schema.get_local_table_name()
+STRIP_CAST_RE = re.compile(r"^CAST\((.*), (.*)\)$", re.IGNORECASE)
 
-    STRIP_CAST_RE = re.compile(r"^CAST\((.*), (.*)\)$", re.IGNORECASE)
-
-    def strip_cast(default_expr: str) -> str:
-        match = STRIP_CAST_RE.match(default_expr)
-        if match:
-            default_expr = match.groups()[0]
-        return default_expr
-
-    def get_column_type(column_type: str) -> ColumnType:
-        return Visitor().visit(grammar.parse(column_type))
-
-    def get_column(
-        column_type: str, default_type: str, default_expr: str, codec_expr: str
-    ) -> ColumnType:
-        column = get_column_type(column_type)
-
-        if default_type == "MATERIALIZED":
-            column = Materialized(column, strip_cast(default_expr))
-        elif default_type == "DEFAULT":
-            column = WithDefault(column, strip_cast(default_expr))
-
-        if codec_expr:
-            column = WithCodecs(column, codec_expr.split(", "))
-
-        return column
-
-    def get_schema() -> Mapping[str, ColumnType]:
-        return {
-            column_name: get_column(column_type, default_type, default_expr, codec_expr)
-            for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
-                cols[:6]
-                for cols in conn.execute("DESCRIBE TABLE %s" % clickhouse_table)
-            ]
-        }
-
-    local_schema = get_schema()
-
-    migrations = schema.get_migration_statements()(clickhouse_table, local_schema)
-    for statement in migrations:
-        logger.info(f"Executing migration: {statement}")
-        conn.execute(statement)
-
-    # Refresh after alters
-    refreshed_schema = get_schema()
-
-    # Warn user about any *other* schema diffs
-    differences = schema.get_column_differences(refreshed_schema)
-
-    for difference in differences:
-        logger.warn(difference)
+def _strip_cast(default_expr: str) -> str:
+    match = STRIP_CAST_RE.match(default_expr)
+    if match:
+        default_expr = match.groups()[0]
+    return default_expr
 
 
-def run(conn, dataset):
-    schemas = []
-    if dataset.get_table_writer():
-        schemas.append(dataset.get_table_writer().get_schema())
-    schemas.append(dataset.get_dataset_schemas().get_read_schema())
+def _get_column(
+    column_type: str, default_type: str, default_expr: str, codec_expr: str
+) -> ColumnType:
+    column = Visitor().visit(grammar.parse(column_type))
 
-    for schema in schemas:
-        _run_schema(conn, schema)
+    if default_type == "MATERIALIZED":
+        column = Materialized(column, _strip_cast(default_expr))
+    elif default_type == "DEFAULT":
+        column = WithDefault(column, _strip_cast(default_expr))
+
+    if codec_expr:
+        column = WithCodecs(column, codec_expr.split(", "))
+
+    return column
+
+
+def get_local_schema(conn, table_name) -> Mapping[str, ColumnType]:
+    return {
+        column_name: _get_column(column_type, default_type, default_expr, codec_expr)
+        for column_name, column_type, default_type, default_expr, _comment, codec_expr in [
+            cols[:6]
+            for cols in conn.execute("DESCRIBE TABLE %s" % table_name)
+        ]
+    }

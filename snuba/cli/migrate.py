@@ -21,7 +21,7 @@ from snuba.util import local_dataset_mode
 def migrate(
     *, log_level: Optional[str] = None, dataset_name: Optional[str] = None
 ) -> None:
-    from snuba.migrate import logger, run
+    from snuba.migrations.migrate import logger, run
 
     setup_logging(log_level)
 
