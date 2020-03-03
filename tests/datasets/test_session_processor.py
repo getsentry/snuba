@@ -39,7 +39,6 @@ class TestSessionProcessor(BaseTest):
         assert ret.action == ProcessorAction.INSERT
         assert ret.data == [
             {
-                "deleted": 0,
                 "distinct_id": "b3ef3211-58a4-4b36-a9a1-5a55df0d9aaf",
                 "duration": 1947490,
                 "environment": "production",

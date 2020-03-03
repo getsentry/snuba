@@ -3,11 +3,10 @@ from datetime import timedelta, datetime
 from typing import Mapping, Sequence, Optional
 
 from snuba.clickhouse.columns import (
+    AggregateFunction,
     ColumnSet,
     DateTime,
     LowCardinality,
-    AggregateFunction,
-    Nullable,
     String,
     UInt,
     UUID,
@@ -130,20 +129,14 @@ class SessionsDataset(TimeSeriesDataset):
                     "duration_quantiles",
                     AggregateFunction("quantilesIf(0.5, 0.9)", UInt(32), UInt(8)),
                 ),
-                ("uniq_sessions", AggregateFunction("countIf", UUID(), UInt(8))),
-                ("uniq_users", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                (
-                    "uniq_sessions_crashed",
-                    AggregateFunction("countIf", UUID(), UInt(8)),
-                ),
-                (
-                    "uniq_sessions_abnormal",
-                    AggregateFunction("countIf", UUID(), UInt(8)),
-                ),
-                ("uniq_sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
-                ("uniq_users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("sessions", AggregateFunction("countIf", UUID(), UInt(8))),
+                ("users", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("sessions_crashed", AggregateFunction("countIf", UUID(), UInt(8)),),
+                ("sessions_abnormal", AggregateFunction("countIf", UUID(), UInt(8)),),
+                ("sessions_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("users_crashed", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("users_abnormal", AggregateFunction("uniqIf", UUID(), UInt(8))),
+                ("users_errored", AggregateFunction("uniqIf", UUID(), UInt(8))),
             ]
         )
         read_schema = AggregatingMergeTreeSchema(
@@ -171,14 +164,14 @@ class SessionsDataset(TimeSeriesDataset):
                         duration,
                         duration <> {MAX_UINT32} AND status == 1
                     ) as duration_quantiles,
-                    countIfState(session_id, seq == 0) as uniq_sessions,
-                    uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as uniq_users,
-                    countIfState(session_id, status == 2) as uniq_sessions_crashed,
-                    countIfState(session_id, status == 3) as uniq_sessions_abnormal,
-                    uniqIfState(session_id, errors > 0) as uniq_sessions_errored,
-                    uniqIfState(distinct_id, status == 2) as uniq_users_crashed,
-                    uniqIfState(distinct_id, status == 3) as uniq_users_abnormal,
-                    uniqIfState(distinct_id, errors > 0) as uniq_users_errored
+                    countIfState(session_id, seq == 0) as sessions,
+                    uniqIfState(distinct_id, distinct_id != '{NIL_UUID}') as users,
+                    countIfState(session_id, status == 2) as sessions_crashed,
+                    countIfState(session_id, status == 3) as sessions_abnormal,
+                    uniqIfState(session_id, errors > 0) as sessions_errored,
+                    uniqIfState(distinct_id, status == 2) as users_crashed,
+                    uniqIfState(distinct_id, status == 3) as users_abnormal,
+                    uniqIfState(distinct_id, errors > 0) as users_errored
                 FROM
                     %(source_table_name)s
                 GROUP BY
@@ -240,18 +233,14 @@ class SessionsDataset(TimeSeriesDataset):
         func = None
         if column_name == "duration_quantiles":
             func = "quantilesIfMerge(0.5, 0.9)"
-        elif column_name in (
-            "uniq_sessions",
-            "uniq_sessions_crashed",
-            "uniq_sessions_abnormal",
-        ):
+        elif column_name in ("sessions", "sessions_crashed", "sessions_abnormal",):
             func = "countIfMerge"
         elif column_name in (
-            "uniq_users",
-            "uniq_sessions_errored",
-            "uniq_users_crashed",
-            "uniq_users_abnormal",
-            "uniq_users_errored",
+            "users",
+            "sessions_errored",
+            "users_crashed",
+            "users_abnormal",
+            "users_errored",
         ):
             func = "uniqIfMerge"
         if func is not None:

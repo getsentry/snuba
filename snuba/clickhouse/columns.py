@@ -220,7 +220,7 @@ class LowCardinality(ColumnTypeWithModifier):
 
 
 class AggregateFunction(ColumnType):
-    def __init__(self, func, *arg_types: Tuple[ColumnType]) -> None:
+    def __init__(self, func: str, *arg_types: Tuple[ColumnType]) -> None:
         self.func = func
         self.arg_types = arg_types
 
