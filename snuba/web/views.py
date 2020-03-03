@@ -359,7 +359,7 @@ if application.debug or application.testing:
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
-        from snuba import migrate
+        from snuba.migrations import migrate
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
