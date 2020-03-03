@@ -1,17 +1,14 @@
 import logging
 import queue
 import time
-from datetime import date, datetime
-from typing import Callable, Iterable, Mapping, Optional, TypeVar
-from uuid import UUID
+from typing import Iterable, Mapping, Optional
 
 from clickhouse_driver import Client, errors
-from dateutil.tz import tz
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader, Result, build_result_transformer
+from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -130,57 +127,6 @@ class ClickhousePool(object):
             pass
 
 
-T = TypeVar("T")
-R = TypeVar("R")
-
-
-def transform_nullable(
-    function: Callable[[T], R]
-) -> Callable[[Optional[T]], Optional[R]]:
-    def transform_column(value: Optional[T]) -> Optional[R]:
-        if value is None:
-            return value
-        else:
-            return function(value)
-
-    return transform_column
-
-
-def transform_date(value: date) -> str:
-    """
-    Convert a timezone-naive date object into an ISO 8601 formatted date and
-    time string respresentation.
-    """
-    return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
-
-
-def transform_datetime(value: datetime) -> str:
-    """
-    Convert a timezone-naive datetime object into an ISO 8601 formatted date
-    and time string representation.
-    """
-    return value.replace(tzinfo=tz.tzutc()).isoformat()
-
-
-def transform_uuid(value: UUID) -> str:
-    """
-    Convert a UUID object into a string representation.
-    """
-    return str(value)
-
-
-transform_column_types = build_result_transformer(
-    {
-        "Date": transform_date,
-        "Nullable(Date)": transform_nullable(transform_date),
-        "DateTime": transform_datetime,
-        "Nullable(DateTime)": transform_nullable(transform_datetime),
-        "UUID": transform_uuid,
-        "Nullable(UUID)": transform_nullable(transform_uuid),
-    }
-)
-
-
 class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
@@ -213,9 +159,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         else:
             result = {"data": data, "meta": meta}
 
-        transform_column_types(result)
-
-        return result
+        return transform_columns(result)
 
     def execute(
         self,
