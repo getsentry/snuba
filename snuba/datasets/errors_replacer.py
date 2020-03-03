@@ -141,6 +141,7 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
+        self.__optimize = False
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -171,7 +172,7 @@ class ErrorsReplacer(ReplacerProcessor):
 
         return processed
 
-    def pre_replacement(self, replacement: Replacement, matching_records: int) -> None:
+    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
         # query_time_flags == (type, project_id, [...data...])
         flag_type, project_id = replacement.query_time_flags[:2]
         if self.__state_name == ReplacerState.EVENTS:
@@ -180,15 +181,21 @@ class ErrorsReplacer(ReplacerProcessor):
             compatibility_double_write = True
         else:
             compatibility_double_write = False
-        if flag_type == NEEDS_FINAL:
-            if compatibility_double_write:
-                set_project_needs_final(project_id, None)
-            set_project_needs_final(project_id, self.__state_name)
-        elif flag_type == EXCLUDE_GROUPS:
-            group_ids = replacement.query_time_flags[2]
-            if compatibility_double_write:
-                set_project_exclude_groups(project_id, group_ids, None)
-            set_project_exclude_groups(project_id, group_ids, self.__state_name)
+
+        if not self.__optimize:
+            if flag_type == NEEDS_FINAL:
+                if compatibility_double_write:
+                    set_project_needs_final(project_id, None)
+                set_project_needs_final(project_id, self.__state_name)
+            elif flag_type == EXCLUDE_GROUPS:
+                group_ids = replacement.query_time_flags[2]
+                if compatibility_double_write:
+                    set_project_exclude_groups(project_id, group_ids, None)
+                set_project_exclude_groups(project_id, group_ids, self.__state_name)
+        elif flag_type in {NEEDS_FINAL, EXCLUDE_GROUPS}:
+            return True
+
+        return False
 
 
 def process_delete_groups(

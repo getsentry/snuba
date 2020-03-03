@@ -69,6 +69,12 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
     help="Minimum number of messages per topic+partition librdkafka tries to maintain in the local consumer queue.",
 )
 @click.option("--log-level", help="Logging level to use.")
+@click.option(
+    "--optimize",
+    is_flag=True,
+    default=False,
+    help="Run optimize after each replacement.",
+)
 def replacer(
     *,
     replacements_topic: Optional[str],
@@ -82,6 +88,7 @@ def replacer(
     queued_max_messages_kbytes: int,
     queued_min_messages: int,
     log_level: Optional[str] = None,
+    optimize: bool,
 ) -> None:
 
     from snuba.clickhouse.native import ClickhousePool
@@ -154,7 +161,7 @@ def replacer(
             codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, storage, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, storage, metrics=metrics, optimize=optimize),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
