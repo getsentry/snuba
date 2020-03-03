@@ -1,4 +1,5 @@
 from datetime import timedelta
+
 from snuba import settings
 from snuba.clickhouse.columns import (
     Array,
@@ -14,14 +15,12 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.query.extensions import QueryExtension
-from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
 
@@ -61,8 +60,8 @@ class QuerylogDataset(TimeSeriesDataset):
             columns=columns,
             local_table_name="querylog_local",
             dist_table_name="querylog_dist",
-            order_by="(timestamp)",
-            partition_by="(toMonday(timestamp))",
+            order_by="(toDate(timestamp))",
+            partition_by="(timestamp)",
         )
 
         dataset_schemas = DatasetSchemas(
@@ -83,9 +82,6 @@ class QuerylogDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(
-                processor=ProjectExtensionProcessor(project_column="project_id")
-            ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
