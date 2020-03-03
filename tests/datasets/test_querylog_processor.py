@@ -1,3 +1,5 @@
+import uuid
+
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.query.query import Query
@@ -31,6 +33,7 @@ def test_simple():
     time.sleep(0.01)
 
     message = SnubaQueryMetadata(
+        query_id=uuid.UUID("a" * 32).hex,
         request=request,
         dataset=get_dataset("events"),
         timer=timer,
@@ -39,7 +42,7 @@ def test_simple():
             sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
             stats={"sample": 10},
             status="success",
-            trace_id="a" * 32
+            trace_id="b" * 32
         )]
     ).to_dict()
 
@@ -50,6 +53,7 @@ def test_simple():
     assert processor.process_message(message) == ProcessedMessage(
         ProcessorAction.INSERT,
         [{
+            "query_id": "a" * 32,
             "request": "{'limit': 100, 'offset': 50, 'orderby': 'event_id', 'project': 1, 'sample': 0.1, 'selected_columns': ['event_id']}",
             "referrer": "search",
             "dataset": get_dataset("events"),
@@ -64,7 +68,7 @@ def test_simple():
             "clickhouse_queries.cache_hit": [0],
             "clickhouse_queries.sample": [10.],
             "clickhouse_queries.max_threads": [0],
-            "clickhouse_queries.trace_id": ["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"],
+            "clickhouse_queries.trace_id": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"],
             "clickhouse_queries.duration_ms": [0],
         }]
     )

@@ -30,6 +30,7 @@ class QuerylogDataset(TimeSeriesDataset):
 
         columns = ColumnSet(
             [
+                ("query_id", UUID()),
                 ("request", String()),
                 ("referrer", LowCardinality(String())),
                 ("dataset", LowCardinality(String())),
@@ -60,8 +61,9 @@ class QuerylogDataset(TimeSeriesDataset):
             columns=columns,
             local_table_name="querylog_local",
             dist_table_name="querylog_dist",
-            order_by="(toDate(timestamp))",
-            partition_by="(timestamp)",
+            order_by="(toStartOfDay(timestamp), query_id)",
+            partition_by="(toMonday(timestamp))",
+            sample_expr="query_id",
         )
 
         dataset_schemas = DatasetSchemas(
@@ -85,6 +87,6 @@ class QuerylogDataset(TimeSeriesDataset):
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
-                timestamp_column="start_ts",
+                timestamp_column="timestamp",
             ),
         }

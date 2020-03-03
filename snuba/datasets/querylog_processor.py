@@ -1,3 +1,4 @@
+from hashlib import md5
 from typing import Any, Mapping, Optional, Sequence, Union
 import uuid
 
@@ -18,7 +19,9 @@ class QuerylogProcessor(MessageProcessor):
 
         return sample
 
-    def extract_query_list(self, query_list: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
+    def extract_query_list(
+        self, query_list: Sequence[Mapping[str, Any]]
+    ) -> Mapping[str, Any]:
         sql = []
         status = []
         final = []
@@ -58,6 +61,7 @@ class QuerylogProcessor(MessageProcessor):
             projects = [projects]
 
         processed = {
+            "query_id": str(uuid.UUID(message["query_id"])),
             "request": self.get_request(message["request"]),
             "referrer": message["referrer"],
             "dataset": message["dataset"],
