@@ -6,7 +6,7 @@ from snuba.request.request_settings import RequestSettings, SamplingMode
 
 class SamplingRateProcessor(QueryProcessor):
     """
-    Apply the appropriate sampling rate to the query to be executed.
+    Applies the appropriate sampling rate to the query to be executed.
     This will be a storage specific processor as soon as we will have a clickhouse
     specific query class and ast. As long as that does not exist, this
     is just applied at the very end of the query processing phase.
