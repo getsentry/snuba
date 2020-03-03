@@ -1,5 +1,6 @@
 import logging
 import queue
+import re
 import time
 from datetime import date, datetime
 from typing import Callable, Iterable, Mapping, Optional, TypeVar
@@ -171,12 +172,14 @@ def transform_uuid(value: UUID) -> str:
 
 transform_column_types = build_result_transformer(
     {
-        "Date": transform_date,
-        "Nullable(Date)": transform_nullable(transform_date),
-        "DateTime": transform_datetime,
-        "Nullable(DateTime)": transform_nullable(transform_datetime),
-        "UUID": transform_uuid,
-        "Nullable(UUID)": transform_nullable(transform_uuid),
+        re.compile(r"^Date$"): transform_date,
+        re.compile(r"^Nullable\(Date\)$"): transform_nullable(transform_date),
+        re.compile(r"^DateTime(\(.+\))?$"): transform_datetime,
+        re.compile(r"^Nullable\(DateTime((.+))?\)$"): transform_nullable(
+            transform_datetime
+        ),
+        re.compile(r"^UUID$"): transform_uuid,
+        re.compile(r"^Nullable\(UUID\)$"): transform_nullable(transform_uuid),
     }
 )
 

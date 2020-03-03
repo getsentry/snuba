@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 from abc import ABC, abstractmethod
+from re import Pattern
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -37,7 +38,7 @@ def iterate_rows(result: Result) -> Iterator[Row]:
 
 
 def build_result_transformer(
-    column_transformations: Mapping[str, Callable[[Any], Any]],
+    column_transformations: Mapping[Pattern, Callable[[Any], Any]],
 ) -> Callable[[Result], None]:
     """
     Builds and returns a function that can be used to mutate a ``Result``
@@ -47,13 +48,12 @@ def build_result_transformer(
 
     def transform_result(result: Result) -> None:
         for column in result["meta"]:
-            transformer = column_transformations.get(column["type"])
-            if transformer is None:
-                continue
-
-            name = column["name"]
-            for row in iterate_rows(result):
-                row[name] = transformer(row[name])
+            for pattern, transformer in column_transformations.items():
+                if pattern.match(column["type"]):
+                    name = column["name"]
+                    for row in iterate_rows(result):
+                        row[name] = transformer(row[name])
+                    break
 
     return transform_result
 
