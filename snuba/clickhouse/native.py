@@ -169,7 +169,7 @@ def transform_uuid(value: UUID) -> str:
     return str(value)
 
 
-transform_result = build_result_transformer(
+transform_column_types = build_result_transformer(
     {
         "Date": transform_date,
         "Nullable(Date)": transform_nullable(transform_date),
@@ -213,7 +213,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         else:
             result = {"data": data, "meta": meta}
 
-        transform_result(result)
+        transform_column_types(result)
 
         return result
 
