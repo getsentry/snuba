@@ -1,5 +1,6 @@
 import copy
 import logging
+import uuid
 
 from hashlib import md5
 from typing import (
@@ -265,6 +266,7 @@ def parse_and_run_query(
     """
     request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
+        query_id=uuid.uuid4().hex,
         request=request_copy,
         dataset=get_dataset_name(dataset),
         timer=timer,
