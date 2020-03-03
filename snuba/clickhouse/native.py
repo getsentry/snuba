@@ -138,8 +138,19 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         """
         data, meta = result
 
-        data = [{c[0]: d[i] for i, c in enumerate(meta)} for d in data]
-        meta = [{"name": m[0], "type": m[1]} for m in meta]
+        # XXX: Rows are represented as mappings that are keyed by column or
+        # alias, which is problematic when the result set contains duplicate
+        # names. To ensure that the column headers and row data are consistent
+        # duplicated names are discarded at this stage.
+        columns = {c[0]: i for i, c in enumerate(meta)}
+
+        data = [
+            {column: row[index] for column, index in columns.items()} for row in data
+        ]
+
+        meta = [
+            {"name": m[0], "type": m[1]} for m in [meta[i] for i in columns.values()]
+        ]
 
         if with_totals:
             assert len(data) > 0
