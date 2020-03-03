@@ -233,7 +233,7 @@ class SessionsDataset(TimeSeriesDataset):
         func = None
         if column_name == "duration_quantiles":
             func = "quantilesIfMerge(0.5, 0.9)"
-        elif column_name in ("sessions", "sessions_crashed", "sessions_abnormal",):
+        elif column_name in ("sessions", "sessions_crashed", "sessions_abnormal"):
             func = "countIfMerge"
         elif column_name in (
             "users",
