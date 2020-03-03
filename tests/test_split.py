@@ -1,5 +1,6 @@
-import pytest
 from typing import Any, Mapping
+
+import pytest
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
@@ -8,6 +9,7 @@ from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
+from snuba.web.query import RawQueryResult
 from snuba.web.split import split_query
 
 
@@ -92,9 +94,9 @@ def test_col_split(
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
-            return {"data": first_query_data}
+            return RawQueryResult({"data": first_query_data}, {})
         elif selected_cols == list(second_query_data[0].keys()):
-            return {"data": second_query_data}
+            return RawQueryResult({"data": second_query_data}, {})
         else:
             raise ValueError(f"Unexpected selected columns: {selected_cols}")
 

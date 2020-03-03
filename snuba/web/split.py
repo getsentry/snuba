@@ -15,7 +15,7 @@ STEP_GROWTH = 10
 
 def split_query(query_func):
     def wrapper(dataset, request: Request, *args, **kwargs):
-        use_split, = state.get_configs([("use_split", 0)])
+        (use_split,) = state.get_configs([("use_split", 0)])
         query_limit = request.query.get_limit()
         limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
@@ -88,22 +88,24 @@ def split_query(query_func):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
+            # XXX: The extra data is carried across from the initial response
+            # and never updated.
             result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
 
             if overall_result is None:
                 overall_result = result
             else:
-                overall_result["data"].extend(result["data"])
+                overall_result.result["data"].extend(result.result["data"])
 
-            if remaining_offset > 0 and len(overall_result["data"]) > 0:
-                to_trim = min(remaining_offset, len(overall_result["data"]))
-                overall_result["data"] = overall_result["data"][to_trim:]
+            if remaining_offset > 0 and len(overall_result.result["data"]) > 0:
+                to_trim = min(remaining_offset, len(overall_result.result["data"]))
+                overall_result.result["data"] = overall_result.result["data"][to_trim:]
                 remaining_offset -= to_trim
 
-            total_results = len(overall_result["data"])
+            total_results = len(overall_result.result["data"])
 
             if total_results < limit:
-                if len(result["data"]) == 0:
+                if len(result.result["data"]) == 0:
                     # If we got nothing from the last query, expand the range by a static factor
                     split_step = split_step * STEP_GROWTH
                 else:
@@ -112,7 +114,7 @@ def split_query(query_func):
                     # our last query and its time range, and how many we have left to fetch.
                     remaining = limit - total_results
                     split_step = split_step * math.ceil(
-                        remaining / float(len(result["data"]))
+                        remaining / float(len(result.result["data"]))
                     )
 
                 # Set the start and end of the next query based on the new range.
@@ -143,11 +145,16 @@ def split_query(query_func):
         result = query_func(dataset, minimal_request, *args, **kwargs)
         del minimal_request
 
-        if result["data"]:
+        if result.result["data"]:
             request = copy.deepcopy(request)
 
             event_ids = list(
-                set([event[column_split_spec.id_column] for event in result["data"]])
+                set(
+                    [
+                        event[column_split_spec.id_column]
+                        for event in result.result["data"]
+                    ]
+                )
             )
             request.query.add_conditions(
                 [(column_split_spec.id_column, "IN", event_ids)]
@@ -159,14 +166,14 @@ def split_query(query_func):
                 set(
                     [
                         event[column_split_spec.project_column]
-                        for event in result["data"]
+                        for event in result.result["data"]
                     ]
                 )
             )
             request.extensions["project"]["project"] = project_ids
 
             timestamp_field = column_split_spec.timestamp_column
-            timestamps = [event[timestamp_field] for event in result["data"]]
+            timestamps = [event[timestamp_field] for event in result.result["data"]]
             request.extensions["timeseries"]["from_date"] = util.parse_datetime(
                 min(timestamps)
             ).isoformat()

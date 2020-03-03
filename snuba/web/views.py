@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import NamedTuple
+from typing import Any, Mapping, NamedTuple
 from uuid import UUID
 
 import jsonschema
@@ -39,7 +39,6 @@ from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
 from snuba.web.query import (
-    ClickhouseQueryResult,
     RawQueryException,
     parse_and_run_query,
 )
@@ -48,9 +47,9 @@ from snuba.web.query import (
 logger = logging.getLogger("snuba.api")
 
 
-class QueryResult(NamedTuple):
+class WebQueryResult(NamedTuple):
     # TODO: Give a better abstraction to QueryResult
-    result: ClickhouseQueryResult
+    payload: Mapping[str, Any]
     status: int
 
 
@@ -282,17 +281,15 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     )
 
 
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
+def run_query(dataset: Dataset, request: Request, timer: Timer) -> WebQueryResult:
     try:
-        return QueryResult(
-            {
-                **parse_and_run_query(dataset, request, timer),
-                "timing": timer.for_json(),
-            },
-            200,
-        )
+        result = parse_and_run_query(dataset, request, timer)
+        payload = {**result.result, "timing": timer.for_json()}
+        if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+            payload.update(result.extra)
+        return WebQueryResult(payload, 200)
     except RawQueryException as e:
-        return QueryResult(
+        return WebQueryResult(
             {
                 "error": {"type": e.err_type, "message": e.message, **e.meta},
                 "sql": e.sql,
@@ -303,7 +300,7 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> QueryResult:
         )
 
 
-def format_result(result: QueryResult) -> Response:
+def format_result(result: WebQueryResult) -> Response:
     def json_default(obj):
         if isinstance(obj, datetime):
             return obj.isoformat()
@@ -312,7 +309,7 @@ def format_result(result: QueryResult) -> Response:
         return obj
 
     return Response(
-        json.dumps(result.result, default=json_default),
+        json.dumps(result.payload, default=json_default),
         result.status,
         {"Content-Type": "application/json"},
     )
