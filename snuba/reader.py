@@ -11,7 +11,9 @@ from typing import (
     Mapping,
     MutableMapping,
     Optional,
+    Pattern,
     Sequence,
+    Tuple,
     TypeVar,
 )
 
@@ -37,7 +39,7 @@ def iterate_rows(result: Result) -> Iterator[Row]:
 
 
 def build_result_transformer(
-    column_transformations: Mapping[str, Callable[[Any], Any]],
+    column_transformations: Sequence[Tuple[Pattern[str], Callable[[Any], Any]]],
 ) -> Callable[[Result], None]:
     """
     Builds and returns a function that can be used to mutate a ``Result``
@@ -47,7 +49,15 @@ def build_result_transformer(
 
     def transform_result(result: Result) -> None:
         for column in result["meta"]:
-            transformer = column_transformations.get(column["type"])
+            transformer = next(
+                (
+                    transformer
+                    for pattern, transformer in column_transformations
+                    if pattern.match(column["type"])
+                ),
+                None,
+            )
+
             if transformer is None:
                 continue
 

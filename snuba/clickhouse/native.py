@@ -1,5 +1,6 @@
 import logging
 import queue
+import re
 import time
 from datetime import date, datetime
 from typing import Callable, Iterable, Mapping, Optional, TypeVar
@@ -151,6 +152,8 @@ def transform_date(value: date) -> str:
     Convert a timezone-naive date object into an ISO 8601 formatted date and
     time string respresentation.
     """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
     return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
 
 
@@ -159,6 +162,8 @@ def transform_datetime(value: datetime) -> str:
     Convert a timezone-naive datetime object into an ISO 8601 formatted date
     and time string representation.
     """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
     return value.replace(tzinfo=tz.tzutc()).isoformat()
 
 
@@ -170,14 +175,20 @@ def transform_uuid(value: UUID) -> str:
 
 
 transform_column_types = build_result_transformer(
-    {
-        "Date": transform_date,
-        "Nullable(Date)": transform_nullable(transform_date),
-        "DateTime": transform_datetime,
-        "Nullable(DateTime)": transform_nullable(transform_datetime),
-        "UUID": transform_uuid,
-        "Nullable(UUID)": transform_nullable(transform_uuid),
-    }
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (
+            re.compile(r"^Nullable\(Date(\(.+\))?\)$"),
+            transform_nullable(transform_date),
+        ),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (
+            re.compile(r"^Nullable\(DateTime(\(.+\))?\)$"),
+            transform_nullable(transform_datetime),
+        ),
+        (re.compile(r"^UUID$"), transform_uuid),
+        (re.compile(r"^Nullable\(UUID\)$"), transform_nullable(transform_uuid)),
+    ]
 )
 
 
