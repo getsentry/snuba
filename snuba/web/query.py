@@ -11,12 +11,12 @@ from typing import (
 )
 
 import sentry_sdk
-from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
 from functools import partial
 
 from snuba import settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -182,7 +182,7 @@ def raw_query(
                         logger.exception("Error running query: %s\n%s", sql, error)
                         stats = update_with_status("error")
                         meta = {}
-                        if isinstance(ex, ClickHouseError):
+                        if isinstance(ex, ClickhouseError):
                             err_type = "clickhouse"
                             meta["code"] = ex.code
                         else:

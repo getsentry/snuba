@@ -7,6 +7,7 @@ from clickhouse_driver import Client, errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.reader import Reader, Result, transform_columns
 from snuba.writer import BatchWriter, WriterTableRow
@@ -63,11 +64,16 @@ class ClickhousePool(object):
                     # Force a reconnection next time
                     conn = None
                     if attempts_remaining == 0:
-                        raise e
+                        if isinstance(e, errors.Error):
+                            raise ClickhouseError(e.code, e.message) from e
+                        else:
+                            raise e
                     else:
                         # Short sleep to make sure we give the load
                         # balancer a chance to mark a bad host as down.
                         time.sleep(0.1)
+                except errors.Error as e:
+                    raise ClickhouseError(e.code, e.message) from e
         finally:
             self.pool.put(conn, block=False)
 
@@ -94,8 +100,10 @@ class ClickhousePool(object):
                 )
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
-                    raise
-
+                    if isinstance(e, errors.Error):
+                        raise ClickhouseError(e.code, e.message) from e
+                    else:
+                        raise e
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
@@ -106,7 +114,9 @@ class ClickhousePool(object):
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise
+                    raise ClickhouseError(e.code, e.message) from e
+            except errors.Error as e:
+                raise ClickhouseError(e.code, e.message) from e
 
     def _create_conn(self):
         return Client(
