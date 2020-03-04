@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from snuba import settings
 from snuba.clickhouse.columns import (
     Array,
@@ -15,16 +13,15 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
-from snuba.query.timeseries import TimeSeriesExtension
 
 
-class QuerylogDataset(TimeSeriesDataset):
+class QuerylogDataset(Dataset):
     def __init__(self) -> None:
         status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
 
@@ -78,15 +75,7 @@ class QuerylogDataset(TimeSeriesDataset):
                     processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
                 ),
             ),
-            time_group_columns={"time": "timestamp"},
-            time_parse_columns=("timestamp",),
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
-        return {
-            "timeseries": TimeSeriesExtension(
-                default_granularity=3600,
-                default_window=timedelta(days=5),
-                timestamp_column="timestamp",
-            ),
-        }
+        return {}
