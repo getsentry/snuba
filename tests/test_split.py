@@ -1,4 +1,6 @@
 import pytest
+import uuid
+
 from typing import Any, Mapping
 
 from snuba import state
@@ -41,7 +43,7 @@ def test_no_split(dataset_name: str):
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         assert request.query == query
 
-    request = Request(query, HTTPRequestSettings(), {}, "tests")
+    request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
     do_query(events, request, None)
 
@@ -112,6 +114,7 @@ def test_col_split(
     )
 
     request = Request(
+        uuid.uuid4().hex,
         query,
         HTTPRequestSettings(),
         {
