@@ -27,8 +27,8 @@ class QuerylogDataset(Dataset):
 
         columns = ColumnSet(
             [
-                ("query_id", UUID()),
-                ("request", String()),
+                ("request_id", UUID()),
+                ("request_body", String()),
                 ("referrer", LowCardinality(String())),
                 ("dataset", LowCardinality(String())),
                 ("projects", Array(UInt(64))),
@@ -58,9 +58,9 @@ class QuerylogDataset(Dataset):
             columns=columns,
             local_table_name="querylog_local",
             dist_table_name="querylog_dist",
-            order_by="(toStartOfDay(timestamp), query_id)",
+            order_by="(toStartOfDay(timestamp), request_id)",
             partition_by="(toMonday(timestamp))",
-            sample_expr="query_id",
+            sample_expr="request_id",
         )
 
         dataset_schemas = DatasetSchemas(

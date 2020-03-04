@@ -35,7 +35,7 @@ class SnubaQueryMetadata:
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "query_id": self.request.id,
+            "request_id": self.request.id,
             "referrer": self.referrer,
             "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],
