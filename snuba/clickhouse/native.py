@@ -3,7 +3,7 @@ import queue
 import re
 import time
 from datetime import date, datetime
-from typing import Callable, Iterable, Mapping, Optional, TypeVar
+from typing import Iterable, Mapping, Optional
 from uuid import UUID
 
 from clickhouse_driver import Client, errors
@@ -131,22 +131,6 @@ class ClickhousePool(object):
             pass
 
 
-T = TypeVar("T")
-R = TypeVar("R")
-
-
-def transform_nullable(
-    function: Callable[[T], R]
-) -> Callable[[Optional[T]], Optional[R]]:
-    def transform_column(value: Optional[T]) -> Optional[R]:
-        if value is None:
-            return value
-        else:
-            return function(value)
-
-    return transform_column
-
-
 def transform_date(value: date) -> str:
     """
     Convert a timezone-naive date object into an ISO 8601 formatted date and
@@ -177,17 +161,8 @@ def transform_uuid(value: UUID) -> str:
 transform_column_types = build_result_transformer(
     [
         (re.compile(r"^Date(\(.+\))?$"), transform_date),
-        (
-            re.compile(r"^Nullable\(Date(\(.+\))?\)$"),
-            transform_nullable(transform_date),
-        ),
         (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
-        (
-            re.compile(r"^Nullable\(DateTime(\(.+\))?\)$"),
-            transform_nullable(transform_datetime),
-        ),
         (re.compile(r"^UUID$"), transform_uuid),
-        (re.compile(r"^Nullable\(UUID\)$"), transform_nullable(transform_uuid)),
     ]
 )
 

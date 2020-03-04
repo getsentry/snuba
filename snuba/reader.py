@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import re
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
@@ -38,6 +39,33 @@ def iterate_rows(result: Result) -> Iterator[Row]:
         return iter(result["data"])
 
 
+NULLABLE_RE = re.compile(r"^Nullable\((.+)\)$")
+
+
+def unwrap_nullable_type(type: str) -> Tuple[bool, str]:
+    match = NULLABLE_RE.match(type)
+    if match is not None:
+        return True, match.groups()[0]
+    else:
+        return False, type
+
+
+T = TypeVar("T")
+R = TypeVar("R")
+
+
+def transform_nullable(
+    function: Callable[[T], R]
+) -> Callable[[Optional[T]], Optional[R]]:
+    def transform_column(value: Optional[T]) -> Optional[R]:
+        if value is None:
+            return value
+        else:
+            return function(value)
+
+    return transform_column
+
+
 def build_result_transformer(
     column_transformations: Sequence[Tuple[Pattern[str], Callable[[Any], Any]]],
 ) -> Callable[[Result], None]:
@@ -49,17 +77,22 @@ def build_result_transformer(
 
     def transform_result(result: Result) -> None:
         for column in result["meta"]:
+            is_nullable, type = unwrap_nullable_type(column["type"])
+
             transformer = next(
                 (
                     transformer
                     for pattern, transformer in column_transformations
-                    if pattern.match(column["type"])
+                    if pattern.match(type)
                 ),
                 None,
             )
 
             if transformer is None:
                 continue
+
+            if is_nullable:
+                transformer = transform_nullable(transformer)
 
             name = column["name"]
             for row in iterate_rows(result):
