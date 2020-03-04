@@ -54,7 +54,7 @@ def test_simple():
         ProcessorAction.INSERT,
         [{
             "query_id": str(uuid.UUID("a" * 32)),
-            "request": "{'limit': 100, 'offset': 50, 'orderby': 'event_id', 'project': 1, 'sample': 0.1, 'selected_columns': ['event_id']}",
+            "request": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
             "referrer": "search",
             "dataset": get_dataset("events"),
             "projects": [1],
