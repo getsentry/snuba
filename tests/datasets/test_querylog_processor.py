@@ -53,7 +53,7 @@ def test_simple():
     assert processor.process_message(message) == ProcessedMessage(
         ProcessorAction.INSERT,
         [{
-            "query_id": "a" * 32,
+            "query_id": str(uuid.UUID("a" * 32)),
             "request": "{'limit': 100, 'offset': 50, 'orderby': 'event_id', 'project': 1, 'sample': 0.1, 'selected_columns': ['event_id']}",
             "referrer": "search",
             "dataset": get_dataset("events"),
@@ -68,7 +68,7 @@ def test_simple():
             "clickhouse_queries.cache_hit": [0],
             "clickhouse_queries.sample": [10.],
             "clickhouse_queries.max_threads": [0],
-            "clickhouse_queries.trace_id": ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"],
+            "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
             "clickhouse_queries.duration_ms": [0],
         }]
     )
