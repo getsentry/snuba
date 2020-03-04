@@ -1,7 +1,5 @@
 import os
 
-from snuba.settings_test import *  # NOQA
-
 env = os.environ.get
 
 USE_REDIS_CLUSTER = env("USE_REDIS_CLUSTER", "1") != "0"
