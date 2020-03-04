@@ -1,3 +1,4 @@
+import simplejson as json
 from typing import Any, Mapping, Optional, Sequence, Union
 import uuid
 
@@ -6,7 +7,7 @@ from snuba.processor import MessageProcessor, ProcessedMessage, ProcessorAction
 
 class QuerylogProcessor(MessageProcessor):
     def __get_request(self, request: Mapping[str, Any]) -> str:
-        return str({k: v for k, v in sorted(request.items())})
+        return json.dumps({k: v for k, v in sorted(request.items())})
 
     def __get_sample(self, sample: Union[int, float]) -> float:
         """
