@@ -301,17 +301,8 @@ def run_query(dataset: Dataset, request: Request, timer: Timer) -> WebQueryResul
 
 
 def format_result(result: WebQueryResult) -> Response:
-    def json_default(obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        elif isinstance(obj, UUID):
-            return str(obj)
-        return obj
-
     return Response(
-        json.dumps(result.payload, default=json_default),
-        result.status,
-        {"Content-Type": "application/json"},
+        json.dumps(result.payload), result.status, {"Content-Type": "application/json"},
     )
 
 
