@@ -27,7 +27,6 @@ class SnubaQueryMetadata:
     Metadata about a Snuba query for recording on the querylog dataset.
     """
 
-    query_id: str
     request: Request
     dataset: str
     timer: Timer
@@ -36,7 +35,7 @@ class SnubaQueryMetadata:
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "query_id": self.query_id,
+            "query_id": self.request.id,
             "referrer": self.referrer,
             "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],
