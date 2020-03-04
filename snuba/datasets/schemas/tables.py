@@ -261,6 +261,11 @@ class SummingMergeTreeSchema(MergeTreeSchema):
         return "SummingMergeTree()"
 
 
+class AggregatingMergeTreeSchema(MergeTreeSchema):
+    def _get_engine_type(self) -> str:
+        return "AggregatingMergeTree()"
+
+
 class MaterializedViewSchema(TableSchema):
     def __init__(
         self,
