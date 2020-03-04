@@ -74,7 +74,11 @@ def raw_query(
     """
 
     use_cache, use_deduper, uc_max = state.get_configs(
-        [("use_cache", 0), ("use_deduper", 1), ("uncompressed_cache_max_cols", 5)]
+        [
+            ("use_cache", settings.USE_RESULT_CACHE),
+            ("use_deduper", 1),
+            ("uncompressed_cache_max_cols", 5),
+        ]
     )
 
     all_confs = state.get_all_configs()
