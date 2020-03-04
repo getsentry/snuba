@@ -20,6 +20,10 @@ DATASET_NAMES: Set[str] = {
     "querylog",
 }
 
+# Internal datasets registered here cannot be queried directly via API
+INTERNAL_DATASET_NAMES: Set[str] = {
+    "querylog",
+}
 
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
