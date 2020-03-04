@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest.mock import Mock
 
 from pytest import raises
 
@@ -7,11 +6,15 @@ from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
+from snuba.utils.metrics.timer import Timer
 from snuba.web.query import RawQueryException
 from tests.subscriptions import BaseSubscriptionTest
 
 
 class TestSubscriptionCreator(BaseSubscriptionTest):
+
+    timer = Timer("test")
+
     def test(self):
         creator = SubscriptionCreator(self.dataset)
         subscription = SubscriptionData(
@@ -21,7 +24,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
         )
-        identifier = creator.create(subscription, Mock())
+        identifier = creator.create(subscription, self.timer)
         RedisSubscriptionDataStore(
             redis_client, self.dataset, identifier.partition,
         ).all()[0][1] == subscription
@@ -37,7 +40,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     timedelta(minutes=10),
                     timedelta(minutes=1),
                 ),
-                Mock(),
+                self.timer,
             )
 
     def test_invalid_aggregation(self):
@@ -51,7 +54,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     timedelta(minutes=10),
                     timedelta(minutes=1),
                 ),
-                Mock(),
+                self.timer,
             )
 
     def test_invalid_time_window(self):
@@ -65,7 +68,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     timedelta(),
                     timedelta(minutes=1),
                 ),
-                Mock(),
+                self.timer,
             )
 
         with raises(InvalidSubscriptionError):
@@ -77,7 +80,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     timedelta(hours=48),
                     timedelta(minutes=1),
                 ),
-                Mock(),
+                self.timer,
             )
 
     def test_invalid_resolution(self):
@@ -91,7 +94,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
                     timedelta(minutes=1),
                     timedelta(),
                 ),
-                Mock(),
+                self.timer,
             )
 
 
@@ -105,7 +108,7 @@ class TestSubscriptionDeleter(BaseSubscriptionTest):
             time_window=timedelta(minutes=10),
             resolution=timedelta(minutes=1),
         )
-        identifier = creator.create(subscription, Mock())
+        identifier = creator.create(subscription, Timer("test"))
         RedisSubscriptionDataStore(
             redis_client, self.dataset, identifier.partition,
         ).all()[0][1] == subscription
