@@ -1,22 +1,19 @@
 from __future__ import annotations
 
 import itertools
-import re
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Generic,
+    Iterator,
     Mapping,
     MutableMapping,
     Optional,
     Sequence,
     TypeVar,
 )
-
-from dateutil.tz import tz
-
 
 if TYPE_CHECKING:
     from mypy_extensions import TypedDict
@@ -30,6 +27,36 @@ if TYPE_CHECKING:
     )
 else:
     Result = MutableMapping[str, Any]
+
+
+def iterate_rows(result: Result) -> Iterator[Row]:
+    if "totals" in result:
+        return itertools.chain(result["data"], [result["totals"]])
+    else:
+        return iter(result["data"])
+
+
+def build_result_transformer(
+    column_transformations: Mapping[str, Callable[[Any], Any]],
+) -> Callable[[Result], None]:
+    """
+    Builds and returns a function that can be used to mutate a ``Result``
+    instance in-place by transforming all values for columns that have a
+    transformation function specified for their data type.
+    """
+
+    def transform_result(result: Result) -> None:
+        for column in result["meta"]:
+            transformer = column_transformations.get(column["type"])
+            if transformer is None:
+                continue
+
+            name = column["name"]
+            for row in iterate_rows(result):
+                row[name] = transformer(row[name])
+
+    return transform_result
+
 
 TQuery = TypeVar("TQuery")
 
@@ -45,48 +72,3 @@ class Reader(ABC, Generic[TQuery]):
     ) -> Result:
         """Execute a query."""
         raise NotImplementedError
-
-
-DATE_TYPE_RE = re.compile(r"(Nullable\()?Date\b")
-DATETIME_TYPE_RE = re.compile(r"(Nullable\()?DateTime\b")
-
-UUID_TYPE_RE = re.compile(r"(Nullable\()?UUID\b")
-
-
-def transform_columns(result: Result) -> Result:
-    """
-    Converts Clickhouse results into formatted strings. Specifically:
-    - timezone-naive date and datetime values returned by ClickHouse
-       into ISO 8601 formatted strings (including the UTC offset.)
-    - UUID objects into strings
-    """
-
-    def iterate_rows():
-        if "totals" in result:
-            return itertools.chain(result["data"], [result["totals"]])
-        else:
-            return iter(result["data"])
-
-    columns = {col["name"]: col["type"] for col in result["meta"]}
-    for col_name, col_type in columns.items():
-        if DATETIME_TYPE_RE.match(col_type):
-            for row in iterate_rows():
-                if (
-                    row[col_name] is not None
-                ):  # The column value can be null/None at times.
-                    row[col_name] = row[col_name].replace(tzinfo=tz.tzutc()).isoformat()
-        elif DATE_TYPE_RE.match(col_type):
-            for row in iterate_rows():
-                if (
-                    row[col_name] is not None
-                ):  # The column value can be null/None at times.
-                    row[col_name] = (
-                        datetime(*(row[col_name].timetuple()[:6]))
-                        .replace(tzinfo=tz.tzutc())
-                        .isoformat()
-                    )
-        elif UUID_TYPE_RE.match(col_type):
-            for row in iterate_rows():
-                row[col_name] = str(row[col_name])
-
-    return result
