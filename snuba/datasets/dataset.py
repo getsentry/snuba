@@ -169,7 +169,9 @@ class TimeSeriesDataset(Dataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        if column_name in self.__time_group_columns:
+        # We want to permit functions here, so we need to make sure we're not trying
+        # to look up lists in the dictionary or it will fail with a type error.
+        if isinstance(column_name, str) and column_name in self.__time_group_columns:
             real_column = self.__time_group_columns[column_name]
             return self.time_expr(real_column, query.get_granularity(), table_alias)
         else:
