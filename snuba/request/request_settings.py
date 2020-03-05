@@ -43,21 +43,20 @@ class SamplingMode(Enum):
 @dataclass(frozen=True)
 class SamplingConfig:
     mode: SamplingMode
-    rate: Optional[float]
-
-    def __post_init__(self) -> None:
-        if self.mode != SamplingMode.FIXED:
-            assert (
-                self.rate is None
-            ), f"Sampling mode {self.mode} does not support a fixed rate"
-        else:
-            assert (
-                self.rate is not None
-            ), f"Sampling mode {self.mode} requires a fixed rate"
+    parameters: Mapping[str, Any]
 
     @classmethod
     def build_from_dict(cls, raw_config: Mapping[str, Any]) -> SamplingConfig:
-        return SamplingConfig(SamplingMode(raw_config["mode"]), raw_config.get("rate"))
+        mode = raw_config["mode"]
+
+        rate = raw_config.get("rate")
+        if mode != SamplingMode.FIXED:
+            assert rate is None, f"Sampling mode {mode} does not support a fixed rate"
+            params = {}
+        else:
+            assert rate is not None, f"Sampling mode {mode} requires a fixed rate"
+            params = {"rate": rate}
+        return SamplingConfig(SamplingMode(mode), params)
 
     @classmethod
     def build_default(cls) -> SamplingConfig:
