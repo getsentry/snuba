@@ -20,7 +20,7 @@ DATASET_NAMES: Set[str] = {
 }
 
 # Internal datasets registered here cannot be queried directly via API
-INTERNAL_DATASET_NAMES: Set[str] = {}
+INTERNAL_DATASET_NAMES: Set[str] = set()
 
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
