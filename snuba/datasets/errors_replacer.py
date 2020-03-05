@@ -4,11 +4,11 @@ import time
 from collections import deque
 from datetime import datetime
 from enum import Enum
-from typing import Any, Deque, FrozenSet, Mapping, Optional, Sequence, Tuple
+from typing import Any, Deque, Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clickhouse.columns import ColumnTypeWithModifier, Materialized
+from snuba.clickhouse.columns import Materialized
 from snuba.clickhouse.escaping import escape_identifier, escape_string
 from snuba.datasets.schemas.tables import TableSchema, WritableTableSchema
 from snuba.processor import InvalidMessageType, _hashify
@@ -136,10 +136,7 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__all_column_names = [
             col.escaped
             for col in write_schema.get_columns()
-            if not (
-                isinstance(col.type, ColumnTypeWithModifier)
-                and Materialized in col.type.get_all_modifiers()
-            )
+            if Materialized not in col.type.get_all_modifiers()
         ]
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
@@ -415,9 +412,9 @@ def process_delete_tag(
     """
 
     if is_promoted:
-        where += "AND %(tag_column)s IS NOT NULL"
+        prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
     else:
-        where += "AND has(`tags.key`, %(tag_str)s)"
+        prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
 
     insert_query_template = (
         """\
@@ -425,16 +422,13 @@ def process_delete_tag(
         SELECT %(select_columns)s
         FROM %(dist_read_table_name)s FINAL
     """
-        + where
+        + prewhere + where
     )
 
     all_columns = [
         col
         for col in schema.get_columns()
-        if not (
-            isinstance(col.type, ColumnTypeWithModifier)
-            and Materialized in col.type.get_all_modifiers()
-        )
+        if Materialized not in col.type.get_all_modifiers()
     ]
     select_columns = []
     for col in all_columns:
@@ -470,7 +464,7 @@ def process_delete_tag(
         SELECT count()
         FROM %(dist_read_table_name)s FINAL
     """
-        + where
+        + prewhere + where
     )
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
