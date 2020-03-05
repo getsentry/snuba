@@ -8,7 +8,9 @@ def test_transform_datetime() -> None:
     fmt = "2020-01-02T03:04:05+00:00"
     assert transform_datetime(now) == fmt
     assert transform_datetime(now.replace(tzinfo=tz.tzutc())) == fmt
+
+    offset = timedelta(hours=8)
     assert (
-        transform_datetime(now.replace(tzinfo=tz.gettz("PST")) - timedelta(hours=8))
+        transform_datetime(now.replace(tzinfo=tz.tzoffset("PST", offset)) + offset)
         == fmt
     )
