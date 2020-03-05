@@ -2,7 +2,9 @@ from typing import Sequence, Tuple
 
 import pytest
 
+from snuba import settings
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.http import HTTPReader
 from snuba.clickhouse.native import NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import clickhouse_ro
@@ -18,7 +20,13 @@ class SimpleClickhouseQuery(ClickhouseQuery):
         return f"SELECT {columns}"
 
 
-@pytest.mark.parametrize("reader", [NativeDriverReader(clickhouse_ro)])
+@pytest.mark.parametrize(
+    "reader",
+    [
+        NativeDriverReader(clickhouse_ro),
+        HTTPReader(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_HTTP_PORT),
+    ],
+)
 def test_reader(reader: Reader[ClickhouseQuery]) -> None:
     assert reader.execute(
         SimpleClickhouseQuery(

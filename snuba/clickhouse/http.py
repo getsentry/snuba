@@ -1,13 +1,19 @@
+import json
 import re
+from typing import Callable, Iterable, Mapping, Optional
 from urllib.parse import urlencode
-from typing import Callable, Iterable
 
+from datetime import datetime
+from dateutil.parser import parse as dateutil_parse
+from dateutil.tz import tz
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 from urllib3.response import HTTPResponse
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.reader import Reader, Result, build_result_transformer
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -90,3 +96,78 @@ class HTTPBatchWriter(BatchWriter):
         )
 
         raise_for_error_response(response)
+
+
+def transform_date(value: str) -> str:
+    """
+    Convert a timezone-naive date object into an ISO 8601 formatted date and
+    time string respresentation.
+    """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
+    return (
+        datetime(*dateutil_parse(value).timetuple()[:6])
+        .replace(tzinfo=tz.tzutc())
+        .isoformat()
+    )
+
+
+def transform_datetime(value: str) -> str:
+    """
+    Convert a timezone-naive datetime object into an ISO 8601 formatted date
+    and time string representation.
+    """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
+    return dateutil_parse(value).replace(tzinfo=tz.tzutc()).isoformat()
+
+
+transform_column_types = build_result_transformer(
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+    ]
+)
+
+
+class HTTPReader(Reader[ClickhouseQuery]):
+    def __init__(
+        self, host: str, port: int, settings: Optional[Mapping[str, str]] = None
+    ):
+        if settings is not None:
+            assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        self.__pool = HTTPConnectionPool(host, port)
+        self.__default_settings = settings if settings is not None else {}
+
+    def execute(
+        self,
+        query: ClickhouseQuery,
+        settings: Optional[Mapping[str, str]] = None,
+        query_id: Optional[str] = None,
+        with_totals: bool = False,  # NOTE: unnecessary with FORMAT JSON
+    ) -> Result:
+        if settings is None:
+            settings = {}
+
+        assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        if query_id is not None:
+            settings["query_id"] = query_id
+
+        response = self.__pool.urlopen(
+            "POST",
+            "/?" + urlencode({**self.__default_settings, **settings}),
+            headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
+            body=query.format_sql("JSON"),
+        )
+
+        raise_for_error_response(response)
+
+        result = json.loads(response.data.decode("utf-8"))
+
+        for k in [*result.keys()]:
+            if k not in {"meta", "data", "totals"}:
+                del result[k]
+
+        transform_column_types(result)
+
+        return result
