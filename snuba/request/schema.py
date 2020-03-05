@@ -142,20 +142,41 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             "consistent": {"type": "boolean", "default": False},
             "debug": {"type": "boolean", "default": False},
             "sampling_config": {
-                "type": "object",
-                "properties": {
-                    "mode": {
-                        "type": "string",
-                        "enum": [mode.value for mode in SamplingMode],
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "properties": {
+                            "mode": {"const": SamplingMode.FIXED.value},
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "rate": {
+                                        "type": "number",
+                                        "exclusiveMinimum": 0.0,
+                                        "exclusiveMaximum": 1.0,
+                                    }
+                                },
+                                "required": ["rate"],
+                            },
+                        },
+                        "required": ["mode", "parameters"],
                     },
-                    "rate": {
-                        "type": "number",
-                        "exclusiveMinimum": 0.0,
-                        "exclusiveMaximum": 1.0,
+                    {
+                        "type": "object",
+                        "properties": {
+                            "mode": {
+                                "type": "string",
+                                "enum": [
+                                    mode.value
+                                    for mode in SamplingMode
+                                    if mode != SamplingMode.FIXED
+                                ],
+                            },
+                        },
+                        "required": ["mode"],
                     },
-                },
-                "required": ["mode"],
-                "default": {"mode": "auto"},
+                ],
+                "default": {"mode": SamplingMode.AUTO_DEPRECATED.value},
             },
         },
         "additionalProperties": False,
