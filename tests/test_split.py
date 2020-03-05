@@ -4,6 +4,7 @@ import uuid
 from typing import Any, Mapping
 
 import pytest
+import uuid
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
