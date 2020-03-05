@@ -210,6 +210,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
             result = {"data": data, "meta": meta}
 
         transform_column_types(result)
+
         return result
 
     def execute(
