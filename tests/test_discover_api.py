@@ -317,6 +317,48 @@ class TestDiscoverApi(BaseApiTest):
         data = json.loads(response.data)
         assert data["data"] == [{"count": 1}]
 
+    def test_os_fields_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["os_build", "LIKE", "x86%"],
+                        ["os_kernel_version", "LIKE", "10.1%"],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"count": 0}]
+
+    def test_device_fields_condition(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "transaction"],
+                        ["device_model_id", "LIKE", "Arithmetic%"],
+                        ["device_charging", "=", 0],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"] == [{"count": 0}]
+
     def test_having(self):
         result = json.loads(
             self.app.post(
