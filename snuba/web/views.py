@@ -284,7 +284,11 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 def run_query(dataset: Dataset, request: Request, timer: Timer) -> WebQueryResult:
     try:
         result = parse_and_run_query(dataset, request, timer)
-        payload = {**result.result, "timing": timer.for_json()}
+        payload = {
+            **result.result,
+            "applied_sampling_rate": result.applied_sampling_rate,
+            "timing": timer.for_json(),
+        }
         if settings.STATS_IN_RESPONSE or request.settings.get_debug():
             payload.update(result.extra)
         return WebQueryResult(payload, 200)

@@ -94,9 +94,9 @@ def test_col_split(
     def do_query(dataset: Dataset, request: Request, timer: Timer):
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
-            return RawQueryResult({"data": first_query_data}, {})
+            return RawQueryResult({"data": first_query_data}, None, {})
         elif selected_cols == list(second_query_data[0].keys()):
-            return RawQueryResult({"data": second_query_data}, {})
+            return RawQueryResult({"data": second_query_data}, None, {})
         else:
             raise ValueError(f"Unexpected selected columns: {selected_cols}")
 

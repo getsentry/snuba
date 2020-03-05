@@ -43,6 +43,7 @@ metrics = create_metrics("snuba.api")
 
 class RawQueryResult(NamedTuple):
     result: Result
+    applied_sampling_rate: Optional[float]
     extra: Any
 
 
@@ -206,7 +207,9 @@ def raw_query(
 
     stats = update_with_status("success")
 
-    return RawQueryResult(result, {"stats": stats, "sql": sql})
+    return RawQueryResult(
+        result, query.get_applied_sampling_rate(), {"stats": stats, "sql": sql},
+    )
 
 
 def update_query_metadata_and_stats(

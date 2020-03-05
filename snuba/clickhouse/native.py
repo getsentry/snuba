@@ -181,9 +181,7 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
-    def __transform_result(
-        self, result, with_totals: bool, sampling_rate: Optional[float]
-    ) -> Result:
+    def __transform_result(self, result, with_totals: bool) -> Result:
         """
         Transform a native driver response into a response that is
         structurally similar to a ClickHouse-flavored JSON response.
@@ -212,7 +210,6 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
             result = {"data": data, "meta": meta}
 
         transform_column_types(result)
-        result["applied_sampling_rate"] = sampling_rate
         return result
 
     def execute(
@@ -236,7 +233,6 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
                 sql, with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
-            sampling_rate=query.get_applied_sampling_rate(),
         )
 
 
