@@ -412,9 +412,9 @@ def process_delete_tag(
     """
 
     if is_promoted:
-        where += "AND %(tag_column)s IS NOT NULL"
+        prewhere = " PREWHERE %(tag_column)s IS NOT NULL "
     else:
-        where += "AND has(`tags.key`, %(tag_str)s)"
+        prewhere = " PREWHERE has(`tags.key`, %(tag_str)s) "
 
     insert_query_template = (
         """\
@@ -422,7 +422,7 @@ def process_delete_tag(
         SELECT %(select_columns)s
         FROM %(dist_read_table_name)s FINAL
     """
-        + where
+        + prewhere + where
     )
 
     all_columns = [
@@ -464,7 +464,7 @@ def process_delete_tag(
         SELECT count()
         FROM %(dist_read_table_name)s FINAL
     """
-        + where
+        + prewhere + where
     )
 
     query_time_flags = (NEEDS_FINAL, message["project_id"])
