@@ -122,6 +122,9 @@ class HTTPReader(Reader[ClickhouseQuery]):
         self.__pool = HTTPConnectionPool(host, port)
         self.__default_settings = settings if settings is not None else {}
 
+        if "output_format_json_quote_64bit_integers" not in self.__default_settings:
+            self.__default_settings["output_format_json_quote_64bit_integers"] = "0"
+
     def execute(
         self,
         query: ClickhouseQuery,

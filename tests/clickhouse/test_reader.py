@@ -33,6 +33,7 @@ def test_reader(reader: Reader[ClickhouseQuery]) -> None:
             [
                 ("datetime", "toDateTime('2020-01-02 03:04:05')"),
                 ("date", "toDate('2020-01-02')"),
+                ("int64", "toInt64(1)"),
                 ("uuid", "toUUID('00000000-0000-4000-8000-000000000000')"),
             ]
         )
@@ -40,12 +41,14 @@ def test_reader(reader: Reader[ClickhouseQuery]) -> None:
         "meta": [
             {"name": "datetime", "type": "DateTime"},
             {"name": "date", "type": "Date"},
+            {"name": "int64", "type": "Int64"},
             {"name": "uuid", "type": "UUID"},
         ],
         "data": [
             {
                 "date": "2020-01-02T00:00:00+00:00",
                 "datetime": "2020-01-02T03:04:05+00:00",
+                "int64": 1,
                 "uuid": "00000000-0000-4000-8000-000000000000",
             }
         ],
