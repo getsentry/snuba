@@ -12,9 +12,9 @@ from snuba.request import Request
 from snuba.request.request_settings import (
     HTTPRequestSettings,
     RequestSettings,
-    SamplingMode,
     SubscriptionRequestSettings,
 )
+from snuba.request.sampling_mode import MODES_MAPPING
 from snuba.schemas import Schema, validate_jsonschema
 
 
@@ -144,10 +144,7 @@ SETTINGS_SCHEMAS: Mapping[Type[RequestSettings], Schema] = {
             "sampling_config": {
                 "type": "object",
                 "properties": {
-                    "mode": {
-                        "type": "string",
-                        "enum": [mode.value for mode in SamplingMode],
-                    },
+                    "mode": {"type": "string", "enum": MODES_MAPPING.keys(),},
                     "rate": {
                         "type": "number",
                         "exclusiveMinimum": 0.0,
