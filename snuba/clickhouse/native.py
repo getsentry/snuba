@@ -136,8 +136,10 @@ def transform_date(value: date) -> str:
     Convert a timezone-naive date object into an ISO 8601 formatted date and
     time string respresentation.
     """
-    # XXX: If the original value had a valid nonzero UTC offset, this will
-    # result in an incorrect value being returned.
+    # XXX: Both Python and ClickHouse date objects do not have time zones, so
+    # just assume UTC. (Ideally, we'd have just left these as timezone naive to
+    # begin with and not done this transformation at all, since the time
+    # portion has no benefit or significance here.)
     return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
 
 
@@ -146,9 +148,11 @@ def transform_datetime(value: datetime) -> str:
     Convert a timezone-naive datetime object into an ISO 8601 formatted date
     and time string representation.
     """
-    # XXX: If the original value had a valid nonzero UTC offset, this will
-    # result in an incorrect value being returned.
-    return value.replace(tzinfo=tz.tzutc()).isoformat()
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz.tzutc())
+    else:
+        value = value.astimezone(tz.tzutc())
+    return value.isoformat()
 
 
 def transform_uuid(value: UUID) -> str:
