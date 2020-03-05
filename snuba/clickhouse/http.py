@@ -4,6 +4,7 @@ from typing import Callable, Iterable
 
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
+from urllib3.response import HTTPResponse
 
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.schemas.tables import TableSchema
@@ -14,6 +15,21 @@ CLICKHOUSE_ERROR_RE = re.compile(
     r"^Code: (?P<code>\d+), e.displayText\(\) = (?P<type>(?:\w+)::(?:\w+)): (?P<message>.+)$",
     re.MULTILINE,
 )
+
+
+def raise_for_error_response(response: HTTPResponse) -> None:
+    if response.status != 200:
+        # XXX: This should be switched to just parse the JSON body after
+        # https://github.com/yandex/ClickHouse/issues/6272 is available.
+        content = response.data.decode("utf8")
+        details = CLICKHOUSE_ERROR_RE.match(content)
+        if details is not None:
+            code, type, message = details.groups()
+            raise ClickhouseError(int(code), message)
+        else:
+            raise HTTPError(
+                f"Received unexpected {response.status} response: {content}"
+            )
 
 
 class HTTPBatchWriter(BatchWriter):
@@ -73,15 +89,4 @@ class HTTPBatchWriter(BatchWriter):
             chunked=True,
         )
 
-        if response.status != 200:
-            # XXX: This should be switched to just parse the JSON body after
-            # https://github.com/yandex/ClickHouse/issues/6272 is available.
-            content = response.data.decode("utf8")
-            details = CLICKHOUSE_ERROR_RE.match(content)
-            if details is not None:
-                code, type, message = details.groups()
-                raise ClickhouseError(int(code), message)
-            else:
-                raise HTTPError(
-                    f"Received unexpected {response.status} response: {content}"
-                )
+        raise_for_error_response(response)

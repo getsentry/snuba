@@ -1,10 +1,12 @@
-import pytest
-from snuba.environment import clickhouse_ro
 from typing import Sequence, Tuple
-from snuba.reader import Reader
+
+import pytest
+
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.native import NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery
+from snuba.environment import clickhouse_ro
+from snuba.reader import Reader
 
 
 class SimpleClickhouseQuery(ClickhouseQuery):
@@ -44,4 +46,4 @@ def test_reader(reader: Reader[ClickhouseQuery]) -> None:
     with pytest.raises(ClickhouseError) as e:
         reader.execute(SimpleClickhouseQuery([("invalid", '"')]))
 
-    assert e.value.code == 60
+    assert e.value.code == 62
