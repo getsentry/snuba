@@ -11,6 +11,7 @@ import simplejson as json
 from snuba.util import force_bytes
 
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
+MAX_UINT16 = 2 ** 16 - 1
 MAX_UINT32 = 2 ** 32 - 1
 
 
@@ -53,6 +54,17 @@ def _as_dict_safe(value):
         if item is not None:
             rv[item[0]] = item[1]
     return rv
+
+
+def _collapse_uint16(n) -> Optional[int]:
+    if n is None:
+        return None
+
+    i = int(n)
+    if (i < 0) or (i > MAX_UINT16):
+        return None
+
+    return i
 
 
 def _collapse_uint32(n) -> Optional[int]:

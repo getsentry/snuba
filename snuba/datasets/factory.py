@@ -16,6 +16,7 @@ DATASET_NAMES: Set[str] = {
     "transactions",
     "outcomes",
     "outcomes_raw",
+    "sessions",
     "discover",
     "querylog",
 }
@@ -48,6 +49,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.groups import Groups
     from snuba.datasets.discover import DiscoverDataset
     from snuba.datasets.querylog import QuerylogDataset
+    from snuba.datasets.sessions import SessionsDataset
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
         "events": EventsDataset,
@@ -58,6 +60,7 @@ def get_dataset(name: str) -> Dataset:
         "transactions": TransactionsDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
+        "sessions": SessionsDataset,
         "discover": DiscoverDataset,
         "querylog": QuerylogDataset,
     }

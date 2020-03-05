@@ -1228,7 +1228,7 @@ class TestApi(BaseApiTest):
             "granularity": 3600,
         }
         result = json.loads(self.app.post("/query", data=json.dumps(query)).data)
-        assert "error" not in result
+        assert result["meta"] == [{"name": "timestamp", "type": "DateTime"}]
 
     def test_test_endpoints(self):
         project_id = 73

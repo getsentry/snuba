@@ -5,6 +5,7 @@ import json
 from concurrent.futures import Future, as_completed
 from typing import Mapping, NamedTuple, Optional, Sequence
 
+from snuba.reader import Result
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.executor import SubscriptionExecutor
@@ -14,17 +15,16 @@ from snuba.utils.streams.batching import AbstractBatchWorker
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Topic
-from snuba.web.query import ClickhouseQueryResult
 
 
 class SubscriptionResultFuture(NamedTuple):
     task: ScheduledTask[Subscription]
-    future: Future[ClickhouseQueryResult]
+    future: Future[Result]
 
 
 class SubscriptionResult(NamedTuple):
     task: ScheduledTask[Subscription]
-    result: ClickhouseQueryResult
+    result: Result
 
 
 class SubscriptionWorker(AbstractBatchWorker[Tick, Sequence[SubscriptionResultFuture]]):

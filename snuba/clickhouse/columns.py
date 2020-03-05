@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from itertools import chain
 from abc import ABC
 from typing import Mapping, Iterable, Optional, Sequence, Type, Tuple, Union
 
@@ -68,6 +69,13 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
+    def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
+        """
+        Basic column types never have any modifiers, since modifiers wrap a basic
+        column type in order to modify it in some way.
+        """
+        return []
+
 
 class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
@@ -76,16 +84,13 @@ class ColumnTypeWithModifier(ABC, ColumnType):
     def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
         def get_nested_modifiers(
             obj: ColumnType,
-        ) -> Optional[Iterable[Type[ColumnTypeWithModifier]]]:
+        ) -> Iterable[Type[ColumnTypeWithModifier]]:
             if not isinstance(obj, ColumnTypeWithModifier):
-                return []
+                return obj.get_all_modifiers()
             else:
                 nested_modifiers = get_nested_modifiers(obj.inner_type)
-                if nested_modifiers:
-                    nested_modifiers.append(type(obj))
-                    return nested_modifiers
-                else:
-                    return [type(obj)]
+                nested_modifiers.append(type(obj))
+                return nested_modifiers
 
         return get_nested_modifiers(self)
 
@@ -216,6 +221,29 @@ class LowCardinality(ColumnTypeWithModifier):
 
     def for_schema(self) -> str:
         return "LowCardinality({})".format(self.inner_type.for_schema())
+
+
+class AggregateFunction(ColumnType):
+    def __init__(self, func: str, *arg_types: Tuple[ColumnType]) -> None:
+        self.func = func
+        self.arg_types = arg_types
+
+    def __repr__(self) -> str:
+        return "AggregateFunction({})".format(
+            ", ".join(repr(x) for x in chain([self.func], self.arg_types)),
+        )
+
+    def __eq__(self, other):
+        return (
+            self.__class__ == other.__class__
+            and self.func == other.func
+            and self.arg_types == other.arg_types
+        )
+
+    def for_schema(self) -> str:
+        return "AggregateFunction({})".format(
+            ", ".join(chain([self.func], (x.for_schema() for x in self.arg_types))),
+        )
 
 
 class String(ColumnType):

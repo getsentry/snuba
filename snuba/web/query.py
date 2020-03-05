@@ -6,6 +6,7 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
+    NamedTuple,
     Optional,
 )
 
@@ -21,6 +22,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -39,7 +41,9 @@ logger = logging.getLogger("snuba.query")
 metrics = create_metrics("snuba.api")
 
 
-ClickhouseQueryResult = MutableMapping[str, MutableMapping[str, Any]]
+class RawQueryResult(NamedTuple):
+    result: Result
+    extra: Any
 
 
 class RawQueryException(Exception):
@@ -61,17 +65,20 @@ def raw_query(
     query: DictClickhouseQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    stats: Optional[MutableMapping[str, Any]] = None,
+    stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
-) -> ClickhouseQueryResult:
+) -> RawQueryResult:
     """
     Submit a raw SQL query to clickhouse and do some post-processing on it to
     fix some of the formatting issues in the result JSON
     """
 
-    stats = stats or {}
     use_cache, use_deduper, uc_max = state.get_configs(
-        [("use_cache", 0), ("use_deduper", 1), ("uncompressed_cache_max_cols", 5)]
+        [
+            ("use_cache", settings.USE_RESULT_CACHE),
+            ("use_deduper", 1),
+            ("uncompressed_cache_max_cols", 5),
+        ]
     )
 
     all_confs = state.get_all_configs()
@@ -199,11 +206,7 @@ def raw_query(
 
     stats = update_with_status("success")
 
-    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-        result["stats"] = stats
-        result["sql"] = sql
-
-    return result
+    return RawQueryResult(result, {"stats": stats, "sql": sql})
 
 
 def update_query_metadata_and_stats(
@@ -225,9 +228,7 @@ def update_query_metadata_and_stats(
     stats.update(query_settings)
 
     query_metadata.query_list.append(
-        ClickhouseQueryMetadata(
-            sql=sql, stats=stats, status=status, trace_id=trace_id,
-        )
+        ClickhouseQueryMetadata(sql=sql, stats=stats, status=status, trace_id=trace_id)
     )
 
     return stats
@@ -258,7 +259,7 @@ def record_query(
 
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
-) -> ClickhouseQueryResult:
+) -> RawQueryResult:
     """
     Runs a query, then records the metadata about each split query that was run.
     """
@@ -289,7 +290,7 @@ def _run_query(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-) -> ClickhouseQueryResult:
+) -> RawQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
@@ -349,14 +350,7 @@ def _run_query(
         except Exception:
             logger.exception("Failed to format ast query")
 
-        result = raw_query(
-            request,
-            query,
-            timer,
-            query_metadata,
-            stats,
-            span.trace_id,
-        )
+        result = raw_query(request, query, timer, query_metadata, stats, span.trace_id)
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:

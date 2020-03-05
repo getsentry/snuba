@@ -36,6 +36,8 @@ REDIS_PORT = 6379
 REDIS_PASSWORD = None
 REDIS_DB = 1
 
+USE_RESULT_CACHE = False
+
 # Query Recording Options
 RECORD_QUERIES = False
 QUERIES_TOPIC = "snuba-queries"
