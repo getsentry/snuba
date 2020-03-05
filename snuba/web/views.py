@@ -19,6 +19,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
+    ensure_not_internal,
     get_dataset,
     get_enabled_dataset_names,
 )
@@ -263,6 +264,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
+    ensure_not_internal(dataset)
     ensure_table_exists(dataset)
     return format_result(
         run_query(
