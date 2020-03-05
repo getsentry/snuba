@@ -25,7 +25,7 @@ def test_simple():
         get_dataset("events").get_dataset_schemas().get_read_schema().get_data_source(),
     )
 
-    request = Request(query, HTTPRequestSettings(), {}, "tests")
+    request = Request(uuid.UUID("a" * 32).hex, query, HTTPRequestSettings(), {}, "tests")
 
     time = TestingClock()
 
@@ -33,7 +33,6 @@ def test_simple():
     time.sleep(0.01)
 
     message = SnubaQueryMetadata(
-        query_id=uuid.UUID("a" * 32).hex,
         request=request,
         dataset=get_dataset("events"),
         timer=timer,
@@ -53,8 +52,8 @@ def test_simple():
     assert processor.process_message(message) == ProcessedMessage(
         ProcessorAction.INSERT,
         [{
-            "query_id": str(uuid.UUID("a" * 32)),
-            "request": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
+            "request_id": str(uuid.UUID("a" * 32)),
+            "request_body": '{"limit": 100, "offset": 50, "orderby": "event_id", "project": 1, "sample": 0.1, "selected_columns": ["event_id"]}',
             "referrer": "search",
             "dataset": get_dataset("events"),
             "projects": [1],
