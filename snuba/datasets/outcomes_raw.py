@@ -71,6 +71,6 @@ class OutcomesRawDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
             SamplingRateProcessor(),
+            PrewhereProcessor(),
         ]

@@ -177,6 +177,6 @@ class Groups(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             SimpleJoinOptimizer(),
-            PrewhereProcessor(),
             SamplingRateProcessor(),
+            PrewhereProcessor(),
         ]

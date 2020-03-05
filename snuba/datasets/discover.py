@@ -304,8 +304,8 @@ class DiscoverDataset(TimeSeriesDataset):
                     EVENTS: [ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro")],
                 },
             ),
-            PrewhereProcessor(),
             SamplingRateProcessor(),
+            PrewhereProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

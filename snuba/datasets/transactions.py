@@ -291,7 +291,6 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            PrewhereProcessor(),
             NestedFieldConditionOptimizer(
                 "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME
             ),
@@ -302,4 +301,5 @@ class TransactionsDataset(TimeSeriesDataset):
                 BEGINNING_OF_TIME,
             ),
             SamplingRateProcessor(),
+            PrewhereProcessor(),
         ]

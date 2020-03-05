@@ -417,6 +417,6 @@ class EventsDataset(TimeSeriesDataset):
         return [
             ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
             SamplingRateProcessor(),
+            PrewhereProcessor(),
         ]
