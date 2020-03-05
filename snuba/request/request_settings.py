@@ -26,7 +26,7 @@ class SamplingMode(Enum):
     # the sampling rate where it makes sense. If an aggregation function is passed
     # that Snuba does not know how to adjust, Snuba will bail and apply no sampling
     # so the client will still receive data that does not need adjustment, thus
-    # copmliant with what was requested.
+    # compliant with what was requested.
     ADAPTIVE_ADJUSTED = "adaptive_adjusted"
     # Adaptive sampling rate without aggregation adjustment. It works like for
     # adaptive_adjusted but Snuba will not apply any adjustment. It is responsibility
