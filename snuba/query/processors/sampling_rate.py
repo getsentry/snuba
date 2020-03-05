@@ -1,7 +1,7 @@
 from snuba import settings
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.request.request_settings import RequestSettings, SamplingMode
+from snuba.request.request_settings import AutoSamplingConfig, RequestSettings
 
 
 class SamplingRateProcessor(QueryProcessor):
@@ -19,7 +19,7 @@ class SamplingRateProcessor(QueryProcessor):
         if not query.get_data_source().supports_sample():
             query.set_sample(None)
 
-        if request_settings.get_sampling_config().mode == SamplingMode.AUTO_DEPRECATED:
+        if isinstance(request_settings.get_sampling_config(), AutoSamplingConfig):
             if query.get_sample():
                 return
             elif request_settings.get_turbo():
