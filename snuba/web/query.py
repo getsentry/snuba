@@ -348,7 +348,7 @@ def _run_query(
                 AstClickhouseQuery(request.query, request.settings).format_sql(),
             )
         except Exception:
-            logger.exception("Failed to format ast query")
+            logger.warning("Failed to format ast query", exc_info=True)
 
         result = raw_query(request, query, timer, query_metadata, stats, span.trace_id)
 
