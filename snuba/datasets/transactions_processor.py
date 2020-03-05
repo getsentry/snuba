@@ -4,6 +4,7 @@ from typing import Optional
 
 import uuid
 
+from snuba import environment
 from snuba.datasets.events_format import (
     enforce_retention,
     extract_base,
@@ -22,10 +23,10 @@ from snuba.processor import (
     _ensure_valid_ip,
     _unicodify,
 )
-from snuba.util import create_metrics
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 
-metrics = create_metrics("snuba.transactions.processor")
+metrics = MetricsWrapper(environment.metrics, "transactions.processor")
 
 
 UNKNOWN_SPAN_STATUS = 2

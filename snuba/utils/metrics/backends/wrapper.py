@@ -1,7 +1,7 @@
 from collections import ChainMap
 from typing import Optional, Union
 
-from snuba.utils.metrics.abstract import MetricsBackend
+from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.types import Tags
 
 
