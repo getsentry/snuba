@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Callable, Iterable, Mapping, Optional
+from typing import Callable, Iterable, Mapping, MutableMapping, Optional
 from urllib.parse import urlencode
 
 from dateutil.parser import parse as dateutil_parse
@@ -119,8 +119,12 @@ class HTTPReader(Reader[ClickhouseQuery]):
     ):
         if settings is not None:
             assert "query_id" not in settings, "query_id cannot be passed as a setting"
+
         self.__pool = HTTPConnectionPool(host, port)
-        self.__default_settings = settings if settings is not None else {}
+
+        self.__default_settings: MutableMapping[str, str] = (
+            {**settings} if settings is not None else {}
+        )
 
         if "output_format_json_quote_64bit_integers" not in self.__default_settings:
             self.__default_settings["output_format_json_quote_64bit_integers"] = "0"
@@ -132,16 +136,25 @@ class HTTPReader(Reader[ClickhouseQuery]):
         query_id: Optional[str] = None,
         with_totals: bool = False,  # NOTE: unnecessary with FORMAT JSON
     ) -> Result:
-        if settings is None:
-            settings = {}
+        query_settings: MutableMapping[str, str] = (
+            {**settings} if settings is not None else {}
+        )
 
-        assert "query_id" not in settings, "query_id cannot be passed as a setting"
+        # XXX: mypy won't allow redefining ``settings`` as mutable, so delete
+        # the original variable to avoid accidentally referencing ``settings``
+        # instead of ``query_settings``.
+        del settings
+
+        assert (
+            "query_id" not in query_settings
+        ), "query_id cannot be passed as a setting"
+
         if query_id is not None:
-            settings["query_id"] = query_id
+            query_settings["query_id"] = query_id
 
         response = self.__pool.urlopen(
             "POST",
-            "/?" + urlencode({**self.__default_settings, **settings}),
+            "/?" + urlencode({**self.__default_settings, **query_settings}),
             headers={"Connection": "keep-alive", "Accept-Encoding": "gzip,deflate"},
             body=query.format_sql("JSON"),
         )
