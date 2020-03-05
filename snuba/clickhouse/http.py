@@ -3,14 +3,13 @@ import re
 from typing import Callable, Iterable, Mapping, Optional
 from urllib.parse import urlencode
 
-from datetime import datetime
 from dateutil.parser import parse as dateutil_parse
-from dateutil.tz import tz
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 from urllib3.response import HTTPResponse
 
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import transform_date, transform_datetime
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.reader import Reader, Result, build_result_transformer
@@ -98,34 +97,18 @@ class HTTPBatchWriter(BatchWriter):
         raise_for_error_response(response)
 
 
-def transform_date(value: str) -> str:
-    """
-    Convert a timezone-naive date object into an ISO 8601 formatted date and
-    time string respresentation.
-    """
-    # XXX: If the original value had a valid nonzero UTC offset, this will
-    # result in an incorrect value being returned.
-    return (
-        datetime(*dateutil_parse(value).timetuple()[:6])
-        .replace(tzinfo=tz.tzutc())
-        .isoformat()
-    )
+def parse_and_transform_date(value: str) -> str:
+    return transform_date(dateutil_parse(value))
 
 
-def transform_datetime(value: str) -> str:
-    """
-    Convert a timezone-naive datetime object into an ISO 8601 formatted date
-    and time string representation.
-    """
-    # XXX: If the original value had a valid nonzero UTC offset, this will
-    # result in an incorrect value being returned.
-    return dateutil_parse(value).replace(tzinfo=tz.tzutc()).isoformat()
+def parse_and_transform_datetime(value: str) -> str:
+    return transform_datetime(dateutil_parse(value))
 
 
 transform_column_types = build_result_transformer(
     [
-        (re.compile(r"^Date(\(.+\))?$"), transform_date),
-        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^Date(\(.+\))?$"), parse_and_transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), parse_and_transform_datetime),
     ]
 )
 
@@ -164,6 +147,7 @@ class HTTPReader(Reader[ClickhouseQuery]):
 
         result = json.loads(response.data.decode("utf-8"))
 
+        # Remove any extra keys that are not part of the Result data structure.
         for k in [*result.keys()]:
             if k not in {"meta", "data", "totals"}:
                 del result[k]
