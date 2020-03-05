@@ -1,15 +1,19 @@
 import logging
 import queue
+import re
 import time
+from datetime import date, datetime
 from typing import Iterable, Mapping, Optional
+from uuid import UUID
 
 from clickhouse_driver import Client, errors
+from dateutil.tz import tz
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader, Result, transform_columns
+from snuba.reader import Reader, Result, build_result_transformer
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -137,6 +141,42 @@ class ClickhousePool(object):
             pass
 
 
+def transform_date(value: date) -> str:
+    """
+    Convert a timezone-naive date object into an ISO 8601 formatted date and
+    time string respresentation.
+    """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
+    return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
+
+
+def transform_datetime(value: datetime) -> str:
+    """
+    Convert a timezone-naive datetime object into an ISO 8601 formatted date
+    and time string representation.
+    """
+    # XXX: If the original value had a valid nonzero UTC offset, this will
+    # result in an incorrect value being returned.
+    return value.replace(tzinfo=tz.tzutc()).isoformat()
+
+
+def transform_uuid(value: UUID) -> str:
+    """
+    Convert a UUID object into a string representation.
+    """
+    return str(value)
+
+
+transform_column_types = build_result_transformer(
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^UUID$"), transform_uuid),
+    ]
+)
+
+
 class NativeDriverReader(Reader[ClickhouseQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
@@ -169,7 +209,9 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         else:
             result = {"data": data, "meta": meta}
 
-        return transform_columns(result)
+        transform_column_types(result)
+
+        return result
 
     def execute(
         self,
