@@ -51,7 +51,7 @@ class AstClickhouseQuery(ClickhouseQuery):
         self.__settings = settings
         self.__formatted_query: Optional[str] = None
 
-    def get_applied_sampling_rate(self) -> Optional[float]:
+    def get_sampling_rate(self) -> Optional[float]:
         return self.__sample
 
     def _format_query_impl(self) -> str:

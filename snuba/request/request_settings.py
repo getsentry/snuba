@@ -27,14 +27,14 @@ class SamplingMode(Enum):
     # that Snuba does not know how to adjust, Snuba will bail and apply no sampling
     # so the client will still receive data that does not need adjustment, thus
     # copmliant with what was requested.
-    ADAPTIVE_ADJUST = "adaptive_adjust"
+    ADAPTIVE_ADJUSTED = "adaptive_adjusted"
     # Adaptive sampling rate without aggregation adjustment. It works like for
-    # adaptive_adjust but Snuba will not apply any adjustment. It is responsibility
+    # adaptive_adjusted but Snuba will not apply any adjustment. It is responsibility
     # of the client to apply the appropriate adjustment.
     # This gives higher guarantees that sampling will actually be applied since
     # Snuba does not need to know how to adjust the aggregations provided in the
     # query.
-    ADAPTIVE_NO_ADJUST = "adaptive_no_adjust"
+    ADAPTIVE_UNADJUSTED = "adaptive_unadjusted"
     # The old automatic approach that applies a fixed config sampling if in TURBO
     # mode.
     AUTO_DEPRECATED = "auto"

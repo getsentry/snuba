@@ -208,7 +208,7 @@ def raw_query(
     stats = update_with_status("success")
 
     return RawQueryResult(
-        result, query.get_applied_sampling_rate(), {"stats": stats, "sql": sql},
+        result, query.get_sampling_rate(), {"stats": stats, "sql": sql},
     )
 
 

@@ -32,9 +32,9 @@ class ClickhouseQuery(ABC):
         return query
 
     @abstractmethod
-    def get_applied_sampling_rate(self) -> Optional[float]:
+    def get_sampling_rate(self) -> Optional[float]:
         """
-        This method probably won't exist when we will have a clickhosue AST,
+        This method probably won't exist when we will have a ClickHouse AST,
         since the format process will simply format the query to SQL without
         applying any specific logic.
         The method is used to ensure we do not tweak the the sampling rate provided
@@ -159,7 +159,7 @@ class DictClickhouseQuery(ClickhouseQuery):
             ]
         )
 
-    def get_applied_sampling_rate(self) -> Optional[float]:
+    def get_sampling_rate(self) -> Optional[float]:
         return self.__sample
 
     def _format_query_impl(self) -> str:
