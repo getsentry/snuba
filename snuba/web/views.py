@@ -226,8 +226,8 @@ def health():
 
 def parse_request_body(http_request):
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+        metrics.timing("http_request_body_length", len(http_request.data))
         try:
-            metrics.timing("http_request_body_length", len(http_request.data))
             return json.loads(http_request.data)
         except json.errors.JSONDecodeError as error:
             raise BadRequest(str(error)) from error
