@@ -2,13 +2,14 @@ from typing import Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
-from snuba import settings, util
+from snuba import environment, settings
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.retries import BasicRetryPolicy, RetryPolicy, constant_delay
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.kafka import (
@@ -93,8 +94,10 @@ class ConsumerBuilder:
             }
         )
 
-        self.metrics = util.create_metrics(
-            "snuba.consumer", tags={"group": group_id, "dataset": self.dataset_name},
+        self.metrics = MetricsWrapper(
+            environment.metrics,
+            "consumer",
+            tags={"group": group_id, "dataset": self.dataset_name},
         )
 
         self.max_batch_size = max_batch_size
