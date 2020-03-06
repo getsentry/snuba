@@ -3,7 +3,8 @@ import pytest
 from typing import Iterable
 
 from tests.base import BaseEventsTest
-from snuba.clickhouse.http import ClickHouseError, HTTPBatchWriter
+from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.datasets.factory import enforce_table_writer
 from snuba import settings
 from snuba.writer import WriterTableRow
@@ -20,9 +21,8 @@ class TestHTTPBatchWriter(BaseEventsTest):
             enforce_table_writer(self.dataset).get_writer(table_name="invalid").write(
                 [{"x": "y"}]
             )
-        except ClickHouseError as error:
+        except ClickhouseError as error:
             assert error.code == 60
-            assert error.type == "DB::Exception"
         else:
             assert False, "expected error"
 
@@ -30,9 +30,8 @@ class TestHTTPBatchWriter(BaseEventsTest):
             enforce_table_writer(self.dataset).get_writer().write(
                 [{"timestamp": "invalid"}]
             )
-        except ClickHouseError as error:
+        except ClickhouseError as error:
             assert error.code == 41
-            assert error.type == "DB::Exception"
         else:
             assert False, "expected error"
 

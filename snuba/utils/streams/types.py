@@ -39,5 +39,10 @@ class Message(Generic[TPayload]):
     payload: TPayload
     timestamp: datetime
 
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(partition={self.partition}, offset={self.offset})"
+        )
+
     def get_next_offset(self) -> int:
         return self.offset + 1

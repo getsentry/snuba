@@ -296,11 +296,6 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     with the specified prefix and tags. Return a DummyMetricsBackend otherwise.
     Prefixes must start with `snuba.<category>`, for example: `snuba.processor`.
     """
-    bits = prefix.split(".", 2)
-    assert (
-        len(bits) >= 2 and bits[0] == "snuba"
-    ), "prefix must be like `snuba.<category>`"
-
     host = settings.DOGSTATSD_HOST
     port = settings.DOGSTATSD_PORT
 

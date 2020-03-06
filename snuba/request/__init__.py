@@ -11,6 +11,7 @@ from snuba.request.request_settings import RequestSettings
 
 @dataclass(frozen=True)
 class Request:
+    id: str
     query: Query
     settings: RequestSettings  # settings provided by the request
     extensions: Mapping[str, Mapping[str, Any]]

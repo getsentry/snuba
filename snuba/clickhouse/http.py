@@ -5,21 +5,9 @@ from typing import Callable, Iterable
 from urllib3.connectionpool import HTTPConnectionPool
 from urllib3.exceptions import HTTPError
 
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.writer import BatchWriter, WriterTableRow
-
-
-class ClickHouseError(Exception):
-    def __init__(self, code: int, type: str, message: str):
-        self.code = code
-        self.type = type
-        self.message = message
-
-    def __str__(self) -> str:
-        return f"[{self.code}] {self.type}: {self.message}"
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__}: {self}>"
 
 
 CLICKHOUSE_ERROR_RE = re.compile(
@@ -92,7 +80,7 @@ class HTTPBatchWriter(BatchWriter):
             details = CLICKHOUSE_ERROR_RE.match(content)
             if details is not None:
                 code, type, message = details.groups()
-                raise ClickHouseError(int(code), type, message)
+                raise ClickhouseError(int(code), message)
             else:
                 raise HTTPError(
                     f"Received unexpected {response.status} response: {content}"

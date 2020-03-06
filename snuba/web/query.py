@@ -11,12 +11,12 @@ from typing import (
 )
 
 import sentry_sdk
-from clickhouse_driver.errors import Error as ClickHouseError
 from flask import request as http_request
 from functools import partial
 
-from snuba import settings, state
+from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -31,14 +31,16 @@ from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
 )
-from snuba.util import create_metrics, force_bytes
+from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
-metrics = create_metrics("snuba.api")
+
+metrics = MetricsWrapper(environment.metrics, "api")
 
 
 class RawQueryResult(NamedTuple):
@@ -182,7 +184,7 @@ def raw_query(
                         logger.exception("Error running query: %s\n%s", sql, error)
                         stats = update_with_status("error")
                         meta = {}
-                        if isinstance(ex, ClickHouseError):
+                        if isinstance(ex, ClickhouseError):
                             err_type = "clickhouse"
                             meta["code"] = ex.code
                         else:
