@@ -63,7 +63,7 @@ class QuerylogProcessor(MessageProcessor):
         processed = {
             "request_id": str(uuid.UUID(message["request_id"])),
             "request_body": self.__get_request(message["request"]),
-            "referrer": message["referrer"],
+            "referrer": message["referrer"] or "",
             "dataset": message["dataset"],
             "projects": projects,
             "organization": None,
