@@ -321,6 +321,7 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
+    ensure_not_internal(dataset)
     subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
@@ -336,6 +337,7 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
+    ensure_not_internal(dataset)
     SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 

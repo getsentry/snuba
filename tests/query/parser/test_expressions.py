@@ -60,6 +60,10 @@ test_data = [
         FunctionCall("apdex_score", "f", (Literal(None, "asd"),),),
     ),  # string literals
     (
+        ["f('asd', '')", "", "f"],
+        FunctionCall("f", "f", (Literal(None, "asd"), Literal(None, ""))),
+    ),  # empty string literals
+    (
         ["toUInt64(plus(multiply(log(times_seen), 600), last_seen))", None, None],
         FunctionCall(
             None,
