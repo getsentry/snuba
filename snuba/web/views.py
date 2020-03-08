@@ -360,7 +360,7 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        for storages in dataset.get_all_storages():
+        for storage in dataset.get_all_storages():
             for statement in storage.get_dataset_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
 

@@ -32,7 +32,9 @@ class JoinedStorage(Storage):
         self.__structure = join_structure
 
     def get_dataset_schemas(self) -> DatasetSchemas:
-        return DatasetSchemas(read_schema=JoinedSchema(self.__structure))
+        return DatasetSchemas(
+            read_schema=JoinedSchema(self.__structure), write_schema=None
+        )
 
     def can_write(self) -> bool:
         return False
@@ -66,14 +68,18 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            self.__grouped_message.get_dataset_schemas()
+            self.__grouped_message.get_all_storages()[0]
+            .get_dataset_schemas()
             .get_read_schema()
             .get_data_source()
         )
 
         self.__events = get_dataset("events")
         events_source = (
-            self.__events.get_dataset_schemas().get_read_schema().get_data_source()
+            self.__events.get_storage()
+            .get_dataset_schemas()
+            .get_read_schema()
+            .get_data_source()
         )
 
         join_structure = JoinClause(

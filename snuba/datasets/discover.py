@@ -78,10 +78,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
     ) -> Storage:
         table = detect_table(
             query,
-            self.__events_table.get_dataset_schemas().get_read_schema().get_columns,
+            self.__events_table.get_dataset_schemas().get_read_schema().get_columns(),
             self.__transactions_table.get_dataset_schemas()
             .get_read_schema()
-            .get_columns,
+            .get_columns(),
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 

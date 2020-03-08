@@ -308,10 +308,15 @@ def _run_query(
             request.query, request.extensions[name], request.settings
         )
 
-    request.query.add_conditions(dataset.default_conditions())
-
     if request.settings.get_turbo():
         request.query.set_final(False)
+
+    storage = dataset.get_query_storage_selector().select_storage(
+        request.query, request.settings
+    )
+    request.query.set_data_source(
+        storage.get_dataset_schemas().get_read_schema().get_data_source()
+    )
 
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)

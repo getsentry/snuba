@@ -1,5 +1,6 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
+from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.schemas import ColumnSet
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.query.extensions import QueryExtension
@@ -49,6 +50,19 @@ class Dataset(object):
         self.__storage_selector = storage_selector
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
+
+    def column_expr(
+        self,
+        column_name,
+        query: Query,
+        parsing_context: ParsingContext,
+        table_alias: str = "",
+    ):
+        """
+        Return an expression for the column name. Handle special column aliases
+        that evaluate to something else.
+        """
+        return escape_identifier(qualified_column(column_name, table_alias))
 
     def process_condition(self, condition) -> Tuple[str, str, Any]:
         """
