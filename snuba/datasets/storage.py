@@ -2,7 +2,7 @@ from abc import ABC
 from typing import Optional, Sequence
 
 
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -10,7 +10,7 @@ from snuba.request.request_settings import RequestSettings
 
 
 class Storage(ABC):
-    def get_dataset_schemas(self) -> DatasetSchemas:
+    def get_schemas(self) -> StorageSchemas:
         """
         Returns the collections of schemas for DDL operations and for
         query.
@@ -48,16 +48,16 @@ class Storage(ABC):
 class TableStorage(Storage):
     def __init__(
         self,
-        dataset_schemas: DatasetSchemas,
+        storage_schemas: StorageSchemas,
         table_writer: Optional[TableWriter] = None,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
-        self.__dataset_schemas = dataset_schemas
+        self.__storage_schemas = storage_schemas
         self.__table_writer = table_writer
         self.__query_processors = query_processors or []
 
-    def get_dataset_schemas(self) -> DatasetSchemas:
-        return self.__dataset_schemas
+    def get_schemas(self) -> StorageSchemas:
+        return self.__storage_schemas
 
     def get_table_writer(self) -> Optional[TableWriter]:
         return self.__table_writer

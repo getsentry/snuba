@@ -115,7 +115,7 @@ def test_referenced_columns():
     dataset = get_dataset("events")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )

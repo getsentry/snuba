@@ -11,7 +11,7 @@ def get_dataset_source(dataset_name):
     return (
         get_dataset(dataset_name)
         .get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )
@@ -45,7 +45,7 @@ class TestDiscover(BaseDatasetTest):
             query, request_settings
         )
         query.set_data_source(
-            storage.get_dataset_schemas().get_read_schema().get_data_source()
+            storage.get_schemas().get_read_schema().get_data_source()
         )
 
         for processor in get_dataset("discover").get_query_processors():

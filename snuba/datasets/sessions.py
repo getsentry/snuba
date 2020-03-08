@@ -12,7 +12,7 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     MaterializedViewSchema,
@@ -202,7 +202,7 @@ class SessionsDataset(TimeSeriesDataset):
         )
 
         writable_storage = TableStorage(
-            dataset_schemas=DatasetSchemas(
+            storage_schemas=StorageSchemas(
                 read_schema=raw_schema, write_schema=raw_schema
             ),
             table_writer=TableWriter(
@@ -214,7 +214,7 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
         materialized_storage = TableStorage(
-            dataset_schemas=DatasetSchemas(
+            storage_schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,
                 intermediary_schemas=[materialized_view],

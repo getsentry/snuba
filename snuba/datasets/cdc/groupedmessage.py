@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 
 from snuba.datasets.cdc import CdcDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
@@ -76,7 +76,7 @@ class GroupedMessageDataset(CdcDataset):
         )
 
         storage = TableStorage(
-            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+            storage_schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=GroupedMessageTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(

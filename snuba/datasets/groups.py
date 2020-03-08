@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Mapping, Optional, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -31,8 +31,8 @@ class JoinedStorage(Storage):
     def __init__(self, join_structure: JoinClause) -> None:
         self.__structure = join_structure
 
-    def get_dataset_schemas(self) -> DatasetSchemas:
-        return DatasetSchemas(
+    def get_schemas(self) -> StorageSchemas:
+        return StorageSchemas(
             read_schema=JoinedSchema(self.__structure), write_schema=None
         )
 
@@ -69,7 +69,7 @@ class Groups(TimeSeriesDataset):
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
             self.__grouped_message.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -77,7 +77,7 @@ class Groups(TimeSeriesDataset):
         self.__events = get_dataset("events")
         events_source = (
             self.__events.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )

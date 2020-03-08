@@ -4,7 +4,7 @@ from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import DDLStatement, TableSchema, WritableTableSchema
 
 
-class DatasetSchemas(object):
+class StorageSchemas(object):
     """
     A collection of schemas associated with a dataset, providing access to schemas and DDL functions
     """

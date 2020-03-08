@@ -38,7 +38,7 @@ def test_no_split(dataset_name: str):
             "offset": 50,
         },
         events.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source(),
     )
@@ -115,7 +115,7 @@ def test_col_split(
             "offset": 50,
         },
         events.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source(),
     )

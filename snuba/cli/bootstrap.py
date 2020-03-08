@@ -119,7 +119,7 @@ def bootstrap(
         logger.debug("Creating tables for dataset %s", name)
         run_migrations = False
         for storage in dataset.get_all_storages():
-            for statement in storage.get_dataset_schemas().get_create_statements():
+            for statement in storage.get_schemas().get_create_statements():
                 if statement.table_name not in existing_tables:
                     # This is a hack to deal with updates to Materialized views.
                     # It seems that ClickHouse would parse the SELECT statement that defines a

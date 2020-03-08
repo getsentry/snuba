@@ -19,7 +19,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
@@ -170,7 +170,7 @@ class ErrorsDataset(TimeSeriesDataset):
         ]
 
         storage = TableStorage(
-            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+            storage_schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(

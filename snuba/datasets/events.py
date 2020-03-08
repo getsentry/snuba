@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
@@ -273,7 +273,7 @@ class EventsDataset(TimeSeriesDataset):
         self.__required_columns = required_columns
 
         self.__storage = TableStorage(
-            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+            storage_schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(

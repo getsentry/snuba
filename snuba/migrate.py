@@ -54,7 +54,7 @@ def run(conn: Client, dataset: Dataset) -> None:
         if writer:
             schemas.append(writer.get_schema())
     for storage in dataset.get_all_storages():
-        schemas.append(storage.get_dataset_schemas().get_read_schema())
+        schemas.append(storage.get_schemas().get_read_schema())
 
     for schema in schemas:
         _run_schema(conn, schema)

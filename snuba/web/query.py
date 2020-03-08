@@ -318,7 +318,7 @@ def _run_query(
         request.query, request.settings
     )
     request.query.set_data_source(
-        storage.get_dataset_schemas().get_read_schema().get_data_source()
+        storage.get_schemas().get_read_schema().get_data_source()
     )
 
     for processor in storage.get_query_processors():

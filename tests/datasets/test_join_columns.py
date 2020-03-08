@@ -12,7 +12,7 @@ def test_simple_column_expr():
     dataset = get_dataset("groups")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )
@@ -154,7 +154,7 @@ def test_alias_in_alias():
     dataset = get_dataset("groups")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )
@@ -184,7 +184,7 @@ def test_conditions_expr():
     dataset = get_dataset("groups")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )
@@ -266,7 +266,7 @@ def test_duplicate_expression_alias():
     dataset = get_dataset("groups")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )
@@ -294,7 +294,7 @@ def test_order_by():
     dataset = get_dataset("groups")
     source = (
         dataset.get_all_storages()[0]
-        .get_dataset_schemas()
+        .get_schemas()
         .get_read_schema()
         .get_data_source()
     )

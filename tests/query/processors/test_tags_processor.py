@@ -169,7 +169,7 @@ def test_tags_processor(query_body, expected_query) -> None:
         query, request_settings
     )
     query.set_data_source(
-        storage.get_dataset_schemas().get_read_schema().get_data_source()
+        storage.get_schemas().get_read_schema().get_data_source()
     )
 
     assert (

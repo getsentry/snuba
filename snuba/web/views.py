@@ -81,7 +81,7 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                source = storage.get_dataset_schemas().get_read_schema()
+                source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
                     if (table_name,) not in clickhouse_tables:
@@ -361,7 +361,7 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for storage in dataset.get_all_storages():
-            for statement in storage.get_dataset_schemas().get_create_statements():
+            for statement in storage.get_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
 
         migrate.run(clickhouse_rw, dataset)
@@ -431,7 +431,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            for statement in storage.get_dataset_schemas().get_drop_statements():
+            for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 
         ensure_table_exists(dataset, force=True)

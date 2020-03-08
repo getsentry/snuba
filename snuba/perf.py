@@ -45,7 +45,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     from snuba.consumer import ConsumerWorker
 
     for storage in dataset.get_all_storages():
-        for statement in storage.get_dataset_schemas().get_create_statements():
+        for statement in storage.get_schemas().get_create_statements():
             clickhouse_rw.execute(statement.statement)
 
     consumer = ConsumerWorker(dataset, metrics=DummyMetricsBackend())

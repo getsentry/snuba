@@ -12,7 +12,7 @@ class TestEventsDataset(BaseEventsTest):
     def test_column_expr(self):
         source = (
             self.dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -157,7 +157,7 @@ class TestEventsDataset(BaseEventsTest):
     def test_alias_in_alias(self):
         source = (
             self.dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -190,7 +190,7 @@ class TestEventsDataset(BaseEventsTest):
         """
         source = (
             self.dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )

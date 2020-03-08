@@ -64,7 +64,7 @@ class TestUtil(BaseTest):
         conditions = [["a", "=", 1]]
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -227,7 +227,7 @@ class TestUtil(BaseTest):
         parsing_context = ParsingContext()
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -244,7 +244,7 @@ class TestUtil(BaseTest):
     def test_nested_aggregate_legacy_format(self, dataset):
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -282,7 +282,7 @@ class TestUtil(BaseTest):
     def test_complex_conditions_expr(self, dataset):
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -526,7 +526,7 @@ class TestUtil(BaseTest):
         parsing_context = ParsingContext()
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
@@ -544,7 +544,7 @@ class TestUtil(BaseTest):
         parsing_context = ParsingContext()
         source = (
             dataset.get_all_storages()[0]
-            .get_dataset_schemas()
+            .get_schemas()
             .get_read_schema()
             .get_data_source()
         )
