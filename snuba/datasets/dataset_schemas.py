@@ -6,7 +6,7 @@ from snuba.datasets.schemas.tables import DDLStatement, TableSchema, WritableTab
 
 class StorageSchemas(object):
     """
-    A collection of schemas associated with a dataset, providing access to schemas and DDL functions
+    A collection of schemas associated with a Storage, providing access to schemas and DDL functions
     """
 
     def __init__(

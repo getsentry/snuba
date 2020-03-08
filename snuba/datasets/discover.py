@@ -22,7 +22,9 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -80,18 +82,18 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         table = detect_table(
             query,
             self.__events_table.get_schemas().get_read_schema().get_columns(),
-            self.__transactions_table.get_schemas()
-            .get_read_schema()
-            .get_columns(),
+            self.__transactions_table.get_schemas().get_read_schema().get_columns(),
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
 
 class DiscoverDataset(TimeSeriesDataset):
     """
-    Experimental dataset for Discover that maps the columns of Events and
+    Dataset for the Discover product that maps the columns of Events and
     Transactions into a standard format and sends a query to one of the 2 tables
     depending on the conditions detected.
+
+    It is based on two storages. One for events and one for transactions.
     """
 
     def __init__(self) -> None:
@@ -189,7 +191,7 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
         # TODO: Move the storage definition out of events and transactions dataset so
-        # we can reuse the class itself.
+        # we can reuse the class itself and avoid the isinstance call.
         events_dataset = get_dataset(EVENTS)
         assert isinstance(events_dataset, EventsDataset)
         transactions_dataset = get_dataset(TRANSACTIONS)
@@ -216,6 +218,11 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            # Apdex and Impact seem very good candidates for
+            # being defined by the Transaction entity when it will
+            # exist, so it would run before Storage selection.
+            ApdexProcessor(),
+            ImpactProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

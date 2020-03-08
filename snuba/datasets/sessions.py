@@ -166,7 +166,7 @@ class SessionsDataset(TimeSeriesDataset):
             partition_by="(toMonday(started))",
             settings={"index_granularity": 256},
         )
-        materialized_view = MaterializedViewSchema(
+        materialized_view_schema = MaterializedViewSchema(
             local_materialized_view_name=READ_LOCAL_MV_NAME,
             dist_materialized_view_name=READ_DIST_MV_NAME,
             prewhere_candidates=["project_id", "org_id"],
@@ -201,10 +201,10 @@ class SessionsDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
+        # The raw table we write onto, and that potentially we could
+        # query.
         writable_storage = TableStorage(
-            schemas=StorageSchemas(
-                read_schema=raw_schema, write_schema=raw_schema
-            ),
+            schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
             table_writer=TableWriter(
                 write_schema=raw_schema,
                 stream_loader=KafkaStreamLoader(
@@ -213,11 +213,12 @@ class SessionsDataset(TimeSeriesDataset):
             ),
             query_processors=[],
         )
+        # The materialized view we query aggregate data from.
         materialized_storage = TableStorage(
             schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,
-                intermediary_schemas=[materialized_view],
+                intermediary_schemas=[materialized_view_schema],
             ),
             query_processors=[PrewhereProcessor()],
         )
