@@ -43,8 +43,10 @@ def _run_schema(conn, schema):
 
 def run(conn, dataset):
     schemas = []
-    if dataset.get_table_writer():
-        schemas.append(dataset.get_table_writer().get_schema())
+    if dataset.get_writable_storage():
+        writer = dataset.get_writable_storage().get_table_writer()
+        if writer:
+            schemas.append(writer.get_schema())
     for storage in dataset.get_all_storages():
         schemas.append(storage.get_dataset_schemas().get_read_schema())
 
