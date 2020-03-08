@@ -5,13 +5,7 @@ from snuba.datasets.storage import QueryStorageSelector
 
 class CdcDataset(Dataset):
     def __init__(
-        self,
-        *,
-        storage_selector: QueryStorageSelector,
-        abstract_column_set: ColumnSet,
-        default_control_topic: str,
-        postgres_table: str,
-        **kwargs
+        self, *, default_control_topic: str, postgres_table: str, **kwargs,
     ):
         super().__init__(**kwargs)
         self.__default_control_topic = default_control_topic
