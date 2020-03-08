@@ -14,7 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import StorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -66,7 +66,7 @@ def detect_table(
     return EVENTS
 
 
-class DiscoverStorageSelector(StorageSelector):
+class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self, events_table: TableStorage, transactions_table: TableStorage
     ) -> None:
@@ -189,7 +189,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
         # TODO: Move the storage definition out of events and transactions dataset so
         # we can reuse the class itself.
-        storage_selector = DiscoverStorageSelector(
+        storage_selector = DiscoverQueryStorageSelector(
             events_table=get_dataset(EVENTS).get_storage(),
             transactions_table=get_dataset(TRANSACTIONS).get_storage(),
         )
@@ -199,6 +199,7 @@ class DiscoverDataset(TimeSeriesDataset):
             abstract_column_set=self.__common_columns
             + self.__events_columns
             + self.__transactions_columns,
+            writable_storage=None,
             time_group_columns={},
             time_parse_columns=["timestamp"],
         )

@@ -18,7 +18,7 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
-from snuba.datasets.storage import StorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -90,7 +90,7 @@ class SessionsProcessor(MessageProcessor):
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
 
-class SessionsStorageSelector(StorageSelector):
+class SessionsQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self, raw_table: TableStorage, materialized_view: TableStorage
     ) -> None:
@@ -201,19 +201,21 @@ class SessionsDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
-        storage_selector = SessionsStorageSelector(
-            raw_table=TableStorage(
-                dataset_schemas=DatasetSchemas(
-                    read_schema=raw_schema, write_schema=raw_schema
-                ),
-                table_writer=TableWriter(
-                    write_schema=raw_schema,
-                    stream_loader=KafkaStreamLoader(
-                        processor=SessionsProcessor(), default_topic="ingest-sessions",
-                    ),
-                ),
-                query_processors=[],
+        writable_storage = TableStorage(
+            dataset_schemas=DatasetSchemas(
+                read_schema=raw_schema, write_schema=raw_schema
             ),
+            table_writer=TableWriter(
+                write_schema=raw_schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=SessionsProcessor(), default_topic="ingest-sessions",
+                ),
+            ),
+            query_processors=[],
+        )
+
+        storage_selector = SessionsQueryStorageSelector(
+            raw_table=writable_storage,
             materialized_view=TableStorage(
                 dataset_schemas=DatasetSchemas(
                     read_schema=read_schema, intermediary_schemas=[materialized_view],
@@ -225,6 +227,7 @@ class SessionsDataset(TimeSeriesDataset):
         super().__init__(
             storage_selector=storage_selector,
             abstract_column_set=read_schema.get_columns(),
+            writable_storage=writable_storage,
             time_group_columns={"bucketed_started": "started"},
             time_parse_columns=("started", "received"),
         )

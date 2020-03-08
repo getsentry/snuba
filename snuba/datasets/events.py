@@ -17,7 +17,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
+from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
@@ -294,11 +294,12 @@ class EventsDataset(TimeSeriesDataset):
             query_processors=[],
         )
 
-        storage_selector = SingleTableStorageSelector(storage=self.__storage)
+        storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
 
         super(EventsDataset, self).__init__(
             storage_selector=storage_selector,
             abstract_column_set=schema.get_columns(),
+            writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )

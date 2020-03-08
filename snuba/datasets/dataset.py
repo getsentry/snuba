@@ -1,7 +1,7 @@
-from typing import Any, Mapping, NamedTuple, Sequence, Tuple, Union
+from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.datasets.schemas import ColumnSet
-from snuba.datasets.storage import StorageSelector
+from snuba.datasets.storage import QueryStorageSelector, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -38,10 +38,15 @@ class Dataset(object):
     """
 
     def __init__(
-        self, *, storage_selector: StorageSelector, abstract_column_set: ColumnSet
+        self,
+        *,
+        storage_selector: QueryStorageSelector,
+        abstract_column_set: ColumnSet,
+        writable_storage: Optional[TableStorage],
     ) -> None:
         self.__storage_selector = storage_selector
         self.__abstract_column_set = abstract_column_set
+        self.__writable_storage = writable_storage
 
     def process_condition(self, condition) -> Tuple[str, str, Any]:
         """
@@ -76,12 +81,21 @@ class Dataset(object):
         """
         return []
 
-    def get_storage_selector(self) -> StorageSelector:
+    def get_query_storage_selector(self) -> QueryStorageSelector:
         """
         Returns the component that provides the storage to run the query onto
         during the query execution.
         """
         return self.__storage_selector
+
+    def get_writable_storage(self) -> Optional[TableStorage]:
+        """
+        We allow only one table storage we can write onto per dataset as of now.
+        This will become one per entity as soon as we have entities, and
+        the constraint of one writable storage will drop as soon as the consumers
+        start referencing entities and storages instead of datasets.
+        """
+        return self.__writable_storage
 
     def get_abstract_columnset(self) -> ColumnSet:
         """
@@ -98,15 +112,17 @@ class Dataset(object):
 class TimeSeriesDataset(Dataset):
     def __init__(
         self,
-        storage_selector: StorageSelector,
+        storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
+        writable_storage: Optional[TableStorage],
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
         **kwargs,
     ) -> None:
         super().__init__(
-            dataset_schemas=storage_selector,
+            storage_selector=storage_selector,
             abstract_column_set=abstract_column_set,
+            writable_storage=writable_storage,
             **kwargs,
         )
         # Convenience columns that evaluate to a bucketed time. The bucketing

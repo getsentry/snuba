@@ -66,7 +66,7 @@ class TableStorage(Storage):
         return self.__query_processors
 
 
-class StorageSelector(ABC):
+class QueryStorageSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage query should be executed onto.
@@ -78,7 +78,7 @@ class StorageSelector(ABC):
         raise NotImplementedError
 
 
-class SingleTableStorageSelector(StorageSelector):
+class SingleTableQueryStorageSelector(QueryStorageSelector):
     def __init__(self, storage: TableStorage) -> None:
         self.__storage = storage
 

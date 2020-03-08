@@ -12,7 +12,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.storage import StorageSelector, Storage
+from snuba.datasets.storage import QueryStorageSelector, Storage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
@@ -44,7 +44,7 @@ class JoinedStorage(Storage):
         return []
 
 
-class GroupsStorageSelector(StorageSelector):
+class GroupsQueryStorageSelector(QueryStorageSelector):
     def __init__(self, joined_storage: JoinedStorage) -> None:
         self.__storage = joined_storage
 
@@ -127,8 +127,9 @@ class Groups(TimeSeriesDataset):
 
         schema = JoinedSchema(join_structure)
         super().__init__(
-            storage_selector=GroupsStorageSelector(JoinedStorage(join_structure)),
+            storage_selector=GroupsQueryStorageSelector(JoinedStorage(join_structure)),
             abstract_column_set=schema.get_columns(),
+            writable_storage=None,
             time_group_columns={"events.time": "events.timestamp"},
             time_parse_columns=[
                 "events.timestamp",

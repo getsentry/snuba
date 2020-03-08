@@ -1,13 +1,13 @@
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.schemas import ColumnSet
-from snuba.datasets.storage import StorageSelector
+from snuba.datasets.storage import QueryStorageSelector
 
 
 class CdcDataset(Dataset):
     def __init__(
         self,
         *,
-        storage_selector: StorageSelector,
+        storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
         default_control_topic: str,
         postgres_table: str,

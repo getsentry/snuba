@@ -24,7 +24,7 @@ from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
 )
-from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
+from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -223,11 +223,12 @@ class TransactionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
 
-        storage_selector = SingleTableStorageSelector(storage=self.__storage)
+        storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
 
         super().__init__(
             storage_selector=storage_selector,
             abstract_column_set=schema.get_columns(),
+            writable_storage=self.__storage,
             time_group_columns={
                 "bucketed_start": "start_ts",
                 "bucketed_end": "finish_ts",

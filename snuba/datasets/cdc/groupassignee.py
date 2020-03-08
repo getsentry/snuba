@@ -8,7 +8,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeRow,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
+from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -69,24 +69,25 @@ class GroupAssigneeDataset(CdcDataset):
             version_column="offset",
         )
 
-        storage_selector = SingleTableStorageSelector(
-            storage=TableStorage(
-                dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
-                table_writer=GroupAssigneeTableWriter(
-                    write_schema=schema,
-                    stream_loader=KafkaStreamLoader(
-                        processor=GroupAssigneeProcessor(self.POSTGRES_TABLE),
-                        default_topic="cdc",
-                    ),
-                    postgres_table=self.POSTGRES_TABLE,
+        storage = TableStorage(
+            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+            table_writer=GroupAssigneeTableWriter(
+                write_schema=schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=GroupAssigneeProcessor(self.POSTGRES_TABLE),
+                    default_topic="cdc",
                 ),
-                query_processors=[],
-            )
+                postgres_table=self.POSTGRES_TABLE,
+            ),
+            query_processors=[],
         )
+
+        storage_selector = SingleTableQueryStorageSelector(storage=storage)
 
         super().__init__(
             storage_selector=storage_selector,
             abstract_column_set=schema.get_columns(),
+            writable_storage=storage,
             default_control_topic="cdc_control",
             postgres_table=self.POSTGRES_TABLE,
         )

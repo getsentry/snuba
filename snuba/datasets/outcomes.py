@@ -14,7 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.storage import StorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.processor import (
     _ensure_valid_date,
     MessageProcessor,
@@ -63,7 +63,7 @@ class OutcomesProcessor(MessageProcessor):
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
 
 
-class OutcomesStorageSelector(StorageSelector):
+class OutcomesQueryStorageSelector(QueryStorageSelector):
     def __init__(
         self, raw_table: TableStorage, materialized_view: TableStorage
     ) -> None:
@@ -170,19 +170,20 @@ class OutcomesDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
-        storage_selector = OutcomesStorageSelector(
-            raw_table=TableStorage(
-                dataset_schemas=DatasetSchemas(
-                    read_schema=raw_schema, write_schema=raw_schema
-                ),
-                table_writer=TableWriter(
-                    write_schema=raw_schema,
-                    stream_loader=KafkaStreamLoader(
-                        processor=OutcomesProcessor(), default_topic="outcomes",
-                    ),
-                ),
-                query_processors=[],
+        writable_storage = TableStorage(
+            dataset_schemas=DatasetSchemas(
+                read_schema=raw_schema, write_schema=raw_schema
             ),
+            table_writer=TableWriter(
+                write_schema=raw_schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=OutcomesProcessor(), default_topic="outcomes",
+                ),
+            ),
+            query_processors=[],
+        )
+        storage_selector = OutcomesQueryStorageSelector(
+            raw_table=write_columns,
             materialized_view=TableStorage(
                 dataset_schemas=DatasetSchemas(
                     read_schema=read_schema, intermediary_schemas=[materialized_view],
@@ -194,6 +195,7 @@ class OutcomesDataset(TimeSeriesDataset):
         super().__init__(
             storage_selector=storage_selector,
             abstract_column_set=read_schema.get_columns(),
+            writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
             time_parse_columns=("timestamp"),
         )
