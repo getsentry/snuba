@@ -37,7 +37,10 @@ def test_no_split(dataset_name: str):
             "limit": 100,
             "offset": 50,
         },
-        events.get_dataset_schemas().get_read_schema().get_data_source(),
+        events.get_all_storages()[0]
+        .get_dataset_schemas()
+        .get_read_schema()
+        .get_data_source(),
     )
 
     @split_query
@@ -111,7 +114,10 @@ def test_col_split(
             "limit": 100,
             "offset": 50,
         },
-        events.get_dataset_schemas().get_read_schema().get_data_source(),
+        events.get_all_storages()[0]
+        .get_dataset_schemas()
+        .get_read_schema()
+        .get_data_source(),
     )
 
     request = Request(

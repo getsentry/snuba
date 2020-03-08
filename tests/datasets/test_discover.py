@@ -34,13 +34,15 @@ class TestDiscover(BaseDatasetTest):
     def test_data_source(
         self, query_body: MutableMapping[str, Any], expected_dataset: str
     ):
-        query = Query(query_body, get_dataset_source("discover"))
-
+        query = Query(query_body, None)
         request_settings = HTTPRequestSettings()
+        dataset = get_dataset_source("discover")
+        storage = dataset.get_query_storage_selector().select_storage(
+            query, request_settings
+        )
+        query.set_source(storage.get_source())
+
         for processor in get_dataset("discover").get_query_processors():
             processor.process_query(query, request_settings)
 
-        assert (
-            query.get_data_source().format_from()
-            == get_dataset_source(expected_dataset).format_from()
-        )
+        assert query.get_data_source().format_from() == expected_dataset

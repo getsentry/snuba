@@ -33,8 +33,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
             raise e
         else:
             logger.exception("Failed to parse query")
-            source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
-            return Query(body, source)
+            return Query(body, None)
 
 
 def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
@@ -94,10 +93,9 @@ def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query
             )
         )
 
-    source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
     return Query(
         body,
-        source,
+        None,
         selected_columns=selected_cols,
         array_join=array_join_expr,
         condition=where_expr,

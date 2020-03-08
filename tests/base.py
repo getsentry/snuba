@@ -56,18 +56,20 @@ class BaseTest(object):
             self.dataset = get_dataset(self.dataset_name)
             self.clickhouse = clickhouse_rw
 
-            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
-                self.clickhouse.execute(statement.statement)
+            for storage in self.dataset.get_all_storages():
+                for statement in storage.get_dataset_schemas().get_drop_statements():
+                    self.clickhouse.execute(statement.statement)
 
-            for statement in self.dataset.get_dataset_schemas().get_create_statements():
-                self.clickhouse.execute(statement.statement)
+                for statement in storage.get_dataset_schemas().get_create_statements():
+                    self.clickhouse.execute(statement.statement)
 
         redis_client.flushdb()
 
     def teardown_method(self, test_method):
         if self.dataset_name:
-            for statement in self.dataset.get_dataset_schemas().get_drop_statements():
-                self.clickhouse.execute(statement.statement)
+            for storage in self.dataset.get_all_storages():
+                for statement in storage.get_dataset_schemas().get_drop_statements():
+                    self.clickhouse.execute(statement.statement)
 
         redis_client.flushdb()
 
