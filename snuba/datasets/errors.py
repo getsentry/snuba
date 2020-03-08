@@ -22,6 +22,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -158,8 +159,6 @@ class ErrorsDataset(TimeSeriesDataset):
             settings={"index_granularity": "8192"},
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         required_columns = [
             "org_id",
             "event_id",
@@ -170,29 +169,38 @@ class ErrorsDataset(TimeSeriesDataset):
             "retention_days",
         ]
 
-        table_writer = TableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(self.__promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="errors-replacements",
-            ),
-            replacer_processor=ErrorsReplacer(
-                write_schema=schema,
-                read_schema=schema,
-                required_columns=required_columns,
-                tag_column_map={"tags": self.__promoted_tag_columns, "contexts": {}},
-                promoted_tags={
-                    "tags": self.__promoted_tag_columns.keys(),
-                    "contexts": {},
-                },
-                state_name=ReplacerState.ERRORS,
-            ),
+        storage_selector = SingleTableStorageSelector(
+            storage=TableStorage(
+                dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+                table_writer=TableWriter(
+                    write_schema=schema,
+                    stream_loader=KafkaStreamLoader(
+                        processor=ErrorsProcessor(self.__promoted_tag_columns),
+                        default_topic="events",
+                        replacement_topic="errors-replacements",
+                    ),
+                    replacer_processor=ErrorsReplacer(
+                        write_schema=schema,
+                        read_schema=schema,
+                        required_columns=required_columns,
+                        tag_column_map={
+                            "tags": self.__promoted_tag_columns,
+                            "contexts": {},
+                        },
+                        promoted_tags={
+                            "tags": self.__promoted_tag_columns.keys(),
+                            "contexts": {},
+                        },
+                        state_name=ReplacerState.ERRORS,
+                    ),
+                ),
+                query_processors=[],
+            )
         )
 
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storage_selector=storage_selector,
+            abstract_column_set=schema.get_columns(),
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )

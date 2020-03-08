@@ -18,6 +18,7 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
+from snuba.datasets.storage import StorageSelector, Storage, TableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -37,7 +38,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-
+from snuba.request.request_settings import RequestSettings
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -89,6 +90,23 @@ class SessionsProcessor(MessageProcessor):
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
 
+class SessionsStorageSelector(StorageSelector):
+    def __init__(
+        self, raw_table: TableStorage, materialized_view: TableStorage
+    ) -> None:
+        self.__raw_table = raw_table
+        self.__materialized_view = materialized_view
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Storage:
+        """
+        This preserves the behavior of the existing dataset. and alwyas queries the mat view
+        """
+        # TODO: expose a raw schema and switch to the raw table when possible
+        return self.__materialized_view
+
+
 class SessionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         all_columns = ColumnSet(
@@ -109,7 +127,7 @@ class SessionsDataset(TimeSeriesDataset):
             ]
         )
 
-        write_schema = MergeTreeSchema(
+        raw_schema = MergeTreeSchema(
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
@@ -183,22 +201,30 @@ class SessionsDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
-        dataset_schemas = DatasetSchemas(
-            read_schema=read_schema,
-            write_schema=write_schema,
-            intermediary_schemas=[materialized_view],
-        )
-
-        table_writer = TableWriter(
-            write_schema=write_schema,
-            stream_loader=KafkaStreamLoader(
-                processor=SessionsProcessor(), default_topic="ingest-sessions",
+        storage_selector = SessionsStorageSelector(
+            raw_table=TableStorage(
+                dataset_schemas=DatasetSchemas(
+                    read_schema=raw_schema, write_schema=raw_schema
+                ),
+                table_writer=TableWriter(
+                    write_schema=raw_schema,
+                    stream_loader=KafkaStreamLoader(
+                        processor=SessionsProcessor(), default_topic="ingest-sessions",
+                    ),
+                ),
+                query_processors=[],
+            ),
+            materialized_view=TableStorage(
+                dataset_schemas=DatasetSchemas(
+                    read_schema=read_schema, intermediary_schemas=[materialized_view],
+                ),
+                query_processors=[],
             ),
         )
 
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storage_selector=storage_selector,
+            abstract_column_set=read_schema.get_columns(),
             time_group_columns={"bucketed_started": "started"},
             time_parse_columns=("started", "received"),
         )

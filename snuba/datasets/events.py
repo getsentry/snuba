@@ -17,6 +17,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
 from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
@@ -271,29 +272,33 @@ class EventsDataset(TimeSeriesDataset):
         self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
-        table_writer = TableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="event-replacements",
-                commit_log_topic="snuba-commit-log",
-            ),
-            replacer_processor=ErrorsReplacer(
+        self.__storage = TableStorage(
+            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
+            table_writer=TableWriter(
                 write_schema=schema,
-                read_schema=schema,
-                required_columns=[col.escaped for col in required_columns],
-                tag_column_map=self.get_tag_column_map(),
-                promoted_tags=self.get_promoted_tags(),
-                state_name=ReplacerState.EVENTS,
+                stream_loader=KafkaStreamLoader(
+                    processor=EventsProcessor(promoted_tag_columns),
+                    default_topic="events",
+                    replacement_topic="event-replacements",
+                    commit_log_topic="snuba-commit-log",
+                ),
+                replacer_processor=ErrorsReplacer(
+                    write_schema=schema,
+                    read_schema=schema,
+                    required_columns=[col.escaped for col in required_columns],
+                    tag_column_map=self.get_tag_column_map(),
+                    promoted_tags=self.get_promoted_tags(),
+                    state_name=ReplacerState.EVENTS,
+                ),
             ),
+            query_processors=[],
         )
 
+        storage_selector = SingleTableStorageSelector(storage=self.__storage)
+
         super(EventsDataset, self).__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storage_selector=storage_selector,
+            abstract_column_set=schema.get_columns(),
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
@@ -303,6 +308,9 @@ class EventsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
+
+    def get_storage(self) -> TableStorage:
+        return self.__storage
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(

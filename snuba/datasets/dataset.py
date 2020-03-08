@@ -1,13 +1,11 @@
-from typing import Any, Optional, Mapping, NamedTuple, Sequence, Tuple, Union
+from typing import Any, Mapping, NamedTuple, Sequence, Tuple, Union
 
-from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.table_storage import TableWriter
+from snuba.datasets.schemas import ColumnSet
+from snuba.datasets.storage import StorageSelector
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.types import Condition
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -40,58 +38,10 @@ class Dataset(object):
     """
 
     def __init__(
-        self,
-        dataset_schemas: DatasetSchemas,
-        *,
-        table_writer: Optional[TableWriter] = None,
+        self, *, storage_selector: StorageSelector, abstract_column_set: ColumnSet
     ) -> None:
-        self.__dataset_schemas = dataset_schemas
-        self.__table_writer = table_writer
-
-    def get_dataset_schemas(self) -> DatasetSchemas:
-        """
-        Returns the collections of schemas for DDL operations and for
-        query.
-        See TableWriter to get a write schema.
-        """
-        return self.__dataset_schemas
-
-    def can_write(self) -> bool:
-        """
-        Returns True if this dataset has write capabilities
-        """
-        return self.__table_writer is not None
-
-    def get_table_writer(self) -> Optional[TableWriter]:
-        """
-        Returns the TableWriter or throws if the dataaset is a readonly one.
-
-        Once we will have a full TableStorage implementation this method will
-        disappear since we will have a table storage factory that will return
-        only writable ones, scripts will depend on table storage instead of
-        going through datasets.
-        """
-        return self.__table_writer
-
-    def default_conditions(self, table_alias: str = "") -> Sequence[Condition]:
-        """
-        Return a list of the default conditions that should be applied to all
-        queries on this dataset.
-        """
-        return []
-
-    def column_expr(
-        self,
-        column_name,
-        query: Query,
-        parsing_context: ParsingContext,
-        table_alias: str = "",
-    ):
-        """
-        Return an expression for the column name. Handle special column aliases
-        that evaluate to something else.
-        """
-        return escape_identifier(qualified_column(column_name, table_alias))
+        self.__storage_selector = storage_selector
+        self.__abstract_column_set = abstract_column_set
 
     def process_condition(self, condition) -> Tuple[str, str, Any]:
         """
@@ -126,27 +76,47 @@ class Dataset(object):
         """
         return []
 
+    def get_storage_selector(self) -> StorageSelector:
+        """
+        Returns the component that provides the storage to run the query onto
+        during the query execution.
+        """
+        return self.__storage_selector
+
+    def get_abstract_columnset(self) -> ColumnSet:
+        """
+        Returns the abstract query schema for this dataset. This is where Entities
+        will come into play since this method will return the structure of the
+        data model.
+        Now the data model is flat so this is just a simple Schema object. With entities
+        this will be a more complex data structure that defines the schema for each entity
+        and
+        """
+        return self.__abstract_column_set
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(
         self,
-        *args,
-        dataset_schemas: DatasetSchemas,
+        storage_selector: StorageSelector,
+        abstract_column_set: ColumnSet,
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
         **kwargs,
     ) -> None:
-        super().__init__(*args, dataset_schemas=dataset_schemas, **kwargs)
+        super().__init__(
+            dataset_schemas=storage_selector,
+            abstract_column_set=abstract_column_set,
+            **kwargs,
+        )
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
         # The bucketed time column names cannot be overlapping with existing
         # schema columns
-        read_schema = dataset_schemas.get_read_schema()
-        if read_schema:
-            for bucketed_column in time_group_columns.keys():
-                assert (
-                    bucketed_column not in read_schema.get_columns()
-                ), f"Bucketed column {bucketed_column} is already defined in the schema"
+        for bucketed_column in time_group_columns.keys():
+            assert (
+                bucketed_column not in abstract_column_set
+            ), f"Bucketed column {bucketed_column} is already defined in the schema"
         self.__time_group_columns = time_group_columns
         self.__time_parse_columns = time_parse_columns
 

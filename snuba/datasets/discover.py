@@ -13,24 +13,16 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.schemas import Schema, RelationalSource
-from snuba.datasets.transactions import BEGINNING_OF_TIME
+from snuba.datasets.storage import StorageSelector, Storage, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.apdex_processor import ApdexProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.readonly_events import ReadOnlyTableSelector
-from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
@@ -38,12 +30,12 @@ EVENTS = "events"
 TRANSACTIONS = "transactions"
 
 
-def detect_dataset(
+def detect_table(
     query: Query, events_columns: ColumnSet, transactions_columns: ColumnSet
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
-    "events" or "transactions" dataset. This is going to be wrong in some cases.
+    "events" or "transactions" table. This is going to be wrong in some cases.
     """
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
@@ -56,14 +48,14 @@ def detect_dataset(
                 elif tuple(condition) == ("type", "=", "transaction"):
                     return TRANSACTIONS
 
-    # Check for any conditions that reference a dataset specific field
+    # Check for any conditions that reference a table specific field
     condition_columns = query.get_columns_referenced_in_conditions()
     if any(events_columns.get(col) for col in condition_columns):
         return EVENTS
     if any(transactions_columns.get(col) for col in condition_columns):
         return TRANSACTIONS
 
-    # Check for any other references to a dataset specific field
+    # Check for any other references to a table specific field
     all_referenced_columns = query.get_all_referenced_columns()
     if any(events_columns.get(col) for col in all_referenced_columns):
         return EVENTS
@@ -74,92 +66,24 @@ def detect_dataset(
     return EVENTS
 
 
-class DiscoverSource(RelationalSource):
-    # TODO: Make this generic. It does not need to be discover specific.
-    # A mutable RelationalSource that switches between multiple datasets
-    # can be used in other scenarios.
+class DiscoverStorageSelector(StorageSelector):
+    def __init__(
+        self, events_table: TableStorage, transactions_table: TableStorage
+    ) -> None:
+        self.__events_table = events_table
+        self.__transactions_table = transactions_table
 
-    def __init__(self, columns: ColumnSet, table_source: RelationalSource) -> None:
-        self.__columns = columns
-        self.__table_source = table_source
-
-    def format_from(self) -> str:
-        if self.__table_source:
-            return self.__table_source.format_from()
-        raise InvalidDataset
-
-    def get_columns(self) -> ColumnSet:
-        return self.__columns
-
-    def get_mandatory_conditions(self) -> Sequence[Condition]:
-        if self.__table_source:
-            return self.__table_source.get_mandatory_conditions()
-        return []
-
-    def set_table_source(self, dataset_name: str) -> None:
-        self.__table_source = (
-            get_dataset(dataset_name)
-            .get_dataset_schemas()
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Storage:
+        table = detect_table(
+            query,
+            self.__events_table.get_dataset_schemas().get_read_schema().get_columns,
+            self.__transactions_table.get_dataset_schemas()
             .get_read_schema()
-            .get_data_source()
+            .get_columns,
         )
-
-    def get_prewhere_candidates(self) -> Sequence[str]:
-        if self.__table_source:
-            return self.__table_source.get_prewhere_candidates()
-        return []
-
-
-class DatasetSelector(QueryProcessor):
-    """
-    Switches the table source to either Events or Transactions, depending on
-    the detected dataset.
-    """
-
-    # TODO: Make this generic. It does not need to be discover specific.
-
-    def __init__(
-        self,
-        discover_source: RelationalSource,
-        events_columns: ColumnSet,
-        transactions_columns: ColumnSet,
-        post_processors: Mapping[str, Sequence[QueryProcessor]],
-    ) -> None:
-        self.__discover_source = discover_source
-        self.__events_columns = events_columns
-        self.__transactions_columns = transactions_columns
-        # These are the processors that need to run depending on the selected dataset.
-        # Adding them here instead of as top level processors running their own conditions
-        # to make the coupling explicit.
-        self._post_processors = post_processors
-
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        detected_dataset = detect_dataset(
-            query, self.__events_columns, self.__transactions_columns
-        )
-        source = query.get_data_source()
-        assert isinstance(source, DiscoverSource)
-        source.set_table_source(detected_dataset)
-        for processor in self._post_processors.get(detected_dataset, []):
-            processor.process_query(query, request_settings)
-
-
-class DiscoverSchema(Schema):
-    def __init__(
-        self, table_source, common_columns, events_columns, transactions_columns
-    ) -> None:
-        self.__common_columns = common_columns
-        self.__events_columns = events_columns
-        self.__transactions_columns = transactions_columns
-        self.__data_source = DiscoverSource(self.get_columns(), table_source)
-
-    def get_data_source(self) -> DiscoverSource:
-        return self.__data_source
-
-    def get_columns(self) -> ColumnSet:
-        return (
-            self.__common_columns + self.__events_columns + self.__transactions_columns
-        )
+        return self.__events_table if table == EVENTS else self.__transactions_table
 
 
 class DiscoverDataset(TimeSeriesDataset):
@@ -263,46 +187,25 @@ class DiscoverDataset(TimeSeriesDataset):
             ]
         )
 
+        # TODO: Move the storage definition out of events and transactions dataset so
+        # we can reuse the class itself.
+        storage_selector = DiscoverStorageSelector(
+            events_table=get_dataset(EVENTS).get_storage(),
+            transactions_table=get_dataset(TRANSACTIONS).get_storage(),
+        )
+
         super().__init__(
-            dataset_schemas=DatasetSchemas(
-                read_schema=DiscoverSchema(
-                    table_source=None,
-                    common_columns=self.__common_columns,
-                    events_columns=self.__events_columns,
-                    transactions_columns=self.__transactions_columns,
-                ),
-                write_schema=None,
-            ),
+            storage_selector=storage_selector,
+            abstract_column_set=self.__common_columns
+            + self.__events_columns
+            + self.__transactions_columns,
             time_group_columns={},
             time_parse_columns=["timestamp"],
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        discover_source = self.get_dataset_schemas().get_read_schema().get_data_source()
-
         return [
             BasicFunctionsProcessor(),
-            DatasetSelector(
-                discover_source=discover_source,
-                events_columns=self.__events_columns,
-                transactions_columns=self.__transactions_columns,
-                post_processors={
-                    TRANSACTIONS: [
-                        ApdexProcessor(),
-                        ImpactProcessor(),
-                        NestedFieldConditionOptimizer(
-                            "tags", "_tags_flattened", {"timestamp"}, BEGINNING_OF_TIME,
-                        ),
-                        NestedFieldConditionOptimizer(
-                            "contexts",
-                            "_contexts_flattened",
-                            {"timestamp"},
-                            BEGINNING_OF_TIME,
-                        ),
-                    ],
-                    EVENTS: [ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro")],
-                },
-            ),
             PrewhereProcessor(),
         ]
 
@@ -327,7 +230,7 @@ class DiscoverDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
-        detected_dataset = detect_dataset(
+        detected_dataset = detect_table(
             query, self.__events_columns, self.__transactions_columns
         )
 

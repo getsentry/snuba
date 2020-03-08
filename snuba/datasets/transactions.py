@@ -24,6 +24,7 @@ from snuba.datasets.schemas.tables import (
     MigrationSchemaColumn,
     ReplacingMergeTreeSchema,
 )
+from snuba.datasets.storage import SingleTableStorageSelector, TableStorage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -205,28 +206,37 @@ class TransactionsDataset(TimeSeriesDataset):
             migration_function=transactions_migrations,
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         self.__tags_processor = TagColumnProcessor(
             columns=columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
 
-        super().__init__(
-            dataset_schemas=dataset_schemas,
+        self.__storage = TableStorage(
+            dataset_schemas=DatasetSchemas(read_schema=schema, write_schema=schema),
             table_writer=TransactionsTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
                     processor=TransactionsMessageProcessor(), default_topic="events",
                 ),
             ),
+            query_processors=[],
+        )
+
+        storage_selector = SingleTableStorageSelector(storage=self.__storage)
+
+        super().__init__(
+            storage_selector=storage_selector,
+            abstract_column_set=schema.get_columns(),
             time_group_columns={
                 "bucketed_start": "start_ts",
                 "bucketed_end": "finish_ts",
             },
             time_parse_columns=("start_ts", "finish_ts"),
         )
+
+    def get_storage(self) -> TableStorage:
+        return self.__storage
 
     def _get_promoted_columns(self):
         # TODO: Support promoted tags

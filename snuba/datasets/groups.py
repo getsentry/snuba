@@ -1,9 +1,8 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Optional, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -13,6 +12,8 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
+from snuba.datasets.storage import StorageSelector, Storage
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
@@ -22,7 +23,35 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
+
+
+class JoinedStorage(Storage):
+    def __init__(self, join_structure: JoinClause) -> None:
+        self.__structure = join_structure
+
+    def get_dataset_schemas(self) -> DatasetSchemas:
+        return DatasetSchemas(read_schema=JoinedSchema(self.__structure))
+
+    def can_write(self) -> bool:
+        return False
+
+    def get_table_writer(self) -> Optional[TableWriter]:
+        return None
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return []
+
+
+class GroupsStorageSelector(StorageSelector):
+    def __init__(self, joined_storage: JoinedStorage) -> None:
+        self.__storage = joined_storage
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Storage:
+        return self.__storage
 
 
 class Groups(TimeSeriesDataset):
@@ -97,9 +126,9 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=None,)
         super().__init__(
-            dataset_schemas=dataset_schemas,
+            storage_selector=GroupsStorageSelector(JoinedStorage(join_structure)),
+            abstract_column_set=schema.get_columns(),
             time_group_columns={"events.time": "events.timestamp"},
             time_parse_columns=[
                 "events.timestamp",
