@@ -202,7 +202,7 @@ class SessionsDataset(TimeSeriesDataset):
         )
 
         writable_storage = TableStorage(
-            storage_schemas=StorageSchemas(
+            schemas=StorageSchemas(
                 read_schema=raw_schema, write_schema=raw_schema
             ),
             table_writer=TableWriter(
@@ -214,7 +214,7 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
         materialized_storage = TableStorage(
-            storage_schemas=StorageSchemas(
+            schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,
                 intermediary_schemas=[materialized_view],

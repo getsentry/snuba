@@ -46,7 +46,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
         )
 
         storage = TableStorage(
-            storage_schemas=StorageSchemas(
+            schemas=StorageSchemas(
                 read_schema=read_schema, write_schema=None, intermediary_schemas=[]
             ),
             table_writer=None,

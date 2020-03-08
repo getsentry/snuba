@@ -273,7 +273,7 @@ class EventsDataset(TimeSeriesDataset):
         self.__required_columns = required_columns
 
         self.__storage = TableStorage(
-            storage_schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(

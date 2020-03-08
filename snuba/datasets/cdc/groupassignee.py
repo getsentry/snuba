@@ -70,7 +70,7 @@ class GroupAssigneeDataset(CdcDataset):
         )
 
         storage = TableStorage(
-            storage_schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=GroupAssigneeTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(

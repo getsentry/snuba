@@ -48,16 +48,16 @@ class Storage(ABC):
 class TableStorage(Storage):
     def __init__(
         self,
-        storage_schemas: StorageSchemas,
+        schemas: StorageSchemas,
         table_writer: Optional[TableWriter] = None,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
-        self.__storage_schemas = storage_schemas
+        self.__schemas = schemas
         self.__table_writer = table_writer
         self.__query_processors = query_processors or []
 
     def get_schemas(self) -> StorageSchemas:
-        return self.__storage_schemas
+        return self.__schemas
 
     def get_table_writer(self) -> Optional[TableWriter]:
         return self.__table_writer
