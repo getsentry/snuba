@@ -1,6 +1,7 @@
 import copy
 import logging
 
+from datetime import datetime
 from hashlib import md5
 from typing import (
     Any,
@@ -20,11 +21,12 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.datasets.plans.query_plan import RawQueryResult
 from snuba.environment import reader
+from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Result
 from snuba.redis import redis_client
-from snuba.request import Request
+from snuba.request import Request, RequestSettings
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
@@ -41,11 +43,6 @@ from snuba.web.split import split_query
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
-
-
-class RawQueryResult(NamedTuple):
-    result: Result
-    extra: Any
 
 
 class RawQueryException(Exception):
@@ -286,6 +283,66 @@ def parse_and_run_query(
     return result
 
 
+def _run_clickhouse_query(
+    dataset: Dataset,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    request: Request,
+    query: Query,
+    settings: RequestSettings,
+) -> RawQueryResult:
+    # TODO: This below should be a query processor.
+    relational_source = query.get_data_source()
+    query.add_conditions(relational_source.get_mandatory_conditions())
+
+    source = relational_source.format_from()
+    with sentry_sdk.start_span(description="create_query", op="db"):
+        # TODO: consider moving the performance logic and the pre_where generation into
+        # ClickhouseQuery since they are Clickhouse specific
+        clickhouse_query = DictClickhouseQuery(dataset, query, settings)
+    timer.mark("prepare_query")
+
+    num_days = (to_date - from_date).days
+    stats = {
+        "clickhouse_table": source,
+        "final": query.get_final(),
+        "referrer": request.referrer,
+        "num_days": num_days,
+        "sample": query.get_sample(),
+    }
+
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            scope.span.set_tag("dataset", type(dataset).__name__)
+            scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("timeframe_days", num_days)
+
+    with sentry_sdk.start_span(
+        description=clickhouse_query.format_sql(), op="db"
+    ) as span:
+        span.set_tag("dataset", type(dataset).__name__)
+        span.set_tag("table", source)
+        try:
+            span.set_tag(
+                "ast_query", AstClickhouseQuery(query, settings).format_sql(),
+            )
+        except Exception:
+            logger.exception("Failed to format ast query")
+
+        result = raw_query(
+            request, clickhouse_query, timer, query_metadata, stats, span.trace_id
+        )
+
+    with sentry_sdk.configure_scope() as scope:
+        if scope.span:
+            if "max_threads" in stats:
+                scope.span.set_tag("max_threads", stats["max_threads"])
+
+    return result
+
+
 @split_query
 def _run_query(
     dataset: Dataset,
@@ -314,58 +371,23 @@ def _run_query(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage = dataset.get_query_storage_selector().select_storage(
-        request.query, request.settings
-    )
-    request.query.set_data_source(
-        storage.get_schemas().get_read_schema().get_data_source()
+    storage_query_plan = dataset.get_query_plan_builder().build_plan(
+        request.query, request.settings,
     )
 
-    for processor in storage.get_query_processors():
-        processor.process_query(request.query, request.settings)
+    for processor in storage_query_plan.query_processors:
+        processor.process_query(storage_query_plan.storage_query, request.settings)
 
-    # TODO: This below should be a query processor.
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
+    query_runner = partial(
+        _run_clickhouse_query,
+        dataset,
+        timer,
+        query_metadata,
+        from_date,
+        to_date,
+        request,
+    )
 
-    source = relational_source.format_from()
-    with sentry_sdk.start_span(description="create_query", op="db"):
-        # TODO: consider moving the performance logic and the pre_where generation into
-        # ClickhouseQuery since they are Clickhouse specific
-        query = DictClickhouseQuery(dataset, request.query, request.settings)
-    timer.mark("prepare_query")
-
-    num_days = (to_date - from_date).days
-    stats = {
-        "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": request.referrer,
-        "num_days": num_days,
-        "sample": request.query.get_sample(),
-    }
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            scope.span.set_tag("dataset", type(dataset).__name__)
-            scope.span.set_tag("referrer", http_request.referrer)
-            scope.span.set_tag("timeframe_days", num_days)
-
-    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
-        span.set_tag("dataset", type(dataset).__name__)
-        span.set_tag("table", source)
-        try:
-            span.set_tag(
-                "ast_query",
-                AstClickhouseQuery(request.query, request.settings).format_sql(),
-            )
-        except Exception:
-            logger.exception("Failed to format ast query")
-
-        result = raw_query(request, query, timer, query_metadata, stats, span.trace_id)
-
-    with sentry_sdk.configure_scope() as scope:
-        if scope.span:
-            if "max_threads" in stats:
-                scope.span.set_tag("max_threads", stats["max_threads"])
-
-    return result
+    return storage_query_plan.plan_executor.execute(
+        storage_query_plan.storage_query, request.settings, query_runner,
+    )

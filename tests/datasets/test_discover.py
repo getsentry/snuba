@@ -41,14 +41,12 @@ class TestDiscover(BaseDatasetTest):
         query = Query(query_body, None)
         request_settings = HTTPRequestSettings()
         dataset = get_dataset("discover")
-        storage = dataset.get_query_storage_selector().select_storage(
-            query, request_settings
-        )
-        query.set_data_source(
-            storage.get_schemas().get_read_schema().get_data_source()
-        )
-
         for processor in get_dataset("discover").get_query_processors():
             processor.process_query(query, request_settings)
 
-        assert query.get_data_source().format_from() == expected_table
+        plan = dataset.get_query_plan_builder().build_plan(query, request_settings)
+
+        for processor in plan.query_processors:
+            processor.process_query(plan.storage_query, request_settings)
+
+        assert plan.storage_query.get_data_source().format_from() == expected_table

@@ -89,13 +89,3 @@ class QueryStorageSelector(ABC):
         self, query: Query, request_settings: RequestSettings
     ) -> Storage:
         raise NotImplementedError
-
-
-class SingleTableQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, storage: TableStorage) -> None:
-        self.__storage = storage
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
-        return self.__storage

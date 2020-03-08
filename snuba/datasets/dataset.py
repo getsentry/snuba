@@ -2,7 +2,8 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
+from snuba.datasets.storage import Storage, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -38,9 +39,10 @@ class Dataset(object):
     - dataset query processing. A series of QueryProcessors are applied to the
       query before deciding which Storage to use. These processors are defined
       by the dataset
-    - the Storage to run the query onto is selected. This is done by a
-      QueryStorageSelector which is provided by the dataset. From this point
-      the query processing is storage specific.
+    - the Storage to run the query onto is selected and the query is transformed
+      into a Storage Query. This is done by a StorageQueryPlanBuilder. This object
+      produces a plan that includes the Query contextualized on the storage/s the
+      list of processors to apply and the strategy to run the query (in case of split).
     - storage query processing. A second series of QueryProcessors are applied
       to the query. These are defined by the storage.
     """
@@ -49,12 +51,12 @@ class Dataset(object):
         self,
         *,
         storages: Sequence[Storage],
-        storage_selector: QueryStorageSelector,
+        query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[TableStorage],
     ) -> None:
         self.__storages = storages
-        self.__storage_selector = storage_selector
+        self.__query_plan_builder = query_plan_builder
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
 
@@ -88,12 +90,12 @@ class Dataset(object):
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
 
-    def get_query_storage_selector(self) -> QueryStorageSelector:
+    def get_query_plan_builder(self) -> StorageQueryPlanBuilder:
         """
-        Returns the component that provides the storage to run the query onto
-        during the query execution.
+        Returns the component that transforms a Snuba query in a Storage query by selecting
+        the storage and provides the direcitons on how to run the query.
         """
-        return self.__storage_selector
+        return self.__query_plan_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """
@@ -145,7 +147,7 @@ class TimeSeriesDataset(Dataset):
     def __init__(
         self,
         storages: Sequence[Storage],
-        storage_selector: QueryStorageSelector,
+        query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[TableStorage],
         time_group_columns: Mapping[str, str],
@@ -153,7 +155,7 @@ class TimeSeriesDataset(Dataset):
     ) -> None:
         super().__init__(
             storages=storages,
-            storage_selector=storage_selector,
+            query_plan_builder=query_plan_builder,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,
         )
