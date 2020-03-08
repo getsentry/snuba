@@ -30,12 +30,19 @@ class Dataset(object):
     A dataset represent one or multiple entities in the Snuba data model.
     The class is a facade to access the components used to write on the
     data model and to query the entities.
-    To query the data model, it provides a schema (for one table or for
-    multiple joined tables), query processing features and query exension
-    parsing features.
-    To write it CAN provide a TableWriter, which has a schema as well and
-    provides a way to stream input from different sources and write them to
-    Clickhouse.
+
+    The dataset is made of several Storage objects (later we will introduce
+    entities between Dataset and Storage). Each storage represent a table/view
+    we can query.
+    When processing a query, there are three main steps:
+    - dataset query processing. A series of QueryProcessors are applied to the
+      query before deciding which Storage to use. These processors are defined
+      by the dataset
+    - the Storage to run the query onto is selected. This is done by a
+      QueryStorageSelector which is provided by the dataset. From this point
+      the query processing is storage specific.
+    - storage query processing. A second series of QueryProcessors are applied
+      to the query. These are defined by the storage.
     """
 
     def __init__(
@@ -51,6 +58,61 @@ class Dataset(object):
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
 
+    def get_extensions(self) -> Mapping[str, QueryExtension]:
+        """
+        Returns the extensions for this dataset.
+        Every extension comes as an instance of QueryExtension.
+        The schema tells Snuba how to parse the query.
+        The processor actually does query processing for this extension.
+        """
+        raise NotImplementedError("dataset does not support queries")
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        """
+        Returns a series of transformation functions (in the form of QueryProcessor objects)
+        that are applied to queries after parsing and before running them on Clickhouse.
+        These are applied in sequence in the same order as they are defined and are supposed
+        to be stateless.
+        """
+        return []
+
+    def get_abstract_columnset(self) -> ColumnSet:
+        """
+        Returns the abstract query schema for this dataset. This is where Entities
+        will come into play since this method will return the structure of the
+        data model.
+        Now the data model is flat so this is just a simple ColumnSet object. With entities
+        this will be a more complex data structure that defines the schema for each entity
+        and
+        """
+        # TODO: Make this available to the dataset query processors.
+        return self.__abstract_column_set
+
+    def get_query_storage_selector(self) -> QueryStorageSelector:
+        """
+        Returns the component that provides the storage to run the query onto
+        during the query execution.
+        """
+        return self.__storage_selector
+
+    def get_all_storages(self) -> Sequence[Storage]:
+        """
+        Returns all storages for this dataset.
+        This method should be used for schema bootstrap and migrations.
+        It is not supposed to be used during query processing.
+        """
+        return self.__storages
+
+    def get_writable_storage(self) -> Optional[TableStorage]:
+        """
+        We allow only one table storage we can write onto per dataset as of now.
+        This will move to the entity as soon as we have entities, and
+        the constraint of one writable storage will drop as soon as the consumers
+        start referencing entities and storages instead of datasets.
+        """
+        return self.__writable_storage
+
+    # Old methods that we are migrating away from
     def column_expr(
         self,
         column_name,
@@ -72,63 +134,11 @@ class Dataset(object):
         """
         return condition
 
-    def get_extensions(self) -> Mapping[str, QueryExtension]:
-        """
-        Returns the extensions for this dataset.
-        Every extension comes as an instance of QueryExtension.
-        The schema tells Snuba how to parse the query.
-        The processor actually does query processing for this
-        extension.
-        """
-        raise NotImplementedError("dataset does not support queries")
-
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         """
         Return the parameters to perform the column split of the query.
         """
         return None
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        """
-        Returns a series of transformation functions (in the form of QueryProcessor objects)
-        that are applied to queries after parsing and before running them on Clickhouse.
-        These are applied in sequence in the same order as they are defined and are supposed
-        to be stateless.
-        """
-        return []
-
-    def get_abstract_columnset(self) -> ColumnSet:
-        """
-        Returns the abstract query schema for this dataset. This is where Entities
-        will come into play since this method will return the structure of the
-        data model.
-        Now the data model is flat so this is just a simple Schema object. With entities
-        this will be a more complex data structure that defines the schema for each entity
-        and
-        """
-        return self.__abstract_column_set
-
-    def get_query_storage_selector(self) -> QueryStorageSelector:
-        """
-        Returns the component that provides the storage to run the query onto
-        during the query execution.
-        """
-        return self.__storage_selector
-
-    def get_all_storages(self) -> Sequence[Storage]:
-        """
-        Returns all storages for this dataset.
-        """
-        return self.__storages
-
-    def get_writable_storage(self) -> Optional[TableStorage]:
-        """
-        We allow only one table storage we can write onto per dataset as of now.
-        This will become one per entity as soon as we have entities, and
-        the constraint of one writable storage will drop as soon as the consumers
-        start referencing entities and storages instead of datasets.
-        """
-        return self.__writable_storage
 
 
 class TimeSeriesDataset(Dataset):

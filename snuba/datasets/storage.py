@@ -10,10 +10,24 @@ from snuba.request.request_settings import RequestSettings
 
 
 class Storage(ABC):
+    """
+    Storage is an abstraction on anything we can run a query onto in our
+    database. This means that it generally represents a Clickhouse table
+    or a view.
+    It provides:
+    - what we need to build the query (the schemas)
+    - it can provide a table writer if we can write on this storage
+    - a sequence of query processors that are applied to the query after
+      the storage is selected.
+
+    There are one or multiple storages per dataset (in the future, there
+    will be multiple per entity). During the query processing a storage
+    is selected and the query focuses on that storage from that point.
+    """
+
     def get_schemas(self) -> StorageSchemas:
         """
-        Returns the collections of schemas for DDL operations and for
-        query.
+        Returns the collections of schemas for DDL operations and for query.
         See TableWriter to get a write schema.
         """
         raise NotImplementedError
@@ -26,12 +40,7 @@ class Storage(ABC):
 
     def get_table_writer(self) -> Optional[TableWriter]:
         """
-        Returns the TableWriter or throws if the dataaset is a readonly one.
-
-        Once we will have a full TableStorage implementation this method will
-        disappear since we will have a table storage factory that will return
-        only writable ones, scripts will depend on table storage instead of
-        going through datasets.
+        Returns the TableWriter if the Storage has one.
         """
         raise NotImplementedError
 
@@ -46,6 +55,10 @@ class Storage(ABC):
 
 
 class TableStorage(Storage):
+    """
+    A table storage that represents either a table or a view.
+    """
+
     def __init__(
         self,
         schemas: StorageSchemas,
