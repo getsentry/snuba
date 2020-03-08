@@ -215,7 +215,9 @@ class SessionsDataset(TimeSeriesDataset):
         )
         materialized_storage = TableStorage(
             dataset_schemas=DatasetSchemas(
-                read_schema=read_schema, intermediary_schemas=[materialized_view],
+                read_schema=read_schema,
+                write_schema=None,
+                intermediary_schemas=[materialized_view],
             ),
             query_processors=[PrewhereProcessor()],
         )

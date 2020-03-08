@@ -13,15 +13,16 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -189,15 +190,19 @@ class DiscoverDataset(TimeSeriesDataset):
 
         # TODO: Move the storage definition out of events and transactions dataset so
         # we can reuse the class itself.
+        events_dataset = get_dataset(EVENTS)
+        assert isinstance(events_dataset, EventsDataset)
+        transactions_dataset = get_dataset(TRANSACTIONS)
+        assert isinstance(transactions_dataset, TransactionsDataset)
         storage_selector = DiscoverQueryStorageSelector(
-            events_table=get_dataset(EVENTS).get_storage(),
-            transactions_table=get_dataset(TRANSACTIONS).get_storage(),
+            events_table=events_dataset.get_storage(),
+            transactions_table=transactions_dataset.get_storage(),
         )
 
         super().__init__(
             storages=[
-                get_dataset(EVENTS).get_storage(),
-                get_dataset(TRANSACTIONS).get_storage(),
+                events_dataset.get_storage(),
+                transactions_dataset.get_storage(),
             ],
             storage_selector=storage_selector,
             abstract_column_set=self.__common_columns

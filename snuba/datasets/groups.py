@@ -76,7 +76,7 @@ class Groups(TimeSeriesDataset):
 
         self.__events = get_dataset("events")
         events_source = (
-            self.__events.get_storage()
+            self.__events.get_all_storages()[0]
             .get_dataset_schemas()
             .get_read_schema()
             .get_data_source()

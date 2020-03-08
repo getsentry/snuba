@@ -1,5 +1,5 @@
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.schemas import ColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.storage import QueryStorageSelector
 
 
@@ -13,11 +13,7 @@ class CdcDataset(Dataset):
         postgres_table: str,
         **kwargs
     ):
-        super().__init__(
-            storage_selector=storage_selector,
-            abstract_column_set=abstract_column_set,
-            **kwargs,
-        )
+        super().__init__(**kwargs)
         self.__default_control_topic = default_control_topic
         self.__postgres_table = postgres_table
 

@@ -1,7 +1,7 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.schemas import ColumnSet
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -140,14 +140,12 @@ class TimeSeriesDataset(Dataset):
         writable_storage: Optional[TableStorage],
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
-        **kwargs,
     ) -> None:
         super().__init__(
             storages=storages,
             storage_selector=storage_selector,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,
-            **kwargs,
         )
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
