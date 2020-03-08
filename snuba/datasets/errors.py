@@ -199,6 +199,7 @@ class ErrorsDataset(TimeSeriesDataset):
         storage_selector = SingleTableQueryStorageSelector(storage=storage)
 
         super().__init__(
+            storages=[storage],
             storage_selector=storage_selector,
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,

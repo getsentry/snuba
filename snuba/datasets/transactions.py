@@ -226,6 +226,7 @@ class TransactionsDataset(TimeSeriesDataset):
         storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
 
         super().__init__(
+            storages=[self.__storage],
             storage_selector=storage_selector,
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,

@@ -1,7 +1,7 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.datasets.schemas import ColumnSet
-from snuba.datasets.storage import QueryStorageSelector, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -40,10 +40,12 @@ class Dataset(object):
     def __init__(
         self,
         *,
+        storages: Sequence[Storage],
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[TableStorage],
     ) -> None:
+        self.__storages = storages
         self.__storage_selector = storage_selector
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
@@ -81,22 +83,6 @@ class Dataset(object):
         """
         return []
 
-    def get_query_storage_selector(self) -> QueryStorageSelector:
-        """
-        Returns the component that provides the storage to run the query onto
-        during the query execution.
-        """
-        return self.__storage_selector
-
-    def get_writable_storage(self) -> Optional[TableStorage]:
-        """
-        We allow only one table storage we can write onto per dataset as of now.
-        This will become one per entity as soon as we have entities, and
-        the constraint of one writable storage will drop as soon as the consumers
-        start referencing entities and storages instead of datasets.
-        """
-        return self.__writable_storage
-
     def get_abstract_columnset(self) -> ColumnSet:
         """
         Returns the abstract query schema for this dataset. This is where Entities
@@ -108,10 +94,33 @@ class Dataset(object):
         """
         return self.__abstract_column_set
 
+    def get_query_storage_selector(self) -> QueryStorageSelector:
+        """
+        Returns the component that provides the storage to run the query onto
+        during the query execution.
+        """
+        return self.__storage_selector
+
+    def get_all_storages(self) -> Sequence[Storage]:
+        """
+        Returns all storages for this dataset.
+        """
+        return self.__storages
+
+    def get_writable_storage(self) -> Optional[TableStorage]:
+        """
+        We allow only one table storage we can write onto per dataset as of now.
+        This will become one per entity as soon as we have entities, and
+        the constraint of one writable storage will drop as soon as the consumers
+        start referencing entities and storages instead of datasets.
+        """
+        return self.__writable_storage
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(
         self,
+        storages: Sequence[Storage],
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[TableStorage],
@@ -120,6 +129,7 @@ class TimeSeriesDataset(Dataset):
         **kwargs,
     ) -> None:
         super().__init__(
+            storages=storages,
             storage_selector=storage_selector,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,

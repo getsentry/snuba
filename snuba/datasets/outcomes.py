@@ -182,17 +182,18 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             query_processors=[],
         )
-        storage_selector = OutcomesQueryStorageSelector(
-            raw_table=write_columns,
-            materialized_view=TableStorage(
-                dataset_schemas=DatasetSchemas(
-                    read_schema=read_schema, intermediary_schemas=[materialized_view],
-                ),
-                query_processors=[],
+        materialized_storage = TableStorage(
+            dataset_schemas=DatasetSchemas(
+                read_schema=read_schema, intermediary_schemas=[materialized_view],
             ),
+            query_processors=[],
+        )
+        storage_selector = OutcomesQueryStorageSelector(
+            raw_table=writable_storage, materialized_view=materialized_storage
         )
 
         super().__init__(
+            storages=[writable_storage, materialized_storage],
             storage_selector=storage_selector,
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,

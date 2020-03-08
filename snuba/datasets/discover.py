@@ -195,6 +195,10 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
         super().__init__(
+            storages=[
+                get_dataset(EVENTS).get_storage(),
+                get_dataset(TRANSACTIONS).get_storage(),
+            ],
             storage_selector=storage_selector,
             abstract_column_set=self.__common_columns
             + self.__events_columns

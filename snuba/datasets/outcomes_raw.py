@@ -45,17 +45,17 @@ class OutcomesRawDataset(TimeSeriesDataset):
             settings={"index_granularity": 16384},
         )
 
-        storage_selector = SingleTableQueryStorageSelector(
-            storage=TableStorage(
-                dataset_schemas=DatasetSchemas(
-                    read_schema=read_schema, write_schema=None, intermediary_schemas=[]
-                ),
-                table_writer=None,
-                query_processors=[],
-            )
+        storage = TableStorage(
+            dataset_schemas=DatasetSchemas(
+                read_schema=read_schema, write_schema=None, intermediary_schemas=[]
+            ),
+            table_writer=None,
+            query_processors=[],
         )
+        storage_selector = SingleTableQueryStorageSelector(storage=storage)
 
         super().__init__(
+            storages=[storage],
             storage_selector=storage_selector,
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
