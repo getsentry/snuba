@@ -188,7 +188,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 write_schema=None,
                 intermediary_schemas=[materialized_view],
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
         storage_selector = OutcomesQueryStorageSelector(
             raw_table=writable_storage, materialized_view=materialized_storage
@@ -216,5 +216,4 @@ class OutcomesDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

@@ -291,7 +291,12 @@ class EventsDataset(TimeSeriesDataset):
                     state_name=ReplacerState.EVENTS,
                 ),
             ),
-            query_processors=[],
+            query_processors=[
+                # TODO: This one should become an entirely separate storage and picked
+                # in the storage selector.
+                ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+                PrewhereProcessor(),
+            ],
         )
 
         storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
@@ -424,7 +429,5 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

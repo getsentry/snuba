@@ -211,7 +211,6 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

@@ -220,7 +220,21 @@ class TransactionsDataset(TimeSeriesDataset):
                     processor=TransactionsMessageProcessor(), default_topic="events",
                 ),
             ),
-            query_processors=[],
+            query_processors=[
+                PrewhereProcessor(),
+                NestedFieldConditionOptimizer(
+                    "tags",
+                    "_tags_flattened",
+                    {"start_ts", "finish_ts"},
+                    BEGINNING_OF_TIME,
+                ),
+                NestedFieldConditionOptimizer(
+                    "contexts",
+                    "_contexts_flattened",
+                    {"start_ts", "finish_ts"},
+                    BEGINNING_OF_TIME,
+                ),
+            ],
         )
 
         storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
@@ -302,14 +316,4 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            PrewhereProcessor(),
-            NestedFieldConditionOptimizer(
-                "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME
-            ),
-            NestedFieldConditionOptimizer(
-                "contexts",
-                "_contexts_flattened",
-                {"start_ts", "finish_ts"},
-                BEGINNING_OF_TIME,
-            ),
         ]

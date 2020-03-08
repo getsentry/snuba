@@ -217,7 +217,7 @@ class SessionsDataset(TimeSeriesDataset):
             dataset_schemas=DatasetSchemas(
                 read_schema=read_schema, intermediary_schemas=[materialized_view],
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         storage_selector = SessionsQueryStorageSelector(
@@ -249,7 +249,6 @@ class SessionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]
 
     def column_expr(

@@ -193,7 +193,7 @@ class ErrorsDataset(TimeSeriesDataset):
                     state_name=ReplacerState.ERRORS,
                 ),
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         storage_selector = SingleTableQueryStorageSelector(storage=storage)
@@ -262,4 +262,4 @@ class ErrorsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), PrewhereProcessor()]
+        return [BasicFunctionsProcessor()]

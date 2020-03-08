@@ -311,6 +311,9 @@ def _run_query(
     if request.settings.get_turbo():
         request.query.set_final(False)
 
+    for processor in dataset.get_query_processors():
+        processor.process_query(request.query, request.settings)
+
     storage = dataset.get_query_storage_selector().select_storage(
         request.query, request.settings
     )
@@ -318,9 +321,10 @@ def _run_query(
         storage.get_dataset_schemas().get_read_schema().get_data_source()
     )
 
-    for processor in dataset.get_query_processors():
+    for processor in storage.get_query_processors():
         processor.process_query(request.query, request.settings)
 
+    # TODO: This below should be a query processor.
     relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 

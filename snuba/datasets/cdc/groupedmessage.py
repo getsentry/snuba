@@ -85,7 +85,7 @@ class GroupedMessageDataset(CdcDataset):
                 ),
                 postgres_table=self.POSTGRES_TABLE,
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         storage_selector = SingleTableQueryStorageSelector(storage=storage)
@@ -105,5 +105,4 @@ class GroupedMessageDataset(CdcDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

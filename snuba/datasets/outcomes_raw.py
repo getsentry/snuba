@@ -50,7 +50,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 read_schema=read_schema, write_schema=None, intermediary_schemas=[]
             ),
             table_writer=None,
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
         storage_selector = SingleTableQueryStorageSelector(storage=storage)
 
@@ -79,5 +79,4 @@ class OutcomesRawDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]
