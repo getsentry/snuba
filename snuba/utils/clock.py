@@ -34,8 +34,8 @@ class TestingClock(Clock):
     the time, use the ``sleep`` method.
     """
 
-    def __init__(self) -> None:
-        self.__time = 0.0
+    def __init__(self, epoch: float = 0.0) -> None:
+        self.__time = epoch
 
     def time(self) -> float:
         return self.__time

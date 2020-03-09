@@ -19,6 +19,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
     InvalidDatasetError,
     enforce_table_writer,
+    ensure_not_internal,
     get_dataset,
     get_enabled_dataset_names,
 )
@@ -266,6 +267,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
+    ensure_not_internal(dataset)
     ensure_table_exists(dataset)
     return format_result(
         run_query(
@@ -322,6 +324,7 @@ def handle_subscription_error(exception: InvalidSubscriptionError):
 @application.route("/<dataset:dataset>/subscriptions", methods=["POST"])
 @util.time_request("subscription")
 def create_subscription(*, dataset: Dataset, timer: Timer):
+    ensure_not_internal(dataset)
     subscription = SubscriptionDataCodec().decode(http_request.data)
     # TODO: Check for valid queries with fields that are invalid for subscriptions. For
     # example date fields and aggregates.
@@ -337,6 +340,7 @@ def create_subscription(*, dataset: Dataset, timer: Timer):
     "/<dataset:dataset>/subscriptions/<int:partition>/<key>", methods=["DELETE"]
 )
 def delete_subscription(*, dataset: Dataset, partition: int, key: str):
+    ensure_not_internal(dataset)
     SubscriptionDeleter(dataset, PartitionId(partition)).delete(UUID(key))
     return "ok", 202, {"Content-Type": "text/plain"}
 
