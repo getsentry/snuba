@@ -1,13 +1,14 @@
+import itertools
 from typing import Sequence
 
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
-    RawQueryResult,
     SingleQueryRunner,
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, Storage
+from snuba.query import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 
@@ -42,9 +43,10 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         request.query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
+
         return StorageQueryPlan(
-            query_processors=self.__storage.get_query_processors()
-            + self.__post_processors,
+            query_processors=list(self.__storage.get_query_processors())
+            + list(self.__post_processors),
             execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )
 

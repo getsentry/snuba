@@ -7,7 +7,6 @@ from typing import (
     Any,
     Mapping,
     MutableMapping,
-    NamedTuple,
     Optional,
 )
 
@@ -21,12 +20,11 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.datasets.plans.query_plan import RawQueryResult
+from snuba.query import RawQueryResult
 from snuba.environment import reader
-from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.redis import redis_client
-from snuba.request import Request, RequestSettings
+from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
