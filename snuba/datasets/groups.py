@@ -1,8 +1,7 @@
 from datetime import timedelta
-from typing import Mapping, Optional, Sequence, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
@@ -14,9 +13,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
-from snuba.datasets.storage import Storage
-from snuba.datasets.table_storage import TableWriter
+from snuba.datasets.plans.joins import JoinQueryPlanBuilder
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
@@ -29,25 +26,6 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
-class JoinedStorage(Storage):
-    def __init__(self, join_structure: JoinClause) -> None:
-        self.__structure = join_structure
-
-    def get_schemas(self) -> StorageSchemas:
-        return StorageSchemas(
-            read_schema=JoinedSchema(self.__structure), write_schema=None
-        )
-
-    def can_write(self) -> bool:
-        return False
-
-    def get_table_writer(self) -> Optional[TableWriter]:
-        return None
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return []
-
-
 class Groups(TimeSeriesDataset):
     """
     Experimental dataset that provides Groups data joined with
@@ -58,12 +36,9 @@ class Groups(TimeSeriesDataset):
     GROUPS_ALIAS = "groups"
 
     def __init__(self) -> None:
-        self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
             groupedmessages_storage.get_schemas().get_read_schema().get_data_source()
         )
-
-        self.__events = get_dataset("events")
         events_source = events_storage.get_schemas().get_read_schema().get_data_source()
 
         join_structure = JoinClause(
@@ -116,11 +91,13 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage(join_structure)
+        storages = [groupedmessages_storage, events_storage]
         super().__init__(
-            storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+            storages=storages,
+            query_plan_builder=JoinQueryPlanBuilder(
+                storages=storages,
+                join_spec=join_structure,
+                post_processors=[SimpleJoinOptimizer(), PrewhereProcessor()],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
@@ -141,6 +118,8 @@ class Groups(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
+        grouped_message = get_dataset("groupedmessage")
+        events = get_dataset("events")
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
         # Thus, as of now, receiving a table_alias here is not supported.
@@ -157,11 +136,11 @@ class Groups(TimeSeriesDataset):
             table_alias = match[1]
             simple_column_name = match[2]
             if table_alias == self.GROUPS_ALIAS:
-                return self.__grouped_message.column_expr(
+                return grouped_message.column_expr(
                     simple_column_name, query, parsing_context, table_alias
                 )
             elif table_alias == self.EVENTS_ALIAS:
-                return self.__events.column_expr(
+                return events.column_expr(
                     simple_column_name, query, parsing_context, table_alias
                 )
             else:
@@ -198,6 +177,4 @@ class Groups(TimeSeriesDataset):
         return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            SimpleJoinOptimizer(),
-        ]
+        return []
