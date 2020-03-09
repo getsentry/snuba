@@ -28,7 +28,7 @@ class ColumnSplitSpec(NamedTuple):
 
 class Dataset(object):
     """
-    A dataset represent a data model we can run a Snuba Query on.
+    A dataset represents a data model we can run a Snuba Query on.
     A data model provides an abstract schema (today it is a flat table,
     soon it will be a graph of Entities).
     The dataset (later the Entity) has access to multiple Storage objects,
@@ -50,7 +50,7 @@ class Dataset(object):
 
     The architecture of the Dataset is divided in two layers. The highest layer
     provides the logic we use to deal with the data model. (writers, query processors,
-    query planners, etc.). The lowest layer incldues simple objects that defines
+    query planners, etc.). The lowest layer incldues simple objects that define
     the query itself (Query, Schema, RelationalSource). The lop layer object access and
     manipulate the lower layer objects.
     """
