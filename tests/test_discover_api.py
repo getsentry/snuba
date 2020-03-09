@@ -327,8 +327,8 @@ class TestDiscoverApi(BaseApiTest):
                     "aggregations": [["count()", "", "count"]],
                     "conditions": [
                         ["type", "=", "transaction"],
-                        ["os_build", "LIKE", "x86%"],
-                        ["os_kernel_version", "LIKE", "10.1%"],
+                        ["contexts[os.build]", "LIKE", "x86%"],
+                        ["contexts[os.kernel_version]", "LIKE", "10.1%"],
                     ],
                     "limit": 1000,
                 }
@@ -348,8 +348,8 @@ class TestDiscoverApi(BaseApiTest):
                     "aggregations": [["count()", "", "count"]],
                     "conditions": [
                         ["type", "=", "transaction"],
-                        ["device_model_id", "LIKE", "Arithmetic%"],
-                        ["device_charging", "=", 0],
+                        ["contexts[device.model_id]", "LIKE", "Arithmetic%"],
+                        ["contexts[device.charging]", "=", "0"],
                     ],
                     "limit": 1000,
                 }

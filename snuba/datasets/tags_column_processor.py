@@ -148,6 +148,12 @@ class TagColumnProcessor:
             if actual_tag in self.__promoted_columns[col]:
                 return qualified_column(self.__string_col(actual_tag), table_alias)
 
+            actual_tag = self.__get_tag_column_map()[col].get(
+                tag_name.replace(".", "_"), tag_name
+            )
+            if actual_tag in self.__promoted_columns[col]:
+                return qualified_column(self.__string_col(actual_tag), table_alias)
+
         # For the rest, return an expression that looks it up in the nested tags.
         return "{col}.value[indexOf({col}.key, {tag})]".format(
             **{
