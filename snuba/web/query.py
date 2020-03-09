@@ -375,4 +375,4 @@ def _run_query(
         _run_clickhouse_query, dataset, timer, query_metadata, from_date, to_date,
     )
 
-    return storage_query_plan.plan_executor.execute(request, query_runner)
+    return storage_query_plan.execution_strategy.execute(request, query_runner)

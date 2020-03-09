@@ -18,10 +18,24 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
 
 
 class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
+    """
+    Builds the Storage Query Execution Plan for a dataset that is based on
+    a single storage.
+    """
+
     def __init__(
         self, storage: Storage, post_processors: Sequence[QueryProcessor]
     ) -> None:
+        # The storage the query is based on
         self.__storage = storage
+        # This is a set of query processors that have to be executed on the
+        # query after the storage selection but that are defined by the dataset.
+        # Query processors defined by a Storage must be executable independently
+        # from the context the Storage is used (whether the storage is used by
+        # itself or whether it is joined with another storage).
+        # In a joined query we would have processors defined by multiple storages.
+        # that would have to be executed only once (liek Prewhere). That is a
+        # candidate to be added here as post process.
         self.__post_processors = post_processors
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
@@ -31,11 +45,16 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         return StorageQueryPlan(
             query_processors=self.__storage.get_query_processors()
             + self.__post_processors,
-            plan_executor=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )
 
 
 class SelectedTableQueryPlanBuilder(StorageQueryPlanBuilder):
+    """
+    A query plan builder that selects one of multiple storages in the
+    dataset.
+    """
+
     def __init__(
         self, selector: QueryStorageSelector, post_processors: Sequence[QueryProcessor]
     ) -> None:
