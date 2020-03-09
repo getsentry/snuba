@@ -56,14 +56,14 @@ class QuerylogProcessor(MessageProcessor):
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
         action_type = ProcessorAction.INSERT
 
-        projects = message["request"].get("project", [])
+        projects = message["request"]["body"].get("project", [])
         if not isinstance(projects, (list, tuple)):
             projects = [projects]
 
         processed = {
-            "request_id": str(uuid.UUID(message["request_id"])),
-            "request_body": self.__get_request(message["request"]),
-            "referrer": message["referrer"] or "",
+            "request_id": str(uuid.UUID(message["request"]["id"])),
+            "request_body": self.__get_request(message["request"]["body"]),
+            "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
             "projects": projects,
             "organization": None,

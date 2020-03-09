@@ -25,7 +25,7 @@ def test_simple():
         get_dataset("events").get_dataset_schemas().get_read_schema().get_data_source(),
     )
 
-    request = Request(uuid.UUID("a" * 32).hex, query, HTTPRequestSettings(), {}, "tests")
+    request = Request(uuid.UUID("a" * 32).hex, query, HTTPRequestSettings(), {}, "search")
 
     time = TestingClock()
 
@@ -36,7 +36,6 @@ def test_simple():
         request=request,
         dataset=get_dataset("events"),
         timer=timer,
-        referrer="search",
         query_list=[ClickhouseQueryMetadata(
             sql="select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100",
             stats={"sample": 10},
