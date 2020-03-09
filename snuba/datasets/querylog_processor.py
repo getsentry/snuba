@@ -24,33 +24,45 @@ class QuerylogProcessor(MessageProcessor):
     ) -> Mapping[str, Any]:
         sql = []
         status = []
+        trace_id = []
         final = []
         cache_hit = []
         sample = []
         max_threads = []
         duration_ms = []
-        trace_id = []
+        num_days = []
+        clickhouse_table = []
+        query_id = []
+        is_duplicate = []
 
         for query in query_list:
             sql.append(query["sql"])
             status.append(query["status"])
-            final.append(query["stats"].get("final", 0))
-            cache_hit.append(query["stats"].get("cache_hit", 0))
-            sample.append(query["stats"].get("sample", 0))
-            max_threads.append(query["stats"].get("max_threads", 0))
             trace_id.append(str(uuid.UUID(query["trace_id"])))
             # TODO: Calculate subquery duration, for now just insert 0s
             duration_ms.append(0)
+            final.append(int(query["stats"].get("final", 0)))
+            cache_hit.append(int(query["stats"].get("cache_hit", 0)))
+            sample.append(query["stats"].get("sample", 0))
+            max_threads.append(query["stats"].get("max_threads", 0))
+            num_days.append(query["stats"].get("num_days", 0))
+            clickhouse_table.append(query["stats"].get("clickhouse_table", ""))
+            query_id.append(query["stats"].get("query_id", 0))
+            is_duplicate.append(int(query["stats"].get("is_duplicate", 0)))
 
         return {
             "clickhouse_queries.sql": sql,
             "clickhouse_queries.status": status,
+            "clickhouse_queries.trace_id": trace_id,
+            "clickhouse_queries.duration_ms": duration_ms,
             "clickhouse_queries.final": final,
             "clickhouse_queries.cache_hit": cache_hit,
             "clickhouse_queries.sample": [self.__get_sample(s) for s in sample],
             "clickhouse_queries.max_threads": max_threads,
-            "clickhouse_queries.trace_id": trace_id,
-            "clickhouse_queries.duration_ms": duration_ms,
+            "clickhouse_queries.num_days": num_days,
+            "clickhouse_queries.clickhouse_table": clickhouse_table,
+            "clickhouse_queries.query_id": query_id,
+            "clickhouse_queries.is_duplicate": is_duplicate,
         }
 
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:

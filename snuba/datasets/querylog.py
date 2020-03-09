@@ -42,12 +42,16 @@ class QuerylogDataset(Dataset):
                         [
                             ("sql", String()),
                             ("status", status_type),
+                            ("trace_id", Nullable(UUID())),
+                            ("duration_ms", UInt(32)),
                             ("final", UInt(8)),
                             ("cache_hit", UInt(8)),
                             ("sample", Float(32)),
                             ("max_threads", UInt(8)),
-                            ("duration_ms", UInt(32)),
-                            ("trace_id", Nullable(UUID())),
+                            ("num_days", UInt(32)),
+                            ("clickhouse_table", LowCardinality(String())),
+                            ("query_id", String()),
+                            ("is_duplicate", UInt(8)),
                         ]
                     ),
                 ),
