@@ -28,23 +28,31 @@ class ColumnSplitSpec(NamedTuple):
 
 class Dataset(object):
     """
-    A dataset represent one or multiple entities in the Snuba data model.
+    A dataset represent a data model we can run a Snuba Query on.
+    A data model provides an abstract schema (today it is a flat table,
+    soon it will be a graph of Entities).
+    The dataset (later the Entity) has access to multiple Storage objects,
+    each one represents a table/view on the DB we can query.
     The class is a facade to access the components used to write on the
     data model and to query the entities.
 
-    The dataset is made of several Storage objects (later we will introduce
-    entities between Dataset and Storage). Each storage represent a table/view
-    we can query.
     When processing a query, there are three main steps:
     - dataset query processing. A series of QueryProcessors are applied to the
       query before deciding which Storage to use. These processors are defined
       by the dataset
     - the Storage to run the query onto is selected and the query is transformed
       into a Storage Query. This is done by a StorageQueryPlanBuilder. This object
-      produces a plan that includes the Query contextualized on the storage/s the
-      list of processors to apply and the strategy to run the query (in case of split).
+      produces a plan that includes the Query contextualized on the storage/s, the
+      list of processors to apply and the strategy to run the query (in case of
+      any strategy more complex than a single DB query like a split).
     - storage query processing. A second series of QueryProcessors are applied
       to the query. These are defined by the storage.
+
+    The architecture of the Dataset is divided in two layers. The highest layer
+    provides the logic we use to deal with the data model. (writers, query processors,
+    query planners, etc.). The lowest layer incldues simple objects that defines
+    the query itself (Query, Schema, RelationalSource). The lop layer object access and
+    manipulate the lower layer objects.
     """
 
     def __init__(
@@ -72,7 +80,7 @@ class Dataset(object):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
-        that are applied to queries after parsing and before running them on Clickhouse.
+        that are applied to queries after parsing and before running them on the storage.
         These are applied in sequence in the same order as they are defined and are supposed
         to be stateless.
         """
