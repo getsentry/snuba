@@ -2,16 +2,11 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple, Sequence
+from typing import Callable, Sequence
 
+from snuba.query import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
-from snuba.reader import Result
 from snuba.request import Request
-
-
-class RawQueryResult(NamedTuple):
-    result: Result
-    extra: Any
 
 
 SingleQueryRunner = Callable[[Request], RawQueryResult]
