@@ -13,9 +13,11 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
     Union,
 )
 
+from snuba.utils.clock import Clock, TestingClock
 from snuba.utils.streams.consumer import Consumer, ConsumerError, EndOfPartition
 from snuba.utils.streams.producer import Producer
 from snuba.utils.streams.types import Message, Partition, Topic, TPayload
@@ -24,8 +26,11 @@ epoch = datetime(2019, 12, 19)
 
 
 class DummyBroker(Generic[TPayload]):
-    def __init__(self) -> None:
-        self.__topics: MutableMapping[Topic, Sequence[MutableSequence[TPayload]]] = {}
+    def __init__(self, clock: Clock = TestingClock(epoch.timestamp())) -> None:
+        self.__clock = clock
+        self.__topics: MutableMapping[
+            Topic, Sequence[MutableSequence[Tuple[TPayload, datetime]]]
+        ] = {}
 
         self.__offsets: MutableMapping[
             str, MutableMapping[Partition, int]
@@ -50,9 +55,10 @@ class DummyBroker(Generic[TPayload]):
         with self.__lock:
             messages = self.__topics[partition.topic][partition.index]
             offset = len(messages)
-            messages.append(payload)
+            timestamp = datetime.fromtimestamp(self.__clock.time())
+            messages.append((payload, timestamp))
 
-        return Message(partition, offset, payload, epoch)
+        return Message(partition, offset, payload, timestamp)
 
     def subscribe(
         self, consumer: DummyConsumer[TPayload], topics: Sequence[Topic]
@@ -90,14 +96,14 @@ class DummyBroker(Generic[TPayload]):
             messages = self.__topics[partition.topic][partition.index]
 
             try:
-                payload = messages[offset]
+                payload, timestamp = messages[offset]
             except IndexError:
                 if offset == len(messages):
                     return None
                 else:
                     raise Exception("invalid offset")
 
-        return Message(partition, offset, payload, epoch)
+        return Message(partition, offset, payload, timestamp)
 
     def commit(
         self, consumer: DummyConsumer[TPayload], offsets: Mapping[Partition, int]

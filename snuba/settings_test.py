@@ -1,5 +1,3 @@
-from snuba.settings_base import *  # NOQA
-
 TESTING = True
 
 REDIS_DB = 2

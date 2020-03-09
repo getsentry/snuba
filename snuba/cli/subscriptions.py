@@ -8,7 +8,7 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
@@ -21,8 +21,8 @@ from snuba.subscriptions.worker import (
     SubscriptionResultCodec,
     SubscriptionWorker,
 )
-from snuba.util import create_metrics
 from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.streams.batching import BatchingConsumer
 from snuba.utils.streams.kafka import (
     CommitCodec,
@@ -124,8 +124,10 @@ def subscriptions(
 
     loader = enforce_table_writer(dataset).get_stream_loader()
 
-    metrics = create_metrics(
-        "snuba.subscriptions", tags={"group": consumer_group, "dataset": dataset_name},
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "subscriptions",
+        tags={"group": consumer_group, "dataset": dataset_name},
     )
 
     consumer = TickConsumer(
