@@ -139,7 +139,7 @@ class WritableTableSchema(TableSchema):
     This class identifies a subset of TableSchemas we can write onto.
     While it does not provide any functionality by itself, it is used
     to allow the type checker to prevent us from returning a read only
-    schema from DatasetSchemas.
+    schema from StorageSchemas.
     """
 
     pass

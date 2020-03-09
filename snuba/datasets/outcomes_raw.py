@@ -12,7 +12,9 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.schemas.tables import MergeTreeSchema
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.storage import TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -45,12 +47,22 @@ class OutcomesRawDataset(TimeSeriesDataset):
             settings={"index_granularity": 16384},
         )
 
-        dataset_schemas = DatasetSchemas(
-            read_schema=read_schema, write_schema=None, intermediary_schemas=[]
+        storage = TableStorage(
+            schemas=StorageSchemas(
+                read_schema=read_schema, write_schema=None, intermediary_schemas=[]
+            ),
+            table_writer=None,
+            query_processors=[],
         )
 
         super().__init__(
-            dataset_schemas=dataset_schemas,
+            storages=[storage],
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=storage,
+                post_processors=[PrewhereProcessor(), SamplingRateProcessor()],
+            ),
+            abstract_column_set=read_schema.get_columns(),
+            writable_storage=None,
             time_group_columns={"time": "timestamp"},
             time_parse_columns=("timestamp",),
         )
@@ -71,6 +83,4 @@ class OutcomesRawDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            SamplingRateProcessor(),
-            PrewhereProcessor(),
         ]

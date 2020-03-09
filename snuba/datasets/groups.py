@@ -1,10 +1,10 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence
 
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.errors_replacer import ReplacerState
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.events import storage as events_storage
+from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
@@ -13,6 +13,8 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
+from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.joins import JoinQueryPlanBuilder
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
@@ -24,6 +26,10 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
+from snuba.web.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
 
 
 class Groups(TimeSeriesDataset):
@@ -36,17 +42,10 @@ class Groups(TimeSeriesDataset):
     GROUPS_ALIAS = "groups"
 
     def __init__(self) -> None:
-        self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            self.__grouped_message.get_dataset_schemas()
-            .get_read_schema()
-            .get_data_source()
+            groupedmessages_storage.get_schemas().get_read_schema().get_data_source()
         )
-
-        self.__events = get_dataset("events")
-        events_source = (
-            self.__events.get_dataset_schemas().get_read_schema().get_data_source()
-        )
+        events_source = events_storage.get_schemas().get_read_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
@@ -98,9 +97,28 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=None,)
+        storages = [groupedmessages_storage, events_storage]
         super().__init__(
-            dataset_schemas=dataset_schemas,
+            storages=storages,
+            query_plan_builder=JoinQueryPlanBuilder(
+                storages=storages,
+                join_spec=join_structure,
+                post_processors=[
+                    SimpleJoinOptimizer(),
+                    PrewhereProcessor(),
+                    SamplingRateProcessor(),
+                ],
+                execution_strategy=SplitQueryPlanExecutionStrategy(
+                    ColumnSplitSpec(
+                        id_column="events.event_id",
+                        project_column="events.project_id",
+                        timestamp_column="events.timestamp",
+                    ),
+                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+                ),
+            ),
+            abstract_column_set=schema.get_columns(),
+            writable_storage=None,
             time_group_columns={"events.time": "events.timestamp"},
             time_parse_columns=[
                 "events.timestamp",
@@ -118,6 +136,8 @@ class Groups(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
+        grouped_message = get_dataset("groupedmessage")
+        events = get_dataset("events")
         # Eventually joined dataset should not be represented by the same abstraction
         # as joinable datasets. That will be easier through the TableStorage abstraction.
         # Thus, as of now, receiving a table_alias here is not supported.
@@ -134,11 +154,11 @@ class Groups(TimeSeriesDataset):
             table_alias = match[1]
             simple_column_name = match[2]
             if table_alias == self.GROUPS_ALIAS:
-                return self.__grouped_message.column_expr(
+                return grouped_message.column_expr(
                     simple_column_name, query, parsing_context, table_alias
                 )
             elif table_alias == self.EVENTS_ALIAS:
-                return self.__events.column_expr(
+                return events.column_expr(
                     simple_column_name, query, parsing_context, table_alias
                 )
             else:
@@ -162,21 +182,10 @@ class Groups(TimeSeriesDataset):
             ),
         }
 
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="events.event_id",
-            project_column="events.project_id",
-            timestamp_column="events.timestamp",
-        )
-
     def get_prewhere_keys(self) -> Sequence[str]:
         # TODO: revisit how to build the prewhere clause on join
         # queries.
         return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            SimpleJoinOptimizer(),
-            SamplingRateProcessor(),
-            PrewhereProcessor(),
-        ]
+        return []

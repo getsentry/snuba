@@ -12,12 +12,14 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
+from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -37,7 +39,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-
+from snuba.request.request_settings import RequestSettings
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -89,6 +91,23 @@ class SessionsProcessor(MessageProcessor):
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
 
+class SessionsQueryStorageSelector(QueryStorageSelector):
+    def __init__(
+        self, raw_table: TableStorage, materialized_view: TableStorage
+    ) -> None:
+        self.__raw_table = raw_table
+        self.__materialized_view = materialized_view
+
+    def select_storage(
+        self, query: Query, request_settings: RequestSettings
+    ) -> Storage:
+        """
+        This preserves the behavior of the existing dataset. and alwyas queries the mat view
+        """
+        # TODO: expose a raw schema and switch to the raw table when possible
+        return self.__materialized_view
+
+
 class SessionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         all_columns = ColumnSet(
@@ -109,7 +128,7 @@ class SessionsDataset(TimeSeriesDataset):
             ]
         )
 
-        write_schema = MergeTreeSchema(
+        raw_schema = MergeTreeSchema(
             columns=all_columns,
             local_table_name=WRITE_LOCAL_TABLE_NAME,
             dist_table_name=WRITE_DIST_TABLE_NAME,
@@ -148,7 +167,7 @@ class SessionsDataset(TimeSeriesDataset):
             partition_by="(toMonday(started))",
             settings={"index_granularity": 256},
         )
-        materialized_view = MaterializedViewSchema(
+        materialized_view_schema = MaterializedViewSchema(
             local_materialized_view_name=READ_LOCAL_MV_NAME,
             dist_materialized_view_name=READ_DIST_MV_NAME,
             prewhere_candidates=["project_id", "org_id"],
@@ -183,22 +202,39 @@ class SessionsDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
-        dataset_schemas = DatasetSchemas(
-            read_schema=read_schema,
-            write_schema=write_schema,
-            intermediary_schemas=[materialized_view],
+        # The raw table we write onto, and that potentially we could
+        # query.
+        writable_storage = TableStorage(
+            schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+            table_writer=TableWriter(
+                write_schema=raw_schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=SessionsProcessor(), default_topic="ingest-sessions",
+                ),
+            ),
+            query_processors=[],
+        )
+        # The materialized view we query aggregate data from.
+        materialized_storage = TableStorage(
+            schemas=StorageSchemas(
+                read_schema=read_schema,
+                write_schema=None,
+                intermediary_schemas=[materialized_view_schema],
+            ),
+            query_processors=[],
         )
 
-        table_writer = TableWriter(
-            write_schema=write_schema,
-            stream_loader=KafkaStreamLoader(
-                processor=SessionsProcessor(), default_topic="ingest-sessions",
-            ),
+        storage_selector = SessionsQueryStorageSelector(
+            raw_table=writable_storage, materialized_view=materialized_storage,
         )
 
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storages=[writable_storage, materialized_storage],
+            query_plan_builder=SelectedTableQueryPlanBuilder(
+                selector=storage_selector, post_processors=[PrewhereProcessor()],
+            ),
+            abstract_column_set=read_schema.get_columns(),
+            writable_storage=writable_storage,
             time_group_columns={"bucketed_started": "started"},
             time_parse_columns=("started", "received"),
         )
@@ -219,7 +255,6 @@ class SessionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]
 
     def column_expr(

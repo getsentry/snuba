@@ -87,7 +87,7 @@ class Query:
     def __init__(
         self,
         body: MutableMapping[str, Any],  # Temporary
-        data_source: RelationalSource,
+        data_source: Optional[RelationalSource],
         # New data model to replace the one based on the dictionary
         selected_columns: Optional[Sequence[Expression]] = None,
         array_join: Optional[Expression] = None,
@@ -168,6 +168,12 @@ class Query:
         )
 
     def get_data_source(self) -> RelationalSource:
+        """
+        After the split between dataset query class and storage query class
+        this method will only be in the storage query class, which will be instantiated
+        with a non nullable RelationalSource.
+        """
+        assert self.__data_source is not None, "Data source has not been provided yet."
         return self.__data_source
 
     def set_data_source(self, data_source: RelationalSource) -> None:

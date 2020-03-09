@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -18,10 +18,15 @@ from snuba.clickhouse.columns import (
     WithCodecs,
     WithDefault,
 )
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.plans.single_table import (
+    SimpleQueryPlanExecutionStrategy,
+    SingleTableQueryPlanBuilder,
+)
+from snuba.datasets.storage import TableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -34,6 +39,10 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.web.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
 
 
 class ErrorsDataset(TimeSeriesDataset):
@@ -159,8 +168,6 @@ class ErrorsDataset(TimeSeriesDataset):
             settings={"index_granularity": "8192"},
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         required_columns = [
             "org_id",
             "event_id",
@@ -171,29 +178,49 @@ class ErrorsDataset(TimeSeriesDataset):
             "retention_days",
         ]
 
-        table_writer = TableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=ErrorsProcessor(self.__promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="errors-replacements",
-            ),
-            replacer_processor=ErrorsReplacer(
+        storage = TableStorage(
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+            table_writer=TableWriter(
                 write_schema=schema,
-                read_schema=schema,
-                required_columns=required_columns,
-                tag_column_map={"tags": self.__promoted_tag_columns, "contexts": {}},
-                promoted_tags={
-                    "tags": self.__promoted_tag_columns.keys(),
-                    "contexts": {},
-                },
-                state_name=ReplacerState.ERRORS,
+                stream_loader=KafkaStreamLoader(
+                    processor=ErrorsProcessor(self.__promoted_tag_columns),
+                    default_topic="events",
+                    replacement_topic="errors-replacements",
+                ),
+                replacer_processor=ErrorsReplacer(
+                    write_schema=schema,
+                    read_schema=schema,
+                    required_columns=required_columns,
+                    tag_column_map={
+                        "tags": self.__promoted_tag_columns,
+                        "contexts": {},
+                    },
+                    promoted_tags={
+                        "tags": self.__promoted_tag_columns.keys(),
+                        "contexts": {},
+                    },
+                    state_name=ReplacerState.ERRORS,
+                ),
             ),
+            query_processors=[],
         )
 
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storages=[storage],
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=storage,
+                post_processors=[PrewhereProcessor(), SamplingRateProcessor()],
+                execution_strategy=SplitQueryPlanExecutionStrategy(
+                    ColumnSplitSpec(
+                        id_column="event_id",
+                        project_column="project_id",
+                        timestamp_column="timestamp",
+                    ),
+                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+                ),
+            ),
+            abstract_column_set=schema.get_columns(),
+            writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
@@ -202,13 +229,6 @@ class ErrorsDataset(TimeSeriesDataset):
             columns=all_columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
-        )
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
         )
 
     def column_expr(
@@ -253,4 +273,4 @@ class ErrorsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor(), SamplingRateProcessor(), PrewhereProcessor()]
+        return [BasicFunctionsProcessor()]
