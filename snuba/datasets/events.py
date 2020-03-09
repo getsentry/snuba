@@ -1,9 +1,12 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.plans.single_table import (
+    SimpleQueryPlanExecutionStrategy,
+    SingleTableQueryPlanBuilder,
+)
 from snuba.datasets.storages.events import (
     all_columns,
     metadata_columns,
@@ -24,6 +27,10 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
+from snuba.web.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
 
 
 class EventsDataset(TimeSeriesDataset):
@@ -43,7 +50,16 @@ class EventsDataset(TimeSeriesDataset):
         super(EventsDataset, self).__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage,
+                post_processors=[PrewhereProcessor()],
+                execution_strategy=SplitQueryPlanExecutionStrategy(
+                    ColumnSplitSpec(
+                        id_column="event_id",
+                        project_column="project_id",
+                        timestamp_column="timestamp",
+                    ),
+                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+                ),
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
@@ -55,13 +71,6 @@ class EventsDataset(TimeSeriesDataset):
             columns=all_columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
-        )
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
         )
 
     def column_expr(

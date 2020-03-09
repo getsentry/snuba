@@ -14,7 +14,10 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import (
+    SelectedTableQueryPlanBuilder,
+    SimpleQueryPlanExecutionStrategy,
+)
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
@@ -30,6 +33,8 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
+from snuba.web.split import SplitQueryPlanExecutionStrategy
+
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
@@ -199,7 +204,12 @@ class DiscoverDataset(TimeSeriesDataset):
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[PrewhereProcessor()],
+                selector=storage_selector,
+                post_processors=[PrewhereProcessor()],
+                execution_strategy=SplitQueryPlanExecutionStrategy(
+                    split_spec=None,
+                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+                ),
             ),
             abstract_column_set=self.__common_columns
             + self.__events_columns

@@ -1,5 +1,4 @@
-import itertools
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
@@ -25,7 +24,10 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
     """
 
     def __init__(
-        self, storage: Storage, post_processors: Sequence[QueryProcessor]
+        self,
+        storage: Storage,
+        post_processors: Sequence[QueryProcessor],
+        execution_strategy: Optional[QueryPlanExecutionStrategy] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
@@ -38,8 +40,11 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         # that would have to be executed only once (liek Prewhere). That is a
         # candidate to be added here as post process.
         self.__post_processors = post_processors
+        self.__execution_strategy = (
+            execution_strategy or SimpleQueryPlanExecutionStrategy()
+        )
 
-    def build_plan(self, request: Request) -> StorageQueryPlan:
+    def build_plan(self, request: Request,) -> StorageQueryPlan:
         request.query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
@@ -47,7 +52,7 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         return StorageQueryPlan(
             query_processors=list(self.__storage.get_query_processors())
             + list(self.__post_processors),
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=self.__execution_strategy,
         )
 
 
@@ -58,13 +63,19 @@ class SelectedTableQueryPlanBuilder(StorageQueryPlanBuilder):
     """
 
     def __init__(
-        self, selector: QueryStorageSelector, post_processors: Sequence[QueryProcessor]
+        self,
+        selector: QueryStorageSelector,
+        post_processors: Sequence[QueryProcessor],
+        execution_strategy: Optional[QueryPlanExecutionStrategy] = None,
     ) -> None:
         self.__selector = selector
         self.__post_processor = post_processors
+        self.__execution_strategy = (
+            execution_strategy or SimpleQueryPlanExecutionStrategy()
+        )
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        return SingleTableQueryPlanBuilder(storage, self.__post_processor,).build_plan(
-            request,
-        )
+        return SingleTableQueryPlanBuilder(
+            storage, self.__post_processor, self.__execution_strategy
+        ).build_plan(request)

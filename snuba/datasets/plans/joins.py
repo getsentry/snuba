@@ -1,11 +1,12 @@
 import itertools
 
-from typing import Sequence
+from typing import Optional, Sequence
 
 from snuba.datasets.plans.query_plan import (
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
+from snuba.datasets.plans.query_plan import QueryPlanExecutionStrategy
 from snuba.datasets.schemas.join import JoinClause
 from snuba.datasets.storage import TableStorage
 from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
@@ -23,10 +24,14 @@ class JoinQueryPlanBuilder(StorageQueryPlanBuilder):
         storages: Sequence[TableStorage],
         join_spec: JoinClause,
         post_processors: Sequence[QueryProcessor],
+        execution_strategy: Optional[QueryPlanExecutionStrategy] = None,
     ) -> None:
         self.__storages = storages
         self.__join_spec = join_spec
         self.__post_processors = post_processors
+        self.__execution_strategy = (
+            execution_strategy or SimpleQueryPlanExecutionStrategy()
+        )
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         request.query.set_data_source(self.__join_spec)
@@ -40,6 +45,5 @@ class JoinQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
         return StorageQueryPlan(
-            query_processors=processors,
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            query_processors=processors, execution_strategy=self.__execution_strategy,
         )

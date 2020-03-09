@@ -11,21 +11,6 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.util import parse_datetime, qualified_column
 
 
-class ColumnSplitSpec(NamedTuple):
-    """
-    Provides the column names needed to perform column splitting.
-    id_column represent the identity of the row.
-
-    """
-
-    id_column: str
-    project_column: str
-    timestamp_column: str
-
-    def get_min_columns(self) -> Sequence[str]:
-        return [self.id_column, self.project_column, self.timestamp_column]
-
-
 class Dataset(object):
     """
     A dataset represent a data model we can run a Snuba Query on.
@@ -143,12 +128,6 @@ class Dataset(object):
         a condition before it is added to the query.
         """
         return condition
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        """
-        Return the parameters to perform the column split of the query.
-        """
-        return None
 
 
 class TimeSeriesDataset(Dataset):

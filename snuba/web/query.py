@@ -36,7 +36,6 @@ from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
-from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -336,7 +335,6 @@ def _run_clickhouse_query(
     return result
 
 
-@split_query
 def _run_query(
     dataset: Dataset,
     request: Request,

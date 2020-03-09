@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
@@ -13,6 +13,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
+from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.joins import JoinQueryPlanBuilder
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
@@ -24,6 +25,10 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
+from snuba.web.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
 
 
 class Groups(TimeSeriesDataset):
@@ -98,6 +103,14 @@ class Groups(TimeSeriesDataset):
                 storages=storages,
                 join_spec=join_structure,
                 post_processors=[SimpleJoinOptimizer(), PrewhereProcessor()],
+                execution_strategy=SplitQueryPlanExecutionStrategy(
+                    ColumnSplitSpec(
+                        id_column="events.event_id",
+                        project_column="events.project_id",
+                        timestamp_column="events.timestamp",
+                    ),
+                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+                ),
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
@@ -163,13 +176,6 @@ class Groups(TimeSeriesDataset):
                 timestamp_column="events.timestamp",
             ),
         }
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="events.event_id",
-            project_column="events.project_id",
-            timestamp_column="events.timestamp",
-        )
 
     def get_prewhere_keys(self) -> Sequence[str]:
         # TODO: revisit how to build the prewhere clause on join
