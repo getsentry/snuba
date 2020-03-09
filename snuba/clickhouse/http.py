@@ -29,7 +29,7 @@ def raise_for_error_response(response: HTTPResponse) -> None:
         content = response.data.decode("utf8")
         details = CLICKHOUSE_ERROR_RE.match(content)
         if details is not None:
-            code, type, message = details.groups()
+            code, _, message = details.groups()
             raise ClickhouseError(int(code), message)
         else:
             raise HTTPError(
