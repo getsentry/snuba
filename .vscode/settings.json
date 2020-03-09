@@ -42,6 +42,8 @@
   },
 
   "python.linting.pylintEnabled": false,
+  "python.linting.mypyEnabled": true,
+  "python.linting.mypyArgs": ["--strict"],
   "python.linting.flake8Enabled": true,
   "python.formatting.provider": "black",
   // https://github.com/DonJayamanne/pythonVSCode/issues/992
