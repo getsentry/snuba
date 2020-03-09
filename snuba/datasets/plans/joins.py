@@ -30,11 +30,16 @@ class JoinQueryPlanBuilder(StorageQueryPlanBuilder):
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         request.query.set_data_source(self.__join_spec)
-        processors = itertools.chain.from_iterable(
-            storage.get_query_processors() for storage in self.__storages
+        processors = (
+            list(
+                itertools.chain.from_iterable(
+                    storage.get_query_processors() for storage in self.__storages
+                )
+            )
+            + self.__post_processors
         )
 
         return StorageQueryPlan(
-            query_processors=processors + self.__post_processors,
+            query_processors=processors,
             execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )
