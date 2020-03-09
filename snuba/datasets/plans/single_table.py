@@ -8,16 +8,13 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, Storage
-from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.request import RequestSettings
+from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def execute(
-        self, query: Query, settings: RequestSettings, runner: SingleQueryRunner
-    ) -> RawQueryResult:
-        return runner(query, settings)
+    def execute(self, request: Request, runner: SingleQueryRunner) -> RawQueryResult:
+        return runner(request)
 
 
 class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
@@ -27,14 +24,13 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__storage = storage
         self.__post_processors = post_processors
 
-    def build_plan(self, query: Query, settings: RequestSettings) -> StorageQueryPlan:
-        query.set_data_source(
+    def build_plan(self, request: Request) -> StorageQueryPlan:
+        request.query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
         return StorageQueryPlan(
             query_processors=self.__storage.get_query_processors()
             + self.__post_processors,
-            storage_query=query,
             plan_executor=SimpleQueryPlanExecutionStrategy(),
         )
 
@@ -46,8 +42,8 @@ class SelectedTableQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__selector = selector
         self.__post_processor = post_processors
 
-    def build_plan(self, query: Query, settings: RequestSettings) -> StorageQueryPlan:
-        storage = self.__selector.select_storage(query, settings)
+    def build_plan(self, request: Request) -> StorageQueryPlan:
+        storage = self.__selector.select_storage(request.query, request.settings)
         return SingleTableQueryPlanBuilder(storage, self.__post_processor,).build_plan(
-            query, settings
+            request,
         )

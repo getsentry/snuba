@@ -7,7 +7,7 @@ from typing import Any, Callable, NamedTuple, Sequence
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.reader import Result
-from snuba.request import RequestSettings
+from snuba.request import Request
 
 
 class RawQueryResult(NamedTuple):
@@ -15,7 +15,7 @@ class RawQueryResult(NamedTuple):
     extra: Any
 
 
-SingleQueryRunner = Callable[[Query, RequestSettings], RawQueryResult]
+SingleQueryRunner = Callable[[Request], RawQueryResult]
 
 
 class QueryPlanExecutionStrategy(ABC):
@@ -28,9 +28,7 @@ class QueryPlanExecutionStrategy(ABC):
     against the DB.
     """
 
-    def execute(
-        self, query: Query, settings: RequestSettings, runner: SingleQueryRunner
-    ) -> RawQueryResult:
+    def execute(self, request: Request, runner: SingleQueryRunner) -> RawQueryResult:
         raise NotImplementedError
 
 
@@ -49,7 +47,6 @@ class StorageQueryPlan:
     """
 
     query_processors: Sequence[QueryProcessor]
-    storage_query: Query
     plan_executor: QueryPlanExecutionStrategy
 
 
@@ -62,5 +59,5 @@ class StorageQueryPlanBuilder(ABC):
     StorageQueryPlan the api is able to understand.
     """
 
-    def build_plan(self, query: Query, settings: RequestSettings) -> StorageQueryPlan:
+    def build_plan(self, request: Request) -> StorageQueryPlan:
         raise NotImplementedError

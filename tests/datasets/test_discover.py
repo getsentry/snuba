@@ -4,6 +4,7 @@ from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.query import Query
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
@@ -41,12 +42,13 @@ class TestDiscover(BaseDatasetTest):
         query = Query(query_body, None)
         request_settings = HTTPRequestSettings()
         dataset = get_dataset("discover")
+        request = Request("a", query, request_settings, {}, "r")
         for processor in get_dataset("discover").get_query_processors():
-            processor.process_query(query, request_settings)
+            processor.process_query(request.query, request.settings)
 
-        plan = dataset.get_query_plan_builder().build_plan(query, request_settings)
+        plan = dataset.get_query_plan_builder().build_plan(request)
 
         for processor in plan.query_processors:
-            processor.process_query(plan.storage_query, request_settings)
+            processor.process_query(request.query, request.settings)
 
-        assert plan.storage_query.get_data_source().format_from() == expected_table
+        assert request.query.get_data_source().format_from() == expected_table
