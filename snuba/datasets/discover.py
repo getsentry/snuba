@@ -34,7 +34,7 @@ from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-from snuba.web.split import SplitQueryPlanExecutionStrategy
+from snuba.datasets.plans.split import SplitQueryPlanExecutionStrategy
 
 
 EVENTS = "events"

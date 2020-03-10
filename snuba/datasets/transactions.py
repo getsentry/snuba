@@ -23,7 +23,7 @@ from snuba.query.processors.sampling_rate import SamplingRateProcessor
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.web.split import (
+from snuba.datasets.plans.split import (
     ColumnSplitSpec,
     SplitQueryPlanExecutionStrategy,
 )
