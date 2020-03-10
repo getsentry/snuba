@@ -49,7 +49,7 @@ class QuerylogProcessor(MessageProcessor):
             max_threads.append(query["stats"].get("max_threads", 0))
             num_days.append(query["stats"].get("num_days", 0))
             clickhouse_table.append(query["stats"].get("clickhouse_table", ""))
-            query_id.append(query["stats"].get("query_id", 0))
+            query_id.append(query["stats"].get("query_id", ""))
             is_duplicate.append(int(query["stats"].get("is_duplicate", 0)))
 
 

@@ -64,6 +64,14 @@ def test_simple():
             "clickhouse_queries.status": ["success"],
             "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
             "clickhouse_queries.duration_ms": [0],
-            "clickhouse_queries.stats": ['{"sample": 10}']
+            "clickhouse_queries.stats": ['{"sample": 10}'],
+            "clickhouse_queries.final": [0],
+            "clickhouse_queries.cache_hit": [0],
+            "clickhouse_queries.sample": [10.],
+            "clickhouse_queries.max_threads": [0],
+            "clickhouse_queries.num_days": [0],
+            "clickhouse_queries.clickhouse_table": [""],
+            "clickhouse_queries.query_id": [""],
+            "clickhouse_queries.is_duplicate": [0],
         }]
     )
