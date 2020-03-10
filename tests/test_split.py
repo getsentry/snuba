@@ -54,7 +54,7 @@ def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
 
     def do_query(request: Request) -> RawQueryResult:
         assert request.query == query
-        return RawQueryResult({}, {})
+        return RawQueryResult({}, 1, {})
 
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
