@@ -1,31 +1,44 @@
-from typing import Any, Mapping
+from typing import Any, MutableMapping, Sequence
 
 import pytest
 import uuid
 
 from snuba import state
-from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.split import SplitQueryPlanExecutionStrategy, ColumnSplitSpec
+from snuba.query import RawQueryResult
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.utils.metrics.timer import Timer
-from snuba.web.query import RawQueryResult
 
 
-def setup_function(function):
+def setup_function(function) -> None:
     state.set_config("use_split", 1)
 
 
-test_data_no_split = [
-    "events",
-    "transactions",
-    "groups",
+split_specs = [
+    (
+        "events",
+        ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+    ),
+    (
+        "groups",
+        ColumnSplitSpec(
+            id_column="events.event_id",
+            project_column="events.project_id",
+            timestamp_column="events.timestamp",
+        ),
+    ),
 ]
 
 
-@pytest.mark.parametrize("dataset_name", test_data_no_split)
-def test_no_split(dataset_name: str):
+@pytest.mark.parametrize("dataset_name, split_spec", split_specs)
+def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
     events = get_dataset(dataset_name)
     query = Query(
         {
@@ -39,17 +52,27 @@ def test_no_split(dataset_name: str):
         events.get_all_storages()[0].get_schemas().get_read_schema().get_data_source(),
     )
 
-    def do_query(dataset: Dataset, request: Request, timer: Timer):
+    def do_query(request: Request) -> RawQueryResult:
         assert request.query == query
+        return RawQueryResult({}, {})
 
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
-    do_query(events, request, None)
+    strategy = SplitQueryPlanExecutionStrategy(
+        split_spec=split_spec, default_strategy=SimpleQueryPlanExecutionStrategy(),
+    )
+
+    strategy.execute(request, do_query)
 
 
 test_data_col = [
     (
         "events",
+        ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
         [{"event_id": "a", "project_id": "1", "timestamp": " 2019-10-01 22:33:42"}],
         [
             {
@@ -62,6 +85,11 @@ test_data_col = [
     ),
     (
         "groups",
+        ColumnSplitSpec(
+            id_column="events.event_id",
+            project_column="events.project_id",
+            timestamp_column="events.timestamp",
+        ),
         [
             {
                 "events.event_id": "a",
@@ -82,14 +110,15 @@ test_data_col = [
 
 
 @pytest.mark.parametrize(
-    "dataset_name, first_query_data, second_query_data", test_data_col
+    "dataset_name, split_spec, first_query_data, second_query_data", test_data_col
 )
 def test_col_split(
     dataset_name: str,
-    first_query_data: Mapping[str, Any],
-    second_query_data: Mapping[str, Any],
-):
-    def do_query(dataset: Dataset, request: Request, timer: Timer):
+    split_spec: ColumnSplitSpec,
+    first_query_data: Sequence[MutableMapping[str, Any]],
+    second_query_data: Sequence[MutableMapping[str, Any]],
+) -> None:
+    def do_query(request: Request) -> RawQueryResult:
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
             return RawQueryResult({"data": first_query_data}, {})
@@ -126,4 +155,8 @@ def test_col_split(
         "tests",
     )
 
-    do_query(events, request, None)
+    strategy = SplitQueryPlanExecutionStrategy(
+        split_spec=split_spec, default_strategy=SimpleQueryPlanExecutionStrategy(),
+    )
+
+    strategy.execute(request, do_query)

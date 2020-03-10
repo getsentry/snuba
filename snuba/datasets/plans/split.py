@@ -109,20 +109,29 @@ class SplitQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         split_start = max(split_end - timedelta(seconds=split_step), from_date)
         total_results = 0
         while split_start < split_end and total_results < limit:
-            request.extensions["timeseries"]["from_date"] = split_start.isoformat()
-            request.extensions["timeseries"]["to_date"] = split_end.isoformat()
-            # Because its paged, we have to ask for (limit+offset) results
-            # and set offset=0 so we can then trim them ourselves.
-            request.query.set_offset(0)
-            request.query.set_limit(limit - total_results + remaining_offset)
-
             # The query function may mutate the request body during query
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
             # XXX: The extra data is carried across from the initial response
             # and never updated.
-            result = runner(copy.deepcopy(request))
+            split_request = copy.deepcopy(request)
+            split_request.extensions["timeseries"][
+                "from_date"
+            ] = split_start.isoformat()
+            split_request.extensions["timeseries"]["to_date"] = split_end.isoformat()
+            split_request.query.add_conditions(
+                [
+                    ("timestamp", ">=", split_start.isoformat()),
+                    ("timestamp", "<", split_end.isoformat()),
+                ]
+            )
+            # Because its paged, we have to ask for (limit+offset) results
+            # and set offset=0 so we can then trim them ourselves.
+            split_request.query.set_offset(0)
+            split_request.query.set_limit(limit - total_results + remaining_offset)
+
+            result = runner(split_request)
 
             if overall_result is None:
                 overall_result = result
