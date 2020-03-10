@@ -62,11 +62,8 @@ def test_simple():
             "status": "success",
             "clickhouse_queries.sql": ["select event_id from sentry_dist sample 0.1 prewhere project_id in (1) limit 50, 100"],
             "clickhouse_queries.status": ["success"],
-            "clickhouse_queries.final": [0],
-            "clickhouse_queries.cache_hit": [0],
-            "clickhouse_queries.sample": [10.],
-            "clickhouse_queries.max_threads": [0],
             "clickhouse_queries.trace_id": [str(uuid.UUID("b" * 32))],
             "clickhouse_queries.duration_ms": [0],
+            "clickhouse_queries.stats": ['{"sample": 10}']
         }]
     )
