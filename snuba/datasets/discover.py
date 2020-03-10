@@ -33,7 +33,7 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-from snuba.web.split import SplitQueryPlanExecutionStrategy
+from snuba.datasets.plans import SplitQueryPlanExecutionStrategy
 
 
 EVENTS = "events"

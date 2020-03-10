@@ -27,7 +27,7 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
-from snuba.web.split import (
+from snuba.datasets.plans.split import (
     ColumnSplitSpec,
     SplitQueryPlanExecutionStrategy,
 )
