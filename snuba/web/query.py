@@ -271,7 +271,6 @@ def parse_and_run_query(
         dataset=get_dataset_name(dataset),
         timer=timer,
         query_list=[],
-        referrer=request.referrer,
     )
 
     try:
