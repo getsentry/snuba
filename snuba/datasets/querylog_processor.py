@@ -35,6 +35,7 @@ class QuerylogProcessor(MessageProcessor):
         clickhouse_table = []
         query_id = []
         is_duplicate = []
+        consistent = []
 
         for query in query_list:
             sql.append(query["sql"])
@@ -51,7 +52,7 @@ class QuerylogProcessor(MessageProcessor):
             clickhouse_table.append(query["stats"].get("clickhouse_table", ""))
             query_id.append(query["stats"].get("query_id", ""))
             is_duplicate.append(int(query["stats"].get("is_duplicate", 0)))
-
+            consistent.append(int(query["stats"].get("consistent", 0)))
 
         return {
             "clickhouse_queries.sql": sql,
@@ -67,6 +68,7 @@ class QuerylogProcessor(MessageProcessor):
             "clickhouse_queries.clickhouse_table": clickhouse_table,
             "clickhouse_queries.query_id": query_id,
             "clickhouse_queries.is_duplicate": is_duplicate,
+            "clickhouse_queries.consistent": consistent,
         }
 
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
@@ -82,6 +84,8 @@ class QuerylogProcessor(MessageProcessor):
             "referrer": message["request"]["referrer"] or "",
             "dataset": message["dataset"],
             "projects": projects,
+            # TODO: This column is empty for now, we plan to use it soon as we
+            # will start to write org IDs into events and allow querying by org.
             "organization": None,
             "timestamp": message["timing"]["timestamp"],
             "duration_ms": message["timing"]["duration_ms"],

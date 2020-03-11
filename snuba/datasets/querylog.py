@@ -53,6 +53,7 @@ class QuerylogDataset(Dataset):
                             ("clickhouse_table", LowCardinality(String())),
                             ("query_id", String()),
                             ("is_duplicate", UInt(8)),
+                            ("consistent", UInt(8)),
                         ]
                     ),
                 ),
