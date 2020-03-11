@@ -32,6 +32,7 @@ def run(conn, dataset):
     schemas = []
     if dataset.get_table_writer():
         schemas.append(dataset.get_table_writer().get_schema())
+    schemas.append(dataset.get_dataset_schemas().get_read_schema())
 
     for schema in schemas:
         _run_schema(conn, schema)
