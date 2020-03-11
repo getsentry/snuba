@@ -160,7 +160,7 @@ class TransactionsDataset(TimeSeriesDataset):
                     Materialized(UInt(64), "cityHash64(transaction_name)",),
                 ),
                 ("transaction_op", LowCardinality(String())),
-                ("transaction_status", WithDefault(UInt(8), UNKNOWN_SPAN_STATUS)),
+                ("transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))),
                 ("start_ts", DateTime()),
                 ("start_ms", UInt(16)),
                 ("_start_date", Materialized(Date(), "toDate(start_ts)"),),
