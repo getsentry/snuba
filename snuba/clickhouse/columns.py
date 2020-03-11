@@ -402,7 +402,7 @@ class ColumnSet:
     def __len__(self) -> int:
         return len(self._flattened)
 
-    def __add__(self, other: Union[ColumnSet, List[Column]]) -> ColumnSet:
+    def __add__(self, other) -> ColumnSet:
         if isinstance(other, ColumnSet):
             return ColumnSet(self.columns + other.columns)
         return ColumnSet(self.columns + other)
