@@ -32,7 +32,7 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
         if enforce_validity:
             raise e
         else:
-            logger.exception("Failed to parse query")
+            logger.warning("Failed to parse query", exc_info=True)
             source = dataset.get_dataset_schemas().get_read_schema().get_data_source()
             return Query(body, source)
 
