@@ -16,9 +16,12 @@ DATASET_NAMES: Set[str] = {
     "transactions",
     "outcomes",
     "outcomes_raw",
+    "sessions",
     "discover",
 }
 
+# Internal datasets registered here cannot be queried directly via API
+INTERNAL_DATASET_NAMES: Set[str] = set()
 
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
@@ -42,6 +45,7 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
     from snuba.datasets.groups import Groups
     from snuba.datasets.discover import DiscoverDataset
+    from snuba.datasets.sessions import SessionsDataset
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
         "events": EventsDataset,
@@ -52,6 +56,7 @@ def get_dataset(name: str) -> Dataset:
         "transactions": TransactionsDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
+        "sessions": SessionsDataset,
         "discover": DiscoverDataset,
     }
 
@@ -79,3 +84,8 @@ def enforce_table_writer(dataset: Dataset) -> TableWriter:
     table_writer = dataset.get_table_writer()
     assert table_writer is not None, f"Dataset{dataset} is not writable"
     return table_writer
+
+def ensure_not_internal(dataset: Dataset) -> None:
+    name = get_dataset_name(dataset)
+    if name in INTERNAL_DATASET_NAMES:
+        raise InvalidDatasetError(f"Dataset {name} is internal")

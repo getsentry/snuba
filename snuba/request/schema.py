@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import uuid
 
 from typing import Any, Mapping, Type
 
@@ -103,7 +104,8 @@ class RequestSchema:
             }
 
         query = parse_query(query_body, dataset)
-        return Request(query, self.__setting_class(**settings), extensions, referrer)
+        request_id = uuid.uuid4().hex
+        return Request(request_id, query, self.__setting_class(**settings), extensions, referrer)
 
     def __generate_template_impl(self, schema) -> Any:
         """

@@ -13,6 +13,6 @@ conftest.py
 .coverage
 .mypy_cache/
 .pytest_cache/
-.venv/
+.venv
 htmlcov/
 snuba.egg-info/
