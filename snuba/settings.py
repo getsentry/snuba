@@ -1,5 +1,5 @@
 import os
-from typing import MutableMapping
+from typing import Any, Mapping, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -11,7 +11,7 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS = {}
+DISABLED_DATASETS: Set[str] = set()
 DATASET_MODE = "local"
 
 # Clickhouse Options
@@ -57,7 +57,7 @@ BULK_CLICKHOUSE_BUFFER = 10000
 
 # Processor/Writer Options
 DEFAULT_BROKERS = ["localhost:9092"]
-DEFAULT_DATASET_BROKERS = {}
+DEFAULT_DATASET_BROKERS: Mapping[str, Sequence[str]] = {}
 
 DEFAULT_MAX_BATCH_SIZE = 50000
 DEFAULT_MAX_BATCH_TIME_MS = 2 * 1000
@@ -67,7 +67,7 @@ DISCARD_OLD_EVENTS = True
 CLICKHOUSE_HTTP_CHUNK_SIZE = 1
 
 DEFAULT_RETENTION_DAYS = 90
-RETENTION_OVERRIDES = {}
+RETENTION_OVERRIDES: Mapping[int, int] = {}
 
 MAX_PREWHERE_CONDITIONS = 1
 
@@ -85,12 +85,12 @@ REPLACER_MAX_GROUP_IDS_TO_EXCLUDE = 256
 
 TURBO_SAMPLE_RATE = 0.1
 
-PROJECT_STACKTRACE_BLACKLIST = set()
+PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 
-TOPIC_PARTITION_COUNTS: MutableMapping[str, int] = {}  # (topic name, # of partitions)
+TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 
-def _load_settings(obj=locals()):
+def _load_settings(obj: Any = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
     variable. Defaults to `./snuba/settings_base.py`. Users can provide a
     short name like `test` that will be expanded to `settings_test.py` in the
@@ -113,6 +113,7 @@ def _load_settings(obj=locals()):
                 "snuba.settings.custom", settings
             )
             settings_module = importlib.util.module_from_spec(settings_spec)
+            assert isinstance(settings_spec.loader, importlib.abc.Loader)
             settings_spec.loader.exec_module(settings_module)
         else:
             module_format = ".%s" if settings.startswith("settings_") else ".settings_%s"
