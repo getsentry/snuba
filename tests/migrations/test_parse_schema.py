@@ -1,6 +1,7 @@
 import pytest
 
 from snuba.clickhouse.columns import (
+    AggregateFunction,
     Array,
     Date,
     DateTime,
@@ -33,6 +34,10 @@ test_data = [
     (("String", "", "", ""), String()),
     (("UInt32", "", "", ""), UInt(32)),
     (("UUID", "", "", ""), UUID()),
+    # Aggregate functions
+    (("AggregateFunction(uniq, UInt8)", "", "", ""), AggregateFunction("uniq", UInt(8))),
+    (("AggregateFunction(countIf, UUID, UInt8)", "", "", ""), AggregateFunction("countIf", UUID(), UInt(8))),
+    (("AggregateFunction(quantileIf(0.5, 0.9), UInt32, UInt8)", "", "", ""), AggregateFunction("quantileIf(0.5, 0.9)", UInt(32), UInt(8))),
     # Array
     (("Array(String)", "", "", ""), Array(String())),
     (("Array(DateTime)", "", "", ""), Array(DateTime())),

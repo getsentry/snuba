@@ -6,6 +6,7 @@ from parsimonious.nodes import Node, NodeVisitor  # type: ignore
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from snuba.clickhouse.columns import (
+    AggregateFunction,
     Array,
     ColumnType,
     Date,
@@ -30,7 +31,7 @@ logger = logging.getLogger("snuba.migrate")
 
 grammar = Grammar(
     r"""
-    type             = primitive / lowcardinality / nullable / array
+    type             = primitive / lowcardinality / agg / nullable / array
     primitive        = basic_type / uint / float / fixedstring / enum
     # DateTime must come before Date
     basic_type       = "DateTime" / "Date" / "IPv4" / "IPv6" / "String" / "UUID"
@@ -46,6 +47,9 @@ grammar = Grammar(
     enum_pair        = quote enum_str quote space equal space enum_val
     enum_str         = ~r"([a-zA-Z0-9]+)"
     enum_val         = ~r"\d+"
+    agg              = "AggregateFunction" open_paren agg_func comma space agg_types close_paren
+    agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
+    agg_types        = (primitive (comma space)?)*
     array            = "Array" open_paren (primitive / nullable) close_paren
     lowcardinality   = "LowCardinality" open_paren (primitive / nullable) close_paren
     nullable         = "Nullable" open_paren (primitive) close_paren
@@ -98,6 +102,16 @@ class Visitor(NodeVisitor):
 
     def visit_enum_val(self, node: Node, visited_children: Iterable[Any]) -> int:
         return int(node.text)
+
+    def visit_agg(self, node: Node, visited_children: Iterable[Any]) -> str:
+        (_agg, _paren, agg_func, _comma, _space, agg_types, _paren) = visited_children
+        return AggregateFunction(agg_func, *agg_types)
+
+    def visit_agg_func(self, node: Node, visited_children: Iterable[Any]) -> str:
+        return str(node.text)
+
+    def visit_agg_types(self, node: Node, visited_children: Iterable[Any]) -> Sequence[ColumnType]:
+        return [c[0] for c in visited_children]
 
     def visit_lowcardinality(self, node: Node, visited_children: Iterable[Any]) -> ColumnType:
         (_lc, _paren, inner_type, _paren) = visited_children
