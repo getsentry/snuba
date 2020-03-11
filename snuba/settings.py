@@ -1,5 +1,5 @@
 import os
-from typing import Any, Mapping, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -90,7 +90,7 @@ PROJECT_STACKTRACE_BLACKLIST: Set[int] = set()
 TOPIC_PARTITION_COUNTS: Mapping[str, int] = {}  # (topic name, # of partitions)
 
 
-def _load_settings(obj: Any = locals()) -> None:
+def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
     """Load settings from the path provided in the SNUBA_SETTINGS environment
     variable. Defaults to `./snuba/settings_base.py`. Users can provide a
     short name like `test` that will be expanded to `settings_test.py` in the
