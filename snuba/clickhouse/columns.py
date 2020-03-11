@@ -150,9 +150,9 @@ class WithCodecs(ColumnTypeWithModifier):
 
 
 class WithDefault(ColumnTypeWithModifier):
-    def __init__(self, inner_type: ColumnType, default) -> None:
+    def __init__(self, inner_type: ColumnType, default: str) -> None:
         super().__init__(inner_type)
-        self.default = default  # XXX: this is problematic for typing
+        self.default = default
 
     def __repr__(self) -> str:
         return "WithDefault({}, {})".format(repr(self.inner_type), self.default)
