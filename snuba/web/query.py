@@ -14,7 +14,7 @@ import sentry_sdk
 from flask import request as http_request
 from functools import partial
 
-from snuba import settings, state
+from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
@@ -31,14 +31,16 @@ from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
 )
-from snuba.util import create_metrics, force_bytes
+from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
-metrics = create_metrics("snuba.api")
+
+metrics = MetricsWrapper(environment.metrics, "api")
 
 
 class RawQueryResult(NamedTuple):
@@ -269,7 +271,6 @@ def parse_and_run_query(
         dataset=get_dataset_name(dataset),
         timer=timer,
         query_list=[],
-        referrer=request.referrer,
     )
 
     try:

@@ -20,6 +20,8 @@ DATASET_NAMES: Set[str] = {
     "discover",
 }
 
+# Internal datasets registered here cannot be queried directly via API
+INTERNAL_DATASET_NAMES: Set[str] = set()
 
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
@@ -82,3 +84,8 @@ def enforce_table_writer(dataset: Dataset) -> TableWriter:
     table_writer = dataset.get_table_writer()
     assert table_writer is not None, f"Dataset{dataset} is not writable"
     return table_writer
+
+def ensure_not_internal(dataset: Dataset) -> None:
+    name = get_dataset_name(dataset)
+    if name in INTERNAL_DATASET_NAMES:
+        raise InvalidDatasetError(f"Dataset {name} is internal")

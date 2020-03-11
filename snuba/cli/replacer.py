@@ -3,9 +3,10 @@ from typing import Optional, Sequence
 
 import click
 
-from snuba import settings
+from snuba import environment, settings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.environment import setup_logging, setup_sentry
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 
 @click.command()
@@ -75,7 +76,6 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
-    from snuba import util
     from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
     from snuba.utils.codecs import PassthroughCodec
@@ -100,8 +100,10 @@ def replacer(
     ), f"Dataset {dataset} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = util.create_metrics(
-        "snuba.replacer", tags={"group": consumer_group, "dataset": dataset_name}
+    metrics = MetricsWrapper(
+        environment.metrics,
+        "replacer",
+        tags={"group": consumer_group, "dataset": dataset_name},
     )
 
     client_settings = {

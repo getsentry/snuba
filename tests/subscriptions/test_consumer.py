@@ -1,10 +1,14 @@
+from datetime import timedelta
+
 import pytest
 
 from snuba.subscriptions.consumer import Tick, TickConsumer
+from snuba.utils.clock import TestingClock
 from snuba.utils.streams.consumer import Consumer, ConsumerError
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer, epoch
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
+from tests.assertions import assert_changes, assert_does_not_change
 
 
 def test_tick_consumer() -> None:
@@ -154,3 +158,72 @@ def test_tick_consumer() -> None:
 
     with pytest.raises(ConsumerError):
         consumer.seek({Partition(topic, -1): 0})
+
+
+def test_tick_consumer_non_monotonic() -> None:
+    topic = Topic("messages")
+    partition = Partition(topic, 0)
+
+    clock = TestingClock(epoch.timestamp())
+    broker: DummyBroker[int] = DummyBroker(clock)
+    broker.create_topic(topic, partitions=1)
+
+    producer: DummyProducer[int] = DummyProducer(broker)
+
+    inner_consumer: Consumer[int] = DummyConsumer(broker, "group")
+
+    consumer = TickConsumer(inner_consumer)
+
+    consumer.subscribe([topic])
+
+    producer.produce(partition, 0)
+
+    clock.sleep(1)
+
+    producer.produce(partition, 1)
+
+    with assert_changes(
+        inner_consumer.tell, {partition: 0}, {partition: 1}
+    ), assert_does_not_change(consumer.tell, {partition: 0}):
+        assert consumer.poll() is None
+
+    with assert_changes(
+        inner_consumer.tell, {partition: 1}, {partition: 2}
+    ), assert_changes(consumer.tell, {partition: 0}, {partition: 1}):
+        assert consumer.poll() == Message(
+            partition,
+            0,
+            Tick(
+                offsets=Interval(0, 1),
+                timestamps=Interval(epoch, epoch + timedelta(seconds=1)),
+            ),
+            epoch + timedelta(seconds=1),
+        )
+
+    clock.sleep(-1)
+
+    producer.produce(partition, 2)
+
+    with assert_changes(
+        inner_consumer.tell, {partition: 2}, {partition: 3}
+    ), assert_does_not_change(consumer.tell, {partition: 1}):
+        assert consumer.poll() is None
+
+    clock.sleep(2)
+
+    producer.produce(partition, 3)
+
+    with assert_changes(
+        inner_consumer.tell, {partition: 3}, {partition: 4}
+    ), assert_changes(consumer.tell, {partition: 1}, {partition: 3}):
+        assert consumer.poll() == Message(
+            partition,
+            1,
+            Tick(
+                offsets=Interval(1, 3),
+                timestamps=Interval(
+                    epoch + timedelta(seconds=1), epoch + timedelta(seconds=2)
+                ),
+            ),
+            epoch + timedelta(seconds=2),
+        )

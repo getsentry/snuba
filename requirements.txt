@@ -42,7 +42,9 @@ lz4==2.0.0
 Markdown==2.6.11
 MarkupSafe==1.0
 mccabe==0.6.1
+mywsgi==1.0.3
 more-itertools==4.2.0
+mypy>=0.761
 packaging==17.1
 parsimonious==0.8.1
 parso==0.2.1
@@ -79,7 +81,7 @@ traitlets==4.3.2
 typing-extensions==3.7.4.1
 unittest2==1.1.0
 urllib3==1.25.3
-uWSGI==2.0.17
+uWSGI==2.0.18
 wcwidth==0.1.7
 Werkzeug==0.15.3
 wrapt==1.10.11

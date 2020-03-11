@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import (
     Any,
@@ -11,7 +12,10 @@ from typing import (
 
 from snuba.utils.streams.consumer import Consumer, ConsumerError
 from snuba.utils.streams.types import Message, Partition, Topic
-from snuba.utils.types import Interval
+from snuba.utils.types import Interval, InvalidRangeError
+
+
+logger = logging.getLogger(__name__)
 
 
 class MessageDetails(NamedTuple):
@@ -107,15 +111,26 @@ class TickConsumer(Consumer[Tick]):
 
         result: Optional[Message[Tick]]
         if previous_message is not None:
-            result = Message(
-                message.partition,
-                previous_message.offset,
-                Tick(
-                    Interval(previous_message.offset, message.offset),
-                    Interval(previous_message.timestamp, message.timestamp),
-                ),
-                message.timestamp,
-            )
+            try:
+                time_interval = Interval(previous_message.timestamp, message.timestamp)
+            except InvalidRangeError:
+                logger.warning(
+                    "Could not construct valid time interval between %r and %r!",
+                    previous_message,
+                    message,
+                    exc_info=True,
+                )
+                return None
+            else:
+                result = Message(
+                    message.partition,
+                    previous_message.offset,
+                    Tick(
+                        Interval(previous_message.offset, message.offset),
+                        time_interval,
+                    ),
+                    message.timestamp,
+                )
         else:
             result = None
 
