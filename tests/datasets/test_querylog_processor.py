@@ -73,5 +73,6 @@ def test_simple():
             "clickhouse_queries.clickhouse_table": [""],
             "clickhouse_queries.query_id": [""],
             "clickhouse_queries.is_duplicate": [0],
+            "clickhouse_queries.consistent": [0],
         }]
     )
