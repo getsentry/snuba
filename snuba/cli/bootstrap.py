@@ -66,22 +66,20 @@ def bootstrap(
         topics = {}
         for name in DATASET_NAMES:
             dataset = get_dataset(name)
-            storage = dataset.get_writable_storage()
-            if storage:
-                table_writer = storage.get_table_writer()
-                if table_writer:
-                    stream_loader = table_writer.get_stream_loader()
-                    for topic_spec in stream_loader.get_all_topic_specs():
-                        if topic_spec.topic_name in topics:
-                            continue
-                        logger.debug(
-                            "Adding topic %s to creation list", topic_spec.topic_name
-                        )
-                        topics[topic_spec.topic_name] = NewTopic(
-                            topic_spec.topic_name,
-                            num_partitions=topic_spec.partitions_number,
-                            replication_factor=topic_spec.replication_factor,
-                        )
+            table_writer = dataset.get_table_writer()
+            if table_writer:
+                stream_loader = table_writer.get_stream_loader()
+                for topic_spec in stream_loader.get_all_topic_specs():
+                    if topic_spec.topic_name in topics:
+                        continue
+                    logger.debug(
+                        "Adding topic %s to creation list", topic_spec.topic_name
+                    )
+                    topics[topic_spec.topic_name] = NewTopic(
+                        topic_spec.topic_name,
+                        num_partitions=topic_spec.partitions_number,
+                        replication_factor=topic_spec.replication_factor,
+                    )
 
         logger.debug("Initiating topic creation")
         for topic, future in client.create_topics(
