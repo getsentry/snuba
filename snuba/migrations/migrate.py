@@ -1,7 +1,7 @@
 import logging
 
 from clickhouse_driver import Client
-from typing import Sequence
+from typing import MutableSequence
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.schemas import Schema
@@ -35,12 +35,10 @@ def _run_schema(conn: Client, schema: Schema) -> None:
 
 
 def run(conn: Client, dataset: Dataset) -> None:
-    schemas: Sequence[Schema] = []
-    write_storage = dataset.get_writable_storage()
-    if write_storage:
-        writer = write_storage.get_table_writer()
-        if writer:
-            schemas.append(writer.get_schema())
+    schemas: MutableSequence[Schema] = []
+    writer = dataset.get_table_writer()
+    if writer:
+        schemas.append(writer.get_schema())
     for storage in dataset.get_all_storages():
         schemas.append(storage.get_schemas().get_read_schema())
 
