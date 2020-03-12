@@ -1,3 +1,5 @@
+from typing import Optional
+
 import jsonschema
 import sentry_sdk
 from werkzeug.exceptions import BadRequest
@@ -9,7 +11,7 @@ from snuba.utils.metrics.timer import Timer
 
 
 def validate_request_content(
-    body, schema: RequestSchema, timer: Timer, dataset: Dataset, referrer: str
+    body, schema: RequestSchema, timer: Optional[Timer], dataset: Dataset, referrer: str
 ) -> Request:
     with sentry_sdk.start_span(
         description="validate_request_content", op="validate"
@@ -20,6 +22,7 @@ def validate_request_content(
         except jsonschema.ValidationError as error:
             raise BadRequest(str(error)) from error
 
-        timer.mark("validate_schema")
+        if timer is not None:
+            timer.mark("validate_schema")
 
     return request
