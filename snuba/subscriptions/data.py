@@ -12,7 +12,7 @@ from snuba.request import Request
 from snuba.request.request_settings import SubscriptionRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import validate_request_content
-from snuba.utils.metrics.timer import Timer
+
 
 SUBSCRIPTION_REFERRER = "subscription"
 
@@ -69,7 +69,7 @@ class SubscriptionData:
             raise InvalidSubscriptionError("Resolution does not support microseconds")
 
     def build_request(
-        self, dataset: Dataset, timestamp: datetime, offset: Optional[int], timer: Timer
+        self, dataset: Dataset, timestamp: datetime, offset: Optional[int]
     ) -> Request:
         """
         Returns a Request that can be used to run a query via `parse_and_run_query`.
@@ -92,7 +92,7 @@ class SubscriptionData:
                 "to_date": timestamp.isoformat(),
             },
             schema,
-            timer,
+            None,
             dataset,
             SUBSCRIPTION_REFERRER,
         )

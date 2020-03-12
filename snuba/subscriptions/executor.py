@@ -35,27 +35,24 @@ class SubscriptionExecutor:
         self.__metrics = metrics
         self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
 
-    def __run_query(
-        self, scheduled_at: datetime, request: Request, timer: Timer
-    ) -> Result:
+    def __run_query(self, scheduled_at: datetime, request: Request) -> Result:
         self.__metrics.timing(
             "executor.latency", (time.time() - scheduled_at.timestamp()) * 1000,
         )
         with self.__concurrent_gauge:
-            return parse_and_run_query(self.__dataset, request, timer).result
+            return parse_and_run_query(self.__dataset, request, Timer("query")).result
 
     def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:
-        timer = Timer("query")
         try:
             request = task.task.data.build_request(
-                self.__dataset, task.timestamp, tick.offsets.upper, timer,
+                self.__dataset, task.timestamp, tick.offsets.upper
             )
         except Exception as e:
             future: Future[Result] = Future()
             future.set_exception(e)
         else:
             future = self.__executor_pool.submit(
-                self.__run_query, task.timestamp, request, timer
+                self.__run_query, task.timestamp, request
             )
         return future
 
