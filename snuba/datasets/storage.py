@@ -19,7 +19,6 @@ class Storage(ABC):
     - it can provide a table writer if we can write on this storage
     - a sequence of query processors that are applied to the query after
       the storage is selected.
-
     There are one or multiple storages per dataset (in the future, there
     will be multiple per entity). During the query processing a storage
     is selected and the query focuses on that storage from that point.
