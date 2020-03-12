@@ -25,6 +25,10 @@ class Storage(ABC):
     is selected and the query focuses on that storage from that point.
     """
 
+    # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
+    # read schema that existed before this dataset model and before TableWriters (then we
+    # trusted StorageSchemas to define which schema we would write on and which one we would
+    # read from). This is not needed anymore since TableWriter has its own write schema.
     def get_schemas(self) -> StorageSchemas:
         """
         Returns the collections of schemas for DDL operations and for query.
