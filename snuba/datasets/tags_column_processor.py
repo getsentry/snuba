@@ -125,9 +125,13 @@ class TagColumnProcessor:
 
     def __string_col(self, col: str) -> str:
         col_type = self.__columns.get(col, None)
-        col_type = str(col_type) if col_type else None
+        col_type_name = str(col_type) if col_type else None
 
-        if col_type and "String" in col_type and "FixedString" not in col_type:
+        if (
+            col_type_name
+            and "String" in col_type_name
+            and "FixedString" not in col_type_name
+        ):
             return escape_identifier(col)
         else:
             return "toString({})".format(escape_identifier(col))

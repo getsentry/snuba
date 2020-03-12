@@ -31,15 +31,16 @@ class SnubaQueryMetadata:
     dataset: str
     timer: Timer
     query_list: MutableSequence[ClickhouseQueryMetadata]
-    referrer: Optional[str] = None
 
     def to_dict(self) -> Mapping[str, Any]:
         return {
-            "request_id": self.request.id,
-            "referrer": self.referrer,
+            "request": {
+                "id": self.request.id,
+                "body": self.request.body,
+                "referrer": self.request.referrer,
+            },
             "dataset": self.dataset,
             "query_list": [q.to_dict() for q in self.query_list],
-            "request": self.request.body,
             "status": self.status,
             "timing": self.timer.for_json(),
         }
