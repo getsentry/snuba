@@ -4,6 +4,7 @@ from typing import FrozenSet, Mapping, Sequence, Union
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
+    ColumnType,
     DateTime,
     FixedString,
     Float,
@@ -17,10 +18,7 @@ from snuba.datasets.dataset_schemas import DatasetSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schemas.tables import (
-    MigrationSchemaColumn,
-    ReplacingMergeTreeSchema,
-)
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -35,7 +33,7 @@ from snuba.util import qualified_column
 
 
 def events_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
 ) -> Sequence[str]:
     # Add/remove known migrations
     ret = []

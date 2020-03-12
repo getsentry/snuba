@@ -6,7 +6,7 @@ import click
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import clickhouse_rw, setup_logging
-from snuba.migrate import run
+from snuba.migrations.migrate import run
 
 
 @click.command()
