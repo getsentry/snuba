@@ -27,7 +27,11 @@ class ColumnSplitSpec(NamedTuple):
 
 class Dataset(object):
     """
-    A dataset represent one or multiple entities in the Snuba data model.
+    A dataset represents a data model we can run a Snuba Query on.
+    A data model provides an abstract schema (today it is a flat table,
+    soon it will be a graph of Entities).
+    The dataset (later the Entity) has access to multiple Storage objects,
+    each one represents a table/view on the DB we can query.
     The class is a facade to access the components used to write on the
     data model and to query the entities.
 
@@ -40,9 +44,16 @@ class Dataset(object):
       by the dataset
     - the Storage to run the query onto is selected. This is done by a
       QueryStorageSelector which is provided by the dataset. From this point
-      the query processing is storage specific.
+      the query processing is storage specific. [This step is temporary till we
+      do not have a Query Plan Builder]
     - storage query processing. A second series of QueryProcessors are applied
       to the query. These are defined by the storage.
+
+    The architecture of the Dataset is divided in two layers. The highest layer
+    provides the logic we use to deal with the data model. (writers, query processors,
+    storage selectors, etc.). The lowest layer incldues simple objects that define
+    the query itself (Query, Schema, RelationalSource). The lop layer object access and
+    manipulate the lower layer objects.
     """
 
     def __init__(
