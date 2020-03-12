@@ -108,13 +108,12 @@ class Schema(ABC):
                 )
                 continue
 
-            expected_type = self.get_columns()[column_name].type.for_schema()
+            expected_type = self.get_columns()[column_name].type
 
-            column_type = column.for_schema()
-            if column_type != expected_type:
+            if column != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
-                    % (column_name, expected_type, column_type)
+                    % (column_name, expected_type, column)
                 )
 
         return errors
