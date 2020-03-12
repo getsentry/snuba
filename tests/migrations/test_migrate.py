@@ -24,7 +24,10 @@ class TestMigrate(BaseDatasetTest):
         from snuba.migrations.parse_schema import get_local_schema
 
         for dataset_name in DATASET_NAMES:
-            table_writer = get_dataset(dataset_name).get_table_writer()
+            storage = get_dataset(dataset_name).get_writable_storage()
+            if not storage:
+                continue
+            table_writer = storage.get_table_writer()
             if not table_writer:
                 continue
 
