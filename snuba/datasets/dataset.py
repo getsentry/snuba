@@ -4,6 +4,7 @@ from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
 from snuba.datasets.storage import Storage, TableStorage
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -28,7 +29,7 @@ class ColumnSplitSpec(NamedTuple):
 
 class Dataset(object):
     """
-    A dataset represent a data model we can run a Snuba Query on.
+    A dataset represents a data model we can run a Snuba Query on.
     A data model provides an abstract schema (today it is a flat table,
     soon it will be a graph of Entities).
     The dataset (later the Entity) has access to multiple Storage objects,
@@ -50,7 +51,7 @@ class Dataset(object):
 
     The architecture of the Dataset is divided in two layers. The highest layer
     provides the logic we use to deal with the data model. (writers, query processors,
-    query planners, etc.). The lowest layer incldues simple objects that defines
+    query planners, etc.). The lowest layer incldues simple objects that define
     the query itself (Query, Schema, RelationalSource). The lop layer object access and
     manipulate the lower layer objects.
     """
@@ -113,14 +114,18 @@ class Dataset(object):
         """
         return self.__storages
 
-    def get_writable_storage(self) -> Optional[TableStorage]:
+    def get_table_writer(self) -> Optional[TableWriter]:
         """
         We allow only one table storage we can write onto per dataset as of now.
         This will move to the entity as soon as we have entities, and
         the constraint of one writable storage will drop as soon as the consumers
         start referencing entities and storages instead of datasets.
         """
-        return self.__writable_storage
+        return (
+            self.__writable_storage.get_table_writer()
+            if self.__writable_storage
+            else None
+        )
 
     # Old methods that we are migrating away from
     def column_expr(

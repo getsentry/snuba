@@ -1284,8 +1284,8 @@ class TestApi(BaseApiTest):
 
         assert self.app.post("/tests/events/drop").status_code == 200
         dataset = get_dataset("events")
-        storage = dataset.get_writable_storage()
-        table = storage.get_table_writer().get_schema().get_table_name()
+        writer = dataset.get_table_writer()
+        table = writer.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 
@@ -1708,7 +1708,7 @@ class TestApi(BaseApiTest):
             assert record_query_mock.call_count == 1
             metadata = record_query_mock.call_args[0][0]
             assert metadata["dataset"] == "events"
-            assert metadata["referrer"] == "test"
+            assert metadata["request"]["referrer"] == "test"
             assert len(metadata["query_list"]) == expected_query_count
 
 
