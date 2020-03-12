@@ -1,4 +1,6 @@
 from snuba.datasets.dataset import Dataset
+from snuba.clickhouse.columns import ColumnSet
+from snuba.datasets.storage import QueryStorageSelector
 
 
 class CdcDataset(Dataset):

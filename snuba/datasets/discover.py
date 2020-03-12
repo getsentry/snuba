@@ -15,7 +15,6 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
@@ -26,7 +25,6 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -208,9 +206,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 events_dataset.get_storage(),
                 transactions_dataset.get_storage(),
             ],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[PrewhereProcessor()],
-            ),
+            storage_selector=storage_selector,
             abstract_column_set=self.__common_columns
             + self.__events_columns
             + self.__transactions_columns,

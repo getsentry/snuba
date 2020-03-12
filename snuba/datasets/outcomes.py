@@ -14,7 +14,6 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
 from snuba.processor import (
     _ensure_valid_date,
@@ -190,17 +189,15 @@ class OutcomesDataset(TimeSeriesDataset):
                 write_schema=None,
                 intermediary_schemas=[materialized_view_schema],
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
+        )
+        storage_selector = OutcomesQueryStorageSelector(
+            raw_table=writable_storage, materialized_view=materialized_storage
         )
 
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                OutcomesQueryStorageSelector(
-                    raw_table=writable_storage, materialized_view=materialized_storage
-                ),
-                post_processors=[PrewhereProcessor()],
-            ),
+            storage_selector=storage_selector,
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
