@@ -34,6 +34,17 @@ class TestEventsDataset(BaseEventsTest):
             == "(app_device AS `tags[app.device]`)"
         )
 
+        # Promoted context expression / with translation
+        assert (
+            column_expr(
+                self.dataset,
+                "contexts[device.battery_level]",
+                deepcopy(query),
+                ParsingContext(),
+            )
+            == "(toString(device_battery_level) AS `contexts[device.battery_level]`)"
+        )
+
         # All tag keys expression
         q = Query({"granularity": 86400, "selected_columns": ["tags_key"]}, source,)
         assert column_expr(self.dataset, "tags_key", q, ParsingContext()) == (

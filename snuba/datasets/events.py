@@ -368,13 +368,17 @@ class EventsDataset(TimeSeriesDataset):
         # For every applicable promoted column,  a map of translations from the column
         # name  we save in the database to the tag we receive in the query.
         promoted_context_tag_columns = self._get_promoted_context_tag_columns()
+        promoted_context_columns = self._get_promoted_context_columns()
 
         return {
             "tags": {
                 col.flattened: col.flattened.replace("_", ".")
                 for col in promoted_context_tag_columns
             },
-            "contexts": {},
+            "contexts": {
+                col.flattened: col.flattened.replace("_", ".", 1)
+                for col in promoted_context_columns
+            },
         }
 
     def get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
