@@ -22,7 +22,8 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
-from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
+from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.storage import TableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -193,14 +194,14 @@ class ErrorsDataset(TimeSeriesDataset):
                     state_name=ReplacerState.ERRORS,
                 ),
             ),
-            query_processors=[PrewhereProcessor()],
+            query_processors=[],
         )
-
-        storage_selector = SingleTableQueryStorageSelector(storage=storage)
 
         super().__init__(
             storages=[storage],
-            storage_selector=storage_selector,
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=storage, post_processors=[PrewhereProcessor()],
+            ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
