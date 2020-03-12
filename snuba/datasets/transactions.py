@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
+    ColumnType,
     Date,
     DateTime,
     IPv4,
@@ -15,16 +16,13 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
     WithDefault,
-)
+
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.schemas.tables import (
-    MigrationSchemaColumn,
-    ReplacingMergeTreeSchema,
-)
-from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.storage import TableStorage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -79,11 +77,11 @@ class TransactionsTableWriter(TableWriter):
 
 
 def transactions_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
 ) -> Sequence[str]:
     ret = []
     duration_col = current_schema.get("duration")
-    if duration_col and duration_col.default_type == "MATERIALIZED":
+    if duration_col and Materialized in duration_col.get_all_modifiers():
         ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
 
     if "sdk_name" not in current_schema:
@@ -138,10 +136,14 @@ def transactions_migrations(
     ]
     for col_name in low_cardinality_cols:
         col = current_schema.get(col_name)
-        if col and not col.column_type.startswith("LowCardinality"):
-            new_type = f"LowCardinality({col.column_type})"
+
+        if col and LowCardinality not in col.get_all_modifiers():
+            if isinstance(col, WithDefault):
+                col.inner_type = LowCardinality(col.inner_type)
+            else:
+                col = LowCardinality(col)
             ret.append(
-                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {new_type} {col.default_type} {col.default_expr}"
+                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {col.for_schema()}"
             )
 
     return ret
@@ -161,7 +163,7 @@ class TransactionsDataset(TimeSeriesDataset):
                     Materialized(UInt(64), "cityHash64(transaction_name)",),
                 ),
                 ("transaction_op", LowCardinality(String())),
-                ("transaction_status", WithDefault(UInt(8), UNKNOWN_SPAN_STATUS)),
+                ("transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))),
                 ("start_ts", DateTime()),
                 ("start_ms", UInt(16)),
                 ("_start_date", Materialized(Date(), "toDate(start_ts)"),),

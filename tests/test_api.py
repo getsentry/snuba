@@ -1708,7 +1708,7 @@ class TestApi(BaseApiTest):
             assert record_query_mock.call_count == 1
             metadata = record_query_mock.call_args[0][0]
             assert metadata["dataset"] == "events"
-            assert metadata["referrer"] == "test"
+            assert metadata["request"]["referrer"] == "test"
             assert len(metadata["query_list"]) == expected_query_count
 
 
