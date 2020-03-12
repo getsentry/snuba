@@ -40,7 +40,7 @@ class Column:
     @staticmethod
     def to_columns(
         columns: Sequence[Union[Column, Tuple[str, ColumnType]]]
-    ) -> List[Column]:
+    ) -> MutableSequence[Column]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
 
@@ -406,8 +406,8 @@ class ColumnSet:
 
     def __add__(self, other) -> ColumnSet:
         if isinstance(other, ColumnSet):
-            return ColumnSet(self.columns + other.columns)
-        return ColumnSet(self.columns + other)
+            return ColumnSet([*self.columns, *other.columns])
+        return ColumnSet([*self.columns, *other])
 
     def __contains__(self, key: str) -> bool:
         return key in self._lookup
