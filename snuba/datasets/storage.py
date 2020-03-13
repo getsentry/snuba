@@ -19,12 +19,15 @@ class Storage(ABC):
     - it can provide a table writer if we can write on this storage
     - a sequence of query processors that are applied to the query after
       the storage is selected.
-
     There are one or multiple storages per dataset (in the future, there
     will be multiple per entity). During the query processing a storage
     is selected and the query focuses on that storage from that point.
     """
 
+    # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
+    # read schema that existed before this dataset model and before TableWriters (then we
+    # trusted StorageSchemas to define which schema we would write on and which one we would
+    # read from). This is not needed anymore since TableWriter has its own write schema.
     def get_schemas(self) -> StorageSchemas:
         """
         Returns the collections of schemas for DDL operations and for query.
