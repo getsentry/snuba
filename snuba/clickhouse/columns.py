@@ -40,7 +40,7 @@ class Column:
     @staticmethod
     def to_columns(
         columns: Sequence[Union[Column, Tuple[str, ColumnType]]]
-    ) -> MutableSequence[Column]:
+    ) -> Sequence[Column]:
         return [Column(*col) if not isinstance(col, Column) else col for col in columns]
 
 
