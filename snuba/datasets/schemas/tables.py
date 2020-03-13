@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Mapping, NamedTuple, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.datasets.schemas import RelationalSource, Schema
 from snuba.query.types import Condition
 from snuba.util import local_dataset_mode
@@ -41,12 +41,6 @@ class TableSource(RelationalSource):
         return self.__prewhere_candidates
 
 
-class MigrationSchemaColumn(NamedTuple):
-    column_type: str
-    default_type: Optional[str]
-    default_expr: Optional[str]
-
-
 class DDLStatement(NamedTuple):
     table_name: str
     statement: str
@@ -72,7 +66,7 @@ class TableSchema(Schema, ABC):
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         migration_function: Optional[
-            Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
     ):
         self.__migration_function = (
@@ -130,7 +124,7 @@ class TableSchema(Schema, ABC):
 
     def get_migration_statements(
         self,
-    ) -> Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]:
+    ) -> Callable[[str, Mapping[str, ColumnType]], Sequence[str]]:
         return self.__migration_function
 
 
@@ -160,7 +154,7 @@ class MergeTreeSchema(WritableTableSchema):
         ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
         migration_function: Optional[
-            Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
     ):
         super(MergeTreeSchema, self).__init__(
@@ -234,7 +228,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         ttl_expr: Optional[str] = None,
         settings: Optional[Mapping[str, str]] = None,
         migration_function: Optional[
-            Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
     ) -> None:
         super(ReplacingMergeTreeSchema, self).__init__(
@@ -281,7 +275,7 @@ class MaterializedViewSchema(TableSchema):
         dist_source_table_name: str,
         dist_destination_table_name: str,
         migration_function: Optional[
-            Callable[[str, Mapping[str, MigrationSchemaColumn]], Sequence[str]]
+            Callable[[str, Mapping[str, ColumnType]], Sequence[str]]
         ] = None,
     ) -> None:
         super().__init__(
