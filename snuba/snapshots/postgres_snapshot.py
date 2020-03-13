@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-import jsonschema  # type: ignore
+import jsonschema
 import json
 import logging
 import os.path

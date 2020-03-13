@@ -273,7 +273,7 @@
                         Header: 'project',
                         width: 120,
                         id: 'project',
-                        accessor: row => Array.isArray(row.request.project) ? row.request.project.join(',') : row.request.project
+                        accessor: row => Array.isArray(row.request.body.project) ? row.request.body.project.join(',') : row.request.body.project
                       },{
                         Header: 'dataset',
                         width: 120,
@@ -281,7 +281,7 @@
                       },{
                         Header: 'referrer',
                         width: 400,
-                        accessor: 'referrer'
+                        accessor: 'request.referrer'
                       },{
                         Header: 'ms',
                         width: 70,
@@ -290,7 +290,7 @@
                         Header: 'days',
                         width:70,
                         id: 'days',
-                        accessor: row => (new Date(row.request.to_date).getTime() - new Date(row.request.from_date).getTime()) / (1000 * 3600 * 24)
+                        accessor: row => (new Date(row.request.body.to_date).getTime() - new Date(row.request.body.from_date).getTime()) / (1000 * 3600 * 24)
                       },{
                         Header: 'groupby',
                         width:200,

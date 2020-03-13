@@ -4,8 +4,9 @@ from snuba import state
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
-from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request import Request
+from snuba.request.request_settings import HTTPRequestSettings
+
 
 test_data = [
     (
