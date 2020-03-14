@@ -103,7 +103,7 @@ class ErrorsProcessor(EventsProcessorBase):
                 user_to_write,
                 type(user_to_write),
             )
-        output["user"] = tags.get("sentry:user", str(user_to_write))
+        output["user"] = str(user_to_write)
         # The table has an empty string default, but the events coming from eventstream
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
