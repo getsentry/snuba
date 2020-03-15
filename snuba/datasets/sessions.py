@@ -20,7 +20,8 @@ from snuba.datasets.schemas.tables import (
 )
 from snuba.datasets.storage import (
     SingleStorageSelector,
-    TableStorage,
+    ReadableTableStorage,
+    WritableTableStorage,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
@@ -188,7 +189,7 @@ class SessionsDataset(TimeSeriesDataset):
 
         # The raw table we write onto, and that potentially we could
         # query.
-        writable_storage = TableStorage(
+        writable_storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
             table_writer=TableWriter(
                 write_schema=raw_schema,
@@ -199,7 +200,7 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
         # The materialized view we query aggregate data from.
-        materialized_storage = TableStorage(
+        materialized_storage = ReadableTableStorage(
             schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,

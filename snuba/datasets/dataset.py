@@ -2,7 +2,7 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -63,7 +63,7 @@ class Dataset(object):
         storages: Sequence[Storage],
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
-        writable_storage: Optional[TableStorage],
+        writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
         self.__storage_selector = storage_selector
@@ -163,7 +163,7 @@ class TimeSeriesDataset(Dataset):
         storages: Sequence[Storage],
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
-        writable_storage: Optional[TableStorage],
+        writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
     ) -> None:

@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, Storage, ReadableStorage
 from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -71,14 +71,14 @@ def detect_table(
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
-        self, events_table: TableStorage, transactions_table: TableStorage
+        self, events_table: ReadableStorage, transactions_table: ReadableStorage,
     ) -> None:
         self.__events_table = events_table
         self.__transactions_table = transactions_table
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
+    ) -> ReadableStorage:
         table = detect_table(
             query,
             self.__events_table.get_schemas().get_read_schema().get_columns(),

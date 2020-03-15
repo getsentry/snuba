@@ -22,7 +22,11 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import SingleStorageSelector, TableStorage
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -214,7 +218,7 @@ class TransactionsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-        self.__storage = TableStorage(
+        self.__storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TransactionsTableWriter(
                 write_schema=schema,
@@ -253,7 +257,7 @@ class TransactionsDataset(TimeSeriesDataset):
             time_parse_columns=("start_ts", "finish_ts"),
         )
 
-    def get_storage(self) -> TableStorage:
+    def get_storage(self) -> ReadableTableStorage:
         return self.__storage
 
     def _get_promoted_columns(self):

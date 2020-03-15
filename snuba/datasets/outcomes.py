@@ -16,7 +16,8 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storage import (
     SingleStorageSelector,
-    TableStorage,
+    ReadableTableStorage,
+    WritableTableStorage,
 )
 from snuba.processor import (
     _ensure_valid_date,
@@ -155,7 +156,7 @@ class OutcomesDataset(TimeSeriesDataset):
 
         # The raw table we write onto, and that potentially we could
         # query.
-        writable_storage = TableStorage(
+        writable_storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
             table_writer=TableWriter(
                 write_schema=raw_schema,
@@ -166,7 +167,7 @@ class OutcomesDataset(TimeSeriesDataset):
             query_processors=[],
         )
         # The materialized view we query aggregate data from.
-        materialized_storage = TableStorage(
+        materialized_storage = ReadableTableStorage(
             schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,

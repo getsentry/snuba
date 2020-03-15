@@ -18,7 +18,11 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.storage import SingleStorageSelector, TableStorage
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -270,7 +274,7 @@ class EventsDataset(TimeSeriesDataset):
         self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
 
-        self.__storage = TableStorage(
+        self.__storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
@@ -314,7 +318,7 @@ class EventsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-    def get_storage(self) -> TableStorage:
+    def get_storage(self) -> ReadableTableStorage:
         return self.__storage
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:

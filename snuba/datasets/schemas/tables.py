@@ -222,7 +222,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
-        partition_by: str,
+        partition_by: Optional[str],
         version_column: str,
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,

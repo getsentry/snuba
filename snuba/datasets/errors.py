@@ -22,7 +22,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
-from snuba.datasets.storage import SingleStorageSelector, TableStorage
+from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -169,7 +169,7 @@ class ErrorsDataset(TimeSeriesDataset):
             "retention_days",
         ]
 
-        storage = TableStorage(
+        storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
