@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.extensions import QueryExtension
@@ -40,7 +40,7 @@ def detect_table(
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
-    "events" or "transactions" table. This is going to be wrong in some cases.
+    "events" or "transactions" storage. This is going to be wrong in some cases.
     """
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
@@ -73,14 +73,14 @@ def detect_table(
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
-        self, events_table: TableStorage, transactions_table: TableStorage
+        self, events_table: ReadableStorage, transactions_table: ReadableStorage,
     ) -> None:
         self.__events_table = events_table
         self.__transactions_table = transactions_table
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
+    ) -> ReadableStorage:
         table = detect_table(
             query,
             self.__events_table.get_schemas().get_read_schema().get_columns(),
@@ -201,9 +201,11 @@ class DiscoverDataset(TimeSeriesDataset):
             query_plan_builder=SelectedTableQueryPlanBuilder(
                 selector=storage_selector, post_processors=[PrewhereProcessor()],
             ),
-            abstract_column_set=self.__common_columns
-            + self.__events_columns
-            + self.__transactions_columns,
+            abstract_column_set=(
+                self.__common_columns
+                + self.__events_columns
+                + self.__transactions_columns
+            ),
             writable_storage=None,
             time_group_columns={},
             time_parse_columns=["timestamp"],
@@ -244,9 +246,11 @@ class DiscoverDataset(TimeSeriesDataset):
             query, self.__events_columns, self.__transactions_columns
         )
 
+        # Assignment in order not to loose track there is a type error in the Query class.
+        granularity: int = query.get_granularity()
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
-                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
+                return self.time_expr("finish_ts", granularity, table_alias)
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -278,7 +282,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "NULL"
         else:
             if column_name == "time":
-                return self.time_expr("timestamp", query.get_granularity(), table_alias)
+                return self.time_expr("timestamp", granularity, table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":

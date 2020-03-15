@@ -20,7 +20,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import TableStorage
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -190,7 +190,7 @@ schema = ReplacingMergeTreeSchema(
     migration_function=transactions_migrations,
 )
 
-storage = TableStorage(
+storage = WritableTableStorage(
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TransactionsTableWriter(
         write_schema=schema,

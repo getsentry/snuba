@@ -13,13 +13,16 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import (
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -39,7 +42,6 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -89,23 +91,6 @@ class SessionsProcessor(MessageProcessor):
             "environment": message.get("environment") or "",
         }
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
-
-
-class SessionsQueryStorageSelector(QueryStorageSelector):
-    def __init__(
-        self, raw_table: TableStorage, materialized_view: TableStorage
-    ) -> None:
-        self.__raw_table = raw_table
-        self.__materialized_view = materialized_view
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
-        """
-        This preserves the behavior of the existing dataset. and alwyas queries the mat view
-        """
-        # TODO: expose a raw schema and switch to the raw table when possible
-        return self.__materialized_view
 
 
 class SessionsDataset(TimeSeriesDataset):
@@ -204,7 +189,7 @@ class SessionsDataset(TimeSeriesDataset):
 
         # The raw table we write onto, and that potentially we could
         # query.
-        writable_storage = TableStorage(
+        writable_storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
             table_writer=TableWriter(
                 write_schema=raw_schema,
@@ -215,7 +200,7 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
         # The materialized view we query aggregate data from.
-        materialized_storage = TableStorage(
+        materialized_storage = ReadableTableStorage(
             schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,
@@ -224,14 +209,13 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[],
         )
 
-        storage_selector = SessionsQueryStorageSelector(
-            raw_table=writable_storage, materialized_view=materialized_storage,
-        )
-
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[PrewhereProcessor()],
+            # TODO: Once we are ready to expose the raw data model and select whether to use
+            # materialized storage or the raw one here, replace this with a custom storage
+            # selector that decides when to use the materialized data.
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=materialized_storage, post_processors=[PrewhereProcessor()],
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
