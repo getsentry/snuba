@@ -36,9 +36,6 @@ class JoinedStorage(Storage):
             read_schema=JoinedSchema(self.__structure), write_schema=None
         )
 
-    def can_write(self) -> bool:
-        return False
-
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
 

@@ -9,7 +9,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 )
 from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import TableStorage
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -70,7 +70,7 @@ class GroupAssigneeDataset(CdcDataset):
             version_column="offset",
         )
 
-        storage = TableStorage(
+        storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=GroupAssigneeTableWriter(
                 write_schema=schema,
