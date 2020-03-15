@@ -18,7 +18,10 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    TableStorage,
+)
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -38,7 +41,6 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -88,23 +90,6 @@ class SessionsProcessor(MessageProcessor):
             "environment": message.get("environment") or "",
         }
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
-
-
-class SessionsQueryStorageSelector(QueryStorageSelector):
-    def __init__(
-        self, raw_table: TableStorage, materialized_view: TableStorage
-    ) -> None:
-        self.__raw_table = raw_table
-        self.__materialized_view = materialized_view
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
-        """
-        This preserves the behavior of the existing dataset. and alwyas queries the mat view
-        """
-        # TODO: expose a raw schema and switch to the raw table when possible
-        return self.__materialized_view
 
 
 class SessionsDataset(TimeSeriesDataset):
@@ -223,13 +208,12 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[PrewhereProcessor()],
         )
 
-        storage_selector = SessionsQueryStorageSelector(
-            raw_table=writable_storage, materialized_view=materialized_storage,
-        )
-
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            storage_selector=storage_selector,
+            # TODO: Once we are ready to expose the raw data model and select whether to use
+            # materialized storage or the raw one here, replace this with a custom storage
+            # selector that decides when to use the materialized data.
+            storage_selector=SingleStorageSelector(materialized_storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
             time_group_columns={"bucketed_started": "started"},

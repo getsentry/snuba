@@ -9,7 +9,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
+from snuba.datasets.storage import SingleStorageSelector, TableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -88,7 +88,7 @@ class GroupedMessageDataset(CdcDataset):
             query_processors=[PrewhereProcessor()],
         )
 
-        storage_selector = SingleTableQueryStorageSelector(storage=storage)
+        storage_selector = SingleStorageSelector(storage=storage)
 
         super().__init__(
             storages=[storage],

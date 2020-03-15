@@ -14,7 +14,10 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.storage import QueryStorageSelector, Storage, TableStorage
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    TableStorage,
+)
 from snuba.processor import (
     _ensure_valid_date,
     MessageProcessor,
@@ -28,14 +31,12 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
 
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -61,24 +62,6 @@ class OutcomesProcessor(MessageProcessor):
         }
 
         return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
-
-
-class OutcomesQueryStorageSelector(QueryStorageSelector):
-    def __init__(
-        self, raw_table: TableStorage, materialized_view: TableStorage
-    ) -> None:
-        self.__raw_table = raw_table
-        self.__materialized_view = materialized_view
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
-        """
-        This preserves the behavior of the existing dataset. and alwyas queries the mat view
-        """
-        # TODO: get rid of the outcomes_raw dataset and inspect the query here to decide
-        # whether to query the mat view or the raw table.
-        return self.__materialized_view
 
 
 class OutcomesDataset(TimeSeriesDataset):
@@ -191,17 +174,16 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             query_processors=[PrewhereProcessor()],
         )
-        storage_selector = OutcomesQueryStorageSelector(
-            raw_table=writable_storage, materialized_view=materialized_storage
-        )
-
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            storage_selector=storage_selector,
+            # TODO: Once we are ready to expose the raw data model and select whether to use
+            # materialized storage or the raw one here, replace this with a custom storage
+            # selector that decides when to use the materialized data.
+            storage_selector=SingleStorageSelector(materialized_storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
-            time_parse_columns=("timestamp"),
+            time_parse_columns=("timestamp",),
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

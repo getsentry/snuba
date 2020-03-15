@@ -38,7 +38,7 @@ def detect_table(
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
-    "events" or "transactions" table. This is going to be wrong in some cases.
+    "events" or "transactions" storage. This is going to be wrong in some cases.
     """
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
@@ -207,9 +207,11 @@ class DiscoverDataset(TimeSeriesDataset):
                 transactions_dataset.get_storage(),
             ],
             storage_selector=storage_selector,
-            abstract_column_set=self.__common_columns
-            + self.__events_columns
-            + self.__transactions_columns,
+            abstract_column_set=(
+                self.__common_columns
+                + self.__events_columns
+                + self.__transactions_columns
+            ),
             writable_storage=None,
             time_group_columns={},
             time_parse_columns=["timestamp"],
@@ -250,9 +252,11 @@ class DiscoverDataset(TimeSeriesDataset):
             query, self.__events_columns, self.__transactions_columns
         )
 
+        # Assignment in order not to loose track there is a type error in the Query class.
+        granularity: int = query.get_granularity()
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
-                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
+                return self.time_expr("finish_ts", granularity, table_alias)
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -284,7 +288,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "NULL"
         else:
             if column_name == "time":
-                return self.time_expr("timestamp", query.get_granularity(), table_alias)
+                return self.time_expr("timestamp", granularity, table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":

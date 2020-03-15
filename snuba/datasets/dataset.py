@@ -95,7 +95,7 @@ class Dataset(object):
         data model.
         Now the data model is flat so this is just a simple ColumnSet object. With entities
         this will be a more complex data structure that defines the schema for each entity
-        and
+        and their relations.
         """
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set

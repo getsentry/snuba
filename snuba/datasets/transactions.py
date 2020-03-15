@@ -22,7 +22,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
+from snuba.datasets.storage import SingleStorageSelector, TableStorage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -239,7 +239,7 @@ class TransactionsDataset(TimeSeriesDataset):
             ],
         )
 
-        storage_selector = SingleTableQueryStorageSelector(storage=self.__storage)
+        storage_selector = SingleStorageSelector(storage=self.__storage)
 
         super().__init__(
             storages=[self.__storage],

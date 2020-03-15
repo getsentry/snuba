@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.storage import SingleTableQueryStorageSelector, TableStorage
+from snuba.datasets.storage import SingleStorageSelector, TableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -52,7 +52,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
             table_writer=None,
             query_processors=[PrewhereProcessor()],
         )
-        storage_selector = SingleTableQueryStorageSelector(storage=storage)
+        storage_selector = SingleStorageSelector(storage=storage)
 
         super().__init__(
             storages=[storage],

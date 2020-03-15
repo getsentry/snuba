@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
 
@@ -27,7 +27,9 @@ class Storage(ABC):
     # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
     # read schema that existed before this dataset model and before TableWriters (then we
     # trusted StorageSchemas to define which schema we would write on and which one we would
-    # read from). This is not needed anymore since TableWriter has its own write schema.
+    # read from). This is not needed anymore since TableWriter is provided the correct write
+    # schema through the constructor.
+    @abstractmethod
     def get_schemas(self) -> StorageSchemas:
         """
         Returns the collections of schemas for DDL operations and for query.
@@ -41,12 +43,14 @@ class Storage(ABC):
         """
         return self.get_table_writer() is not None
 
+    @abstractmethod
     def get_table_writer(self) -> Optional[TableWriter]:
         """
         Returns the TableWriter if the Storage has one.
         """
         raise NotImplementedError
 
+    @abstractmethod
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
@@ -88,13 +92,14 @@ class QueryStorageSelector(ABC):
     execution of a query to pick the storage query should be executed onto.
     """
 
+    @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> Storage:
         raise NotImplementedError
 
 
-class SingleTableQueryStorageSelector(QueryStorageSelector):
+class SingleStorageSelector(QueryStorageSelector):
     def __init__(self, storage: TableStorage) -> None:
         self.__storage = storage
 
