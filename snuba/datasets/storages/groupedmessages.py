@@ -6,7 +6,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
 )
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import TableStorage
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
@@ -62,7 +62,7 @@ schema = ReplacingMergeTreeSchema(
 
 POSTGRES_TABLE = "sentry_groupedmessage"
 
-storage = TableStorage(
+storage = WritableTableStorage(
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=GroupedMessageTableWriter(
         write_schema=schema,

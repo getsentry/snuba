@@ -26,7 +26,7 @@ from snuba.datasets.plans.single_table import (
     SimpleQueryPlanExecutionStrategy,
     SingleTableQueryPlanBuilder,
 )
-from snuba.datasets.storage import TableStorage
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -177,7 +177,7 @@ class ErrorsDataset(TimeSeriesDataset):
             "retention_days",
         ]
 
-        storage = TableStorage(
+        storage = WritableTableStorage(
             schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TableWriter(
                 write_schema=schema,
