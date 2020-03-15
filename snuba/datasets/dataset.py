@@ -3,7 +3,7 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
-from snuba.datasets.storage import Storage, TableStorage
+from snuba.datasets.storage import Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -62,7 +62,7 @@ class Dataset(object):
         storages: Sequence[Storage],
         query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
-        writable_storage: Optional[TableStorage],
+        writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
         self.__query_plan_builder = query_plan_builder
@@ -94,7 +94,7 @@ class Dataset(object):
         data model.
         Now the data model is flat so this is just a simple ColumnSet object. With entities
         this will be a more complex data structure that defines the schema for each entity
-        and
+        and their relations.
         """
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
@@ -162,7 +162,7 @@ class TimeSeriesDataset(Dataset):
         storages: Sequence[Storage],
         query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
-        writable_storage: Optional[TableStorage],
+        writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
     ) -> None:

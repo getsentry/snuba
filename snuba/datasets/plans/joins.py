@@ -7,7 +7,7 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.schemas.join import JoinClause
-from snuba.datasets.storage import TableStorage
+from snuba.datasets.storage import ReadableTableStorage
 from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
@@ -20,7 +20,7 @@ class JoinQueryPlanBuilder(StorageQueryPlanBuilder):
 
     def __init__(
         self,
-        storages: Sequence[TableStorage],
+        storages: Sequence[ReadableTableStorage],
         join_spec: JoinClause,
         post_processors: Sequence[QueryProcessor],
     ) -> None:
@@ -30,14 +30,14 @@ class JoinQueryPlanBuilder(StorageQueryPlanBuilder):
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         request.query.set_data_source(self.__join_spec)
-        processors = (
-            list(
+        processors = [
+            *list(
                 itertools.chain.from_iterable(
                     storage.get_query_processors() for storage in self.__storages
                 )
-            )
-            + self.__post_processors
-        )
+            ),
+            *self.__post_processors,
+        ]
 
         return StorageQueryPlan(
             query_processors=processors,
