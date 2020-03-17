@@ -40,7 +40,7 @@ class JoinedStorage(ReadableStorage):
         return None
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [PrewhereProcessor()]
+        return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
 class GroupsQueryStorageSelector(QueryStorageSelector):
@@ -209,6 +209,4 @@ class Groups(TimeSeriesDataset):
         return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            SimpleJoinOptimizer(),
-        ]
+        return []
