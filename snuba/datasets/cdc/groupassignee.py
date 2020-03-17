@@ -9,11 +9,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 )
 from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-<<<<<<< HEAD
 from snuba.datasets.storage import WritableTableStorage
-=======
-from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
->>>>>>> master
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
