@@ -9,7 +9,8 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageRow,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
+from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -85,14 +86,14 @@ class GroupedMessageDataset(CdcDataset):
                 ),
                 postgres_table=self.POSTGRES_TABLE,
             ),
-            query_processors=[PrewhereProcessor()],
+            query_processors=[],
         )
-
-        storage_selector = SingleStorageSelector(storage=storage)
 
         super().__init__(
             storages=[storage],
-            storage_selector=storage_selector,
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=storage, post_processors=[PrewhereProcessor()],
+            ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             default_control_topic="cdc_control",

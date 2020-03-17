@@ -19,14 +19,11 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import (
-    SingleStorageSelector,
-    ReadableTableStorage,
-    WritableTableStorage,
-)
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
+from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -227,7 +224,6 @@ class TransactionsDataset(TimeSeriesDataset):
                 ),
             ),
             query_processors=[
-                PrewhereProcessor(),
                 NestedFieldConditionOptimizer(
                     "tags",
                     "_tags_flattened",
@@ -243,11 +239,11 @@ class TransactionsDataset(TimeSeriesDataset):
             ],
         )
 
-        storage_selector = SingleStorageSelector(storage=self.__storage)
-
         super().__init__(
             storages=[self.__storage],
-            storage_selector=storage_selector,
+            query_plan_builder=SingleTableQueryPlanBuilder(
+                storage=self.__storage, post_processors=[PrewhereProcessor()],
+            ),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,
             time_group_columns={
