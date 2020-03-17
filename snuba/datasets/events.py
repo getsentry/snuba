@@ -14,10 +14,15 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -269,29 +274,40 @@ class EventsDataset(TimeSeriesDataset):
         self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
-        table_writer = TableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="event-replacements",
-                commit_log_topic="snuba-commit-log",
-            ),
-            replacer_processor=ErrorsReplacer(
+        self.__storage = WritableTableStorage(
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+            table_writer=TableWriter(
                 write_schema=schema,
-                read_schema=schema,
-                required_columns=[col.escaped for col in required_columns],
-                tag_column_map=self.get_tag_column_map(),
-                promoted_tags=self.get_promoted_tags(),
-                state_name=ReplacerState.EVENTS,
+                stream_loader=KafkaStreamLoader(
+                    processor=EventsProcessor(promoted_tag_columns),
+                    default_topic="events",
+                    replacement_topic="event-replacements",
+                    commit_log_topic="snuba-commit-log",
+                ),
+                replacer_processor=ErrorsReplacer(
+                    write_schema=schema,
+                    read_schema=schema,
+                    required_columns=[col.escaped for col in required_columns],
+                    tag_column_map=self.get_tag_column_map(),
+                    promoted_tags=self.get_promoted_tags(),
+                    state_name=ReplacerState.EVENTS,
+                ),
             ),
+            query_processors=[
+                # TODO: This one should become an entirely separate storage and picked
+                # in the storage selector.
+                ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+                PrewhereProcessor(),
+            ],
         )
 
+        storage_selector = SingleStorageSelector(storage=self.__storage)
+
         super(EventsDataset, self).__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storages=[self.__storage],
+            storage_selector=storage_selector,
+            abstract_column_set=schema.get_columns(),
+            writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
@@ -301,6 +317,14 @@ class EventsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
+
+    def get_storage(self) -> ReadableTableStorage:
+        """
+        Temporary method to allow composite datasets depending on the event storage to
+        reuse it.
+        """
+        # TODO: Move the storage definition out of this class so it is reusable
+        return self.__storage
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(
@@ -412,7 +436,5 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

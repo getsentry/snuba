@@ -20,9 +20,12 @@ class PrewhereProcessor(QueryProcessor):
     """
 
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
-        self.__max_prewhere_conditions: int = max_prewhere_conditions if max_prewhere_conditions is not None else settings.MAX_PREWHERE_CONDITIONS
+        self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
     def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+        max_prewhere_conditions: int = (
+            self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
+        )
         prewhere_keys = query.get_data_source().get_prewhere_candidates()
         if not prewhere_keys:
             return
@@ -55,7 +58,7 @@ class PrewhereProcessor(QueryProcessor):
         )
         if prewhere_candidates:
             prewhere_conditions = [cond for _, cond in prewhere_candidates][
-                : self.__max_prewhere_conditions
+                :max_prewhere_conditions
             ]
             query.set_conditions(
                 list(filter(lambda cond: cond not in prewhere_conditions, conditions))

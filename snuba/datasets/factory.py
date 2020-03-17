@@ -23,6 +23,7 @@ DATASET_NAMES: Set[str] = {
 # Internal datasets registered here cannot be queried directly via API
 INTERNAL_DATASET_NAMES: Set[str] = set()
 
+
 class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
 
@@ -82,8 +83,11 @@ def get_enabled_dataset_names() -> Sequence[str]:
 
 def enforce_table_writer(dataset: Dataset) -> TableWriter:
     table_writer = dataset.get_table_writer()
-    assert table_writer is not None, f"Dataset{dataset} is not writable"
+    assert (
+        table_writer is not None
+    ), f"Dataset{dataset} does not have a writable storage."
     return table_writer
+
 
 def ensure_not_internal(dataset: Dataset) -> None:
     name = get_dataset_name(dataset)

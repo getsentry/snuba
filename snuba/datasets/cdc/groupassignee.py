@@ -1,13 +1,14 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -68,10 +69,8 @@ class GroupAssigneeDataset(CdcDataset):
             version_column="offset",
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
-        super().__init__(
-            dataset_schemas=dataset_schemas,
+        storage = WritableTableStorage(
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=GroupAssigneeTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
@@ -80,6 +79,16 @@ class GroupAssigneeDataset(CdcDataset):
                 ),
                 postgres_table=self.POSTGRES_TABLE,
             ),
+            query_processors=[PrewhereProcessor()],
+        )
+
+        storage_selector = SingleStorageSelector(storage=storage)
+
+        super().__init__(
+            storages=[storage],
+            storage_selector=storage_selector,
+            abstract_column_set=schema.get_columns(),
+            writable_storage=storage,
             default_control_topic="cdc_control",
             postgres_table=self.POSTGRES_TABLE,
         )
@@ -90,5 +99,4 @@ class GroupAssigneeDataset(CdcDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

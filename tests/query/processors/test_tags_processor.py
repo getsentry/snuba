@@ -165,6 +165,12 @@ def test_tags_processor(query_body, expected_query) -> None:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
+    storage = dataset.get_query_storage_selector().select_storage(
+        query, request_settings
+    )
+    query.set_data_source(
+        storage.get_schemas().get_read_schema().get_data_source()
+    )
 
     assert (
         DictClickhouseQuery(dataset, query, request_settings).format_sql()

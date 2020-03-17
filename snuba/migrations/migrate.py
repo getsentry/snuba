@@ -1,12 +1,18 @@
 import logging
 
+from clickhouse_driver import Client
+from typing import MutableSequence
+
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.migrations.parse_schema import get_local_schema
+
 
 logger = logging.getLogger("snuba.migrate")
 
 
-def _run_schema(conn, schema):
+def _run_schema(conn: Client, schema: Schema) -> None:
     if not isinstance(schema, TableSchema):
         return
     clickhouse_table = schema.get_local_table_name()
@@ -28,11 +34,13 @@ def _run_schema(conn, schema):
         logger.warn(difference)
 
 
-def run(conn, dataset):
-    schemas = []
-    if dataset.get_table_writer():
-        schemas.append(dataset.get_table_writer().get_schema())
-    schemas.append(dataset.get_dataset_schemas().get_read_schema())
+def run(conn: Client, dataset: Dataset) -> None:
+    schemas: MutableSequence[Schema] = []
+    writer = dataset.get_table_writer()
+    if writer:
+        schemas.append(writer.get_schema())
+    for storage in dataset.get_all_storages():
+        schemas.append(storage.get_schemas().get_read_schema())
 
     for schema in schemas:
         _run_schema(conn, schema)

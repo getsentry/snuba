@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import Mapping, Optional, Sequence
 import uuid
 
+from snuba import settings
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
@@ -12,7 +13,12 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.storage import (
+    SingleStorageSelector,
+    ReadableTableStorage,
+    WritableTableStorage,
+)
 from snuba.processor import (
     _ensure_valid_date,
     MessageProcessor,
@@ -32,7 +38,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba import settings
 
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -78,7 +83,7 @@ class OutcomesDataset(TimeSeriesDataset):
             ]
         )
 
-        write_schema = MergeTreeSchema(
+        raw_schema = MergeTreeSchema(
             columns=write_columns,
             # TODO: change to outcomes.raw_local when we add multi DB support
             local_table_name=WRITE_LOCAL_TABLE_NAME,
@@ -137,7 +142,7 @@ class OutcomesDataset(TimeSeriesDataset):
                GROUP BY org_id, project_id, key_id, timestamp, outcome, reason
                """
 
-        materialized_view = MaterializedViewSchema(
+        materialized_view_schema = MaterializedViewSchema(
             local_materialized_view_name="outcomes_mv_hourly_local",
             dist_materialized_view_name="outcomes_mv_hourly_dist",
             prewhere_candidates=["project_id", "org_id"],
@@ -149,22 +154,35 @@ class OutcomesDataset(TimeSeriesDataset):
             dist_destination_table_name=READ_DIST_TABLE_NAME,
         )
 
-        dataset_schemas = DatasetSchemas(
-            read_schema=read_schema,
-            write_schema=write_schema,
-            intermediary_schemas=[materialized_view],
-        )
-
-        table_writer = TableWriter(
-            write_schema=write_schema,
-            stream_loader=KafkaStreamLoader(
-                processor=OutcomesProcessor(), default_topic="outcomes",
+        # The raw table we write onto, and that potentially we could
+        # query.
+        writable_storage = WritableTableStorage(
+            schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+            table_writer=TableWriter(
+                write_schema=raw_schema,
+                stream_loader=KafkaStreamLoader(
+                    processor=OutcomesProcessor(), default_topic="outcomes",
+                ),
             ),
+            query_processors=[],
         )
-
+        # The materialized view we query aggregate data from.
+        materialized_storage = ReadableTableStorage(
+            schemas=StorageSchemas(
+                read_schema=read_schema,
+                write_schema=None,
+                intermediary_schemas=[materialized_view_schema],
+            ),
+            query_processors=[PrewhereProcessor()],
+        )
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storages=[writable_storage, materialized_storage],
+            # TODO: Once we are ready to expose the raw data model and select whether to use
+            # materialized storage or the raw one here, replace this with a custom storage
+            # selector that decides when to use the materialized data.
+            storage_selector=SingleStorageSelector(materialized_storage),
+            abstract_column_set=read_schema.get_columns(),
+            writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
             time_parse_columns=("timestamp",),
         )
@@ -182,5 +200,4 @@ class OutcomesDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

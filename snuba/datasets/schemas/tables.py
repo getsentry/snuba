@@ -133,7 +133,7 @@ class WritableTableSchema(TableSchema):
     This class identifies a subset of TableSchemas we can write onto.
     While it does not provide any functionality by itself, it is used
     to allow the type checker to prevent us from returning a read only
-    schema from DatasetSchemas.
+    schema from StorageSchemas.
     """
 
     pass
@@ -222,7 +222,7 @@ class ReplacingMergeTreeSchema(MergeTreeSchema):
         mandatory_conditions: Optional[Sequence[Condition]] = None,
         prewhere_candidates: Optional[Sequence[str]] = None,
         order_by: str,
-        partition_by: str,
+        partition_by: Optional[str],
         version_column: str,
         sample_expr: Optional[str] = None,
         ttl_expr: Optional[str] = None,
