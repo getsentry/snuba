@@ -36,7 +36,7 @@ TRANSACTIONS = "transactions"
 
 
 def detect_table(
-    query: Query, events_columns: ColumnSet, transactions_columns: ColumnSet
+    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
@@ -55,16 +55,16 @@ def detect_table(
 
     # Check for any conditions that reference a table specific field
     condition_columns = query.get_columns_referenced_in_conditions()
-    if any(events_columns.get(col) for col in condition_columns):
+    if any(events_only_columns.get(col) for col in condition_columns):
         return EVENTS
-    if any(transactions_columns.get(col) for col in condition_columns):
+    if any(transactions_only_columns.get(col) for col in condition_columns):
         return TRANSACTIONS
 
     # Check for any other references to a table specific field
     all_referenced_columns = query.get_all_referenced_columns()
-    if any(events_columns.get(col) for col in all_referenced_columns):
+    if any(events_only_columns.get(col) for col in all_referenced_columns):
         return EVENTS
-    if any(transactions_columns.get(col) for col in all_referenced_columns):
+    if any(transactions_only_columns.get(col) for col in all_referenced_columns):
         return TRANSACTIONS
 
     # Use events by default
@@ -73,18 +73,26 @@ def detect_table(
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
-        self, events_table: ReadableStorage, transactions_table: ReadableStorage,
+        self,
+        events_table: ReadableStorage,
+        abstract_events_columns: ColumnSet,
+        transactions_table: ReadableStorage,
+        abstract_transactions_columns: ColumnSet,
     ) -> None:
         self.__events_table = events_table
+        # Columns from the abstract model that map to storage columns present only
+        # in the Events table
+        self.__abstract_events_columns = abstract_events_columns
         self.__transactions_table = transactions_table
+        # Columns from the abstract model that map to storage columns present only
+        # in the Transactions table
+        self.__abstract_transactions_columns = abstract_transactions_columns
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> ReadableStorage:
         table = detect_table(
-            query,
-            self.__events_table.get_schemas().get_read_schema().get_columns(),
-            self.__transactions_table.get_schemas().get_read_schema().get_columns(),
+            query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
@@ -200,7 +208,9 @@ class DiscoverDataset(TimeSeriesDataset):
         assert isinstance(transactions_dataset, TransactionsDataset)
         storage_selector = DiscoverQueryStorageSelector(
             events_table=events_dataset.get_storage(),
+            abstract_events_columns=self.__events_columns,
             transactions_table=transactions_dataset.get_storage(),
+            abstract_transactions_columns=self.__transactions_columns,
         )
 
         super().__init__(

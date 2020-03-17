@@ -96,14 +96,7 @@ class ErrorsProcessor(EventsProcessorBase):
     ) -> None:
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
-        user_to_write = tags.get("sentry:user", "") or ""
-        if not isinstance(user_to_write, str):
-            logger.error(
-                "User key has the wrong format: %r %r",
-                user_to_write,
-                type(user_to_write),
-            )
-        output["user"] = str(user_to_write)
+        output["user"] = tags.get("sentry:user", "") or ""
         # The table has an empty string default, but the events coming from eventstream
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.

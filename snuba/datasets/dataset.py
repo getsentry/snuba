@@ -1,5 +1,6 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
+from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder

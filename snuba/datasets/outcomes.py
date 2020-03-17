@@ -175,7 +175,6 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             query_processors=[],
         )
-
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_plan_builder=SingleTableQueryPlanBuilder(

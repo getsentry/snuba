@@ -24,6 +24,7 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 
 
