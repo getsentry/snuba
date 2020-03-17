@@ -22,6 +22,10 @@ test_data = [
     ({"conditions": [["type", "!=", "transaction"]]}, "test_sentry_local",),
     ({"conditions": []}, "test_sentry_local",),
     ({"conditions": [["duration", "=", 0]]}, "test_transactions_local",),
+    (
+        {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
+        "test_transactions_local",
+    ),
     # No conditions, other referenced columns
     ({"selected_columns": ["group_id"]}, "test_sentry_local"),
     ({"selected_columns": ["trace_id"]}, "test_transactions_local"),
@@ -44,9 +48,7 @@ class TestDiscover(BaseDatasetTest):
         storage = dataset.get_query_storage_selector().select_storage(
             query, request_settings
         )
-        query.set_data_source(
-            storage.get_schemas().get_read_schema().get_data_source()
-        )
+        query.set_data_source(storage.get_schemas().get_read_schema().get_data_source())
 
         for processor in get_dataset("discover").get_query_processors():
             processor.process_query(query, request_settings)
