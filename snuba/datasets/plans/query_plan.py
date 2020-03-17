@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
@@ -9,7 +9,7 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 
 
-SingleQueryRunner = Callable[[Request], RawQueryResult]
+QueryRunner = Callable[[Request], RawQueryResult]
 
 
 @dataclass(frozen=True)
@@ -46,7 +46,8 @@ class QueryPlanExecutionStrategy(ABC):
     Potentially this could be agnostic to the DB.
     """
 
-    def execute(self, request: Request, runner: SingleQueryRunner) -> RawQueryResult:
+    @abstractmethod
+    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
         The runner parameters is a function to actually run one individual query on the
@@ -64,5 +65,6 @@ class StorageQueryPlanBuilder(ABC):
     StorageQueryPlan the api is able to understand.
     """
 
+    @abstractmethod
     def build_plan(self, request: Request) -> StorageQueryPlan:
         raise NotImplementedError

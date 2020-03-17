@@ -102,7 +102,7 @@ class Dataset(object):
     def get_query_plan_builder(self) -> StorageQueryPlanBuilder:
         """
         Returns the component that transforms a Snuba query in a Storage query by selecting
-        the storage and provides the direcitons on how to run the query.
+        the storage and provides the directions on how to run the query.
         """
         return self.__query_plan_builder
 
