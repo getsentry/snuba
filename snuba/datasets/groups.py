@@ -12,7 +12,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.storage import QueryStorageSelector, Storage
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
@@ -27,7 +27,7 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 
 
-class JoinedStorage(Storage):
+class JoinedStorage(ReadableStorage):
     def __init__(self, join_structure: JoinClause) -> None:
         self.__structure = join_structure
 
@@ -49,7 +49,7 @@ class GroupsQueryStorageSelector(QueryStorageSelector):
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> Storage:
+    ) -> ReadableStorage:
         return self.__storage
 
 

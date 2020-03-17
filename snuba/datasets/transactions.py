@@ -258,6 +258,11 @@ class TransactionsDataset(TimeSeriesDataset):
         )
 
     def get_storage(self) -> ReadableTableStorage:
+        """
+        Temporary method to allow composite datasets depending on the event storage to
+        reuse it.
+        """
+        # TODO: Move the storage definition out of this class so it is reusable
         return self.__storage
 
     def _get_promoted_columns(self):

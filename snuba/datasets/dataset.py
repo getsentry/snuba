@@ -160,6 +160,7 @@ class Dataset(object):
 class TimeSeriesDataset(Dataset):
     def __init__(
         self,
+        *,
         storages: Sequence[Storage],
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
