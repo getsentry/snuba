@@ -1,7 +1,7 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
-from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
