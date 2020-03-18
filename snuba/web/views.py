@@ -21,10 +21,11 @@ from snuba.datasets.factory import (
     enforce_table_writer,
     ensure_not_internal,
     get_dataset,
+    get_dataset_name,
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.environment import clickhouse_ro, clickhouse_rw
+from snuba.environment import get_clickhouse_ro, get_clickhouse_rw
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -78,8 +79,10 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        clickhouse_tables = clickhouse_ro.execute("show tables")
         for name in get_enabled_dataset_names():
+            clickhouse_ro = get_clickhouse_ro(name)
+            clickhouse_tables = clickhouse_ro.execute("show tables")
+
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
@@ -363,6 +366,7 @@ if application.debug or application.testing:
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
+        clickhouse_rw = get_clickhouse_rw(get_dataset_name(dataset))
         for storage in dataset.get_all_storages():
             for statement in storage.get_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
@@ -421,6 +425,8 @@ if application.debug or application.testing:
         else:
             from snuba.replacer import ReplacerWorker
 
+            clickhouse_rw = get_clickhouse_rw(get_dataset_name(dataset))
+
             worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)
@@ -433,6 +439,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
+            clickhouse_rw = get_clickhouse_rw(get_dataset_name(dataset))
             for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 

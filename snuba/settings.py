@@ -24,6 +24,11 @@ CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port)
 CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
+# Overrides the default values for the specified dataset
+CLICKHOUSE_HOST_BY_DATASET: Mapping[str, str] = {}
+CLICKHOUSE_PORT_BY_DATASET: Mapping[str, int] = {}
+CLICKHOUSE_HTTP_PORT_BY_DATASET: Mapping[str, int] = {}
+
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
 DOGSTATSD_PORT = 8125

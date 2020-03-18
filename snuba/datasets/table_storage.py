@@ -156,7 +156,7 @@ class TableWriter:
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
-    def get_bulk_loader(self, source, dest_table) -> BulkLoader:
+    def get_bulk_loader(self, source, dest_table, clickhouse_client) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.

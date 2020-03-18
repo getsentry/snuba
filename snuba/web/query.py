@@ -17,12 +17,13 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clickhouse.native import NativeDriverReader
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.environment import reader
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Result
+from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -65,6 +66,7 @@ cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
 def raw_query(
     request: Request,
     query: DictClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -360,7 +362,10 @@ def _run_query(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        result = raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        clickhouse_ro = environment.get_clickhouse_ro(get_dataset_name(dataset))
+        reader: Reader[ClickhouseQuery] = NativeDriverReader(clickhouse_ro)
+
+        result = raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:

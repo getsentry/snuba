@@ -8,7 +8,7 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
-from snuba.environment import clickhouse_ro
+from snuba.environment import get_clickhouse_ro
 
 
 class TestGroupedMessage(BaseDatasetTest):
@@ -102,6 +102,7 @@ class TestGroupedMessage(BaseDatasetTest):
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
         self.write_processed_records(ret.data)
+        clickhouse_ro = get_clickhouse_ro("groupassignee")
         ret = clickhouse_ro.execute("SELECT * FROM test_groupedmessage_local;")
         assert ret[0] == (
             42,  # offset
@@ -136,6 +137,7 @@ class TestGroupedMessage(BaseDatasetTest):
             }
         )
         self.write_processed_records(row.to_clickhouse())
+        clickhouse_ro = get_clickhouse_ro("groupassignee")
         ret = clickhouse_ro.execute("SELECT * FROM test_groupedmessage_local;")
         assert ret[0] == (
             0,  # offset

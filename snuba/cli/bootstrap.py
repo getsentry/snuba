@@ -1,11 +1,11 @@
 import logging
-from typing import Optional, Sequence
+from typing import MutableMapping, Optional, Sequence
 
 import click
 
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.environment import clickhouse_rw, setup_logging
+from snuba.environment import get_clickhouse_rw, setup_logging
 from snuba.migrations.migrate import run
 
 
@@ -63,7 +63,7 @@ def bootstrap(
                     raise
                 time.sleep(1)
 
-        topics = {}
+        topics: MutableMapping[str, NewTopic] = {}
         for name in DATASET_NAMES:
             dataset = get_dataset(name)
             table_writer = dataset.get_table_writer()
@@ -95,6 +95,7 @@ def bootstrap(
     while True:
         try:
             logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
+            clickhouse_rw = get_clickhouse_rw()
             clickhouse_rw.execute("SELECT 1")
             break
         except Exception as e:
@@ -110,9 +111,10 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
-    existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
+        clickhouse_rw = get_clickhouse_rw(name)
+        existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
 
         logger.debug("Creating tables for dataset %s", name)
         run_migrations = False

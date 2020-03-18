@@ -1,6 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.native import ClickhousePool
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.cdc.groupassignee_processor import (
@@ -24,11 +25,12 @@ class GroupAssigneeTableWriter(TableWriter):
         super().__init__(**kwargs)
         self.__postgres_table = postgres_table
 
-    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str):
+    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str, clickhouse_client: ClickhousePool):
         return SingleTableBulkLoader(
             source=source,
             source_table=self.__postgres_table,
             dest_table=dest_table,
+            clickhouse_client=clickhouse_client,
             row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),
         )
 
