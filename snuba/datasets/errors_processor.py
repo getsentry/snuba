@@ -118,7 +118,7 @@ class ErrorsProcessor(EventsProcessorBase):
         contexts: Mapping[str, Any],
         tags: Mapping[str, Any],
     ) -> None:
-        transaction_ctx = contexts.get("trace", {})
+        transaction_ctx = contexts.get("trace") or {}
         if transaction_ctx.get("trace_id", None):
             output["trace_id"] = str(uuid.UUID(transaction_ctx["trace_id"]))
         if transaction_ctx.get("span_id", None):
