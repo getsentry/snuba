@@ -345,6 +345,26 @@ class EventsDataset(TimeSeriesDataset):
         )
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
+
+            # This conversion must not be ported to the errors dataset. We should
+            # not support promoting tags/contexts with boolean values. There is
+            # no way to convert them back consistentyl to the value provided by
+            # the client when the event is ingested, in all ways to access
+            # tags/contexts. Once the errors dataset is in use, we will not have
+            # boolean promoted tags/contexts so this constraint will be easy to enforce.
+            boolean_contexts = {
+                "contexts[device.simulator]",
+                "contexts[device.online]",
+                "contexts[device.charging]",
+            }
+            boolean_context_template = (
+                "multiIf(%(processed_column)s == '', '', "
+                "%(processed_column)s IN ('1', 'True'), 'True', 'False')"
+            )
+            if column_name in boolean_contexts:
+                return boolean_context_template % (
+                    {"processed_column": processed_column}
+                )
             return processed_column
         elif column_name == "group_id":
             return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
