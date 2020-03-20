@@ -24,7 +24,6 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 
 
@@ -124,7 +123,7 @@ class Groups(TimeSeriesDataset):
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
@@ -195,11 +194,6 @@ class Groups(TimeSeriesDataset):
             project_column="events.project_id",
             timestamp_column="events.timestamp",
         )
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        # TODO: revisit how to build the prewhere clause on join
-        # queries.
-        return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

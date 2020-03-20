@@ -297,13 +297,14 @@ class EventsDataset(TimeSeriesDataset):
                 # TODO: This one should become an entirely separate storage and picked
                 # in the storage selector.
                 ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+                PrewhereProcessor(),
             ],
         )
 
         super(EventsDataset, self).__init__(
             storages=[self.__storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=self.__storage, post_processors=[PrewhereProcessor()],
+                storage=self.__storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,

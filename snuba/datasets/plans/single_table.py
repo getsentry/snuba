@@ -7,7 +7,12 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
-from snuba.query import RawQueryResult
+
+# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
+# dependency is a refactoring of the methods that return RawQueryResult to make them
+# depend on Result + some debug data structure instead. Also It requires removing
+# extra data from the result of the query.
+from snuba.web import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 
@@ -39,6 +44,9 @@ class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__post_processors = post_processors
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
+        # the Request object is immutable, the query processing still depends on the same
+        # request object to be moved around, thus the Query has to be mutable and cannot
+        # be simply rebuilt and replaced.
         request.query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
@@ -62,10 +70,18 @@ class SelectedTableQueryPlanBuilder(StorageQueryPlanBuilder):
         self, selector: QueryStorageSelector, post_processors: Sequence[QueryProcessor]
     ) -> None:
         self.__selector = selector
-        self.__post_processor = post_processors
+        self.__post_processors = post_processors
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        return SingleTableQueryPlanBuilder(storage, self.__post_processor).build_plan(
-            request,
+        request.query.set_data_source(
+            storage.get_schemas().get_read_schema().get_data_source()
+        )
+
+        return StorageQueryPlan(
+            query_processors=[
+                *storage.get_query_processors(),
+                *self.__post_processors,
+            ],
+            execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )

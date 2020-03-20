@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.query import RawQueryResult
+from snuba.web import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 
@@ -27,7 +27,7 @@ class StorageQueryPlan:
     """
 
     # TODO: When we will have a separate Query class for Snuba Query and
-    # Storage QUery, this plan will also provide the Storage Query. Right
+    # Storage Query, this plan will also provide the Storage Query. Right
     # now the storage query is the same mutable object referenced by Request
     # so no need to add an additional reference here (it would make the query
     # execution code more confusing).
@@ -58,11 +58,11 @@ class QueryPlanExecutionStrategy(ABC):
 
 class StorageQueryPlanBuilder(ABC):
     """
-    Embeds the dataset specific logic that selects what storage to use
-    to execute the query and produce the storage query (when we will
+    Embeds the dataset specific logic that selects which storage to use
+    to execute the query and produces the storage query (when we will
     have a separation between Snuba Query and Storage Query).
     This is provided by a dataset and, when executed, it returns a
-    StorageQueryPlan the api is able to understand.
+    StorageQueryPlan that embeds what is needed to run the storage query.
     """
 
     @abstractmethod

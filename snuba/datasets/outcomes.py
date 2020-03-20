@@ -173,7 +173,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 write_schema=None,
                 intermediary_schemas=[materialized_view_schema],
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
         super().__init__(
             storages=[writable_storage, materialized_storage],
@@ -182,7 +182,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 # materialized storage or the raw one here, replace this with a custom storage
                 # selector that decides when to use the materialized data.
                 storage=materialized_storage,
-                post_processors=[PrewhereProcessor()],
+                post_processors=[],
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,

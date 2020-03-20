@@ -2,7 +2,6 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
@@ -37,6 +36,10 @@ class Dataset(object):
     each one represents a table/view on the DB we can query.
     The class is a facade to access the components used to write on the
     data model and to query the entities.
+
+    The dataset is made of several Storage objects (later we will introduce
+    entities between Dataset and Storage). Each storage represent a table/view
+    we can query.
 
     When processing a query, there are three main steps:
     - dataset query processing. A series of QueryProcessors are applied to the

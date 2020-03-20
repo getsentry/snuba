@@ -236,13 +236,14 @@ class TransactionsDataset(TimeSeriesDataset):
                     {"start_ts", "finish_ts"},
                     BEGINNING_OF_TIME,
                 ),
+                PrewhereProcessor(),
             ],
         )
 
         super().__init__(
             storages=[self.__storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=self.__storage, post_processors=[PrewhereProcessor()],
+                storage=self.__storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,

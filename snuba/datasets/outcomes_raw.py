@@ -51,13 +51,13 @@ class OutcomesRawDataset(TimeSeriesDataset):
                 read_schema=read_schema, write_schema=None, intermediary_schemas=[]
             ),
             table_writer=None,
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage, post_processors=[],
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,

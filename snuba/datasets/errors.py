@@ -194,13 +194,13 @@ class ErrorsDataset(TimeSeriesDataset):
                     state_name=ReplacerState.ERRORS,
                 ),
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,

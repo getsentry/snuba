@@ -26,7 +26,6 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -219,7 +218,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 transactions_dataset.get_storage(),
             ],
             query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[PrewhereProcessor()],
+                selector=storage_selector, post_processors=[],
             ),
             abstract_column_set=(
                 self.__common_columns
