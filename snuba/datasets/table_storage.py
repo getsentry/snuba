@@ -100,10 +100,12 @@ class TableWriter:
         self,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
+        clickhouse_connection_config: settings.ClickhouseConnectionConfig,
         replacer_processor: Optional[ReplacerProcessor] = None,
     ) -> None:
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
+        self.__clickhouse_connection_config = clickhouse_connection_config
         self.__replacer_processor = replacer_processor
 
     def get_schema(self) -> WritableTableSchema:
@@ -123,8 +125,8 @@ class TableWriter:
 
         return HTTPBatchWriter(
             self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+            self.__clickhouse_connection_config.host,
+            self.__clickhouse_connection_config.http_port,
             lambda row: (
                 rapidjson.dumps(row, default=default)
                 if rapidjson_serialize
@@ -148,15 +150,15 @@ class TableWriter:
 
         return HTTPBatchWriter(
             self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+            self.__clickhouse_connection_config.host,
+            self.__clickhouse_connection_config.http_port,
             lambda row: rapidjson.dumps(row).encode("utf-8"),
             options,
             table_name,
             chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
-    def get_bulk_loader(self, source, dest_table, clickhouse_client) -> BulkLoader:
+    def get_bulk_loader(self, source, dest_table) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
@@ -172,3 +174,6 @@ class TableWriter:
         replacements on the table it manages.
         """
         return self.__replacer_processor
+
+    def get_clickhouse_connection_config(self) -> settings.ClickhouseConnectionConfig:
+        return self.__clickhouse_connection_config

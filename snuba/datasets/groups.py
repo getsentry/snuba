@@ -24,6 +24,7 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
+from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import qualified_column
 
 
@@ -62,7 +63,7 @@ class Groups(TimeSeriesDataset):
     EVENTS_ALIAS = "events"
     GROUPS_ALIAS = "groups"
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
             self.__grouped_message.get_all_storages()[0]
@@ -143,6 +144,7 @@ class Groups(TimeSeriesDataset):
                 "groups.first_seen",
                 "groups.active_at",
             ],
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def column_expr(

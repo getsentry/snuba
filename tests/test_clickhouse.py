@@ -4,7 +4,7 @@ from clickhouse_driver import errors
 
 from snuba import settings
 from snuba.clickhouse.columns import Array, ColumnSet, Nested, Nullable, String, UInt
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.factory import enforce_table_writer
 from tests.base import BaseEventsTest
 
@@ -29,14 +29,17 @@ class TestClickhouse(BaseEventsTest):
         assert cols["foo"].type == UInt(8)
         assert cols["bar.qux:mux"].type == Array(String())
 
-    @patch("snuba.clickhouse.native.Client")
+    @patch("snuba.clickhouse.pool.Client")
     def test_reconnect(self, FakeClient):
         # If the connection NetworkErrors a first time, make sure we call it a second time.
         FakeClient.return_value.execute.side_effect = [
             errors.NetworkError,
             '{"data": "to my face"}',
         ]
-        cp = ClickhousePool(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_PORT)
+        cp = ClickhousePool(
+            settings.CLICKHOUSE_DEFAULT_CONNECTION_CONFIG.host,
+            settings.CLICKHOUSE_DEFAULT_CONNECTION_CONFIG.port
+        )
         cp.execute("SHOW TABLES")
         assert FakeClient.return_value.execute.mock_calls == [
             call("SHOW TABLES"),

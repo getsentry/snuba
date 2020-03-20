@@ -43,6 +43,7 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+from snuba.settings import ClickhouseConnectionConfig
 
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts
@@ -154,7 +155,7 @@ def transactions_migrations(
 
 
 class TransactionsDataset(TimeSeriesDataset):
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         columns = ColumnSet(
             [
                 ("project_id", UInt(64)),
@@ -225,6 +226,7 @@ class TransactionsDataset(TimeSeriesDataset):
                 stream_loader=KafkaStreamLoader(
                     processor=TransactionsMessageProcessor(), default_topic="events",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
             ),
             query_processors=[
                 PrewhereProcessor(),
@@ -255,6 +257,7 @@ class TransactionsDataset(TimeSeriesDataset):
                 "bucketed_end": "finish_ts",
             },
             time_parse_columns=("start_ts", "finish_ts"),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_storage(self) -> ReadableTableStorage:

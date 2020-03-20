@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storage import QueryStorageSelector, Storage, ReadableStorage
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -27,6 +27,7 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
+from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import is_condition
 
 EVENTS = "events"
@@ -104,7 +105,7 @@ class DiscoverDataset(TimeSeriesDataset):
     It is based on two storages. One for events and one for transactions.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         self.__common_columns = ColumnSet(
             [
                 ("event_id", FixedString(32)),
@@ -225,6 +226,7 @@ class DiscoverDataset(TimeSeriesDataset):
             writable_storage=None,
             time_group_columns={},
             time_parse_columns=["timestamp"],
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:

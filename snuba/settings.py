@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 import os
-from typing import Any, Mapping, MutableMapping, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -19,15 +20,23 @@ DATASET_MODE = "local"
 [default_clickhouse_host, default_clickhouse_port] = os.environ.get(
     "CLICKHOUSE_SERVER", "localhost:9000"
 ).split(":", 1)
-CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", default_clickhouse_host)
-CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port))
-CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
-# Overrides the default values for the specified dataset
-CLICKHOUSE_HOST_BY_DATASET: Mapping[str, str] = {}
-CLICKHOUSE_PORT_BY_DATASET: Mapping[str, int] = {}
-CLICKHOUSE_HTTP_PORT_BY_DATASET: Mapping[str, int] = {}
+# TODO: this needs to be moved to another file so it can be imported elsewhere
+@dataclass(frozen=True)
+class ClickhouseConnectionConfig:
+    host: str
+    port: int
+    http_port: Optional[int]
+
+
+CLICKHOUSE_DATASET_CONNECTION_CONFIG: Mapping[str, ClickhouseConnectionConfig] = {}
+
+CLICKHOUSE_DEFAULT_CONNECTION_CONFIG = ClickhouseConnectionConfig(
+    host=os.environ.get("CLICKHOUSE_HOST", default_clickhouse_host),
+    port=int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port)),
+    http_port=int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+)
 
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"

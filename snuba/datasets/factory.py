@@ -1,4 +1,4 @@
-from typing import Callable, MutableMapping, Set, Sequence
+from typing import Callable, MutableMapping, Optional, Set, Sequence
 
 from snuba import settings
 from snuba.datasets.dataset import Dataset
@@ -28,7 +28,10 @@ class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
 
 
-def get_dataset(name: str) -> Dataset:
+def get_dataset(
+    name: str,
+    clickhouse_connection_config: Optional[settings.ClickhouseConnectionConfig] = None
+) -> Dataset:
     if name in DATASETS_IMPL:
         return DATASETS_IMPL[name]
 
@@ -62,7 +65,9 @@ def get_dataset(name: str) -> Dataset:
     }
 
     try:
-        dataset = DATASETS_IMPL[name] = dataset_factories[name]()
+        if not clickhouse_connection_config:
+            clickhouse_connection_config = get_clickhouse_connection_config(name)
+        dataset = DATASETS_IMPL[name] = dataset_factories[name](clickhouse_connection_config)
         DATASETS_NAME_LOOKUP[dataset] = name
     except KeyError as error:
         raise InvalidDatasetError(f"dataset {name!r} does not exist") from error
@@ -93,3 +98,10 @@ def ensure_not_internal(dataset: Dataset) -> None:
     name = get_dataset_name(dataset)
     if name in INTERNAL_DATASET_NAMES:
         raise InvalidDatasetError(f"Dataset {name} is internal")
+
+
+def get_clickhouse_connection_config(name: str) -> settings.ClickhouseConnectionConfig:
+    return settings.CLICKHOUSE_DATASET_CONNECTION_CONFIG.get(
+        name,
+        settings.CLICKHOUSE_DEFAULT_CONNECTION_CONFIG
+    )

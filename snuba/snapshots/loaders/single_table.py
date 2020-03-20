@@ -1,7 +1,7 @@
 import logging
 from typing import Callable
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.snapshots import BulkLoadSource, SnapshotTableRow
 from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BufferedWriterWrapper, WriterTableRow

@@ -362,7 +362,7 @@ def _run_query(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        clickhouse_ro = environment.get_clickhouse_ro(get_dataset_name(dataset))
+        clickhouse_ro = dataset.get_clickhouse_ro()
         reader: Reader[ClickhouseQuery] = NativeDriverReader(clickhouse_ro)
 
         result = raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)

@@ -20,10 +20,11 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.settings import ClickhouseConnectionConfig
 
 
 class OutcomesRawDataset(TimeSeriesDataset):
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         read_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),
@@ -61,6 +62,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
             writable_storage=None,
             time_group_columns={"time": "timestamp"},
             time_parse_columns=("timestamp",),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

@@ -4,7 +4,7 @@ import simplejson as json
 
 from typing import Optional, Sequence
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset_name
 from snuba.processor import InvalidMessageVersion

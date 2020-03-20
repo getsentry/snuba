@@ -4,8 +4,9 @@ from typing import MutableMapping, Optional, Sequence
 import click
 
 from snuba import settings
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.environment import get_clickhouse_rw, setup_logging
+from snuba.environment import setup_logging
 from snuba.migrations.migrate import run
 
 
@@ -93,9 +94,10 @@ def bootstrap(
 
     attempts = 0
     while True:
+        config = settings.CLICKHOUSE_DEFAULT_CONNECTION_CONFIG
+        clickhouse_rw = ClickhousePool(config.host, config.port)
         try:
             logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
-            clickhouse_rw = get_clickhouse_rw()
             clickhouse_rw.execute("SELECT 1")
             break
         except Exception as e:
@@ -113,7 +115,7 @@ def bootstrap(
     # Create the tables for every dataset.
     for name in DATASET_NAMES:
         dataset = get_dataset(name)
-        clickhouse_rw = get_clickhouse_rw(name)
+        clickhouse_rw = dataset.get_clickhouse_rw()
         existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
 
         logger.debug("Creating tables for dataset %s", name)

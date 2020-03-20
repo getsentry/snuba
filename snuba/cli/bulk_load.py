@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
-from snuba.environment import get_clickhouse_ro, setup_logging, setup_sentry
+from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
 
@@ -43,9 +43,8 @@ def bulk_load(
     snapshot_source = PostgresSnapshot.load(
         product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,
     )
-    clickhouse_ro = get_clickhouse_ro(dataset_name)
 
-    loader = enforce_table_writer(dataset).get_bulk_loader(snapshot_source, dest_table, clickhouse_ro)
+    loader = enforce_table_writer(dataset).get_bulk_loader(snapshot_source, dest_table)
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
         enforce_table_writer(dataset).get_bulk_writer(table_name=dest_table),

@@ -1,7 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clickhouse.pool import ClickhousePool
 
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
@@ -15,6 +15,7 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
+from snuba.settings import ClickhouseConnectionConfig
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
 
@@ -25,7 +26,9 @@ class GroupedMessageTableWriter(TableWriter):
         super().__init__(**kwargs)
         self.__postgres_table = postgres_table
 
-    def get_bulk_loader(self, source, dest_table, clickhouse_client: ClickhousePool):
+    def get_bulk_loader(self, source, dest_table):
+        config = self.get_clickhouse_connection_config()
+        clickhouse_client = ClickhousePool(config.host, config.port)
         return SingleTableBulkLoader(
             source=source,
             source_table=self.__postgres_table,
@@ -43,7 +46,7 @@ class GroupedMessageDataset(CdcDataset):
 
     POSTGRES_TABLE = "sentry_groupedmessage"
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         columns = ColumnSet(
             [
                 # columns to maintain the dataset
@@ -85,6 +88,7 @@ class GroupedMessageDataset(CdcDataset):
                     processor=GroupedMessageProcessor(self.POSTGRES_TABLE),
                     default_topic="cdc",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
                 postgres_table=self.POSTGRES_TABLE,
             ),
             query_processors=[PrewhereProcessor()],
@@ -99,6 +103,7 @@ class GroupedMessageDataset(CdcDataset):
             writable_storage=storage,
             default_control_topic="cdc_control",
             postgres_table=self.POSTGRES_TABLE,
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:

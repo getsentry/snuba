@@ -7,8 +7,6 @@ from datetime import datetime
 from itertools import chain
 from typing import MutableSequence, Sequence
 
-from snuba.datasets.factory import get_dataset_name
-from snuba.environment import get_clickhouse_rw
 from snuba.util import settings_override
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
 from snuba.utils.streams.kafka import KafkaPayload
@@ -46,8 +44,7 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
     from snuba.consumer import ConsumerWorker
 
     for storage in dataset.get_all_storages():
-        dataset_name = get_dataset_name(dataset)
-        clickhouse_rw = get_clickhouse_rw(dataset_name)
+        clickhouse_rw = dataset.get_clickhouse_rw()
         for statement in storage.get_schemas().get_create_statements():
             clickhouse_rw.execute(statement.statement)
 

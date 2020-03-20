@@ -42,6 +42,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.settings import ClickhouseConnectionConfig
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
@@ -94,7 +95,7 @@ class SessionsProcessor(MessageProcessor):
 
 
 class SessionsDataset(TimeSeriesDataset):
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         all_columns = ColumnSet(
             [
                 ("session_id", UUID()),
@@ -196,6 +197,7 @@ class SessionsDataset(TimeSeriesDataset):
                 stream_loader=KafkaStreamLoader(
                     processor=SessionsProcessor(), default_topic="ingest-sessions",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
             ),
             query_processors=[],
         )
@@ -219,6 +221,7 @@ class SessionsDataset(TimeSeriesDataset):
             writable_storage=writable_storage,
             time_group_columns={"bucketed_started": "started"},
             time_parse_columns=("started", "received"),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

@@ -2,12 +2,14 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -64,11 +66,22 @@ class Dataset(object):
         storage_selector: QueryStorageSelector,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
+        clickhouse_connection_config: ClickhouseConnectionConfig,
     ) -> None:
         self.__storages = storages
         self.__storage_selector = storage_selector
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
+        self.__clickhouse_connection_config = clickhouse_connection_config
+        self.__clickhouse_rw = ClickhousePool(
+            clickhouse_connection_config.host,
+            clickhouse_connection_config.port
+        )
+        self.__clickhouse_ro = ClickhousePool(
+            clickhouse_connection_config.host,
+            clickhouse_connection_config.port,
+            client_settings={"readonly": True}
+        )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
@@ -156,6 +169,15 @@ class Dataset(object):
         """
         return None
 
+    def get_clickhouse_connection_config(self) -> ClickhouseConnectionConfig:
+        return self.__clickhouse_connection_config
+
+    def get_clickhouse_rw(self) -> ClickhousePool:
+        return self.__clickhouse_rw
+
+    def get_clickhouse_ro(self) -> ClickhousePool:
+        return self.__clickhouse_ro
+
 
 class TimeSeriesDataset(Dataset):
     def __init__(
@@ -167,12 +189,14 @@ class TimeSeriesDataset(Dataset):
         writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
+        clickhouse_connection_config: ClickhouseConnectionConfig,
     ) -> None:
         super().__init__(
             storages=storages,
             storage_selector=storage_selector,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,
+            clickhouse_connection_config=clickhouse_connection_config,
         )
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.

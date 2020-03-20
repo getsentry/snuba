@@ -34,6 +34,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import qualified_column
 
 
@@ -97,7 +98,7 @@ class EventsDataset(TimeSeriesDataset):
     and the particular quirks of storing and querying them.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         metadata_columns = ColumnSet(
             [
                 # optional stream related data
@@ -284,6 +285,7 @@ class EventsDataset(TimeSeriesDataset):
                     replacement_topic="event-replacements",
                     commit_log_topic="snuba-commit-log",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
                 replacer_processor=ErrorsReplacer(
                     write_schema=schema,
                     read_schema=schema,
@@ -310,6 +312,7 @@ class EventsDataset(TimeSeriesDataset):
             writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
         self.__tags_processor = TagColumnProcessor(

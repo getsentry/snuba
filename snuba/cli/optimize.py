@@ -2,7 +2,6 @@ from typing import Optional
 
 import click
 
-from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
 
@@ -10,12 +9,10 @@ from snuba.environment import setup_logging
 @click.command()
 @click.option(
     "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
     help="Clickhouse server to write to.",
 )
 @click.option(
     "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
     type=int,
     help="Clickhouse native port to write to.",
 )
@@ -44,7 +41,7 @@ def optimize(
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.pool import ClickhousePool
     from snuba.optimize import run_optimize, logger
 
     setup_logging(log_level)

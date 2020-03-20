@@ -38,6 +38,7 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.settings import ClickhouseConnectionConfig
 
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
@@ -70,7 +71,7 @@ class OutcomesDataset(TimeSeriesDataset):
     Tracks event ingestion outcomes in Sentry.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         write_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),
@@ -163,6 +164,7 @@ class OutcomesDataset(TimeSeriesDataset):
                 stream_loader=KafkaStreamLoader(
                     processor=OutcomesProcessor(), default_topic="outcomes",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
             ),
             query_processors=[],
         )
@@ -185,6 +187,7 @@ class OutcomesDataset(TimeSeriesDataset):
             writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
             time_parse_columns=("timestamp",),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

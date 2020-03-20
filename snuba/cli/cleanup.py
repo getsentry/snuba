@@ -10,12 +10,10 @@ from snuba.environment import setup_logging
 @click.command()
 @click.option(
     "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
     help="Clickhouse server to write to.",
 )
 @click.option(
     "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
     type=int,
     help="Clickhouse native port to write to.",
 )
@@ -36,8 +34,8 @@ from snuba.environment import setup_logging
 @click.option("--log-level", help="Logging level to use.")
 def cleanup(
     *,
-    clickhouse_host: str,
-    clickhouse_port: int,
+    clickhouse_host: Optional[str],
+    clickhouse_port: Optional[int],
     dry_run: bool,
     database: str,
     dataset_name: str,
@@ -50,9 +48,20 @@ def cleanup(
     setup_logging(log_level)
 
     from snuba.cleanup import run_cleanup, logger
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.pool import ClickhousePool
 
-    dataset = get_dataset(dataset_name)
+    if bool(clickhouse_host) ^ bool(clickhouse_port):
+        raise click.ClickException("Provide both clickhouse_host and clickhouse_port, or neither")
+
+    if clickhouse_host and clickhouse_port:
+        clickhouse_connection_config = settings.ClickhouseConnectionConfig(
+            host=clickhouse_host,
+            port=clickhouse_port
+        )
+    else:
+        clickhouse_connection_config = None
+
+    dataset = get_dataset(dataset_name, clickhouse_connection_config)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     clickhouse = ClickhousePool(clickhouse_host, clickhouse_port)

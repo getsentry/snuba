@@ -6,7 +6,6 @@ from hashlib import md5
 import uuid
 
 from snuba import settings
-from snuba.environment import get_clickhouse_rw
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
@@ -54,7 +53,7 @@ class BaseTest(object):
 
         if self.dataset_name:
             self.dataset = get_dataset(self.dataset_name)
-            self.clickhouse = get_clickhouse_rw(self.dataset_name)
+            self.clickhouse = self.dataset.get_clickhouse_rw()
 
             for storage in self.dataset.get_all_storages():
                 for statement in storage.get_schemas().get_drop_statements():

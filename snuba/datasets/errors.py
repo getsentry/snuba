@@ -34,6 +34,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
+from snuba.settings import ClickhouseConnectionConfig
 
 
 class ErrorsDataset(TimeSeriesDataset):
@@ -43,7 +44,7 @@ class ErrorsDataset(TimeSeriesDataset):
     This is meant to replace Events. They will both exist during the migration.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, clickhouse_connection_config: ClickhouseConnectionConfig) -> None:
         all_columns = ColumnSet(
             [
                 ("org_id", UInt(64)),
@@ -178,6 +179,7 @@ class ErrorsDataset(TimeSeriesDataset):
                     default_topic="events",
                     replacement_topic="errors-replacements",
                 ),
+                clickhouse_connection_config=clickhouse_connection_config,
                 replacer_processor=ErrorsReplacer(
                     write_schema=schema,
                     read_schema=schema,
@@ -205,6 +207,7 @@ class ErrorsDataset(TimeSeriesDataset):
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
+            clickhouse_connection_config=clickhouse_connection_config,
         )
 
         self.__tags_processor = TagColumnProcessor(

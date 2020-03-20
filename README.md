@@ -56,7 +56,7 @@ Snuba exposes an HTTP API (default port: `1218`) with the following endpoints.
 
 Settings are found in `settings.py`
 
-- `CLICKHOUSE_HOST` : The hostname for the clickhouse service.
+- `CLICKHOUSE_DEFAULT_CONNECTION_CONFIG` : The default host / port for the clickhouse service.
 - `REDIS_HOST` : The host redis is running on.
 - `DATASET_MODE` : If "local" runs Clickhouse local tables instead of distributed ones.
 

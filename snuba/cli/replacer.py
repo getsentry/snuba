@@ -76,7 +76,7 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
-    from snuba.clickhouse.native import ClickhousePool
+    from snuba.clickhouse.pool import ClickhousePool
     from snuba.replacer import ReplacerWorker
     from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
@@ -118,9 +118,11 @@ def replacer(
         "use_uncompressed_cache": 0,
     }
 
+    clickhouse_config = dataset.get_clickhouse_connection_config()
+
     clickhouse = ClickhousePool(
-        settings.CLICKHOUSE_HOST,
-        settings.CLICKHOUSE_PORT,
+        clickhouse_config.host,
+        clickhouse_config.port,
         client_settings=client_settings,
     )
 
