@@ -65,7 +65,7 @@ class WritableStorage(Storage):
     """
 
     @abstractmethod
-    def get_table_writer(self) -> Optional[TableWriter]:
+    def get_table_writer(self) -> TableWriter:
         """
         Returns the TableWriter if the Storage has one.
         """
@@ -96,13 +96,13 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
         self,
         schemas: StorageSchemas,
+        table_writer: TableWriter,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
-        table_writer: Optional[TableWriter] = None,
     ) -> None:
         super().__init__(schemas, query_processors)
         self.__table_writer = table_writer
 
-    def get_table_writer(self) -> Optional[TableWriter]:
+    def get_table_writer(self) -> TableWriter:
         return self.__table_writer
 
 

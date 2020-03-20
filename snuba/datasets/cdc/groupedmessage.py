@@ -8,7 +8,6 @@ from snuba.datasets.storages.groupedmessages import (
 )
 from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 
 
@@ -19,11 +18,10 @@ class GroupedMessageDataset(CdcDataset):
     """
 
     def __init__(self) -> None:
-
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,

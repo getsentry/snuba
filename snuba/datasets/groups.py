@@ -15,7 +15,7 @@ from snuba.datasets.schemas.join import (
     TableJoinNode,
 )
 from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
-from snuba.datasets.storage import Storage
+from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
@@ -29,7 +29,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
-class JoinedStorage(Storage):
+class JoinedStorage(ReadableStorage):
     def __init__(self, join_structure: JoinClause) -> None:
         self.__structure = join_structure
 
@@ -42,7 +42,7 @@ class JoinedStorage(Storage):
         return None
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return []
+        return [PrewhereProcessor()]
 
 
 class Groups(TimeSeriesDataset):
@@ -117,7 +117,7 @@ class Groups(TimeSeriesDataset):
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
+                storage=storage, post_processors=[],
             ),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
@@ -188,11 +188,6 @@ class Groups(TimeSeriesDataset):
             project_column="events.project_id",
             timestamp_column="events.timestamp",
         )
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        # TODO: revisit how to build the prewhere clause on join
-        # queries.
-        return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
