@@ -6,4 +6,4 @@ from typing import Optional
 class ClickhouseConnectionConfig:
     host: str
     port: int
-    http_port: Optional[int]
+    http_port: Optional[int] = 0
