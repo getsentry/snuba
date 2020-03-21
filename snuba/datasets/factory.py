@@ -1,6 +1,7 @@
 from typing import Callable, MutableMapping, Optional, Set, Sequence
 
 from snuba import settings
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.table_storage import TableWriter
 
@@ -30,7 +31,7 @@ class InvalidDatasetError(Exception):
 
 def get_dataset(
     name: str,
-    clickhouse_connection_config: Optional[settings.ClickhouseConnectionConfig] = None
+    clickhouse_connection_config: Optional[ClickhouseConnectionConfig] = None
 ) -> Dataset:
     if name in DATASETS_IMPL:
         return DATASETS_IMPL[name]
@@ -100,7 +101,7 @@ def ensure_not_internal(dataset: Dataset) -> None:
         raise InvalidDatasetError(f"Dataset {name} is internal")
 
 
-def get_clickhouse_connection_config(name: str) -> settings.ClickhouseConnectionConfig:
+def get_clickhouse_connection_config(name: str) -> ClickhouseConnectionConfig:
     return settings.CLICKHOUSE_DATASET_CONNECTION_CONFIG.get(
         name,
         settings.CLICKHOUSE_DEFAULT_CONNECTION_CONFIG

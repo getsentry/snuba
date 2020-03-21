@@ -1,6 +1,7 @@
 from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
@@ -9,7 +10,6 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import parse_datetime, qualified_column
 
 

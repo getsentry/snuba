@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
@@ -27,7 +28,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import is_condition
 
 EVENTS = "events"

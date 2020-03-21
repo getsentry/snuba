@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import (
@@ -42,7 +43,6 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.settings import ClickhouseConnectionConfig
 
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"

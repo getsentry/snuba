@@ -12,6 +12,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storage import (
@@ -38,7 +39,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.settings import ClickhouseConnectionConfig
 
 
 WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"

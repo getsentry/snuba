@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
     WithCodecs,
     WithDefault,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
@@ -34,7 +35,6 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.settings import ClickhouseConnectionConfig
 
 
 class ErrorsDataset(TimeSeriesDataset):

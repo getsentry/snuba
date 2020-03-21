@@ -1,6 +1,6 @@
-from dataclasses import dataclass
 import os
-from typing import Any, Mapping, MutableMapping, Optional, Sequence, Set
+from typing import Any, Mapping, MutableMapping, Sequence, Set
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
@@ -21,14 +21,6 @@ DATASET_MODE = "local"
     "CLICKHOUSE_SERVER", "localhost:9000"
 ).split(":", 1)
 CLICKHOUSE_MAX_POOL_SIZE = 25
-
-# TODO: this needs to be moved to another file so it can be imported elsewhere
-@dataclass(frozen=True)
-class ClickhouseConnectionConfig:
-    host: str
-    port: int
-    http_port: Optional[int]
-
 
 CLICKHOUSE_DATASET_CONNECTION_CONFIG: Mapping[str, ClickhouseConnectionConfig] = {}
 

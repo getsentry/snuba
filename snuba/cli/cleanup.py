@@ -2,7 +2,7 @@ from typing import Optional
 
 import click
 
-from snuba import settings
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
 
@@ -54,7 +54,7 @@ def cleanup(
         raise click.ClickException("Provide both clickhouse_host and clickhouse_port, or neither")
 
     if clickhouse_host and clickhouse_port:
-        clickhouse_connection_config = settings.ClickhouseConnectionConfig(
+        clickhouse_connection_config = ClickhouseConnectionConfig(
             host=clickhouse_host,
             port=clickhouse_port
         )

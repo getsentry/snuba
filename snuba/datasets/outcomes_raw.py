@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
@@ -20,7 +21,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.settings import ClickhouseConnectionConfig
 
 
 class OutcomesRawDataset(TimeSeriesDataset):

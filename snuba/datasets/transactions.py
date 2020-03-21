@@ -17,6 +17,7 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -43,7 +44,6 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.settings import ClickhouseConnectionConfig
 
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts

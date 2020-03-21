@@ -13,6 +13,7 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -34,7 +35,6 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
-from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import qualified_column
 
 

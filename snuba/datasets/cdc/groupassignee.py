@@ -1,6 +1,7 @@
 from typing import Sequence
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.clickhouse.pool import ClickhousePool
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc import CdcDataset
@@ -14,7 +15,6 @@ from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query_processor import QueryProcessor
-from snuba.settings import ClickhouseConnectionConfig
 from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 

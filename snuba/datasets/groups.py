@@ -12,6 +12,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -24,7 +25,6 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
-from snuba.settings import ClickhouseConnectionConfig
 from snuba.util import qualified_column
 
 

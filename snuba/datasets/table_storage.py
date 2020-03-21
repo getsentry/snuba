@@ -7,6 +7,7 @@ from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -100,7 +101,7 @@ class TableWriter:
         self,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
-        clickhouse_connection_config: settings.ClickhouseConnectionConfig,
+        clickhouse_connection_config: ClickhouseConnectionConfig,
         replacer_processor: Optional[ReplacerProcessor] = None,
     ) -> None:
         self.__table_schema = write_schema
@@ -175,5 +176,5 @@ class TableWriter:
         """
         return self.__replacer_processor
 
-    def get_clickhouse_connection_config(self) -> settings.ClickhouseConnectionConfig:
+    def get_clickhouse_connection_config(self) -> ClickhouseConnectionConfig:
         return self.__clickhouse_connection_config
