@@ -242,9 +242,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[self.__storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=self.__storage, post_processors=[],
-            ),
+            query_plan_builder=SingleTableQueryPlanBuilder(storage=self.__storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,
             time_group_columns={

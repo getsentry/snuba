@@ -215,7 +215,7 @@ class SessionsDataset(TimeSeriesDataset):
             # materialized storage or the raw one here, replace this with a custom storage
             # selector that decides when to use the materialized data.
             query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=materialized_storage, post_processors=[],
+                storage=materialized_storage,
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,

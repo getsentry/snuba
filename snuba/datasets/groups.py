@@ -122,9 +122,7 @@ class Groups(TimeSeriesDataset):
         storage = JoinedStorage(join_structure)
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleTableQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
             time_group_columns={"events.time": "events.timestamp"},

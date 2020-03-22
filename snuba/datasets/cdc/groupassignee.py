@@ -85,9 +85,7 @@ class GroupAssigneeDataset(CdcDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleTableQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             default_control_topic="cdc_control",

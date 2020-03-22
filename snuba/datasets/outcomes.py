@@ -182,7 +182,6 @@ class OutcomesDataset(TimeSeriesDataset):
                 # materialized storage or the raw one here, replace this with a custom storage
                 # selector that decides when to use the materialized data.
                 storage=materialized_storage,
-                post_processors=[],
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,

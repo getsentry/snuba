@@ -199,9 +199,7 @@ class ErrorsDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleTableQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},

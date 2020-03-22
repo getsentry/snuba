@@ -56,9 +56,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleTableQueryPlanBuilder(storage=storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
             time_group_columns={"time": "timestamp"},

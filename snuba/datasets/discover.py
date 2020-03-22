@@ -217,9 +217,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 events_dataset.get_storage(),
                 transactions_dataset.get_storage(),
             ],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[],
-            ),
+            query_plan_builder=SelectedTableQueryPlanBuilder(selector=storage_selector),
             abstract_column_set=(
                 self.__common_columns
                 + self.__events_columns
