@@ -2,7 +2,8 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
+from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
+from snuba.datasets.storage import Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -39,20 +40,22 @@ class Dataset(object):
     The dataset is made of several Storage objects (later we will introduce
     entities between Dataset and Storage). Each storage represent a table/view
     we can query.
+
     When processing a query, there are three main steps:
     - dataset query processing. A series of QueryProcessors are applied to the
       query before deciding which Storage to use. These processors are defined
       by the dataset
-    - the Storage to run the query onto is selected. This is done by a
-      QueryStorageSelector which is provided by the dataset. From this point
-      the query processing is storage specific. [This step is temporary till we
-      do not have a Query Plan Builder]
+    - the Storage to run the query onto is selected and the query is transformed
+      into a Storage Query. This is done by a StorageQueryPlanBuilder. This object
+      produces a plan that includes the Query contextualized on the storage/s, the
+      list of processors to apply and the strategy to run the query (in case of
+      any strategy more complex than a single DB query like a split).
     - storage query processing. A second series of QueryProcessors are applied
       to the query. These are defined by the storage.
 
     The architecture of the Dataset is divided in two layers. The highest layer
     provides the logic we use to deal with the data model. (writers, query processors,
-    storage selectors, etc.). The lowest layer incldues simple objects that define
+    query planners, etc.). The lowest layer incldues simple objects that define
     the query itself (Query, Schema, RelationalSource). The lop layer object access and
     manipulate the lower layer objects.
     """
@@ -61,12 +64,12 @@ class Dataset(object):
         self,
         *,
         storages: Sequence[Storage],
-        storage_selector: QueryStorageSelector,
+        query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
         self.__storages = storages
-        self.__storage_selector = storage_selector
+        self.__query_plan_builder = query_plan_builder
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
 
@@ -82,7 +85,7 @@ class Dataset(object):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
-        that are applied to queries after parsing and before running them on Clickhouse.
+        that are applied to queries after parsing and before running them on the storage.
         These are applied in sequence in the same order as they are defined and are supposed
         to be stateless.
         """
@@ -100,12 +103,12 @@ class Dataset(object):
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
 
-    def get_query_storage_selector(self) -> QueryStorageSelector:
+    def get_query_plan_builder(self) -> StorageQueryPlanBuilder:
         """
-        Returns the component that provides the storage to run the query onto
-        during the query execution.
+        Returns the component that transforms a Snuba query in a Storage query by selecting
+        the storage and provides the directions on how to run the query.
         """
-        return self.__storage_selector
+        return self.__query_plan_builder
 
     def get_all_storages(self) -> Sequence[Storage]:
         """
@@ -162,7 +165,7 @@ class TimeSeriesDataset(Dataset):
         self,
         *,
         storages: Sequence[Storage],
-        storage_selector: QueryStorageSelector,
+        query_plan_builder: StorageQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],
@@ -170,7 +173,7 @@ class TimeSeriesDataset(Dataset):
     ) -> None:
         super().__init__(
             storages=storages,
-            storage_selector=storage_selector,
+            query_plan_builder=query_plan_builder,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,
         )

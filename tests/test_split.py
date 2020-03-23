@@ -10,7 +10,7 @@ from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import RawQueryResult
+from snuba.web import RawQueryResult
 from snuba.web.split import split_query
 
 

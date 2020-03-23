@@ -12,7 +12,8 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
@@ -23,7 +24,6 @@ from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.request.request_settings import RequestSettings
 from snuba.util import qualified_column
 
 
@@ -41,16 +41,6 @@ class JoinedStorage(ReadableStorage):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
-
-
-class GroupsQueryStorageSelector(QueryStorageSelector):
-    def __init__(self, joined_storage: JoinedStorage) -> None:
-        self.__storage = joined_storage
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
-        return self.__storage
 
 
 class Groups(TimeSeriesDataset):
@@ -132,7 +122,7 @@ class Groups(TimeSeriesDataset):
         storage = JoinedStorage(join_structure)
         super().__init__(
             storages=[storage],
-            storage_selector=GroupsQueryStorageSelector(storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
             time_group_columns={"events.time": "events.timestamp"},
@@ -202,11 +192,6 @@ class Groups(TimeSeriesDataset):
             project_column="events.project_id",
             timestamp_column="events.timestamp",
         )
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        # TODO: revisit how to build the prewhere clause on join
-        # queries.
-        return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return []

@@ -14,8 +14,8 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import (
-    SingleStorageSelector,
     ReadableTableStorage,
     WritableTableStorage,
 )
@@ -177,10 +177,12 @@ class OutcomesDataset(TimeSeriesDataset):
         )
         super().__init__(
             storages=[writable_storage, materialized_storage],
-            # TODO: Once we are ready to expose the raw data model and select whether to use
-            # materialized storage or the raw one here, replace this with a custom storage
-            # selector that decides when to use the materialized data.
-            storage_selector=SingleStorageSelector(materialized_storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                # TODO: Once we are ready to expose the raw data model and select whether to use
+                # materialized storage or the raw one here, replace this with a custom storage
+                # selector that decides when to use the materialized data.
+                storage=materialized_storage,
+            ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
             time_group_columns={"time": "timestamp"},
