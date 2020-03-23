@@ -62,7 +62,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
 
-class SelectedTableQueryPlanBuilder(StorageQueryPlanBuilder):
+class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     """
     A query plan builder that selects one of multiple storages in the
     dataset.

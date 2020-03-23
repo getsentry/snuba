@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
@@ -217,7 +217,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 events_dataset.get_storage(),
                 transactions_dataset.get_storage(),
             ],
-            query_plan_builder=SelectedTableQueryPlanBuilder(selector=storage_selector),
+            query_plan_builder=SelectedStorageQueryPlanBuilder(selector=storage_selector),
             abstract_column_set=(
                 self.__common_columns
                 + self.__events_columns
