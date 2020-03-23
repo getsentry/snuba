@@ -30,7 +30,6 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 
-
 EVENTS = "events"
 TRANSACTIONS = "transactions"
 

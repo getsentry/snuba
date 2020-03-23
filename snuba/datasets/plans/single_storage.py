@@ -62,7 +62,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=self.__execution_strategy,
         )
 
 
@@ -95,5 +95,5 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
                 *storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=self.__execution_strategy,
         )
