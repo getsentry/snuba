@@ -348,7 +348,7 @@ class EventsDataset(TimeSeriesDataset):
 
             # This conversion must not be ported to the errors dataset. We should
             # not support promoting tags/contexts with boolean values. There is
-            # no way to convert them back consistentyl to the value provided by
+            # no way to convert them back consistently to the value provided by
             # the client when the event is ingested, in all ways to access
             # tags/contexts. Once the errors dataset is in use, we will not have
             # boolean promoted tags/contexts so this constraint will be easy to enforce.
