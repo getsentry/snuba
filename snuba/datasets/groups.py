@@ -12,7 +12,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor

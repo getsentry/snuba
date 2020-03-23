@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor

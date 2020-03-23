@@ -14,7 +14,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import (
     ReadableTableStorage,
     WritableTableStorage,

@@ -22,7 +22,7 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader

@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension

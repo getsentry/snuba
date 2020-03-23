@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
-from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader

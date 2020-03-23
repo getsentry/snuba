@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SelectedStorageQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.transactions import TransactionsDataset
 from snuba.query.extensions import QueryExtension
