@@ -199,17 +199,15 @@ class DiscoverDataset(TimeSeriesDataset):
             ]
         )
 
-        storage_selector = DiscoverQueryStorageSelector(
-            events_table=events_storage,
-            abstract_events_columns=self.__events_columns,
-            transactions_table=transactions_storage,
-            abstract_transactions_columns=self.__transactions_columns,
-        )
-
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
-                selector=storage_selector,
+                selector=DiscoverQueryStorageSelector(
+                    events_table=events_storage,
+                    abstract_events_columns=self.__events_columns,
+                    transactions_table=transactions_storage,
+                    abstract_transactions_columns=self.__transactions_columns,
+                ),
             ),
             abstract_column_set=(
                 self.__common_columns

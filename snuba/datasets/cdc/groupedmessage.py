@@ -1,12 +1,12 @@
 from typing import Sequence
 
 from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.groupedmessages import (
     POSTGRES_TABLE,
     schema,
     storage,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 

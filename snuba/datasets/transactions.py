@@ -11,13 +11,13 @@ from snuba.datasets.storages.transactions import (
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.query import Query
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
+from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 class TransactionsDataset(TimeSeriesDataset):
