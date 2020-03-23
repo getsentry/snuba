@@ -16,11 +16,11 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.storage import (
-    SingleStorageSelector,
     ReadableTableStorage,
     WritableTableStorage,
 )
@@ -303,11 +303,9 @@ class EventsDataset(TimeSeriesDataset):
             ],
         )
 
-        storage_selector = SingleStorageSelector(storage=self.__storage)
-
         super(EventsDataset, self).__init__(
             storages=[self.__storage],
-            storage_selector=storage_selector,
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=self.__storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
@@ -348,6 +346,26 @@ class EventsDataset(TimeSeriesDataset):
         )
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
+
+            # This conversion must not be ported to the errors dataset. We should
+            # not support promoting tags/contexts with boolean values. There is
+            # no way to convert them back consistently to the value provided by
+            # the client when the event is ingested, in all ways to access
+            # tags/contexts. Once the errors dataset is in use, we will not have
+            # boolean promoted tags/contexts so this constraint will be easy to enforce.
+            boolean_contexts = {
+                "contexts[device.simulator]",
+                "contexts[device.online]",
+                "contexts[device.charging]",
+            }
+            boolean_context_template = (
+                "multiIf(%(processed_column)s == '', '', "
+                "%(processed_column)s IN ('1', 'True'), 'True', 'False')"
+            )
+            if column_name in boolean_contexts:
+                return boolean_context_template % (
+                    {"processed_column": processed_column}
+                )
             return processed_column
         elif column_name == "group_id":
             return f"nullIf({qualified_column('group_id', table_alias)}, 0)"

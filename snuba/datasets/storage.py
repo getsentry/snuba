@@ -117,13 +117,3 @@ class QueryStorageSelector(ABC):
         self, query: Query, request_settings: RequestSettings
     ) -> ReadableStorage:
         raise NotImplementedError
-
-
-class SingleStorageSelector(QueryStorageSelector):
-    def __init__(self, storage: ReadableTableStorage) -> None:
-        self.__storage = storage
-
-    def select_storage(
-        self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
-        return self.__storage

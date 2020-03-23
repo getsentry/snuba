@@ -14,7 +14,8 @@ from snuba.clickhouse.columns import (
 from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.storage import SingleStorageSelector, WritableTableStorage
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storage import WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
@@ -53,11 +54,10 @@ class OutcomesRawDataset(TimeSeriesDataset):
             table_writer=None,
             query_processors=[PrewhereProcessor()],
         )
-        storage_selector = SingleStorageSelector(storage=storage)
 
         super().__init__(
             storages=[storage],
-            storage_selector=storage_selector,
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
             time_group_columns={"time": "timestamp"},

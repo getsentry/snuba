@@ -4,7 +4,9 @@ from snuba import state
 from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
+from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
+
 
 test_data = [
     (
@@ -165,12 +167,8 @@ def test_tags_processor(query_body, expected_query) -> None:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
-    storage = dataset.get_query_storage_selector().select_storage(
-        query, request_settings
-    )
-    query.set_data_source(
-        storage.get_schemas().get_read_schema().get_data_source()
-    )
+    request = Request("a", query, request_settings, {}, "r")
+    _ = dataset.get_query_plan_builder().build_plan(request)
 
     assert (
         DictClickhouseQuery(dataset, query, request_settings).format_sql()
