@@ -29,7 +29,6 @@ from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
-from snuba.datasets.plans.split import SplitQueryPlanExecutionStrategy
 
 
 EVENTS = "events"

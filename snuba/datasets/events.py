@@ -6,6 +6,10 @@ from snuba.datasets.plans.single_storage import (
     SimpleQueryPlanExecutionStrategy,
     SingleStorageQueryPlanBuilder,
 )
+from snuba.datasets.plans.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
 from snuba.datasets.storages.events import (
     all_columns,
     get_column_tag_map,
@@ -22,10 +26,6 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
-from snuba.datasets.plans.split import (
-    ColumnSplitSpec,
-    SplitQueryPlanExecutionStrategy,
-)
 
 
 class EventsDataset(TimeSeriesDataset):
