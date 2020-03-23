@@ -86,7 +86,7 @@ class TestDiscoverApi(BaseApiTest):
                                     "span_id": span_id,
                                     "op": "http",
                                 },
-                                "device": {"online": True},
+                                "device": {"online": True, "charging": True},
                             },
                             "sdk": {
                                 "name": "sentry.python",
@@ -359,6 +359,45 @@ class TestDiscoverApi(BaseApiTest):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["data"] == [{"count": 0}]
+
+    def test_device_boolean_fields_context_vs_promoted_column(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["contexts[device.charging]"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["type", "=", "transaction"],],
+                    "groupby": ["contexts[device.charging]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["contexts[device.charging]"] == "True"
+        assert data["data"][0]["count"] == 1
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "selected_columns": ["contexts[device.charging]"],
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [["type", "=", "error"],],
+                    "groupby": ["contexts[device.charging]"],
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["contexts[device.charging]"] == "True"
+        assert data["data"][0]["count"] == 1
 
     def test_having(self):
         result = json.loads(
