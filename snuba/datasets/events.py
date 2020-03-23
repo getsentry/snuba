@@ -5,8 +5,8 @@ from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.events import (
     all_columns,
-    get_promoted_columns,
     get_column_tag_map,
+    get_promoted_columns,
     schema,
     storage,
 )
