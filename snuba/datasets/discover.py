@@ -14,11 +14,8 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import (
-    SelectedTableQueryPlanBuilder,
-    SimpleQueryPlanExecutionStrategy,
-)
-from snuba.datasets.storage import QueryStorageSelector, Storage, ReadableStorage
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.extensions import QueryExtension
@@ -29,7 +26,6 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -41,7 +37,7 @@ TRANSACTIONS = "transactions"
 
 
 def detect_table(
-    query: Query, events_columns: ColumnSet, transactions_columns: ColumnSet
+    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
@@ -60,16 +56,16 @@ def detect_table(
 
     # Check for any conditions that reference a table specific field
     condition_columns = query.get_columns_referenced_in_conditions()
-    if any(events_columns.get(col) for col in condition_columns):
+    if any(events_only_columns.get(col) for col in condition_columns):
         return EVENTS
-    if any(transactions_columns.get(col) for col in condition_columns):
+    if any(transactions_only_columns.get(col) for col in condition_columns):
         return TRANSACTIONS
 
     # Check for any other references to a table specific field
     all_referenced_columns = query.get_all_referenced_columns()
-    if any(events_columns.get(col) for col in all_referenced_columns):
+    if any(events_only_columns.get(col) for col in all_referenced_columns):
         return EVENTS
-    if any(transactions_columns.get(col) for col in all_referenced_columns):
+    if any(transactions_only_columns.get(col) for col in all_referenced_columns):
         return TRANSACTIONS
 
     # Use events by default
@@ -78,18 +74,26 @@ def detect_table(
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
     def __init__(
-        self, events_table: ReadableStorage, transactions_table: ReadableStorage,
+        self,
+        events_table: ReadableStorage,
+        abstract_events_columns: ColumnSet,
+        transactions_table: ReadableStorage,
+        abstract_transactions_columns: ColumnSet,
     ) -> None:
         self.__events_table = events_table
+        # Columns from the abstract model that map to storage columns present only
+        # in the Events table
+        self.__abstract_events_columns = abstract_events_columns
         self.__transactions_table = transactions_table
+        # Columns from the abstract model that map to storage columns present only
+        # in the Transactions table
+        self.__abstract_transactions_columns = abstract_transactions_columns
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
     ) -> ReadableStorage:
         table = detect_table(
-            query,
-            self.__events_table.get_schemas().get_read_schema().get_columns(),
-            self.__transactions_table.get_schemas().get_read_schema().get_columns(),
+            query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
@@ -197,18 +201,14 @@ class DiscoverDataset(TimeSeriesDataset):
             ]
         )
 
-        storage_selector = DiscoverQueryStorageSelector(
-            events_table=events_storage, transactions_table=transactions_storage,
-        )
-
         super().__init__(
             storages=[events_storage, transactions_storage],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector,
-                post_processors=[PrewhereProcessor()],
-                execution_strategy=SplitQueryPlanExecutionStrategy(
-                    split_spec=None,
-                    default_strategy=SimpleQueryPlanExecutionStrategy(),
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=DiscoverQueryStorageSelector(
+                    events_table=events_storage,
+                    abstract_events_columns=self.__events_columns,
+                    transactions_table=transactions_storage,
+                    abstract_transactions_columns=self.__transactions_columns,
                 ),
             ),
             abstract_column_set=(
@@ -256,11 +256,9 @@ class DiscoverDataset(TimeSeriesDataset):
             query, self.__events_columns, self.__transactions_columns
         )
 
-        # Assignment in order not to loose track there is a type error in the Query class.
-        granularity: int = query.get_granularity()
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
-                return self.time_expr("finish_ts", granularity, table_alias)
+                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
             if column_name == "type":
                 return "'transaction'"
             if column_name == "timestamp":
@@ -292,7 +290,7 @@ class DiscoverDataset(TimeSeriesDataset):
                 return "NULL"
         else:
             if column_name == "time":
-                return self.time_expr("timestamp", granularity, table_alias)
+                return self.time_expr("timestamp", query.get_granularity(), table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":

@@ -5,12 +5,12 @@ import uuid
 
 from snuba import state
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
+from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.datasets.plans.split import SplitQueryPlanExecutionStrategy, ColumnSplitSpec
-from snuba.query import RawQueryResult
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.web import RawQueryResult
 
 
 def setup_function(function) -> None:

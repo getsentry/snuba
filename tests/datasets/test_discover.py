@@ -23,6 +23,10 @@ test_data = [
     ({"conditions": [["type", "!=", "transaction"]]}, "test_sentry_local",),
     ({"conditions": []}, "test_sentry_local",),
     ({"conditions": [["duration", "=", 0]]}, "test_transactions_local",),
+    (
+        {"conditions": [["event_id", "=", "asdasdasd"], ["duration", "=", 0]]},
+        "test_transactions_local",
+    ),
     # No conditions, other referenced columns
     ({"selected_columns": ["group_id"]}, "test_sentry_local"),
     ({"selected_columns": ["trace_id"]}, "test_transactions_local"),

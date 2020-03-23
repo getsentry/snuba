@@ -1,7 +1,8 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Optional, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
@@ -13,8 +14,16 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_table import SimpleQueryPlanExecutionStrategy
-from snuba.datasets.plans.joins import JoinQueryPlanBuilder
+from snuba.datasets.plans.single_storage import (
+    SimpleQueryPlanExecutionStrategy,
+    SingleStorageQueryPlanBuilder,
+)
+from snuba.datasets.plans.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
+)
+from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
@@ -25,10 +34,22 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
-from snuba.datasets.plans.split import (
-    ColumnSplitSpec,
-    SplitQueryPlanExecutionStrategy,
-)
+
+
+class JoinedStorage(ReadableStorage):
+    def __init__(self, join_structure: JoinClause) -> None:
+        self.__structure = join_structure
+
+    def get_schemas(self) -> StorageSchemas:
+        return StorageSchemas(
+            read_schema=JoinedSchema(self.__structure), write_schema=None
+        )
+
+    def get_table_writer(self) -> Optional[TableWriter]:
+        return None
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
 class Groups(TimeSeriesDataset):
@@ -96,13 +117,11 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storages = [groupedmessages_storage, events_storage]
+        storage = JoinedStorage(join_structure)
         super().__init__(
-            storages=storages,
-            query_plan_builder=JoinQueryPlanBuilder(
-                storages=storages,
-                join_spec=join_structure,
-                post_processors=[SimpleJoinOptimizer(), PrewhereProcessor()],
+            storages=[storage],
+            query_plan_builder=SingleStorageQueryPlanBuilder(
+                storage=storage,
                 execution_strategy=SplitQueryPlanExecutionStrategy(
                     ColumnSplitSpec(
                         id_column="events.event_id",
@@ -176,11 +195,6 @@ class Groups(TimeSeriesDataset):
                 timestamp_column="events.timestamp",
             ),
         }
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        # TODO: revisit how to build the prewhere clause on join
-        # queries.
-        return []
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return []

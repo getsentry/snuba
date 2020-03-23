@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -80,22 +80,17 @@ class GroupAssigneeDataset(CdcDataset):
                 ),
                 postgres_table=self.POSTGRES_TABLE,
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
-            ),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             default_control_topic="cdc_control",
             postgres_table=self.POSTGRES_TABLE,
         )
-
-    def get_prewhere_keys(self) -> Sequence[str]:
-        return ["project_id", "group_id"]
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

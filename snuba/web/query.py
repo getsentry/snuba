@@ -20,7 +20,6 @@ from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query import RawQueryResult
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.redis import redis_client
@@ -35,6 +34,7 @@ from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.web import RawQueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 logger = logging.getLogger("snuba.query")
@@ -268,7 +268,7 @@ def parse_and_run_query(
     )
 
     try:
-        result = _run_query(
+        result = _process_and_run_query(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
         record_query(request_copy, timer, query_metadata)
@@ -279,7 +279,9 @@ def parse_and_run_query(
     return result
 
 
-def _run_clickhouse_query(
+# TODO: The responsibilities of the functions of these file are split in a pretty arbitrary way.
+# This deserves some refactoring.
+def _run_db_query(
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -334,7 +336,7 @@ def _run_clickhouse_query(
     return result
 
 
-def _run_query(
+def _process_and_run_query(
     dataset: Dataset,
     request: Request,
     timer: Timer,
@@ -367,7 +369,7 @@ def _run_query(
         processor.process_query(request.query, request.settings)
 
     query_runner = partial(
-        _run_clickhouse_query, dataset, timer, query_metadata, from_date, to_date,
+        _run_db_query, dataset, timer, query_metadata, from_date, to_date,
     )
 
     return storage_query_plan.execution_strategy.execute(request, query_runner)

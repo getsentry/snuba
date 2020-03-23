@@ -2,9 +2,13 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.plans.single_table import (
+from snuba.datasets.plans.single_storage import (
     SimpleQueryPlanExecutionStrategy,
-    SingleTableQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
+)
+from snuba.datasets.plans.split import (
+    ColumnSplitSpec,
+    SplitQueryPlanExecutionStrategy,
 )
 from snuba.datasets.storages.transactions import (
     columns,
@@ -14,18 +18,13 @@ from snuba.datasets.storages.transactions import (
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
-from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query import Query
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.datasets.plans.split import (
-    ColumnSplitSpec,
-    SplitQueryPlanExecutionStrategy,
-)
+from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
+from snuba.query.timeseries import TimeSeriesExtension
 
 
 class TransactionsDataset(TimeSeriesDataset):
@@ -38,9 +37,8 @@ class TransactionsDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=storage,
-                post_processors=[PrewhereProcessor()],
                 execution_strategy=SplitQueryPlanExecutionStrategy(
                     ColumnSplitSpec(
                         id_column="event_id",

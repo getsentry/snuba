@@ -22,9 +22,9 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
-from snuba.datasets.plans.single_table import (
+from snuba.datasets.plans.single_storage import (
     SimpleQueryPlanExecutionStrategy,
-    SingleTableQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -201,14 +201,13 @@ class ErrorsDataset(TimeSeriesDataset):
                     state_name=ReplacerState.ERRORS,
                 ),
             ),
-            query_processors=[],
+            query_processors=[PrewhereProcessor()],
         )
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=storage,
-                post_processors=[PrewhereProcessor()],
                 execution_strategy=SplitQueryPlanExecutionStrategy(
                     ColumnSplitSpec(
                         id_column="event_id",

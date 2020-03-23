@@ -8,10 +8,10 @@ from typing import NamedTuple, Optional, Sequence
 from snuba import state, util
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
-    SingleQueryRunner,
+    QueryRunner,
 )
-from snuba.query import RawQueryResult
 from snuba.request import Request
+from snuba.web import RawQueryResult
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -44,7 +44,7 @@ class SplitQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self.__split_spec = split_spec
         self.__default_strategy = default_strategy
 
-    def execute(self, request: Request, runner: SingleQueryRunner) -> RawQueryResult:
+    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         (use_split,) = state.get_configs([("use_split", 0)])
         query_limit = request.query.get_limit()
         limit = query_limit if query_limit is not None else 0
@@ -75,9 +75,7 @@ class SplitQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
 
         return self.__default_strategy.execute(request, runner)
 
-    def __time_split(
-        self, request: Request, runner: SingleQueryRunner
-    ) -> RawQueryResult:
+    def __time_split(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -170,10 +168,7 @@ class SplitQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return overall_result
 
     def __col_split(
-        self,
-        request: Request,
-        column_split_spec: ColumnSplitSpec,
-        runner: SingleQueryRunner,
+        self, request: Request, column_split_spec: ColumnSplitSpec, runner: QueryRunner,
     ):
         """
         Split query in 2 steps if a large number of columns is being selected.

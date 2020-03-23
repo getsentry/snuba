@@ -18,6 +18,7 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 
 
@@ -246,7 +247,7 @@ schema = ReplacingMergeTreeSchema(
 )
 
 
-def _get_promoted_columns() -> Mapping[str, FrozenSet[str]]:
+def get_promoted_columns() -> Mapping[str, FrozenSet[str]]:
     # The set of columns, and associated keys that have been promoted
     # to the top level table namespace.
     return {
@@ -258,7 +259,7 @@ def _get_promoted_columns() -> Mapping[str, FrozenSet[str]]:
     }
 
 
-def _get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
+def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
     # For every applicable promoted column,  a map of translations from the column
     # name  we save in the database to the tag we receive in the query.
 
@@ -275,7 +276,7 @@ def get_tag_column_map() -> Mapping[str, Mapping[str, str]]:
     # And a reverse map from the tags the client expects to the database columns
     return {
         col: dict(map(reversed, trans.items()))
-        for col, trans in _get_column_tag_map().items()
+        for col, trans in get_column_tag_map().items()
     }
 
 
@@ -283,10 +284,8 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
     # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
     # and they can/will use a promoted column.
     return {
-        col: [
-            _get_column_tag_map()[col].get(x, x) for x in _get_promoted_columns()[col]
-        ]
-        for col in _get_promoted_columns()
+        col: [get_column_tag_map()[col].get(x, x) for x in get_promoted_columns()[col]]
+        for col in get_promoted_columns()
     }
 
 
@@ -313,5 +312,6 @@ storage = WritableTableStorage(
         # TODO: This one should become an entirely separate storage and picked
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+        PrewhereProcessor(),
     ],
 )

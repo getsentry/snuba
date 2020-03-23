@@ -1,31 +1,26 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence
+from typing import Mapping, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.plans.single_table import (
+from snuba.datasets.plans.single_storage import (
     SimpleQueryPlanExecutionStrategy,
-    SingleTableQueryPlanBuilder,
+    SingleStorageQueryPlanBuilder,
 )
 from snuba.datasets.storages.events import (
     all_columns,
-    metadata_columns,
-    promoted_tag_columns,
-    promoted_context_tag_columns,
-    promoted_context_columns,
-    required_columns,
+    get_column_tag_map,
+    get_promoted_columns,
     schema,
     storage,
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
+from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.util import qualified_column
 from snuba.datasets.plans.split import (
     ColumnSplitSpec,
@@ -41,17 +36,10 @@ class EventsDataset(TimeSeriesDataset):
 
     def __init__(self) -> None:
 
-        self.__metadata_columns = metadata_columns
-        self.__promoted_tag_columns = promoted_tag_columns
-        self.__promoted_context_tag_columns = promoted_context_tag_columns
-        self.__promoted_context_columns = promoted_context_columns
-        self.__required_columns = required_columns
-
         super(EventsDataset, self).__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
+            query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=storage,
-                post_processors=[PrewhereProcessor()],
                 execution_strategy=SplitQueryPlanExecutionStrategy(
                     ColumnSplitSpec(
                         id_column="event_id",
@@ -69,8 +57,8 @@ class EventsDataset(TimeSeriesDataset):
 
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            promoted_columns=get_promoted_columns(),
+            column_tag_map=get_column_tag_map(),
         )
 
     def column_expr(
@@ -97,65 +85,6 @@ class EventsDataset(TimeSeriesDataset):
             return f"coalesce({search_message}, {message})"
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
-
-    def get_promoted_tag_columns(self) -> ColumnSet:
-        return self.__promoted_tag_columns
-
-    def _get_promoted_context_tag_columns(self) -> ColumnSet:
-        return self.__promoted_context_tag_columns
-
-    def _get_promoted_context_columns(self) -> ColumnSet:
-        return self.__promoted_context_columns
-
-    def get_required_columns(self) -> ColumnSet:
-        return self.__required_columns
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        # The set of columns, and associated keys that have been promoted
-        # to the top level table namespace.
-        return {
-            "tags": frozenset(
-                col.flattened
-                for col in (
-                    self.get_promoted_tag_columns()
-                    + self._get_promoted_context_tag_columns()
-                )
-            ),
-            "contexts": frozenset(
-                col.flattened for col in self._get_promoted_context_columns()
-            ),
-        }
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        # For every applicable promoted column,  a map of translations from the column
-        # name  we save in the database to the tag we receive in the query.
-        promoted_context_tag_columns = self._get_promoted_context_tag_columns()
-
-        return {
-            "tags": {
-                col.flattened: col.flattened.replace("_", ".")
-                for col in promoted_context_tag_columns
-            },
-            "contexts": {},
-        }
-
-    def get_tag_column_map(self) -> Mapping[str, Mapping[str, str]]:
-        # And a reverse map from the tags the client expects to the database columns
-        return {
-            col: dict(map(reversed, trans.items()))
-            for col, trans in self._get_column_tag_map().items()
-        }
-
-    def get_promoted_tags(self) -> Mapping[str, Sequence[str]]:
-        # The canonical list of foo.bar strings that you can send as a `tags[foo.bar]` query
-        # and they can/will use a promoted column.
-        return {
-            col: [
-                self._get_column_tag_map()[col].get(x, x)
-                for x in self._get_promoted_columns()[col]
-            ]
-            for col in self._get_promoted_columns()
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
