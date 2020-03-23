@@ -1,13 +1,12 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.events import (
     all_columns,
-    promoted_context_columns,
-    promoted_context_tag_columns,
-    promoted_tag_columns,
+    get_promoted_columns,
+    get_column_tag_map,
     schema,
     storage,
 )
@@ -41,8 +40,8 @@ class EventsDataset(TimeSeriesDataset):
 
         self.__tags_processor = TagColumnProcessor(
             columns=all_columns,
-            promoted_columns=self._get_promoted_columns(),
-            column_tag_map=self._get_column_tag_map(),
+            promoted_columns=get_promoted_columns(),
+            column_tag_map=get_column_tag_map(),
         )
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
@@ -76,29 +75,6 @@ class EventsDataset(TimeSeriesDataset):
             return f"coalesce({search_message}, {message})"
         else:
             return super().column_expr(column_name, query, parsing_context, table_alias)
-
-    def _get_promoted_columns(self) -> Mapping[str, FrozenSet[str]]:
-        # The set of columns, and associated keys that have been promoted
-        # to the top level table namespace.
-        return {
-            "tags": frozenset(
-                col.flattened
-                for col in (promoted_tag_columns + promoted_context_tag_columns)
-            ),
-            "contexts": frozenset(col.flattened for col in promoted_context_columns),
-        }
-
-    def _get_column_tag_map(self) -> Mapping[str, Mapping[str, str]]:
-        # For every applicable promoted column,  a map of translations from the column
-        # name  we save in the database to the tag we receive in the query.
-
-        return {
-            "tags": {
-                col.flattened: col.flattened.replace("_", ".")
-                for col in promoted_context_tag_columns
-            },
-            "contexts": {},
-        }
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
