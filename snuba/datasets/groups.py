@@ -14,7 +14,7 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -42,7 +42,7 @@ class JoinedStorage(ReadableStorage):
         return None
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [PrewhereProcessor()]
+        return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
 class Groups(TimeSeriesDataset):
@@ -116,9 +116,7 @@ class Groups(TimeSeriesDataset):
         storage = JoinedStorage(join_structure)
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
             time_group_columns={"events.time": "events.timestamp"},
@@ -190,6 +188,4 @@ class Groups(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            SimpleJoinOptimizer(),
-        ]
+        return []

@@ -13,7 +13,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
@@ -56,9 +56,7 @@ class OutcomesRawDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[],
-            ),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
             time_group_columns={"time": "timestamp"},

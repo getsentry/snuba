@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
@@ -208,5 +209,6 @@ storage = WritableTableStorage(
             {"start_ts", "finish_ts"},
             BEGINNING_OF_TIME,
         ),
+        PrewhereProcessor(),
     ],
 )

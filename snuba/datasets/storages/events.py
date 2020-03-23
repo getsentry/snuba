@@ -18,6 +18,7 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 
 
@@ -313,5 +314,6 @@ storage = WritableTableStorage(
         # TODO: This one should become an entirely separate storage and picked
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+        PrewhereProcessor(),
     ],
 )

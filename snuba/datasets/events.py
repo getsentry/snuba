@@ -3,7 +3,7 @@ from typing import FrozenSet, Mapping, Sequence, Union
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.events import (
     all_columns,
     metadata_columns,
@@ -16,7 +16,6 @@ from snuba.datasets.storages.events import (
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.query import Query
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -42,9 +41,7 @@ class EventsDataset(TimeSeriesDataset):
 
         super(EventsDataset, self).__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(
-                storage=storage, post_processors=[PrewhereProcessor()],
-            ),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
