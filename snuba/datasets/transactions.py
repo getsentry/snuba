@@ -3,6 +3,7 @@ from typing import Any, Mapping, MutableMapping, Optional, Sequence, Union
 
 from snuba.clickhouse.columns import (
     ColumnSet,
+    ColumnType,
     Date,
     DateTime,
     IPv4,
@@ -18,12 +19,11 @@ from snuba.clickhouse.columns import (
 )
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.schemas.tables import (
-    MigrationSchemaColumn,
-    ReplacingMergeTreeSchema,
-)
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -78,11 +78,11 @@ class TransactionsTableWriter(TableWriter):
 
 
 def transactions_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
 ) -> Sequence[str]:
     ret = []
     duration_col = current_schema.get("duration")
-    if duration_col and duration_col.default_type == "MATERIALIZED":
+    if duration_col and Materialized in duration_col.get_all_modifiers():
         ret.append("ALTER TABLE %s MODIFY COLUMN duration UInt32" % clickhouse_table)
 
     if "sdk_name" not in current_schema:
@@ -137,10 +137,14 @@ def transactions_migrations(
     ]
     for col_name in low_cardinality_cols:
         col = current_schema.get(col_name)
-        if col and not col.column_type.startswith("LowCardinality"):
-            new_type = f"LowCardinality({col.column_type})"
+
+        if col and LowCardinality not in col.get_all_modifiers():
+            if isinstance(col, WithDefault):
+                col.inner_type = LowCardinality(col.inner_type)
+            else:
+                col = LowCardinality(col)
             ret.append(
-                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {new_type} {col.default_type} {col.default_expr}"
+                f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {col.for_schema()}"
             )
 
     return ret
@@ -205,28 +209,56 @@ class TransactionsDataset(TimeSeriesDataset):
             migration_function=transactions_migrations,
         )
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
         self.__tags_processor = TagColumnProcessor(
             columns=columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
 
-        super().__init__(
-            dataset_schemas=dataset_schemas,
+        self.__storage = WritableTableStorage(
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
             table_writer=TransactionsTableWriter(
                 write_schema=schema,
                 stream_loader=KafkaStreamLoader(
                     processor=TransactionsMessageProcessor(), default_topic="events",
                 ),
             ),
+            query_processors=[
+                NestedFieldConditionOptimizer(
+                    "tags",
+                    "_tags_flattened",
+                    {"start_ts", "finish_ts"},
+                    BEGINNING_OF_TIME,
+                ),
+                NestedFieldConditionOptimizer(
+                    "contexts",
+                    "_contexts_flattened",
+                    {"start_ts", "finish_ts"},
+                    BEGINNING_OF_TIME,
+                ),
+                PrewhereProcessor(),
+            ],
+        )
+
+        super().__init__(
+            storages=[self.__storage],
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=self.__storage),
+            abstract_column_set=schema.get_columns(),
+            writable_storage=self.__storage,
             time_group_columns={
                 "bucketed_start": "start_ts",
                 "bucketed_end": "finish_ts",
             },
             time_parse_columns=("start_ts", "finish_ts"),
         )
+
+    def get_storage(self) -> ReadableTableStorage:
+        """
+        Temporary method to allow composite datasets depending on the event storage to
+        reuse it.
+        """
+        # TODO: Move the storage definition out of this class so it is reusable
+        return self.__storage
 
     def _get_promoted_columns(self):
         # TODO: Support promoted tags
@@ -290,14 +322,4 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            PrewhereProcessor(),
-            NestedFieldConditionOptimizer(
-                "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME
-            ),
-            NestedFieldConditionOptimizer(
-                "contexts",
-                "_contexts_flattened",
-                {"start_ts", "finish_ts"},
-                BEGINNING_OF_TIME,
-            ),
         ]

@@ -86,6 +86,7 @@ class TestDiscoverApi(BaseApiTest):
                                     "span_id": span_id,
                                     "op": "http",
                                 },
+                                "device": {"online": True},
                             },
                             "sdk": {
                                 "name": "sentry.python",
@@ -444,3 +445,20 @@ class TestDiscoverApi(BaseApiTest):
         )
 
         assert result["data"] == []
+
+    def test_contexts(self):
+        # TODO: Add the same test for errors after PR #820 is merged.
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "conditions": [["type", "=", "transaction"]],
+                        "selected_columns": ["contexts[device.online]"],
+                    }
+                ),
+            ).data
+        )
+        assert result["data"] == [{"contexts[device.online]": "True"}]

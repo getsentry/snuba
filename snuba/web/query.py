@@ -1,12 +1,12 @@
 import copy
 import logging
 
+from datetime import datetime
 from hashlib import md5
 from typing import (
     Any,
     Mapping,
     MutableMapping,
-    NamedTuple,
     Optional,
 )
 
@@ -22,7 +22,6 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.environment import reader
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
-from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -35,17 +34,13 @@ from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
+from snuba.web import RawQueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 
 metrics = MetricsWrapper(environment.metrics, "api")
-
-
-class RawQueryResult(NamedTuple):
-    result: Result
-    extra: Any
 
 
 class RawQueryException(Exception):
@@ -274,7 +269,7 @@ def parse_and_run_query(
     )
 
     try:
-        result = _run_query(
+        result = _process_and_run_query(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
         record_query(request_copy, timer, query_metadata)
@@ -285,36 +280,17 @@ def parse_and_run_query(
     return result
 
 
-@split_query
-def _run_query(
+# TODO: The responsibilities of the functions of these file are split in a pretty arbitrary way.
+# This deserves some refactoring.
+def _run_db_query(
     dataset: Dataset,
-    request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    request: Request,
 ) -> RawQueryResult:
-    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
-        request.extensions["timeseries"]
-    )
-
-    if (
-        request.query.get_sample() is not None and request.query.get_sample() != 1.0
-    ) and not request.settings.get_turbo():
-        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
-
-    extensions = dataset.get_extensions()
-    for name, extension in extensions.items():
-        extension.get_processor().process_query(
-            request.query, request.extensions[name], request.settings
-        )
-
-    request.query.add_conditions(dataset.default_conditions())
-
-    if request.settings.get_turbo():
-        request.query.set_final(False)
-
-    for processor in dataset.get_query_processors():
-        processor.process_query(request.query, request.settings)
-
+    # TODO: This below should be a query processor.
     relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
@@ -359,3 +335,43 @@ def _run_query(
                 scope.span.set_tag("max_threads", stats["max_threads"])
 
     return result
+
+
+@split_query
+def _process_and_run_query(
+    dataset: Dataset,
+    request: Request,
+    timer: Timer,
+    query_metadata: SnubaQueryMetadata,
+) -> RawQueryResult:
+    from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
+        request.extensions["timeseries"]
+    )
+
+    if (
+        request.query.get_sample() is not None and request.query.get_sample() != 1.0
+    ) and not request.settings.get_turbo():
+        metrics.increment("sample_without_turbo", tags={"referrer": request.referrer})
+
+    extensions = dataset.get_extensions()
+    for name, extension in extensions.items():
+        extension.get_processor().process_query(
+            request.query, request.extensions[name], request.settings
+        )
+
+    if request.settings.get_turbo():
+        request.query.set_final(False)
+
+    for processor in dataset.get_query_processors():
+        processor.process_query(request.query, request.settings)
+
+    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+
+    for processor in storage_query_plan.query_processors:
+        processor.process_query(request.query, request.settings)
+
+    query_runner = partial(
+        _run_db_query, dataset, timer, query_metadata, from_date, to_date,
+    )
+
+    return storage_query_plan.execution_strategy.execute(request, query_runner)

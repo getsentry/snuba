@@ -4,6 +4,7 @@ from typing import FrozenSet, Mapping, Sequence, Union
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
+    ColumnType,
     DateTime,
     FixedString,
     Float,
@@ -13,14 +14,16 @@ from snuba.clickhouse.columns import (
     UInt,
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.schemas.tables import (
-    MigrationSchemaColumn,
-    ReplacingMergeTreeSchema,
+from snuba.datasets.storage import (
+    ReadableTableStorage,
+    WritableTableStorage,
 )
+from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -35,7 +38,7 @@ from snuba.util import qualified_column
 
 
 def events_migrations(
-    clickhouse_table: str, current_schema: Mapping[str, MigrationSchemaColumn]
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
 ) -> Sequence[str]:
     # Add/remove known migrations
     ret = []
@@ -271,29 +274,38 @@ class EventsDataset(TimeSeriesDataset):
         self.__promoted_context_columns = promoted_context_columns
         self.__required_columns = required_columns
 
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=schema,)
-
-        table_writer = TableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=EventsProcessor(promoted_tag_columns),
-                default_topic="events",
-                replacement_topic="event-replacements",
-                commit_log_topic="snuba-commit-log",
-            ),
-            replacer_processor=ErrorsReplacer(
+        self.__storage = WritableTableStorage(
+            schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+            table_writer=TableWriter(
                 write_schema=schema,
-                read_schema=schema,
-                required_columns=[col.escaped for col in required_columns],
-                tag_column_map=self.get_tag_column_map(),
-                promoted_tags=self.get_promoted_tags(),
-                state_name=ReplacerState.EVENTS,
+                stream_loader=KafkaStreamLoader(
+                    processor=EventsProcessor(promoted_tag_columns),
+                    default_topic="events",
+                    replacement_topic="event-replacements",
+                    commit_log_topic="snuba-commit-log",
+                ),
+                replacer_processor=ErrorsReplacer(
+                    write_schema=schema,
+                    read_schema=schema,
+                    required_columns=[col.escaped for col in required_columns],
+                    tag_column_map=self.get_tag_column_map(),
+                    promoted_tags=self.get_promoted_tags(),
+                    state_name=ReplacerState.EVENTS,
+                ),
             ),
+            query_processors=[
+                # TODO: This one should become an entirely separate storage and picked
+                # in the storage selector.
+                ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+                PrewhereProcessor(),
+            ],
         )
 
         super(EventsDataset, self).__init__(
-            dataset_schemas=dataset_schemas,
-            table_writer=table_writer,
+            storages=[self.__storage],
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=self.__storage),
+            abstract_column_set=schema.get_columns(),
+            writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
@@ -303,6 +315,14 @@ class EventsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
+
+    def get_storage(self) -> ReadableTableStorage:
+        """
+        Temporary method to allow composite datasets depending on the event storage to
+        reuse it.
+        """
+        # TODO: Move the storage definition out of this class so it is reusable
+        return self.__storage
 
     def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
         return ColumnSplitSpec(
@@ -323,6 +343,26 @@ class EventsDataset(TimeSeriesDataset):
         )
         if processed_column:
             # If processed_column is None, this was not a tag/context expression
+
+            # This conversion must not be ported to the errors dataset. We should
+            # not support promoting tags/contexts with boolean values. There is
+            # no way to convert them back consistently to the value provided by
+            # the client when the event is ingested, in all ways to access
+            # tags/contexts. Once the errors dataset is in use, we will not have
+            # boolean promoted tags/contexts so this constraint will be easy to enforce.
+            boolean_contexts = {
+                "contexts[device.simulator]",
+                "contexts[device.online]",
+                "contexts[device.charging]",
+            }
+            boolean_context_template = (
+                "multiIf(%(processed_column)s == '', '', "
+                "%(processed_column)s IN ('1', 'True'), 'True', 'False')"
+            )
+            if column_name in boolean_contexts:
+                return boolean_context_template % (
+                    {"processed_column": processed_column}
+                )
             return processed_column
         elif column_name == "group_id":
             return f"nullIf({qualified_column('group_id', table_alias)}, 0)"
@@ -418,7 +458,5 @@ class EventsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
-            ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
             BasicFunctionsProcessor(),
-            PrewhereProcessor(),
         ]

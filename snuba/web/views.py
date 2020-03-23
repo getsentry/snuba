@@ -81,11 +81,13 @@ def check_clickhouse() -> bool:
         clickhouse_tables = clickhouse_ro.execute("show tables")
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            source = dataset.get_dataset_schemas().get_read_schema()
-            if isinstance(source, TableSchema):
-                table_name = source.get_table_name()
-                if (table_name,) not in clickhouse_tables:
-                    return False
+
+            for storage in dataset.get_all_storages():
+                source = storage.get_schemas().get_read_schema()
+                if isinstance(source, TableSchema):
+                    table_name = source.get_table_name()
+                    if (table_name,) not in clickhouse_tables:
+                        return False
 
         return True
 
@@ -357,12 +359,13 @@ if application.debug or application.testing:
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
-        from snuba import migrate
+        from snuba.migrations import migrate
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        for statement in dataset.get_dataset_schemas().get_create_statements():
-            clickhouse_rw.execute(statement.statement)
+        for storage in dataset.get_all_storages():
+            for statement in storage.get_schemas().get_create_statements():
+                clickhouse_rw.execute(statement.statement)
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -429,8 +432,9 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
-        for statement in dataset.get_dataset_schemas().get_drop_statements():
-            clickhouse_rw.execute(statement.statement)
+        for storage in dataset.get_all_storages():
+            for statement in storage.get_schemas().get_drop_statements():
+                clickhouse_rw.execute(statement.statement)
 
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()

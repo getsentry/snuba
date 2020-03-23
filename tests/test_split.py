@@ -10,7 +10,7 @@ from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import RawQueryResult
+from snuba.web import RawQueryResult
 from snuba.web.split import split_query
 
 
@@ -37,7 +37,10 @@ def test_no_split(dataset_name: str):
             "limit": 100,
             "offset": 50,
         },
-        events.get_dataset_schemas().get_read_schema().get_data_source(),
+        events.get_all_storages()[0]
+        .get_schemas()
+        .get_read_schema()
+        .get_data_source(),
     )
 
     @split_query
@@ -111,7 +114,10 @@ def test_col_split(
             "limit": 100,
             "offset": 50,
         },
-        events.get_dataset_schemas().get_read_schema().get_data_source(),
+        events.get_all_storages()[0]
+        .get_schemas()
+        .get_read_schema()
+        .get_data_source(),
     )
 
     request = Request(
