@@ -7,7 +7,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -85,7 +85,7 @@ class GroupAssigneeDataset(CdcDataset):
 
         super().__init__(
             storages=[storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(storage=storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
             default_control_topic="cdc_control",

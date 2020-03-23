@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 )
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
@@ -303,7 +303,7 @@ class EventsDataset(TimeSeriesDataset):
 
         super(EventsDataset, self).__init__(
             storages=[self.__storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(storage=self.__storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=self.__storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},

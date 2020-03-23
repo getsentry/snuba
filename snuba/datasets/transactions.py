@@ -20,7 +20,7 @@ from snuba.clickhouse.columns import (
 from snuba.writer import BatchWriter
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.single_table import SingleTableQueryPlanBuilder
+from snuba.datasets.plans.single_table import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -242,7 +242,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
         super().__init__(
             storages=[self.__storage],
-            query_plan_builder=SingleTableQueryPlanBuilder(storage=self.__storage),
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=self.__storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=self.__storage,
             time_group_columns={

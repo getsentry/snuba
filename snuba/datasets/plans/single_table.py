@@ -22,7 +22,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return runner(request)
 
 
-class SingleTableQueryPlanBuilder(StorageQueryPlanBuilder):
+class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     """
     Builds the Storage Query Execution Plan for a dataset that is based on
     a single storage.
