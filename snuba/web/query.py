@@ -17,8 +17,7 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.native import NativeDriverReader
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.clickhouse.query import ClickhouseQuery
@@ -362,8 +361,7 @@ def _run_query(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        clickhouse_ro = dataset.get_clickhouse_ro()
-        reader: Reader[ClickhouseQuery] = NativeDriverReader(clickhouse_ro)
+        reader = dataset.get_clickhouse_reader()
 
         result = raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)
 

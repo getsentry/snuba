@@ -3,13 +3,16 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.config import ClickhouseConnectionConfig
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.clickhouse.native import NativeDriverReader
 from snuba.clickhouse.pool import ClickhousePool
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.storage import QueryStorageSelector, Storage, WritableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.reader import Reader
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -82,6 +85,7 @@ class Dataset(object):
             clickhouse_connection_config.port,
             client_settings={"readonly": True}
         )
+        self.__reader = NativeDriverReader(self.__clickhouse_ro)
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
@@ -177,6 +181,9 @@ class Dataset(object):
 
     def get_clickhouse_ro(self) -> ClickhousePool:
         return self.__clickhouse_ro
+
+    def get_clickhouse_reader(self) -> Reader[ClickhouseQuery]:
+        return self.__reader
 
 
 class TimeSeriesDataset(Dataset):
