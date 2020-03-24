@@ -35,6 +35,9 @@ from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.transaction_column_processor import (
+    TransactionColumnProcessor,
+)
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.query import Query
@@ -322,4 +325,5 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
+            TransactionColumnProcessor(self.__tags_processor),
         ]

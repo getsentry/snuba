@@ -9,6 +9,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.util import parse_datetime, qualified_column
 
 
@@ -224,3 +225,8 @@ class TimeSeriesDataset(Dataset):
         ):
             lit = parse_datetime(lit)
         return lhs, op, lit
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [
+            TimeSeriesColumnProcessor(self.__time_group_columns),
+        ]
