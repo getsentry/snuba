@@ -1,8 +1,8 @@
 from dataclasses import replace
 from typing import List, Tuple, Union
 
-from parsimonious.grammar import Grammar  # type: ignore
-from parsimonious.nodes import Node, NodeVisitor  # type: ignore
+from parsimonious.grammar import Grammar
+from parsimonious.nodes import Node, NodeVisitor
 from typing import Any, Iterable, Optional
 
 from snuba.query.expressions import (

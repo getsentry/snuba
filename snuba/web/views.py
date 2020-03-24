@@ -13,7 +13,7 @@ from flask import request as http_request
 from markdown import markdown
 from werkzeug.exceptions import BadRequest
 
-from snuba import settings, state, util
+from snuba import environment, settings, state, util
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -34,7 +34,7 @@ from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.util import local_dataset_mode
-from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
@@ -44,6 +44,8 @@ from snuba.web.query import (
     parse_and_run_query,
 )
 
+
+metrics = MetricsWrapper(environment.metrics, "api")
 
 logger = logging.getLogger("snuba.api")
 
@@ -79,11 +81,13 @@ def check_clickhouse() -> bool:
         clickhouse_tables = clickhouse_ro.execute("show tables")
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
-            source = dataset.get_dataset_schemas().get_read_schema()
-            if isinstance(source, TableSchema):
-                table_name = source.get_table_name()
-                if (table_name,) not in clickhouse_tables:
-                    return False
+
+            for storage in dataset.get_all_storages():
+                source = storage.get_schemas().get_read_schema()
+                if isinstance(source, TableSchema):
+                    table_name = source.get_table_name()
+                    if (table_name,) not in clickhouse_tables:
+                        return False
 
         return True
 
@@ -225,6 +229,7 @@ def health():
 
 def parse_request_body(http_request):
     with sentry_sdk.start_span(description="parse_request_body", op="parse"):
+        metrics.timing("http_request_body_length", len(http_request.data))
         try:
             return json.loads(http_request.data)
         except json.errors.JSONDecodeError as error:
@@ -354,12 +359,13 @@ if application.debug or application.testing:
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
-        from snuba import migrate
+        from snuba.migrations import migrate
 
         # We cannot build distributed tables this way. So this only works in local
         # mode.
-        for statement in dataset.get_dataset_schemas().get_create_statements():
-            clickhouse_rw.execute(statement.statement)
+        for storage in dataset.get_all_storages():
+            for statement in storage.get_schemas().get_create_statements():
+                clickhouse_rw.execute(statement.statement)
 
         migrate.run(clickhouse_rw, dataset)
 
@@ -408,7 +414,6 @@ if application.debug or application.testing:
         )
 
         type_ = record[1]
-        metrics = DummyMetricsBackend()
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
 
@@ -427,8 +432,9 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
-        for statement in dataset.get_dataset_schemas().get_drop_statements():
-            clickhouse_rw.execute(statement.statement)
+        for storage in dataset.get_all_storages():
+            for statement in storage.get_schemas().get_drop_statements():
+                clickhouse_rw.execute(statement.statement)
 
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()
