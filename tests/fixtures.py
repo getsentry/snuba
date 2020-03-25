@@ -18,7 +18,7 @@ raw_event = {
         "name": "sentry-java",
         "version": "1.6.1-d1e3a",
     },
-    "contexts": {"device": {"online": True, "charging": True}},
+    "contexts": {"device": {"online": True, "charging": True, "model_id": "Galaxy"}},
     "sentry.interfaces.Exception": {
         "exc_omitted": None,
         "values": [

@@ -86,7 +86,11 @@ class TestDiscoverApi(BaseApiTest):
                                     "span_id": span_id,
                                     "op": "http",
                                 },
-                                "device": {"online": True, "charging": True},
+                                "device": {
+                                    "online": True,
+                                    "charging": True,
+                                    "model_id": "Galaxy",
+                                },
                             },
                             "sdk": {
                                 "name": "sentry.python",
@@ -349,16 +353,38 @@ class TestDiscoverApi(BaseApiTest):
                     "aggregations": [["count()", "", "count"]],
                     "conditions": [
                         ["type", "=", "transaction"],
-                        ["contexts[device.model_id]", "LIKE", "Arithmetic%"],
-                        ["contexts[device.charging]", "=", "0"],
+                        ["contexts[device.charging]", "=", "True"],
+                        ["contexts[device.model_id]", "=", "Galaxy"],
                     ],
                     "limit": 1000,
                 }
             ),
         )
+
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert data["data"] == [{"count": 0}]
+        assert data["data"][0]["count"] == 1
+
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["count()", "", "count"]],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        ["contexts[device.charging]", "=", "True"],
+                        ["contexts[device.model_id]", "=", "Galaxy"],
+                    ],
+                    "limit": 1000,
+                }
+            ),
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["data"][0]["count"] == 1
 
     def test_device_boolean_fields_context_vs_promoted_column(self):
         response = self.app.post(
