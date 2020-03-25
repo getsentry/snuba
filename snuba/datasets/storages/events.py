@@ -16,7 +16,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import Storage, WritableTableStorage
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
@@ -288,7 +288,7 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
         for col in get_promoted_columns()
     }
 
-def get_storage() -> Storage:
+def get_storage() -> WritableTableStorage:
     return WritableTableStorage(
         schemas=StorageSchemas(read_schema=schema, write_schema=schema),
         table_writer=TableWriter(

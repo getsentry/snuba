@@ -3,7 +3,7 @@ from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.storages.transactions import (
     columns,
     schema,
@@ -28,7 +28,7 @@ class TransactionsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-        storage = get_storage("transactions")
+        storage = get_writable_storage("transactions")
 
         super().__init__(
             storages=[storage],
