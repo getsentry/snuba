@@ -14,9 +14,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
-from snuba.query.processors.transaction_column_processor import (
-    TransactionColumnProcessor,
-)
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -105,5 +103,5 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
-            TransactionColumnProcessor(self.__tags_processor),
+            TimeSeriesColumnProcessor(self._TimeSeriesDataset__time_group_columns),
         ]

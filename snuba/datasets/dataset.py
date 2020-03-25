@@ -225,8 +225,3 @@ class TimeSeriesDataset(Dataset):
         ):
             lit = parse_datetime(lit)
         return lhs, op, lit
-
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            TimeSeriesColumnProcessor(self.__time_group_columns),
-        ]
