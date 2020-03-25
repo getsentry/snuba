@@ -60,9 +60,11 @@ def parse_and_run_query(
 @split_query
 def _run_query_pipeline(
     dataset: Dataset,
-    request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
+    from_date: datetime,
+    to_date: datetime,
+    request: Request,
 ) -> RawQueryResult:
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]

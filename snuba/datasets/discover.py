@@ -13,11 +13,11 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
-from snuba.datasets.events import EventsDataset
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.plans.single_table import SelectedTableQueryPlanBuilder
+from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
-from snuba.datasets.transactions import TransactionsDataset
+from snuba.datasets.storages.events import storage as events_storage
+from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -199,26 +199,15 @@ class DiscoverDataset(TimeSeriesDataset):
             ]
         )
 
-        # TODO: Move the storage definition out of events and transactions dataset so
-        # we can reuse the class itself and avoid the isinstance call.
-        events_dataset = get_dataset(EVENTS)
-        assert isinstance(events_dataset, EventsDataset)
-        transactions_dataset = get_dataset(TRANSACTIONS)
-        assert isinstance(transactions_dataset, TransactionsDataset)
-        storage_selector = DiscoverQueryStorageSelector(
-            events_table=events_dataset.get_storage(),
-            abstract_events_columns=self.__events_columns,
-            transactions_table=transactions_dataset.get_storage(),
-            abstract_transactions_columns=self.__transactions_columns,
-        )
-
         super().__init__(
-            storages=[
-                events_dataset.get_storage(),
-                transactions_dataset.get_storage(),
-            ],
-            query_plan_builder=SelectedTableQueryPlanBuilder(
-                selector=storage_selector, post_processors=[],
+            storages=[events_storage, transactions_storage],
+            query_plan_builder=SelectedStorageQueryPlanBuilder(
+                selector=DiscoverQueryStorageSelector(
+                    events_table=events_storage,
+                    abstract_events_columns=self.__events_columns,
+                    transactions_table=transactions_storage,
+                    abstract_transactions_columns=self.__transactions_columns,
+                ),
             ),
             abstract_column_set=(
                 self.__common_columns

@@ -27,10 +27,13 @@ class StorageQueryPlan:
     """
 
     # TODO: When we will have a separate Query class for Snuba Query and
-    # Storage Query, this plan will also provide the Storage Query. Right
-    # now the storage query is the same mutable object referenced by Request
-    # so no need to add an additional reference here (it would make the query
-    # execution code more confusing).
+    # Storage Query, this plan will also provide the Storage Query.
+    # Right now the storage query is the same mutable object referenced by
+    # the Request object.
+    # The Request object is used by the web module to access the Query object,
+    # having two query objects of the same type around during processing
+    # would be dangerous, so it is probably better not to expose the query
+    # here yet.
     query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
