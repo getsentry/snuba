@@ -3,13 +3,14 @@ from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages.events import (
     all_columns,
     get_column_tag_map,
     get_promoted_columns,
     schema,
-    storage,
 )
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -28,6 +29,9 @@ class EventsDataset(TimeSeriesDataset):
     """
 
     def __init__(self) -> None:
+
+        storage = get_storage("events")
+        assert isinstance(storage, WritableTableStorage)
 
         super(EventsDataset, self).__init__(
             storages=[storage],

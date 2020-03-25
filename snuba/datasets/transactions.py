@@ -3,10 +3,10 @@ from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.storages.transactions import (
     columns,
     schema,
-    storage,
 )
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
@@ -27,6 +27,8 @@ class TransactionsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
+
+        storage = get_storage("transactions")
 
         super().__init__(
             storages=[storage],

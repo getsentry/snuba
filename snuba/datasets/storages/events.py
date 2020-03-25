@@ -16,7 +16,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
@@ -288,30 +288,30 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
         for col in get_promoted_columns()
     }
 
-
-storage = WritableTableStorage(
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=EventsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="event-replacements",
-            commit_log_topic="snuba-commit-log",
-        ),
-        replacer_processor=ErrorsReplacer(
+def get_storage() -> Storage:
+    return WritableTableStorage(
+        schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+        table_writer=TableWriter(
             write_schema=schema,
-            read_schema=schema,
-            required_columns=[col.escaped for col in required_columns],
-            tag_column_map=get_tag_column_map(),
-            promoted_tags=get_promoted_tags(),
-            state_name=ReplacerState.EVENTS,
+            stream_loader=KafkaStreamLoader(
+                processor=EventsProcessor(promoted_tag_columns),
+                default_topic="events",
+                replacement_topic="event-replacements",
+                commit_log_topic="snuba-commit-log",
+            ),
+            replacer_processor=ErrorsReplacer(
+                write_schema=schema,
+                read_schema=schema,
+                required_columns=[col.escaped for col in required_columns],
+                tag_column_map=get_tag_column_map(),
+                promoted_tags=get_promoted_tags(),
+                state_name=ReplacerState.EVENTS,
+            ),
         ),
-    ),
-    query_processors=[
-        # TODO: This one should become an entirely separate storage and picked
-        # in the storage selector.
-        ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
-        PrewhereProcessor(),
-    ],
-)
+        query_processors=[
+            # TODO: This one should become an entirely separate storage and picked
+            # in the storage selector.
+            ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
+            PrewhereProcessor(),
+        ],
+    )

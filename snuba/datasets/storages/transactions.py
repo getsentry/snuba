@@ -21,7 +21,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storage import Storage, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -191,24 +191,25 @@ schema = ReplacingMergeTreeSchema(
     migration_function=transactions_migrations,
 )
 
-storage = WritableTableStorage(
-    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TransactionsTableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=TransactionsMessageProcessor(), default_topic="events",
+def get_storage() -> Storage:
+    return WritableTableStorage(
+        schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+        table_writer=TransactionsTableWriter(
+            write_schema=schema,
+            stream_loader=KafkaStreamLoader(
+                processor=TransactionsMessageProcessor(), default_topic="events",
+            ),
         ),
-    ),
-    query_processors=[
-        NestedFieldConditionOptimizer(
-            "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
-        ),
-        NestedFieldConditionOptimizer(
-            "contexts",
-            "_contexts_flattened",
-            {"start_ts", "finish_ts"},
-            BEGINNING_OF_TIME,
-        ),
-        PrewhereProcessor(),
-    ],
-)
+        query_processors=[
+            NestedFieldConditionOptimizer(
+                "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
+            ),
+            NestedFieldConditionOptimizer(
+                "contexts",
+                "_contexts_flattened",
+                {"start_ts", "finish_ts"},
+                BEGINNING_OF_TIME,
+            ),
+            PrewhereProcessor(),
+        ],
+    )
