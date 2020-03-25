@@ -1,8 +1,6 @@
-from datetime import datetime, timedelta
-from typing import Mapping, Optional, Sequence
-import uuid
+from datetime import timedelta
+from typing import Mapping, Sequence
 
-from snuba import settings
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
@@ -15,17 +13,12 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.storage import (
     ReadableTableStorage,
     WritableTableStorage,
 )
-from snuba.processor import (
-    _ensure_valid_date,
-    MessageProcessor,
-    ProcessorAction,
-    ProcessedMessage,
-    _unicodify,
-)
+
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
     SummingMergeTreeSchema,
@@ -44,25 +37,6 @@ WRITE_LOCAL_TABLE_NAME = "outcomes_raw_local"
 WRITE_DIST_TABLE_NAME = "outcomes_raw_dist"
 READ_LOCAL_TABLE_NAME = "outcomes_hourly_local"
 READ_DIST_TABLE_NAME = "outcomes_hourly_dist"
-
-
-class OutcomesProcessor(MessageProcessor):
-    def process_message(self, value, metadata=None) -> Optional[ProcessedMessage]:
-        assert isinstance(value, dict)
-        v_uuid = value.get("event_id")
-        message = {
-            "org_id": value.get("org_id", 0),
-            "project_id": value.get("project_id", 0),
-            "key_id": value.get("key_id"),
-            "timestamp": _ensure_valid_date(
-                datetime.strptime(value["timestamp"], settings.PAYLOAD_DATETIME_FORMAT),
-            ),
-            "outcome": value["outcome"],
-            "reason": _unicodify(value.get("reason")),
-            "event_id": str(uuid.UUID(v_uuid)) if v_uuid is not None else None,
-        }
-
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[message],)
 
 
 class OutcomesDataset(TimeSeriesDataset):
