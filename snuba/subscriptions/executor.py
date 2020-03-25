@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime
 
 from snuba.datasets.dataset import Dataset
 from snuba.reader import Result
-from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask
@@ -35,29 +33,30 @@ class SubscriptionExecutor:
         self.__metrics = metrics
         self.__concurrent_gauge = Gauge(self.__metrics, "executor.concurrent")
 
-    def __run_query(
-        self, scheduled_at: datetime, request: Request, timer: Timer
-    ) -> Result:
+    def __execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Result:
+        # Measure the amount of time that took between this task being
+        # scheduled and it beginning to execute.
         self.__metrics.timing(
-            "executor.latency", (time.time() - scheduled_at.timestamp()) * 1000,
+            "executor.latency", (time.time() - task.timestamp.timestamp()) * 1000
         )
+
+        # XXX: The ``query`` name is taken from the web views so that all query
+        # performance metrics are reported to the same spot, regardless of
+        # execution environment.
+        timer = Timer("query")
+
+        request = task.task.data.build_request(
+            self.__dataset, task.timestamp, tick.offsets.upper, timer,
+        )
+
         with self.__concurrent_gauge:
+            # XXX: The ``extra`` is discarded from ``RawQueryResult`` since it
+            # is not particularly useful in this context and duplicates data
+            # that is already being published to the query log.
             return parse_and_run_query(self.__dataset, request, timer).result
 
     def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:
-        timer = Timer("query")
-        try:
-            request = task.task.data.build_request(
-                self.__dataset, task.timestamp, tick.offsets.upper, timer,
-            )
-        except Exception as e:
-            future: Future[Result] = Future()
-            future.set_exception(e)
-        else:
-            future = self.__executor_pool.submit(
-                self.__run_query, task.timestamp, request, timer
-            )
-        return future
+        return self.__executor_pool.submit(self.__execute, task, tick)
 
     def close(self) -> None:
         self.__executor_pool.shutdown()
