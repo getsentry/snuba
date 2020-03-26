@@ -3,7 +3,7 @@ from typing import Sequence
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.groupassignees import POSTGRES_TABLE, schema
+from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 
@@ -19,6 +19,7 @@ class GroupAssigneeDataset(CdcDataset):
 
     def __init__(self) -> None:
         storage = get_writable_storage("groupassignees")
+        schema = storage.get_table_writer().get_schema()
 
         super().__init__(
             storages=[storage],

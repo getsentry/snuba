@@ -4,10 +4,8 @@ from typing import Mapping, Sequence, Union
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.events import (
-    all_columns,
     get_column_tag_map,
     get_promoted_columns,
-    schema,
 )
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -28,20 +26,21 @@ class EventsDataset(TimeSeriesDataset):
     """
 
     def __init__(self) -> None:
-
         storage = get_writable_storage("events")
+        schema = storage.get_table_writer().get_schema()
+        columns = schema.get_columns()
 
         super(EventsDataset, self).__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=schema.get_columns(),
+            abstract_column_set=columns,
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
+            columns=columns,
             promoted_columns=get_promoted_columns(),
             column_tag_map=get_column_tag_map(),
         )
