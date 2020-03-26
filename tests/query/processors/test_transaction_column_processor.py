@@ -15,10 +15,7 @@ def test_transaction_column_format_expressions() -> None:
         TableSource("events", ColumnSet([])),
         selected_columns=[
             Column("transaction.duration", "duration", None),
-            Column("v4_ip_address", "ip_address_v4", None),
-            Column(None, "ip_address_v6", None),
-            Column(None, "ip_address", None),
-            Column(None, "event_id", None),
+            Column("the_event_id", "event_id", None),
         ],
     )
     expected = Query(
@@ -27,27 +24,7 @@ def test_transaction_column_format_expressions() -> None:
         selected_columns=[
             Column("transaction.duration", "duration", None),
             FunctionCall(
-                "v4_ip_address",
-                "IPv4NumToString",
-                (Column(None, "ip_address_v4", None),),
-            ),
-            FunctionCall(
-                None, "IPv6NumToString", (Column(None, "ip_address_v6", None),),
-            ),
-            FunctionCall(
-                None,
-                "coalesce",
-                (
-                    FunctionCall(
-                        None, "IPv4NumToString", (Column(None, "ip_address_v4", None),),
-                    ),
-                    FunctionCall(
-                        None, "IPv6NumToString", (Column(None, "ip_address_v6", None),),
-                    ),
-                ),
-            ),
-            FunctionCall(
-                None,
+                "the_event_id",
                 "replaceAll",
                 (
                     FunctionCall(None, "toString", (Column(None, "event_id", None),),),
@@ -64,13 +41,7 @@ def test_transaction_column_format_expressions() -> None:
         == unprocessed.get_selected_columns_from_ast()
     )
 
-    columns = unprocessed.get_selected_columns_from_ast()
-    expected = [
-        "(IPv4NumToString(ip_address_v4) AS v4_ip_address)",
-        "IPv6NumToString(ip_address_v6)",
-        "coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))",
-        "replaceAll(toString(event_id), '-', '')",
-    ]
-    for idx, c in enumerate(columns[1:]):
-        ret = c.accept(ClickhouseExpressionFormatter())
-        assert ret == expected[idx]
+    formatted = unprocessed.get_selected_columns_from_ast()[1].accept(
+        ClickhouseExpressionFormatter()
+    )
+    assert formatted == "(replaceAll(toString(event_id), '-', '') AS the_event_id)"

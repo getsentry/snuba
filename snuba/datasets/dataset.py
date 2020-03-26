@@ -9,7 +9,6 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.util import parse_datetime, qualified_column
 
 

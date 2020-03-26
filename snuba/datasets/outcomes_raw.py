@@ -19,6 +19,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
@@ -53,13 +54,13 @@ class OutcomesRawDataset(TimeSeriesDataset):
             table_writer=None,
             query_processors=[PrewhereProcessor()],
         )
-
+        self.__time_group_columns = {"time": "timestamp"}
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
-            time_group_columns={"time": "timestamp"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp",),
         )
 
@@ -79,4 +80,5 @@ class OutcomesRawDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

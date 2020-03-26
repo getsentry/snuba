@@ -36,6 +36,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
@@ -175,6 +176,7 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             query_processors=[PrewhereProcessor()],
         )
+        self.__time_group_columns = {"time": "timestamp"}
         super().__init__(
             storages=[writable_storage, materialized_storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
@@ -185,7 +187,7 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
-            time_group_columns={"time": "timestamp"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp",),
         )
 
@@ -202,4 +204,5 @@ class OutcomesDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
