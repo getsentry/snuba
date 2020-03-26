@@ -30,7 +30,7 @@ def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
 ) -> RawQueryResult:
     """
-    Runs a query, then records the metadata about each split query that was run.
+    Runs a Snuba Query, then records the metadata about each split query that was run.
     """
     request_copy = copy.deepcopy(request)
     query_metadata = SnubaQueryMetadata(
@@ -42,7 +42,7 @@ def parse_and_run_query(
 
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
-            scope.span.set_tag("dataset", type(dataset).__name__)
+            scope.span.set_tag("dataset", get_dataset_name(dataset))
             scope.span.set_tag("referrer", http_request.referrer)
 
     try:
@@ -60,12 +60,26 @@ def parse_and_run_query(
 @split_query
 def _run_query_pipeline(
     dataset: Dataset,
+    request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-    from_date: datetime,
-    to_date: datetime,
-    request: Request,
 ) -> RawQueryResult:
+    """
+    Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
+    and a Request and returns the results of the query.
+
+    This process includes:
+    - Applying dataset specific syntax extensions (QueryExtension)
+    - Applying dataset query processors on the abstract Snuba query.
+    - Using the dataset provided StorageQueryPlanBuilder to build a StorageQueryPlan. This step
+      transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
+      From this point on none should depend on the dataset.
+    - Executing the storage specific query processors.
+    - Providing the newly built Query and a QueryRunner to the QueryExecutionStrategy to actually
+      run the DB Query.
+    """
+
+    # TODO: this will work perfectly with datasets that are not time series. Remove it.
     from_date, to_date = TimeSeriesExtensionProcessor.get_time_limit(
         request.extensions["timeseries"]
     )
@@ -81,6 +95,8 @@ def _run_query_pipeline(
             request.query, request.extensions[name], request.settings
         )
 
+    # TODO: Fit this in a query processor. All query transformations should be driven by
+    # datasets/storages and never hardcoded.
     if request.settings.get_turbo():
         request.query.set_final(False)
 
@@ -88,6 +104,10 @@ def _run_query_pipeline(
         processor.process_query(request.query, request.settings)
 
     storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+
+    # TODO: This below should be a storage specific query processor.
+    relational_source = request.query.get_data_source()
+    request.query.add_conditions(relational_source.get_mandatory_conditions())
 
     for processor in storage_query_plan.query_processors:
         processor.process_query(request.query, request.settings)
@@ -105,6 +125,8 @@ def _run_query_pipeline(
 
 
 def _format_storage_query_and_run(
+    # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
+    # with the AST this won't be needed.
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -112,28 +134,28 @@ def _format_storage_query_and_run(
     to_date: datetime,
     request: Request,
 ) -> RawQueryResult:
-    # TODO: This below should be a query processor.
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
+    """
+    Formats the Storage Query and pass it to the DB specific code for execution.
+    TODO: When we will have the AST in production and we will have the StorageQuery
+    abstraction, this function is probably going to collapse and disappear.
+    """
 
-    source = relational_source.format_from()
+    source = request.query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
         # ClickhouseQuery since they are Clickhouse specific
         query = DictClickhouseQuery(dataset, request.query, request.settings)
     timer.mark("prepare_query")
 
-    num_days = (to_date - from_date).days
     stats = {
         "clickhouse_table": source,
         "final": request.query.get_final(),
         "referrer": request.referrer,
-        "num_days": num_days,
+        "num_days": (to_date - from_date).days,
         "sample": request.query.get_sample(),
     }
 
     with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
-        span.set_tag("dataset", type(dataset).__name__)
         span.set_tag("table", source)
         try:
             span.set_tag(

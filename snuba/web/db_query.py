@@ -1,5 +1,6 @@
 import logging
 
+from functools import partial
 from hashlib import md5
 from typing import (
     Any,
@@ -8,11 +9,9 @@ from typing import (
     Optional,
 )
 
-from functools import partial
-
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
 from snuba.redis import redis_client
 from snuba.request import Request
@@ -25,7 +24,7 @@ from snuba.state.rate_limit import (
 from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryResult, RawQueryException
+from snuba.web import RawQueryException, RawQueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
@@ -42,13 +41,12 @@ def update_query_metadata_and_stats(
     query_settings: Mapping[str, Any],
     trace_id: Optional[str],
     status: str,
-) -> MutableMapping:
+) -> MutableMapping[str, Any]:
     """
     If query logging is enabled then logs details about the query and its status, as
     well as timing information.
     Also updates stats with any relevant information and returns the updated dict.
     """
-
     stats.update(query_settings)
 
     query_metadata.query_list.append(
@@ -60,15 +58,21 @@ def update_query_metadata_and_stats(
 
 def raw_query(
     request: Request,
-    query: DictClickhouseQuery,
+    query: ClickhouseQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
 ) -> RawQueryResult:
     """
-    Submit a raw SQL query to clickhouse and do some post-processing on it to
-    fix some of the formatting issues in the result JSON
+    Submits a raw SQL query to the DB and does some post-processing on it to
+    fix some of the formatting issues in the result JSON.
+    This function is not supposed to depend on anything higher level than the storage
+    query (ClickhouseQuery as of now). If this function ends up depending on the
+    dataset, something is wrong.
+
+    TODO: As soon as we have a StorageQuery abstraction remove all the references
+    to the original query from the request.
     """
 
     use_cache, use_deduper, uc_max = state.get_configs(
