@@ -4,9 +4,9 @@ from typing import FrozenSet, Mapping, Sequence, Union
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.datasets.storages.errors import all_columns, promoted_tag_columns, schema
+from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
+from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -25,18 +25,20 @@ class ErrorsDataset(TimeSeriesDataset):
 
     def __init__(self) -> None:
         storage = get_writable_storage("errors")
+        schema = storage.get_table_writer().get_schema()
+        columns = schema.get_columns()
 
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=schema.get_columns(),
+            abstract_column_set=columns,
             writable_storage=storage,
             time_group_columns={"time": "timestamp", "rtime": "received"},
             time_parse_columns=("timestamp", "received"),
         )
 
         self.__tags_processor = TagColumnProcessor(
-            columns=all_columns,
+            columns=columns,
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
