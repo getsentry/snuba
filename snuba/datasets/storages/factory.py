@@ -3,6 +3,7 @@ from typing import Mapping
 from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.events import storage as events_storage
+from snuba.datasets.storages.groupassignees import storage as groupassignees_storage
 from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
 from snuba.datasets.storages.transactions import storage as transactions_storage
 from snuba.datasets.storages.outcomes import (
@@ -15,6 +16,7 @@ WRITABLE_STORAGES: Mapping[str, WritableTableStorage] = {
     "errors": errors_storage,
     "events": events_storage,
     "groupedmessages": groupedmessages_storage,
+    "groupassignees": groupassignees_storage,
     "outcomes_raw": outcomes_raw_storage,
     "transactions": transactions_storage
 }
