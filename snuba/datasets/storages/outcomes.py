@@ -111,24 +111,22 @@ materialized_view_schema = MaterializedViewSchema(
 )
 
 
-def get_raw_storage() -> WritableTableStorage:
-    return WritableTableStorage(
-        schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
-        table_writer=TableWriter(
-            write_schema=raw_schema,
-            stream_loader=KafkaStreamLoader(
-                processor=OutcomesProcessor(), default_topic="outcomes",
-            ),
+raw_storage = WritableTableStorage(
+    schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+    table_writer=TableWriter(
+        write_schema=raw_schema,
+        stream_loader=KafkaStreamLoader(
+            processor=OutcomesProcessor(), default_topic="outcomes",
         ),
-        query_processors=[],
-    )
+    ),
+    query_processors=[],
+)
 
-def get_materialized_storage() -> ReadableTableStorage:
-    return ReadableTableStorage(
-        schemas=StorageSchemas(
-            read_schema=read_schema,
-            write_schema=None,
-            intermediary_schemas=[materialized_view_schema],
-        ),
-        query_processors=[PrewhereProcessor()],
-    )
+materialized_storage = ReadableTableStorage(
+    schemas=StorageSchemas(
+        read_schema=read_schema,
+        write_schema=None,
+        intermediary_schemas=[materialized_view_schema],
+    ),
+    query_processors=[PrewhereProcessor()],
+)

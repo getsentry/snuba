@@ -62,15 +62,14 @@ schema = ReplacingMergeTreeSchema(
 
 POSTGRES_TABLE = "sentry_groupedmessage"
 
-def get_storage() -> WritableTableStorage:
-    return WritableTableStorage(
-        schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-        table_writer=GroupedMessageTableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=GroupedMessageProcessor(POSTGRES_TABLE), default_topic="cdc",
-            ),
-            postgres_table=POSTGRES_TABLE,
+storage = WritableTableStorage(
+    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    table_writer=GroupedMessageTableWriter(
+        write_schema=schema,
+        stream_loader=KafkaStreamLoader(
+            processor=GroupedMessageProcessor(POSTGRES_TABLE), default_topic="cdc",
         ),
-        query_processors=[],
-    )
+        postgres_table=POSTGRES_TABLE,
+    ),
+    query_processors=[],
+)

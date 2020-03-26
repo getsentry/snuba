@@ -191,25 +191,24 @@ schema = ReplacingMergeTreeSchema(
     migration_function=transactions_migrations,
 )
 
-def get_storage() -> WritableTableStorage:
-    return WritableTableStorage(
-        schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-        table_writer=TransactionsTableWriter(
-            write_schema=schema,
-            stream_loader=KafkaStreamLoader(
-                processor=TransactionsMessageProcessor(), default_topic="events",
-            ),
+storage = WritableTableStorage(
+    schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    table_writer=TransactionsTableWriter(
+        write_schema=schema,
+        stream_loader=KafkaStreamLoader(
+            processor=TransactionsMessageProcessor(), default_topic="events",
         ),
-        query_processors=[
-            NestedFieldConditionOptimizer(
-                "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
-            ),
-            NestedFieldConditionOptimizer(
-                "contexts",
-                "_contexts_flattened",
-                {"start_ts", "finish_ts"},
-                BEGINNING_OF_TIME,
-            ),
-            PrewhereProcessor(),
-        ],
-    )
+    ),
+    query_processors=[
+        NestedFieldConditionOptimizer(
+            "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
+        ),
+        NestedFieldConditionOptimizer(
+            "contexts",
+            "_contexts_flattened",
+            {"start_ts", "finish_ts"},
+            BEGINNING_OF_TIME,
+        ),
+        PrewhereProcessor(),
+    ],
+)
