@@ -1,14 +1,19 @@
 import logging
 import queue
+import re
 import time
+from datetime import date, datetime
 from typing import Iterable, Mapping, Optional
+from uuid import UUID
 
 from clickhouse_driver import Client, errors
+from dateutil.tz import tz
 
 from snuba import settings
 from snuba.clickhouse.columns import Array
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader, Result, transform_columns
+from snuba.reader import Reader, Result, build_result_transformer
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -63,11 +68,16 @@ class ClickhousePool(object):
                     # Force a reconnection next time
                     conn = None
                     if attempts_remaining == 0:
-                        raise e
+                        if isinstance(e, errors.Error):
+                            raise ClickhouseError(e.code, e.message) from e
+                        else:
+                            raise e
                     else:
                         # Short sleep to make sure we give the load
                         # balancer a chance to mark a bad host as down.
                         time.sleep(0.1)
+                except errors.Error as e:
+                    raise ClickhouseError(e.code, e.message) from e
         finally:
             self.pool.put(conn, block=False)
 
@@ -94,8 +104,10 @@ class ClickhousePool(object):
                 )
                 attempts_remaining -= 1
                 if attempts_remaining <= 0:
-                    raise
-
+                    if isinstance(e, errors.Error):
+                        raise ClickhouseError(e.code, e.message) from e
+                    else:
+                        raise e
                 time.sleep(1)
                 continue
             except errors.ServerException as e:
@@ -106,7 +118,9 @@ class ClickhousePool(object):
                     continue
                 else:
                     # Quit immediately for other types of server errors.
-                    raise
+                    raise ClickhouseError(e.code, e.message) from e
+            except errors.Error as e:
+                raise ClickhouseError(e.code, e.message) from e
 
     def _create_conn(self):
         return Client(
@@ -125,6 +139,46 @@ class ClickhousePool(object):
                     conn.disconnect()
         except queue.Empty:
             pass
+
+
+def transform_date(value: date) -> str:
+    """
+    Convert a timezone-naive date object into an ISO 8601 formatted date and
+    time string respresentation.
+    """
+    # XXX: Both Python and ClickHouse date objects do not have time zones, so
+    # just assume UTC. (Ideally, we'd have just left these as timezone naive to
+    # begin with and not done this transformation at all, since the time
+    # portion has no benefit or significance here.)
+    return datetime(*value.timetuple()[:6]).replace(tzinfo=tz.tzutc()).isoformat()
+
+
+def transform_datetime(value: datetime) -> str:
+    """
+    Convert a timezone-naive datetime object into an ISO 8601 formatted date
+    and time string representation.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=tz.tzutc())
+    else:
+        value = value.astimezone(tz.tzutc())
+    return value.isoformat()
+
+
+def transform_uuid(value: UUID) -> str:
+    """
+    Convert a UUID object into a string representation.
+    """
+    return str(value)
+
+
+transform_column_types = build_result_transformer(
+    [
+        (re.compile(r"^Date(\(.+\))?$"), transform_date),
+        (re.compile(r"^DateTime(\(.+\))?$"), transform_datetime),
+        (re.compile(r"^UUID$"), transform_uuid),
+    ]
+)
 
 
 class NativeDriverReader(Reader[ClickhouseQuery]):
@@ -159,7 +213,9 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         else:
             result = {"data": data, "meta": meta}
 
-        return transform_columns(result)
+        transform_column_types(result)
+
+        return result
 
     def execute(
         self,

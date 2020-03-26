@@ -1,8 +1,8 @@
 from dataclasses import replace
 from typing import List, Tuple, Union
 
-from parsimonious.grammar import Grammar  # type: ignore
-from parsimonious.nodes import Node, NodeVisitor  # type: ignore
+from parsimonious.grammar import Grammar
+from parsimonious.nodes import Node, NodeVisitor
 from typing import Any, Iterable, Optional
 
 from snuba.query.expressions import (
@@ -28,7 +28,7 @@ function_call   = function_name open_paren parameters_list? close_paren (open_pa
 simple_term     = quoted_literal / numeric_literal / column_name
 literal         = ~r"[a-zA-Z0-9_\.:-]+"
 quoted_literal  = "'" string_literal "'"
-string_literal  = ~r"[a-zA-Z0-9_\.:-]+"
+string_literal  = ~r"[a-zA-Z0-9_\.:-]*"
 numeric_literal = ~r"-?[0-9]+(\.[0-9]+)?"
 column_name     = ~r"[a-zA-Z_][a-zA-Z0-9_\.]*"
 function_name   = ~r"[a-zA-Z_][a-zA-Z0-9_]*"

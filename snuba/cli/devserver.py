@@ -21,23 +21,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
         if returncode > 0:
             sys.exit(returncode)
 
-    daemons = [
-        (
-            "api",
-            [
-                "uwsgi",
-                "--master",
-                "--manage-script-name",
-                "--wsgi-file",
-                "snuba/web/wsgi.py",
-                "--http",
-                "0.0.0.0:1218",
-                "--http-keepalive",
-                "--need-app",
-                "--die-on-term",
-            ],
-        ),
-    ]
+    daemons = [("api", ["snuba", "api"])]
 
     if not workers:
         os.execvp(daemons[0][1][0], daemons[0][1])

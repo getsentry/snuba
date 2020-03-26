@@ -1,5 +1,4 @@
 import os
-from snuba.settings_base import *  # NOQA
 
 env = os.environ.get
 
