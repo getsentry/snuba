@@ -10,7 +10,6 @@ from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
-from snuba.datasets.storages.outcomes import read_schema
 
 class OutcomesDataset(TimeSeriesDataset):
     """
@@ -25,6 +24,7 @@ class OutcomesDataset(TimeSeriesDataset):
 
         # The materialized view we query aggregate data from.
         materialized_storage = get_storage("outcomes_hourly")
+        read_schema = materialized_storage.get_schemas().get_read_schema()
 
         super().__init__(
             storages=[writable_storage, materialized_storage],
