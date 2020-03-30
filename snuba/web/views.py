@@ -39,10 +39,8 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
-from snuba.web.query import (
-    RawQueryException,
-    parse_and_run_query,
-)
+from snuba.web import RawQueryException
+from snuba.web.query import parse_and_run_query
 
 
 metrics = MetricsWrapper(environment.metrics, "api")
