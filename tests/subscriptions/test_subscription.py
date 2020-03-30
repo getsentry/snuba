@@ -7,7 +7,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import RawQueryException
+from snuba.web import RawQueryException
 from tests.subscriptions import BaseSubscriptionTest
 
 
