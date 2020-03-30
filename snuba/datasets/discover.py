@@ -16,8 +16,7 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
-from snuba.datasets.storages.events import storage as events_storage
-from snuba.datasets.storages.transactions import storage as transactions_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -198,6 +197,9 @@ class DiscoverDataset(TimeSeriesDataset):
                 ("duration", Nullable(UInt(32))),
             ]
         )
+
+        events_storage = get_storage("events")
+        transactions_storage = get_storage("transactions")
 
         super().__init__(
             storages=[events_storage, transactions_storage],
