@@ -2,11 +2,8 @@ from typing import Sequence
 
 from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.groupedmessages import (
-    POSTGRES_TABLE,
-    schema,
-    storage,
-)
+from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.storages.groupedmessages import POSTGRES_TABLE
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 
@@ -18,6 +15,9 @@ class GroupedMessageDataset(CdcDataset):
     """
 
     def __init__(self) -> None:
+        storage = get_storage("groupedmessages")
+        schema = storage.get_table_writer().get_schema()
+
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),

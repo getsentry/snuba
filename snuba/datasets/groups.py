@@ -4,8 +4,7 @@ from typing import Mapping, Optional, Sequence, Union
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
-from snuba.datasets.storages.events import storage as events_storage
-from snuba.datasets.storages.groupedmessages import storage as groupedmessages_storage
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
@@ -57,11 +56,11 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            groupedmessages_storage.get_schemas().get_read_schema().get_data_source()
+            get_storage("groupedmessages").get_schemas().get_read_schema().get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = events_storage.get_schemas().get_read_schema().get_data_source()
+        events_source = get_storage("events").get_schemas().get_read_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
