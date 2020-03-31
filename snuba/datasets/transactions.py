@@ -10,6 +10,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -27,16 +28,16 @@ class TransactionsDataset(TimeSeriesDataset):
             promoted_columns=self._get_promoted_columns(),
             column_tag_map=self._get_column_tag_map(),
         )
-
+        self.__time_group_columns = {
+            "bucketed_start": "start_ts",
+            "bucketed_end": "finish_ts",
+        }
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
-            time_group_columns={
-                "bucketed_start": "start_ts",
-                "bucketed_end": "finish_ts",
-            },
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("start_ts", "finish_ts"),
         )
 
@@ -102,4 +103,5 @@ class TransactionsDataset(TimeSeriesDataset):
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

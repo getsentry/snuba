@@ -16,12 +16,13 @@ class OutcomesRawDataset(TimeSeriesDataset):
         storage = get_storage("outcomes_raw")
         read_schema = storage.get_schemas().get_read_schema()
 
+        self.__time_group_columns = {"time": "timestamp"}
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=None,
-            time_group_columns={"time": "timestamp"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp",),
         )
 
@@ -41,4 +42,5 @@ class OutcomesRawDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
