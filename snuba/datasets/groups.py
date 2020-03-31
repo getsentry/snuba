@@ -22,6 +22,7 @@ from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -113,12 +114,13 @@ class Groups(TimeSeriesDataset):
 
         schema = JoinedSchema(join_structure)
         storage = JoinedStorage(join_structure)
+        self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
-            time_group_columns={"events.time": "events.timestamp"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=[
                 "events.timestamp",
                 "events.received",
@@ -187,4 +189,4 @@ class Groups(TimeSeriesDataset):
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return []
+        return [TimeSeriesColumnProcessor(self.__time_group_columns)]

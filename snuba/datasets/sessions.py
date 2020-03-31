@@ -38,6 +38,7 @@ from snuba.processor import (
 )
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -209,6 +210,7 @@ class SessionsDataset(TimeSeriesDataset):
             query_processors=[PrewhereProcessor()],
         )
 
+        self.__time_group_columns = {"bucketed_started": "started"}
         super().__init__(
             storages=[writable_storage, materialized_storage],
             # TODO: Once we are ready to expose the raw data model and select whether to use
@@ -219,7 +221,7 @@ class SessionsDataset(TimeSeriesDataset):
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
-            time_group_columns={"bucketed_started": "started"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("started", "received"),
         )
 
@@ -239,6 +241,7 @@ class SessionsDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
         ]
 
     def column_expr(

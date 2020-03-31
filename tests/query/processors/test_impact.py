@@ -13,7 +13,7 @@ from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_format_expressions() -> None:
+def test_impact_format_expressions() -> None:
     unprocessed = Query(
         {},
         TableSource("events", ColumnSet([])),
