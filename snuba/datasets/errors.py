@@ -7,9 +7,10 @@ from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -28,12 +29,13 @@ class ErrorsDataset(TimeSeriesDataset):
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
+        self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=columns,
             writable_storage=storage,
-            time_group_columns={"time": "timestamp", "rtime": "received"},
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp", "received"),
         )
 
@@ -92,4 +94,7 @@ class ErrorsDataset(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [BasicFunctionsProcessor()]
+        return [
+            BasicFunctionsProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
+        ]
