@@ -1,9 +1,8 @@
 import collections
 import logging
-from typing import Any, Mapping, Optional, Sequence
+from typing import Optional, Sequence
 
 import simplejson as json
-import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
 from snuba.datasets.dataset import Dataset
@@ -48,17 +47,10 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def process_message(
         self, message: Message[KafkaPayload]
     ) -> Optional[ProcessedMessage]:
-        # TODO: consider moving this inside the processor so we can do a quick
-        # processing of messages we want to filter out without fully parsing the
-        # json.
-        if self.__rapidjson_deserialize:
-            value = rapidjson.loads(message.payload.value)
-        else:
-            value = json.loads(message.payload.value)
         metadata = KafkaMessageMetadata(
             offset=message.offset, partition=message.partition.index
         )
-        processed = self._process_message_impl(value, metadata)
+        processed = self._process_message_impl(message, metadata)
         if processed is None:
             return None
 
@@ -70,12 +62,15 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         return processed
 
     def _process_message_impl(
-        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
+        self, value: Message[KafkaPayload], metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
-        processor = (
-            enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
-        )
-        return processor.process_message(value, metadata)
+        stream_loader = enforce_table_writer(self.__dataset).get_stream_loader()
+        parser = stream_loader.get_parser()
+        processor = stream_loader.get_processor()
+        parsed_message = parser.parse_message(value)
+        if parsed_message is None:
+            return None
+        return processor.process_message(parsed_message, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:

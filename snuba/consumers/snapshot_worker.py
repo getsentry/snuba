@@ -5,10 +5,13 @@ from confluent_kafka import Producer
 
 from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import enforce_table_writer
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.abstract import MetricsBackend
-from snuba.utils.streams.types import Topic
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import Message, Topic
+
 
 logger = logging.getLogger("snuba.snapshot-consumer")
 
@@ -47,6 +50,7 @@ class SnapshotAwareWorker(ConsumerWorker):
             replacements_topic=replacements_topic,
             metrics=metrics,
         )
+        self.__dataset = dataset
         self.__snapshot_id = snapshot_id
         self.__transaction_data = transaction_data
         self.__catching_up = True
@@ -55,7 +59,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         logger.debug("Starting snapshot aware worker for id %s", self.__snapshot_id)
 
     def __accept_message(
-        self, xid: int, value: Mapping[str, Any], metadata: KafkaMessageMetadata
+        self, xid: int, value: Message[KafkaPayload], metadata: KafkaMessageMetadata
     ):
         if self.__catching_up and xid and xid >= self.__transaction_data.xmax:
             logger.info(
@@ -72,7 +76,7 @@ class SnapshotAwareWorker(ConsumerWorker):
             self.__xip_list_applied.clear()
             self.__catching_up = False
 
-        return super()._process_message_impl(value, metadata,)
+        return super()._process_message_impl(value, metadata)
 
     def __drop_message(
         self, xid: int,
@@ -87,7 +91,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         return None
 
     def _process_message_impl(
-        self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
+        self, value: Message[KafkaPayload], metadata: KafkaMessageMetadata,
     ):
         """
         This delegates the processing of all transactions that follow the snapshot
@@ -114,7 +118,12 @@ class SnapshotAwareWorker(ConsumerWorker):
         - After seeing xmax, all transactions have to be applied since they are either
           higher of xmax or part of xip_list.
         """
-        xid = value.get("xid")
+        stream_loader = enforce_table_writer(self.__dataset).get_stream_loader()
+        parser = stream_loader.get_parser()
+        parsed_message = parser.parse_message(value)
+        if parsed_message is None:
+            return None
+        xid = parsed_message.get("xid")
 
         if xid is not None:
             if self.__catching_up:

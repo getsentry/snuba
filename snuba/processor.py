@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
 from hashlib import md5
-from typing import Any, NamedTuple, Optional, Sequence, Union
+from typing import Any, Mapping, NamedTuple, NewType, Optional, Sequence, Union
 
 import simplejson as json
 
@@ -25,6 +25,9 @@ class ProcessedMessage(NamedTuple):
     data: Sequence[Any]
 
 
+Message = NewType("Message", Mapping[str, Any])
+
+
 class MessageProcessor(ABC):
     """
     The Processor is responsible for converting an incoming message body from the
@@ -32,7 +35,9 @@ class MessageProcessor(ABC):
     """
 
     @abstractmethod
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+    def process_message(
+        self, message: Message, metadata=None
+    ) -> Optional[ProcessedMessage]:
         raise NotImplementedError
 
 

@@ -1,16 +1,20 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Generic, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.datasets.message_parser import KafkaJsonMessageParser, StreamMessageParser
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots.loaders import BulkLoader
+from snuba.utils.streams.kafka import KafkaPayload
+from snuba.utils.streams.types import TPayload
 from snuba.writer import BatchWriter
 
 
@@ -31,6 +35,7 @@ class KafkaStreamLoader:
         self,
         processor: MessageProcessor,
         default_topic: str,
+        use_rapid_json: bool = True,
         replacement_topic: Optional[str] = None,
         commit_log_topic: Optional[str] = None,
     ) -> None:
@@ -59,9 +64,13 @@ class KafkaStreamLoader:
             if commit_log_topic
             else None
         )
+        self.__use_rapid_json = use_rapid_json
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
+
+    def get_parser(self) -> StreamMessageParser[KafkaPayload]:
+        return KafkaJsonMessageParser(self.__use_rapid_json)
 
     def get_default_topic_spec(self) -> KafkaTopicSpec:
         return self.__default_topic_spec
