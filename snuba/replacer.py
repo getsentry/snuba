@@ -5,8 +5,7 @@ import simplejson as json
 from typing import Optional, Sequence
 
 from snuba.clickhouse.native import ClickhousePool
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import enforce_table_writer, get_dataset_name
+from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -20,15 +19,14 @@ logger = logging.getLogger("snuba.replacer")
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
-        self, clickhouse: ClickhousePool, dataset: Dataset, metrics: MetricsBackend
+        self, clickhouse: ClickhousePool, storage: WritableTableStorage, metrics: MetricsBackend
     ) -> None:
         self.clickhouse = clickhouse
         self.metrics = metrics
-        processor = enforce_table_writer(dataset).get_replacer_processor()
-        dataset_name = get_dataset_name(dataset)
+        processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
-        ), f"This dataset writer does not support replacements {dataset_name}"
+        ), f"This storage writer does not support replacements {storage}"
         self.__replacer_processor = processor
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:

@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba import environment, settings
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
@@ -25,11 +25,11 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
     help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset",
-    "dataset_name",
+    "--storage",
+    "storage_name",
     default="events",
-    type=click.Choice(["events", "events_migration"]),
-    help="The dataset to consume/run replacements for (currently only events supported)",
+    type=click.Choice(["events", "errors"]),
+    help="The storage to consume/run replacements for (currently only events supported)",
 )
 @click.option(
     "--max-batch-size",
@@ -67,7 +67,7 @@ def replacer(
     replacements_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    dataset_name: str,
+    storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -91,19 +91,19 @@ def replacer(
     setup_logging(log_level)
     setup_sentry()
 
-    dataset = get_dataset(dataset_name)
+    storage = get_writable_storage(storage_name)
 
-    stream_loader = enforce_table_writer(dataset).get_stream_loader()
+    stream_loader = storage.get_table_writer().get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
     assert (
         default_replacement_topic_spec is not None
-    ), f"Dataset {dataset} does not have a replacement topic."
+    ), f"Storage {storage} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
     metrics = MetricsWrapper(
         environment.metrics,
         "replacer",
-        tags={"group": consumer_group, "dataset": dataset_name},
+        tags={"group": consumer_group, "storage": storage_name},
     )
 
     client_settings = {
@@ -137,7 +137,7 @@ def replacer(
             codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, dataset, metrics=metrics),
+        worker=ReplacerWorker(clickhouse, storage, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,
