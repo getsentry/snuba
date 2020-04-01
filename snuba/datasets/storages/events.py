@@ -296,6 +296,7 @@ storage = WritableTableStorage(
         stream_loader=KafkaStreamLoader(
             processor=EventsProcessor(promoted_tag_columns),
             default_topic="events",
+            use_rapid_json=False,
             replacement_topic="event-replacements",
             commit_log_topic="snuba-commit-log",
         ),

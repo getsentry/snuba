@@ -116,7 +116,9 @@ raw_storage = WritableTableStorage(
     table_writer=TableWriter(
         write_schema=raw_schema,
         stream_loader=KafkaStreamLoader(
-            processor=OutcomesProcessor(), default_topic="outcomes",
+            processor=OutcomesProcessor(),
+            default_topic="outcomes",
+            use_rapid_json=False,
         ),
     ),
     query_processors=[],

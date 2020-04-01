@@ -77,7 +77,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     "--rapidjson-deserialize",
     default=False,
     type=bool,
-    help="Uses rapidjson to deserialize messages",
+    help="[DEPRECATED] It does nothing here",
 )
 @click.option(
     "--rapidjson-serialize",
@@ -122,7 +122,6 @@ def consumer(
         auto_offset_reset=auto_offset_reset,
         queued_max_messages_kbytes=queued_max_messages_kbytes,
         queued_min_messages=queued_min_messages,
-        rapidjson_deserialize=rapidjson_deserialize,
         rapidjson_serialize=rapidjson_serialize,
     )
 

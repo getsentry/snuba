@@ -194,7 +194,9 @@ class SessionsDataset(TimeSeriesDataset):
             table_writer=TableWriter(
                 write_schema=raw_schema,
                 stream_loader=KafkaStreamLoader(
-                    processor=SessionsProcessor(), default_topic="ingest-sessions",
+                    processor=SessionsProcessor(),
+                    default_topic="ingest-sessions",
+                    use_rapid_json=False,
                 ),
             ),
             query_processors=[],

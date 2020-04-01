@@ -43,7 +43,6 @@ class ConsumerBuilder:
         auto_offset_reset: str,
         queued_max_messages_kbytes: int,
         queued_min_messages: int,
-        rapidjson_deserialize: bool,
         rapidjson_serialize: bool,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
@@ -121,7 +120,6 @@ class ConsumerBuilder:
             )
 
         self.__commit_retry_policy = commit_retry_policy
-        self.__rapidjson_deserialize = rapidjson_deserialize
         self.__rapidjson_serialize = rapidjson_serialize
 
     def __build_consumer(
@@ -171,7 +169,6 @@ class ConsumerBuilder:
                 producer=self.producer,
                 replacements_topic=self.replacements_topic,
                 metrics=self.metrics,
-                rapidjson_deserialize=self.__rapidjson_deserialize,
                 rapidjson_serialize=self.__rapidjson_serialize,
             )
         )

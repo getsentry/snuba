@@ -196,7 +196,9 @@ storage = WritableTableStorage(
     table_writer=TransactionsTableWriter(
         write_schema=schema,
         stream_loader=KafkaStreamLoader(
-            processor=TransactionsMessageProcessor(), default_topic="events",
+            processor=TransactionsMessageProcessor(),
+            default_topic="events",
+            use_rapid_json=False,
         ),
     ),
     query_processors=[
