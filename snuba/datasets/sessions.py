@@ -1,6 +1,5 @@
-import uuid
-from datetime import timedelta, datetime
-from typing import Mapping, Sequence, Optional
+from datetime import timedelta
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     AggregateFunction,
@@ -19,23 +18,16 @@ from snuba.datasets.schemas.tables import (
     MaterializedViewSchema,
     AggregatingMergeTreeSchema,
 )
+from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.datasets.storage import (
     ReadableTableStorage,
     WritableTableStorage,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.parsing import ParsingContext
-from snuba.processor import (
-    MAX_UINT32,
-    MessageProcessor,
-    ProcessedMessage,
-    ProcessorAction,
-    _collapse_uint16,
-    _collapse_uint32,
-    _ensure_valid_date,
-)
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
@@ -44,57 +36,13 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
+
 WRITE_LOCAL_TABLE_NAME = "sessions_raw_local"
 WRITE_DIST_TABLE_NAME = "sessions_raw_dist"
 READ_LOCAL_TABLE_NAME = "sessions_hourly_local"
 READ_DIST_TABLE_NAME = "sessions_hourly_dist"
 READ_LOCAL_MV_NAME = "sessions_hourly_mv_local"
 READ_DIST_MV_NAME = "sessions_hourly_mv_dist"
-
-STATUS_MAPPING = {
-    "ok": 0,
-    "exited": 1,
-    "crashed": 2,
-    "abnormal": 3,
-}
-REVERSE_STATUS_MAPPING = {v: k for (k, v) in STATUS_MAPPING.items()}
-NIL_UUID = "00000000-0000-0000-0000-000000000000"
-
-
-class SessionsProcessor(MessageProcessor):
-    def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
-        # some old relays accidentally emit rows without release
-        if message["release"] is None:
-            return None
-        if message["duration"] is None:
-            duration = None
-        else:
-            duration = _collapse_uint32(int(message["duration"] * 1000))
-
-        # since duration is not nullable, the max duration means no duration
-        if duration is None:
-            duration = MAX_UINT32
-
-        processed = {
-            "session_id": str(uuid.UUID(message["session_id"])),
-            "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
-            "seq": message["seq"],
-            "org_id": message["org_id"],
-            "project_id": message["project_id"],
-            "retention_days": message["retention_days"],
-            "duration": duration,
-            "status": STATUS_MAPPING[message["status"]],
-            "errors": _collapse_uint16(message["errors"]) or 0,
-            "received": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["received"])
-            ),
-            "started": _ensure_valid_date(
-                datetime.utcfromtimestamp(message["started"])
-            ),
-            "release": message["release"],
-            "environment": message.get("environment") or "",
-        }
-        return ProcessedMessage(action=ProcessorAction.INSERT, data=[processed])
 
 
 class SessionsDataset(TimeSeriesDataset):
