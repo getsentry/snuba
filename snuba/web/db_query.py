@@ -12,7 +12,7 @@ from typing import (
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.environment import reader
+from snuba.reader import Reader
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -59,6 +59,7 @@ def update_query_metadata_and_stats(
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],

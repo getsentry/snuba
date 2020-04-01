@@ -9,10 +9,11 @@ from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
@@ -103,7 +104,9 @@ def _run_query_pipeline(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan_builder = dataset.get_query_plan_builder()
+    storage_query_plan = query_plan_builder.build_plan(request)
+    reader = query_plan_builder.get_storage(request).get_cluster().get_reader()
 
     # TODO: This below should be a storage specific query processor.
     relational_source = request.query.get_data_source()
@@ -115,6 +118,7 @@ def _run_query_pipeline(
     query_runner = partial(
         _format_storage_query_and_run,
         dataset,
+        reader,
         timer,
         query_metadata,
         from_date,
@@ -128,6 +132,7 @@ def _format_storage_query_and_run(
     # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
     # with the AST this won't be needed.
     dataset: Dataset,
+    reader: Reader,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
@@ -165,7 +170,7 @@ def _format_storage_query_and_run(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        return raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)
 
 
 def record_query(

@@ -11,18 +11,18 @@ from snuba.datasets.storages.outcomes import (
     materialized_storage as outcomes_hourly_storage,
 )
 
-
 WRITABLE_STORAGES: Mapping[str, WritableTableStorage] = {
     "errors": errors_storage,
     "events": events_storage,
     "groupedmessages": groupedmessages_storage,
     "groupassignees": groupassignees_storage,
     "outcomes_raw": outcomes_raw_storage,
-    "transactions": transactions_storage
+    "transactions": transactions_storage,
+
 }
 
 NON_WRITABLE_STORAGES: Mapping[str, ReadableTableStorage] = {
-    "outcomes_hourly": outcomes_hourly_storage,
+    "outcomes_hourly": outcomes_hourly_storage
 }
 
 STORAGES: Mapping[str, ReadableTableStorage] = {**WRITABLE_STORAGES, **NON_WRITABLE_STORAGES}

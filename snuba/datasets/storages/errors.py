@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
     WithCodecs,
     WithDefault,
 )
+from snuba.clusters import get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
@@ -149,6 +150,7 @@ required_columns = [
 ]
 
 storage = WritableTableStorage(
+    cluster=get_cluster("errors"),
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

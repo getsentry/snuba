@@ -118,6 +118,9 @@ class Dataset(object):
         """
         return self.__storages
 
+    def get_writable_storage(self) -> Optional[Storage]:
+        return self.__writable_storage
+
     def get_table_writer(self) -> Optional[TableWriter]:
         """
         We allow only one table storage we can write onto per dataset as of now.

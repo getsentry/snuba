@@ -1,3 +1,4 @@
+from snuba.clusters import get_cluster
 from snuba.clickhouse.columns import (
     ColumnSet,
     DateTime,
@@ -112,6 +113,7 @@ materialized_view_schema = MaterializedViewSchema(
 
 
 raw_storage = WritableTableStorage(
+    cluster=get_cluster("outcomes_raw"),
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -123,6 +125,7 @@ raw_storage = WritableTableStorage(
 )
 
 materialized_storage = ReadableTableStorage(
+    cluster=get_cluster("outcomes_hourly"),
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

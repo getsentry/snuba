@@ -6,7 +6,7 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage, Storage
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -61,6 +61,9 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )
 
+    def get_storage(self, request: Request) -> Storage:
+        return self.__storage
+
 
 class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     """
@@ -89,3 +92,6 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             ],
             execution_strategy=SimpleQueryPlanExecutionStrategy(),
         )
+
+    def get_storage(self, request: Request) -> Storage:
+        return self.__selector.select_storage(request.query, request.settings)

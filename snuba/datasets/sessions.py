@@ -11,6 +11,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clusters import get_cluster
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -191,6 +192,7 @@ class SessionsDataset(TimeSeriesDataset):
         # The raw table we write onto, and that potentially we could
         # query.
         writable_storage = WritableTableStorage(
+            cluster=get_cluster("sessions_raw"),
             schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
             table_writer=TableWriter(
                 write_schema=raw_schema,
@@ -202,6 +204,7 @@ class SessionsDataset(TimeSeriesDataset):
         )
         # The materialized view we query aggregate data from.
         materialized_storage = ReadableTableStorage(
+            cluster=get_cluster("sessions_hourly"),
             schemas=StorageSchemas(
                 read_schema=read_schema,
                 write_schema=None,

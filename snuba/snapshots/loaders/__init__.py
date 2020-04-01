@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from snuba.clickhouse.native import ClickhousePool
 from snuba.writer import BufferedWriterWrapper
 
 
@@ -13,5 +14,5 @@ class BulkLoader(ABC):
     """
 
     @abstractmethod
-    def load(self, writer: BufferedWriterWrapper) -> None:
+    def load(self, writer: BufferedWriterWrapper, clickhouse_ro: ClickhousePool) -> None:
         raise NotImplementedError

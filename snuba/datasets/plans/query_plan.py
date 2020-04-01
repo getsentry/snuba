@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+from snuba.datasets.storage import Storage
 from snuba.web import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
@@ -70,4 +71,8 @@ class StorageQueryPlanBuilder(ABC):
 
     @abstractmethod
     def build_plan(self, request: Request) -> StorageQueryPlan:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_storage(self, request: Request) -> Storage:
         raise NotImplementedError

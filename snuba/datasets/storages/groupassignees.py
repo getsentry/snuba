@@ -1,5 +1,6 @@
 
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+from snuba.clusters import get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
@@ -56,6 +57,7 @@ schema = ReplacingMergeTreeSchema(
 POSTGRES_TABLE = "sentry_groupasignee"
 
 storage = WritableTableStorage(
+    cluster=get_cluster("groupassignees"),
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=GroupAssigneeTableWriter(
         write_schema=schema,
@@ -63,6 +65,7 @@ storage = WritableTableStorage(
             processor=GroupAssigneeProcessor(POSTGRES_TABLE),
             default_topic="cdc",
         ),
+        # cluster=get_cluster("groupassignees")
         postgres_table=POSTGRES_TABLE,
     ),
     query_processors=[PrewhereProcessor()],
