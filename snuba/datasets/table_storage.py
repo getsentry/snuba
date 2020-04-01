@@ -1,10 +1,9 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import json
 import rapidjson
 
 from datetime import datetime
-from typing import Generic, Optional, Sequence
+from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
@@ -14,7 +13,6 @@ from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots.loaders import BulkLoader
 from snuba.utils.streams.kafka import KafkaPayload
-from snuba.utils.streams.types import TPayload
 from snuba.writer import BatchWriter
 
 
