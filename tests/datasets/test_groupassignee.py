@@ -1,5 +1,4 @@
 import pytz
-import simplejson as json
 from datetime import datetime
 
 from tests.base import BaseDatasetTest
@@ -8,7 +7,11 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
+from snuba.datasets.cdc.parser import CdcKafkaMessageParser
+from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
 from snuba.environment import clickhouse_ro
+from snuba.utils.streams.kafka import Headers, KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 class TestGroupassignee(BaseDatasetTest):
@@ -75,20 +78,37 @@ class TestGroupassignee(BaseDatasetTest):
         "date_added": None,
     }
 
+    def __make_msg(
+        self, partition: int, offset: int, payload: str, headers: Headers
+    ) -> Message[KafkaPayload]:
+        return Message(
+            partition=Partition(Topic("topic"), partition),
+            offset=offset,
+            payload=KafkaPayload(b"key", payload.encode(), headers),
+            timestamp=datetime(2019, 6, 19, 6, 46, 28),
+        )
+
     def test_messages(self):
         processor = GroupAssigneeProcessor("sentry_groupasignee")
+        parser = CdcKafkaMessageParser(
+            use_rapid_json=True, postgres_table=POSTGRES_TABLE
+        )
 
         metadata = KafkaMessageMetadata(offset=42, partition=0,)
 
-        begin_msg = json.loads(self.BEGIN_MSG)
+        begin_msg = parser.parse_message(self.__make_msg(0, 42, self.BEGIN_MSG, []))
         ret = processor.process_message(begin_msg, metadata)
         assert ret is None
 
-        commit_msg = json.loads(self.COMMIT_MSG)
+        commit_msg = parser.parse_message(self.__make_msg(0, 42, self.COMMIT_MSG, []))
         ret = processor.process_message(commit_msg, metadata)
         assert ret is None
 
-        insert_msg = json.loads(self.INSERT_MSG)
+        insert_msg = parser.parse_message(
+            self.__make_msg(
+                0, 42, self.INSERT_MSG, [("table", POSTGRES_TABLE.encode())]
+            )
+        )
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
         self.write_processed_records(ret.data)
@@ -103,17 +123,31 @@ class TestGroupassignee(BaseDatasetTest):
             None,  # team_id
         )
 
-        update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
+        update_msg = parser.parse_message(
+            self.__make_msg(
+                0,
+                42,
+                self.UPDATE_MSG_NO_KEY_CHANGE,
+                [("table", POSTGRES_TABLE.encode())],
+            )
+        )
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.PROCESSED]
 
         # Tests an update with key change which becomes a two inserts:
         # one deletion and the insertion of the new row.
-        update_msg = json.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
+        update_msg = parser.parse_message(
+            self.__make_msg(
+                0,
+                42,
+                self.UPDATE_MSG_WITH_KEY_CHANGE,
+                [("table", POSTGRES_TABLE.encode())],
+            )
+        )
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.DELETED, self.PROCESSED_UPDATE]
 
-        delete_msg = json.loads(self.DELETE_MSG)
+        delete_msg = parser.parse_message(self.__make_msg(0, 42, self.DELETE_MSG, []))
         ret = processor.process_message(delete_msg, metadata)
         assert ret.data == [self.DELETED]
 

@@ -4,7 +4,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
-from snuba.datasets.message_parser import KafkaJsonMessageParser
+from snuba.datasets.cdc.parser import CdcKafkaMessageParser
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -61,7 +61,9 @@ storage = WritableTableStorage(
         write_schema=schema,
         stream_loader=KafkaStreamLoader(
             processor=GroupAssigneeProcessor(POSTGRES_TABLE),
-            parser=KafkaJsonMessageParser(use_rapid_json=True),
+            parser=CdcKafkaMessageParser(
+                use_rapid_json=True, postgres_table=POSTGRES_TABLE
+            ),
             default_topic="cdc",
         ),
         postgres_table=POSTGRES_TABLE,
