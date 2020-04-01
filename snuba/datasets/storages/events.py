@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.message_parser import KafkaJsonMessageParser
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -295,8 +296,8 @@ storage = WritableTableStorage(
         write_schema=schema,
         stream_loader=KafkaStreamLoader(
             processor=EventsProcessor(promoted_tag_columns),
+            parser=KafkaJsonMessageParser(use_rapid_json=False),
             default_topic="events",
-            use_rapid_json=False,
             replacement_topic="event-replacements",
             commit_log_topic="snuba-commit-log",
         ),

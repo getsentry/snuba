@@ -8,6 +8,7 @@ from snuba.clickhouse.columns import (
     UUID,
 )
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.message_parser import KafkaJsonMessageParser
 from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.storage import (
     ReadableTableStorage,
@@ -117,8 +118,8 @@ raw_storage = WritableTableStorage(
         write_schema=raw_schema,
         stream_loader=KafkaStreamLoader(
             processor=OutcomesProcessor(),
+            parser=KafkaJsonMessageParser(use_rapid_json=False),
             default_topic="outcomes",
-            use_rapid_json=False,
         ),
     ),
     query_processors=[],

@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.message_parser import KafkaJsonMessageParser
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -32,8 +33,7 @@ all_columns = ColumnSet(
         (
             "event_hash",
             WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",),
-                ["NONE"],
+                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
             ),
         ),
         ("platform", LowCardinality(String())),
@@ -54,10 +54,7 @@ all_columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-        (
-            "transaction_hash",
-            Materialized(UInt(64), "cityHash64(transaction_name)"),
-        ),
+        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
         ("span_id", Nullable(UInt(64))),
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
@@ -154,6 +151,7 @@ storage = WritableTableStorage(
         write_schema=schema,
         stream_loader=KafkaStreamLoader(
             processor=ErrorsProcessor(promoted_tag_columns),
+            parser=KafkaJsonMessageParser(use_rapid_json=True),
             default_topic="events",
             replacement_topic="errors-replacements",
         ),
@@ -161,14 +159,8 @@ storage = WritableTableStorage(
             write_schema=schema,
             read_schema=schema,
             required_columns=required_columns,
-            tag_column_map={
-                "tags": promoted_tag_columns,
-                "contexts": {},
-            },
-            promoted_tags={
-                "tags": promoted_tag_columns.keys(),
-                "contexts": {},
-            },
+            tag_column_map={"tags": promoted_tag_columns, "contexts": {},},
+            promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {},},
             state_name=ReplacerState.ERRORS,
         ),
     ),

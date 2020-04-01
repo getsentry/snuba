@@ -24,6 +24,7 @@ from snuba.datasets.storage import (
     WritableTableStorage,
 )
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.message_parser import KafkaJsonMessageParser
 from snuba.query.extensions import QueryExtension
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.parsing import ParsingContext
@@ -195,8 +196,8 @@ class SessionsDataset(TimeSeriesDataset):
                 write_schema=raw_schema,
                 stream_loader=KafkaStreamLoader(
                     processor=SessionsProcessor(),
+                    parser=KafkaJsonMessageParser(use_rapid_json=False),
                     default_topic="ingest-sessions",
-                    use_rapid_json=False,
                 ),
             ),
             query_processors=[],

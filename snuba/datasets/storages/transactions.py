@@ -18,6 +18,7 @@ from snuba.clickhouse.columns import (
     WithDefault,
 )
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.message_parser import KafkaJsonMessageParser
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -197,8 +198,8 @@ storage = WritableTableStorage(
         write_schema=schema,
         stream_loader=KafkaStreamLoader(
             processor=TransactionsMessageProcessor(),
+            parser=KafkaJsonMessageParser(use_rapid_json=False),
             default_topic="events",
-            use_rapid_json=False,
         ),
     ),
     query_processors=[

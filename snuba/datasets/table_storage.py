@@ -7,7 +7,7 @@ from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.datasets.message_parser import KafkaJsonMessageParser, StreamMessageParser
+from snuba.datasets.message_parser import StreamMessageParser
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -31,12 +31,13 @@ class KafkaStreamLoader:
 
     def __init__(
         self,
+        parser: StreamMessageParser[KafkaPayload],
         processor: MessageProcessor,
         default_topic: str,
-        use_rapid_json: bool = True,
         replacement_topic: Optional[str] = None,
         commit_log_topic: Optional[str] = None,
     ) -> None:
+        self.__parser = parser
         self.__processor = processor
         self.__default_topic_spec = KafkaTopicSpec(
             topic_name=default_topic,
@@ -62,13 +63,12 @@ class KafkaStreamLoader:
             if commit_log_topic
             else None
         )
-        self.__use_rapid_json = use_rapid_json
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
 
     def get_parser(self) -> StreamMessageParser[KafkaPayload]:
-        return KafkaJsonMessageParser(self.__use_rapid_json)
+        return self.__parser
 
     def get_default_topic_spec(self) -> KafkaTopicSpec:
         return self.__default_topic_spec
