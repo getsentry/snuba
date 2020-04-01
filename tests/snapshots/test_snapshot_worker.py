@@ -82,7 +82,11 @@ class TestSnapshotWorker:
         message: Message[KafkaPayload] = Message(
             Partition(Topic("topic"), 0),
             1,
-            KafkaPayload(None, value.encode("utf-8")),
+            KafkaPayload(
+                None,
+                value.encode("utf-8"),
+                [("table", "sentry_groupedmessage".encode())],
+            ),
             datetime.now(),
         )
 

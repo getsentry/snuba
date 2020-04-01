@@ -7,10 +7,12 @@ from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.datasets.message_filters import PassthroughKafkaFilter, StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots.loaders import BulkLoader
+from snuba.utils.streams.kafka import KafkaPayload
 from snuba.writer import BatchWriter
 
 
@@ -31,6 +33,7 @@ class KafkaStreamLoader:
         self,
         processor: MessageProcessor,
         default_topic: str,
+        pre_filter: Optional[StreamMessageFilter[KafkaPayload]] = None,
         replacement_topic: Optional[str] = None,
         commit_log_topic: Optional[str] = None,
     ) -> None:
@@ -59,9 +62,13 @@ class KafkaStreamLoader:
             if commit_log_topic
             else None
         )
+        self.__pre_filter = pre_filter
 
     def get_processor(self) -> MessageProcessor:
         return self.__processor
+
+    def get_pre_filter(self) -> Optional[StreamMessageFilter[KafkaPayload]]:
+        return self.__pre_filter
 
     def get_default_topic_spec(self) -> KafkaTopicSpec:
         return self.__default_topic_spec

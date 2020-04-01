@@ -48,9 +48,12 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def process_message(
         self, message: Message[KafkaPayload]
     ) -> Optional[ProcessedMessage]:
-        # TODO: consider moving this inside the processor so we can do a quick
-        # processing of messages we want to filter out without fully parsing the
-        # json.
+        pre_filter = (
+            enforce_table_writer(self.__dataset).get_stream_loader().get_pre_filter()
+        )
+        if pre_filter and pre_filter.should_drop(message):
+            return None
+
         if self.__rapidjson_deserialize:
             value = rapidjson.loads(message.payload.value)
         else:
