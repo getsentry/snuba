@@ -119,8 +119,7 @@ class SnapshotAwareWorker(ConsumerWorker):
           higher of xmax or part of xip_list.
         """
         stream_loader = enforce_table_writer(self.__dataset).get_stream_loader()
-        parser = stream_loader.get_parser()
-        parsed_message = parser.parse_message(value)
+        parsed_message = stream_loader.get_parser().parse_message(value)
         if parsed_message is None:
             return None
         xid = parsed_message.get("xid")

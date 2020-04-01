@@ -15,6 +15,8 @@ from snuba.utils.streams.types import Message, Topic
 
 logger = logging.getLogger("snuba.consumer")
 
+# TODO: Remove this abstraction entirely and rely on StreamMessageParser subclasses
+# to deal with the Kafka specific fields that are needed when consuming a message.
 KafkaMessageMetadata = collections.namedtuple(
     "KafkaMessageMetadata", "offset partition"
 )
@@ -65,12 +67,10 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self, value: Message[KafkaPayload], metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         stream_loader = enforce_table_writer(self.__dataset).get_stream_loader()
-        parser = stream_loader.get_parser()
-        processor = stream_loader.get_processor()
-        parsed_message = parser.parse_message(value)
+        parsed_message = stream_loader.get_parser().parse_message(value)
         if parsed_message is None:
             return None
-        return processor.process_message(parsed_message, metadata)
+        return stream_loader.get_processor().process_message(parsed_message, metadata)
 
     def delivery_callback(self, error, message):
         if error is not None:

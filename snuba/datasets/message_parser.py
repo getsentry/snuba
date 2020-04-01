@@ -1,5 +1,5 @@
-import simplejson as json
 import rapidjson
+import simplejson as json
 
 from abc import ABC, abstractmethod
 from typing import Generic, Optional
