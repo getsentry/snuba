@@ -12,6 +12,12 @@ KAFKA_ONLY_PARTITION = (
 
 
 class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
+    """
+    Filters CDC messages not related with the table this filter is interested into.
+    This filtering happens based on the table header when present and without
+    parsing the message payload.
+    """
+
     def __init__(self, postgres_table: str) -> None:
         self.__postgres_table = postgres_table
 
@@ -20,11 +26,12 @@ class CdcTableNameMessageFilter(StreamMessageFilter[KafkaPayload]):
             message.partition.index == KAFKA_ONLY_PARTITION
         ), "CDC can only work with single partition topics for consistency"
 
-        table_header = [
-            header for header in message.payload.headers if header[0] == "table"
-        ]
+        table_header = next(
+            (header for header in message.payload.headers if header[0] == "table"), None
+        )
+
         if table_header:
-            table_name = table_header[0][1].decode("utf-8")
+            table_name = table_header[1].decode("utf-8")
             if table_name != self.__postgres_table:
                 metrics.increment("CDC Message Dropped", tags={"table": table_name})
                 return True

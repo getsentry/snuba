@@ -7,7 +7,7 @@ from typing import Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.datasets.message_filters import PassthroughKafkaFilter, StreamMessageFilter
+from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
@@ -68,6 +68,10 @@ class KafkaStreamLoader:
         return self.__processor
 
     def get_pre_filter(self) -> Optional[StreamMessageFilter[KafkaPayload]]:
+        """
+        Returns a filter (or none if none is defined) to be applied to the messages
+        coming from the Kafka stream before parsing the content of the message.
+        """
         return self.__pre_filter
 
     def get_default_topic_spec(self) -> KafkaTopicSpec:
