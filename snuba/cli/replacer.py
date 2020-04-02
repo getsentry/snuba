@@ -100,6 +100,7 @@ def replacer(
     setup_sentry()
 
     storage = get_writable_storage(storage_name)
+    metrics_tags = {"group": consumer_group, "storage": storage_name}
 
     # If dataset_name is provided, use the writable storage from that dataset.
     # This can be removed once we are passing storage_name instead of
@@ -107,6 +108,7 @@ def replacer(
     if dataset_name:
         dataset = get_dataset(dataset_name)
         storage = dataset.get_writable_storage()
+        metrics_tags = {"group": consumer_group, "dataset": dataset_name}
 
     stream_loader = storage.get_table_writer().get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
@@ -118,7 +120,7 @@ def replacer(
     metrics = MetricsWrapper(
         environment.metrics,
         "replacer",
-        tags={"group": consumer_group, "storage": storage_name},
+        tags=metrics_tags,
     )
 
     client_settings = {
