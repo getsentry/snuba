@@ -4,6 +4,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba import environment, settings
+from snuba.datasets.factory import get_dataset
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -23,6 +24,12 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
     default=settings.DEFAULT_BROKERS,
     multiple=True,
     help="Kafka bootstrap server to use.",
+)
+@click.option(
+    "--dataset",
+    "dataset_name",
+    type=click.Choice(["events", "events_migration"]),
+    help="The dataset to consume/run replacements for (currently only events supported)",
 )
 @click.option(
     "--storage",
@@ -67,6 +74,7 @@ def replacer(
     replacements_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
+    dataset_name: Optional[str],
     storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -92,6 +100,13 @@ def replacer(
     setup_sentry()
 
     storage = get_writable_storage(storage_name)
+
+    # If dataset_name is provided, use the writable storage from that dataset.
+    # This can be removed once we are passing storage_name instead of
+    # dataset_name everywhere
+    if dataset_name:
+        dataset = get_dataset(dataset_name)
+        storage = dataset.get_writable_storage()
 
     stream_loader = storage.get_table_writer().get_stream_loader()
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
