@@ -26,7 +26,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
-        ), f"This storage writer does not support replacements {storage}"
+        ), f"This storage writer does not support replacements {type(storage)}"
         self.__replacer_processor = processor
 
     def process_message(self, message: Message[KafkaPayload]) -> Optional[Replacement]:
