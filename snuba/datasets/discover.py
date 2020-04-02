@@ -47,7 +47,7 @@ def detect_table(
     if conditions:
         for idx, condition in enumerate(conditions):
             if is_condition(condition):
-                if tuple(condition) == ("type", "!=", "transaction"):
+                if tuple(condition) == ("type", "=", "error"):
                     return EVENTS
                 elif tuple(condition) == ("type", "=", "transaction"):
                     return TRANSACTIONS
