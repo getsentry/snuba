@@ -11,7 +11,7 @@ DEBUG = True
 PORT = 1218
 
 DEFAULT_DATASET_NAME = "events"
-DISABLED_DATASETS = {}
+DISABLED_DATASETS = {"querylog"}
 DATASET_MODE = "local"
 
 # Clickhouse Options

@@ -9,6 +9,10 @@ from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
 from snuba.web.query import ClickhouseQueryMetadata, SnubaQueryMetadata
 
+# TODO: Remove this once querylog is in prod and no longer disableds
+from snuba import settings
+settings.DISABLED_DATASETS = set()
+
 
 def test_simple():
     request_body = {
