@@ -114,7 +114,7 @@ def replacer(
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
     assert (
         default_replacement_topic_spec is not None
-    ), f"Storage {storage} does not have a replacement topic."
+    ), f"Storage {type(storage)} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
     metrics = MetricsWrapper(
