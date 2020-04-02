@@ -63,6 +63,9 @@ NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 class SessionsProcessor(MessageProcessor):
     def process_message(self, message, metadata=None) -> Optional[ProcessedMessage]:
+        # some old relays accidentally emit rows without release
+        if message["release"] is None:
+            return None
         if message["duration"] is None:
             duration = None
         else:
