@@ -1,10 +1,10 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Optional, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
-from snuba.datasets.dataset_schemas import DatasetSchemas
-from snuba.datasets.errors_replacer import ReplacerState
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
     JoinCondition,
@@ -13,16 +13,36 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
+
+
+class JoinedStorage(ReadableStorage):
+    def __init__(self, join_structure: JoinClause) -> None:
+        self.__structure = join_structure
+
+    def get_schemas(self) -> StorageSchemas:
+        return StorageSchemas(
+            read_schema=JoinedSchema(self.__structure), write_schema=None
+        )
+
+    def get_table_writer(self) -> Optional[TableWriter]:
+        return None
+
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
+        return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
 class Groups(TimeSeriesDataset):
@@ -37,15 +57,11 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            self.__grouped_message.get_dataset_schemas()
-            .get_read_schema()
-            .get_data_source()
+            get_storage("groupedmessages").get_schemas().get_read_schema().get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = (
-            self.__events.get_dataset_schemas().get_read_schema().get_data_source()
-        )
+        events_source = get_storage("events").get_schemas().get_read_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
@@ -97,10 +113,14 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        dataset_schemas = DatasetSchemas(read_schema=schema, write_schema=None,)
+        storage = JoinedStorage(join_structure)
+        self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
-            dataset_schemas=dataset_schemas,
-            time_group_columns={"events.time": "events.timestamp"},
+            storages=[storage],
+            query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
+            abstract_column_set=schema.get_columns(),
+            writable_storage=None,
+            time_group_columns=self.__time_group_columns,
             time_parse_columns=[
                 "events.timestamp",
                 "events.received",
@@ -168,13 +188,5 @@ class Groups(TimeSeriesDataset):
             timestamp_column="events.timestamp",
         )
 
-    def get_prewhere_keys(self) -> Sequence[str]:
-        # TODO: revisit how to build the prewhere clause on join
-        # queries.
-        return []
-
     def get_query_processors(self) -> Sequence[QueryProcessor]:
-        return [
-            SimpleJoinOptimizer(),
-            PrewhereProcessor(),
-        ]
+        return [TimeSeriesColumnProcessor(self.__time_group_columns)]

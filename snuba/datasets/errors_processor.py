@@ -96,7 +96,7 @@ class ErrorsProcessor(EventsProcessorBase):
     ) -> None:
         output["release"] = tags.get("sentry:release")
         output["dist"] = tags.get("sentry:dist")
-        output["user"] = tags.get("sentry:user", "")
+        output["user"] = tags.get("sentry:user", "") or ""
         # The table has an empty string default, but the events coming from eventstream
         # often have transaction_name set to NULL, so we need to replace that with
         # an empty string.
@@ -118,7 +118,7 @@ class ErrorsProcessor(EventsProcessorBase):
         contexts: Mapping[str, Any],
         tags: Mapping[str, Any],
     ) -> None:
-        transaction_ctx = contexts.get("trace", {})
+        transaction_ctx = contexts.get("trace") or {}
         if transaction_ctx.get("trace_id", None):
             output["trace_id"] = str(uuid.UUID(transaction_ctx["trace_id"]))
         if transaction_ctx.get("span_id", None):

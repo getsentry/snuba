@@ -13,6 +13,7 @@ from snuba.util import force_bytes
 HASH_RE = re.compile(r"^[0-9a-f]{32}$", re.IGNORECASE)
 MAX_UINT16 = 2 ** 16 - 1
 MAX_UINT32 = 2 ** 32 - 1
+NIL_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 class ProcessorAction(Enum):

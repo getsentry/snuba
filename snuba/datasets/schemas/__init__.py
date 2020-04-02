@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Mapping, List, Sequence
 
-from snuba.clickhouse.columns import ColumnSet
+from snuba.clickhouse.columns import ColumnSet, ColumnType
 from snuba.query.types import Condition
 
 
@@ -92,13 +92,15 @@ class Schema(ABC):
     def get_columns(self) -> ColumnSet:
         return self.get_data_source().get_columns()
 
-    def get_column_differences(self, expected_columns: Mapping[str, str]) -> List[str]:
+    def get_column_differences(
+        self, expected_columns: Mapping[str, ColumnType]
+    ) -> List[str]:
         """
         Returns a list of differences between the expected_columns and the columns described in the schema.
         """
         errors: List[str] = []
 
-        for column_name, column_type in expected_columns.items():
+        for column_name, column in expected_columns.items():
             if column_name not in self.get_columns():
                 errors.append(
                     "Column '%s' exists in local ClickHouse but not in schema!"
@@ -106,11 +108,12 @@ class Schema(ABC):
                 )
                 continue
 
-            expected_type = self.get_columns()[column_name].type.for_schema()
-            if column_type != expected_type:
+            expected_type = self.get_columns()[column_name].type
+
+            if column != expected_type:
                 errors.append(
                     "Column '%s' type differs between local ClickHouse and schema! (expected: %s, is: %s)"
-                    % (column_name, expected_type, column_type)
+                    % (column_name, expected_type, column)
                 )
 
         return errors

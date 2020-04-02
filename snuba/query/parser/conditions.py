@@ -92,7 +92,7 @@ def parse_conditions(
         # (IN, =, LIKE) are looking for rows where any array value matches, and
         # exclusionary operators (NOT IN, NOT LIKE, !=) are looking for rows
         # where all elements match (eg. all NOT LIKE 'foo').
-        columns = dataset.get_dataset_schemas().get_read_schema().get_columns()
+        columns = dataset.get_abstract_columnset()
         if (
             isinstance(lhs, str)
             and lhs in columns

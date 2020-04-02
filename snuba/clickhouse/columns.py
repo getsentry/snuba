@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from itertools import chain
 from abc import ABC
-from typing import Mapping, Iterable, Optional, Sequence, Type, Tuple, Union
+from typing import (
+    cast,
+    Iterator,
+    Mapping,
+    MutableMapping,
+    MutableSequence,
+    List,
+    Optional,
+    Sequence,
+    Type,
+    Tuple,
+    Union,
+)
 
 from snuba.clickhouse.escaping import escape_identifier
 
@@ -15,11 +27,11 @@ class Column:
     def __repr__(self) -> str:
         return "Column({}, {})".format(repr(self.name), repr(self.type))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.name == other.name
-            and self.type == other.type
+            and self.name == cast(Column, other).name
+            and self.type == cast(Column, other).type
         )
 
     def for_schema(self) -> str:
@@ -41,18 +53,19 @@ class FlattenedColumn:
         self.flattened = (
             "{}.{}".format(self.base_name, self.name) if self.base_name else self.name
         )
-        self.escaped = escape_identifier(self.flattened)
+        self.escaped: str = escape_identifier(self.flattened)
+        assert self.escaped is not None
 
     def __repr__(self) -> str:
         return "FlattenedColumn({}, {}, {})".format(
             repr(self.base_name), repr(self.name), repr(self.type)
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.flattened == other.flattened
-            and self.type == other.type
+            and self.flattened == cast(FlattenedColumn, other).flattened
+            and self.type == cast(FlattenedColumn, other).type
         )
 
 
@@ -60,7 +73,7 @@ class ColumnType:
     def __repr__(self) -> str:
         return self.__class__.__name__ + "()"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return self.__class__ == other.__class__
 
     def for_schema(self) -> str:
@@ -69,7 +82,7 @@ class ColumnType:
     def flatten(self, name: str) -> Sequence[FlattenedColumn]:
         return [FlattenedColumn(None, name, self)]
 
-    def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
+    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
         """
         Basic column types never have any modifiers, since modifiers wrap a basic
         column type in order to modify it in some way.
@@ -81,10 +94,10 @@ class ColumnTypeWithModifier(ABC, ColumnType):
     def __init__(self, inner_type: ColumnType) -> None:
         self.inner_type = inner_type
 
-    def get_all_modifiers(self) -> Iterable[Type[ColumnTypeWithModifier]]:
+    def get_all_modifiers(self) -> MutableSequence[Type[ColumnTypeWithModifier]]:
         def get_nested_modifiers(
             obj: ColumnType,
-        ) -> Iterable[Type[ColumnTypeWithModifier]]:
+        ) -> MutableSequence[Type[ColumnTypeWithModifier]]:
             if not isinstance(obj, ColumnTypeWithModifier):
                 return obj.get_all_modifiers()
             else:
@@ -102,8 +115,11 @@ class Nullable(ColumnTypeWithModifier):
     def __repr__(self) -> str:
         return "Nullable({})".format(repr(self.inner_type))
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.inner_type == cast(Nullable, other).inner_type
+        )
 
     def for_schema(self) -> str:
         return "Nullable({})".format(self.inner_type.for_schema())
@@ -117,11 +133,11 @@ class Materialized(ColumnTypeWithModifier):
     def __repr__(self) -> str:
         return "Materialized({}, {})".format(repr(self.inner_type), self.expression)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.expression == other.expression
-            and self.inner_type == other.inner_type
+            and self.expression == cast(Materialized, other).expression
+            and self.inner_type == cast(Materialized, other).inner_type
         )
 
     def for_schema(self) -> str:
@@ -138,11 +154,11 @@ class WithCodecs(ColumnTypeWithModifier):
     def __repr__(self) -> str:
         return f"WithCodecs({repr(self.inner_type)}, {', '.join(self.__codecs)})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.__codecs == other.__codecs
-            and self.inner_type == other.inner_type
+            and self.__codecs == cast(WithCodecs, other).__codecs
+            and self.inner_type == cast(WithCodecs, other).inner_type
         )
 
     def for_schema(self) -> str:
@@ -157,11 +173,11 @@ class WithDefault(ColumnTypeWithModifier):
     def __repr__(self) -> str:
         return "WithDefault({}, {})".format(repr(self.inner_type), self.default)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.default == other.default
-            and self.inner_type == other.inner_type
+            and self.default == cast(WithDefault, other).default
+            and self.inner_type == cast(WithDefault, other).inner_type
         )
 
     def for_schema(self) -> str:
@@ -175,8 +191,11 @@ class Array(ColumnType):
     def __repr__(self) -> str:
         return "Array({})".format(repr(self.inner_type))
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.inner_type == cast(Array, other).inner_type
+        )
 
     def for_schema(self) -> str:
         return "Array({})".format(self.inner_type.for_schema())
@@ -191,10 +210,10 @@ class Nested(ColumnType):
     def __repr__(self) -> str:
         return "Nested({})".format(repr(self.nested_columns))
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.nested_columns == other.nested_columns
+            and self.nested_columns == cast(Nested, other).nested_columns
         )
 
     def for_schema(self) -> str:
@@ -216,15 +235,18 @@ class LowCardinality(ColumnTypeWithModifier):
     def __repr__(self) -> str:
         return "LowCardinality({})".format(repr(self.inner_type))
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.inner_type == other.inner_type
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.inner_type == cast(Array, other).inner_type
+        )
 
     def for_schema(self) -> str:
         return "LowCardinality({})".format(self.inner_type.for_schema())
 
 
 class AggregateFunction(ColumnType):
-    def __init__(self, func: str, *arg_types: Tuple[ColumnType]) -> None:
+    def __init__(self, func: str, *arg_types: ColumnType) -> None:
         self.func = func
         self.arg_types = arg_types
 
@@ -233,11 +255,11 @@ class AggregateFunction(ColumnType):
             ", ".join(repr(x) for x in chain([self.func], self.arg_types)),
         )
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         return (
             self.__class__ == other.__class__
-            and self.func == other.func
-            and self.arg_types == other.arg_types
+            and self.func == cast(AggregateFunction, other).func
+            and self.arg_types == cast(AggregateFunction, other).arg_types
         )
 
     def for_schema(self) -> str:
@@ -269,8 +291,11 @@ class FixedString(ColumnType):
     def __repr__(self) -> str:
         return "FixedString({})".format(self.length)
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.length == other.length
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.length == cast(FixedString, other).length
+        )
 
     def for_schema(self) -> str:
         return "FixedString({})".format(self.length)
@@ -284,8 +309,8 @@ class UInt(ColumnType):
     def __repr__(self) -> str:
         return "UInt({})".format(self.size)
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.size == other.size
+    def __eq__(self, other: object) -> bool:
+        return self.__class__ == other.__class__ and self.size == cast(UInt, other).size
 
     def for_schema(self) -> str:
         return "UInt{}".format(self.size)
@@ -299,8 +324,10 @@ class Float(ColumnType):
     def __repr__(self) -> str:
         return "Float({})".format(self.size)
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.size == other.size
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__ and self.size == cast(Float, other).size
+        )
 
     def for_schema(self) -> str:
         return "Float{}".format(self.size)
@@ -323,8 +350,11 @@ class Enum(ColumnType):
             ", ".join("'{}' = {}".format(v[0], v[1]) for v in self.values)
         )
 
-    def __eq__(self, other) -> bool:
-        return self.__class__ == other.__class__ and self.values == other.values
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self.values == cast(Enum, other).values
+        )
 
     def for_schema(self) -> str:
         return "Enum({})".format(
@@ -349,8 +379,8 @@ class ColumnSet:
     ) -> None:
         self.columns = Column.to_columns(columns)
 
-        self._lookup = {}
-        self._flattened = []
+        self._lookup: MutableMapping[str, FlattenedColumn] = {}
+        self._flattened: List[FlattenedColumn] = []
         for column in self.columns:
             self._flattened.extend(column.type.flatten(column.name))
 
@@ -365,27 +395,32 @@ class ColumnSet:
     def __repr__(self) -> str:
         return "ColumnSet({})".format(repr(self.columns))
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__ and self._flattened == other._flattened
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.__class__ == other.__class__
+            and self._flattened == cast(ColumnSet, other)._flattened
+        )
 
     def __len__(self) -> int:
         return len(self._flattened)
 
     def __add__(self, other) -> ColumnSet:
         if isinstance(other, ColumnSet):
-            return ColumnSet(self.columns + other.columns)
-        return ColumnSet(self.columns + other)
+            return ColumnSet([*self.columns, *other.columns])
+        return ColumnSet([*self.columns, *other])
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         return key in self._lookup
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> FlattenedColumn:
         return self._lookup[key]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[FlattenedColumn]:
         return iter(self._flattened)
 
-    def get(self, key, default=None):
+    def get(
+        self, key: str, default: Optional[FlattenedColumn] = None
+    ) -> Optional[FlattenedColumn]:
         try:
             return self[key]
         except KeyError:
