@@ -1,7 +1,7 @@
 from datetime import timedelta
-from typing import FrozenSet, Mapping, Sequence, Union
+from typing import FrozenSet, Mapping, Sequence
 
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.errors import promoted_tag_columns
