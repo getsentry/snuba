@@ -14,6 +14,7 @@ from snuba.datasets.schemas.join import (
     TableJoinNode,
 )
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
@@ -43,6 +44,9 @@ class JoinedStorage(ReadableStorage):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
+
+    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+        return []
 
 
 class Groups(TimeSeriesDataset):

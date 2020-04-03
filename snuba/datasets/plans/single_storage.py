@@ -7,6 +7,7 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -18,7 +19,16 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+    def __init__(
+        self, splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None
+    ) -> None:
+        self.__splitters = splitters or []
+
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+        for splitter in self.__splitters:
+            if splitter.can_execute(request):
+                return splitter.execute(request, runner)
+
         return runner(request)
 
 
@@ -58,7 +68,9 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                self.__storage.get_query_splitters()
+            ),
         )
 
 
@@ -87,5 +99,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
                 *storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                storage.get_query_splitters()
+            ),
         )
