@@ -1,13 +1,14 @@
 import copy
 from datetime import timedelta
-from enum import Enum
-from typing import NamedTuple, Sequence
+from typing import Any, List, NamedTuple, Sequence, Union
 import math
 
 from snuba import state, util
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
+from snuba.query.query import Query
 from snuba.request import Request
+from snuba.util import is_condition
 from snuba.web import RawQueryResult
 
 # Every time we find zero results for a given step, expand the search window by
@@ -17,65 +18,56 @@ from snuba.web import RawQueryResult
 STEP_GROWTH = 10
 
 
-class SplitType(Enum):
-    COL_SPLIT = "col"
-    TIME_SPLIT = "time"
-    NO_SPLIT = "no"
-
-
-class ColumnSplitSpec(NamedTuple):
-    """
-    Provides the column names needed to perform column splitting.
-    id_column represent the identity of the row.
-
-    """
-
-    id_column: str
-    project_column: str
-    timestamp_column: str
-
-    def get_min_columns(self) -> Sequence[str]:
-        return [self.id_column, self.project_column, self.timestamp_column]
-
-
-def select_algorithm(request: Request, spec: ColumnSplitSpec) -> SplitType:
+def _is_query_splittable(query: Query) -> bool:
     (use_split,) = state.get_configs([("use_split", 0)])
-    query_limit = request.query.get_limit()
+    query_limit = query.get_limit()
     limit = query_limit if query_limit is not None else 0
-    remaining_offset = request.query.get_offset()
-    orderby = util.to_list(request.query.get_orderby())
 
-    common_conditions = use_split and limit and not request.query.get_groupby()
+    return use_split and limit and not query.get_groupby()
 
-    if common_conditions:
-        total_col_count = len(request.query.get_all_referenced_columns())
-        column_split_spec = spec
-        if column_split_spec:
-            copied_query = copy.deepcopy(request.query)
-            copied_query.set_selected_columns(column_split_spec.get_min_columns())
-            min_col_count = len(copied_query.get_all_referenced_columns())
-        else:
-            min_col_count = None
 
-        if (
-            column_split_spec
-            and request.query.get_selected_columns()
-            and not request.query.get_aggregations()
-            and total_col_count > min_col_count
-        ):
-            return SplitType.COL_SPLIT
-        elif orderby[:1] == ["-timestamp"] and remaining_offset < 1000:
-            return SplitType.TIME_SPLIT
+def _identify_condition(condition: Any, field: str, operand: str) -> bool:
+    return is_condition(condition) and condition[0] == field and condition[1] == operand
 
-    return SplitType.NO_SPLIT
+
+def _replace_condition(
+    query: Query, field: str, operand: str, new_literal: Union[str, List[Any]]
+) -> None:
+    query.set_conditions(
+        [
+            cond
+            if not _identify_condition(cond, field, operand)
+            else [field, operand, new_literal]
+            for cond in query.get_conditions() or []
+        ]
+    )
 
 
 class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
-    def __init__(self, spec: ColumnSplitSpec) -> None:
-        self.__spec = spec
+    def __init__(self, timestamp_col: str) -> None:
+        self.__timestamp_col = timestamp_col
 
     def can_execute(self, request: Request) -> bool:
-        return select_algorithm(request, self.__spec) == SplitType.TIME_SPLIT
+        remaining_offset = request.query.get_offset()
+        orderby = util.to_list(request.query.get_orderby())
+
+        has_from_date = any(
+            _identify_condition(condition, self.__timestamp_col, ">=")
+            for condition in request.query.get_conditions() or []
+        )
+
+        has_to_date = any(
+            _identify_condition(condition, self.__timestamp_col, "<")
+            for condition in request.query.get_conditions() or []
+        )
+
+        return (
+            _is_query_splittable(request.query)
+            and has_to_date
+            and has_from_date
+            and orderby[:1] == [f"-{self.__timestamp_col}"]
+            and remaining_offset < 1000
+        )
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
@@ -97,12 +89,19 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
 
-        to_date = util.parse_datetime(
-            request.extensions["timeseries"]["to_date"], date_align
+        to_date_str = next(
+            condition[2]
+            for condition in request.query.get_conditions() or []
+            if _identify_condition(condition, self.__timestamp_col, "<")
         )
-        from_date = util.parse_datetime(
-            request.extensions["timeseries"]["from_date"], date_align
+        from_date_str = next(
+            condition[2]
+            for condition in request.query.get_conditions() or []
+            if _identify_condition(condition, self.__timestamp_col, ">=")
         )
+
+        to_date = util.parse_datetime(to_date_str, date_align)
+        from_date = util.parse_datetime(from_date_str, date_align)
 
         overall_result = None
         split_end = to_date
@@ -117,15 +116,11 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             # and never updated.
             split_request = copy.deepcopy(request)
 
-            split_request.extensions["timeseries"][
-                "from_date"
-            ] = split_start.isoformat()
-            split_request.extensions["timeseries"]["to_date"] = split_end.isoformat()
-            split_request.query.add_conditions(
-                [
-                    ("timestamp", ">=", split_start.isoformat()),
-                    ("timestamp", "<", split_end.isoformat()),
-                ]
+            _replace_condition(
+                split_request.query, self.__timestamp_col, ">=", split_start.isoformat()
+            )
+            _replace_condition(
+                split_request.query, self.__timestamp_col, "<", split_end.isoformat()
             )
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
@@ -171,13 +166,39 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         return overall_result
 
 
+class ColumnSplitSpec(NamedTuple):
+    """
+    Provides the column names needed to perform column splitting.
+    id_column represent the identity of the row.
+
+    """
+
+    id_column: str
+    project_column: str
+    timestamp_column: str
+
+    def get_min_columns(self) -> Sequence[str]:
+        return [self.id_column, self.project_column, self.timestamp_column]
+
+
 class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
     def __init__(self, spec: ColumnSplitSpec) -> None:
         self.__column_split_spec = spec
 
     def can_execute(self, request: Request) -> bool:
+        if not _is_query_splittable(request.query):
+            return False
+
+        total_col_count = len(request.query.get_all_referenced_columns())
+        copied_query = copy.deepcopy(request.query)
+        copied_query.set_selected_columns(self.__column_split_spec.get_min_columns())
+        min_col_count = len(copied_query.get_all_referenced_columns())
+
         return (
-            select_algorithm(request, self.__column_split_spec) == SplitType.COL_SPLIT
+            self.__column_split_spec
+            and request.query.get_selected_columns()
+            and not request.query.get_aggregations()
+            and total_col_count > min_col_count
         )
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
@@ -222,17 +243,30 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
                     ]
                 )
             )
-            request.extensions["project"]["project"] = project_ids
+            _replace_condition(
+                request.query,
+                self.__column_split_spec.project_column,
+                "IN",
+                project_ids,
+            )
 
             timestamp_field = self.__column_split_spec.timestamp_column
             timestamps = [event[timestamp_field] for event in result.result["data"]]
-            request.extensions["timeseries"]["from_date"] = util.parse_datetime(
-                min(timestamps)
-            ).isoformat()
+            _replace_condition(
+                request.query,
+                timestamp_field,
+                ">=",
+                util.parse_datetime(min(timestamps)).isoformat(),
+            )
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
-            request.extensions["timeseries"]["to_date"] = (
-                util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-            ).isoformat()
+            _replace_condition(
+                request.query,
+                timestamp_field,
+                "<",
+                (
+                    util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+                ).isoformat(),
+            )
 
         return runner(request)

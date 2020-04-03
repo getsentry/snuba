@@ -63,7 +63,10 @@ def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
     strategy = SimpleQueryPlanExecutionStrategy(
-        [ColumnSplitQueryStrategy(split_spec), TimeSplitQueryStrategy(split_spec)]
+        [
+            ColumnSplitQueryStrategy(split_spec),
+            TimeSplitQueryStrategy(timestamp_col=split_spec.timestamp_column),
+        ]
     )
 
     strategy.execute(request, do_query)
@@ -160,7 +163,10 @@ def test_col_split(
     )
 
     strategy = SimpleQueryPlanExecutionStrategy(
-        [ColumnSplitQueryStrategy(split_spec), TimeSplitQueryStrategy(split_spec)]
+        [
+            ColumnSplitQueryStrategy(split_spec),
+            TimeSplitQueryStrategy(timestamp_col=split_spec.timestamp_column),
+        ]
     )
 
     strategy.execute(request, do_query)
