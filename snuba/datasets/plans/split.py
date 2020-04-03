@@ -1,10 +1,13 @@
 import copy
 from datetime import timedelta
+from enum import Enum
 import math
 
 from snuba import state, util
-from snuba.datasets.dataset import ColumnSplitSpec
+from snuba.datasets.plans.query_plan import QueryRunner
+from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.request import Request
+from snuba.web import RawQueryResult
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -13,39 +16,63 @@ from snuba.request import Request
 STEP_GROWTH = 10
 
 
+class SplitType(Enum):
+    COL_SPLIT = "col"
+    TIME_SPLIT = "time"
+    NO_SPLIT = "no"
+
+
 def split_query(query_func):
     def wrapper(dataset, request: Request, *args, **kwargs):
-        (use_split,) = state.get_configs([("use_split", 0)])
-        query_limit = request.query.get_limit()
-        limit = query_limit if query_limit is not None else 0
-        remaining_offset = request.query.get_offset()
-        orderby = util.to_list(request.query.get_orderby())
-
-        common_conditions = use_split and limit and not request.query.get_groupby()
-
-        if common_conditions:
-            total_col_count = len(request.query.get_all_referenced_columns())
-            column_split_spec = dataset.get_split_query_spec()
-            if column_split_spec:
-                copied_query = copy.deepcopy(request.query)
-                copied_query.set_selected_columns(column_split_spec.get_min_columns())
-                min_col_count = len(copied_query.get_all_referenced_columns())
-            else:
-                min_col_count = None
-
-            if (
-                column_split_spec
-                and request.query.get_selected_columns()
-                and not request.query.get_aggregations()
-                and total_col_count > min_col_count
-            ):
-                return col_split(dataset, request, column_split_spec, *args, **kwargs)
-            elif orderby[:1] == ["-timestamp"] and remaining_offset < 1000:
-                return time_split(dataset, request, *args, **kwargs)
-
+        col_split = ColumnSplitQueryStrategy(dataset)
+        if col_split.can_execute(request):
+            return col_split.execute(request, query_func)
+        tiime_split = TimeSplitQueryStrategy(dataset)
+        if tiime_split.can_execute(request):
+            return tiime_split.execute(request, query_func)
         return query_func(dataset, request, *args, **kwargs)
 
-    def time_split(dataset, request: Request, *args, **kwargs):
+
+def select_algorithm(dataset, request: Request) -> SplitType:
+    (use_split,) = state.get_configs([("use_split", 0)])
+    query_limit = request.query.get_limit()
+    limit = query_limit if query_limit is not None else 0
+    remaining_offset = request.query.get_offset()
+    orderby = util.to_list(request.query.get_orderby())
+
+    common_conditions = use_split and limit and not request.query.get_groupby()
+
+    if common_conditions:
+        total_col_count = len(request.query.get_all_referenced_columns())
+        column_split_spec = dataset.get_split_query_spec()
+        if column_split_spec:
+            copied_query = copy.deepcopy(request.query)
+            copied_query.set_selected_columns(column_split_spec.get_min_columns())
+            min_col_count = len(copied_query.get_all_referenced_columns())
+        else:
+            min_col_count = None
+
+        if (
+            column_split_spec
+            and request.query.get_selected_columns()
+            and not request.query.get_aggregations()
+            and total_col_count > min_col_count
+        ):
+            return SplitType.COL_SPLIT
+        elif orderby[:1] == ["-timestamp"] and remaining_offset < 1000:
+            return SplitType.TIME_SPLIT
+
+    return SplitType.NO_SPLIT
+
+
+class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
+    def __init__(self, dataset) -> None:
+        self.__dataset = dataset
+
+    def can_execute(self, request: Request) -> bool:
+        return select_algorithm(self.__dataset, request) == SplitType.TIME_SPLIT
+
+    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -90,7 +117,7 @@ def split_query(query_func):
             # iteration, if needed.
             # XXX: The extra data is carried across from the initial response
             # and never updated.
-            result = query_func(dataset, copy.deepcopy(request), *args, **kwargs)
+            result = runner(copy.deepcopy(request))
 
             if overall_result is None:
                 overall_result = result
@@ -128,9 +155,16 @@ def split_query(query_func):
 
         return overall_result
 
-    def col_split(
-        dataset, request: Request, column_split_spec: ColumnSplitSpec, *args, **kwargs
-    ):
+
+class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
+    def __init__(self, dataset) -> None:
+        self.__dataset = dataset
+        self.__column_split_spec = dataset.get_split_query_spec()
+
+    def can_execute(self, request: Request) -> bool:
+        return select_algorithm(self.__dataset, request) == SplitType.COL_SPLIT
+
+    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
@@ -141,8 +175,10 @@ def split_query(query_func):
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(column_split_spec.get_min_columns())
-        result = query_func(dataset, minimal_request, *args, **kwargs)
+        minimal_request.query.set_selected_columns(
+            self.__column_split_spec.get_min_columns()
+        )
+        result = runner(minimal_request)
         del minimal_request
 
         if result.result["data"]:
@@ -151,13 +187,13 @@ def split_query(query_func):
             event_ids = list(
                 set(
                     [
-                        event[column_split_spec.id_column]
+                        event[self.__column_split_spec.id_column]
                         for event in result.result["data"]
                     ]
                 )
             )
             request.query.add_conditions(
-                [(column_split_spec.id_column, "IN", event_ids)]
+                [(self.__column_split_spec.id_column, "IN", event_ids)]
             )
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
@@ -165,14 +201,14 @@ def split_query(query_func):
             project_ids = list(
                 set(
                     [
-                        event[column_split_spec.project_column]
+                        event[self.__column_split_spec.project_column]
                         for event in result.result["data"]
                     ]
                 )
             )
             request.extensions["project"]["project"] = project_ids
 
-            timestamp_field = column_split_spec.timestamp_column
+            timestamp_field = self.__column_split_spec.timestamp_column
             timestamps = [event[timestamp_field] for event in result.result["data"]]
             request.extensions["timeseries"]["from_date"] = util.parse_datetime(
                 min(timestamps)
@@ -183,6 +219,4 @@ def split_query(query_func):
                 util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
             ).isoformat()
 
-        return query_func(dataset, request, *args, **kwargs)
-
-    return wrapper
+        return runner(request)
