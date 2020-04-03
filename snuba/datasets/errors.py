@@ -45,13 +45,6 @@ class ErrorsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
 
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        )
-
     def column_expr(
         self,
         column_name,

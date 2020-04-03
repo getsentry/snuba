@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 
 
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -56,6 +57,16 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+        """
+        If this storage supports splitting queries as optimizations, they are provided here.
+        These are optimizations, the query plan builder may decide to override the storage
+        and to skip the splitters. So correctness of the query must not depend on these
+        strategies to be applied.
+        """
+        raise NotImplementedError
+
 
 class WritableStorage(Storage):
     """
@@ -81,15 +92,20 @@ class ReadableTableStorage(ReadableStorage):
         self,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
+        self.__query_splitters = query_splitters or []
 
     def get_schemas(self) -> StorageSchemas:
         return self.__schemas
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
+
+    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+        return self.__query_splitters
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -98,8 +114,9 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schemas: StorageSchemas,
         table_writer: TableWriter,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None,
     ) -> None:
-        super().__init__(schemas, query_processors)
+        super().__init__(schemas, query_processors, query_splitters)
         self.__table_writer = table_writer
 
     def get_table_writer(self) -> TableWriter:

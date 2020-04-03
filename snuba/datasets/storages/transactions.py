@@ -20,7 +20,14 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
-from snuba.query.processors.transaction_column_processor import TransactionColumnProcessor
+from snuba.query.processors.transaction_column_processor import (
+    TransactionColumnProcessor,
+)
+from snuba.datasets.plans.split import (
+    ColumnSplitQueryStrategy,
+    ColumnSplitSpec,
+    TimeSplitQueryStrategy,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -212,5 +219,21 @@ storage = WritableTableStorage(
         ),
         TransactionColumnProcessor(),
         PrewhereProcessor(),
+    ],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            ColumnSplitSpec(
+                id_column="event_id",
+                project_column="project_id",
+                timestamp_column="start_ts",
+            )
+        ),
+        TimeSplitQueryStrategy(
+            ColumnSplitSpec(
+                id_column="event_id",
+                project_column="project_id",
+                timestamp_column="start_ts",
+            )
+        ),
     ],
 )

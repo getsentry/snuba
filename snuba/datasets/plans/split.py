@@ -1,6 +1,7 @@
 import copy
 from datetime import timedelta
 from enum import Enum
+from typing import NamedTuple, Sequence
 import math
 
 from snuba import state, util
@@ -22,18 +23,22 @@ class SplitType(Enum):
     NO_SPLIT = "no"
 
 
-def split_query(query_func):
-    def wrapper(dataset, request: Request, *args, **kwargs):
-        col_split = ColumnSplitQueryStrategy(dataset)
-        if col_split.can_execute(request):
-            return col_split.execute(request, query_func)
-        tiime_split = TimeSplitQueryStrategy(dataset)
-        if tiime_split.can_execute(request):
-            return tiime_split.execute(request, query_func)
-        return query_func(dataset, request, *args, **kwargs)
+class ColumnSplitSpec(NamedTuple):
+    """
+    Provides the column names needed to perform column splitting.
+    id_column represent the identity of the row.
+
+    """
+
+    id_column: str
+    project_column: str
+    timestamp_column: str
+
+    def get_min_columns(self) -> Sequence[str]:
+        return [self.id_column, self.project_column, self.timestamp_column]
 
 
-def select_algorithm(dataset, request: Request) -> SplitType:
+def select_algorithm(request: Request, spec: ColumnSplitSpec) -> SplitType:
     (use_split,) = state.get_configs([("use_split", 0)])
     query_limit = request.query.get_limit()
     limit = query_limit if query_limit is not None else 0
@@ -44,7 +49,7 @@ def select_algorithm(dataset, request: Request) -> SplitType:
 
     if common_conditions:
         total_col_count = len(request.query.get_all_referenced_columns())
-        column_split_spec = dataset.get_split_query_spec()
+        column_split_spec = spec
         if column_split_spec:
             copied_query = copy.deepcopy(request.query)
             copied_query.set_selected_columns(column_split_spec.get_min_columns())
@@ -66,11 +71,11 @@ def select_algorithm(dataset, request: Request) -> SplitType:
 
 
 class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
-    def __init__(self, dataset) -> None:
-        self.__dataset = dataset
+    def __init__(self, spec: ColumnSplitSpec) -> None:
+        self.__spec = spec
 
     def can_execute(self, request: Request) -> bool:
-        return select_algorithm(self.__dataset, request) == SplitType.TIME_SPLIT
+        return select_algorithm(request, self.__spec) == SplitType.TIME_SPLIT
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """
@@ -157,12 +162,13 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
 
 
 class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
-    def __init__(self, dataset) -> None:
-        self.__dataset = dataset
-        self.__column_split_spec = dataset.get_split_query_spec()
+    def __init__(self, spec: ColumnSplitSpec) -> None:
+        self.__column_split_spec = spec
 
     def can_execute(self, request: Request) -> bool:
-        return select_algorithm(self.__dataset, request) == SplitType.COL_SPLIT
+        return (
+            select_algorithm(request, self.__column_split_spec) == SplitType.COL_SPLIT
+        )
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         """

@@ -1,7 +1,7 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence
 
-from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -90,13 +90,6 @@ class TransactionsDataset(TimeSeriesDataset):
             # If processed_column is None, this was not a tag/context expression
             return processed_column
         return super().column_expr(column_name, query, parsing_context)
-
-    def get_split_query_spec(self) -> Union[None, ColumnSplitSpec]:
-        return ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="start_ts",
-        )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [

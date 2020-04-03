@@ -15,6 +15,11 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.datasets.plans.split import (
+    ColumnSplitQueryStrategy,
+    ColumnSplitSpec,
+    TimeSplitQueryStrategy,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -316,5 +321,21 @@ storage = WritableTableStorage(
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         PrewhereProcessor(),
+    ],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            ColumnSplitSpec(
+                id_column="event_id",
+                project_column="project_id",
+                timestamp_column="timestamp",
+            )
+        ),
+        TimeSplitQueryStrategy(
+            ColumnSplitSpec(
+                id_column="event_id",
+                project_column="project_id",
+                timestamp_column="timestamp",
+            )
+        ),
     ],
 )
