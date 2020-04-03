@@ -268,7 +268,10 @@ def get_column_tag_map() -> Mapping[str, Mapping[str, str]]:
             col.flattened: col.flattened.replace("_", ".")
             for col in promoted_context_tag_columns
         },
-        "contexts": {},
+        "contexts": {
+            col.flattened: col.flattened.replace("_", ".", 1)
+            for col in promoted_context_columns
+        },
     }
 
 
