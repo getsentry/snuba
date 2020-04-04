@@ -7,7 +7,7 @@ from snuba.request import Request
 class StorageQuerySplitStrategy(QueryPlanExecutionStrategy, ABC):
     """
     An execution strategy that implements one query split algorithm. For example
-    a StorageQuerySplitStrategy can be time based splitting.
+    a StorageQuerySplitStrategy can implement the time based query splitting.
     Since not every split algorithm can work on every query, a StorageQuerySplitStrategy
     has a validation method "can_execute" that the StorageQuqeryPlanBuilder uses
     to select the valid algorithm.

@@ -44,6 +44,11 @@ def _replace_condition(
 
 
 class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
+    """
+    A strategy that breaks the time window into smaller ones and executes
+    them in sequence.
+    """
+
     def __init__(self, timestamp_col: str) -> None:
         self.__timestamp_col = timestamp_col
 
@@ -182,6 +187,13 @@ class ColumnSplitSpec(NamedTuple):
 
 
 class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
+    """
+    A strategy that performs column based splitting: if the client requests enough columns,
+    a first query on the minimum set of columns is ran to load as little Clickhouse data
+    as possible. A second query based on the results of the first is then executed to
+    build the full result set.
+    """
+
     def __init__(self, spec: ColumnSplitSpec) -> None:
         self.__column_split_spec = spec
 
