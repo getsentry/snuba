@@ -1,7 +1,8 @@
 import copy
+import math
+
 from datetime import timedelta
 from typing import Any, List, NamedTuple, Sequence, Union
-import math
 
 from snuba import state, util
 from snuba.datasets.plans.query_plan import QueryRunner
@@ -20,10 +21,12 @@ STEP_GROWTH = 10
 
 def _is_query_splittable(query: Query) -> bool:
     (use_split,) = state.get_configs([("use_split", 0)])
-    query_limit = query.get_limit()
+    query_limit = query.get_limit() or 0
     limit = query_limit if query_limit is not None else 0
 
-    return use_split and limit and not query.get_groupby()
+    # cannot return (use_split and limit) since mypy expects us to return
+    # a boolean. use_split would be Union[Any, Int]
+    return (use_split or 0) > 0 and limit > 0 and not query.get_groupby()
 
 
 def _identify_condition(condition: Any, field: str, operand: str) -> bool:
@@ -68,8 +71,8 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
 
         return (
             _is_query_splittable(request.query)
-            and has_to_date
             and has_from_date
+            and has_to_date
             and orderby[:1] == [f"-{self.__timestamp_col}"]
             and remaining_offset < 1000
         )
@@ -206,9 +209,10 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         copied_query.set_selected_columns(self.__column_split_spec.get_min_columns())
         min_col_count = len(copied_query.get_all_referenced_columns())
 
+        selected_cols = request.query.get_selected_columns()
         return (
-            self.__column_split_spec
-            and request.query.get_selected_columns()
+            selected_cols is not None
+            and len(selected_cols) > 0
             and not request.query.get_aggregations()
             and total_col_count > min_col_count
         )

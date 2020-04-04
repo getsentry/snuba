@@ -6,8 +6,8 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
