@@ -23,7 +23,7 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.processors.transaction_column_processor import (
     TransactionColumnProcessor,
 )
-from snuba.datasets.plans.split import (
+from snuba.web.split import (
     ColumnSplitQueryStrategy,
     ColumnSplitSpec,
     TimeSplitQueryStrategy,

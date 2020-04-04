@@ -6,7 +6,7 @@ import uuid
 from snuba import state
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
-from snuba.datasets.plans.split import (
+from snuba.web.split import (
     ColumnSplitSpec,
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,

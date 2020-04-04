@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.datasets.plans.split import (
+from snuba.web.split import (
     ColumnSplitQueryStrategy,
     ColumnSplitSpec,
     TimeSplitQueryStrategy,
