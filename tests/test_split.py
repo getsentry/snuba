@@ -4,6 +4,7 @@ import pytest
 import uuid
 
 from snuba import state
+from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.web.split import (
@@ -11,6 +12,7 @@ from snuba.web.split import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
+from snuba.datasets.schemas.tables import TableSource
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
@@ -170,3 +172,91 @@ def test_col_split(
     )
 
     strategy.execute(request, do_query)
+
+
+column_split_tests = [
+    (
+        ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        Query(
+            {
+                "selected_columns": [
+                    "event_id",
+                    "level",
+                    "logger",
+                    "server_name",
+                    "transaction",
+                    "timestamp",
+                    "project_id",
+                ],
+                "conditions": [
+                    ("timestamp", ">=", "2019-09-19T10:00:00"),
+                    ("timestamp", "<", "2019-09-19T12:00:00"),
+                    ("project_id", "IN", [1, 2, 3]),
+                ],
+                "groupby": ["timestamp"],
+                "limit": 10,
+            },
+            TableSource("events", ColumnSet([])),
+        ),
+        False,
+    ),  # Query with group by. No split
+    (
+        ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        Query(
+            {
+                "selected_columns": [
+                    "event_id",
+                    "level",
+                    "logger",
+                    "server_name",
+                    "transaction",
+                    "timestamp",
+                    "project_id",
+                ],
+                "conditions": [
+                    ("timestamp", ">=", "2019-09-19T10:00:00"),
+                    ("timestamp", "<", "2019-09-19T12:00:00"),
+                    ("project_id", "IN", [1, 2, 3]),
+                ],
+                "limit": 10,
+            },
+            TableSource("events", ColumnSet([])),
+        ),
+        True,
+    ),  # Valid query to split
+    (
+        ColumnSplitSpec(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        Query(
+            {
+                "selected_columns": ["event_id",],
+                "conditions": [
+                    ("timestamp", ">=", "2019-09-19T10:00:00"),
+                    ("timestamp", "<", "2019-09-19T12:00:00"),
+                    ("project_id", "IN", [1, 2, 3]),
+                ],
+                "limit": 10,
+            },
+            TableSource("events", ColumnSet([])),
+        ),
+        False,
+    ),  # Valid query but not enough columns to split.
+]
+
+
+@pytest.mark.parametrize("split_spec, query, expected_result", column_split_tests)
+def test_col_split_conditions(split_spec, query, expected_result) -> None:
+    splitter = ColumnSplitQueryStrategy(split_spec)
+    request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
+    assert splitter.can_execute(request) == expected_result
