@@ -415,7 +415,9 @@ if application.debug or application.testing:
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
 
-            worker = ConsumerWorker(dataset, metrics=metrics)
+            storage = dataset.get_writable_storage()
+
+            worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
 

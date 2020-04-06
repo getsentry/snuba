@@ -48,7 +48,9 @@ def run(events_file, dataset, repeat=1, profile_process=False, profile_write=Fal
         for statement in storage.get_schemas().get_create_statements():
             clickhouse_rw.execute(statement.statement)
 
-    consumer = ConsumerWorker(dataset, metrics=DummyMetricsBackend())
+    writable_storage = dataset.get_writable_storage()
+
+    consumer = ConsumerWorker(writable_storage, metrics=DummyMetricsBackend())
 
     messages = get_messages(events_file)
     messages = chain(*([messages] * repeat))

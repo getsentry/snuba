@@ -4,7 +4,7 @@ from typing import Any, Mapping, Optional, Set
 from confluent_kafka import Producer
 
 from snuba.consumer import ConsumerWorker, KafkaMessageMetadata
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.storage import WritableTableStorage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.metrics.backends.abstract import MetricsBackend
@@ -34,7 +34,7 @@ class SnapshotAwareWorker(ConsumerWorker):
 
     def __init__(
         self,
-        dataset: Dataset,
+        storage: WritableTableStorage,
         producer: Producer,
         snapshot_id: SnapshotId,
         transaction_data: TransactionData,
@@ -42,7 +42,7 @@ class SnapshotAwareWorker(ConsumerWorker):
         replacements_topic: Optional[Topic] = None,
     ) -> None:
         super().__init__(
-            dataset=dataset,
+            storage=storage,
             producer=producer,
             replacements_topic=replacements_topic,
             metrics=metrics,

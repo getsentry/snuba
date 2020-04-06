@@ -6,8 +6,7 @@ import simplejson as json
 import rapidjson
 from confluent_kafka import Producer as ConfluentKafkaProducer
 
-from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.streams.batching import AbstractBatchWorker
@@ -28,22 +27,23 @@ class InvalidActionType(Exception):
 class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
     def __init__(
         self,
-        dataset: Dataset,
+        storage: WritableTableStorage,
         metrics: MetricsBackend,
         producer: Optional[ConfluentKafkaProducer] = None,
         replacements_topic: Optional[Topic] = None,
         rapidjson_deserialize: bool = False,
         rapidjson_serialize: bool = False,
     ) -> None:
-        self.__dataset = dataset
+        self.__storage = storage
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        table_writer = enforce_table_writer(dataset)
+        table_writer = storage.get_table_writer()
         self.__writer = table_writer.get_writer(
             {"load_balancing": "in_order", "insert_distributed_sync": 1},
             rapidjson_serialize=rapidjson_serialize,
         )
+
         self.__rapidjson_deserialize = rapidjson_deserialize
         self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
 
@@ -76,7 +76,7 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self, value: Mapping[str, Any], metadata: KafkaMessageMetadata,
     ) -> Optional[ProcessedMessage]:
         processor = (
-            enforce_table_writer(self.__dataset).get_stream_loader().get_processor()
+            self.__storage.get_table_writer().get_stream_loader().get_processor()
         )
         return processor.process_message(value, metadata)
 
