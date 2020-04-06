@@ -48,9 +48,9 @@ def get_dataset(name: str) -> Dataset:
     from snuba.datasets.events import EventsDataset
     from snuba.datasets.errors import ErrorsDataset
     from snuba.datasets.groups import Groups
-    from snuba.datasets.querylog import QuerylogDataset
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
+    from snuba.datasets.querylog import QuerylogDataset
     from snuba.datasets.sessions import SessionsDataset
     from snuba.datasets.transactions import TransactionsDataset
 
