@@ -21,6 +21,8 @@ DATASET_NAMES: Set[str] = {
     "transactions",
 }
 
+ACTIVE_DATASET_NAMES: Set[str] = DATASET_NAMES - settings.DISABLED_DATASETS
+
 # Internal datasets registered here cannot be queried directly via API
 INTERNAL_DATASET_NAMES: Set[str] = {
     "querylog",

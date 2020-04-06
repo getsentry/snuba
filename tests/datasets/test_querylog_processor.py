@@ -1,15 +1,16 @@
 import uuid
 
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storages.factory import get_storage
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings
 from snuba.utils.clock import TestingClock
 from snuba.utils.metrics.timer import Timer
-from snuba.web.query import ClickhouseQueryMetadata, SnubaQueryMetadata
+from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
-# TODO: Remove this once querylog is in prod and no longer disableds
+# TODO: Remove this once querylog is in prod and no longer disabled
 from snuba import settings
 settings.DISABLED_DATASETS = set()
 
@@ -26,7 +27,7 @@ def test_simple():
 
     query = Query(
         request_body,
-        get_dataset("events").get_dataset_schemas().get_read_schema().get_data_source(),
+        get_storage("events").get_schemas().get_read_schema().get_data_source(),
     )
 
     request = Request(uuid.UUID("a" * 32).hex, query, HTTPRequestSettings(), {}, "search")
