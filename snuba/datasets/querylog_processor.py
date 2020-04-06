@@ -44,15 +44,15 @@ class QuerylogProcessor(MessageProcessor):
             # TODO: Calculate subquery duration, for now just insert 0s
             duration_ms.append(0)
             stats.append(self.__to_json_string(query["stats"]))
-            final.append(int(query["stats"].get("final", 0)))
-            cache_hit.append(int(query["stats"].get("cache_hit", 0)))
-            sample.append(query["stats"].get("sample", 0))
-            max_threads.append(query["stats"].get("max_threads", 0))
-            num_days.append(query["stats"].get("num_days", 0))
-            clickhouse_table.append(query["stats"].get("clickhouse_table", ""))
-            query_id.append(query["stats"].get("query_id", ""))
-            is_duplicate.append(int(query["stats"].get("is_duplicate", 0)))
-            consistent.append(int(query["stats"].get("consistent", 0)))
+            final.append(int(query["stats"].get("final") or 0))
+            cache_hit.append(int(query["stats"].get("cache_hit") or 0))
+            sample.append(query["stats"].get("sample") or 0)
+            max_threads.append(query["stats"].get("max_threads") or 0)
+            num_days.append(query["stats"].get("num_days") or 0)
+            clickhouse_table.append(query["stats"].get("clickhouse_table") or "")
+            query_id.append(query["stats"].get("query_id") or "")
+            is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
+            consistent.append(int(query["stats"].get("consistent") or 0))
 
         return {
             "clickhouse_queries.sql": sql,
