@@ -1,10 +1,10 @@
-
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.cdc.groupassignee_processor import (
     GroupAssigneeProcessor,
     GroupAssigneeRow,
 )
+from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -62,6 +62,7 @@ storage = WritableTableStorage(
         stream_loader=KafkaStreamLoader(
             processor=GroupAssigneeProcessor(POSTGRES_TABLE),
             default_topic="cdc",
+            pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
         ),
         postgres_table=POSTGRES_TABLE,
     ),
