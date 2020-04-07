@@ -2,7 +2,7 @@ from tests.base import BaseTest
 
 from datetime import datetime, timedelta, timezone
 
-from snuba.datasets.sessions import SessionsProcessor
+from snuba.datasets.sessions_processor import SessionsProcessor
 from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import ProcessorAction
 

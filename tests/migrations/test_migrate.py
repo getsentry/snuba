@@ -3,6 +3,9 @@ from tests.base import BaseDatasetTest
 from snuba.clusters import cluster
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
+# TODO: Remove this once querylog is in prod and no longer disabled
+from snuba import settings
+settings.DISABLED_DATASETS = set()
 
 class TestMigrate(BaseDatasetTest):
     def setup_method(self, test_method):

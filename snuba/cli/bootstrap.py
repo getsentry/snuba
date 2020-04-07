@@ -5,8 +5,8 @@ import click
 
 from snuba import settings
 from snuba.clusters import cluster
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.environment import setup_logging
+from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
+from snuba.environment import
 from snuba.migrations.migrate import run
 
 
@@ -65,7 +65,7 @@ def bootstrap(
                 time.sleep(1)
 
         topics = {}
-        for name in DATASET_NAMES:
+        for name in ACTIVE_DATASET_NAMES:
             dataset = get_dataset(name)
             table_writer = dataset.get_table_writer()
             if table_writer:
@@ -118,7 +118,7 @@ def bootstrap(
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
-    for name in DATASET_NAMES:
+    for name in ACTIVE_DATASET_NAMES:
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)
