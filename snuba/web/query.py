@@ -9,7 +9,7 @@ from functools import partial
 
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.query import DictClickhouseQuery
+from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
