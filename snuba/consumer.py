@@ -39,14 +39,13 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
         self.producer = producer
         self.replacements_topic = replacements_topic
         self.metrics = metrics
-        self.__writer = enforce_table_writer(dataset).get_writer(
+        table_writer = enforce_table_writer(dataset)
+        self.__writer = table_writer.get_writer(
             {"load_balancing": "in_order", "insert_distributed_sync": 1},
             rapidjson_serialize=rapidjson_serialize,
         )
         self.__rapidjson_deserialize = rapidjson_deserialize
-        self.__pre_filter = (
-            enforce_table_writer(self.__dataset).get_stream_loader().get_pre_filter()
-        )
+        self.__pre_filter = table_writer.get_stream_loader().get_pre_filter()
 
     def process_message(
         self, message: Message[KafkaPayload]
