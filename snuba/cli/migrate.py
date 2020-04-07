@@ -5,7 +5,7 @@ import click
 from clickhouse_driver import Client
 
 from snuba import settings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.util import local_dataset_mode
 
@@ -15,7 +15,7 @@ from snuba.util import local_dataset_mode
 @click.option(
     "--dataset",
     "dataset_name",
-    type=click.Choice(DATASET_NAMES),
+    type=click.Choice(ACTIVE_DATASET_NAMES),
     help="The dataset to target",
 )
 def migrate(
@@ -29,7 +29,7 @@ def migrate(
         logger.error("The migration tool can only work on local dataset mode.")
         sys.exit(1)
 
-    dataset_names = [dataset_name] if dataset_name else DATASET_NAMES
+    dataset_names = [dataset_name] if dataset_name else ACTIVE_DATASET_NAMES
     for name in dataset_names:
         dataset = get_dataset(name)
         logger.info("Migrating dataset %s", name)

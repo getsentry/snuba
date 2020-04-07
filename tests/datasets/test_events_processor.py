@@ -1,4 +1,5 @@
 import calendar
+import copy
 import pytest
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -50,8 +51,8 @@ class TestEventsProcessor(BaseEventsTest):
             enforce_table_writer(self.dataset).get_stream_loader().get_processor()
         )
         assert processor.process_message(
-            (0, "insert", self.event)
-        ) == processor.process_message((1, "insert", self.event, {}))
+            (0, "insert", copy.deepcopy(self.event))
+        ) == processor.process_message((1, "insert", copy.deepcopy(self.event), {}))
 
     def test_invalid_type_version_0(self):
         with pytest.raises(InvalidMessageType):
