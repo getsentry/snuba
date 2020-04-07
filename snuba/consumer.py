@@ -44,14 +44,15 @@ class ConsumerWorker(AbstractBatchWorker[KafkaPayload, ProcessedMessage]):
             rapidjson_serialize=rapidjson_serialize,
         )
         self.__rapidjson_deserialize = rapidjson_deserialize
+        self.__pre_filter = (
+            enforce_table_writer(self.__dataset).get_stream_loader().get_pre_filter()
+        )
 
     def process_message(
         self, message: Message[KafkaPayload]
     ) -> Optional[ProcessedMessage]:
-        pre_filter = (
-            enforce_table_writer(self.__dataset).get_stream_loader().get_pre_filter()
-        )
-        if pre_filter and pre_filter.should_drop(message):
+
+        if self.__pre_filter and self.__pre_filter.should_drop(message):
             return None
 
         if self.__rapidjson_deserialize:

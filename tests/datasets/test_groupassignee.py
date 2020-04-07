@@ -1,5 +1,5 @@
 import pytz
-import rapidjson
+import simplejson as json
 from datetime import datetime
 
 from tests.base import BaseDatasetTest
@@ -98,14 +98,14 @@ class TestGroupassignee(BaseDatasetTest):
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.BEGIN_MSG, [])
         )
-        begin_msg = rapidjson.loads(self.BEGIN_MSG)
+        begin_msg = json.loads(self.BEGIN_MSG)
         ret = processor.process_message(begin_msg, metadata)
         assert ret is None
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.COMMIT_MSG, [])
         )
-        commit_msg = rapidjson.loads(self.COMMIT_MSG)
+        commit_msg = json.loads(self.COMMIT_MSG)
         ret = processor.process_message(commit_msg, metadata)
         assert ret is None
 
@@ -114,7 +114,7 @@ class TestGroupassignee(BaseDatasetTest):
                 0, 42, self.INSERT_MSG, [("table", POSTGRES_TABLE.encode())]
             )
         )
-        insert_msg = rapidjson.loads(self.INSERT_MSG)
+        insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
         self.write_processed_records(ret.data)
@@ -137,7 +137,7 @@ class TestGroupassignee(BaseDatasetTest):
                 [("table", POSTGRES_TABLE.encode())],
             )
         )
-        update_msg = rapidjson.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
+        update_msg = json.loads(self.UPDATE_MSG_NO_KEY_CHANGE)
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.PROCESSED]
 
@@ -151,14 +151,14 @@ class TestGroupassignee(BaseDatasetTest):
                 [("table", POSTGRES_TABLE.encode())],
             )
         )
-        update_msg = rapidjson.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
+        update_msg = json.loads(self.UPDATE_MSG_WITH_KEY_CHANGE)
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.DELETED, self.PROCESSED_UPDATE]
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.DELETE_MSG, [])
         )
-        delete_msg = rapidjson.loads(self.DELETE_MSG)
+        delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
         assert ret.data == [self.DELETED]
 
