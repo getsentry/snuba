@@ -18,4 +18,4 @@ class StreamMessageFilter(ABC, Generic[TPayload]):
 
 class PassthroughKafkaFilter(StreamMessageFilter[KafkaPayload]):
     def should_drop(self, message: Message[KafkaPayload]) -> bool:
-        return True
+        return False
