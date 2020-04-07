@@ -14,18 +14,30 @@ from snuba.request.request_settings import HTTPRequestSettings
 tests = [
     (
         3600,
-        FunctionCall("my_start", "toStartOfHour", (Column(None, "start_ts", None),)),
-        "(toStartOfHour(start_ts) AS my_start)",
+        FunctionCall(
+            "my_start",
+            "toStartOfHour",
+            (Column(None, "start_ts", None), Literal(None, "Universal")),
+        ),
+        "(toStartOfHour(start_ts, 'Universal') AS my_start)",
     ),
     (
         60,
-        FunctionCall("my_start", "toStartOfMinute", (Column(None, "start_ts", None),)),
-        "(toStartOfMinute(start_ts) AS my_start)",
+        FunctionCall(
+            "my_start",
+            "toStartOfMinute",
+            (Column(None, "start_ts", None), Literal(None, "Universal")),
+        ),
+        "(toStartOfMinute(start_ts, 'Universal') AS my_start)",
     ),
     (
         86400,
-        FunctionCall("my_start", "toDate", (Column(None, "start_ts", None),)),
-        "(toDate(start_ts) AS my_start)",
+        FunctionCall(
+            "my_start",
+            "toDate",
+            (Column(None, "start_ts", None), Literal(None, "Universal")),
+        ),
+        "(toDate(start_ts, 'Universal') AS my_start)",
     ),
     (
         1440,
@@ -46,9 +58,10 @@ tests = [
                     ),
                     Literal(None, 1440),
                 ),
+                Literal(None, "Universal"),
             ),
         ),
-        "(toDateTime(multiply(intDiv(toUInt32(start_ts), 1440), 1440)) AS my_start)",
+        "(toDateTime(multiply(intDiv(toUInt32(start_ts), 1440), 1440), 'Universal') AS my_start)",
     ),
 ]
 
