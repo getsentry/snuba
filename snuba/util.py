@@ -11,6 +11,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    TypeVar,
     Union,
 )
 import logging
@@ -29,6 +30,9 @@ from snuba.utils.metrics.types import Tags
 logger = logging.getLogger("snuba.util")
 
 
+T = TypeVar("T")
+
+
 # example partition name: "('2018-03-13 00:00:00', 90)"
 PART_RE = re.compile(r"\('(\d{4}-\d{2}-\d{2})',\s*(\d+)\)")
 QUOTED_LITERAL_RE = re.compile(r"^'.*'$")
@@ -44,7 +48,7 @@ def local_dataset_mode() -> bool:
     return settings.DATASET_MODE == "local"
 
 
-def to_list(value: Any) -> List[Any]:
+def to_list(value: Union[T, List[T]]) -> List[T]:
     return value if isinstance(value, list) else [value]
 
 
