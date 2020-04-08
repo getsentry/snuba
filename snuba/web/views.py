@@ -14,7 +14,6 @@ from markdown import markdown
 from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
-from snuba.clusters import cluster
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -420,8 +419,10 @@ if application.debug or application.testing:
             worker = ConsumerWorker(dataset, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            # TODO: Fix
-            clickhouse_rw = cluster.get_clickhouse_rw()
+            # TODO: This should come from storage after
+            # https://github.com/getsentry/snuba/pull/861 is merged
+            from snuba.clusters.cluster import CLUSTERS
+            clickhouse_rw = CLUSTERS[0].get_clickhouse_rw()
             worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)

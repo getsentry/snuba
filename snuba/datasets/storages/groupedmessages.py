@@ -1,5 +1,4 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
-from snuba.clusters import get_cluster
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
@@ -63,10 +62,8 @@ schema = ReplacingMergeTreeSchema(
 
 POSTGRES_TABLE = "sentry_groupedmessage"
 
-cluster = get_cluster("groupedmessages")
-
 storage = WritableTableStorage(
-    cluster=cluster,
+    storage_key="groupedmessages",
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=GroupedMessageTableWriter(
         write_schema=schema,

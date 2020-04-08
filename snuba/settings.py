@@ -1,7 +1,6 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
-
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
 
@@ -125,3 +124,15 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
+
+
+# Snuba currently only supports a single cluster to which all storage sets are assigned.
+# In future this will be configurable.
+CLUSTERS = [
+    {
+        "host": CLICKHOUSE_HOST,
+        "port": CLICKHOUSE_PORT,
+        "http_port": CLICKHOUSE_HTTP_PORT,
+        "storage_sets": {"events", "groupassignees", "outcomes", "querylog", "sessions", "transactions"},
+    },
+]

@@ -126,6 +126,7 @@ materialized_view_schema = MaterializedViewSchema(
 # The raw table we write onto, and that potentially we could
 # query.
 raw_storage = WritableTableStorage(
+    storage_key="sessions_raw",
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -137,6 +138,7 @@ raw_storage = WritableTableStorage(
 )
 # The materialized view we query aggregate data from.
 materialized_storage = ReadableTableStorage(
+    storage_key="sessions_hourly",
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

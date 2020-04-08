@@ -4,15 +4,14 @@ import simplejson as json
 from datetime import datetime
 
 from tests.base import BaseDatasetTest
+from snuba.clusters.cluster import get_cluster
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
-from snuba.clusters import cluster
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.storages.groupedmessages import POSTGRES_TABLE
-from snuba.environment import clickhouse_ro
 from snuba.utils.streams.kafka import Headers, KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 
@@ -130,7 +129,7 @@ class TestGroupedMessage(BaseDatasetTest):
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
         self.write_processed_records(ret.data)
-        ret = cluster.get_clickhouse_ro().execute("SELECT * FROM test_groupedmessage_local;")
+        ret = get_cluster("groupedmessages").get_clickhouse_ro().execute("SELECT * FROM test_groupedmessage_local;")
         assert ret[0] == (
             42,  # offset
             0,  # deleted
@@ -181,7 +180,7 @@ class TestGroupedMessage(BaseDatasetTest):
             }
         )
         self.write_processed_records(row.to_clickhouse())
-        ret = cluster.get_clickhouse_ro().execute("SELECT * FROM test_groupedmessage_local;")
+        ret = get_cluster("groupedmessages").get_clickhouse_ro().execute("SELECT * FROM test_groupedmessage_local;")
         assert ret[0] == (
             0,  # offset
             0,  # deleted

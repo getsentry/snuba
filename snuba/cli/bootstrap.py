@@ -4,9 +4,9 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.clusters import cluster
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
-from snuba.environment import
+from snuba.environment import setup_logging
 from snuba.migrations.migrate import run
 
 
@@ -95,10 +95,8 @@ def bootstrap(
     attempts = 0
 
     # Attempt to connect with every cluster
-    clusters = [cluster]
-
-    for c in clusters:
-        clickhouse_rw = c.get_clickhouse_rw()
+    for cluster in CLUSTERS:
+        clickhouse_rw = cluster.get_clickhouse_rw()
 
         while True:
             try:

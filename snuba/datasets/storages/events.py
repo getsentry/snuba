@@ -12,7 +12,6 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.clusters import get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
@@ -294,7 +293,7 @@ def get_promoted_tags() -> Mapping[str, Sequence[str]]:
 
 
 storage = WritableTableStorage(
-    cluster=get_cluster("events"),
+    storage_key="events",
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

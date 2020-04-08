@@ -111,7 +111,6 @@ class TableWriter:
         self,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
-        # cluster: Cluster,
         replacer_processor: Optional[ReplacerProcessor] = None,
     ) -> None:
         self.__table_schema = write_schema

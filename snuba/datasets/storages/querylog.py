@@ -67,6 +67,7 @@ schema = MergeTreeSchema(
 )
 
 storage = WritableTableStorage(
+    storage_key="querylog",
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

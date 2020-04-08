@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
-from snuba.clusters import Cluster
+from snuba.clusters.cluster import Cluster, get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.query import Query
@@ -21,8 +21,8 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(self, cluster: Cluster):
-        self.__cluster = cluster
+    def __init__(self, storage_key: str):
+        self.__storage_key = storage_key
 
     # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
     # read schema that existed before this dataset model and before TableWriters (then we
@@ -38,7 +38,7 @@ class Storage(ABC):
         raise NotImplementedError
 
     def get_cluster(self) -> Cluster:
-        return self.__cluster
+        return get_cluster(self.__storage_key)
 
 class ReadableStorage(Storage):
     """
@@ -84,13 +84,13 @@ class ReadableTableStorage(ReadableStorage):
 
     def __init__(
         self,
-        cluster: Cluster,
+        storage_key: str,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
-        super().__init__(cluster)
+        super().__init__(storage_key)
 
     def get_schemas(self) -> StorageSchemas:
         return self.__schemas
@@ -102,12 +102,12 @@ class ReadableTableStorage(ReadableStorage):
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
         self,
-        cluster: Cluster,
+        storage_key: str,
         schemas: StorageSchemas,
         table_writer: TableWriter,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
-        super().__init__(cluster, schemas, query_processors)
+        super().__init__(storage_key, schemas, query_processors)
         self.__table_writer = table_writer
 
     def get_table_writer(self) -> TableWriter:

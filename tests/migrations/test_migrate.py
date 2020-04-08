@@ -1,6 +1,5 @@
 from tests.base import BaseDatasetTest
 
-from snuba.clusters import cluster
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
 # TODO: Remove this once querylog is in prod and no longer disabled
@@ -26,8 +25,10 @@ class TestMigrate(BaseDatasetTest):
 
     def test_no_schema_diffs(self):
         from snuba.migrations.parse_schema import get_local_schema
-
-        clickhouse = cluster.get_clickhouse_rw()
+        # TODO: This should come from storage after
+        # https://github.com/getsentry/snuba/pull/861 is merged
+        from snuba.clusters.cluster import CLUSTERS
+        clickhouse = CLUSTERS[0].get_clickhouse_rw()
 
         for dataset_name in DATASET_NAMES:
             table_writer = get_dataset(dataset_name).get_table_writer()

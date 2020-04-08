@@ -17,7 +17,6 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
-from snuba.clusters import get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
@@ -193,10 +192,8 @@ schema = ReplacingMergeTreeSchema(
     migration_function=transactions_migrations,
 )
 
-cluster = get_cluster("transactions")
-
 storage = WritableTableStorage(
-    cluster=cluster,
+    storage_key="transactions",
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TransactionsTableWriter(
         write_schema=schema,
