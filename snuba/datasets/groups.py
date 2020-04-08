@@ -114,7 +114,6 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        # TODO: migrate to use factory
         storage = JoinedStorage("groups", join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(

@@ -1,5 +1,5 @@
 from datetime import datetime
-from semaphore.consts import SPAN_STATUS_NAME_TO_CODE
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import Optional
 
 import uuid
