@@ -45,14 +45,14 @@ grammar = Grammar(
     enum_size        = "8" / "16"
     enum_pairs       = (enum_pair (space* comma space*)?)*
     enum_pair        = quote enum_str quote space* equal space* enum_val
-    enum_str         = ~r"([a-zA-Z0-9]+)"
+    enum_str         = ~r"([a-zA-Z0-9\-]+)"
     enum_val         = ~r"\d+"
     agg              = "AggregateFunction" open_paren space* agg_func space* comma space* agg_types space* close_paren
     agg_func         = ~r"[a-zA-Z]+\([a-zA-Z0-9\,\.\s]+\)|[a-zA-Z]+"
     agg_types        = (primitive (space* comma space*)?)*
-    array            = "Array" open_paren space* (primitive / nullable) space* close_paren
+    array            = "Array" open_paren space* (primitive / lowcardinality / nullable) space* close_paren
     lowcardinality   = "LowCardinality" open_paren space* (primitive / nullable) space* close_paren
-    nullable         = "Nullable" open_paren space* (primitive) space* close_paren
+    nullable         = "Nullable" open_paren space* (primitive / basic_type) space* close_paren
     open_paren       = "("
     close_paren      = ")"
     equal            = "="
@@ -103,7 +103,7 @@ class Visitor(NodeVisitor):
     def visit_enum_val(self, node: Node, visited_children: Iterable[Any]) -> int:
         return int(node.text)
 
-    def visit_agg(self, node: Node, visited_children: Iterable[Any]) -> str:
+    def visit_agg(self, node: Node, visited_children: Iterable[Any]) -> AggregateFunction:
         (_agg, _paren, _sp, agg_func, _sp, _comma, _sp, agg_types, _sp, _paren) = visited_children
         return AggregateFunction(agg_func, *agg_types)
 

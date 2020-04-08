@@ -1,7 +1,7 @@
-from typing import Any, Mapping
-
 import pytest
 import uuid
+
+from typing import Any, Mapping
 
 from snuba import state
 from snuba.datasets.dataset import Dataset
