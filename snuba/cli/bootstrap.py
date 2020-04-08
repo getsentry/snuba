@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import clickhouse_rw, setup_logging
 from snuba.migrations.migrate import run
 
@@ -64,7 +64,7 @@ def bootstrap(
                 time.sleep(1)
 
         topics = {}
-        for name in DATASET_NAMES:
+        for name in ACTIVE_DATASET_NAMES:
             dataset = get_dataset(name)
             table_writer = dataset.get_table_writer()
             if table_writer:
@@ -111,7 +111,7 @@ def bootstrap(
 
     # Create the tables for every dataset.
     existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
-    for name in DATASET_NAMES:
+    for name in ACTIVE_DATASET_NAMES:
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)

@@ -1,5 +1,6 @@
 import pytz
 import simplejson as json
+
 from datetime import datetime
 
 from tests.base import BaseDatasetTest
@@ -8,7 +9,11 @@ from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
 )
+from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
+from snuba.datasets.storages.groupedmessages import POSTGRES_TABLE
 from snuba.environment import clickhouse_ro
+from snuba.utils.streams.kafka import Headers, KafkaPayload
+from snuba.utils.streams.types import Message, Partition, Topic
 
 
 class TestGroupedMessage(BaseDatasetTest):
@@ -85,19 +90,41 @@ class TestGroupedMessage(BaseDatasetTest):
         "first_release_id": None,
     }
 
+    def __make_msg(
+        self, partition: int, offset: int, payload: str, headers: Headers
+    ) -> Message[KafkaPayload]:
+        return Message(
+            partition=Partition(Topic("topic"), partition),
+            offset=offset,
+            payload=KafkaPayload(b"key", payload.encode(), headers),
+            timestamp=datetime(2019, 6, 19, 6, 46, 28),
+        )
+
     def test_messages(self):
         processor = GroupedMessageProcessor("sentry_groupedmessage")
+        message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
 
         metadata = KafkaMessageMetadata(offset=42, partition=0,)
 
+        assert not message_filter.should_drop(
+            self.__make_msg(0, 42, self.BEGIN_MSG, [])
+        )
         begin_msg = json.loads(self.BEGIN_MSG)
         ret = processor.process_message(begin_msg, metadata)
         assert ret is None
 
+        assert not message_filter.should_drop(
+            self.__make_msg(0, 42, self.COMMIT_MSG, [])
+        )
         commit_msg = json.loads(self.COMMIT_MSG)
         ret = processor.process_message(commit_msg, metadata)
         assert ret is None
 
+        assert not message_filter.should_drop(
+            self.__make_msg(
+                0, 42, self.INSERT_MSG, [("table", "sentry_groupedmessage".encode())]
+            )
+        )
         insert_msg = json.loads(self.INSERT_MSG)
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
@@ -115,13 +142,30 @@ class TestGroupedMessage(BaseDatasetTest):
             None,
         )
 
+        assert not message_filter.should_drop(
+            self.__make_msg(
+                0, 42, self.UPDATE_MSG, [("table", "sentry_groupedmessage".encode())]
+            )
+        )
         update_msg = json.loads(self.UPDATE_MSG)
         ret = processor.process_message(update_msg, metadata)
         assert ret.data == [self.PROCESSED]
 
+        assert not message_filter.should_drop(
+            self.__make_msg(0, 42, self.DELETE_MSG, [])
+        )
         delete_msg = json.loads(self.DELETE_MSG)
         ret = processor.process_message(delete_msg, metadata)
         assert ret.data == [self.DELETED]
+
+    def test_ignored_table(self):
+        message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
+
+        assert message_filter.should_drop(
+            self.__make_msg(
+                0, 42, self.UPDATE_MSG, [("table", "NOT_groupedmessage".encode())]
+            )
+        )
 
     def test_bulk_load(self):
         row = GroupedMessageRow.from_bulk(
