@@ -1,6 +1,7 @@
 from typing import Mapping
 
-from snuba.datasets.storage import CdcStorage, ReadableTableStorage, WritableTableStorage
+from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.storage import ReadableTableStorage, WritableTableStorage
 from snuba.datasets.storages.errors import storage as errors_storage
 from snuba.datasets.storages.events import storage as events_storage
 from snuba.datasets.storages.groupassignees import storage as groupassignees_storage

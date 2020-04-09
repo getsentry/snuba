@@ -6,7 +6,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 )
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
-from snuba.datasets.storage import CdcStorage
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.snapshots import BulkLoadSource

@@ -6,7 +6,7 @@ from confluent_kafka import Message
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
-from snuba.datasets.storage import CdcStorage
+from snuba.datasets.cdc import CdcStorage
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import (

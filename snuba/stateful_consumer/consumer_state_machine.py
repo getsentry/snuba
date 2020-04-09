@@ -1,7 +1,7 @@
 from typing import Optional
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.storage import CdcStorage
+from snuba.datasets.cdc import CdcStorage
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.state_machine import State, StateType, StateMachine
 from snuba.stateful_consumer.states.bootstrap import BootstrapState

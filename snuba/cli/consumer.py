@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.storage import CdcStorage
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
