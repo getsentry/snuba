@@ -16,6 +16,18 @@ from snuba.datasets.storages.sessions import (
 )
 from snuba.datasets.storages.transactions import storage as transactions_storage
 
+writable_storages = [
+    errors_storage,
+    events_storage,
+    groupedmessages_storage,
+    groupassignees_storage,
+    outcomes_raw_storage,
+    querylog_storage,
+    sessions_raw_storage,
+    transactions_storage,
+]
+
+
 WRITABLE_STORAGES: Mapping[str, WritableTableStorage] = {
     "errors": errors_storage,
     "events": events_storage,

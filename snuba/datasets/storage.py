@@ -24,6 +24,9 @@ class Storage(ABC):
     def __init__(self, storage_key: str):
         self.__storage_key = storage_key
 
+    def get_storage_key(self):
+        return self.__storage_key
+
     # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
     # read schema that existed before this dataset model and before TableWriters (then we
     # trusted StorageSchemas to define which schema we would write on and which one we would
