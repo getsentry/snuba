@@ -24,6 +24,7 @@ from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.discover_column_processor import DiscoverColumnProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.timeseries import TimeSeriesExtension
@@ -225,12 +226,17 @@ class DiscoverDataset(TimeSeriesDataset):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
             BasicFunctionsProcessor(),
+            DiscoverColumnProcessor(
+                self.__events_columns, self.__transactions_columns, detect_table,
+            ),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
             # exist, so it would run before Storage selection.
             ApdexProcessor(),
             ImpactProcessor(),
-            TimeSeriesColumnProcessor({}),
+            TimeSeriesColumnProcessor(
+                {"finish_ts": "finish_ts", "timestamp": "timestamp"}
+            ),
         ]
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
