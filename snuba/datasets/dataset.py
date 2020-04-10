@@ -3,7 +3,7 @@ from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
-from snuba.datasets.storage import Storage, WritableStorage
+from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
@@ -118,7 +118,12 @@ class Dataset(object):
         """
         return self.__storages
 
-    def get_writable_storage(self) -> Optional[Storage]:
+    def get_writable_storage(self) -> Optional[WritableTableStorage]:
+        """
+        Temporarily support getting the writable storage from a dataset.
+        Once consumers/replacers no longer reference datasets, this can be removed
+        and datasets can have more than one writable storage.
+        """
         return self.__writable_storage
 
     def get_table_writer(self) -> Optional[TableWriter]:
