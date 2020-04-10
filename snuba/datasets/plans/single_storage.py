@@ -1,12 +1,13 @@
 from typing import Optional, Sequence
 
+from snuba.clusters.cluster import Cluster
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage, Storage
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -18,8 +19,14 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+    def __init__(self, cluster: Cluster):
+        self.__cluster = cluster
+
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         return runner(request)
+
+    def get_cluster(self) -> Cluster:
+        return self.__cluster
 
 
 class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
@@ -53,16 +60,15 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = self.__storage.get_cluster()
+
         return StorageQueryPlan(
             query_processors=[
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(cluster),
         )
-
-    def get_storage(self, request: Request) -> Storage:
-        return self.__storage
 
 
 class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
@@ -85,13 +91,12 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = storage.get_cluster()
+
         return StorageQueryPlan(
             query_processors=[
                 *storage.get_query_processors(),
                 *self.__post_processors,
             ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(cluster),
         )
-
-    def get_storage(self, request: Request) -> Storage:
-        return self.__selector.select_storage(request.query, request.settings)

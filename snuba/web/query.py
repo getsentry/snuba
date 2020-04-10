@@ -106,7 +106,9 @@ def _run_query_pipeline(
 
     query_plan_builder = dataset.get_query_plan_builder()
     storage_query_plan = query_plan_builder.build_plan(request)
-    reader = query_plan_builder.get_storage(request).get_cluster().get_reader()
+
+    cluster = storage_query_plan.execution_strategy.get_cluster()
+    reader = cluster.get_reader()
 
     # TODO: This below should be a storage specific query processor.
     relational_source = request.query.get_data_source()
