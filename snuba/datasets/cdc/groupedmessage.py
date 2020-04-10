@@ -1,21 +1,20 @@
 from typing import Sequence
 
-from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.factory import get_storage
-from snuba.datasets.storages.groupedmessages import POSTGRES_TABLE
+from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 
 
-class GroupedMessageDataset(CdcDataset):
+class GroupedMessageDataset(Dataset):
     """
     This is a clone of the bare minimum fields we need from postgres groupedmessage table
     to replace such a table in event search.
     """
 
     def __init__(self) -> None:
-        storage = get_storage("groupedmessages")
+        storage = get_cdc_storage("groupedmessages")
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(
@@ -23,8 +22,6 @@ class GroupedMessageDataset(CdcDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
-            default_control_topic="cdc_control",
-            postgres_table=POSTGRES_TABLE,
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:

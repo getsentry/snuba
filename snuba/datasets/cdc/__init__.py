@@ -1,7 +1,7 @@
-from snuba.datasets.dataset import Dataset
+from snuba.datasets.storage import WritableTableStorage
 
 
-class CdcDataset(Dataset):
+class CdcStorage(WritableTableStorage):
     def __init__(
         self, *, default_control_topic: str, postgres_table: str, **kwargs,
     ):
