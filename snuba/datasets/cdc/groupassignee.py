@@ -1,14 +1,13 @@
 from typing import Sequence
 
-from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.dataset import Dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storages.factory import get_writable_storage
-from snuba.datasets.storages.groupassignees import POSTGRES_TABLE
+from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.query_processor import QueryProcessor
 
 
-class GroupAssigneeDataset(CdcDataset):
+class GroupAssigneeDataset(Dataset):
     """
     This is a clone of sentry_groupasignee table in postgres.
 
@@ -18,7 +17,7 @@ class GroupAssigneeDataset(CdcDataset):
     """
 
     def __init__(self) -> None:
-        storage = get_writable_storage("groupassignees")
+        storage = get_cdc_storage("groupassignees")
         schema = storage.get_table_writer().get_schema()
 
         super().__init__(
@@ -26,8 +25,6 @@ class GroupAssigneeDataset(CdcDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
-            default_control_topic="cdc_control",
-            postgres_table=POSTGRES_TABLE,
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:

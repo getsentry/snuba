@@ -9,19 +9,24 @@ DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
 
 DATASET_NAMES: Set[str] = {
+    "discover",
     "events",
     "events_migration",
     "groupassignee",
     "groupedmessage",
-    "transactions",
+    "querylog",
     "outcomes",
     "outcomes_raw",
     "sessions",
-    "discover",
+    "transactions",
 }
 
+ACTIVE_DATASET_NAMES: Set[str] = DATASET_NAMES - settings.DISABLED_DATASETS
+
 # Internal datasets registered here cannot be queried directly via API
-INTERNAL_DATASET_NAMES: Set[str] = set()
+INTERNAL_DATASET_NAMES: Set[str] = {
+    "querylog",
+}
 
 
 class InvalidDatasetError(Exception):
@@ -37,28 +42,30 @@ def get_dataset(name: str) -> Dataset:
             f"dataset {name!r} is not available in this environment"
         )
 
-    from snuba.datasets.events import EventsDataset
-    from snuba.datasets.errors import ErrorsDataset
     from snuba.datasets.cdc.groupassignee import GroupAssigneeDataset
     from snuba.datasets.cdc.groupedmessage import GroupedMessageDataset
-    from snuba.datasets.transactions import TransactionsDataset
+    from snuba.datasets.discover import DiscoverDataset
+    from snuba.datasets.events import EventsDataset
+    from snuba.datasets.errors import ErrorsDataset
+    from snuba.datasets.groups import Groups
     from snuba.datasets.outcomes import OutcomesDataset
     from snuba.datasets.outcomes_raw import OutcomesRawDataset
-    from snuba.datasets.groups import Groups
-    from snuba.datasets.discover import DiscoverDataset
+    from snuba.datasets.querylog import QuerylogDataset
     from snuba.datasets.sessions import SessionsDataset
+    from snuba.datasets.transactions import TransactionsDataset
 
     dataset_factories: MutableMapping[str, Callable[[], Dataset]] = {
+        "discover": DiscoverDataset,
         "events": EventsDataset,
         "events_migration": ErrorsDataset,
         "groupassignee": GroupAssigneeDataset,
         "groupedmessage": GroupedMessageDataset,
         "groups": Groups,
-        "transactions": TransactionsDataset,
         "outcomes": OutcomesDataset,
         "outcomes_raw": OutcomesRawDataset,
+        "querylog": QuerylogDataset,
         "sessions": SessionsDataset,
-        "discover": DiscoverDataset,
+        "transactions": TransactionsDataset,
     }
 
     try:

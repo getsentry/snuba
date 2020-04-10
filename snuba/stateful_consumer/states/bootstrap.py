@@ -6,7 +6,7 @@ from confluent_kafka import Message
 
 from snuba import settings
 from snuba.consumers.strict_consumer import CommitDecision, StrictConsumer
-from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.cdc import CdcStorage
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import (
@@ -191,7 +191,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
         topic: str,
         bootstrap_servers: Sequence[str],
         group_id: str,
-        dataset: CdcDataset,
+        storage: CdcStorage,
     ):
         self.__consumer = StrictConsumer(
             topic=topic,
@@ -202,7 +202,7 @@ class BootstrapState(State[ConsumerStateCompletionEvent, Optional[ConsumerStateD
             on_message=self.__handle_msg,
         )
 
-        self.__recovery_state = RecoveryState(dataset.get_postgres_table())
+        self.__recovery_state = RecoveryState(storage.get_postgres_table())
 
     def __handle_msg(self, message: Message) -> CommitDecision:
         value = json.loads(message.value())

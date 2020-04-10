@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.stateful_consumer import ConsumerStateCompletionEvent
 from snuba.consumers.strict_consumer import StrictConsumer
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
@@ -32,7 +32,7 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_cdc_storage("groupedmessages"),
         )
 
         ret = bootstrap.handle(None)
@@ -54,7 +54,7 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_cdc_storage("groupedmessages"),
         )
 
         ret = bootstrap.handle(None)
@@ -76,7 +76,7 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_cdc_storage("groupedmessages"),
         )
 
         ret = bootstrap.handle(None)
@@ -114,7 +114,7 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_dataset("groupedmessage"),
+            "cdc_control", "somewhere", "something", get_cdc_storage("groupedmessages"),
         )
 
         ret = bootstrap.handle(None)

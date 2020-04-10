@@ -1,7 +1,7 @@
 from typing import Optional
 
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.cdc import CdcStorage
 from snuba.stateful_consumer import ConsumerStateData, ConsumerStateCompletionEvent
 from snuba.utils.state_machine import State, StateType, StateMachine
 from snuba.stateful_consumer.states.bootstrap import BootstrapState
@@ -24,12 +24,12 @@ class ConsumerStateMachine(
         consumer_builder: ConsumerBuilder,
         topic: str,
         group_id: str,
-        dataset: CdcDataset,
+        storage: CdcStorage,
     ) -> None:
         self.__consumer_builder = consumer_builder
         self.__topic = topic
         self.__group_id = group_id
-        self.__dataset = dataset
+        self.__storage = storage
 
         super(ConsumerStateMachine, self).__init__(
             definition={
@@ -67,7 +67,7 @@ class ConsumerStateMachine(
                 topic=self.__topic,
                 bootstrap_servers=self.__consumer_builder.bootstrap_servers,
                 group_id=self.__group_id,
-                dataset=self.__dataset,
+                storage=self.__storage,
             )
         elif state_class == CatchingUpState:
             return CatchingUpState(self.__consumer_builder)

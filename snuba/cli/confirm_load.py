@@ -6,8 +6,8 @@ import click
 from confluent_kafka import Producer
 
 from snuba import settings
-from snuba.datasets.cdc import CdcDataset
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.datasets.cdc import CdcStorage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
@@ -53,11 +53,14 @@ def confirm_load(
     )
 
     dataset = get_dataset(dataset_name)
-    assert isinstance(
-        dataset, CdcDataset
-    ), "Only CDC dataset have a control topic thus are supported."
 
-    control_topic = control_topic or dataset.get_default_control_topic()
+    storage = dataset.get_writable_storage()
+
+    assert isinstance(
+        storage, CdcStorage
+    ), "Only CDC storages have a control topic thus are supported."
+
+    control_topic = control_topic or storage.get_default_control_topic()
 
     snapshot_source = PostgresSnapshot.load(
         product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,

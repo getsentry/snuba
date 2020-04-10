@@ -5,7 +5,7 @@ import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.cdc import CdcDataset
+from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
@@ -127,14 +127,16 @@ def consumer(
     )
 
     if stateful_consumer:
+        storage = dataset.get_writable_storage()
+
         assert isinstance(
-            dataset, CdcDataset
-        ), "Only CDC dataset have a control topic thus are supported."
+            storage, CdcStorage
+        ), "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
-            topic=control_topic or dataset.get_default_control_topic(),
+            topic=control_topic or storage.get_default_control_topic(),
             group_id=consumer_group,
-            dataset=dataset,
+            storage=storage,
         )
 
         def handler(signum, frame) -> None:

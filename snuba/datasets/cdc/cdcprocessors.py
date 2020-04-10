@@ -8,10 +8,6 @@ from typing import Any, Mapping, Optional, Sequence, Type
 from snuba.processor import MessageProcessor, ProcessorAction, ProcessedMessage
 from snuba.writer import WriterTableRow
 
-KAFKA_ONLY_PARTITION = (
-    0  # CDC only works with single partition topics. So partition must be 0
-)
-
 POSTGRES_DATE_FORMAT_WITH_NS = "%Y-%m-%d %H:%M:%S.%f%z"
 POSTGRES_DATE_FORMAT_WITHOUT_NS = "%Y-%m-%d %H:%M:%S%z"
 
@@ -115,11 +111,6 @@ class CdcProcessor(MessageProcessor):
 
     def process_message(self, value, metadata) -> Optional[ProcessedMessage]:
         assert isinstance(value, dict)
-
-        partition = metadata.partition
-        assert (
-            partition == KAFKA_ONLY_PARTITION
-        ), "CDC can only work with single partition topics for consistency"
 
         offset = metadata.offset
         event = value["event"]
