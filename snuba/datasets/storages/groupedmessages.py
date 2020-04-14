@@ -1,4 +1,5 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
+
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
