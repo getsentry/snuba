@@ -250,4 +250,8 @@ def test_col_split_conditions(
 ) -> None:
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
-    assert splitter.can_execute(request) == expected_result
+
+    def do_query(request: Request) -> RawQueryResult:
+        return RawQueryResult({"data": []}, {})
+
+    assert (splitter.execute(request, do_query) is not None) == expected_result

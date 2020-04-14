@@ -2,7 +2,7 @@ import copy
 import math
 
 from datetime import timedelta
-from typing import Any, List, NamedTuple, Sequence, Union
+from typing import Any, List, NamedTuple, Optional, Sequence, Union
 
 from snuba import state, util
 from snuba.datasets.plans.query_plan import QueryRunner
@@ -55,7 +55,7 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
     def __init__(self, timestamp_col: str) -> None:
         self.__timestamp_col = timestamp_col
 
-    def can_execute(self, request: Request) -> bool:
+    def __can_execute(self, request: Request) -> bool:
         orderby = util.to_list(request.query.get_orderby())
 
         has_from_date = any(
@@ -76,7 +76,9 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             and request.query.get_offset() < 1000
         )
 
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+    def execute(
+        self, request: Request, runner: QueryRunner
+    ) -> Optional[RawQueryResult]:
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -88,6 +90,9 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         into smaller increments, and start with the last one, so that we can potentially
         avoid querying the entire range.
         """
+        if not self.__can_execute(request):
+            return None
+
         date_align, split_step = state.get_configs(
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
@@ -191,7 +196,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
     def __get_min_columns(self) -> Sequence[str]:
         return [self.__id_column, self.__project_column, self.__timestamp_column]
 
-    def can_execute(self, request: Request) -> bool:
+    def __can_execute(self, request: Request) -> bool:
         if not _is_query_splittable(request.query):
             return False
 
@@ -208,13 +213,18 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             and total_col_count > min_col_count
         )
 
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+    def execute(
+        self, request: Request, runner: QueryRunner
+    ) -> Optional[RawQueryResult]:
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id and project_id.
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
+        if not self.__can_execute(request):
+            return None
+
         # The query function may mutate the request body during query
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.

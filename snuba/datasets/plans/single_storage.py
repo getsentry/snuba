@@ -26,8 +26,9 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
         for splitter in self.__splitters:
-            if splitter.can_execute(request):
-                return splitter.execute(request, runner)
+            result = splitter.execute(request, runner)
+            if result is not None:
+                return result
 
         return runner(request)
 
