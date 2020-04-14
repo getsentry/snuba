@@ -4,7 +4,7 @@ from enum import Enum
 from snuba.datasets.storages import StorageKey
 
 
-class StorageSet(Enum):
+class StorageSetKey(Enum):
     EVENTS = "events"
     GROUPASSIGNEES = "groupassignees"
     OUTCOMES = "outcomes"
@@ -13,12 +13,12 @@ class StorageSet(Enum):
     TRANSACTIONS = "transactions"
 
 
-STORAGE_SETS: Mapping[StorageSet, Set[StorageKey]] = {
-    StorageSet.EVENTS: {StorageKey.ERRORS, StorageKey.EVENTS, StorageKey.GROUPEDMESSAGES},
+STORAGE_SETS: Mapping[StorageSetKey, Set[StorageKey]] = {
+    StorageSetKey.EVENTS: {StorageKey.ERRORS, StorageKey.EVENTS, StorageKey.GROUPEDMESSAGES},
     # Should group assignee be on the events cluster?
-    StorageSet.GROUPASSIGNEES: {StorageKey.GROUPASSIGNEES},
-    StorageSet.OUTCOMES: {StorageKey.OUTCOMES_RAW, StorageKey.OUTCOMES_HOURLY},
-    StorageSet.QUERYLOG: {StorageKey.QUERYLOG},
-    StorageSet.SESSIONS: {StorageKey.SESSIONS_RAW, StorageKey.SESSIONS_HOURLY},
-    StorageSet.TRANSACTIONS: {StorageKey.TRANSACTIONS},
+    StorageSetKey.GROUPASSIGNEES: {StorageKey.GROUPASSIGNEES},
+    StorageSetKey.OUTCOMES: {StorageKey.OUTCOMES_RAW, StorageKey.OUTCOMES_HOURLY},
+    StorageSetKey.QUERYLOG: {StorageKey.QUERYLOG},
+    StorageSetKey.SESSIONS: {StorageKey.SESSIONS_RAW, StorageKey.SESSIONS_HOURLY},
+    StorageSetKey.TRANSACTIONS: {StorageKey.TRANSACTIONS},
 }
