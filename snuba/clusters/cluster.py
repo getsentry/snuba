@@ -3,7 +3,8 @@ from typing import MutableMapping, Set
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.clusters.storage_sets import STORAGE_SETS
+from snuba.clusters.storage_sets import StorageSet, STORAGE_SETS
+from snuba.datasets.storages import StorageKey
 from snuba.reader import Reader
 
 
@@ -43,31 +44,38 @@ class Cluster:
     def get_clickhouse_ro(self) -> ClickhousePool:
         return self.__clickhouse_ro
 
-    def get_reader(self) -> Reader:
+    def get_reader(self) -> Reader[ClickhouseQuery]:
         return self.__reader
 
 
-CLUSTERS = [Cluster(**cluster) for cluster in settings.CLUSTERS]
+CLUSTERS = [
+    Cluster(
+        host=cluster["host"],
+        port=cluster["port"],
+        http_port=cluster["http_port"],
+        storage_sets=cluster["storage_sets"],
+    )
+    for cluster in settings.CLUSTERS
+]
 
 _registered_storage_sets = [
-    storage_set
-    for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_sets()
+    storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_sets()
 ]
 assert len(_registered_storage_sets) == len(
     (set(_registered_storage_sets))
 ), "Storage set registered to more than one cluster"
-assert set(STORAGE_SETS.keys()) == set(
+
+assert set([s.value for s in StorageSet]) == set(
     _registered_storage_sets
 ), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
-STORAGE_CLUSTER_MAP: MutableMapping[str, Cluster] = {}
+_STORAGE_CLUSTER_MAP: MutableMapping[StorageKey, Cluster] = {}
 for cluster in CLUSTERS:
-    for storage_set in cluster.get_storage_sets():
-        for storage_key in STORAGE_SETS[storage_set]:
-            STORAGE_CLUSTER_MAP[storage_key] = cluster
+    for storage_set_key in cluster.get_storage_sets():
+        for storage_key in STORAGE_SETS[StorageSet(storage_set_key)]:
+            _STORAGE_CLUSTER_MAP[storage_key] = cluster
 
 
-def get_cluster(storage_key: str) -> Cluster:
-    return STORAGE_CLUSTER_MAP[storage_key]
+def get_cluster(storage_key: StorageKey) -> Cluster:
+    return _STORAGE_CLUSTER_MAP[storage_key]

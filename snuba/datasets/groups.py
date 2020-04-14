@@ -4,6 +4,7 @@ from typing import Mapping, Optional, Sequence, Union
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -30,7 +31,7 @@ from snuba.util import qualified_column
 
 
 class JoinedStorage(ReadableStorage):
-    def __init__(self, storage_key: str, join_structure: JoinClause) -> None:
+    def __init__(self, storage_key: StorageKey, join_structure: JoinClause) -> None:
         self.__structure = join_structure
         super().__init__(storage_key)
 
@@ -58,11 +59,11 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage("groupedmessages").get_schemas().get_read_schema().get_data_source()
+            get_storage(StorageKey.GROUPEDMESSAGES).get_schemas().get_read_schema().get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = get_storage("events").get_schemas().get_read_schema().get_data_source()
+        events_source = get_storage(StorageKey.EVENTS).get_schemas().get_read_schema().get_data_source()
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
@@ -114,7 +115,7 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage("groups", join_structure)
+        storage = JoinedStorage(StorageKey.GROUPS, join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],

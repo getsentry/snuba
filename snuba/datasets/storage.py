@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 
 from snuba.clusters.cluster import Cluster, get_cluster
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
@@ -21,11 +22,14 @@ class Storage(ABC):
     for more useful abstractions.
     """
 
-    def __init__(self, storage_key: str):
+    def __init__(self, storage_key: StorageKey):
         self.__storage_key = storage_key
 
-    def get_storage_key(self):
+    def get_storage_key(self) -> StorageKey:
         return self.__storage_key
+
+    def get_cluster(self) -> Cluster:
+        return get_cluster(self.__storage_key)
 
     # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
     # read schema that existed before this dataset model and before TableWriters (then we
@@ -40,8 +44,6 @@ class Storage(ABC):
         """
         raise NotImplementedError
 
-    def get_cluster(self) -> Cluster:
-        return get_cluster(self.__storage_key)
 
 class ReadableStorage(Storage):
     """
@@ -87,7 +89,7 @@ class ReadableTableStorage(ReadableStorage):
 
     def __init__(
         self,
-        storage_key: str,
+        storage_key: StorageKey,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
@@ -105,7 +107,7 @@ class ReadableTableStorage(ReadableStorage):
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
     def __init__(
         self,
-        storage_key: str,
+        storage_key: StorageKey,
         schemas: StorageSchemas,
         table_writer: TableWriter,
         query_processors: Optional[Sequence[QueryProcessor]] = None,

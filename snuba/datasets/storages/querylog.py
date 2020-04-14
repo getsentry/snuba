@@ -17,6 +17,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 
 
@@ -67,7 +68,7 @@ schema = MergeTreeSchema(
 )
 
 storage = WritableTableStorage(
-    storage_key="querylog",
+    storage_key=StorageKey.QUERYLOG,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

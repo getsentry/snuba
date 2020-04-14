@@ -20,6 +20,7 @@ from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -149,7 +150,7 @@ required_columns = [
 ]
 
 storage = WritableTableStorage(
-    storage_key="errors",
+    storage_key=StorageKey.ERRORS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

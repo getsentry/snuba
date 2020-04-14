@@ -128,7 +128,7 @@ _load_settings()
 
 # Snuba currently only supports a single cluster to which all storage sets are assigned.
 # In future this will be configurable.
-CLUSTERS = [
+CLUSTERS: Sequence[Mapping[str, Any]] = [
     {
         "host": CLICKHOUSE_HOST,
         "port": CLICKHOUSE_PORT,

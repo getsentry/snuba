@@ -19,6 +19,7 @@ from snuba.datasets.schemas.tables import (
     SummingMergeTreeSchema,
     MaterializedViewSchema,
 )
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -112,7 +113,7 @@ materialized_view_schema = MaterializedViewSchema(
 
 
 raw_storage = WritableTableStorage(
-    storage_key="outcomes_raw",
+    storage_key=StorageKey.OUTCOMES_RAW,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -124,7 +125,7 @@ raw_storage = WritableTableStorage(
 )
 
 materialized_storage = ReadableTableStorage(
-    storage_key="outcomes_hourly",
+    storage_key=StorageKey.OUTCOMES_HOURLY,
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

@@ -23,6 +23,7 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.processors.transaction_column_processor import TransactionColumnProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
@@ -51,7 +52,7 @@ class TransactionsTableWriter(TableWriter):
         self,
         options: Optional[MutableMapping[str, Any]] = None,
         table_name: Optional[str] = None,
-        rapidjson_serialize=False,
+        rapidjson_serialize: bool = False,
     ) -> BatchWriter:
         return super().get_writer(
             self.__update_options(options), table_name, rapidjson_serialize
@@ -193,7 +194,7 @@ schema = ReplacingMergeTreeSchema(
 )
 
 storage = WritableTableStorage(
-    storage_key="transactions",
+    storage_key=StorageKey.TRANSACTIONS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TransactionsTableWriter(
         write_schema=schema,

@@ -18,6 +18,7 @@ from snuba.datasets.storage import (
     ReadableTableStorage,
     WritableTableStorage,
 )
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.processors.prewhere import PrewhereProcessor
@@ -126,7 +127,7 @@ materialized_view_schema = MaterializedViewSchema(
 # The raw table we write onto, and that potentially we could
 # query.
 raw_storage = WritableTableStorage(
-    storage_key="sessions_raw",
+    storage_key=StorageKey.SESSIONS_RAW,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -138,7 +139,7 @@ raw_storage = WritableTableStorage(
 )
 # The materialized view we query aggregate data from.
 materialized_storage = ReadableTableStorage(
-    storage_key="sessions_hourly",
+    storage_key=StorageKey.SESSIONS_HOURLY,
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

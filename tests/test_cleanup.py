@@ -3,6 +3,7 @@ from tests.base import BaseEventsTest
 from datetime import datetime, timedelta
 
 from snuba import cleanup
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 
 
@@ -13,7 +14,7 @@ class TestCleanup(BaseEventsTest):
 
         base = datetime(1999, 12, 26)  # a sunday
 
-        clickhouse = get_storage("events").get_cluster().get_clickhouse_rw()
+        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
 
         parts = cleanup.get_active_partitions(
             clickhouse, self.database, self.table

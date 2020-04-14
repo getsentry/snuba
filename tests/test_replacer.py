@@ -8,6 +8,7 @@ from snuba import replacer
 from snuba.clickhouse import DATETIME_FORMAT
 from snuba.datasets.errors_replacer import FLATTENED_COLUMN_TEMPLATE, ReplacerState
 from snuba.datasets import errors_replacer
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -26,7 +27,7 @@ class TestReplacer(BaseEventsTest):
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
-        clickhouse = get_storage("events").get_cluster().get_clickhouse_rw()
+        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
 
         self.replacer = replacer.ReplacerWorker(
             clickhouse, self.dataset, DummyMetricsBackend(strict=True)

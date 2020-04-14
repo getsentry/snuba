@@ -7,6 +7,7 @@ from snuba.datasets.cdc.groupassignee_processor import (
 from snuba.datasets.cdc.message_filters import CdcTableNameMessageFilter
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.snapshots import BulkLoadSource
@@ -20,7 +21,7 @@ class GroupAssigneeTableWriter(TableWriter):
         super().__init__(**kwargs)
         self.__postgres_table = postgres_table
 
-    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str):
+    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str) -> SingleTableBulkLoader:
         return SingleTableBulkLoader(
             source=source,
             source_table=self.__postgres_table,
@@ -56,7 +57,7 @@ schema = ReplacingMergeTreeSchema(
 POSTGRES_TABLE = "sentry_groupasignee"
 
 storage = CdcStorage(
-    storage_key="groupassignees",
+    storage_key=StorageKey.GROUPASSIGNEES,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=GroupAssigneeTableWriter(
         write_schema=schema,

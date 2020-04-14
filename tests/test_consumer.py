@@ -4,6 +4,7 @@ import simplejson as json
 
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.utils.metrics.backends.dummy import DummyMetricsBackend
@@ -43,7 +44,7 @@ class TestConsumer(BaseEventsTest):
         batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
 
-        clickhouse = get_storage("events").get_cluster().get_clickhouse_rw()
+        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
 
         assert clickhouse.execute(
             "SELECT project_id, event_id, offset, partition FROM %s" % self.table
