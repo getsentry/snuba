@@ -1,7 +1,7 @@
-from typing import Any, MutableMapping, Sequence
-
 import pytest
 import uuid
+
+from typing import Any, MutableMapping, Sequence
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet

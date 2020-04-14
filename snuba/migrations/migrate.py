@@ -36,8 +36,10 @@ def _run_schema(conn: Client, schema: Schema) -> None:
 
 def run(conn: Client, dataset: Dataset) -> None:
     schemas: MutableSequence[Schema] = []
-    writer = dataset.get_table_writer()
-    if writer:
+
+    writable_storage = dataset.get_writable_storage()
+    if writable_storage:
+        writer = writable_storage.get_table_writer()
         schemas.append(writer.get_schema())
     for storage in dataset.get_all_storages():
         schemas.append(storage.get_schemas().get_read_schema())

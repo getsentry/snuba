@@ -2,6 +2,9 @@ from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
+# TODO: Remove this once querylog is in prod and no longer disabled
+from snuba import settings
+settings.DISABLED_DATASETS = set()
 
 class TestMigrate(BaseDatasetTest):
     def setup_method(self, test_method):
@@ -24,10 +27,11 @@ class TestMigrate(BaseDatasetTest):
         from snuba.migrations.parse_schema import get_local_schema
 
         for dataset_name in DATASET_NAMES:
-            table_writer = get_dataset(dataset_name).get_table_writer()
-            if not table_writer:
+            writable_storage = get_dataset(dataset_name).get_writable_storage()
+            if not writable_storage:
                 continue
 
+            table_writer = writable_storage.get_table_writer()
             dataset_schema = table_writer.get_schema()
             local_table_name = dataset_schema.get_local_table_name()
             local_schema = get_local_schema(self.clickhouse, local_table_name)
