@@ -56,7 +56,6 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_col = timestamp_col
 
     def can_execute(self, request: Request) -> bool:
-        remaining_offset = request.query.get_offset()
         orderby = util.to_list(request.query.get_orderby())
 
         has_from_date = any(
@@ -74,7 +73,7 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             and has_from_date
             and has_to_date
             and orderby[:1] == [f"-{self.__timestamp_col}"]
-            and remaining_offset < 1000
+            and request.query.get_offset() < 1000
         )
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
@@ -97,6 +96,8 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         limit = query_limit if query_limit is not None else 0
         remaining_offset = request.query.get_offset()
 
+        # We already ensured the conditions below exist in the query during the
+        # can_execute call.
         to_date_str = next(
             condition[2]
             for condition in request.query.get_conditions() or []
@@ -120,8 +121,6 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             # evaluation, so we need to copy the body to ensure that the query
             # has not been modified in between this call and the next loop
             # iteration, if needed.
-            # XXX: The extra data is carried across from the initial response
-            # and never updated.
             split_request = copy.deepcopy(request)
 
             _replace_condition(
@@ -174,21 +173,6 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         return overall_result
 
 
-class ColumnSplitSpec(NamedTuple):
-    """
-    Provides the column names needed to perform column splitting.
-    id_column represent the identity of the row.
-
-    """
-
-    id_column: str
-    project_column: str
-    timestamp_column: str
-
-    def get_min_columns(self) -> Sequence[str]:
-        return [self.id_column, self.project_column, self.timestamp_column]
-
-
 class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
     """
     A strategy that performs column based splitting: if the client requests enough columns,
@@ -197,8 +181,15 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
     build the full result set.
     """
 
-    def __init__(self, spec: ColumnSplitSpec) -> None:
-        self.__column_split_spec = spec
+    def __init__(
+        self, id_column: str, project_column: str, timestamp_column: str
+    ) -> None:
+        self.__id_column = id_column
+        self.__project_column = project_column
+        self.__timestamp_column = timestamp_column
+
+    def __get_min_columns(self) -> Sequence[str]:
+        return [self.__id_column, self.__project_column, self.__timestamp_column]
 
     def can_execute(self, request: Request) -> bool:
         if not _is_query_splittable(request.query):
@@ -206,7 +197,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
 
         total_col_count = len(request.query.get_all_referenced_columns())
         copied_query = copy.deepcopy(request.query)
-        copied_query.set_selected_columns(self.__column_split_spec.get_min_columns())
+        copied_query.set_selected_columns(self.__get_min_columns())
         min_col_count = len(copied_query.get_all_referenced_columns())
 
         selected_cols = request.query.get_selected_columns()
@@ -228,9 +219,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         # evaluation, so we need to copy the body to ensure that the query has
         # not been modified by the time we're ready to run the full query.
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(
-            self.__column_split_spec.get_min_columns()
-        )
+        minimal_request.query.set_selected_columns(self.__get_min_columns())
         result = runner(minimal_request)
         del minimal_request
 
@@ -238,35 +227,20 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             request = copy.deepcopy(request)
 
             event_ids = list(
-                set(
-                    [
-                        event[self.__column_split_spec.id_column]
-                        for event in result.result["data"]
-                    ]
-                )
+                set([event[self.__id_column] for event in result.result["data"]])
             )
-            request.query.add_conditions(
-                [(self.__column_split_spec.id_column, "IN", event_ids)]
-            )
+            request.query.add_conditions([(self.__id_column, "IN", event_ids)])
             request.query.set_offset(0)
             request.query.set_limit(len(event_ids))
 
             project_ids = list(
-                set(
-                    [
-                        event[self.__column_split_spec.project_column]
-                        for event in result.result["data"]
-                    ]
-                )
+                set([event[self.__project_column] for event in result.result["data"]])
             )
             _replace_condition(
-                request.query,
-                self.__column_split_spec.project_column,
-                "IN",
-                project_ids,
+                request.query, self.__project_column, "IN", project_ids,
             )
 
-            timestamp_field = self.__column_split_spec.timestamp_column
+            timestamp_field = self.__timestamp_column
             timestamps = [event[timestamp_field] for event in result.result["data"]]
             _replace_condition(
                 request.query,

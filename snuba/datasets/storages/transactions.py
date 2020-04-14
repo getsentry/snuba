@@ -25,7 +25,6 @@ from snuba.query.processors.transaction_column_processor import (
 )
 from snuba.web.split import (
     ColumnSplitQueryStrategy,
-    ColumnSplitSpec,
     TimeSplitQueryStrategy,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -222,11 +221,9 @@ storage = WritableTableStorage(
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
-            ColumnSplitSpec(
-                id_column="event_id",
-                project_column="project_id",
-                timestamp_column="finish_ts",
-            )
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="finish_ts",
         ),
         TimeSplitQueryStrategy(timestamp_col="finish_ts"),
     ],

@@ -8,7 +8,6 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.web.split import (
-    ColumnSplitSpec,
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
@@ -24,27 +23,17 @@ def setup_function(function) -> None:
 
 
 split_specs = [
-    (
-        "events",
-        ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        ),
-    ),
-    (
-        "groups",
-        ColumnSplitSpec(
-            id_column="events.event_id",
-            project_column="events.project_id",
-            timestamp_column="events.timestamp",
-        ),
-    ),
+    ("events", "event_id", "project_id", "timestamp",),
+    ("groups", "events.event_id", "events.project_id", "events.timestamp",),
 ]
 
 
-@pytest.mark.parametrize("dataset_name, split_spec", split_specs)
-def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
+@pytest.mark.parametrize(
+    "dataset_name, id_column, project_column, timestamp_column", split_specs
+)
+def test_no_split(
+    dataset_name: str, id_column: str, project_column: str, timestamp_column: str
+) -> None:
     events = get_dataset(dataset_name)
     query = Query(
         {
@@ -66,8 +55,12 @@ def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
 
     strategy = SimpleQueryPlanExecutionStrategy(
         [
-            ColumnSplitQueryStrategy(split_spec),
-            TimeSplitQueryStrategy(timestamp_col=split_spec.timestamp_column),
+            ColumnSplitQueryStrategy(
+                id_column=id_column,
+                project_column=project_column,
+                timestamp_column=timestamp_column,
+            ),
+            TimeSplitQueryStrategy(timestamp_col=timestamp_column),
         ]
     )
 
@@ -77,11 +70,9 @@ def test_no_split(dataset_name: str, split_spec: ColumnSplitSpec) -> None:
 test_data_col = [
     (
         "events",
-        ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        ),
+        "event_id",
+        "project_id",
+        "timestamp",
         [{"event_id": "a", "project_id": "1", "timestamp": " 2019-10-01 22:33:42"}],
         [
             {
@@ -94,11 +85,9 @@ test_data_col = [
     ),
     (
         "groups",
-        ColumnSplitSpec(
-            id_column="events.event_id",
-            project_column="events.project_id",
-            timestamp_column="events.timestamp",
-        ),
+        "events.event_id",
+        "events.project_id",
+        "events.timestamp",
         [
             {
                 "events.event_id": "a",
@@ -119,11 +108,14 @@ test_data_col = [
 
 
 @pytest.mark.parametrize(
-    "dataset_name, split_spec, first_query_data, second_query_data", test_data_col
+    "dataset_name, id_column, project_column, timestamp_column, first_query_data, second_query_data",
+    test_data_col,
 )
 def test_col_split(
     dataset_name: str,
-    split_spec: ColumnSplitSpec,
+    id_column: str,
+    project_column: str,
+    timestamp_column: str,
     first_query_data: Sequence[MutableMapping[str, Any]],
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
@@ -166,8 +158,8 @@ def test_col_split(
 
     strategy = SimpleQueryPlanExecutionStrategy(
         [
-            ColumnSplitQueryStrategy(split_spec),
-            TimeSplitQueryStrategy(timestamp_col=split_spec.timestamp_column),
+            ColumnSplitQueryStrategy(id_column, project_column, timestamp_column),
+            TimeSplitQueryStrategy(timestamp_col=timestamp_column),
         ]
     )
 
@@ -176,11 +168,9 @@ def test_col_split(
 
 column_split_tests = [
     (
-        ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        ),
+        "event_id",
+        "project_id",
+        "timestamp",
         Query(
             {
                 "selected_columns": [
@@ -205,11 +195,9 @@ column_split_tests = [
         False,
     ),  # Query with group by. No split
     (
-        ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        ),
+        "event_id",
+        "project_id",
+        "timestamp",
         Query(
             {
                 "selected_columns": [
@@ -233,11 +221,9 @@ column_split_tests = [
         True,
     ),  # Valid query to split
     (
-        ColumnSplitSpec(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="timestamp",
-        ),
+        "event_id",
+        "project_id",
+        "timestamp",
         Query(
             {
                 "selected_columns": ["event_id",],
@@ -255,8 +241,13 @@ column_split_tests = [
 ]
 
 
-@pytest.mark.parametrize("split_spec, query, expected_result", column_split_tests)
-def test_col_split_conditions(split_spec, query, expected_result) -> None:
-    splitter = ColumnSplitQueryStrategy(split_spec)
+@pytest.mark.parametrize(
+    "id_column, project_column, timestamp_column, query, expected_result",
+    column_split_tests,
+)
+def test_col_split_conditions(
+    id_column: str, project_column: str, timestamp_column: str, query, expected_result
+) -> None:
+    splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
     assert splitter.can_execute(request) == expected_result

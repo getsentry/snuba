@@ -9,7 +9,7 @@ class StorageQuerySplitStrategy(QueryPlanExecutionStrategy, ABC):
     An execution strategy that implements one query split algorithm. For example
     a StorageQuerySplitStrategy can implement the time based query splitting.
     Since not every split algorithm can work on every query, a StorageQuerySplitStrategy
-    has a validation method "can_execute" that the StorageQuqeryPlanBuilder uses
+    has a validation method "can_execute" that the StorageQueryPlanBuilder uses
     to select the valid algorithm.
     """
 

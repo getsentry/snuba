@@ -17,7 +17,6 @@ from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
 from snuba.web.split import (
     ColumnSplitQueryStrategy,
-    ColumnSplitSpec,
     TimeSplitQueryStrategy,
 )
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
@@ -326,11 +325,9 @@ storage = WritableTableStorage(
     ],
     query_splitters=[
         ColumnSplitQueryStrategy(
-            ColumnSplitSpec(
-                id_column="event_id",
-                project_column="project_id",
-                timestamp_column="timestamp",
-            )
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
         ),
         TimeSplitQueryStrategy(timestamp_col="timestamp"),
     ],
