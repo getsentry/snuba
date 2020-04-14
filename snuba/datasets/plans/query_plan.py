@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
+from snuba.clusters.cluster import Cluster
 from snuba.web import RawQueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
@@ -58,6 +59,9 @@ class QueryPlanExecutionStrategy(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def get_cluster(self) -> Cluster:
+        raise NotImplementedError
 
 class StorageQueryPlanBuilder(ABC):
     """
