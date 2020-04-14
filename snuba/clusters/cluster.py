@@ -20,9 +20,13 @@ class Cluster:
     A cluster provides a reader and Clickhouse connections that are shared by all
     storages located on the cluster.
 
-    In future, clusters will also be reponsible for co-ordinating commands that
-    need to be run on multiple hosts that are colocated within the same cluster -
-    e.g. bootstrap, migration, cleanup, optimize.
+    In future, clusters will also be responsible for co-ordinating commands that
+    need to be run on multiple hosts that are colocated within the same cluster.
+    The cluster will expose methods for:
+        - bootstrap
+        - migrate
+        - cleanup
+        - optimize
     """
 
     def __init__(self, host: str, port: int, http_port: int, storage_sets: Set[str]):
