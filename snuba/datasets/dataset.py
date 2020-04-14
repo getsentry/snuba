@@ -4,7 +4,6 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
-from snuba.datasets.table_storage import TableWriter
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
@@ -125,19 +124,6 @@ class Dataset(object):
         and datasets can have more than one writable storage.
         """
         return self.__writable_storage
-
-    def get_table_writer(self) -> Optional[TableWriter]:
-        """
-        We allow only one table storage we can write onto per dataset as of now.
-        This will move to the entity as soon as we have entities, and
-        the constraint of one writable storage will drop as soon as the consumers
-        start referencing entities and storages instead of datasets.
-        """
-        return (
-            self.__writable_storage.get_table_writer()
-            if self.__writable_storage
-            else None
-        )
 
     # Old methods that we are migrating away from
     def column_expr(
