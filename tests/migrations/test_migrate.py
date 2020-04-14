@@ -25,16 +25,13 @@ class TestMigrate(BaseDatasetTest):
 
     def test_no_schema_diffs(self):
         from snuba.migrations.parse_schema import get_local_schema
-        # TODO: This should come from storage after
-        # https://github.com/getsentry/snuba/pull/861 is merged
-        from snuba.clusters.cluster import CLUSTERS
-        clickhouse = CLUSTERS[0].get_clickhouse_rw()
 
         for dataset_name in DATASET_NAMES:
             writable_storage = get_dataset(dataset_name).get_writable_storage()
             if not writable_storage:
                 continue
 
+            clickhouse = writable_storage.get_cluster().get_clickhouse_rw()
             table_writer = writable_storage.get_table_writer()
             dataset_schema = table_writer.get_schema()
             local_table_name = dataset_schema.get_local_table_name()

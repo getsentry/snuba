@@ -419,10 +419,11 @@ if application.debug or application.testing:
             worker = ConsumerWorker(dataset, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            # TODO: This should come from storage after
-            # https://github.com/getsentry/snuba/pull/861 is merged
-            from snuba.clusters.cluster import CLUSTERS
-            clickhouse_rw = CLUSTERS[0].get_clickhouse_rw()
+
+            writable_storage = dataset.get_writable_storage()
+            assert writable_storage is not None
+            clickhouse_rw = writable_storage.get_cluster().get_clickhouse_rw()
+
             worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
 
         processed = worker.process_message(message)
