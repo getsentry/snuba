@@ -6,7 +6,6 @@ from hashlib import md5
 import uuid
 
 from snuba import settings
-# from snuba.environment import clickhouse_rw
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
