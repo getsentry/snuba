@@ -1,6 +1,7 @@
 import os
 from typing import Any, Mapping, MutableMapping, Sequence, Set
 
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 LOG_FORMAT = "%(asctime)s %(message)s"
 

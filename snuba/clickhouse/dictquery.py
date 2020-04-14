@@ -1,6 +1,5 @@
 from snuba import settings as snuba_settings
 from snuba import util
-
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
