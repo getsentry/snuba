@@ -5,9 +5,8 @@ import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.datasets.storages.factory import WRITABLE_STORAGES
+from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
@@ -128,11 +127,11 @@ def consumer(
 
     # TODO: Remove this once dataset_name is no longer being passed
     if dataset_name:
-        storage = get_dataset(dataset_name).get_writable_storage()
-        if not storage:
+        dataset_writable_storage = get_dataset(dataset_name).get_writable_storage()
+        if not dataset_writable_storage:
             raise click.ClickException(f"Dataset {dataset_name} has no writable storage")
 
-        storage_name = {v: k for k, v in WRITABLE_STORAGES.items()}[storage]
+        storage_name = {v: k for k, v in WRITABLE_STORAGES.items()}[dataset_writable_storage]
 
     consumer_builder = ConsumerBuilder(
         storage_name=storage_name,
@@ -151,9 +150,8 @@ def consumer(
     )
 
     if stateful_consumer:
-        assert isinstance(
-            storage, CdcStorage
-        ), "Only CDC storages have a control topic thus are supported."
+        storage = get_cdc_storage(storage_name)
+        assert storage is not None, "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
             topic=control_topic or storage.get_default_control_topic(),
