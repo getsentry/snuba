@@ -2,7 +2,7 @@ import copy
 import math
 
 from datetime import timedelta
-from typing import Any, List, NamedTuple, Optional, Sequence, Union
+from typing import Any, List, Optional, Sequence, Union
 
 from snuba import state, util
 from snuba.datasets.plans.query_plan import QueryRunner
@@ -20,13 +20,8 @@ STEP_GROWTH = 10
 
 
 def _is_query_splittable(query: Query) -> bool:
-    (use_split,) = state.get_configs([("use_split", 0)])
-    query_limit = query.get_limit() or 0
-    limit = query_limit if query_limit is not None else 0
-
-    # cannot return (use_split and limit) since mypy expects us to return
-    # a boolean. use_split would be Union[Any, Int]
-    return (use_split or 0) > 0 and limit > 0 and not query.get_groupby()
+    query_limit = query.get_limit()
+    return query_limit is not None and query_limit > 0 and not query.get_groupby()
 
 
 def _identify_condition(condition: Any, field: str, operand: str) -> bool:
@@ -56,7 +51,13 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_col = timestamp_col
 
     def __can_execute(self, request: Request) -> bool:
-        orderby = util.to_list(request.query.get_orderby())
+        (use_split,) = state.get_configs([("use_split", 0)])
+        if not use_split or not _is_query_splittable(request.query):
+            return False
+
+        orderby = request.query.get_orderby()
+        if not orderby:
+            return False
 
         has_from_date = any(
             _identify_condition(condition, self.__timestamp_col, ">=")
@@ -69,11 +70,10 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         )
 
         return (
-            _is_query_splittable(request.query)
-            and has_from_date
+            has_from_date
             and has_to_date
-            and orderby[:1] == [f"-{self.__timestamp_col}"]
             and request.query.get_offset() < 1000
+            and orderby[:1] == [f"-{self.__timestamp_col}"]
         )
 
     def execute(
@@ -97,10 +97,6 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
 
-        query_limit = request.query.get_limit()
-        limit = query_limit if query_limit is not None else 0
-        remaining_offset = request.query.get_offset()
-
         # We already ensured the conditions below exist in the query during the
         # can_execute call.
         to_date_str = next(
@@ -108,24 +104,25 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             for condition in request.query.get_conditions() or []
             if _identify_condition(condition, self.__timestamp_col, "<")
         )
+        to_date = util.parse_datetime(to_date_str, date_align)
+
         from_date_str = next(
             condition[2]
             for condition in request.query.get_conditions() or []
             if _identify_condition(condition, self.__timestamp_col, ">=")
         )
-
-        to_date = util.parse_datetime(to_date_str, date_align)
         from_date = util.parse_datetime(from_date_str, date_align)
+
+        limit = request.query.get_limit() or 0
+        remaining_offset = request.query.get_offset()
 
         overall_result = None
         split_end = to_date
         split_start = max(split_end - timedelta(seconds=split_step), from_date)
         total_results = 0
         while split_start < split_end and total_results < limit:
-            # The query function may mutate the request body during query
-            # evaluation, so we need to copy the body to ensure that the query
-            # has not been modified in between this call and the next loop
-            # iteration, if needed.
+            # We need to make a copy to use during the query execution because we replace
+            # the start-end conditions on the query at each iteration of this loop.
             split_request = copy.deepcopy(request)
 
             _replace_condition(
@@ -197,7 +194,17 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         return [self.__id_column, self.__project_column, self.__timestamp_column]
 
     def __can_execute(self, request: Request) -> bool:
+        (use_split,) = state.get_configs([("use_split", 0)])
+        if not use_split:
+            return False
+
         if not _is_query_splittable(request.query):
+            return False
+
+        if not request.query.get_selected_columns():
+            return False
+
+        if request.query.get_aggregations():
             return False
 
         total_col_count = len(request.query.get_all_referenced_columns())
@@ -205,13 +212,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         copied_query.set_selected_columns(self.__get_min_columns())
         min_col_count = len(copied_query.get_all_referenced_columns())
 
-        selected_cols = request.query.get_selected_columns()
-        return (
-            selected_cols is not None
-            and len(selected_cols) > 0
-            and not request.query.get_aggregations()
-            and total_col_count > min_col_count
-        )
+        return total_col_count > min_col_count
 
     def execute(
         self, request: Request, runner: QueryRunner
