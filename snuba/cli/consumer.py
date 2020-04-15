@@ -7,6 +7,7 @@ from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
 from snuba.datasets.cdc import CdcStorage
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
+from snuba.datasets.storages.factory import WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
@@ -32,9 +33,15 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 @click.option(
     "--dataset",
     "dataset_name",
-    default="events",
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
+)
+@click.option(
+    "--storage",
+    "storage_name",
+    default="events",
+    type=click.Choice(WRITABLE_STORAGES.keys()),
+    help="The storage to target",
 )
 @click.option(
     "--max-batch-size",
@@ -93,7 +100,8 @@ def consumer(
     control_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    dataset_name: str,
+    dataset_name: Optional[str],
+    storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
     auto_offset_reset: str,
@@ -105,13 +113,29 @@ def consumer(
     log_level: Optional[str] = None,
 ) -> None:
 
+    if not bootstrap_server:
+        if dataset_name:
+            bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
+                dataset_name, settings.DEFAULT_BROKERS,
+            )
+        else:
+            bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+                storage_name, settings.DEFAULT_BROKERS,
+            )
+
     setup_logging(log_level)
     setup_sentry()
 
-    dataset = get_dataset(dataset_name)
+    # TODO: Remove this once dataset_name is no longer being passed
+    if dataset_name:
+        storage = get_dataset(dataset_name).get_writable_storage()
+        if not storage:
+            raise click.ClickException(f"Dataset {dataset_name} has no writable storage")
+
+        storage_name = {v: k for k, v in WRITABLE_STORAGES.items()}[storage]
 
     consumer_builder = ConsumerBuilder(
-        dataset_name=dataset_name,
+        storage_name=storage_name,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
@@ -127,8 +151,6 @@ def consumer(
     )
 
     if stateful_consumer:
-        storage = dataset.get_writable_storage()
-
         assert isinstance(
             storage, CdcStorage
         ), "Only CDC storages have a control topic thus are supported."

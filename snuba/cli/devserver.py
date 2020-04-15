@@ -34,7 +34,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "consumer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                "--dataset=transactions",
+                "--storage=transactions",
                 "--consumer-group=transactions_group",
             ],
         ),
