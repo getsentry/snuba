@@ -1284,7 +1284,9 @@ class TestApi(BaseApiTest):
 
         assert self.app.post("/tests/events/drop").status_code == 200
         dataset = get_dataset("events")
-        writer = dataset.get_table_writer()
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+        writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
         assert table not in self.clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0

@@ -66,8 +66,10 @@ def bootstrap(
         topics = {}
         for name in ACTIVE_DATASET_NAMES:
             dataset = get_dataset(name)
-            table_writer = dataset.get_table_writer()
-            if table_writer:
+            writable_storage = dataset.get_writable_storage()
+
+            if writable_storage:
+                table_writer = writable_storage.get_table_writer()
                 stream_loader = table_writer.get_stream_loader()
                 for topic_spec in stream_loader.get_all_topic_specs():
                     if topic_spec.topic_name in topics:
