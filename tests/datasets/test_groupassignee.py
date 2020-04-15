@@ -119,7 +119,11 @@ class TestGroupassignee(BaseDatasetTest):
         ret = processor.process_message(insert_msg, metadata)
         assert ret.data == [self.PROCESSED]
         self.write_processed_records(ret.data)
-        ret = get_cluster(StorageKey.GROUPASSIGNEES).get_clickhouse_ro().execute("SELECT * FROM test_groupassignee_local;")
+        ret = (
+            get_cluster(StorageKey.GROUPASSIGNEES)
+            .get_clickhouse_ro()
+            .execute("SELECT * FROM test_groupassignee_local;")
+        )
         assert ret[0] == (
             42,  # offset
             0,  # deleted
@@ -174,7 +178,11 @@ class TestGroupassignee(BaseDatasetTest):
             }
         )
         self.write_processed_records(row.to_clickhouse())
-        ret = get_cluster(StorageKey.GROUPASSIGNEES).get_clickhouse_ro().execute("SELECT * FROM test_groupassignee_local;")
+        ret = (
+            get_cluster(StorageKey.GROUPASSIGNEES)
+            .get_clickhouse_ro()
+            .execute("SELECT * FROM test_groupassignee_local;")
+        )
         assert ret[0] == (
             0,  # offset
             0,  # deleted

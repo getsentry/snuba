@@ -33,7 +33,10 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_cdc_storage(StorageKey.GROUPEDMESSAGES),
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
 
         ret = bootstrap.handle(None)
@@ -55,7 +58,10 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_cdc_storage(StorageKey.GROUPEDMESSAGES),
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
 
         ret = bootstrap.handle(None)
@@ -77,7 +83,10 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_cdc_storage(StorageKey.GROUPEDMESSAGES),
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
 
         ret = bootstrap.handle(None)
@@ -115,7 +124,10 @@ class TestBootstrapState:
         create_consumer.return_value = kafka_consumer
 
         bootstrap = BootstrapState(
-            "cdc_control", "somewhere", "something", get_cdc_storage(StorageKey.GROUPEDMESSAGES),
+            "cdc_control",
+            "somewhere",
+            "something",
+            get_cdc_storage(StorageKey.GROUPEDMESSAGES),
         )
 
         ret = bootstrap.handle(None)
