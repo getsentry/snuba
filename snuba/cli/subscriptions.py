@@ -10,6 +10,7 @@ import click
 
 from snuba import environment, settings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.datasets.storages.factory import get_storage_key
 from snuba.environment import setup_logging, setup_sentry
 from snuba.redis import redis_client
 from snuba.subscriptions.consumer import TickConsumer
@@ -118,8 +119,11 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     if not bootstrap_servers:
-        bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset_name, settings.DEFAULT_BROKERS
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+        storage_key = get_storage_key(storage)
+        bootstrap_servers = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_key, settings.DEFAULT_BROKERS
         )
 
     loader = enforce_table_writer(dataset).get_stream_loader()

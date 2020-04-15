@@ -8,6 +8,7 @@ from confluent_kafka import Producer
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.storages.factory import get_storage_key
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
@@ -69,8 +70,9 @@ def confirm_load(
     descriptor = snapshot_source.get_descriptor()
 
     if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset, settings.DEFAULT_BROKERS,
+        storage_key = get_storage_key(storage)
+        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_key, settings.DEFAULT_BROKERS,
         )
 
     producer = Producer(
