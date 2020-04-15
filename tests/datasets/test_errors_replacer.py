@@ -25,8 +25,9 @@ class TestReplacer(BaseEventsTest):
 
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
+
         self.replacer = replacer.ReplacerWorker(
-            self.clickhouse, self.dataset, DummyMetricsBackend(strict=True)
+            self.clickhouse, self.dataset.get_writable_storage(), DummyMetricsBackend(strict=True)
         )
 
         self.project_id = 1
