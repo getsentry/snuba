@@ -34,7 +34,7 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "consumer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                "--dataset=transactions",
+                "--storage=transactions",
                 "--consumer-group=transactions_group",
             ],
         ),
@@ -45,17 +45,29 @@ def devserver(*, bootstrap: bool, workers: bool) -> None:
                 "consumer",
                 "--auto-offset-reset=latest",
                 "--log-level=debug",
-                "--dataset=sessions",
+                "--storage=sessions_raw",
                 "--consumer-group=sessions_group",
             ],
         ),
         (
             "consumer",
-            ["snuba", "consumer", "--auto-offset-reset=latest", "--log-level=debug"],
+            [
+                "snuba",
+                "consumer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=events",
+            ],
         ),
         (
             "replacer",
-            ["snuba", "replacer", "--auto-offset-reset=latest", "--log-level=debug"],
+            [
+                "snuba",
+                "replacer",
+                "--auto-offset-reset=latest",
+                "--log-level=debug",
+                "--storage=events",
+            ],
         ),
     ]
 

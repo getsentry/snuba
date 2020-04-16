@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, NamedTuple
+from typing import Any, Mapping, MutableMapping, NamedTuple
 from uuid import UUID
 
 import jsonschema
@@ -349,7 +349,7 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured = {}
+    _ensured: MutableMapping[Dataset, bool] = {}
 
     def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
         if not force and _ensured.get(dataset, False):
@@ -413,18 +413,17 @@ if application.debug or application.testing:
         )
 
         type_ = record[1]
+
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
-
-            worker = ConsumerWorker(dataset, metrics=metrics)
+            worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-
-            writable_storage = dataset.get_writable_storage()
-            assert writable_storage is not None
-            clickhouse_rw = writable_storage.get_cluster().get_clickhouse_rw()
-
-            worker = ReplacerWorker(clickhouse_rw, dataset, metrics=metrics)
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:

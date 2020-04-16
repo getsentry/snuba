@@ -31,7 +31,7 @@ class TestReplacer(BaseEventsTest):
         clickhouse = get_storage(StorageKey.ERRORS).get_cluster().get_clickhouse_rw()
 
         self.replacer = replacer.ReplacerWorker(
-            clickhouse, self.dataset, DummyMetricsBackend(strict=True)
+            clickhouse, self.dataset.get_writable_storage(), DummyMetricsBackend(strict=True)
         )
 
         self.project_id = 1
