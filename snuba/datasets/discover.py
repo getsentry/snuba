@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence
+from typing import Mapping, Sequence, Tuple
 
 from snuba.clickhouse.columns import (
     Array,
@@ -15,6 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.plans.translators import CopyTranslator, QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
@@ -89,11 +90,16 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> Tuple[ReadableStorage, QueryTranslator]:
         table = detect_table(
             query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
-        return self.__events_table if table == EVENTS else self.__transactions_table
+        translator = CopyTranslator()
+        return (
+            (self.__events_table, translator)
+            if table == EVENTS
+            else (self.__transactions_table, translator)
+        )
 
 
 class DiscoverDataset(TimeSeriesDataset):

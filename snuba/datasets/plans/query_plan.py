@@ -22,7 +22,8 @@ class StorageQueryPlan:
     This is produced by StorageQueryPlanBuilder (provided by the dataset)
     after the dataset query processing has been performed and the storage
     has been selected.
-    It embeds the sequence of storage specific QueryProcessors to apply
+    It embeds the PhysicalQuery (the query to run on the storage after translation),
+    and the sequence of storage specific PhysicalQueryProcessors to apply
     to the query after the the storage has been selected.
     It also provides a plan execution strategy, in case the query is not
     one individual query statement (like for split queries).
@@ -52,7 +53,7 @@ class QueryPlanExecutionStrategy(ABC):
         runner: QueryRunner,
     ) -> RawQueryResult:
         """
-        Executes the query plan. The request parameter provides query and query settings.
+        Executes the query plan.
         The runner parameters is a function to actually run one individual query on the
         database.
         """

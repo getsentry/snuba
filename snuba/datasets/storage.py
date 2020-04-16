@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.query import Query
 from snuba.query.query_processor import PhysicalQueryProcessor
@@ -115,5 +116,5 @@ class QueryStorageSelector(ABC):
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> Tuple[ReadableStorage, QueryTranslator]:
         raise NotImplementedError

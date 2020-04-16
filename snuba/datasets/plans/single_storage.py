@@ -87,12 +87,13 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
-        storage = self.__selector.select_storage(request.query, request.settings)
-        # TODO: Same as for SingleStorageQueryPlanBuilder. The instance of the translator
-        # depends on the storage. This dependency will be added in a followup. Also
-        # this code is likely to change with multi-table storages, but it will take a while
+        storage, translator = self.__selector.select_storage(
+            request.query, request.settings
+        )
+        # TODO: This code is likely to change with multi-table storages, since the
+        # storage will be hiding the translation process. But it will take a while
         # to get there.
-        physical_query = CopyTranslator().translate(request.query)
+        physical_query = translator.translate(request.query)
         physical_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
