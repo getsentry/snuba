@@ -12,8 +12,10 @@ from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
+from snuba.query.physical import PhysicalQuery
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import RawQueryException, RawQueryResult
@@ -104,13 +106,14 @@ def _run_query_pipeline(
         processor.process_query(request.query, request.settings)
 
     storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    physical_query = storage_query_plan.query
 
     # TODO: This below should be a storage specific query processor.
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
+    relational_source = physical_query.get_data_source()
+    physical_query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for processor in storage_query_plan.query_processors:
-        processor.process_query(request.query, request.settings)
+    for physical_processor in storage_query_plan.query_processors:
+        physical_processor.process_query(physical_query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -119,9 +122,12 @@ def _run_query_pipeline(
         query_metadata,
         from_date,
         to_date,
+        request.referrer,
     )
 
-    return storage_query_plan.execution_strategy.execute(request, query_runner)
+    return storage_query_plan.execution_strategy.execute(
+        physical_query, request.settings, query_runner
+    )
 
 
 def _format_storage_query_and_run(
@@ -132,7 +138,9 @@ def _format_storage_query_and_run(
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
     to_date: datetime,
-    request: Request,
+    referrer: str,
+    query: PhysicalQuery,
+    request_settings: RequestSettings,
 ) -> RawQueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -140,32 +148,41 @@ def _format_storage_query_and_run(
     abstraction, this function is probably going to collapse and disappear.
     """
 
-    source = request.query.get_data_source().format_from()
+    source = query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
         # ClickhouseQuery since they are Clickhouse specific
-        query = DictClickhouseQuery(dataset, request.query, request.settings)
+        clickhouse_query = DictClickhouseQuery(dataset, query, request_settings)
     timer.mark("prepare_query")
 
     stats = {
         "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": request.referrer,
+        "final": query.get_final(),
+        "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": request.query.get_sample(),
+        "sample": query.get_sample(),
     }
 
-    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
+    with sentry_sdk.start_span(
+        description=clickhouse_query.format_sql(), op="db"
+    ) as span:
         span.set_tag("table", source)
         try:
             span.set_tag(
-                "ast_query",
-                AstClickhouseQuery(request.query, request.settings).format_sql(),
+                "ast_query", AstClickhouseQuery(query, request_settings).format_sql(),
             )
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        return raw_query(
+            query,
+            clickhouse_query,
+            request_settings,
+            timer,
+            query_metadata,
+            stats,
+            span.trace_id,
+        )
 
 
 def record_query(

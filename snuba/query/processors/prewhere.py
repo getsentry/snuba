@@ -1,13 +1,13 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.physical import PhysicalQuery
+from snuba.query.query_processor import PhysicalQueryProcessor
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 
 
-class PrewhereProcessor(QueryProcessor):
+class PrewhereProcessor(PhysicalQueryProcessor):
     """
     Moves top level conditions into the pre-where clause
     according to the list of candidates provided by the query data source.
@@ -22,7 +22,9 @@ class PrewhereProcessor(QueryProcessor):
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
-    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+    def process_query(
+        self, query: PhysicalQuery, request_settings: RequestSettings,
+    ) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )

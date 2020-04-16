@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from snuba.web import RawQueryResult
-from snuba.query.query_processor import QueryProcessor
+
+from snuba.query.physical import PhysicalQuery
+from snuba.query.query_processor import PhysicalQueryProcessor
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 
-
-QueryRunner = Callable[[Request], RawQueryResult]
+QueryRunner = Callable[[PhysicalQuery, RequestSettings], RawQueryResult]
 
 
 @dataclass(frozen=True)
@@ -26,15 +28,8 @@ class StorageQueryPlan:
     one individual query statement (like for split queries).
     """
 
-    # TODO: When we will have a separate Query class for Snuba Query and
-    # Storage Query, this plan will also provide the Storage Query.
-    # Right now the storage query is the same mutable object referenced by
-    # the Request object.
-    # The Request object is used by the web module to access the Query object,
-    # having two query objects of the same type around during processing
-    # would be dangerous, so it is probably better not to expose the query
-    # here yet.
-    query_processors: Sequence[QueryProcessor]
+    query: PhysicalQuery
+    query_processors: Sequence[PhysicalQueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
@@ -50,7 +45,12 @@ class QueryPlanExecutionStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+    def execute(
+        self,
+        query: PhysicalQuery,
+        request_settings: RequestSettings,
+        runner: QueryRunner,
+    ) -> RawQueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
         The runner parameters is a function to actually run one individual query on the

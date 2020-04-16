@@ -1,21 +1,17 @@
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
-from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.physical import PhysicalQuery
+from snuba.query.query_processor import PhysicalQueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
-class EventsColumnProcessor(QueryProcessor):
+class EventsColumnProcessor(PhysicalQueryProcessor):
     """
     Strip any dashes out of the event ID to match what is stored internally.
     """
 
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(
+        self, query: PhysicalQuery, request_settings: RequestSettings
+    ) -> None:
         def process_column(exp: Expression) -> Expression:
             if isinstance(exp, Column):
                 if exp.column_name == "group_id":

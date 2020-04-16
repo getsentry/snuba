@@ -13,13 +13,20 @@ from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import RawQueryResult
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.physical import PhysicalQuery
+from snuba.query.query_processor import PhysicalQueryProcessor
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
-        return runner(request)
+    def execute(
+        self,
+        query: PhysicalQuery,
+        request_settings: RequestSettings,
+        runner: QueryRunner,
+    ) -> RawQueryResult:
+        return runner(query, request_settings)
 
 
 class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
@@ -31,7 +38,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     def __init__(
         self,
         storage: ReadableStorage,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        post_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
@@ -54,6 +61,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
         return StorageQueryPlan(
+            query=request.query,
             query_processors=[
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
@@ -71,7 +79,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     def __init__(
         self,
         selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        post_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
     ) -> None:
         self.__selector = selector
         self.__post_processors = post_processors or []
@@ -83,6 +91,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
         return StorageQueryPlan(
+            query=request.query,
             query_processors=[
                 *storage.get_query_processors(),
                 *self.__post_processors,

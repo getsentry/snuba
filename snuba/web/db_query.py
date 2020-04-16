@@ -13,8 +13,9 @@ from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
+from snuba.query.physical import PhysicalQuery
 from snuba.redis import redis_client
-from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.state.cache import Cache, RedisCache
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
@@ -33,7 +34,6 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    request: Request,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
@@ -57,8 +57,9 @@ def update_query_metadata_and_stats(
 
 
 def raw_query(
-    request: Request,
+    physical_query: PhysicalQuery,
     query: ClickhouseQuery,
+    request_settings: RequestSettings,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -92,7 +93,7 @@ def raw_query(
 
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(request.query.get_all_referenced_columns()) > uc_max:
+    if len(physical_query.get_all_referenced_columns()) > uc_max:
         query_settings["use_uncompressed_cache"] = 0
         use_cache = 0
 
@@ -117,7 +118,6 @@ def raw_query(
 
         update_with_status = partial(
             update_query_metadata_and_stats,
-            request,
             sql,
             timer,
             stats,
@@ -129,7 +129,7 @@ def raw_query(
         if not result:
             try:
                 with RateLimitAggregator(
-                    request.settings.get_rate_limit_params()
+                    request_settings.get_rate_limit_params()
                 ) as rate_limit_stats_container:
                     stats.update(rate_limit_stats_container.to_dict())
                     timer.mark("rate_limit")
@@ -151,7 +151,7 @@ def raw_query(
                     # Force query to use the first shard replica, which
                     # should have synchronously received any cluster writes
                     # before this query is run.
-                    consistent = request.settings.get_consistent()
+                    consistent = request_settings.get_consistent()
                     stats["consistent"] = consistent
                     if consistent:
                         query_settings["load_balancing"] = "in_order"
@@ -164,7 +164,7 @@ def raw_query(
                             # All queries should already be deduplicated at this point
                             # But the query_id will let us know if they aren't
                             query_id=query_id if use_deduper else None,
-                            with_totals=request.query.has_totals(),
+                            with_totals=physical_query.has_totals(),
                         )
 
                         timer.mark("execute")

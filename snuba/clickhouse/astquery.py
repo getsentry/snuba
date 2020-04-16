@@ -4,7 +4,7 @@ from snuba import settings
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
+from snuba.query.physical import PhysicalQuery
 from snuba.request.request_settings import RequestSettings
 
 
@@ -19,7 +19,7 @@ class AstClickhouseQuery(ClickhouseQuery):
     AST.
     """
 
-    def __init__(self, query: Query, settings: RequestSettings,) -> None:
+    def __init__(self, query: PhysicalQuery, settings: RequestSettings,) -> None:
         # Snuba query structure
         # Referencing them here directly since it makes it easier
         # to process this query independently from the Snuba Query
