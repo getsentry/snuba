@@ -106,6 +106,8 @@ def _run_query_pipeline(
         processor.process_query(request.query, request.settings)
 
     storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    # From this point on. The logical query should not be used anymore by anyone.
+    # The PhysicalQuery is the one to be used to run the rest of the query pipeline.
     physical_query = storage_query_plan.query
 
     # TODO: This below should be a storage specific query processor.

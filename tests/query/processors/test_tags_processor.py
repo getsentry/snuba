@@ -168,9 +168,9 @@ def test_tags_processor(query_body, expected_query) -> None:
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
     request = Request("a", query, request_settings, {}, "r")
-    _ = dataset.get_query_plan_builder().build_plan(request)
+    plan = dataset.get_query_plan_builder().build_plan(request)
 
     assert (
-        DictClickhouseQuery(dataset, query, request_settings).format_sql()
+        DictClickhouseQuery(dataset, plan.query, request_settings).format_sql()
         == expected_query
     )

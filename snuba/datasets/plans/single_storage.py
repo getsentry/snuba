@@ -7,6 +7,7 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlanBuilder,
 )
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.datasets.plans.translators import CopyTranslator
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
@@ -53,15 +54,16 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
-        # the Request object is immutable, the query processing still depends on the same
-        # request object to be moved around, thus the Query has to be mutable and cannot
-        # be simply rebuilt and replaced.
-        request.query.set_data_source(
+        # TODO: Clearly the QueryTranslator instance  will be dependent on the storage.
+        # Setting the data_source on the query should become part of the translation
+        # as well.
+        physical_query = CopyTranslator().translate(request.query)
+        physical_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
         return StorageQueryPlan(
-            query=request.query,
+            query=physical_query,
             query_processors=[
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
@@ -86,12 +88,17 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
 
     def build_plan(self, request: Request) -> StorageQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        request.query.set_data_source(
+        # TODO: Same as for SingleStorageQueryPlanBuilder. The instance of the translator
+        # depends on the storage. This dependency will be added in a followup. Also
+        # this code is likely to change with multi-table storages, but it will take a while
+        # to get there.
+        physical_query = CopyTranslator().translate(request.query)
+        physical_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
         return StorageQueryPlan(
-            query=request.query,
+            query=physical_query,
             query_processors=[
                 *storage.get_query_processors(),
                 *self.__post_processors,
