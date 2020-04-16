@@ -111,6 +111,8 @@ class QueryStorageSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage query should be executed onto.
+    It also returns the QueryTranslator that is capable of translating the
+    LogicalQuery into a PhysicalQuery for this storage.
     """
 
     @abstractmethod

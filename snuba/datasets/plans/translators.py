@@ -23,8 +23,8 @@ class QueryTranslator(ABC):
 class CopyTranslator(QueryTranslator):
     """
     The simplest possible translator. It just ensures that we are not using the same
-    Query object anymore, so it forces the storage query processing to work on a
-    different object than the Logical Query
+    Query object anymore after query plan building, so it forces the storage query
+    processing to work on a different object than the Logical Query.
     """
 
     def translate(self, query: Query) -> PhysicalQuery:
