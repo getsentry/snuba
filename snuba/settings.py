@@ -135,6 +135,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "host": CLICKHOUSE_HOST,
         "port": CLICKHOUSE_PORT,
         "http_port": CLICKHOUSE_HTTP_PORT,
-        "storage_sets": {"events", "groupassignees", "outcomes", "querylog", "sessions", "transactions"},
+        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
     },
 ]
