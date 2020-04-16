@@ -1,6 +1,9 @@
+import logging
 import uuid
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Optional, TypeVar
+
+from pkg_resources import resource_string
 
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -8,6 +11,9 @@ from snuba.utils.codecs import Codec
 
 
 T = TypeVar("T")
+
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionError(Exception):
@@ -65,12 +71,12 @@ class Cache(Generic[T], ABC):
         raise NotImplementedError
 
 
-TASK_RESULT = 0
-TASK_EXECUTE = 1
-TASK_WAIT = 2
+RESULT_VALUE = 0
+RESULT_EXECUTE = 1
+RESULT_WAIT = 2
 
-TASK_GET = ""
-TASK_SET = ""
+SCRIPT_GET = resource_string("snuba", "state/scripts/get.lua")
+SCRIPT_SET = resource_string("snuba", "state/scripts/set.lua")
 
 
 class RedisCache(Cache[T]):
@@ -101,56 +107,46 @@ class RedisCache(Cache[T]):
     def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
         key = self.__build_key(key)
 
-        task_id = uuid.uuid1().hex
-        keys = [
-            key,
-            f"{key}:task",
-            f"{key}:task:{task_id}",
-        ]
-        argv = [uuid.uuid1().hex, timeout]
-        result = self.__client.eval(TASK_GET, len(keys), [*keys, *argv])
+        keys = [key, f"{key}:q", f"{key}:u"]
+        argv = [timeout, uuid.uuid1().hex]
+        result = self.__client.eval(SCRIPT_GET, len(keys), *keys, *argv)
 
-        if result[0] == TASK_RESULT:
+        if result[0] == RESULT_VALUE:
+            logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
-        elif result[1] == TASK_EXECUTE:
-            active_task_id = result[1][0]
-            notify_list_key = f"{key}:task:{active_task_id}:notify"
+        elif result[0] == RESULT_EXECUTE:
+            task_id = result[1].decode("utf-8")
+            logger.debug("Executing task (id: %r)...", task_id)
+            keys = [key, f"{key}:q", f"{key}:u", f"{key}:n:{task_id}"]
+            argv = [task_id, 60]
             try:
-                success, value = True, function()
+                value = function()
             except Exception:
-                success = False
+                raise
+            else:
+                argv.extend(
+                    [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
+                )
             finally:
-                keys = [key, f"{key}:task", f"{key}:task:{task_id}", notify_list_key]
-                notify_list_timeout = 60
-                key_timeout = get_config("cache_expiry_sec", 1)
-                argv = [
-                    key_timeout,
-                    notify_list_timeout,
-                ]
-                if success:
-                    argv.append(self.__codec.encode(value))
-                # TODO: Ideally this would let us know if this took effect or not.
-                self.__client.eval(TASK_SET, len(keys), [*keys, *argv])
-                return value
-        elif result[2] == TASK_WAIT:
-            active_task_id = result[1][0]
-            active_task_timeout_remaining = int(result[1][1])
-
-            notify_list_key = f"{key}:task:{active_task_id}:notify"
-            effective_timeout = min(active_task_timeout_remaining, timeout)
-            block_result = self.__client.blpop([notify_list_key], effective_timeout)
-            if block_result is None:
-                if effective_timeout == timeout:
-                    raise TimeoutError("client timeout reached")
+                logger.debug("Setting result and waking blocked clients...")
+                self.__client.eval(SCRIPT_SET, len(keys), *keys, *argv)
+            return value
+        elif result[0] == RESULT_WAIT:
+            task_id = result[1].decode("utf-8")
+            timeout_remaining = result[2]
+            effective_timeout = min(timeout_remaining, timeout)
+            logger.debug(
+                "Waiting for task result (id: %r) for up to %s seconds...",
+                task_id,
+                effective_timeout,
+            )
+            if not self.__client.blpop(f"{key}:n:{task_id}", effective_timeout):
+                raise ExecutionTimeoutError("timed out waiting for result")
+            else:
+                value = self.__client.get(key)
+                if value is None:
+                    raise ExecutionError("no value at key")
                 else:
-                    raise ExecutionTimeoutError("execution timeout reached")
-            else:
-                assert block_result[0][0] == notify_list_key
-
-            raw_value = self.__client.get(key)
-            if raw_value is None:
-                raise ExecutionError("cache value not set")
-            else:
-                return self.__codec.decode(raw_value)
+                    return self.__codec.decode(value)
         else:
             raise ValueError("unexpected result from script")
