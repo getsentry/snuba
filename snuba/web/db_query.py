@@ -15,7 +15,8 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
 from snuba.redis import redis_client
 from snuba.request import Request
-from snuba.state.cache import Cache, RedisCache
+from snuba.state.cache.abstract import Cache
+from snuba.state.cache.redis.backend import RedisCache
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,

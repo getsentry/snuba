@@ -1,12 +1,12 @@
 import logging
 import uuid
-from abc import ABC, abstractmethod
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Optional, TypeVar
 
 from pkg_resources import resource_string
 
 from snuba.redis import RedisClientType
 from snuba.state import get_config
+from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.utils.codecs import Codec
 
 
@@ -16,67 +16,12 @@ T = TypeVar("T")
 logger = logging.getLogger(__name__)
 
 
-class ExecutionError(Exception):
-    pass
-
-
-class ExecutionTimeoutError(ExecutionError):
-    pass
-
-
-class Cache(Generic[T], ABC):
-    @abstractmethod
-    def get(self, key: str) -> Optional[T]:
-        """
-        Gets a value from the cache.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def set(self, key: str, value: T) -> None:
-        """
-        Sets a value in the cache.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
-        """
-        Attempts to get a value from the cache. On a cache miss, the return
-        value of the provided function is used to populate the cache for
-        subsequent callers and is used as the return value for this method.
-
-        This function also acts as an exclusive lock on the cache key while
-        the function is executing. Callers will be blocked until the client
-        that holds the lock (the first client to get a cache miss) has
-        completed executing the function and placed its result in cache.
-
-        If the client holding the lock does not successfully execute the
-        function, no result value will be populated. The client that held the
-        lock will raise the original exception, and all other clients will raise
-        an ``ExecutionError`` when unblocked.
-
-        If the client holding the lock does not finish executing the function
-        prior to the timeout being reached, the client that held the lock
-        will return the result of executing the provided function, and will
-        only set the cache value if none currently exists. Meanwhile, all
-        blocked clients will raise a ``ExecutionTimeoutError`` when the
-        timeout elapses. Since the timeout clock starts when the first client
-        takes the execution lock and begins to execute the function, the
-        timeout is an upper bound on the actual amount of time that any
-        subsequent clients will be blocked -- they will likely get a result
-        or throw a ``ExecutionTimeoutError`` in a time window substantially
-        shorter than the full timeout duration.
-        """
-        raise NotImplementedError
-
-
 RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 
-SCRIPT_GET = resource_string("snuba", "state/scripts/get.lua")
-SCRIPT_SET = resource_string("snuba", "state/scripts/set.lua")
+SCRIPT_GET = resource_string("snuba", "state/cache/redis/scripts/get.lua")
+SCRIPT_SET = resource_string("snuba", "state/cache/redis/scripts/set.lua")
 
 
 class RedisCache(Cache[T]):
