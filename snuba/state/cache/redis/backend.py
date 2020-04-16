@@ -20,9 +20,6 @@ RESULT_VALUE = 0
 RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 
-SCRIPT_GET = resource_string("snuba", "state/cache/redis/scripts/get.lua")
-SCRIPT_SET = resource_string("snuba", "state/cache/redis/scripts/set.lua")
-
 
 class RedisCache(Cache[T]):
     def __init__(
@@ -31,6 +28,15 @@ class RedisCache(Cache[T]):
         self.__client = client
         self.__prefix = prefix
         self.__codec = codec
+
+        # TODO: This should probably be lazily instantiated, rather than
+        # automatically happening at startup.
+        self.__script_get = client.register_script(
+            resource_string("snuba", "state/cache/redis/scripts/get.lua")
+        )
+        self.__script_set = client.register_script(
+            resource_string("snuba", "state/cache/redis/scripts/set.lua")
+        )
 
     def __build_key(self, key: str) -> str:
         return f"{self.__prefix}{key}"
@@ -52,9 +58,9 @@ class RedisCache(Cache[T]):
     def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
         key = self.__build_key(key)
 
-        keys = [key, f"{key}:q", f"{key}:u"]
-        argv = [timeout, uuid.uuid1().hex]
-        result = self.__client.eval(SCRIPT_GET, len(keys), *keys, *argv)
+        result = self.__script_get(
+            [key, f"{key}:q", f"{key}:u"], [timeout, uuid.uuid1().hex]
+        )
 
         if result[0] == RESULT_VALUE:
             logger.debug("Immediately returning result from cache hit.")
@@ -74,7 +80,7 @@ class RedisCache(Cache[T]):
                 )
             finally:
                 logger.debug("Setting result and waking blocked clients...")
-                self.__client.eval(SCRIPT_SET, len(keys), *keys, *argv)
+                self.__script_set(keys, argv)
             return value
         elif result[0] == RESULT_WAIT:
             task_id = result[1].decode("utf-8")
