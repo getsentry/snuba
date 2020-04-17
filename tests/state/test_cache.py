@@ -1,18 +1,29 @@
+import time
+from typing import Iterator
 from unittest import mock
 
-from snuba.state.cache.abstract import Cache
-from snuba.utils.codecs import PassthroughCodec
-from snuba.state.cache.redis.backend import RedisCache
+import pytest
+
 from snuba.redis import redis_client
+from snuba.state.cache.abstract import Cache
+from snuba.state.cache.redis.backend import RedisCache
+from snuba.utils.codecs import PassthroughCodec
 from tests.assertions import assert_changes, assert_does_not_change
 
 
-def test_get_or_execute() -> None:
-    codec: PassthroughCodec[int] = PassthroughCodec()
-    backend: Cache[int] = RedisCache(redis_client, "test", codec)
+@pytest.fixture
+def backend() -> Iterator[Cache[bytes]]:
+    codec: PassthroughCodec[bytes] = PassthroughCodec()
+    backend: Cache[bytes] = RedisCache(redis_client, "test", codec)
+    try:
+        yield backend
+    finally:
+        redis_client.flushdb()
 
+
+def test_get_or_execute(backend: Cache[bytes]) -> None:
     key = "key"
-    value = 1
+    value = b"value"
     function = mock.MagicMock(return_value=value)
 
     assert backend.get(key) is None
@@ -24,3 +35,16 @@ def test_get_or_execute() -> None:
 
     with assert_does_not_change(lambda: function.call_count, 1):
         backend.get_or_execute(key, function, 5) == value
+
+
+def test_get_or_execute_missed_deadline(backend: Cache[bytes]) -> None:
+    key = "key"
+    value = b"value"
+
+    def function() -> int:
+        time.sleep(1.5)
+        return value
+
+    backend.get_or_execute(key, function, 1) == value
+
+    assert backend.get(key) is None
