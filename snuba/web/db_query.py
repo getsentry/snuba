@@ -59,7 +59,7 @@ def update_query_metadata_and_stats(
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
-    reader: Reader,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],

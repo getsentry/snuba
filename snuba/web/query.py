@@ -10,6 +10,7 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
@@ -134,7 +135,7 @@ def _format_storage_query_and_run(
     # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
     # with the AST this won't be needed.
     dataset: Dataset,
-    reader: Reader,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
