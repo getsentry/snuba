@@ -3,6 +3,7 @@ import uuid
 from typing import Callable, Optional, TypeVar
 
 from pkg_resources import resource_string
+from redis.exceptions import ResponseError
 
 from snuba.redis import RedisClientType
 from snuba.state import get_config
@@ -87,15 +88,18 @@ class RedisCache(Cache[T]):
                 )
             finally:
                 logger.debug("Setting result and waking blocked clients...")
-                self.__script_set(
-                    [
-                        result_key,
-                        wait_queue_key,
-                        task_ident_key,
-                        self.__build_notify_queue_key(key, task_ident),
-                    ],
-                    argv,
-                )
+                try:
+                    self.__script_set(
+                        [
+                            result_key,
+                            wait_queue_key,
+                            task_ident_key,
+                            self.__build_notify_queue_key(key, task_ident),
+                        ],
+                        argv,
+                    )
+                except ResponseError:
+                    logger.warning("Error setting cache result!", exc_info=True)
             return value
         elif result[0] == RESULT_WAIT:
             task_ident = result[1].decode("utf-8")
