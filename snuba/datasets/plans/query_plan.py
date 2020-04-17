@@ -4,13 +4,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.clusters.cluster import Cluster
-from snuba.web import RawQueryResult
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query_processor import QueryProcessor
+from snuba.reader import Reader
 from snuba.request import Request
+from snuba.web import RawQueryResult
 
 
-QueryRunner = Callable[[Request], RawQueryResult]
+QueryRunner = Callable[[Request, Reader[ClickhouseQuery]], RawQueryResult]
 
 
 @dataclass(frozen=True)
@@ -59,9 +60,6 @@ class QueryPlanExecutionStrategy(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def get_cluster(self) -> Cluster:
-        raise NotImplementedError
 
 class StorageQueryPlanBuilder(ABC):
     """

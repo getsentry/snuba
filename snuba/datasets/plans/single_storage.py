@@ -23,10 +23,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self.__cluster = cluster
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
-        return runner(request)
-
-    def get_cluster(self) -> Cluster:
-        return self.__cluster
+        return runner(request, self.__cluster.get_reader())
 
 
 class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):

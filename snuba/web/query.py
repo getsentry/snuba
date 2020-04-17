@@ -108,9 +108,6 @@ def _run_query_pipeline(
     query_plan_builder = dataset.get_query_plan_builder()
     storage_query_plan = query_plan_builder.build_plan(request)
 
-    cluster = storage_query_plan.execution_strategy.get_cluster()
-    reader = cluster.get_reader()
-
     # TODO: This below should be a storage specific query processor.
     relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
@@ -121,7 +118,6 @@ def _run_query_pipeline(
     query_runner = partial(
         _format_storage_query_and_run,
         dataset,
-        reader,
         timer,
         query_metadata,
         from_date,
@@ -135,12 +131,12 @@ def _format_storage_query_and_run(
     # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
     # with the AST this won't be needed.
     dataset: Dataset,
-    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
     to_date: datetime,
     request: Request,
+    reader: Reader[ClickhouseQuery],
 ) -> RawQueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
