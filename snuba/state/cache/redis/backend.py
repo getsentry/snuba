@@ -23,7 +23,7 @@ RESULT_WAIT = 2
 
 class RedisCache(Cache[T]):
     def __init__(
-        self, client: RedisClientType, prefix: str, codec: Codec[str, T]
+        self, client: RedisClientType, prefix: str, codec: Codec[bytes, T]
     ) -> None:
         self.__client = client
         self.__prefix = prefix

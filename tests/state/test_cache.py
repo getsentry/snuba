@@ -41,7 +41,7 @@ def test_get_or_execute_missed_deadline(backend: Cache[bytes]) -> None:
     key = "key"
     value = b"value"
 
-    def function() -> int:
+    def function() -> bytes:
         time.sleep(1.5)
         return value
 
