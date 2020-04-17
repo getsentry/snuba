@@ -29,7 +29,7 @@ class TestConsumer(BaseEventsTest):
         )
 
         test_worker = ConsumerWorker(
-            self.dataset,
+            self.dataset.get_writable_storage(),
             producer=FakeConfluentKafkaProducer(),
             replacements_topic=Topic(
                 enforce_table_writer(self.dataset)
@@ -48,7 +48,7 @@ class TestConsumer(BaseEventsTest):
 
     def test_skip_too_old(self):
         test_worker = ConsumerWorker(
-            self.dataset,
+            self.dataset.get_writable_storage(),
             producer=FakeConfluentKafkaProducer(),
             replacements_topic=Topic(
                 enforce_table_writer(self.dataset)
@@ -78,7 +78,7 @@ class TestConsumer(BaseEventsTest):
     def test_produce_replacement_messages(self):
         producer = FakeConfluentKafkaProducer()
         test_worker = ConsumerWorker(
-            self.dataset,
+            self.dataset.get_writable_storage(),
             producer=producer,
             replacements_topic=Topic(
                 enforce_table_writer(self.dataset)

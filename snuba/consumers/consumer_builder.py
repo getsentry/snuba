@@ -2,10 +2,11 @@ from typing import Optional, Sequence
 
 from confluent_kafka import KafkaError, KafkaException, Producer
 
-from snuba import environment, settings
+from snuba import environment
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
 from snuba.utils.codecs import PassthroughCodec
@@ -32,7 +33,7 @@ class ConsumerBuilder:
 
     def __init__(
         self,
-        dataset_name: str,
+        storage_name: str,
         raw_topic: Optional[str],
         replacements_topic: Optional[str],
         max_batch_size: int,
@@ -47,16 +48,10 @@ class ConsumerBuilder:
         rapidjson_serialize: bool,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        self.dataset = get_dataset(dataset_name)
-        self.dataset_name = dataset_name
-        if not bootstrap_servers:
-            self.bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
-                dataset_name, settings.DEFAULT_BROKERS,
-            )
-        else:
-            self.bootstrap_servers = bootstrap_servers
+        self.storage = get_writable_storage(storage_name)
+        self.bootstrap_servers = bootstrap_servers
 
-        stream_loader = enforce_table_writer(self.dataset).get_stream_loader()
+        stream_loader = self.storage.get_table_writer().get_stream_loader()
 
         self.raw_topic: Topic
         if raw_topic is not None:
@@ -97,7 +92,7 @@ class ConsumerBuilder:
         self.metrics = MetricsWrapper(
             environment.metrics,
             "consumer",
-            tags={"group": group_id, "dataset": self.dataset_name},
+            tags={"group": group_id, "storage": storage_name},
         )
 
         self.max_batch_size = max_batch_size
@@ -167,7 +162,7 @@ class ConsumerBuilder:
         """
         return self.__build_consumer(
             ConsumerWorker(
-                self.dataset,
+                storage=self.storage,
                 producer=self.producer,
                 replacements_topic=self.replacements_topic,
                 metrics=self.metrics,
@@ -183,7 +178,7 @@ class ConsumerBuilder:
         Builds the consumer with a ConsumerWorker able to handle snapshots.
         """
         worker = SnapshotAwareWorker(
-            dataset=self.dataset,
+            storage=self.storage,
             producer=self.producer,
             snapshot_id=snapshot_id,
             transaction_data=transaction_data,
