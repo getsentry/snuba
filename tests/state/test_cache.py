@@ -1,13 +1,16 @@
+import random
 import time
+from functools import partial
 from typing import Iterator
 from unittest import mock
 
 import pytest
 
 from snuba.redis import redis_client
-from snuba.state.cache.abstract import Cache
+from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.utils.codecs import PassthroughCodec
+from snuba.utils.concurrent import execute
 from tests.assertions import assert_changes, assert_does_not_change
 
 
@@ -63,3 +66,66 @@ def test_get_or_execute_exception(backend: Cache[bytes]) -> None:
         backend.get_or_execute(key, function, 1)
 
     assert backend.get(key) is None
+
+
+def test_get_or_execute_set_wait(backend: Cache[bytes]) -> None:
+    key = "key"
+
+    def function() -> bytes:
+        time.sleep(1)
+        return f"{random.random()}".encode("utf-8")
+
+    def worker() -> bytes:
+        return backend.get_or_execute(key, function, 10)
+
+    setter = execute(worker)
+    waiter = execute(worker)
+
+    assert setter.result() == waiter.result()
+
+
+def test_get_or_execute_set_wait_error(backend: Cache[bytes]) -> None:
+    key = "key"
+
+    class CustomException(Exception):
+        pass
+
+    def function() -> bytes:
+        time.sleep(1)
+        raise CustomException("error")
+
+    def worker() -> bytes:
+        return backend.get_or_execute(key, function, 10)
+
+    setter = execute(worker)
+    waiter = execute(worker)
+
+    with pytest.raises(CustomException):
+        setter.result()
+
+    with pytest.raises(ExecutionError):
+        waiter.result()
+
+
+def test_get_or_execute_set_wait_timeout(backend: Cache[bytes]) -> None:
+    key = "key"
+    value = b"value"
+
+    def function() -> bytes:
+        time.sleep(2.5)
+        return value
+
+    def worker(timeout: int) -> bytes:
+        return backend.get_or_execute(key, function, timeout)
+
+    setter = execute(partial(worker, 2))
+    waiter_fast = execute(partial(worker, 1))
+    waiter_slow = execute(partial(worker, 3))
+
+    assert setter.result() == value
+
+    with pytest.raises(TimeoutError):
+        waiter_fast.result()
+
+    with pytest.raises(ExecutionTimeoutError):
+        waiter_slow.result()
