@@ -39,7 +39,7 @@ class RedisCache(Cache[T]):
         )
 
     def __build_key(self, key: str) -> str:
-        return f"{self.__prefix}{key}"
+        return f"{self.__prefix}{{{key}}}"
 
     def get(self, key: str) -> Optional[T]:
         value = self.__client.get(self.__build_key(key))
