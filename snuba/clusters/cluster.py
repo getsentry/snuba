@@ -39,8 +39,8 @@ class Cluster:
             self.__clickhouse_ro
         )
 
-    def get_storage_sets(self) -> Set[str]:
-        return self.__storage_sets
+    def get_storage_sets(self) -> Set[StorageSetKey]:
+        return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     def get_clickhouse_rw(self) -> ClickhousePool:
         return self.__clickhouse_rw
@@ -65,21 +65,22 @@ CLUSTERS = [
 _registered_storage_sets = [
     storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_sets()
 ]
+
 assert len(_registered_storage_sets) == len(
     (set(_registered_storage_sets))
 ), "Storage set registered to more than one cluster"
 
-assert set([s.value for s in StorageSetKey]) == set(
+assert set([s for s in StorageSetKey]) == set(
     _registered_storage_sets
 ), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
-_STORAGE_CLUSTER_MAP: MutableMapping[StorageKey, Cluster] = {}
+_STORAGE_SET_CLUSTER_MAP: MutableMapping[StorageSetKey, Cluster] = {}
 for cluster in CLUSTERS:
     for storage_set_key in cluster.get_storage_sets():
-        for storage_key in STORAGE_SETS[StorageSetKey(storage_set_key)]:
-            _STORAGE_CLUSTER_MAP[storage_key] = cluster
+        _STORAGE_SET_CLUSTER_MAP[storage_set_key] = cluster
 
 
 def get_cluster(storage_key: StorageKey) -> Cluster:
-    return _STORAGE_CLUSTER_MAP[storage_key]
+    storage_set_key = STORAGE_SETS[storage_key]
+    return _STORAGE_SET_CLUSTER_MAP[storage_set_key]

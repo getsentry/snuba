@@ -1,4 +1,4 @@
-from typing import Mapping, Set
+from typing import Mapping
 
 from enum import Enum
 from snuba.datasets.storages import StorageKey
@@ -12,18 +12,22 @@ class StorageSetKey(Enum):
     TRANSACTIONS = "transactions"
 
 
-STORAGE_SETS: Mapping[StorageSetKey, Set[StorageKey]] = {
-    StorageSetKey.EVENTS: {
-        StorageKey.ERRORS,
-        StorageKey.EVENTS,
-        StorageKey.GROUPEDMESSAGES,
-        StorageKey.GROUPASSIGNEES,
-        # TODO: Remove once groups are no longer storages
-        StorageKey.GROUPS,
-    },
-    # Should group assignee be on the events cluster?
-    StorageSetKey.OUTCOMES: {StorageKey.OUTCOMES_RAW, StorageKey.OUTCOMES_HOURLY},
-    StorageSetKey.QUERYLOG: {StorageKey.QUERYLOG},
-    StorageSetKey.SESSIONS: {StorageKey.SESSIONS_RAW, StorageKey.SESSIONS_HOURLY},
-    StorageSetKey.TRANSACTIONS: {StorageKey.TRANSACTIONS},
+STORAGE_SETS: Mapping[StorageKey, StorageSetKey] = {
+    # Events
+    StorageKey.EVENTS: StorageSetKey.EVENTS,
+    StorageKey.ERRORS: StorageSetKey.EVENTS,
+    StorageKey.GROUPEDMESSAGES: StorageSetKey.EVENTS,
+    StorageKey.GROUPASSIGNEES: StorageSetKey.EVENTS,
+    # TODO: Remove once groups are no longer storages
+    StorageKey.GROUPS: StorageSetKey.EVENTS,
+    # Querylog
+    StorageKey.QUERYLOG: StorageSetKey.QUERYLOG,
+    # Outcomes
+    StorageKey.OUTCOMES_RAW: StorageSetKey.OUTCOMES,
+    StorageKey.OUTCOMES_HOURLY: StorageSetKey.OUTCOMES,
+    # Sessions
+    StorageKey.SESSIONS_RAW: StorageSetKey.SESSIONS,
+    StorageKey.SESSIONS_HOURLY: StorageSetKey.SESSIONS,
+    # Transactions
+    StorageKey.TRANSACTIONS: StorageSetKey.TRANSACTIONS,
 }
