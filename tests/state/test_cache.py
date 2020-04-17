@@ -48,3 +48,18 @@ def test_get_or_execute_missed_deadline(backend: Cache[bytes]) -> None:
     backend.get_or_execute(key, function, 1) == value
 
     assert backend.get(key) is None
+
+
+def test_get_or_execute_exception(backend: Cache[bytes]) -> None:
+    key = "key"
+
+    class CustomException(Exception):
+        pass
+
+    def function() -> bytes:
+        raise CustomException("error")
+
+    with pytest.raises(CustomException):
+        backend.get_or_execute(key, function, 1)
+
+    assert backend.get(key) is None
