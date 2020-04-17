@@ -56,20 +56,27 @@ class RedisCache(Cache[T]):
         )
 
     def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
-        key = self.__build_key(key)
+        result_key = self.__build_key(key)
+        wait_queue_key = f"{self.__build_key(key)}:w"
+        task_ident_key = f"{self.__build_key(key)}:t"
 
         result = self.__script_get(
-            [key, f"{key}:q", f"{key}:u"], [timeout, uuid.uuid1().hex]
+            [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
         if result[0] == RESULT_VALUE:
             logger.debug("Immediately returning result from cache hit.")
             return self.__codec.decode(result[1])
         elif result[0] == RESULT_EXECUTE:
-            task_id = result[1].decode("utf-8")
-            logger.debug("Executing task (id: %r)...", task_id)
-            keys = [key, f"{key}:q", f"{key}:u", f"{key}:n:{task_id}"]
-            argv = [task_id, 60]
+            task_ident = result[1].decode("utf-8")
+            task_timeout = int(result[2])
+            logger.debug(
+                "Executing task (%r) with %s second timeout...",
+                task_ident,
+                task_timeout,
+            )
+
+            argv = [task_ident, 60]
             try:
                 value = function()
             except Exception:
@@ -80,24 +87,57 @@ class RedisCache(Cache[T]):
                 )
             finally:
                 logger.debug("Setting result and waking blocked clients...")
-                self.__script_set(keys, argv)
+                self.__script_set(
+                    [
+                        result_key,
+                        wait_queue_key,
+                        task_ident_key,
+                        self.__build_notify_queue_key(key, task_ident),
+                    ],
+                    argv,
+                )
             return value
         elif result[0] == RESULT_WAIT:
-            task_id = result[1].decode("utf-8")
-            timeout_remaining = result[2]
-            effective_timeout = min(timeout_remaining, timeout)
+            task_ident = result[1].decode("utf-8")
+            task_timeout_remaining = int(result[2])
+
+            # Block until an item to be available in the notify queue or we hit
+            # one of the two possible timeouts.
+            effective_timeout = min(task_timeout_remaining, timeout)
             logger.debug(
-                "Waiting for task result (id: %r) for up to %s seconds...",
-                task_id,
+                "Waiting for task result (%r) for up to %s seconds...",
+                task_ident,
                 effective_timeout,
             )
-            if not self.__client.blpop(f"{key}:n:{task_id}", effective_timeout):
-                raise ExecutionTimeoutError("timed out waiting for result")
+            if not self.__client.blpop(
+                self.__build_notify_queue_key(key, task_ident), effective_timeout
+            ):
+                if effective_timeout == task_timeout_remaining:
+                    # If the effective timeout was the remaining task timeout,
+                    # this means that the client responsible for generating the
+                    # cache value didn't do so before it promised to.
+                    raise ExecutionTimeoutError(
+                        "result not available before execution deadline"
+                    )
+                else:
+                    # If the effective timeout was the timeout provided to this
+                    # method, that means that our timeout was stricter than the
+                    # execution timeout.
+                    raise TimeoutError("timed out waiting for result")
             else:
-                value = self.__client.get(key)
-                if value is None:
+                # If we didn't timeout, there should be a value waiting for us.
+                # If there is no value, that means that the client responsible
+                # for generating the cache value errored while generating it.
+                raw_value = self.__client.get(result_key)
+                if raw_value is None:
+                    # TODO: If we wanted to get clever, this could include the
+                    # error message from the other client, or a Sentry ID or
+                    # something.
                     raise ExecutionError("no value at key")
                 else:
-                    return self.__codec.decode(value)
+                    return self.__codec.decode(raw_value)
         else:
             raise ValueError("unexpected result from script")
+
+    def __build_notify_queue_key(self, key: str, task_ident: str) -> str:
+        return f"{self.__build_key(key)}:n:{task_ident}"
