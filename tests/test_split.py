@@ -7,7 +7,7 @@ from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
-from snuba.web.split import (
+from snuba.datasets.plans.split import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )

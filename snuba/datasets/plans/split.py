@@ -10,6 +10,11 @@ from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.util import is_condition
+
+# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
+# dependency is a refactoring of the methods that return RawQueryResult to make them
+# depend on Result + some debug data structure instead. Also It requires removing
+# extra data from the result of the query.
 from snuba.web import RawQueryResult
 
 # Every time we find zero results for a given step, expand the search window by

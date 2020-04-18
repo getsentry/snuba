@@ -12,10 +12,10 @@ from snuba.clickhouse.columns import (
     String,
     UInt,
 )
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
+from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.web.split import (
+from snuba.datasets.plans.split import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )

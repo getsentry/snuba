@@ -17,13 +17,13 @@ from snuba.clickhouse.columns import (
     UUID,
     WithDefault,
 )
-from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.query.processors.transaction_column_processor import (
     TransactionColumnProcessor,
 )
-from snuba.web.split import (
+from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.split import (
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
