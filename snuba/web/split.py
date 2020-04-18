@@ -19,11 +19,6 @@ from snuba.web import RawQueryResult
 STEP_GROWTH = 10
 
 
-def _is_query_splittable(query: Query) -> bool:
-    query_limit = query.get_limit()
-    return query_limit is not None and query_limit > 0 and not query.get_groupby()
-
-
 def _identify_condition(condition: Any, field: str, operand: str) -> bool:
     return is_condition(condition) and condition[0] == field and condition[1] == operand
 
@@ -50,32 +45,6 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
     def __init__(self, timestamp_col: str) -> None:
         self.__timestamp_col = timestamp_col
 
-    def __can_execute(self, request: Request) -> bool:
-        (use_split,) = state.get_configs([("use_split", 0)])
-        if not use_split or not _is_query_splittable(request.query):
-            return False
-
-        orderby = request.query.get_orderby()
-        if not orderby:
-            return False
-
-        has_from_date = any(
-            _identify_condition(condition, self.__timestamp_col, ">=")
-            for condition in request.query.get_conditions() or []
-        )
-
-        has_to_date = any(
-            _identify_condition(condition, self.__timestamp_col, "<")
-            for condition in request.query.get_conditions() or []
-        )
-
-        return (
-            has_from_date
-            and has_to_date
-            and request.query.get_offset() < 1000
-            and orderby[:1] == [f"-{self.__timestamp_col}"]
-        )
-
     def execute(
         self, request: Request, runner: QueryRunner
     ) -> Optional[RawQueryResult]:
@@ -90,30 +59,45 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         into smaller increments, and start with the last one, so that we can potentially
         avoid querying the entire range.
         """
-        if not self.__can_execute(request):
+        limit = request.query.get_limit()
+        if limit is None or request.query.get_groupby():
+            return None
+
+        if request.query.get_offset() >= 1000:
+            return None
+
+        orderby = request.query.get_orderby()
+        if not orderby or orderby[0] != f"-{self.__timestamp_col}":
+            return None
+
+        conditions = request.query.get_conditions() or []
+        from_date_str = next(
+            (
+                condition[2]
+                for condition in conditions
+                if _identify_condition(condition, self.__timestamp_col, ">=")
+            ),
+            None,
+        )
+
+        to_date_str = next(
+            (
+                condition[2]
+                for condition in conditions
+                if _identify_condition(condition, self.__timestamp_col, "<")
+            ),
+            None,
+        )
+
+        if not from_date_str or not to_date_str:
             return None
 
         date_align, split_step = state.get_configs(
             [("date_align_seconds", 1), ("split_step", 3600)]  # default 1 hour
         )
-
-        # We already ensured the conditions below exist in the query during the
-        # can_execute call.
-        to_date_str = next(
-            condition[2]
-            for condition in request.query.get_conditions() or []
-            if _identify_condition(condition, self.__timestamp_col, "<")
-        )
         to_date = util.parse_datetime(to_date_str, date_align)
-
-        from_date_str = next(
-            condition[2]
-            for condition in request.query.get_conditions() or []
-            if _identify_condition(condition, self.__timestamp_col, ">=")
-        )
         from_date = util.parse_datetime(from_date_str, date_align)
 
-        limit = request.query.get_limit() or 0
         remaining_offset = request.query.get_offset()
 
         overall_result = None
@@ -193,27 +177,6 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
     def __get_min_columns(self) -> Sequence[str]:
         return [self.__id_column, self.__project_column, self.__timestamp_column]
 
-    def __can_execute(self, request: Request) -> bool:
-        (use_split,) = state.get_configs([("use_split", 0)])
-        if not use_split:
-            return False
-
-        if not _is_query_splittable(request.query):
-            return False
-
-        if not request.query.get_selected_columns():
-            return False
-
-        if request.query.get_aggregations():
-            return False
-
-        total_col_count = len(request.query.get_all_referenced_columns())
-        copied_query = copy.deepcopy(request.query)
-        copied_query.set_selected_columns(self.__get_min_columns())
-        min_col_count = len(copied_query.get_all_referenced_columns())
-
-        return total_col_count > min_col_count
-
     def execute(
         self, request: Request, runner: QueryRunner
     ) -> Optional[RawQueryResult]:
@@ -223,14 +186,21 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
-        if not self.__can_execute(request):
+        if (
+            not request.query.get_limit()
+            or request.query.get_groupby()
+            or request.query.get_aggregations()
+            or not request.query.get_selected_columns()
+        ):
             return None
 
-        # The query function may mutate the request body during query
-        # evaluation, so we need to copy the body to ensure that the query has
-        # not been modified by the time we're ready to run the full query.
+        total_col_count = len(request.query.get_all_referenced_columns())
         minimal_request = copy.deepcopy(request)
         minimal_request.query.set_selected_columns(self.__get_min_columns())
+
+        if total_col_count <= len(minimal_request.query.get_all_referenced_columns()):
+            return None
+
         result = runner(minimal_request)
         del minimal_request
 
@@ -251,11 +221,12 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
                 request.query, self.__project_column, "IN", project_ids,
             )
 
-            timestamp_field = self.__timestamp_column
-            timestamps = [event[timestamp_field] for event in result.result["data"]]
+            timestamps = [
+                event[self.__timestamp_column] for event in result.result["data"]
+            ]
             _replace_condition(
                 request.query,
-                timestamp_field,
+                self.__timestamp_column,
                 ">=",
                 util.parse_datetime(min(timestamps)).isoformat(),
             )
@@ -263,7 +234,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             # and events are stored with a granularity of 1 second.
             _replace_condition(
                 request.query,
-                timestamp_field,
+                self.__timestamp_column,
                 "<",
                 (
                     util.parse_datetime(max(timestamps)) + timedelta(seconds=1)

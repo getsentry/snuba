@@ -1,5 +1,6 @@
 from typing import Optional, Sequence
 
+from snuba import state
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
@@ -25,10 +26,12 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self.__splitters = splitters or []
 
     def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
-        for splitter in self.__splitters:
-            result = splitter.execute(request, runner)
-            if result is not None:
-                return result
+        (use_split,) = state.get_configs([("use_split", 0)])
+        if use_split:
+            for splitter in self.__splitters:
+                result = splitter.execute(request, runner)
+                if result is not None:
+                    return result
 
         return runner(request)
 
