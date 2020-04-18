@@ -6,7 +6,7 @@ from typing import Any, Mapping
 from snuba import state
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.utils.metrics.timer import Timer

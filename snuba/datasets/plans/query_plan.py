@@ -6,12 +6,12 @@ from typing import Callable, Sequence
 
 from snuba.web import RawQueryResult
 
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.physical import Query
+from snuba.query.processors.physical import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 
-QueryRunner = Callable[[PhysicalQuery, RequestSettings], RawQueryResult]
+QueryRunner = Callable[[Query, RequestSettings], RawQueryResult]
 
 
 @dataclass(frozen=True)
@@ -23,14 +23,14 @@ class StorageQueryPlan:
     after the dataset query processing has been performed and the storage
     has been selected.
     It embeds the PhysicalQuery (the query to run on the storage after translation),
-    and the sequence of storage specific PhysicalQueryProcessors to apply
+    and the sequence of storage specific QueryProcessors to apply
     to the query after the the storage has been selected.
     It also provides a plan execution strategy, in case the query is not
     one individual query statement (like for split queries).
     """
 
-    query: PhysicalQuery
-    query_processors: Sequence[PhysicalQueryProcessor]
+    query: Query
+    query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
@@ -48,7 +48,7 @@ class QueryPlanExecutionStrategy(ABC):
     @abstractmethod
     def execute(
         self,
-        query: PhysicalQuery,
+        query: Query,
         request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> RawQueryResult:

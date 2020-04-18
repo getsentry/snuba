@@ -10,9 +10,9 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.query_processor import ExtensionQueryProcessor
-from snuba.query.query import Query
-from snuba.query.query_processor import ExtensionData
+from snuba.query.processors.logical import ExtensionQueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.logical import ExtensionData
 from snuba.request.request_settings import RequestSettings
 from snuba.schemas import get_time_series_extension_properties
 

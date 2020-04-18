@@ -4,7 +4,7 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
-from snuba.query.physical import PhysicalQuery
+from snuba.query.physical import Query
 from snuba.request.request_settings import RequestSettings
 
 
@@ -18,7 +18,7 @@ class DictClickhouseQuery(ClickhouseQuery):
     """
 
     def __init__(
-        self, dataset: Dataset, query: PhysicalQuery, settings: RequestSettings,
+        self, dataset: Dataset, query: Query, settings: RequestSettings,
     ) -> None:
         parsing_context = ParsingContext()
 

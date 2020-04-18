@@ -1,8 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Mapping
 
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
 
 
@@ -30,20 +29,6 @@ class QueryProcessor(ABC):
         # Ideally this should return a query insteadof assuming it mutates the
         # existing one in place. We can move towards an immutable structure
         # after changing Request.
-        raise NotImplementedError
-
-
-class PhysicalQueryProcessor(ABC):
-    """
-    This class represents the same concept as the QueryProcessor. The only difference is
-    that it works on the Physical Query instead of the Logical Query.
-    """
-
-    @abstractmethod
-    def process_query(
-        self, query: PhysicalQuery, request_settings: RequestSettings
-    ) -> None:
-        # TODO: Make the Query class immutable.
         raise NotImplementedError
 
 

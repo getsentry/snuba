@@ -7,8 +7,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.query import Query
-from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.logical import ExtensionData, ExtensionQueryProcessor
 from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs

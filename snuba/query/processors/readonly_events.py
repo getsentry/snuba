@@ -1,11 +1,11 @@
 from snuba import state
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.physical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
-class ReadOnlyTableSelector(PhysicalQueryProcessor):
+class ReadOnlyTableSelector(QueryProcessor):
     """
     Replaces the data source in the query with a TableSource if the table
     name of the original datasource is the one provided to the constructor,
@@ -17,7 +17,7 @@ class ReadOnlyTableSelector(PhysicalQueryProcessor):
         self.__read_only_table = read_only_table
 
     def process_query(
-        self, query: PhysicalQuery, request_settings: RequestSettings
+        self, query: Query, request_settings: RequestSettings
     ) -> None:
         readonly_enabled = state.get_config("enable_events_readonly_table", False)
         if not readonly_enabled:

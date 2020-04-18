@@ -4,8 +4,8 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.logical import QueryProcessor
 from snuba.query.processors.performance_expressions import apdex
 from snuba.request.request_settings import RequestSettings
 

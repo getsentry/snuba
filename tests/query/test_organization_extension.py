@@ -6,7 +6,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import Column, Literal
 from snuba.query.organization_extension import OrganizationExtension
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema
 

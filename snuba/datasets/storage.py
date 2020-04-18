@@ -5,8 +5,8 @@ from typing import Optional, Sequence, Tuple
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.table_storage import TableWriter
-from snuba.query.query import Query
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
@@ -48,7 +48,7 @@ class ReadableStorage(Storage):
     """
 
     @abstractmethod
-    def get_query_processors(self) -> Sequence[PhysicalQueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
         that are applied to queries after parsing and before running them on Clickhouse.
@@ -81,7 +81,7 @@ class ReadableTableStorage(ReadableStorage):
     def __init__(
         self,
         schemas: StorageSchemas,
-        query_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
+        query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
@@ -89,7 +89,7 @@ class ReadableTableStorage(ReadableStorage):
     def get_schemas(self) -> StorageSchemas:
         return self.__schemas
 
-    def get_query_processors(self) -> Sequence[PhysicalQueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
 
 
@@ -98,7 +98,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         self,
         schemas: StorageSchemas,
         table_writer: TableWriter,
-        query_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
+        query_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         super().__init__(schemas, query_processors)
         self.__table_writer = table_writer

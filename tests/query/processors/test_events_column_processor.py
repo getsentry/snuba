@@ -9,7 +9,7 @@ from snuba.query.conditions import (
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.processors.events_column_processor import EventsColumnProcessor
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 

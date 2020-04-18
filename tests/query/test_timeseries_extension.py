@@ -12,7 +12,7 @@ from snuba.query.conditions import (
 )
 from snuba.query.expressions import Column, Expression, Literal
 from snuba.query.timeseries import TimeSeriesExtension
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.query.types import Condition
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema

@@ -13,7 +13,7 @@ from snuba.query.columns import (
     conditions_expr,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.util import (
     escape_literal,
     tuplify,

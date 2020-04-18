@@ -8,7 +8,7 @@ from snuba.datasets.dataset import Dataset
 from snuba.query.expressions import Expression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
-from snuba.query.query import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.util import is_function, to_list, tuplify
 
 logger = logging.getLogger(__name__)

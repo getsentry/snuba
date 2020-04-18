@@ -2,8 +2,8 @@ import copy
 
 from abc import ABC, abstractmethod
 
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query import Query
+from snuba.query.physical import Query as PhysicalQuery
+from snuba.query.logical import Query as LogicalQuery
 
 
 class QueryTranslator(ABC):
@@ -16,7 +16,7 @@ class QueryTranslator(ABC):
     """
 
     @abstractmethod
-    def translate(self, query: Query) -> PhysicalQuery:
+    def translate(self, query: LogicalQuery) -> PhysicalQuery:
         raise NotImplementedError
 
 
@@ -27,5 +27,5 @@ class CopyTranslator(QueryTranslator):
     processing to work on a different object than the Logical Query.
     """
 
-    def translate(self, query: Query) -> PhysicalQuery:
+    def translate(self, query: LogicalQuery) -> PhysicalQuery:
         return copy.deepcopy(query)

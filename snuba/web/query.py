@@ -12,7 +12,7 @@ from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.dictquery import DictClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.physical import PhysicalQuery
+from snuba.query.physical import Query
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -141,7 +141,7 @@ def _format_storage_query_and_run(
     from_date: datetime,
     to_date: datetime,
     referrer: str,
-    query: PhysicalQuery,
+    query: Query,
     request_settings: RequestSettings,
 ) -> RawQueryResult:
     """

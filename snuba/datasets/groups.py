@@ -23,8 +23,8 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.logical import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 

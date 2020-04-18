@@ -1,11 +1,11 @@
 from snuba.datasets.schemas.join import JoinClause
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.physical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
-class SimpleJoinOptimizer(PhysicalQueryProcessor):
+class SimpleJoinOptimizer(QueryProcessor):
     """
     Simplest possible join optimizer. It turns a join expression into a single
     table expression if only one table is referenced in the query.
@@ -17,7 +17,7 @@ class SimpleJoinOptimizer(PhysicalQueryProcessor):
     """
 
     def process_query(
-        self, query: PhysicalQuery, request_settings: RequestSettings,
+        self, query: Query, request_settings: RequestSettings,
     ) -> None:
         from_clause = query.get_data_source()
         if not isinstance(from_clause, JoinClause):

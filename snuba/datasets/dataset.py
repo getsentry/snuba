@@ -6,8 +6,8 @@ from snuba.datasets.plans.query_plan import StorageQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors.logical import QueryProcessor
 from snuba.util import parse_datetime, qualified_column
 
 

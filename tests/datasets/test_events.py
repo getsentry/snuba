@@ -4,7 +4,7 @@ from tests.base import BaseEventsTest
 
 from snuba.query.columns import column_expr
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.util import tuplify
 
 

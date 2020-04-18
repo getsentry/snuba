@@ -7,7 +7,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-from snuba.query.query import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 
 
 def test_iterate_over_query():

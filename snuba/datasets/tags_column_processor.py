@@ -16,7 +16,7 @@ from snuba.query.conditions import (
     is_in_condition,
 )
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.util import (
     alias_expr,
     escape_literal,

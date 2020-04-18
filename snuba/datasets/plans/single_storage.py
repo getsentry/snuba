@@ -14,8 +14,8 @@ from snuba.datasets.plans.translators import CopyTranslator
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import RawQueryResult
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.physical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 
@@ -23,7 +23,7 @@ from snuba.request.request_settings import RequestSettings
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def execute(
         self,
-        query: PhysicalQuery,
+        query: Query,
         request_settings: RequestSettings,
         runner: QueryRunner,
     ) -> RawQueryResult:
@@ -39,7 +39,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     def __init__(
         self,
         storage: ReadableStorage,
-        post_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
+        post_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
@@ -81,7 +81,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
     def __init__(
         self,
         selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[PhysicalQueryProcessor]] = None,
+        post_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         self.__selector = selector
         self.__post_processors = post_processors or []

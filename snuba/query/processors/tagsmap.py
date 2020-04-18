@@ -7,8 +7,8 @@ from typing import Optional, List, NamedTuple, Set
 
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.expressions import Column, Expression
-from snuba.query.physical import PhysicalQuery
-from snuba.query.query_processor import PhysicalQueryProcessor
+from snuba.query.physical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.datasets.events_format import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -29,7 +29,7 @@ class OptimizableCondition(NamedTuple):
 logger = logging.getLogger(__name__)
 
 
-class NestedFieldConditionOptimizer(PhysicalQueryProcessor):
+class NestedFieldConditionOptimizer(QueryProcessor):
     """
     This processor scans the the conditions in the query and converts
     top level eq/neq conditions on specific nested fields, into LIKE/NOT LIKE
@@ -115,7 +115,7 @@ class NestedFieldConditionOptimizer(PhysicalQueryProcessor):
         return False
 
     def process_query(
-        self, query: PhysicalQuery, request_settings: RequestSettings
+        self, query: Query, request_settings: RequestSettings
     ) -> None:
         conditions = query.get_conditions()
         if not conditions:

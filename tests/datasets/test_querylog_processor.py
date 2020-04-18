@@ -3,7 +3,7 @@ import uuid
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages.factory import get_storage
 from snuba.processor import ProcessedMessage, ProcessorAction
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.schema import HTTPRequestSettings
 from snuba.utils.clock import TestingClock

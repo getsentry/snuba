@@ -13,7 +13,7 @@ from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
-from snuba.query.physical import PhysicalQuery
+from snuba.query.physical import Query
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
 from snuba.state.cache import Cache, RedisCache
@@ -57,7 +57,7 @@ def update_query_metadata_and_stats(
 
 
 def raw_query(
-    physical_query: PhysicalQuery,
+    physical_query: Query,
     query: ClickhouseQuery,
     request_settings: RequestSettings,
     timer: Timer,

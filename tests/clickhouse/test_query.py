@@ -2,7 +2,7 @@ from tests.base import BaseEventsTest
 from unittest.mock import patch
 
 from snuba.clickhouse.dictquery import DictClickhouseQuery
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 

@@ -3,7 +3,7 @@ import pytest
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.query import OrderBy, OrderByDirection, Query
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
