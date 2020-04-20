@@ -29,7 +29,7 @@ class Cache(Generic[TValue], ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_or_execute(
+    def get_readthrough(
         self, key: str, function: Callable[[], TValue], timeout: int
     ) -> TValue:
         """

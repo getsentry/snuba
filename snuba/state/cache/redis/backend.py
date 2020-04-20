@@ -58,7 +58,7 @@ class RedisCache(Cache[TValue]):
             ex=get_config("cache_expiry_sec", 1),
         )
 
-    def get_or_execute(
+    def get_readthrough(
         self, key: str, function: Callable[[], TValue], timeout: int
     ) -> TValue:
         result_key = self.__build_key(key)
