@@ -36,7 +36,6 @@ class TimeSeriesColumnProcessor(QueryProcessor):
             ),
         }.get(granularity)
         if not function_call:
-            # "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})",
             function_call = FunctionCall(
                 alias,
                 "toDateTime",
