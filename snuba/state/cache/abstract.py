@@ -33,14 +33,17 @@ class Cache(Generic[TValue], ABC):
         self, key: str, function: Callable[[], TValue], timeout: int
     ) -> TValue:
         """
-        Attempts to get a value from the cache. On a cache miss, the return
-        value of the provided function is used to populate the cache for
-        subsequent callers and is used as the return value for this method.
+        Implements a read-through caching pattern for the value at the given
+        key. This method first attempts to fetch and return a preexisting
+        value from the cache. On a cache miss, the return value of the
+        provided function is used to populate the cache for subsequent
+        callers and is used as the return value for this method.
 
-        This function also acts as an exclusive lock on the cache key while
-        the function is executing. Callers will be blocked until the client
-        that holds the lock (the first client to get a cache miss) has
-        completed executing the function and placed its result in cache.
+        This function also acts as an exclusive lock on the cache key to
+        other callers of this method while the function is executing. Callers
+        will be blocked until the client that holds the lock (the first
+        client to get a cache miss) has completed executing the function and
+        placed its result in cache.
 
         If the client holding the lock does not successfully execute the
         function, no result value will be populated. The client that held the
