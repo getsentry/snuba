@@ -1,17 +1,19 @@
 import logging
 import uuid
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Optional
 
 from pkg_resources import resource_string
 from redis.exceptions import ResponseError
 
 from snuba.redis import RedisClientType
 from snuba.state import get_config
-from snuba.state.cache.abstract import Cache, ExecutionError, ExecutionTimeoutError
+from snuba.state.cache.abstract import (
+    Cache,
+    ExecutionError,
+    ExecutionTimeoutError,
+    TValue,
+)
 from snuba.utils.codecs import Codec
-
-
-T = TypeVar("T")
 
 
 logger = logging.getLogger(__name__)
@@ -22,9 +24,9 @@ RESULT_EXECUTE = 1
 RESULT_WAIT = 2
 
 
-class RedisCache(Cache[T]):
+class RedisCache(Cache[TValue]):
     def __init__(
-        self, client: RedisClientType, prefix: str, codec: Codec[bytes, T]
+        self, client: RedisClientType, prefix: str, codec: Codec[bytes, TValue]
     ) -> None:
         self.__client = client
         self.__prefix = prefix
@@ -42,21 +44,23 @@ class RedisCache(Cache[T]):
     def __build_key(self, key: str) -> str:
         return f"{self.__prefix}{{{key}}}"
 
-    def get(self, key: str) -> Optional[T]:
+    def get(self, key: str) -> Optional[TValue]:
         value = self.__client.get(self.__build_key(key))
         if value is None:
             return None
 
         return self.__codec.decode(value)
 
-    def set(self, key: str, value: T) -> None:
+    def set(self, key: str, value: TValue) -> None:
         self.__client.set(
             self.__build_key(key),
             self.__codec.encode(value),
             ex=get_config("cache_expiry_sec", 1),
         )
 
-    def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
+    def get_or_execute(
+        self, key: str, function: Callable[[], TValue], timeout: int
+    ) -> TValue:
         result_key = self.__build_key(key)
         wait_queue_key = f"{self.__build_key(key)}:w"
         task_ident_key = f"{self.__build_key(key)}:t"

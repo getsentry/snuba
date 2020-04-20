@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Generic, Optional, TypeVar
 
 
-T = TypeVar("T")
+TValue = TypeVar("TValue")
 
 
 class ExecutionError(Exception):
@@ -13,23 +13,25 @@ class ExecutionTimeoutError(ExecutionError):
     pass
 
 
-class Cache(Generic[T], ABC):
+class Cache(Generic[TValue], ABC):
     @abstractmethod
-    def get(self, key: str) -> Optional[T]:
+    def get(self, key: str) -> Optional[TValue]:
         """
         Gets a value from the cache.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def set(self, key: str, value: T) -> None:
+    def set(self, key: str, value: TValue) -> None:
         """
         Sets a value in the cache.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_or_execute(self, key: str, function: Callable[[], T], timeout: int) -> T:
+    def get_or_execute(
+        self, key: str, function: Callable[[], TValue], timeout: int
+    ) -> TValue:
         """
         Attempts to get a value from the cache. On a cache miss, the return
         value of the provided function is used to populate the cache for
