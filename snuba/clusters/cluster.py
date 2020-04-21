@@ -8,7 +8,21 @@ from snuba.datasets.storages import StorageKey
 from snuba.reader import Reader
 
 
-class Cluster:
+class ClickhouseCluster:
+    def __init__(self, host: str, port: int, http_port: int):
+        self.__clickhouse_rw = ClickhousePool(host, port)
+        self.__clickhouse_ro = ClickhousePool(
+            host, port, client_settings={"readonly": True},
+        )
+
+    def get_clickhouse_rw(self) -> ClickhousePool:
+        return self.__clickhouse_rw
+
+    def get_clickhouse_ro(self) -> ClickhousePool:
+        return self.__clickhouse_ro
+
+
+class Cluster(ClickhouseCluster):
     """
     A cluster is responsible for managing a collection of database nodes.
 
@@ -30,23 +44,15 @@ class Cluster:
     """
 
     def __init__(self, host: str, port: int, http_port: int, storage_sets: Set[str]):
+        super().__init__(host, port, http_port)
         self.__storage_sets = storage_sets
-        self.__clickhouse_rw = ClickhousePool(host, port)
-        self.__clickhouse_ro = ClickhousePool(
-            host, port, client_settings={"readonly": True},
-        )
+
         self.__reader: Reader[ClickhouseQuery] = NativeDriverReader(
-            self.__clickhouse_ro
+            self.get_clickhouse_ro()
         )
 
     def get_storage_sets(self) -> Set[StorageSetKey]:
         return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
-
-    def get_clickhouse_rw(self) -> ClickhousePool:
-        return self.__clickhouse_rw
-
-    def get_clickhouse_ro(self) -> ClickhousePool:
-        return self.__clickhouse_ro
 
     def get_reader(self) -> Reader[ClickhouseQuery]:
         return self.__reader
