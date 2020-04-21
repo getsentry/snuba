@@ -41,8 +41,12 @@ class RedisCache(Cache[TValue]):
             resource_string("snuba", "state/cache/redis/scripts/set.lua")
         )
 
-    def __build_key(self, key: str) -> str:
-        return f"{self.__prefix}{{{key}}}"
+    def __build_key(
+        self, key: str, prefix: Optional[str] = None, suffix: Optional[str] = None
+    ) -> str:
+        return self.__prefix + "/".join(
+            [bit for bit in [prefix, f"{{{key}}}", suffix] if bit is not None]
+        )
 
     def get(self, key: str) -> Optional[TValue]:
         value = self.__client.get(self.__build_key(key))
@@ -83,12 +87,12 @@ class RedisCache(Cache[TValue]):
         # the client responsible for executing the function and notifying the
         # subscribed clients of its completion. Only one wait queue should be
         # associated with a cache key at any time.
-        wait_queue_key = self.__build_key(f"tasks/{key}/wait")
+        wait_queue_key = self.__build_key(key, "tasks", "wait")
 
         # The task identity (a Redis bytestring) is used to store a unique
         # identifier for a single task evaluation and notification cycle. Only
         # one task should be associated with a cache key at any time.
-        task_ident_key = self.__build_key(f"tasks/{key}")
+        task_ident_key = self.__build_key(key, "tasks")
 
         # The notify queue (a Redis list) is used to unblock clients that are
         # waiting for the task to complete. **This implementation requires that
@@ -101,7 +105,7 @@ class RedisCache(Cache[TValue]):
         # tasks where it was also a member of the wait queue, the notify queue
         # includes the unique task identity as part of it's key.
         def build_notify_queue_key(task_ident: str) -> str:
-            return self.__build_key(f"tasks/{key}/notify/{task_ident}")
+            return self.__build_key("key", "tasks", f"notify/{task_ident}")
 
         # At this point, we have all of the information we need to figure out
         # if the key exists, and if it doesn't, if we should start working or
