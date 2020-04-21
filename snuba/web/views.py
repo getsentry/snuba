@@ -40,7 +40,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
-from snuba.web import RawQueryException
+from snuba.web import RawQueryException, RawQueryExtraData
 from snuba.web.query import parse_and_run_query
 
 
@@ -275,12 +275,20 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
         http_request.referrer,
     )
 
+    payload: MutableMapping[str, Any]
+    status: int
+    extra: RawQueryExtraData
+
     try:
         result = parse_and_run_query(dataset, request, timer)
     except RawQueryException as exception:
-        cause = getattr(exception, "__cause__", None)
+        status = 500
+        extra = exception.extra
+
         details: Mapping[str, Any]
+        cause = getattr(exception, "__cause__", None)
         if isinstance(cause, RateLimitExceeded):
+            status = 429
             details = {
                 "type": "rate-limited",
                 "message": "rate limit exceeded",
@@ -297,22 +305,22 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
                 "message": str(cause),
             }
         else:
-            raise NotImplementedError  # something went very wrong
+            assert cause is not None and isinstance(
+                cause, Exception
+            ), "expected RawQueryResult to be thrown with Exception-derived cause"
 
-        return Response(
-            json.dumps(
-                {"error": details, "timing": timer.for_json(), **exception.extra}
-            ),
-            429 if isinstance(cause, RateLimitExceeded) else 500,
-            {"Content-Type": "application/json"},
-        )
+        payload = {"error": details}
+    else:
+        status = 200
+        extra = result.extra
+        payload = {**result.result}
 
-    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
+    payload["timing"] = timer.for_json()
 
     if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-        payload.update(result.extra)
+        payload.update(extra)
 
-    return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})
+    return Response(json.dumps(payload), status, {"Content-Type": "application/json"})
 
 
 @application.errorhandler(InvalidSubscriptionError)
