@@ -4,14 +4,16 @@ from snuba.reader import Result
 
 
 class RawQueryException(Exception):
-    def __init__(
-        self, err_type: str, message: str, stats: Mapping[str, Any], sql: str, **meta
-    ):
-        self.err_type = err_type
-        self.message = message
+    """
+    Exception raiesd during query execution that is used to carry context
+    back up the stack to the HTTP response. This exception should always be
+    chained with another exception that contains additional detail about the
+    cause of the exception.
+    """
+
+    def __init__(self, stats: Mapping[str, Any], sql: str):
         self.stats = stats
         self.sql = sql
-        self.meta = meta
 
 
 class RawQueryResult(NamedTuple):

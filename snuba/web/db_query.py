@@ -10,7 +10,6 @@ from typing import (
 )
 
 from snuba import settings, state
-from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
 from snuba.redis import redis_client
@@ -177,28 +176,13 @@ def raw_query(
                     if use_cache:
                         cache.set(query_id, result)
                         timer.mark("cache_set")
-            except RateLimitExceeded as e:
-                stats = update_with_status("rate-limited")
-                raise RawQueryException(
-                    err_type="rate-limited",
-                    message="rate limit exceeded",
-                    stats=stats,
-                    sql=sql,
-                    detail=str(e),
-                ) from e
-            except Exception as e:
-                error = str(e)
-                logger.exception("Error running query: %s\n%s", sql, error)
-                stats = update_with_status("error")
-                meta = {}
-                if isinstance(e, ClickhouseError):
-                    err_type = "clickhouse"
-                    meta["code"] = e.code
+            except Exception as cause:
+                if isinstance(cause, RateLimitExceeded):
+                    stats = update_with_status("rate-limited")
                 else:
-                    err_type = "unknown"
-                raise RawQueryException(
-                    err_type=err_type, message=error, stats=stats, sql=sql, **meta,
-                ) from e
+                    logger.exception("Error running query: %s\n%s", sql, cause)
+                    stats = update_with_status("error")
+                raise RawQueryException(stats=stats, sql=sql) from cause
 
     stats = update_with_status("success")
 
