@@ -4,6 +4,7 @@ from functools import partial
 from hashlib import md5
 from typing import (
     Any,
+    Callable,
     Mapping,
     MutableMapping,
     Optional,
@@ -12,6 +13,7 @@ from typing import (
 from snuba import settings, state
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
+from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -53,6 +55,93 @@ def update_query_metadata_and_stats(
     )
 
     return stats
+
+
+def raw_query_runner(
+    *,
+    request: Request,
+    query: ClickhouseQuery,
+    query_settings: MutableMapping[str, Any],
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_id: Optional[str] = None,
+) -> Result:
+    with RateLimitAggregator(
+        request.settings.get_rate_limit_params()
+    ) as rate_limit_stats_container:
+        stats.update(rate_limit_stats_container.to_dict())
+        timer.mark("rate_limit")
+
+        project_rate_limit_stats = rate_limit_stats_container.get_stats(
+            PROJECT_RATE_LIMIT_NAME
+        )
+
+        if (
+            "max_threads" in query_settings
+            and project_rate_limit_stats is not None
+            and project_rate_limit_stats.concurrent > 1
+        ):
+            maxt = query_settings["max_threads"]
+            query_settings["max_threads"] = max(
+                1, maxt - project_rate_limit_stats.concurrent + 1
+            )
+
+        # Force query to use the first shard replica, which
+        # should have synchronously received any cluster writes
+        # before this query is run.
+        consistent = request.settings.get_consistent()
+        stats["consistent"] = consistent
+        if consistent:
+            query_settings["load_balancing"] = "in_order"
+            query_settings["max_threads"] = 1
+
+        result = reader.execute(
+            query,
+            query_settings,
+            query_id=query_id,
+            with_totals=request.query.has_totals(),
+        )
+
+        timer.mark("execute")
+        stats.update(
+            {"result_rows": len(result["data"]), "result_cols": len(result["meta"])}
+        )
+
+        return result
+
+
+def cache_readthrough(
+    key: str,
+    runner: Callable[[], Result],
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+) -> Result:
+    result = cache.get(key)
+    timer.mark("cache_get")
+    stats["cache_hit"] = bool(result)
+
+    if result is None:
+        result = runner()
+        cache.set(key, result)
+        timer.mark("cache_set")
+
+    return result
+
+
+def dedupe_waiter(
+    query_id: str,
+    runner: Callable[[], Result],
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+) -> Result:
+    with state.deduper(query_id) as is_dupe:
+        timer.mark("dedupe_wait")
+        stats.update({"is_duplicate": is_dupe})
+        return runner(
+            # All queries should already be deduplicated at this point
+            # But the query_id will let us know if they aren't
+            # query_id=query_id,
+        )
 
 
 def raw_query(
@@ -99,91 +188,58 @@ def raw_query(
 
     sql = query.format_sql()
     query_id = md5(force_bytes(sql)).hexdigest()
-    with state.deduper(query_id if use_deduper else None) as is_dupe:
-        timer.mark("dedupe_wait")
+    stats["query_id"] = query_id
 
-        result = cache.get(query_id) if use_cache else None
-        timer.mark("cache_get")
+    update_with_status = partial(
+        update_query_metadata_and_stats,
+        request,
+        sql,
+        timer,
+        stats,
+        query_metadata,
+        query_settings,
+        trace_id,
+    )
 
-        stats.update(
-            {
-                "is_duplicate": is_dupe,
-                "query_id": query_id,
-                "use_cache": bool(use_cache),
-                "cache_hit": bool(result),
-            }
-        ),
+    query_runner = partial(
+        raw_query_runner,
+        request=request,
+        query=query,
+        query_settings=query_settings,
+        timer=timer,
+        stats=stats,
+    )
 
-        update_with_status = partial(
-            update_query_metadata_and_stats,
-            request,
-            sql,
-            timer,
-            stats,
-            query_metadata,
-            query_settings,
-            trace_id,
+    stats["use_cache"] = bool(use_cache)
+    if use_cache:
+        query_runner = partial(
+            cache_readthrough,
+            key=query_id,
+            runner=query_runner,
+            timer=timer,
+            stats=stats,
         )
 
-        if not result:
-            try:
-                with RateLimitAggregator(
-                    request.settings.get_rate_limit_params()
-                ) as rate_limit_stats_container:
-                    stats.update(rate_limit_stats_container.to_dict())
-                    timer.mark("rate_limit")
+    if use_deduper:
+        query_runner = partial(
+            dedupe_waiter,
+            query_id=query_id,
+            runner=query_runner,
+            timer=timer,
+            stats=stats,
+        )
+    else:
+        stats["is_duplicate"] = False
 
-                    project_rate_limit_stats = rate_limit_stats_container.get_stats(
-                        PROJECT_RATE_LIMIT_NAME
-                    )
-
-                    if (
-                        "max_threads" in query_settings
-                        and project_rate_limit_stats is not None
-                        and project_rate_limit_stats.concurrent > 1
-                    ):
-                        maxt = query_settings["max_threads"]
-                        query_settings["max_threads"] = max(
-                            1, maxt - project_rate_limit_stats.concurrent + 1
-                        )
-
-                    # Force query to use the first shard replica, which
-                    # should have synchronously received any cluster writes
-                    # before this query is run.
-                    consistent = request.settings.get_consistent()
-                    stats["consistent"] = consistent
-                    if consistent:
-                        query_settings["load_balancing"] = "in_order"
-                        query_settings["max_threads"] = 1
-
-                    result = reader.execute(
-                        query,
-                        query_settings,
-                        # All queries should already be deduplicated at this point
-                        # But the query_id will let us know if they aren't
-                        query_id=query_id if use_deduper else None,
-                        with_totals=request.query.has_totals(),
-                    )
-
-                    timer.mark("execute")
-                    stats.update(
-                        {
-                            "result_rows": len(result["data"]),
-                            "result_cols": len(result["meta"]),
-                        }
-                    )
-
-                    if use_cache:
-                        cache.set(query_id, result)
-                        timer.mark("cache_set")
-            except Exception as cause:
-                if isinstance(cause, RateLimitExceeded):
-                    stats = update_with_status("rate-limited")
-                else:
-                    logger.exception("Error running query: %s\n%s", sql, cause)
-                    stats = update_with_status("error")
-                raise RawQueryException(stats=stats, sql=sql) from cause
-
-    stats = update_with_status("success")
-
-    return RawQueryResult(result, {"stats": stats, "sql": sql})
+    try:
+        result = query_runner()
+    except Exception as cause:
+        if isinstance(cause, RateLimitExceeded):
+            stats = update_with_status("rate-limited")
+        else:
+            logger.exception("Error running query: %s\n%s", sql, cause)
+            stats = update_with_status("error")
+        raise RawQueryException(stats=stats, sql=sql) from cause
+    else:
+        stats = update_with_status("success")
+        return RawQueryResult(result, {"stats": stats, "sql": sql})
