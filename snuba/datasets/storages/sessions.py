@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import (
     MergeTreeSchema,
@@ -128,6 +129,7 @@ materialized_view_schema = MaterializedViewSchema(
 # query.
 raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
+    storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -140,6 +142,7 @@ raw_storage = WritableTableStorage(
 # The materialized view we query aggregate data from.
 materialized_storage = ReadableTableStorage(
     storage_key=StorageKey.SESSIONS_HOURLY,
+    storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

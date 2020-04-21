@@ -3,8 +3,7 @@ from typing import MutableMapping, Set
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.clusters.storage_sets import StorageSetKey, STORAGE_SETS
-from snuba.datasets.storages import StorageKey
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader
 
 
@@ -87,6 +86,5 @@ for cluster in CLUSTERS:
         _STORAGE_SET_CLUSTER_MAP[storage_set_key] = cluster
 
 
-def get_cluster(storage_key: StorageKey) -> Cluster:
-    storage_set_key = STORAGE_SETS[storage_key]
+def get_cluster(storage_set_key: StorageSetKey) -> Cluster:
     return _STORAGE_SET_CLUSTER_MAP[storage_set_key]

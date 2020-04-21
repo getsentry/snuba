@@ -1,5 +1,5 @@
 from snuba.clickhouse.columns import ColumnSet, DateTime, Nullable, UInt
-
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.groupedmessage_processor import (
     GroupedMessageProcessor,
     GroupedMessageRow,
@@ -67,6 +67,7 @@ POSTGRES_TABLE = "sentry_groupedmessage"
 
 storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
+    storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=GroupedMessageTableWriter(
         write_schema=schema,
