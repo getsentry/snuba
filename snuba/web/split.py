@@ -26,6 +26,14 @@ def _identify_condition(condition: Any, field: str, operand: str) -> bool:
 def _replace_condition(
     query: Query, field: str, operand: str, new_literal: Union[str, List[Any]]
 ) -> None:
+    query.set_prewhere(
+        [
+            cond
+            if not _identify_condition(cond, field, operand)
+            else [field, operand, new_literal]
+            for cond in query.get_prewhere() or []
+        ]
+    )
     query.set_conditions(
         [
             cond
