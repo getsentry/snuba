@@ -157,54 +157,48 @@ def raw_query(
                         query_settings["load_balancing"] = "in_order"
                         query_settings["max_threads"] = 1
 
-                    try:
-                        result = reader.execute(
-                            query,
-                            query_settings,
-                            # All queries should already be deduplicated at this point
-                            # But the query_id will let us know if they aren't
-                            query_id=query_id if use_deduper else None,
-                            with_totals=request.query.has_totals(),
-                        )
+                    result = reader.execute(
+                        query,
+                        query_settings,
+                        # All queries should already be deduplicated at this point
+                        # But the query_id will let us know if they aren't
+                        query_id=query_id if use_deduper else None,
+                        with_totals=request.query.has_totals(),
+                    )
 
-                        timer.mark("execute")
-                        stats.update(
-                            {
-                                "result_rows": len(result["data"]),
-                                "result_cols": len(result["meta"]),
-                            }
-                        )
+                    timer.mark("execute")
+                    stats.update(
+                        {
+                            "result_rows": len(result["data"]),
+                            "result_cols": len(result["meta"]),
+                        }
+                    )
 
-                        if use_cache:
-                            cache.set(query_id, result)
-                            timer.mark("cache_set")
-
-                    except BaseException as ex:
-                        error = str(ex)
-                        logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = update_with_status("error")
-                        meta = {}
-                        if isinstance(ex, ClickhouseError):
-                            err_type = "clickhouse"
-                            meta["code"] = ex.code
-                        else:
-                            err_type = "unknown"
-                        raise RawQueryException(
-                            err_type=err_type,
-                            message=error,
-                            stats=stats,
-                            sql=sql,
-                            **meta,
-                        )
-            except RateLimitExceeded as ex:
+                    if use_cache:
+                        cache.set(query_id, result)
+                        timer.mark("cache_set")
+            except RateLimitExceeded as e:
                 stats = update_with_status("rate-limited")
                 raise RawQueryException(
                     err_type="rate-limited",
                     message="rate limit exceeded",
                     stats=stats,
                     sql=sql,
-                    detail=str(ex),
-                )
+                    detail=str(e),
+                ) from e
+            except Exception as e:
+                error = str(e)
+                logger.exception("Error running query: %s\n%s", sql, error)
+                stats = update_with_status("error")
+                meta = {}
+                if isinstance(e, ClickhouseError):
+                    err_type = "clickhouse"
+                    meta["code"] = e.code
+                else:
+                    err_type = "unknown"
+                raise RawQueryException(
+                    err_type=err_type, message=error, stats=stats, sql=sql, **meta,
+                ) from e
 
     stats = update_with_status("success")
 
