@@ -301,12 +301,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
         return Response(
             json.dumps(
-                {
-                    "error": details,
-                    "sql": exception.sql,
-                    "stats": exception.stats,
-                    "timing": timer.for_json(),
-                }
+                {"error": details, "timing": timer.for_json(), **exception.extra}
             ),
             429 if isinstance(cause, RateLimitExceeded) else 500,
             {"Content-Type": "application/json"},
