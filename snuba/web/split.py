@@ -2,7 +2,7 @@ import copy
 import math
 
 from datetime import timedelta
-from typing import Any, List, Optional, Sequence, Union
+from typing import Any, List, Optional, Union
 
 from snuba import state, util
 from snuba.datasets.plans.query_plan import QueryRunner
@@ -120,6 +120,9 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             split_request.query.set_offset(0)
             split_request.query.set_limit(limit - total_results + remaining_offset)
 
+            # At every iteration we only append the "data" key from the results returned by
+            # the runner. The "extra" key is only populated at the first iteration of the
+            # loop and never changed.
             result = runner(split_request)
 
             if overall_result is None:
@@ -174,15 +177,12 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__project_column = project_column
         self.__timestamp_column = timestamp_column
 
-    def __get_min_columns(self) -> Sequence[str]:
-        return [self.__id_column, self.__project_column, self.__timestamp_column]
-
     def execute(
         self, request: Request, runner: QueryRunner
     ) -> Optional[RawQueryResult]:
         """
         Split query in 2 steps if a large number of columns is being selected.
-            - First query only selects event_id and project_id.
+            - First query only selects event_id, project_id and timestamp.
             - Second query selects all fields for only those events.
             - Shrink the date range.
         """
@@ -196,7 +196,9 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
 
         total_col_count = len(request.query.get_all_referenced_columns())
         minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(self.__get_min_columns())
+        minimal_request.query.set_selected_columns(
+            [self.__id_column, self.__project_column, self.__timestamp_column]
+        )
 
         if total_col_count <= len(minimal_request.query.get_all_referenced_columns()):
             return None
@@ -212,6 +214,9 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             )
             request.query.add_conditions([(self.__id_column, "IN", event_ids)])
             request.query.set_offset(0)
+            # TODO: This is technically wrong. Event ids are unique per project, not globally.
+            # So, if the minimal query only returned the same event_id from two projects, we
+            # would be underestimating the limit here.
             request.query.set_limit(len(event_ids))
 
             project_ids = list(
