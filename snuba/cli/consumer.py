@@ -134,7 +134,7 @@ def consumer(
         if not dataset_writable_storage:
             raise click.ClickException(f"Dataset {dataset_name} has no writable storage")
 
-        storage_key = {v: k for k, v in WRITABLE_STORAGES.items()}[dataset_writable_storage]
+        storage_key = dataset_writable_storage.get_storage_key()
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
