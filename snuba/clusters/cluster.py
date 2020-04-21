@@ -9,10 +9,15 @@ from snuba.reader import Reader
 
 class ClickhouseCluster:
     def __init__(self, host: str, port: int, http_port: int):
+        self.__host = host
+        self.__port = port
         self.__clickhouse_rw = ClickhousePool(host, port)
         self.__clickhouse_ro = ClickhousePool(
             host, port, client_settings={"readonly": True},
         )
+
+    def __str__(self):
+        return f"{self.__host}:{self.__port}"
 
     def get_clickhouse_rw(self) -> ClickhousePool:
         return self.__clickhouse_rw

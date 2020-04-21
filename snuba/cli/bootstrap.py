@@ -102,12 +102,19 @@ def bootstrap(
 
         while True:
             try:
-                logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
+                logger.debug(
+                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
+                    cluster,
+                    attempts,
+                )
                 clickhouse_rw.execute("SELECT 1")
                 break
             except Exception as e:
                 logger.error(
-                    "Connection to Clickhouse failed (attempt %d)", attempts, exc_info=e
+                    "Connection to Clickhouse cluster %s failed (attempt %d)",
+                    cluster,
+                    attempts,
+                    exc_info=e,
                 )
                 attempts += 1
                 if attempts == 60:
