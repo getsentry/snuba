@@ -86,14 +86,20 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         project_ids = util.to_list(extension_data["project"])
 
         if project_ids:
-            query.add_conditions([(self.__project_column, "IN", project_ids)])
-            query.add_condition_to_ast(
-                in_condition(
-                    None,
-                    Column(None, self.__project_column, None),
-                    [Literal(None, p) for p in project_ids],
+            should_add_condition = True
+            for cond in query.get_conditions():
+                if cond[0] == self.__project_column and cond[1] == "=":
+                    should_add_condition = False
+
+            if should_add_condition:
+                query.add_conditions([(self.__project_column, "IN", project_ids)])
+                query.add_condition_to_ast(
+                    in_condition(
+                        None,
+                        Column(None, self.__project_column, None),
+                        [Literal(None, p) for p in project_ids],
+                    )
                 )
-            )
 
         request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 

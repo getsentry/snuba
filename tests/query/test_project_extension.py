@@ -35,21 +35,30 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
 
 
 project_extension_test_data = [
-    ({"project": 2}, [("project_id", "IN", [2])], build_in("project_id", [2]),),
+    ({"project": 2}, None, [("project_id", "IN", [2])], build_in("project_id", [2])),
     (
         {"project": [2, 3]},
+        None,
         [("project_id", "IN", [2, 3])],
+        build_in("project_id", [2, 3]),
+    ),
+    ({"project": [2, 3]}, [["project_id", "=", 2]], [["project_id", "=", 2]], None),
+    (
+        {"project": [2, 3]},
+        [["project_id", "!=", 1]],
+        [["project_id", "!=", 1], ("project_id", "IN", [2, 3])],
         build_in("project_id", [2, 3]),
     ),
 ]
 
 
 @pytest.mark.parametrize(
-    "raw_data, expected_conditions, expected_ast_conditions",
+    "raw_data, conditions, expected_conditions, expected_ast_conditions",
     project_extension_test_data,
 )
 def test_project_extension_query_processing(
     raw_data: dict,
+    conditions: Sequence[Condition],
     expected_conditions: Sequence[Condition],
     expected_ast_conditions: Expression,
 ):
@@ -57,7 +66,9 @@ def test_project_extension_query_processing(
         processor=ProjectExtensionProcessor(project_column="project_id")
     )
     valid_data = validate_jsonschema(raw_data, extension.get_schema())
-    query = Query({"conditions": []}, TableSource("my_table", ColumnSet([])),)
+    query = Query(
+        {"conditions": conditions or []}, TableSource("my_table", ColumnSet([])),
+    )
     request_settings = HTTPRequestSettings()
 
     extension.get_processor().process_query(query, valid_data, request_settings)
