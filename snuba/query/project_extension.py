@@ -88,7 +88,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
         if project_ids:
             should_add_condition = True
             for cond in query.get_conditions():
-                if cond[0] == self.__project_column and cond[1] == "=":
+                if cond and cond[0] == self.__project_column and cond[1] == "=":
                     should_add_condition = False
 
             if should_add_condition:
