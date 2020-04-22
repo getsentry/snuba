@@ -62,7 +62,7 @@ def execute_query(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str] = None,
+    query_id: Optional[str],
 ) -> Result:
     """
     Execute a query and return a result.
@@ -95,6 +95,39 @@ def execute_query(
     )
 
     return result
+
+
+def execute_query_with_rate_limits(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str],
+) -> Result:
+    # XXX: We should consider moving this that it applies to the logical query,
+    # not the physical query.
+    with RateLimitAggregator(
+        request.settings.get_rate_limit_params()
+    ) as rate_limit_stats_container:
+        stats.update(rate_limit_stats_container.to_dict())
+        timer.mark("rate_limit")
+
+        project_rate_limit_stats = rate_limit_stats_container.get_stats(
+            PROJECT_RATE_LIMIT_NAME
+        )
+
+        if (
+            "max_threads" in query_settings
+            and project_rate_limit_stats is not None
+            and project_rate_limit_stats.concurrent > 1
+        ):
+            maxt = query_settings["max_threads"]
+            query_settings["max_threads"] = max(
+                1, maxt - project_rate_limit_stats.concurrent + 1
+            )
+
+        return execute_query(request, query, timer, stats, query_settings, query_id)
 
 
 def raw_query(
@@ -169,36 +202,16 @@ def raw_query(
             ),
 
             if not result:
-                with RateLimitAggregator(
-                    request.settings.get_rate_limit_params()
-                ) as rate_limit_stats_container:
-                    stats.update(rate_limit_stats_container.to_dict())
-                    timer.mark("rate_limit")
-
-                    project_rate_limit_stats = rate_limit_stats_container.get_stats(
-                        PROJECT_RATE_LIMIT_NAME
-                    )
-
-                    if (
-                        "max_threads" in query_settings
-                        and project_rate_limit_stats is not None
-                        and project_rate_limit_stats.concurrent > 1
-                    ):
-                        maxt = query_settings["max_threads"]
-                        query_settings["max_threads"] = max(
-                            1, maxt - project_rate_limit_stats.concurrent + 1
-                        )
-
-                    result = execute_query(
-                        request,
-                        query,
-                        timer,
-                        stats,
-                        query_settings,
-                        # All queries should already be deduplicated at this point
-                        # But the query_id will let us know if they aren't
-                        query_id=(query_id if use_deduper else None),
-                    )
+                result = execute_query_with_rate_limits(
+                    request,
+                    query,
+                    timer,
+                    stats,
+                    query_settings,
+                    # All queries should already be deduplicated at this point
+                    # But the query_id will let us know if they aren't
+                    query_id=(query_id if use_deduper else None),
+                )
 
                 if use_cache:
                     cache.set(query_id, result)
