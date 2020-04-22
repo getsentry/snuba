@@ -52,8 +52,9 @@ class Cache(Generic[TValue], ABC):
 
         If the client holding the lock does not finish executing the function
         prior to the timeout being reached, the client that held the lock
-        will return the result of executing the provided function, and will
-        only set the cache value if none currently exists. Meanwhile, all
+        will return the result of executing the provided function, but will
+        not populate the cache with the value to avoid potentially
+        overwriting a fresher value with a stale value. Meanwhile, all
         blocked clients will raise a ``ExecutionTimeoutError`` when the
         timeout elapses. Since the timeout clock starts when the first client
         takes the execution lock and begins to execute the function, the
