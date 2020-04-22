@@ -1,6 +1,6 @@
 from typing import Optional, Sequence
 
-from snuba.clusters.cluster import Cluster
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
@@ -19,7 +19,7 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def __init__(self, cluster: Cluster):
+    def __init__(self, cluster: ClickhouseCluster):
         self.__cluster = cluster
 
     def execute(self, request: Request, runner: QueryRunner) -> QueryResult:

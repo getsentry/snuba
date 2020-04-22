@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
-from snuba.clusters.cluster import Cluster, get_cluster
+from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storages import StorageKey
@@ -33,7 +33,7 @@ class Storage(ABC):
     def get_storage_set_key(self) -> StorageSetKey:
         return self.__storage_set_key
 
-    def get_cluster(self) -> Cluster:
+    def get_cluster(self) -> ClickhouseCluster:
         return get_cluster(self.__storage_set_key)
 
     # TODO: Break StorageSchemas apart. It contains a distinction between write schema and
