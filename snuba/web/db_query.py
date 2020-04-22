@@ -10,7 +10,6 @@ from typing import (
 )
 
 from snuba import settings, state
-from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
 from snuba.redis import redis_client
@@ -24,7 +23,7 @@ from snuba.state.rate_limit import (
 from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException, RawQueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
@@ -63,7 +62,7 @@ def raw_query(
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
     fix some of the formatting issues in the result JSON.
@@ -157,55 +156,34 @@ def raw_query(
                         query_settings["load_balancing"] = "in_order"
                         query_settings["max_threads"] = 1
 
-                    try:
-                        result = reader.execute(
-                            query,
-                            query_settings,
-                            # All queries should already be deduplicated at this point
-                            # But the query_id will let us know if they aren't
-                            query_id=query_id if use_deduper else None,
-                            with_totals=request.query.has_totals(),
-                        )
+                    result = reader.execute(
+                        query,
+                        query_settings,
+                        # All queries should already be deduplicated at this point
+                        # But the query_id will let us know if they aren't
+                        query_id=query_id if use_deduper else None,
+                        with_totals=request.query.has_totals(),
+                    )
 
-                        timer.mark("execute")
-                        stats.update(
-                            {
-                                "result_rows": len(result["data"]),
-                                "result_cols": len(result["meta"]),
-                            }
-                        )
+                    timer.mark("execute")
+                    stats.update(
+                        {
+                            "result_rows": len(result["data"]),
+                            "result_cols": len(result["meta"]),
+                        }
+                    )
 
-                        if use_cache:
-                            cache.set(query_id, result)
-                            timer.mark("cache_set")
-
-                    except BaseException as ex:
-                        error = str(ex)
-                        logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = update_with_status("error")
-                        meta = {}
-                        if isinstance(ex, ClickhouseError):
-                            err_type = "clickhouse"
-                            meta["code"] = ex.code
-                        else:
-                            err_type = "unknown"
-                        raise RawQueryException(
-                            err_type=err_type,
-                            message=error,
-                            stats=stats,
-                            sql=sql,
-                            **meta,
-                        )
-            except RateLimitExceeded as ex:
-                stats = update_with_status("rate-limited")
-                raise RawQueryException(
-                    err_type="rate-limited",
-                    message="rate limit exceeded",
-                    stats=stats,
-                    sql=sql,
-                    detail=str(ex),
-                )
+                    if use_cache:
+                        cache.set(query_id, result)
+                        timer.mark("cache_set")
+            except Exception as cause:
+                if isinstance(cause, RateLimitExceeded):
+                    stats = update_with_status("rate-limited")
+                else:
+                    logger.exception("Error running query: %s\n%s", sql, cause)
+                    stats = update_with_status("error")
+                raise QueryException({"stats": stats, "sql": sql}) from cause
 
     stats = update_with_status("success")
 
-    return RawQueryResult(result, {"stats": stats, "sql": sql})
+    return QueryResult(result, {"stats": stats, "sql": sql})
