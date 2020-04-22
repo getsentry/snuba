@@ -99,34 +99,35 @@ def raw_query(
 
     sql = query.format_sql()
     query_id = md5(force_bytes(sql)).hexdigest()
-    with state.deduper(query_id if use_deduper else None) as is_dupe:
-        timer.mark("dedupe_wait")
 
-        result = cache.get(query_id) if use_cache else None
-        timer.mark("cache_get")
+    update_with_status = partial(
+        update_query_metadata_and_stats,
+        request,
+        sql,
+        timer,
+        stats,
+        query_metadata,
+        query_settings,
+        trace_id,
+    )
 
-        stats.update(
-            {
-                "is_duplicate": is_dupe,
-                "query_id": query_id,
-                "use_cache": bool(use_cache),
-                "cache_hit": bool(result),
-            }
-        ),
+    try:
+        with state.deduper(query_id if use_deduper else None) as is_dupe:
+            timer.mark("dedupe_wait")
 
-        update_with_status = partial(
-            update_query_metadata_and_stats,
-            request,
-            sql,
-            timer,
-            stats,
-            query_metadata,
-            query_settings,
-            trace_id,
-        )
+            result = cache.get(query_id) if use_cache else None
+            timer.mark("cache_get")
 
-        if not result:
-            try:
+            stats.update(
+                {
+                    "is_duplicate": is_dupe,
+                    "query_id": query_id,
+                    "use_cache": bool(use_cache),
+                    "cache_hit": bool(result),
+                }
+            ),
+
+            if not result:
                 with RateLimitAggregator(
                     request.settings.get_rate_limit_params()
                 ) as rate_limit_stats_container:
@@ -176,14 +177,13 @@ def raw_query(
                     if use_cache:
                         cache.set(query_id, result)
                         timer.mark("cache_set")
-            except Exception as cause:
-                if isinstance(cause, RateLimitExceeded):
-                    stats = update_with_status("rate-limited")
-                else:
-                    logger.exception("Error running query: %s\n%s", sql, cause)
-                    stats = update_with_status("error")
-                raise QueryException({"stats": stats, "sql": sql}) from cause
-
-    stats = update_with_status("success")
-
-    return QueryResult(result, {"stats": stats, "sql": sql})
+    except Exception as cause:
+        if isinstance(cause, RateLimitExceeded):
+            stats = update_with_status("rate-limited")
+        else:
+            logger.exception("Error running query: %s\n%s", sql, cause)
+            stats = update_with_status("error")
+        raise QueryException({"stats": stats, "sql": sql}) from cause
+    else:
+        stats = update_with_status("success")
+        return QueryResult(result, {"stats": stats, "sql": sql})
