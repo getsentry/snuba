@@ -63,7 +63,7 @@ def execute_query(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
+    query_id: Optional[str] = None,
 ) -> Result:
     """
     Execute a query and return a result.
@@ -243,10 +243,10 @@ def raw_query(
         trace_id,
     )
 
+    runner = partial(execute_query, request, query, timer, stats, query_settings,)
+
     try:
-        result = execute_query_with_deduplication(
-            request, query, timer, stats, query_settings,
-        )
+        result = runner()
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
