@@ -8,10 +8,10 @@ from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query_processor import QueryProcessor
 from snuba.reader import Reader
 from snuba.request import Request
-from snuba.web import RawQueryResult
+from snuba.web import QueryResult
 
 
-QueryRunner = Callable[[Request, Reader[ClickhouseQuery]], RawQueryResult]
+QueryRunner = Callable[[Request, Reader[ClickhouseQuery]], QueryResult]
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class QueryPlanExecutionStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
         The runner parameters is a function to actually run one individual query on the

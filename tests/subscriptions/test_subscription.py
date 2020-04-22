@@ -7,7 +7,7 @@ from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException
+from snuba.web import QueryException
 from tests.subscriptions import BaseSubscriptionTest
 
 
@@ -31,7 +31,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     def test_invalid_condition_column(self):
         creator = SubscriptionCreator(self.dataset)
-        with raises(RawQueryException):
+        with raises(QueryException):
             creator.create(
                 SubscriptionData(
                     123,
@@ -45,7 +45,7 @@ class TestSubscriptionCreator(BaseSubscriptionTest):
 
     def test_invalid_aggregation(self):
         creator = SubscriptionCreator(self.dataset)
-        with raises(RawQueryException):
+        with raises(QueryException):
             creator.create(
                 SubscriptionData(
                     123,
