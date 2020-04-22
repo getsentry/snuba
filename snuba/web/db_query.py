@@ -1,5 +1,6 @@
 import logging
 
+from contextlib import nullcontext
 from functools import partial
 from hashlib import md5
 from typing import (
@@ -178,6 +179,30 @@ def execute_query_with_caching(
         return execute()
 
 
+def execute_query_with_deduplication(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+) -> Result:
+    use_deduper = state.get_config("use_deduper", 1)
+    query_id = md5(force_bytes(query.format_sql())).hexdigest()
+    if use_deduper:
+        manager = state.deduper(query_id)
+        execute = partial(execute_query_with_caching, query_id=query_id)
+    else:
+        manager = nullcontext(False)
+        execute = partial(execute_query_with_caching, query_id=None)
+
+    with manager as is_dupe:
+        # XXX: These timings and debug information are reported even if
+        # deduplication is not in use.
+        timer.mark("dedupe_wait")
+        stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+        return execute(request, query, timer, stats, query_settings)
+
+
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
@@ -196,9 +221,6 @@ def raw_query(
     TODO: As soon as we have a StorageQuery abstraction remove all the references
     to the original query from the request.
     """
-
-    use_deduper = state.get_config("use_deduper", 1)
-
     all_confs = state.get_all_configs()
     query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
@@ -209,7 +231,6 @@ def raw_query(
     timer.mark("get_configs")
 
     sql = query.format_sql()
-    query_id = md5(force_bytes(sql)).hexdigest()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
@@ -223,17 +244,9 @@ def raw_query(
     )
 
     try:
-        with state.deduper(query_id if use_deduper else None) as is_dupe:
-            timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-            result = execute_query_with_caching(
-                request,
-                query,
-                timer,
-                stats,
-                query_settings,
-                query_id=(query_id if use_deduper else None),
-            )
+        result = execute_query_with_deduplication(
+            request, query, timer, stats, query_settings,
+        )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
