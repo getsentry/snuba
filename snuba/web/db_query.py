@@ -5,6 +5,7 @@ from functools import partial
 from hashlib import md5
 from typing import (
     Any,
+    Callable,
     Mapping,
     MutableMapping,
     Optional,
@@ -57,150 +58,157 @@ def update_query_metadata_and_stats(
     return stats
 
 
-def execute_query(
+QueryRunner = Callable[[], Result]
+
+
+def build_query_runner(
     request: Request,
     query: ClickhouseQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str] = None,
-) -> Result:
-    """
-    Execute a query and return a result.
-    """
-    # Experiment, if we are going to grab more than X columns worth of data,
-    # don't use uncompressed_cache in ClickHouse.
-    uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if len(request.query.get_all_referenced_columns()) > uc_max:
-        query_settings["use_uncompressed_cache"] = 0
+) -> QueryRunner:
+    def run_query() -> Result:
+        """
+        Execute a query and return a result.
+        """
+        # Experiment, if we are going to grab more than X columns worth of data,
+        # don't use uncompressed_cache in ClickHouse.
+        uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+        if len(request.query.get_all_referenced_columns()) > uc_max:
+            query_settings["use_uncompressed_cache"] = 0
 
-    # Force query to use the first shard replica, which
-    # should have synchronously received any cluster writes
-    # before this query is run.
-    consistent = request.settings.get_consistent()
-    stats["consistent"] = consistent
-    if consistent:
-        query_settings["load_balancing"] = "in_order"
-        query_settings["max_threads"] = 1
+        # Force query to use the first shard replica, which
+        # should have synchronously received any cluster writes
+        # before this query is run.
+        consistent = request.settings.get_consistent()
+        stats["consistent"] = consistent
+        if consistent:
+            query_settings["load_balancing"] = "in_order"
+            query_settings["max_threads"] = 1
 
-    result = reader.execute(
-        query,
-        query_settings,
-        query_id=query_id,
-        with_totals=request.query.has_totals(),
-    )
-
-    timer.mark("execute")
-    stats.update(
-        {"result_rows": len(result["data"]), "result_cols": len(result["meta"])}
-    )
-
-    return result
-
-
-def execute_query_with_rate_limits(
-    request: Request,
-    query: ClickhouseQuery,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
-) -> Result:
-    # XXX: We should consider moving this that it applies to the logical query,
-    # not the physical query.
-    with RateLimitAggregator(
-        request.settings.get_rate_limit_params()
-    ) as rate_limit_stats_container:
-        stats.update(rate_limit_stats_container.to_dict())
-        timer.mark("rate_limit")
-
-        project_rate_limit_stats = rate_limit_stats_container.get_stats(
-            PROJECT_RATE_LIMIT_NAME
+        # XXX: ``query_id`` is treated as a setting in the HTTP interface
+        # anyway -- maybe that should be universally true?
+        result = reader.execute(
+            query,
+            query_settings,
+            query_id=query_settings.get("query_id"),
+            with_totals=request.query.has_totals(),
         )
 
-        if (
-            "max_threads" in query_settings
-            and project_rate_limit_stats is not None
-            and project_rate_limit_stats.concurrent > 1
-        ):
-            maxt = query_settings["max_threads"]
-            query_settings["max_threads"] = max(
-                1, maxt - project_rate_limit_stats.concurrent + 1
+        timer.mark("execute")
+        stats.update(
+            {"result_rows": len(result["data"]), "result_cols": len(result["meta"])}
+        )
+
+        return result
+
+    return run_query
+
+
+def with_rate_limits(
+    request: Request,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    runner: QueryRunner,
+) -> QueryRunner:
+    def run_query_with_rate_limits() -> Result:
+        # XXX: We should consider moving this that it applies to the logical query,
+        # not the physical query.
+        with RateLimitAggregator(
+            request.settings.get_rate_limit_params()
+        ) as rate_limit_stats_container:
+            stats.update(rate_limit_stats_container.to_dict())
+            timer.mark("rate_limit")
+
+            project_rate_limit_stats = rate_limit_stats_container.get_stats(
+                PROJECT_RATE_LIMIT_NAME
             )
 
-        return execute_query(request, query, timer, stats, query_settings, query_id)
+            if (
+                "max_threads" in query_settings
+                and project_rate_limit_stats is not None
+                and project_rate_limit_stats.concurrent > 1
+            ):
+                maxt = query_settings["max_threads"]
+                query_settings["max_threads"] = max(
+                    1, maxt - project_rate_limit_stats.concurrent + 1
+                )
+
+            return runner()
+
+    return run_query_with_rate_limits
 
 
-def execute_query_with_caching(
+def with_caching(
     request: Request,
     query: ClickhouseQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
-) -> Result:
-    # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
-    # cache, as well as the uncompressed cache. These should be independent.
-    use_cache, uc_max = state.get_configs(
-        [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
-    )
+    runner: QueryRunner,
+) -> QueryRunner:
+    def run_query_with_caching() -> Result:
+        # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
+        # cache, as well as the uncompressed cache. These should be independent.
+        use_cache, uc_max = state.get_configs(
+            [
+                ("use_cache", settings.USE_RESULT_CACHE),
+                ("uncompressed_cache_max_cols", 5),
+            ]
+        )
 
-    if len(request.query.get_all_referenced_columns()) > uc_max:
-        use_cache = False
+        if len(request.query.get_all_referenced_columns()) > uc_max:
+            use_cache = False
 
-    stats["use_cache"] = use_cache
+        stats["use_cache"] = use_cache
 
-    execute = partial(
-        execute_query_with_rate_limits,
-        request,
-        query,
-        timer,
-        stats,
-        query_settings,
-        query_id,
-    )
-
-    if use_cache:
-        key = md5(force_bytes(query.format_sql())).hexdigest()
-        result = cache.get(key)
-        timer.mark("cache_get")
-        stats["cache_hit"] = result is not None
-        if result is not None:
+        if use_cache:
+            key = md5(force_bytes(query.format_sql())).hexdigest()
+            result = cache.get(key)
+            timer.mark("cache_get")
+            stats["cache_hit"] = result is not None
+            if result is not None:
+                return result
+            result = runner()
+            cache.set(key, result)
+            timer.mark("cache_set")
             return result
-        result = execute()
-        cache.set(key, result)
-        timer.mark("cache_set")
-        return result
-    else:
-        # XXX: These timings and debug information are reported even if
-        # cache is not in use.
-        timer.mark("cache_get")
-        stats["cache_hit"] = False
-        return execute()
+        else:
+            # XXX: These timings and debug information are reported even if
+            # cache is not in use.
+            timer.mark("cache_get")
+            stats["cache_hit"] = False
+            return runner()
+
+    return run_query_with_caching
 
 
-def execute_query_with_deduplication(
+def with_deduplication(
     request: Request,
     query: ClickhouseQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-) -> Result:
-    use_deduper = state.get_config("use_deduper", 1)
-    query_id = md5(force_bytes(query.format_sql())).hexdigest()
-    if use_deduper:
-        manager = state.deduper(query_id)
-        execute = partial(execute_query_with_caching, query_id=query_id)
-    else:
-        manager = nullcontext(False)
-        execute = partial(execute_query_with_caching, query_id=None)
+    runner: QueryRunner,
+) -> QueryRunner:
+    def run_query_with_deduplication() -> Result:
+        use_deduper = state.get_config("use_deduper", 1)
+        query_id = md5(force_bytes(query.format_sql())).hexdigest()
+        if use_deduper:
+            manager = state.deduper(query_id)
+            query_settings["query_id"] = query_id
+        else:
+            manager = nullcontext(False)
 
-    with manager as is_dupe:
-        # XXX: These timings and debug information are reported even if
-        # deduplication is not in use.
-        timer.mark("dedupe_wait")
-        stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-        return execute(request, query, timer, stats, query_settings)
+        with manager as is_dupe:
+            # XXX: These timings and debug information are reported even if
+            # deduplication is not in use.
+            timer.mark("dedupe_wait")
+            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+            return runner()
+
+    return run_query_with_deduplication
 
 
 def raw_query(
@@ -243,7 +251,26 @@ def raw_query(
         trace_id,
     )
 
-    runner = partial(execute_query, request, query, timer, stats, query_settings,)
+    runner = with_deduplication(
+        request,
+        query,
+        timer,
+        stats,
+        query_settings,
+        with_caching(
+            request,
+            query,
+            timer,
+            stats,
+            with_rate_limits(
+                request,
+                timer,
+                stats,
+                query_settings,
+                build_query_runner(request, query, timer, stats, query_settings),
+            ),
+        ),
+    )
 
     try:
         result = runner()
