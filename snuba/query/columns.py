@@ -62,7 +62,7 @@ def column_expr(
             # is not present elsewhere in the query (thus was not given an alias).
             # This means we need to strip it from the column_name we pass to the column_expr
             # method and add it back to the result since the column_expr functions should
-            # not deal with the order by syntax.
+            # not deal with the ORDER BY syntax.
             match = NEGATE_RE.match(column_name)
             assert (
                 match
