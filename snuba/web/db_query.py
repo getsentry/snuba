@@ -148,21 +148,23 @@ def with_caching(
     stats: MutableMapping[str, Any],
     runner: QueryRunner,
 ) -> QueryRunner:
+    # XXX: The timings and debug information from this function are reported
+    # even if the query cache is not actually used. Ideally, this check would
+    # just cause the ``runner`` function to be returned directly instead of the
+    # hacks for parity with previous implementations.
+
+    # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
+    # cache, as well as the uncompressed cache. These should be independent.
+    use_cache, uc_max = state.get_configs(
+        [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
+    )
+
+    if len(request.query.get_all_referenced_columns()) > uc_max:
+        use_cache = False
+
+    stats["use_cache"] = use_cache
+
     def run_query_with_caching() -> Result:
-        # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
-        # cache, as well as the uncompressed cache. These should be independent.
-        use_cache, uc_max = state.get_configs(
-            [
-                ("use_cache", settings.USE_RESULT_CACHE),
-                ("uncompressed_cache_max_cols", 5),
-            ]
-        )
-
-        if len(request.query.get_all_referenced_columns()) > uc_max:
-            use_cache = False
-
-        stats["use_cache"] = use_cache
-
         if use_cache:
             key = md5(force_bytes(query.format_sql())).hexdigest()
             result = cache.get(key)
@@ -175,8 +177,6 @@ def with_caching(
             timer.mark("cache_set")
             return result
         else:
-            # XXX: These timings and debug information are reported even if
-            # cache is not in use.
             timer.mark("cache_get")
             stats["cache_hit"] = False
             return runner()
@@ -192,8 +192,13 @@ def with_deduplication(
     query_settings: MutableMapping[str, Any],
     runner: QueryRunner,
 ) -> QueryRunner:
+    # XXX: The timings and debug information from this function are reported
+    # even if deduplication is not actually used. Ideally, this check would
+    # just cause the ``runner`` function to be returned directly instead of
+    # the hacks for parity with previous implementations.
+    use_deduper = state.get_config("use_deduper", 1)
+
     def run_query_with_deduplication() -> Result:
-        use_deduper = state.get_config("use_deduper", 1)
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
         if use_deduper:
             manager = state.deduper(query_id)
@@ -202,8 +207,6 @@ def with_deduplication(
             manager = nullcontext(False)
 
         with manager as is_dupe:
-            # XXX: These timings and debug information are reported even if
-            # deduplication is not in use.
             timer.mark("dedupe_wait")
             stats.update({"is_duplicate": is_dupe, "query_id": query_id})
             return runner()
