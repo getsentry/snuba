@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import MutableMapping, Set
+from typing import Set
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
@@ -93,9 +93,12 @@ assert (
 ), "All storage sets must be assigned to a cluster"
 
 # Map all storages to clusters via storage sets
-_STORAGE_SET_CLUSTER_MAP: MutableMapping[StorageSetKey, ClickhouseCluster] = {
-    storage_set: cluster for cluster in CLUSTERS for storage_set in cluster.get_storage_sets()
+_STORAGE_SET_CLUSTER_MAP = {
+    storage_set: cluster
+    for cluster in CLUSTERS
+    for storage_set in cluster.get_storage_sets()
 }
+
 
 def get_cluster(storage_set_key: StorageSetKey) -> ClickhouseCluster:
     return _STORAGE_SET_CLUSTER_MAP[storage_set_key]
