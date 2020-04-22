@@ -58,17 +58,14 @@ def update_query_metadata_and_stats(
     return stats
 
 
-QueryRunner = Callable[[], Result]
+QueryStats = MutableMapping[str, Any]
+QueryRunner = Callable[[Timer, QueryStats], Result]
 
 
 def build_query_runner(
-    request: Request,
-    query: ClickhouseQuery,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
+    request: Request, query: ClickhouseQuery, query_settings: MutableMapping[str, Any],
 ) -> QueryRunner:
-    def run_query() -> Result:
+    def run_query(timer: Timer, stats: QueryStats) -> Result:
         """
         Execute a query and return a result.
         """
@@ -107,13 +104,9 @@ def build_query_runner(
 
 
 def with_rate_limits(
-    request: Request,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
-    runner: QueryRunner,
+    request: Request, query_settings: MutableMapping[str, Any], runner: QueryRunner,
 ) -> QueryRunner:
-    def run_query_with_rate_limits() -> Result:
+    def run_query_with_rate_limits(timer: Timer, stats: QueryStats) -> Result:
         # XXX: We should consider moving this that it applies to the logical query,
         # not the physical query.
         with RateLimitAggregator(
@@ -136,17 +129,13 @@ def with_rate_limits(
                     1, maxt - project_rate_limit_stats.concurrent + 1
                 )
 
-            return runner()
+            return runner(timer, stats)
 
     return run_query_with_rate_limits
 
 
 def with_caching(
-    request: Request,
-    query: ClickhouseQuery,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    runner: QueryRunner,
+    request: Request, query: ClickhouseQuery, runner: QueryRunner,
 ) -> QueryRunner:
     # XXX: The timings and debug information from this function are reported
     # even if the query cache is not actually used. Ideally, this check would
@@ -162,9 +151,8 @@ def with_caching(
     if len(request.query.get_all_referenced_columns()) > uc_max:
         use_cache = False
 
-    stats["use_cache"] = use_cache
-
-    def run_query_with_caching() -> Result:
+    def run_query_with_caching(timer: Timer, stats: QueryStats) -> Result:
+        stats["use_cache"] = use_cache
         if use_cache:
             key = md5(force_bytes(query.format_sql())).hexdigest()
             result = cache.get(key)
@@ -172,14 +160,14 @@ def with_caching(
             stats["cache_hit"] = result is not None
             if result is not None:
                 return result
-            result = runner()
+            result = runner(timer, stats)
             cache.set(key, result)
             timer.mark("cache_set")
             return result
         else:
             timer.mark("cache_get")
             stats["cache_hit"] = False
-            return runner()
+            return runner(timer, stats)
 
     return run_query_with_caching
 
@@ -187,8 +175,6 @@ def with_caching(
 def with_deduplication(
     request: Request,
     query: ClickhouseQuery,
-    timer: Timer,
-    stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
     runner: QueryRunner,
 ) -> QueryRunner:
@@ -198,7 +184,7 @@ def with_deduplication(
     # the hacks for parity with previous implementations.
     use_deduper = state.get_config("use_deduper", 1)
 
-    def run_query_with_deduplication() -> Result:
+    def run_query_with_deduplication(timer: Timer, stats: QueryStats) -> Result:
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
         if use_deduper:
             manager = state.deduper(query_id)
@@ -209,7 +195,7 @@ def with_deduplication(
         with manager as is_dupe:
             timer.mark("dedupe_wait")
             stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-            return runner()
+            return runner(timer, stats)
 
     return run_query_with_deduplication
 
@@ -257,26 +243,20 @@ def raw_query(
     runner = with_deduplication(
         request,
         query,
-        timer,
-        stats,
         query_settings,
         with_caching(
             request,
             query,
-            timer,
-            stats,
             with_rate_limits(
                 request,
-                timer,
-                stats,
                 query_settings,
-                build_query_runner(request, query, timer, stats, query_settings),
+                build_query_runner(request, query, query_settings),
             ),
         ),
     )
 
     try:
-        result = runner()
+        result = runner(timer, stats)
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
