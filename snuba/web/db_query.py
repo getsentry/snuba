@@ -130,6 +130,54 @@ def execute_query_with_rate_limits(
         return execute_query(request, query, timer, stats, query_settings, query_id)
 
 
+def execute_query_with_caching(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str],
+) -> Result:
+    # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
+    # cache, as well as the uncompressed cache. These should be independent.
+    use_cache, uc_max = state.get_configs(
+        [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
+    )
+
+    if len(request.query.get_all_referenced_columns()) > uc_max:
+        use_cache = False
+
+    stats["use_cache"] = use_cache
+
+    execute = partial(
+        execute_query_with_rate_limits,
+        request,
+        query,
+        timer,
+        stats,
+        query_settings,
+        query_id,
+    )
+
+    if use_cache:
+        key = md5(force_bytes(query.format_sql())).hexdigest()
+        result = cache.get(key)
+        timer.mark("cache_get")
+        stats["cache_hit"] = result is not None
+        if result is not None:
+            return result
+        result = execute()
+        cache.set(key, result)
+        timer.mark("cache_set")
+        return result
+    else:
+        # XXX: These timings and debug information are reported even if
+        # cache is not in use.
+        timer.mark("cache_get")
+        stats["cache_hit"] = False
+        return execute()
+
+
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
@@ -149,13 +197,7 @@ def raw_query(
     to the original query from the request.
     """
 
-    use_cache, use_deduper, uc_max = state.get_configs(
-        [
-            ("use_cache", settings.USE_RESULT_CACHE),
-            ("use_deduper", 1),
-            ("uncompressed_cache_max_cols", 5),
-        ]
-    )
+    use_deduper = state.get_config("use_deduper", 1)
 
     all_confs = state.get_all_configs()
     query_settings: MutableMapping[str, Any] = {
@@ -163,11 +205,6 @@ def raw_query(
         for k, v in all_confs.items()
         if k.startswith("query_settings/")
     }
-
-    # Experiment, if we are going to grab more than X columns worth of data,
-    # don't use result cache.
-    if len(request.query.get_all_referenced_columns()) > uc_max:
-        use_cache = 0
 
     timer.mark("get_configs")
 
@@ -188,34 +225,15 @@ def raw_query(
     try:
         with state.deduper(query_id if use_deduper else None) as is_dupe:
             timer.mark("dedupe_wait")
-
-            result = cache.get(query_id) if use_cache else None
-            timer.mark("cache_get")
-
-            stats.update(
-                {
-                    "is_duplicate": is_dupe,
-                    "query_id": query_id,
-                    "use_cache": bool(use_cache),
-                    "cache_hit": bool(result),
-                }
-            ),
-
-            if not result:
-                result = execute_query_with_rate_limits(
-                    request,
-                    query,
-                    timer,
-                    stats,
-                    query_settings,
-                    # All queries should already be deduplicated at this point
-                    # But the query_id will let us know if they aren't
-                    query_id=(query_id if use_deduper else None),
-                )
-
-                if use_cache:
-                    cache.set(query_id, result)
-                    timer.mark("cache_set")
+            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+            result = execute_query_with_caching(
+                request,
+                query,
+                timer,
+                stats,
+                query_settings,
+                query_id=(query_id if use_deduper else None),
+            )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
