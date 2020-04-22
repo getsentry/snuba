@@ -57,8 +57,7 @@ def column_expr(
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
-        fix_orderby_col_processing = state.get_config("fix_orderby_col_processing", 1)
-        if fix_orderby_col_processing:
+        if state.get_config("fix_orderby_col_processing", 1):
             # column_name may be prefixed by `-` if this is in an ORDER BY clause that
             # is not present elsewhere in the query (thus was not given an alias).
             # This means we need to strip it from the column_name we pass to the column_expr
@@ -73,6 +72,7 @@ def column_expr(
             negate = ""
             col = column_name
         expr = f"{negate}{dataset.column_expr(col, query, parsing_context)}"
+
     if aggregate:
         expr = function_expr(aggregate, expr)
 
