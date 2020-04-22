@@ -24,8 +24,10 @@ Data is written into the table `sentry_local`: `select count() from sentry_local
 
 Snuba assumes:
 
-1. A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`).
-2. A redis instance running at `REDIS_HOST` (default `localhost`). On port
+* A Clickhouse server endpoint at `CLICKHOUSE_HOST` (default `localhost`) with:
+  * A user configured with username `CLICKHOUSE_USER` (default `default`) and
+    password `CLICKHOUSE_PASS` (default empty string).
+* A redis instance running at `REDIS_HOST` (default `localhost`). On port
    `6379`
 
 A quick way to get these services running is to set up sentry, then use:

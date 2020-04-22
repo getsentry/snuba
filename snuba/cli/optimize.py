@@ -19,6 +19,18 @@ from snuba.environment import setup_logging
     type=int,
     help="Clickhouse native port to write to.",
 )
+@click.option(
+    "--clickhouse-user",
+    default=settings.CLICKHOUSE_USER,
+    type=str,
+    help="Clickhouse username.",
+)
+@click.option(
+    "--clickhouse-pass",
+    default=settings.CLICKHOUSE_PASS,
+    type=str,
+    help="Clickhouse password.",
+)
 @click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
     "--dataset",
@@ -38,6 +50,8 @@ def optimize(
     *,
     clickhouse_host: str,
     clickhouse_port: int,
+    clickhouse_user: str,
+    clickhouse_pass: str,
     database: str,
     dataset_name: str,
     timeout: int,

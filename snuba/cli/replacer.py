@@ -117,11 +117,7 @@ def replacer(
     ), f"Storage {type(storage)} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
-    metrics = MetricsWrapper(
-        environment.metrics,
-        "replacer",
-        tags=metrics_tags,
-    )
+    metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
     client_settings = {
         # Replacing existing rows requires reconstructing the entire tuple for each
@@ -138,6 +134,8 @@ def replacer(
     clickhouse = ClickhousePool(
         settings.CLICKHOUSE_HOST,
         settings.CLICKHOUSE_PORT,
+        settings.CLICKHOUSE_USER,
+        settings.CLICKHOUSE_PASS,
         client_settings=client_settings,
     )
 

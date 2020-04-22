@@ -20,6 +20,18 @@ from snuba.environment import setup_logging
     help="Clickhouse native port to write to.",
 )
 @click.option(
+    "--clickhouse-user",
+    default=settings.CLICKHOUSE_USER,
+    type=str,
+    help="Clickhouse username.",
+)
+@click.option(
+    "--clickhouse-pass",
+    default=settings.CLICKHOUSE_PASS,
+    type=str,
+    help="Clickhouse password.",
+)
+@click.option(
     "--dry-run",
     type=bool,
     default=True,
@@ -38,6 +50,8 @@ def cleanup(
     *,
     clickhouse_host: str,
     clickhouse_port: int,
+    clickhouse_user: str,
+    clickhouse_pass: str,
     dry_run: bool,
     database: str,
     dataset_name: str,
@@ -55,6 +69,8 @@ def cleanup(
     dataset = get_dataset(dataset_name)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
-    clickhouse = ClickhousePool(clickhouse_host, clickhouse_port)
+    clickhouse = ClickhousePool(
+        clickhouse_host, clickhouse_port, clickhouse_user, clickhouse_pass
+    )
     num_dropped = run_cleanup(clickhouse, database, table, dry_run=dry_run)
     logger.info("Dropped %s partitions on %s" % (num_dropped, clickhouse_host))

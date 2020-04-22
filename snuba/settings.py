@@ -21,6 +21,8 @@ DATASET_MODE = "local"
 ).split(":", 1)
 CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", default_clickhouse_host)
 CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port))
+CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
+CLICKHOUSE_PASS = os.environ.get("CLICKHOUSE_PASS", "")
 CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
 
@@ -117,7 +119,9 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             assert isinstance(settings_spec.loader, importlib.abc.Loader)
             settings_spec.loader.exec_module(settings_module)
         else:
-            module_format = ".%s" if settings.startswith("settings_") else ".settings_%s"
+            module_format = (
+                ".%s" if settings.startswith("settings_") else ".settings_%s"
+            )
             settings_module = importlib.import_module(module_format % settings, "snuba")
 
         for attr in dir(settings_module):

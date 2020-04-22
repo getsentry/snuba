@@ -32,10 +32,17 @@ def setup_sentry() -> None:
     )
 
 
-clickhouse_rw = ClickhousePool(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_PORT)
+clickhouse_rw = ClickhousePool(
+    settings.CLICKHOUSE_HOST,
+    settings.CLICKHOUSE_PORT,
+    settings.CLICKHOUSE_USER,
+    settings.CLICKHOUSE_PASS,
+)
 clickhouse_ro = ClickhousePool(
     settings.CLICKHOUSE_HOST,
     settings.CLICKHOUSE_PORT,
+    settings.CLICKHOUSE_USER,
+    settings.CLICKHOUSE_PASS,
     client_settings={"readonly": True},
 )
 
