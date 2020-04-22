@@ -174,9 +174,9 @@ def raw_query(
                         }
                     )
 
-                    if use_cache:
-                        cache.set(query_id, result)
-                        timer.mark("cache_set")
+                if use_cache:
+                    cache.set(query_id, result)
+                    timer.mark("cache_set")
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
