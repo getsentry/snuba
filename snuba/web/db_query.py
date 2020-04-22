@@ -12,6 +12,7 @@ from typing import (
 from snuba import settings, state
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
+from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -55,6 +56,47 @@ def update_query_metadata_and_stats(
     return stats
 
 
+def execute_query(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str] = None,
+) -> Result:
+    """
+    Execute a query and return a result.
+    """
+    # Experiment, if we are going to grab more than X columns worth of data,
+    # don't use uncompressed_cache in ClickHouse.
+    uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+    if len(request.query.get_all_referenced_columns()) > uc_max:
+        query_settings["use_uncompressed_cache"] = 0
+
+    # Force query to use the first shard replica, which
+    # should have synchronously received any cluster writes
+    # before this query is run.
+    consistent = request.settings.get_consistent()
+    stats["consistent"] = consistent
+    if consistent:
+        query_settings["load_balancing"] = "in_order"
+        query_settings["max_threads"] = 1
+
+    result = reader.execute(
+        query,
+        query_settings,
+        query_id=query_id,
+        with_totals=request.query.has_totals(),
+    )
+
+    timer.mark("execute")
+    stats.update(
+        {"result_rows": len(result["data"]), "result_cols": len(result["meta"])}
+    )
+
+    return result
+
+
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
@@ -90,9 +132,8 @@ def raw_query(
     }
 
     # Experiment, if we are going to grab more than X columns worth of data,
-    # don't use uncompressed_cache in clickhouse, or result cache in snuba.
+    # don't use result cache.
     if len(request.query.get_all_referenced_columns()) > uc_max:
-        query_settings["use_uncompressed_cache"] = 0
         use_cache = 0
 
     timer.mark("get_configs")
@@ -148,30 +189,15 @@ def raw_query(
                             1, maxt - project_rate_limit_stats.concurrent + 1
                         )
 
-                    # Force query to use the first shard replica, which
-                    # should have synchronously received any cluster writes
-                    # before this query is run.
-                    consistent = request.settings.get_consistent()
-                    stats["consistent"] = consistent
-                    if consistent:
-                        query_settings["load_balancing"] = "in_order"
-                        query_settings["max_threads"] = 1
-
-                    result = reader.execute(
+                    result = execute_query(
+                        request,
                         query,
+                        timer,
+                        stats,
                         query_settings,
                         # All queries should already be deduplicated at this point
                         # But the query_id will let us know if they aren't
-                        query_id=query_id if use_deduper else None,
-                        with_totals=request.query.has_totals(),
-                    )
-
-                    timer.mark("execute")
-                    stats.update(
-                        {
-                            "result_rows": len(result["data"]),
-                            "result_cols": len(result["meta"]),
-                        }
+                        query_id=(query_id if use_deduper else None),
                     )
 
                 if use_cache:
