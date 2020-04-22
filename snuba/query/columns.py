@@ -60,11 +60,14 @@ def column_expr(
         fix_orderby_col_processing = state.get_config("fix_orderby_col_processing", 1)
         if fix_orderby_col_processing:
             # column_name may be prefixed by `-` if this is in an ORDER BY clause that
-            # is not present elsewhere in the query (thus it was not given an alias).
+            # is not present elsewhere in the query (thus was not given an alias).
             # This means we need to strip it from the column_name we pass to the column_expr
-            # method and add it back to the result.
+            # method and add it back to the result since the column_expr functions should
+            # not deal with the order by syntax.
             match = NEGATE_RE.match(column_name)
-            assert match, f"Invalid column format: {column_name}"
+            assert (
+                match
+            ), f"Invalid column format: {column_name}. Cannot strip the order by prefix"
             negate, col = match.groups()
         else:
             negate = ""
