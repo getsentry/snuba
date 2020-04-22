@@ -5,24 +5,24 @@ from mypy_extensions import TypedDict
 from snuba.reader import Result
 
 
-class RawQueryExtraData(TypedDict):
+class QueryExtraData(TypedDict):
     stats: Mapping[str, Any]
     sql: str
 
 
-class RawQueryException(Exception):
+class QueryException(Exception):
     """
     Exception raised during query execution that is used to carry extra data
-    back up the stack to the HTTP response -- basically a ``RawQueryResult``,
+    back up the stack to the HTTP response -- basically a ``QueryResult``,
     but without an actual ``Result`` instance. This exception should always
     be chained with another exception that contains additional detail about
     the cause of the exception.
     """
 
-    def __init__(self, extra: RawQueryExtraData):
+    def __init__(self, extra: QueryExtraData):
         self.extra = extra
 
 
-class RawQueryResult(NamedTuple):
+class QueryResult(NamedTuple):
     result: Result
-    extra: RawQueryExtraData
+    extra: QueryExtraData

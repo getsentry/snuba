@@ -23,7 +23,7 @@ from snuba.state.rate_limit import (
 from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException, RawQueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
@@ -62,7 +62,7 @@ def raw_query(
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
     fix some of the formatting issues in the result JSON.
@@ -182,8 +182,8 @@ def raw_query(
                 else:
                     logger.exception("Error running query: %s\n%s", sql, cause)
                     stats = update_with_status("error")
-                raise RawQueryException({"stats": stats, "sql": sql}) from cause
+                raise QueryException({"stats": stats, "sql": sql}) from cause
 
     stats = update_with_status("success")
 
-    return RawQueryResult(result, {"stats": stats, "sql": sql})
+    return QueryResult(result, {"stats": stats, "sql": sql})

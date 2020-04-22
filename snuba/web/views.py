@@ -40,7 +40,7 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
-from snuba.web import RawQueryException
+from snuba.web import QueryException
 from snuba.web.query import parse_and_run_query
 
 
@@ -277,7 +277,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
 
     try:
         result = parse_and_run_query(dataset, request, timer)
-    except RawQueryException as exception:
+    except QueryException as exception:
         status = 500
         details: Mapping[str, Any]
 
