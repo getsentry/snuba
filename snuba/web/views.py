@@ -278,9 +278,12 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     try:
         result = parse_and_run_query(dataset, request, timer)
     except RawQueryException as exception:
-        cause = getattr(exception, "__cause__", None)
+        status = 500
         details: Mapping[str, Any]
+
+        cause = exception.__cause__
         if isinstance(cause, RateLimitExceeded):
+            status = 429
             details = {
                 "type": "rate-limited",
                 "message": "rate limit exceeded",
@@ -297,7 +300,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
                 "message": str(cause),
             }
         else:
-            raise NotImplementedError  # something went very wrong
+            raise  # exception should have been chained
 
         return Response(
             json.dumps(
@@ -308,7 +311,7 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
                     "timing": timer.for_json(),
                 }
             ),
-            429 if isinstance(cause, RateLimitExceeded) else 500,
+            status,
             {"Content-Type": "application/json"},
         )
 
