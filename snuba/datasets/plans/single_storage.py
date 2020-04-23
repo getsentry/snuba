@@ -8,17 +8,17 @@ from snuba.datasets.plans.query_plan import (
 )
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 
-# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
-# dependency is a refactoring of the methods that return RawQueryResult to make them
-# depend on Result + some debug data structure instead. Also It requires removing
-# extra data from the result of the query.
-from snuba.web import RawQueryResult
+# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid
+# this dependency is a refactoring of the methods that return QueryResult to
+# make them depend on Result + some debug data structure instead. Also It
+# requires removing extra data from the result of the query.
+from snuba.web import QueryResult
 from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def execute(self, request: Request, runner: QueryRunner) -> RawQueryResult:
+    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
         return runner(request)
 
 

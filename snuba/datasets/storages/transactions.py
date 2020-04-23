@@ -20,7 +20,9 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
-from snuba.query.processors.transaction_column_processor import TransactionColumnProcessor
+from snuba.query.processors.transaction_column_processor import (
+    TransactionColumnProcessor,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
@@ -184,11 +186,13 @@ schema = ReplacingMergeTreeSchema(
     local_table_name="transactions_local",
     dist_table_name="transactions_dist",
     mandatory_conditions=[],
-    prewhere_candidates=["event_id", "project_id"],
+    prewhere_candidates=["event_id", "transaction", "title", "project_id"],
     order_by="(project_id, _finish_date, transaction_name, cityHash64(span_id))",
     partition_by="(retention_days, toMonday(_finish_date))",
     version_column="deleted",
-    sample_expr=None,
+    sample_expr="cityHash64(span_id)",
+    ttl_expr="finish_ts + toIntervalDay(retention_days)",
+    settings={"index_granularity": "8192"},
     migration_function=transactions_migrations,
 )
 

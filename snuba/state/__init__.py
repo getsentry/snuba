@@ -52,7 +52,7 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
 
 
 @contextmanager
-def deduper(query_id: Optional[str]) -> Iterator[bool]:
+def deduper(query_id: str) -> Iterator[bool]:
     """
     A simple redis distributed lock on a query_id to prevent multiple
     concurrent queries running with the same id. Blocks subsequent
@@ -71,19 +71,16 @@ def deduper(query_id: Optional[str]) -> Iterator[bool]:
         end
     """
 
-    if query_id is None:
-        yield False
-    else:
-        lock = "{}{}".format(query_lock_prefix, query_id)
-        nonce = uuid.uuid4()
-        try:
-            is_dupe = False
-            while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
-                is_dupe = True
-                time.sleep(0.01)
-            yield is_dupe
-        finally:
-            rds.eval(unlock, 1, lock, nonce)
+    lock = "{}{}".format(query_lock_prefix, query_id)
+    nonce = uuid.uuid4()
+    try:
+        is_dupe = False
+        while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
+            is_dupe = True
+            time.sleep(0.01)
+        yield is_dupe
+    finally:
+        rds.eval(unlock, 1, lock, nonce)
 
 
 # Runtime Configuration
