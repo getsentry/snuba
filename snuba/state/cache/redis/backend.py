@@ -143,6 +143,8 @@ class RedisCache(Cache[TValue]):
 
             argv = [task_ident, 60]
             try:
+                # The task is run in a thread pool so that we can return
+                # control to the caller once the timeout is reached.
                 value = self.__executor.submit(function).result(task_timeout)
                 argv.extend(
                     [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
