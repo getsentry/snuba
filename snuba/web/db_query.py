@@ -1,5 +1,6 @@
 import logging
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from typing import (
@@ -28,7 +29,9 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import RawQueryException, RawQueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
-cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
+cache: Cache[Any] = RedisCache(
+    redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
+)
 
 logger = logging.getLogger("snuba.query")
 

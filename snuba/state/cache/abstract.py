@@ -52,15 +52,15 @@ class Cache(Generic[TValue], ABC):
 
         If the client holding the lock does not finish executing the function
         prior to the timeout being reached, the client that held the lock
-        will return the result of executing the provided function, but will
-        not populate the cache with the value to avoid potentially
-        overwriting a fresher value with a stale value. Meanwhile, all
-        blocked clients will raise a ``ExecutionTimeoutError`` when the
-        timeout elapses. Since the timeout clock starts when the first client
-        takes the execution lock and begins to execute the function, the
-        timeout is an upper bound on the actual amount of time that any
-        subsequent clients will be blocked -- they will likely get a result
-        or throw a ``ExecutionTimeoutError`` in a time window substantially
-        shorter than the full timeout duration.
+        will raise a ``TimeoutError`` and will not populate the cache with
+        the value upon function completetion to avoid potentially overwriting
+        a fresher value with a stale value. Meanwhile, all blocked clients
+        will raise a ``ExecutionTimeoutError`` when the timeout elapses.
+        Since the timeout clock starts when the first client takes the
+        execution lock and begins to execute the function, the timeout is an
+        upper bound on the actual amount of time that any subsequent clients
+        will be blocked -- they will likely get a result or throw a
+        ``ExecutionTimeoutError`` in a time window substantially shorter than
+        the full timeout duration.
         """
         raise NotImplementedError

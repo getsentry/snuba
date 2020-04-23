@@ -2,6 +2,8 @@ import logging
 import uuid
 from typing import Callable, Optional
 
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 from pkg_resources import resource_string
 from redis.exceptions import ResponseError
 
@@ -26,11 +28,16 @@ RESULT_WAIT = 2
 
 class RedisCache(Cache[TValue]):
     def __init__(
-        self, client: RedisClientType, prefix: str, codec: Codec[bytes, TValue]
+        self,
+        client: RedisClientType,
+        prefix: str,
+        codec: Codec[bytes, TValue],
+        executor: ThreadPoolExecutor,
     ) -> None:
         self.__client = client
         self.__prefix = prefix
         self.__codec = codec
+        self.__executor = executor
 
         # TODO: This should probably be lazily instantiated, rather than
         # automatically happening at startup.
@@ -136,10 +143,12 @@ class RedisCache(Cache[TValue]):
 
             argv = [task_ident, 60]
             try:
-                value = function()
+                value = self.__executor.submit(function).result(task_timeout)
                 argv.extend(
                     [self.__codec.encode(value), get_config("cache_expiry_sec", 1)]
                 )
+            except concurrent.futures.TimeoutError as error:
+                raise TimeoutError("timed out waiting for value") from error
             finally:
                 # Regardless of whether the function succeeded or failed, we
                 # need to mark the task as completed. If there is no result

@@ -1,5 +1,6 @@
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Iterator
 from unittest import mock
@@ -17,7 +18,9 @@ from tests.assertions import assert_changes, assert_does_not_change
 @pytest.fixture
 def backend() -> Iterator[Cache[bytes]]:
     codec: PassthroughCodec[bytes] = PassthroughCodec()
-    backend: Cache[bytes] = RedisCache(redis_client, "test", codec)
+    backend: Cache[bytes] = RedisCache(
+        redis_client, "test", codec, ThreadPoolExecutor()
+    )
     try:
         yield backend
     finally:
@@ -48,7 +51,8 @@ def test_get_readthrough_missed_deadline(backend: Cache[bytes]) -> None:
         time.sleep(1.5)
         return value
 
-    backend.get_readthrough(key, function, 1) == value
+    with pytest.raises(TimeoutError):
+        backend.get_readthrough(key, function, 1) == value
 
     assert backend.get(key) is None
 
@@ -122,7 +126,8 @@ def test_get_readthrough_set_wait_timeout(backend: Cache[bytes]) -> None:
     waiter_fast = execute(partial(worker, 1))
     waiter_slow = execute(partial(worker, 3))
 
-    assert setter.result() == value
+    with pytest.raises(TimeoutError):
+        assert setter.result() == value
 
     with pytest.raises(TimeoutError):
         waiter_fast.result()
