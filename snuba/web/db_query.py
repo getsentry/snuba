@@ -1,5 +1,6 @@
 import logging
 
+from contextlib import nullcontext
 from functools import partial
 from hashlib import md5
 from typing import (
@@ -9,10 +10,13 @@ from typing import (
     Optional,
 )
 
+from sentry_sdk.api import configure_scope
+
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
+from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
 from snuba.state.cache import Cache, RedisCache
@@ -24,7 +28,7 @@ from snuba.state.rate_limit import (
 from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException, RawQueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
 cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
@@ -56,6 +60,152 @@ def update_query_metadata_and_stats(
     return stats
 
 
+def execute_query(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str],
+) -> Result:
+    """
+    Execute a query and return a result.
+    """
+    # Experiment, if we are going to grab more than X columns worth of data,
+    # don't use uncompressed_cache in ClickHouse.
+    uc_max = state.get_config("uncompressed_cache_max_cols", 5)
+    if len(request.query.get_all_referenced_columns()) > uc_max:
+        query_settings["use_uncompressed_cache"] = 0
+
+    # Force query to use the first shard replica, which
+    # should have synchronously received any cluster writes
+    # before this query is run.
+    consistent = request.settings.get_consistent()
+    stats["consistent"] = consistent
+    if consistent:
+        query_settings["load_balancing"] = "in_order"
+        query_settings["max_threads"] = 1
+
+    result = reader.execute(
+        query,
+        query_settings,
+        query_id=query_id,
+        with_totals=request.query.has_totals(),
+    )
+
+    timer.mark("execute")
+    stats.update(
+        {"result_rows": len(result["data"]), "result_cols": len(result["meta"])}
+    )
+
+    return result
+
+
+def execute_query_with_rate_limits(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str],
+) -> Result:
+    # XXX: We should consider moving this that it applies to the logical query,
+    # not the physical query.
+    with RateLimitAggregator(
+        request.settings.get_rate_limit_params()
+    ) as rate_limit_stats_container:
+        stats.update(rate_limit_stats_container.to_dict())
+        timer.mark("rate_limit")
+
+        project_rate_limit_stats = rate_limit_stats_container.get_stats(
+            PROJECT_RATE_LIMIT_NAME
+        )
+
+        if (
+            "max_threads" in query_settings
+            and project_rate_limit_stats is not None
+            and project_rate_limit_stats.concurrent > 1
+        ):
+            maxt = query_settings["max_threads"]
+            query_settings["max_threads"] = max(
+                1, maxt - project_rate_limit_stats.concurrent + 1
+            )
+
+        return execute_query(request, query, timer, stats, query_settings, query_id)
+
+
+def execute_query_with_caching(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+    query_id: Optional[str],
+) -> Result:
+    # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
+    # cache, as well as the uncompressed cache. These should be independent.
+    use_cache, uc_max = state.get_configs(
+        [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
+    )
+
+    if len(request.query.get_all_referenced_columns()) > uc_max:
+        use_cache = False
+
+    stats["use_cache"] = use_cache
+
+    execute = partial(
+        execute_query_with_rate_limits,
+        request,
+        query,
+        timer,
+        stats,
+        query_settings,
+        query_id,
+    )
+
+    if use_cache:
+        key = md5(force_bytes(query.format_sql())).hexdigest()
+        result = cache.get(key)
+        timer.mark("cache_get")
+        stats["cache_hit"] = result is not None
+        if result is not None:
+            return result
+        result = execute()
+        cache.set(key, result)
+        timer.mark("cache_set")
+        return result
+    else:
+        # XXX: These timings and debug information are reported even if
+        # cache is not in use.
+        timer.mark("cache_get")
+        stats["cache_hit"] = False
+        return execute()
+
+
+def execute_query_with_deduplication(
+    request: Request,
+    query: ClickhouseQuery,
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+) -> Result:
+    use_deduper = state.get_config("use_deduper", 1)
+    query_id = md5(force_bytes(query.format_sql())).hexdigest()
+    if use_deduper:
+        manager = state.deduper(query_id)
+        execute = partial(execute_query_with_caching, query_id=query_id)
+    else:
+        manager = nullcontext(False)
+        execute = partial(execute_query_with_caching, query_id=None)
+
+    with manager as is_dupe:
+        # XXX: These timings and debug information are reported even if
+        # deduplication is not in use.
+        timer.mark("dedupe_wait")
+        stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+        return execute(request, query, timer, stats, query_settings)
+
+
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
@@ -63,7 +213,7 @@ def raw_query(
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
     trace_id: Optional[str] = None,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
     fix some of the formatting issues in the result JSON.
@@ -74,15 +224,6 @@ def raw_query(
     TODO: As soon as we have a StorageQuery abstraction remove all the references
     to the original query from the request.
     """
-
-    use_cache, use_deduper, uc_max = state.get_configs(
-        [
-            ("use_cache", settings.USE_RESULT_CACHE),
-            ("use_deduper", 1),
-            ("uncompressed_cache_max_cols", 5),
-        ]
-    )
-
     all_confs = state.get_all_configs()
     query_settings: MutableMapping[str, Any] = {
         k.split("/", 1)[1]: v
@@ -90,122 +231,35 @@ def raw_query(
         if k.startswith("query_settings/")
     }
 
-    # Experiment, if we are going to grab more than X columns worth of data,
-    # don't use uncompressed_cache in clickhouse, or result cache in snuba.
-    if len(request.query.get_all_referenced_columns()) > uc_max:
-        query_settings["use_uncompressed_cache"] = 0
-        use_cache = 0
-
     timer.mark("get_configs")
 
     sql = query.format_sql()
-    query_id = md5(force_bytes(sql)).hexdigest()
-    with state.deduper(query_id if use_deduper else None) as is_dupe:
-        timer.mark("dedupe_wait")
 
-        result = cache.get(query_id) if use_cache else None
-        timer.mark("cache_get")
+    update_with_status = partial(
+        update_query_metadata_and_stats,
+        request,
+        sql,
+        timer,
+        stats,
+        query_metadata,
+        query_settings,
+        trace_id,
+    )
 
-        stats.update(
-            {
-                "is_duplicate": is_dupe,
-                "query_id": query_id,
-                "use_cache": bool(use_cache),
-                "cache_hit": bool(result),
-            }
-        ),
-
-        update_with_status = partial(
-            update_query_metadata_and_stats,
-            request,
-            sql,
-            timer,
-            stats,
-            query_metadata,
-            query_settings,
-            trace_id,
+    try:
+        result = execute_query_with_deduplication(
+            request, query, timer, stats, query_settings,
         )
-
-        if not result:
-            try:
-                with RateLimitAggregator(
-                    request.settings.get_rate_limit_params()
-                ) as rate_limit_stats_container:
-                    stats.update(rate_limit_stats_container.to_dict())
-                    timer.mark("rate_limit")
-
-                    project_rate_limit_stats = rate_limit_stats_container.get_stats(
-                        PROJECT_RATE_LIMIT_NAME
-                    )
-
-                    if (
-                        "max_threads" in query_settings
-                        and project_rate_limit_stats is not None
-                        and project_rate_limit_stats.concurrent > 1
-                    ):
-                        maxt = query_settings["max_threads"]
-                        query_settings["max_threads"] = max(
-                            1, maxt - project_rate_limit_stats.concurrent + 1
-                        )
-
-                    # Force query to use the first shard replica, which
-                    # should have synchronously received any cluster writes
-                    # before this query is run.
-                    consistent = request.settings.get_consistent()
-                    stats["consistent"] = consistent
-                    if consistent:
-                        query_settings["load_balancing"] = "in_order"
-                        query_settings["max_threads"] = 1
-
-                    try:
-                        result = reader.execute(
-                            query,
-                            query_settings,
-                            # All queries should already be deduplicated at this point
-                            # But the query_id will let us know if they aren't
-                            query_id=query_id if use_deduper else None,
-                            with_totals=request.query.has_totals(),
-                        )
-
-                        timer.mark("execute")
-                        stats.update(
-                            {
-                                "result_rows": len(result["data"]),
-                                "result_cols": len(result["meta"]),
-                            }
-                        )
-
-                        if use_cache:
-                            cache.set(query_id, result)
-                            timer.mark("cache_set")
-
-                    except BaseException as ex:
-                        error = str(ex)
-                        logger.exception("Error running query: %s\n%s", sql, error)
-                        stats = update_with_status("error")
-                        meta = {}
-                        if isinstance(ex, ClickhouseError):
-                            err_type = "clickhouse"
-                            meta["code"] = ex.code
-                        else:
-                            err_type = "unknown"
-                        raise RawQueryException(
-                            err_type=err_type,
-                            message=error,
-                            stats=stats,
-                            sql=sql,
-                            **meta,
-                        )
-            except RateLimitExceeded as ex:
-                stats = update_with_status("rate-limited")
-                raise RawQueryException(
-                    err_type="rate-limited",
-                    message="rate limit exceeded",
-                    stats=stats,
-                    sql=sql,
-                    detail=str(ex),
-                )
-
-    stats = update_with_status("success")
-
-    return RawQueryResult(result, {"stats": stats, "sql": sql})
+    except Exception as cause:
+        if isinstance(cause, RateLimitExceeded):
+            stats = update_with_status("rate-limited")
+        else:
+            with configure_scope() as scope:
+                if isinstance(cause, ClickhouseError):
+                    scope.fingerprint = ["{{default}}", str(cause.code)]
+                logger.exception("Error running query: %s\n%s", sql, cause)
+            stats = update_with_status("error")
+        raise QueryException({"stats": stats, "sql": sql}) from cause
+    else:
+        stats = update_with_status("success")
+        return QueryResult(result, {"stats": stats, "sql": sql})
