@@ -10,7 +10,7 @@ from typing import (
     Optional,
 )
 
-from sentry_sdk import configure_scope
+from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
