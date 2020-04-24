@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Set
+from typing import Generic, Set
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.reader import Reader
+from snuba.reader import Reader, TQuery
 
 
-class Cluster(ABC):
+class Cluster(ABC, Generic[TQuery]):
     """
     A cluster is responsible for managing a collection of database nodes.
 
@@ -33,27 +33,25 @@ class Cluster(ABC):
         return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
-    def get_reader(self) -> Reader[ClickhouseQuery]:
+    def get_reader(self) -> Reader[TQuery]:
         raise NotImplementedError
 
 
-class ClickhouseCluster(Cluster):
+class ClickhouseCluster(Cluster[ClickhouseQuery]):
     """
     ClickhouseCluster provides a reader and Clickhouse connections that are shared by all
     storages located on the cluster
     """
 
     def __init__(self, host: str, port: int, http_port: int, storage_sets: Set[str]):
+        super().__init__(storage_sets)
         self.__host = host
         self.__port = port
         self.__clickhouse_rw = ClickhousePool(host, port)
         self.__clickhouse_ro = ClickhousePool(
             host, port, client_settings={"readonly": True},
         )
-        self.__reader: Reader[ClickhouseQuery] = NativeDriverReader(
-            self.__clickhouse_ro
-        )
-        super().__init__(storage_sets)
+        self.__reader = NativeDriverReader(self.__clickhouse_ro)
 
     def __str__(self) -> str:
         return f"{self.__host}:{self.__port}"
