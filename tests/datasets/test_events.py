@@ -251,3 +251,20 @@ class TestEventsDataset(BaseEventsTest):
             )
             == "-`exception_stacks.type`"
         )
+
+        assert (
+            column_expr(self.dataset, "-tags[myTag]", deepcopy(query), ParsingContext())
+            == "-(tags.value[indexOf(tags.key, 'myTag')] AS `tags[myTag]`)"
+        )
+
+        context = ParsingContext()
+        context.add_alias("`tags[myTag]`")
+        assert (
+            column_expr(self.dataset, "-tags[myTag]", deepcopy(query), context)
+            == "-`tags[myTag]`"
+        )
+
+        assert (
+            column_expr(self.dataset, "-group_id", deepcopy(query), ParsingContext())
+            == "-(nullIf(group_id, 0) AS group_id)"
+        )
