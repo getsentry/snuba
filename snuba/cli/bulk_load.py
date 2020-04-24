@@ -4,7 +4,8 @@ from typing import Optional
 import click
 
 from snuba import settings
-from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.writer import BufferedWriterWrapper
@@ -27,7 +28,7 @@ def bulk_load(
     *,
     dataset_name: str,
     dest_table: Optional[str],
-    source: Optional[str],
+    source: str,
     log_level: Optional[str] = None,
 ) -> None:
     setup_logging(log_level)
@@ -44,13 +45,21 @@ def bulk_load(
         product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,
     )
 
-    loader = enforce_table_writer(dataset).get_bulk_loader(snapshot_source, dest_table)
+    storage = dataset.get_writable_storage()
+
+    assert storage is not None
+
+    table_writer = storage.get_table_writer()
+
+    loader = table_writer.get_bulk_loader(snapshot_source, dest_table)
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
-        enforce_table_writer(dataset).get_bulk_writer(table_name=dest_table),
+        table_writer.get_bulk_writer(table_name=dest_table),
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
-    clickhouse_ro = dataset.get_writable_storage().get_cluster().get_clickhouse_ro()
+    clickhouse_ro = storage.get_cluster().get_connection(
+        ClickhouseClientSettings.READONLY
+    )
 
     loader.load(writer, clickhouse_ro)

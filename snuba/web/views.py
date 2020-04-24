@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -74,7 +75,9 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
+                clickhouse_ro = storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.READONLY
+                )
                 clickhouse_tables = clickhouse_ro.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
@@ -369,7 +372,9 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            clickhouse_rw = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.READWRITE
+            )
             for statement in storage.get_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
 
@@ -426,11 +431,12 @@ if application.debug or application.testing:
 
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
+
             worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
+
+            worker = ReplacerWorker(storage, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -442,7 +448,9 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            clickhouse_rw = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.READWRITE
+            )
             for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 

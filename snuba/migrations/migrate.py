@@ -3,6 +3,7 @@ import logging
 from clickhouse_driver import Client
 from typing import MutableSequence
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
@@ -42,10 +43,8 @@ def run(dataset: Dataset) -> None:
         schemas.append(writer.get_schema())
 
     for storage in dataset.get_all_storages():
-        schemas: MutableSequence[Schema] = []
-
         schemas.append(storage.get_schemas().get_read_schema())
 
-        for schema in schemas:
-            conn = storage.get_cluster().get_clickhouse_rw()
-            _run_schema(conn, schema)
+    for schema in schemas:
+        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.READWRITE)
+        _run_schema(conn, schema)

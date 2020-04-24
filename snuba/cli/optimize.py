@@ -2,22 +2,17 @@ from typing import Optional
 
 import click
 
-from snuba import settings
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
 
 
 @click.command()
 @click.option(
-    "--clickhouse-host",
-    default=settings.CLICKHOUSE_HOST,
-    help="Clickhouse server to write to.",
+    "--clickhouse-host", help="Clickhouse server to write to.",
 )
 @click.option(
-    "--clickhouse-port",
-    default=settings.CLICKHOUSE_PORT,
-    type=int,
-    help="Clickhouse native port to write to.",
+    "--clickhouse-port", type=int, help="Clickhouse native port to write to.",
 )
 @click.option("--database", default="default", help="Name of the database to target.")
 @click.option(
@@ -36,8 +31,8 @@ from snuba.environment import setup_logging
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
     *,
-    clickhouse_host: str,
-    clickhouse_port: int,
+    clickhouse_host: Optional[str],
+    clickhouse_port: Optional[int],
     database: str,
     dataset_name: str,
     timeout: int,
@@ -53,8 +48,23 @@ def optimize(
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    clickhouse = ClickhousePool(
-        clickhouse_host, clickhouse_port, send_receive_timeout=timeout
-    )
-    num_dropped = run_optimize(clickhouse, database, table, before=today)
-    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+
+    if bool(clickhouse_host) ^ bool(clickhouse_port):
+        raise click.ClickException("Provide both Clickhouse host and port or neither")
+
+    # If Clickhouse host and port values are provided, run optimize on that host,
+    # otherwise run optimize on each registered cluster.
+    if clickhouse_host and clickhouse_port:
+        clickhouse_connections = [
+            ClickhousePool(
+                clickhouse_host, clickhouse_port, send_receive_timeout=timeout
+            )
+        ]
+    else:
+        clickhouse_connections = [
+            cluster.get_connection(send_receive_timeout=timeout) for cluster in CLUSTERS
+        ]
+
+    for connection in clickhouse_connections:
+        num_dropped = run_optimize(connection, database, table, before=today)
+        logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
