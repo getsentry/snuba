@@ -63,6 +63,7 @@ def update_query_metadata_and_stats(
 def execute_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -104,6 +105,7 @@ def execute_query(
 def execute_query_with_rate_limits(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -131,12 +133,15 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        return execute_query(request, query, timer, stats, query_settings, query_id)
+        return execute_query(
+            request, query, reader, timer, stats, query_settings, query_id
+        )
 
 
 def execute_query_with_caching(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -157,6 +162,7 @@ def execute_query_with_caching(
         execute_query_with_rate_limits,
         request,
         query,
+        reader,
         timer,
         stats,
         query_settings,
@@ -185,6 +191,7 @@ def execute_query_with_caching(
 def execute_query_with_deduplication(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -203,7 +210,7 @@ def execute_query_with_deduplication(
         # deduplication is not in use.
         timer.mark("dedupe_wait")
         stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-        return execute(request, query, timer, stats, query_settings)
+        return execute(request, query, reader, timer, stats, query_settings)
 
 
 def raw_query(
@@ -249,7 +256,7 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            request, query, timer, stats, query_settings,
+            request, query, reader, timer, stats, query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
