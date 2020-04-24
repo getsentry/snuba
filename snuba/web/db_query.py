@@ -1,6 +1,5 @@
 import logging
 
-from contextlib import nullcontext
 from functools import partial
 from hashlib import md5
 from typing import (
@@ -151,8 +150,6 @@ def execute_query_with_caching(
     if len(request.query.get_all_referenced_columns()) > uc_max:
         use_cache = False
 
-    stats["use_cache"] = use_cache
-
     execute = partial(
         execute_query_with_rate_limits,
         request,
@@ -175,10 +172,6 @@ def execute_query_with_caching(
         timer.mark("cache_set")
         return result
     else:
-        # XXX: These timings and debug information are reported even if
-        # cache is not in use.
-        timer.mark("cache_get")
-        stats["cache_hit"] = False
         return execute()
 
 
@@ -189,21 +182,17 @@ def execute_query_with_deduplication(
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
 ) -> Result:
-    use_deduper = state.get_config("use_deduper", 1)
-    query_id = md5(force_bytes(query.format_sql())).hexdigest()
-    if use_deduper:
-        manager = state.deduper(query_id)
-        execute = partial(execute_query_with_caching, query_id=query_id)
+    execute = partial(
+        execute_query_with_caching, request, query, timer, stats, query_settings
+    )
+    if state.get_config("use_deduper", 1):
+        query_id = md5(force_bytes(query.format_sql())).hexdigest()
+        with state.deduper(query_id) as is_dupe:
+            timer.mark("dedupe_wait")
+            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+            return execute(query_id=query_id)
     else:
-        manager = nullcontext(False)
-        execute = partial(execute_query_with_caching, query_id=None)
-
-    with manager as is_dupe:
-        # XXX: These timings and debug information are reported even if
-        # deduplication is not in use.
-        timer.mark("dedupe_wait")
-        stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-        return execute(request, query, timer, stats, query_settings)
+        return execute(query_id=None)
 
 
 def raw_query(
