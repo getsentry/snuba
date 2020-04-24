@@ -299,6 +299,8 @@ class DiscoverDataset(TimeSeriesDataset):
                 column_name = "tags[sentry:dist]"
             if column_name == "user":
                 column_name = "tags[sentry:user]"
+            if column_name == "duration":
+                return "0"
             if self.__transactions_columns.get(column_name):
                 return "NULL"
 

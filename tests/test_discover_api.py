@@ -527,3 +527,24 @@ class TestDiscoverApi(BaseApiTest):
             ).data
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
+
+    def test_duration_in_event_query(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "discover",
+                    "project": self.project_id,
+                    "aggregations": [["quantile(0.95)", "duration", "p95"]],
+                    "conditions": [["type", "=", "error"]],
+                    "groupby": ["time"],
+                    "orderby": "time",
+                    "granularity": 300,
+                    "limit": 1000,
+                }
+            ),
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert data["data"][0]["p95"] == 0.0
