@@ -1,5 +1,6 @@
 import logging
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from hashlib import md5
 from typing import (
@@ -18,7 +19,8 @@ from snuba.environment import reader
 from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
-from snuba.state.cache import Cache, RedisCache
+from snuba.state.cache.abstract import Cache
+from snuba.state.cache.redis.backend import RedisCache
 from snuba.state.rate_limit import (
     PROJECT_RATE_LIMIT_NAME,
     RateLimitAggregator,
@@ -30,7 +32,9 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.query_metadata import ClickhouseQueryMetadata, SnubaQueryMetadata
 
-cache: Cache[Any] = RedisCache(redis_client, "snuba-query-cache:", JSONCodec())
+cache: Cache[Any] = RedisCache(
+    redis_client, "snuba-query-cache:", JSONCodec(), ThreadPoolExecutor()
+)
 
 logger = logging.getLogger("snuba.query")
 
