@@ -9,7 +9,10 @@ from typing import (
     Optional,
 )
 
+from sentry_sdk.api import configure_scope
+
 from snuba import settings, state
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
 from snuba.environment import reader
 from snuba.reader import Result
@@ -240,7 +243,10 @@ def raw_query(
         if isinstance(cause, RateLimitExceeded):
             stats = update_with_status("rate-limited")
         else:
-            logger.exception("Error running query: %s\n%s", sql, cause)
+            with configure_scope() as scope:
+                if isinstance(cause, ClickhouseError):
+                    scope.fingerprint = ["{{default}}", str(cause.code)]
+                logger.exception("Error running query: %s\n%s", sql, cause)
             stats = update_with_status("error")
         raise QueryException({"stats": stats, "sql": sql}) from cause
     else:
