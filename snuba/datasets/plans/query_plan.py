@@ -61,7 +61,7 @@ class QueryPlanExecutionStrategy(ABC):
     def execute(
         self,
         request: Request,
-        query_processors: Sequence[QueryProcessor],
+        db_query_processors: Sequence[QueryProcessor],
         runner: QueryRunner,
     ) -> QueryResult:
         """
