@@ -22,6 +22,12 @@ class StorageQueryPlan:
     has been selected.
     It embeds the sequence of storage specific QueryProcessors to apply
     to the query after the the storage has been selected.
+    These query processors are split into two disjoint sequences: plan_processors
+    and db_query_processors. The first sequence must be executed ony once per
+    plan and before we pass the query to the ExecutionStrategy. The second
+    sequence instead must be executed for every DB query we execute, so, in
+    case the ExecutionStrategy decides to split the query into multiple DB
+    queries, they have to be executed for each ones of them.
     It also provides a plan execution strategy, in case the query is not
     one individual query statement (like for split queries).
     """
@@ -34,7 +40,8 @@ class StorageQueryPlan:
     # having two query objects of the same type around during processing
     # would be dangerous, so it is probably better not to expose the query
     # here yet.
-    query_processors: Sequence[QueryProcessor]
+    plan_processors: Sequence[QueryProcessor]
+    db_query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
@@ -50,11 +57,19 @@ class QueryPlanExecutionStrategy(ABC):
     """
 
     @abstractmethod
-    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
+    def execute(
+        self,
+        request: Request,
+        query_processors: Sequence[QueryProcessor],
+        runner: QueryRunner,
+    ) -> QueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
         The runner parameters is a function to actually run one individual query on the
         database.
+        The query_processors have to be executed for every DB query this method decides
+        to trigger. Implementations of this class are responsible to execute all the
+        query processors before each DB query.
         """
         raise NotImplementedError
 

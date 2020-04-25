@@ -109,7 +109,7 @@ def _run_query_pipeline(
     relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for processor in storage_query_plan.query_processors:
+    for processor in storage_query_plan.plan_processors:
         processor.process_query(request.query, request.settings)
 
     query_runner = partial(
@@ -121,7 +121,9 @@ def _run_query_pipeline(
         to_date,
     )
 
-    return storage_query_plan.execution_strategy.execute(request, query_runner)
+    return storage_query_plan.execution_strategy.execute(
+        request, storage_query_plan.db_query_processors, query_runner
+    )
 
 
 def _format_storage_query_and_run(

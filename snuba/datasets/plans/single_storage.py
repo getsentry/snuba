@@ -18,7 +18,14 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
+    def execute(
+        self,
+        request: Request,
+        query_processors: Sequence[QueryProcessor],
+        runner: QueryRunner,
+    ) -> QueryResult:
+        for processor in query_processors:
+            processor.process_query(request.query, request.settings)
         return runner(request)
 
 
@@ -54,7 +61,8 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
         return StorageQueryPlan(
-            query_processors=[
+            plan_processors=[],
+            db_query_processors=[
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
             ],
@@ -83,7 +91,8 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
         return StorageQueryPlan(
-            query_processors=[
+            plan_processors=[],
+            db_query_processors=[
                 *storage.get_query_processors(),
                 *self.__post_processors,
             ],
