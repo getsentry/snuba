@@ -21,10 +21,10 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def execute(
         self,
         request: Request,
-        query_processors: Sequence[QueryProcessor],
+        db_query_processors: Sequence[QueryProcessor],
         runner: QueryRunner,
     ) -> QueryResult:
-        for processor in query_processors:
+        for processor in db_query_processors:
             processor.process_query(request.query, request.settings)
         return runner(request)
 

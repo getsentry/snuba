@@ -20,16 +20,16 @@ class StorageQueryPlan:
     This is produced by StorageQueryPlanBuilder (provided by the dataset)
     after the dataset query processing has been performed and the storage
     has been selected.
-    It embeds the sequence of storage specific QueryProcessors to apply
-    to the query after the the storage has been selected.
+    It provides a plan execution strategy, in case the query is not one individual
+    query statement (like for split queries).
+    It also embeds the sequence of storage specific QueryProcessors to apply
+    to the query after the storage has been selected.
     These query processors are split into two disjoint sequences: plan_processors
-    and db_query_processors. The first sequence must be executed ony once per
+    and db_query_processors. The first sequence must be executed only once per
     plan and before we pass the query to the ExecutionStrategy. The second
-    sequence instead must be executed for every DB query we execute, so, in
-    case the ExecutionStrategy decides to split the query into multiple DB
-    queries, they have to be executed for each ones of them.
-    It also provides a plan execution strategy, in case the query is not
-    one individual query statement (like for split queries).
+    sequence must be executed for every DB query we execute. In case the
+    ExecutionStrategy decides to split the query into multiple DB queries,
+    they have to be executed for each one of them.
     """
 
     # TODO: When we will have a separate Query class for Snuba Query and
@@ -47,12 +47,13 @@ class StorageQueryPlan:
 
 class QueryPlanExecutionStrategy(ABC):
     """
-    Orchestrate the executions of a query. An example use case is split
+    Orchestrates the executions of a query. An example use case is split
     queries, when the split is done at storage level.
     It does not know how to run a query against a DB, but it knows how
     and whether to break down a query and how to assemble the results back.
     It receives a runner, that takes care of actually executing one statement
-    against the DB.
+    against the DB and a sequence of query processors to apply before the query
+    is sent to the DB.
     Potentially this could be agnostic to the DB.
     """
 
@@ -65,11 +66,11 @@ class QueryPlanExecutionStrategy(ABC):
     ) -> QueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
-        The runner parameters is a function to actually run one individual query on the
-        database.
         The query_processors have to be executed for every DB query this method decides
         to trigger. Implementations of this class are responsible to execute all the
         query processors before each DB query.
+        The runner parameter is a function to actually run one individual query on the
+        database.
         """
         raise NotImplementedError
 
