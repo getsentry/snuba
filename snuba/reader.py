@@ -110,7 +110,6 @@ class Reader(ABC, Generic[TQuery]):
         self,
         query: TQuery,
         settings: Optional[Mapping[str, str]] = None,
-        query_id: Optional[str] = None,
         with_totals: bool = False,
     ) -> Result:
         """Execute a query."""
