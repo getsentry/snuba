@@ -14,11 +14,11 @@ QueryRunner = Callable[[Query, RequestSettings], QueryResult]
 
 
 @dataclass(frozen=True)
-class StorageQueryPlan:
+class ClickhouseQueryPlan:
     """
     Provides the directions to execute the query against one storage
     or multiple joined ones.
-    This is produced by StorageQueryPlanBuilder (provided by the dataset)
+    This is produced by ClickhouseQueryPlanBuilder (provided by the dataset)
     after the dataset query processing has been performed and the storage
     has been selected.
     It embeds the PhysicalQuery (the query to run on the storage after translation),
@@ -56,15 +56,15 @@ class QueryPlanExecutionStrategy(ABC):
         raise NotImplementedError
 
 
-class StorageQueryPlanBuilder(ABC):
+class ClickhouseQueryPlanBuilder(ABC):
     """
     Embeds the dataset specific logic that selects which storage to use
     to execute the query and produces the storage query (when we will
     have a separation between Snuba Query and Storage Query).
     This is provided by a dataset and, when executed, it returns a
-    StorageQueryPlan that embeds what is needed to run the storage query.
+    ClickhouseQueryPlan that embeds what is needed to run the storage query.
     """
 
     @abstractmethod
-    def build_plan(self, request: Request) -> StorageQueryPlan:
+    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         raise NotImplementedError

@@ -5,8 +5,8 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
-    StorageQueryPlan,
-    StorageQueryPlanBuilder,
+    ClickhouseQueryPlan,
+    ClickhouseQueryPlanBuilder,
 )
 from snuba.datasets.plans.translators import CopyTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
@@ -27,7 +27,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return runner(query, request_settings)
 
 
-class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
+class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     Builds the Storage Query Execution Plan for a dataset that is based on
     a single storage.
@@ -50,7 +50,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         # candidate to be added here as post process.
         self.__post_processors = post_processors or []
 
-    def build_plan(self, request: Request) -> StorageQueryPlan:
+    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         # TODO: Clearly the QueryTranslator instance  will be dependent on the storage.
         # Setting the data_source on the query should become part of the translation
         # as well.
@@ -59,7 +59,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
-        return StorageQueryPlan(
+        return ClickhouseQueryPlan(
             query=clickhouse_query,
             query_processors=[
                 *self.__storage.get_query_processors(),
@@ -69,7 +69,7 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
 
-class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
+class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
     A query plan builder that selects one of multiple storages in the
     dataset.
@@ -83,7 +83,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__selector = selector
         self.__post_processors = post_processors or []
 
-    def build_plan(self, request: Request) -> StorageQueryPlan:
+    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         storage, translator = self.__selector.select_storage(
             request.query, request.settings
         )
@@ -95,7 +95,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
-        return StorageQueryPlan(
+        return ClickhouseQueryPlan(
             query=clickhouse_query,
             query_processors=[
                 *storage.get_query_processors(),
