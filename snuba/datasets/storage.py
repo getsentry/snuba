@@ -6,7 +6,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.logical import Query
-from snuba.query.processors.physical import QueryProcessor
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

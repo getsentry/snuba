@@ -8,7 +8,7 @@ from typing import Optional, List, NamedTuple, Set
 from snuba.clickhouse.query import Query
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.expressions import Column, Expression
-from snuba.query.processors.physical import QueryProcessor
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.events_format import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings

@@ -15,7 +15,7 @@ from snuba.datasets.plans.translators import CopyTranslator
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import QueryResult
-from snuba.query.processors.physical import QueryProcessor
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 
