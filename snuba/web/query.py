@@ -8,8 +8,8 @@ from flask import request as http_request
 from functools import partial
 
 from snuba import environment, settings, state
-from snuba.clickhouse.astquery import AstClickhouseQueryFormatter
-from snuba.clickhouse.dictquery import DictClickhouseQueryFormatter
+from snuba.clickhouse.astquery import AstClickhouseSqlQuery
+from snuba.clickhouse.dictquery import DictClickhouseSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -154,7 +154,7 @@ def _format_storage_query_and_run(
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
         # ClickhouseQueryFormatter since they are Clickhouse specific
-        formatter = DictClickhouseQueryFormatter(dataset, query, request_settings)
+        sql_query = DictClickhouseSqlQuery(dataset, query, request_settings)
     timer.mark("prepare_query")
 
     stats = {
@@ -165,12 +165,12 @@ def _format_storage_query_and_run(
         "sample": query.get_sample(),
     }
 
-    with sentry_sdk.start_span(description=formatter.format_sql(), op="db") as span:
+    with sentry_sdk.start_span(description=sql_query.format_sql(), op="db") as span:
         span.set_tag("table", source)
         try:
             span.set_tag(
                 "ast_query",
-                AstClickhouseQueryFormatter(query, request_settings).format_sql(),
+                AstClickhouseSqlQuery(query, request_settings).format_sql(),
             )
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
@@ -178,7 +178,7 @@ def _format_storage_query_and_run(
         return raw_query(
             query,
             request_settings,
-            formatter,
+            sql_query,
             timer,
             query_metadata,
             stats,

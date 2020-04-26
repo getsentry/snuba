@@ -12,7 +12,7 @@ from dateutil.tz import tz
 from snuba import settings
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.formatter import ClickhouseQueryFormatter
+from snuba.clickhouse.sql import ClickhouseSqlQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -181,7 +181,7 @@ transform_column_types = build_result_transformer(
 )
 
 
-class NativeDriverReader(Reader[ClickhouseQueryFormatter]):
+class NativeDriverReader(Reader[ClickhouseSqlQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
@@ -219,8 +219,8 @@ class NativeDriverReader(Reader[ClickhouseQueryFormatter]):
 
     def execute(
         self,
-        formatter: ClickhouseQueryFormatter,
-        # TODO: move Clickhouse specific arguments into DictClickhouseQueryFormatter
+        query: ClickhouseSqlQuery,
+        # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,
@@ -232,10 +232,9 @@ class NativeDriverReader(Reader[ClickhouseQueryFormatter]):
         if query_id is not None:
             kwargs["query_id"] = query_id
 
-        sql = formatter.format_sql()
         return self.__transform_result(
             self.__client.execute(
-                sql, with_column_types=True, settings=settings, **kwargs
+                query.format_sql(), with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
         )

@@ -1,14 +1,14 @@
 from snuba import settings as snuba_settings
 from snuba import util
-from snuba.clickhouse.formatter import ClickhouseQueryFormatter
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import ClickhouseSqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 
-class DictClickhouseQueryFormatter(ClickhouseQueryFormatter):
+class DictClickhouseSqlQuery(ClickhouseSqlQuery):
     """
     Legacy Clickhouse query formatter that transforms the legacy query representation
     based on the original query body dictionary into a string.

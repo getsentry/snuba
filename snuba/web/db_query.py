@@ -14,8 +14,8 @@ from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.formatter import ClickhouseQueryFormatter
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import ClickhouseSqlQuery
 from snuba.environment import reader
 from snuba.reader import Result
 from snuba.redis import redis_client
@@ -66,7 +66,7 @@ def update_query_metadata_and_stats(
 def execute_query(
     physical_query: Query,
     request_settings: RequestSettings,
-    formatter: ClickhouseQueryFormatter,
+    sql_query: ClickhouseSqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -91,7 +91,7 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        formatter,
+        sql_query,
         query_settings,
         query_id=query_id,
         with_totals=physical_query.has_totals(),
@@ -108,7 +108,7 @@ def execute_query(
 def execute_query_with_rate_limits(
     physical_query: Query,
     request_settings: RequestSettings,
-    formatter: ClickhouseQueryFormatter,
+    sql_query: ClickhouseSqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -139,7 +139,7 @@ def execute_query_with_rate_limits(
         return execute_query(
             physical_query,
             request_settings,
-            formatter,
+            sql_query,
             timer,
             stats,
             query_settings,
@@ -150,7 +150,7 @@ def execute_query_with_rate_limits(
 def execute_query_with_caching(
     physical_query: Query,
     request_settings: RequestSettings,
-    formatter: ClickhouseQueryFormatter,
+    sql_query: ClickhouseSqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -169,7 +169,7 @@ def execute_query_with_caching(
         execute_query_with_rate_limits,
         physical_query,
         request_settings,
-        formatter,
+        sql_query,
         timer,
         stats,
         query_settings,
@@ -177,7 +177,7 @@ def execute_query_with_caching(
     )
 
     if use_cache:
-        key = md5(force_bytes(formatter.format_sql())).hexdigest()
+        key = md5(force_bytes(sql_query.format_sql())).hexdigest()
         result = cache.get(key)
         timer.mark("cache_get")
         stats["cache_hit"] = result is not None
@@ -194,7 +194,7 @@ def execute_query_with_caching(
 def execute_query_with_deduplication(
     physical_query: Query,
     request_settings: RequestSettings,
-    formatter: ClickhouseQueryFormatter,
+    sql_query: ClickhouseSqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -203,13 +203,13 @@ def execute_query_with_deduplication(
         execute_query_with_caching,
         physical_query,
         request_settings,
-        formatter,
+        sql_query,
         timer,
         stats,
         query_settings,
     )
     if state.get_config("use_deduper", 1):
-        query_id = md5(force_bytes(formatter.format_sql())).hexdigest()
+        query_id = md5(force_bytes(sql_query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
             stats.update({"is_duplicate": is_dupe, "query_id": query_id})
@@ -221,7 +221,7 @@ def execute_query_with_deduplication(
 def raw_query(
     physical_query: Query,
     request_settings: RequestSettings,
-    formatter: ClickhouseQueryFormatter,
+    sql_query: ClickhouseSqlQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -246,7 +246,7 @@ def raw_query(
 
     timer.mark("get_configs")
 
-    sql = formatter.format_sql()
+    sql = sql_query.format_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
@@ -260,7 +260,7 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            physical_query, request_settings, formatter, timer, stats, query_settings,
+            physical_query, request_settings, sql_query, timer, stats, query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):

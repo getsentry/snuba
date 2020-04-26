@@ -1,16 +1,14 @@
 from typing import Optional
 
 from snuba import settings
-from snuba.clickhouse.formatter import (
-    ClickhouseExpressionFormatter,
-    ClickhouseQueryFormatter,
-)
+from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import ClickhouseSqlQuery
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 
-class AstClickhouseQueryFormatter(ClickhouseQueryFormatter):
+class AstClickhouseSqlQuery(ClickhouseSqlQuery):
     """
     Clickhouse query formatter that takes the content from the Clickhouse Query
     AST and formats it into a SQL string.
