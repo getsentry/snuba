@@ -21,12 +21,12 @@ from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -90,16 +90,12 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> Tuple[ReadableStorage, QueryTranslator]:
+    ) -> ReadableStorage:
         table = detect_table(
             query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
-        translator = QueryTranslator()
-        return (
-            (self.__events_table, translator)
-            if table == EVENTS
-            else (self.__transactions_table, translator)
-        )
+
+        return self.__events_table if table == EVENTS else self.__transactions_table
 
 
 class DiscoverDataset(TimeSeriesDataset):

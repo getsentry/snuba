@@ -10,8 +10,8 @@ from snuba.request.request_settings import RequestSettings
 
 class DictClickhouseSqlQuery(ClickhouseSqlQuery):
     """
-    Legacy Clickhouse query formatter that transforms the legacy query representation
-    based on the original query body dictionary into a string.
+    Legacy ClickhouseSqlQuery that transforms the legacy query representation
+    based on the original query body dictionary into the SQL string.
     The old query processing mixes processing and format together through the column_expr
     methods. This is the class that runs such process.
 

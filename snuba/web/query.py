@@ -107,15 +107,15 @@ def _run_query_pipeline(
 
     storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
-    # The PhysicalQuery is the one to be used to run the rest of the query pipeline.
+    # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
     query = storage_query_plan.query
 
     # TODO: This below should be a storage specific query processor.
     relational_source = query.get_data_source()
     query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for physical_processor in storage_query_plan.query_processors:
-        physical_processor.process_query(query, request.settings)
+    for clickhouse_processor in storage_query_plan.query_processors:
+        clickhouse_processor.process_query(query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -133,8 +133,8 @@ def _run_query_pipeline(
 
 
 def _format_storage_query_and_run(
-    # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQueryFormatter
-    # with the AST this won't be needed.
+    # TODO: remove dependency on Dataset. This is only for formatting the legacy
+    # ClickhouseSqlQuery with the AST this won't be needed.
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -153,7 +153,7 @@ def _format_storage_query_and_run(
     source = query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
-        # ClickhouseQueryFormatter since they are Clickhouse specific
+        # the Clickhouse Query since they are Clickhouse specific
         sql_query = DictClickhouseSqlQuery(dataset, query, request_settings)
     timer.mark("prepare_query")
 

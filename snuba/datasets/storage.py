@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
@@ -111,12 +110,10 @@ class QueryStorageSelector(ABC):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage query should be executed onto.
-    It also returns the QueryTranslator that is capable of translating the
-    LogicalQuery into a PhysicalQuery for this storage.
     """
 
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> Tuple[ReadableStorage, QueryTranslator]:
+    ) -> ReadableStorage:
         raise NotImplementedError

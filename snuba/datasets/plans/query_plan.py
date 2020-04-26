@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.clickhouse.query import Query
 from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.web import QueryResult
@@ -21,11 +21,11 @@ class ClickhouseQueryPlan:
     This is produced by ClickhouseQueryPlanBuilder (provided by the dataset)
     after the dataset query processing has been performed and the storage
     has been selected.
-    It embeds the PhysicalQuery (the query to run on the storage after translation),
-    and the sequence of storage specific QueryProcessors to apply
-    to the query after the the storage has been selected.
-    It also provides a plan execution strategy, in case the query is not
-    one individual query statement (like for split queries).
+    It embeds the Clickhouse Query (the query to run on the storage after translation),
+    and the sequence of storage specific QueryProcessors to apply to the query after
+    the the storage has been selected.
+    It also provides a plan execution strategy, that takes care of coordinating the
+    execution of the query against the database and eventually to split it into chunks.
     """
 
     query: Query
@@ -50,7 +50,7 @@ class QueryPlanExecutionStrategy(ABC):
     ) -> QueryResult:
         """
         Executes the query plan.
-        The runner parameters is a function to actually run one individual query on the
+        The runner parameter is a function to actually run one individual query on the
         database.
         """
         raise NotImplementedError
@@ -59,8 +59,7 @@ class QueryPlanExecutionStrategy(ABC):
 class ClickhouseQueryPlanBuilder(ABC):
     """
     Embeds the dataset specific logic that selects which storage to use
-    to execute the query and produces the storage query (when we will
-    have a separation between Snuba Query and Storage Query).
+    to execute the query and produces the storage query.
     This is provided by a dataset and, when executed, it returns a
     ClickhouseQueryPlan that embeds what is needed to run the storage query.
     """

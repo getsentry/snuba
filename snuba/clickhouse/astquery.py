@@ -10,12 +10,11 @@ from snuba.request.request_settings import RequestSettings
 
 class AstClickhouseSqlQuery(ClickhouseSqlQuery):
     """
-    Clickhouse query formatter that takes the content from the Clickhouse Query
-    AST and formats it into a SQL string.
+    ClickhouseSqlQuery implementation that builds the SQL query string starting
+    from the AST representation in the Clickhouse Query object.
 
-    Here the process of formatting the query, is independent from
-    the query body dictionary and it is performed starting from the
-    AST.
+    This implementation does not depend on the legacy dictionary based query
+    representation.
     """
 
     def __init__(self, query: Query, settings: RequestSettings,) -> None:

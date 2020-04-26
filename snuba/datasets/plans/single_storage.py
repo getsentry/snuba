@@ -29,7 +29,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
 
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
-    Builds the Storage Query Execution Plan for a dataset that is based on
+    Builds the Clickhouse Query Execution Plan for a dataset that is based on
     a single storage.
     """
 
@@ -51,9 +51,9 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        # TODO: Clearly the QueryTranslator instance  will be dependent on the storage.
-        # Setting the data_source on the query should become part of the translation
-        # as well.
+        # TODO: The translator is going to be configured with a mapping between logical
+        # and physical schema that is a property of the relation between entity and
+        # storage.
         clickhouse_query = QueryTranslator().translate(request.query)
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
@@ -71,8 +71,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
 class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
-    A query plan builder that selects one of multiple storages in the
-    dataset.
+    A query plan builder that selects one of multiple storages in the dataset.
     """
 
     def __init__(
@@ -84,13 +83,8 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        storage, translator = self.__selector.select_storage(
-            request.query, request.settings
-        )
-        # TODO: This code is likely to change with multi-table storages, since the
-        # storage will be hiding the translation process. But it will take a while
-        # to get there.
-        clickhouse_query = translator.translate(request.query)
+        storage = self.__selector.select_storage(request.query, request.settings)
+        clickhouse_query = QueryTranslator().translate(request.query)
         clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
