@@ -3,10 +3,10 @@ from typing import Optional, Sequence
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import (
-    QueryPlanExecutionStrategy,
-    QueryRunner,
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
+    QueryPlanExecutionStrategy,
+    QueryRunner,
 )
 from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
@@ -52,8 +52,8 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         # TODO: The translator is going to be configured with a mapping between logical
-        # and physical schema that is a property of the relation between entity and
-        # storage.
+        # and physical schema that is a property of the relation between dataset (later
+        # entity) and storage.
         clickhouse_query = QueryTranslator().translate(request.query)
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()

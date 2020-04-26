@@ -4,16 +4,18 @@ from typing import Optional
 
 class ClickhouseSqlQuery(ABC):
     """
-    An abstraction that provides the formatted SQL query to execute on Clickhouse.
-    This class embeds (until the AST is not done so we can remove the Dict based formatter)
-    the formatting logic that transforms a Clickhouse Query into a SQL string.
+    An abstraction that provides a formatted SQL query to execute on Clickhouse.
+    This class embeds the formatting logic that transforms a Clickhouse Query into a SQL string.
+    The way this formatting is performed depends on the implementations.
 
-    This abstraction should not be needed. What we would need is a formatter that transforms
-    the Clickhouse Query into a string that can be used directly by the reader.
-    As long as we have DictClickhouseSqlQuery around this is not possible because
+    This abstraction should not be needed. What we would need is a stateless formatter that
+    transforms the Clickhouse Query into a string and that can be used directly by the reader.
+    As long as we have DictClickhouseSqlQuery around, this is not achievable because,
     in the old representation, query processing and formatting are mixed with each other
-    and, worse, they are stateful (we cannot format the query twice). Once that class
-    is gone we can turn this into a stateless formatter.
+    and, worse, they are stateful (we cannot format the query twice).
+    As a consequence, we ned to instantiate this class before we get to the reader and pass it
+    around so it guarantees formatting happens only once. Once that class is gone we can turn
+    this into a stateless formatter.
     """
 
     @abstractmethod

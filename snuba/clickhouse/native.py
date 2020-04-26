@@ -219,6 +219,10 @@ class NativeDriverReader(Reader[ClickhouseSqlQuery]):
 
     def execute(
         self,
+        # TODO: After we remove DictClickhouseSqlQuery (that does all query processing for the
+        # legacy query representation) we should pass the Clickhouse Query here. and the reader
+        # should rely on the formatter to get a SQL string and, thus, be able to provide parameters
+        # to the formatter (like the format clause itself).
         query: ClickhouseSqlQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,

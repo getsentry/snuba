@@ -105,17 +105,16 @@ def _run_query_pipeline(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan = dataset.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
     # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
-    query = storage_query_plan.query
 
     # TODO: This below should be a storage specific query processor.
-    relational_source = query.get_data_source()
-    query.add_conditions(relational_source.get_mandatory_conditions())
+    relational_source = query_plan.query.get_data_source()
+    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for clickhouse_processor in storage_query_plan.query_processors:
-        clickhouse_processor.process_query(query, request.settings)
+    for clickhouse_processor in query_plan.query_processors:
+        clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -127,8 +126,8 @@ def _run_query_pipeline(
         request.referrer,
     )
 
-    return storage_query_plan.execution_strategy.execute(
-        query, request.settings, query_runner
+    return query_plan.execution_strategy.execute(
+        query_plan.query, request.settings, query_runner
     )
 
 
@@ -146,8 +145,8 @@ def _format_storage_query_and_run(
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
-    TODO: When we will have the AST in production and we will have the StorageQuery
-    abstraction, this function is probably going to collapse and disappear.
+    TODO: When we will have the AST in production this function is probably going
+    to collapse and disappear.
     """
 
     source = query.get_data_source().format_from()

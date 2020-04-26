@@ -94,7 +94,6 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         table = detect_table(
             query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
-
         return self.__events_table if table == EVENTS else self.__transactions_table
 
 

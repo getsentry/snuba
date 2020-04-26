@@ -10,12 +10,12 @@ from snuba.request.request_settings import RequestSettings
 
 class DictClickhouseSqlQuery(ClickhouseSqlQuery):
     """
-    Legacy ClickhouseSqlQuery that transforms the legacy query representation
-    based on the original query body dictionary into the SQL string.
-    The old query processing mixes processing and format together through the column_expr
-    methods. This is the class that runs such process.
+    ClickhouseSqlQuery implementation that transforms the legacy query representation
+    based on the query body dictionary into the SQL string.
+    The legacy query processing mixes processing and formatting together through the
+    column_expr methods. This is the class that runs such process and such methods.
 
-    To be used until the AST is not complete.
+    To be used until the AST is not complete, then this class is supposed to be removed.
     """
 
     def __init__(

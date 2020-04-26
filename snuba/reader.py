@@ -108,9 +108,6 @@ class Reader(ABC, Generic[TQuery]):
     @abstractmethod
     def execute(
         self,
-        # TODO: After we remove DictClickhouseSqlQuery (that does all query processing for the
-        # legacy query representation) we should pass the Clickhouse Query here. and the reader
-        # should rely on the formatter to get a SQL string.
         query: TQuery,
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,

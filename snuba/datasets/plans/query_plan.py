@@ -16,11 +16,11 @@ QueryRunner = Callable[[Query, RequestSettings], QueryResult]
 @dataclass(frozen=True)
 class ClickhouseQueryPlan:
     """
-    Provides the directions to execute the query against one storage
+    Provides the directions to execute a Clickhouse Query against one storage
     or multiple joined ones.
     This is produced by ClickhouseQueryPlanBuilder (provided by the dataset)
-    after the dataset query processing has been performed and the storage
-    has been selected.
+    after the dataset query processing has been performed and the storage/s
+    has/have been selected.
     It embeds the Clickhouse Query (the query to run on the storage after translation),
     and the sequence of storage specific QueryProcessors to apply to the query after
     the the storage has been selected.
@@ -50,7 +50,7 @@ class QueryPlanExecutionStrategy(ABC):
     ) -> QueryResult:
         """
         Executes the query plan.
-        The runner parameter is a function to actually run one individual query on the
+        The runner parameter is a function that actually run one individual query on the
         database.
         """
         raise NotImplementedError

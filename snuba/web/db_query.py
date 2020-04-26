@@ -64,7 +64,7 @@ def update_query_metadata_and_stats(
 
 
 def execute_query(
-    physical_query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
     sql_query: ClickhouseSqlQuery,
     timer: Timer,
@@ -78,7 +78,7 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if len(physical_query.get_all_referenced_columns()) > uc_max:
+    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
         query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
@@ -94,7 +94,7 @@ def execute_query(
         sql_query,
         query_settings,
         query_id=query_id,
-        with_totals=physical_query.has_totals(),
+        with_totals=clickhouse_query.has_totals(),
     )
 
     timer.mark("execute")
@@ -106,7 +106,7 @@ def execute_query(
 
 
 def execute_query_with_rate_limits(
-    physical_query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
     sql_query: ClickhouseSqlQuery,
     timer: Timer,
@@ -137,7 +137,7 @@ def execute_query_with_rate_limits(
             )
 
         return execute_query(
-            physical_query,
+            clickhouse_query,
             request_settings,
             sql_query,
             timer,
@@ -148,7 +148,7 @@ def execute_query_with_rate_limits(
 
 
 def execute_query_with_caching(
-    physical_query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
     sql_query: ClickhouseSqlQuery,
     timer: Timer,
@@ -162,12 +162,12 @@ def execute_query_with_caching(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
 
-    if len(physical_query.get_all_referenced_columns()) > uc_max:
+    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
         use_cache = False
 
     execute = partial(
         execute_query_with_rate_limits,
-        physical_query,
+        clickhouse_query,
         request_settings,
         sql_query,
         timer,
@@ -192,7 +192,7 @@ def execute_query_with_caching(
 
 
 def execute_query_with_deduplication(
-    physical_query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
     sql_query: ClickhouseSqlQuery,
     timer: Timer,
@@ -201,7 +201,7 @@ def execute_query_with_deduplication(
 ) -> Result:
     execute = partial(
         execute_query_with_caching,
-        physical_query,
+        clickhouse_query,
         request_settings,
         sql_query,
         timer,
@@ -219,8 +219,11 @@ def execute_query_with_deduplication(
 
 
 def raw_query(
-    physical_query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
+    # TODO: Passing the ClickhouseSqlQuery (which basically wraps the query and formats it)
+    # will be needed as long as the legacy query representation will be around.
+    # See DictClickhouseSqlQuery.
     sql_query: ClickhouseSqlQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
@@ -230,12 +233,8 @@ def raw_query(
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
     fix some of the formatting issues in the result JSON.
-    This function is not supposed to depend on anything higher level than the storage
-    query (ClickhouseQueryFormatter as of now). If this function ends up depending on the
-    dataset, something is wrong.
-
-    TODO: As soon as we have a StorageQuery abstraction remove all the references
-    to the original query from the request.
+    This function is not supposed to depend on anything higher level than the clickhouse
+    query. If this function ends up depending on the dataset, something is wrong.
     """
     all_confs = state.get_all_configs()
     query_settings: MutableMapping[str, Any] = {
@@ -260,7 +259,7 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            physical_query, request_settings, sql_query, timer, stats, query_settings,
+            clickhouse_query, request_settings, sql_query, timer, stats, query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):

@@ -11,6 +11,9 @@ class QueryTranslator:
 
     The implementation will be based on a visitor pattern (like the formatter) and
     configured with a mapping between the logical schema and the physical schema.
+
+    A QueryTranslator is supposed to be a stateless component that does not mutate
+    the input query and produce a new object as a result.
     """
 
     def translate(self, query: LogicalQuery) -> ClickhouseQuery:
