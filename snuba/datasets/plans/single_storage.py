@@ -13,7 +13,7 @@ from snuba.datasets.plans.translators import CopyTranslator
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
-from snuba.web import RawQueryResult
+from snuba.web import QueryResult
 from snuba.query.physical import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.request import Request
@@ -22,11 +22,8 @@ from snuba.request.request_settings import RequestSettings
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def execute(
-        self,
-        query: Query,
-        request_settings: RequestSettings,
-        runner: QueryRunner,
-    ) -> RawQueryResult:
+        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
+    ) -> QueryResult:
         return runner(query, request_settings)
 
 

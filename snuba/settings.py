@@ -36,7 +36,7 @@ REDIS_PORT = 6379
 REDIS_PASSWORD = None
 REDIS_DB = 1
 
-USE_RESULT_CACHE = False
+USE_RESULT_CACHE = True
 
 # Query Recording Options
 RECORD_QUERIES = False
@@ -117,7 +117,9 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
             assert isinstance(settings_spec.loader, importlib.abc.Loader)
             settings_spec.loader.exec_module(settings_module)
         else:
-            module_format = ".%s" if settings.startswith("settings_") else ".settings_%s"
+            module_format = (
+                ".%s" if settings.startswith("settings_") else ".settings_%s"
+            )
             settings_module = importlib.import_module(module_format % settings, "snuba")
 
         for attr in dir(settings_module):

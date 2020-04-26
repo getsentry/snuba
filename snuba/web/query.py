@@ -18,7 +18,7 @@ from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException, RawQueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
 from snuba.web.split import split_query
@@ -30,7 +30,7 @@ metrics = MetricsWrapper(environment.metrics, "api")
 
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
@@ -52,7 +52,7 @@ def parse_and_run_query(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
         record_query(request_copy, timer, query_metadata)
-    except RawQueryException as error:
+    except QueryException as error:
         record_query(request_copy, timer, query_metadata)
         raise error
 
@@ -65,7 +65,7 @@ def _run_query_pipeline(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
     and a Request and returns the results of the query.
@@ -143,7 +143,7 @@ def _format_storage_query_and_run(
     referrer: str,
     query: Query,
     request_settings: RequestSettings,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
     TODO: When we will have the AST in production and we will have the StorageQuery

@@ -4,14 +4,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.web import RawQueryResult
-
 from snuba.query.physical import Query
-from snuba.query.processors.physical import Query
+from snuba.query.processors.physical import QueryProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.web import QueryResult
 
-QueryRunner = Callable[[Query, RequestSettings], RawQueryResult]
+QueryRunner = Callable[[Query, RequestSettings], QueryResult]
 
 
 @dataclass(frozen=True)
@@ -47,11 +46,8 @@ class QueryPlanExecutionStrategy(ABC):
 
     @abstractmethod
     def execute(
-        self,
-        query: Query,
-        request_settings: RequestSettings,
-        runner: QueryRunner,
-    ) -> RawQueryResult:
+        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
+    ) -> QueryResult:
         """
         Executes the query plan.
         The runner parameters is a function to actually run one individual query on the
