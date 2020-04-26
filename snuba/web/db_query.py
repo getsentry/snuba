@@ -15,7 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import ClickhouseSqlQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.environment import reader
 from snuba.reader import Result
 from snuba.redis import redis_client
@@ -66,7 +66,7 @@ def update_query_metadata_and_stats(
 def execute_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    sql_query: ClickhouseSqlQuery,
+    formatted_query: SqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -91,7 +91,7 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        sql_query,
+        formatted_query,
         query_settings,
         query_id=query_id,
         with_totals=clickhouse_query.has_totals(),
@@ -108,7 +108,7 @@ def execute_query(
 def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    sql_query: ClickhouseSqlQuery,
+    formatted_query: SqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -139,7 +139,7 @@ def execute_query_with_rate_limits(
         return execute_query(
             clickhouse_query,
             request_settings,
-            sql_query,
+            formatted_query,
             timer,
             stats,
             query_settings,
@@ -150,7 +150,7 @@ def execute_query_with_rate_limits(
 def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    sql_query: ClickhouseSqlQuery,
+    formatted_query: SqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -169,7 +169,7 @@ def execute_query_with_caching(
         execute_query_with_rate_limits,
         clickhouse_query,
         request_settings,
-        sql_query,
+        formatted_query,
         timer,
         stats,
         query_settings,
@@ -177,7 +177,7 @@ def execute_query_with_caching(
     )
 
     if use_cache:
-        key = md5(force_bytes(sql_query.format_sql())).hexdigest()
+        key = md5(force_bytes(formatted_query.format_sql())).hexdigest()
         result = cache.get(key)
         timer.mark("cache_get")
         stats["cache_hit"] = result is not None
@@ -194,7 +194,7 @@ def execute_query_with_caching(
 def execute_query_with_deduplication(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    sql_query: ClickhouseSqlQuery,
+    formatted_query: SqlQuery,
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -203,13 +203,13 @@ def execute_query_with_deduplication(
         execute_query_with_caching,
         clickhouse_query,
         request_settings,
-        sql_query,
+        formatted_query,
         timer,
         stats,
         query_settings,
     )
     if state.get_config("use_deduper", 1):
-        query_id = md5(force_bytes(sql_query.format_sql())).hexdigest()
+        query_id = md5(force_bytes(formatted_query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
             stats.update({"is_duplicate": is_dupe, "query_id": query_id})
@@ -221,10 +221,10 @@ def execute_query_with_deduplication(
 def raw_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    # TODO: Passing the ClickhouseSqlQuery (which basically wraps the query and formats it)
+    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
     # will be needed as long as the legacy query representation will be around.
-    # See DictClickhouseSqlQuery.
-    sql_query: ClickhouseSqlQuery,
+    # See DictSqlQuery.
+    formatted_query: SqlQuery,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -245,7 +245,7 @@ def raw_query(
 
     timer.mark("get_configs")
 
-    sql = sql_query.format_sql()
+    sql = formatted_query.format_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
@@ -259,7 +259,12 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            clickhouse_query, request_settings, sql_query, timer, stats, query_settings,
+            clickhouse_query,
+            request_settings,
+            formatted_query,
+            timer,
+            stats,
+            query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):

@@ -1,16 +1,16 @@
 from snuba import settings as snuba_settings
 from snuba import util
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import ClickhouseSqlQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 
-class DictClickhouseSqlQuery(ClickhouseSqlQuery):
+class DictSqlQuery(SqlQuery):
     """
-    ClickhouseSqlQuery implementation that transforms the legacy query representation
+    SqlQuery implementation that transforms the legacy query representation
     based on the query body dictionary into the SQL string.
     The legacy query processing mixes processing and formatting together through the
     column_expr methods. This is the class that runs such process and such methods.

@@ -3,14 +3,14 @@ from typing import Optional
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.clickhouse.query import Query
-from snuba.clickhouse.sql import ClickhouseSqlQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 
-class AstClickhouseSqlQuery(ClickhouseSqlQuery):
+class AstSqlQuery(SqlQuery):
     """
-    ClickhouseSqlQuery implementation that builds the SQL query out of the
+    SqlQuery implementation that builds the SQL query out of the
     AST representation present in the Clickhouse Query object.
 
     This implementation does not depend on the legacy dictionary based query

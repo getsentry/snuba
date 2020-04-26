@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 
-class ClickhouseSqlQuery(ABC):
+class SqlQuery(ABC):
     """
     An abstraction that provides a formatted SQL query to execute on Clickhouse.
     This class embeds the formatting logic that transforms a Clickhouse Query into a SQL string.
@@ -10,7 +10,7 @@ class ClickhouseSqlQuery(ABC):
 
     This abstraction should not be needed. What we would need is a stateless formatter that
     transforms the Clickhouse Query into a string and that can be used directly by the reader.
-    As long as we have DictClickhouseSqlQuery around, this is not achievable because,
+    As long as we have DictSqlQuery around, this is not achievable because,
     in the old representation, query processing and formatting are mixed with each other
     and, worse, they are stateful (we cannot format the query twice).
     As a consequence, we ned to instantiate this class before we get to the reader and pass it

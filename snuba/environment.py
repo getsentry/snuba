@@ -10,7 +10,7 @@ from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.sql import ClickhouseSqlQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.reader import Reader
 from snuba.util import create_metrics
 
@@ -41,4 +41,4 @@ clickhouse_ro = ClickhousePool(
 
 metrics = create_metrics("snuba")
 
-reader: Reader[ClickhouseSqlQuery] = NativeDriverReader(clickhouse_ro)
+reader: Reader[SqlQuery] = NativeDriverReader(clickhouse_ro)

@@ -29,10 +29,11 @@ class ColumnSplitSpec(NamedTuple):
 class Dataset(object):
     """
     A dataset represents a data model we can run a Snuba Query on.
-    A data model provides an abstract schema (today it is a flat table,
+    A data model provides a logical schema (today it is a flat table,
     soon it will be a graph of Entities).
-    The dataset (later the Entity) has access to multiple Storage objects,
-    each one represents a table/view on the DB we can query.
+    The dataset (later the Entity) has access to multiple Storage objects, which
+    represent the physical data model. Each one represents a table/view on the
+    DB we can query.
     The class is a facade to access the components used to write on the
     data model and to query the entities.
 
