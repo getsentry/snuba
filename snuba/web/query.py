@@ -8,8 +8,8 @@ from flask import request as http_request
 from functools import partial
 
 from snuba import environment, settings, state
-from snuba.clickhouse.astquery import AstClickhouseSqlQuery
-from snuba.clickhouse.dictquery import DictClickhouseSqlQuery
+from snuba.clickhouse.astquery import AstSqlQuery
+from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
@@ -133,14 +133,14 @@ def _run_query_pipeline(
 
 def _format_storage_query_and_run(
     # TODO: remove dependency on Dataset. This is only for formatting the legacy
-    # ClickhouseSqlQuery with the AST this won't be needed.
+    # SqlQuery with the AST this won't be needed.
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
     to_date: datetime,
     referrer: str,
-    query: Query,
+    clickhouse_query: Query,
     request_settings: RequestSettings,
 ) -> QueryResult:
     """
@@ -149,35 +149,37 @@ def _format_storage_query_and_run(
     to collapse and disappear.
     """
 
-    source = query.get_data_source().format_from()
+    source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
         # the Clickhouse Query since they are Clickhouse specific
-        sql_query = DictClickhouseSqlQuery(dataset, query, request_settings)
+        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
     timer.mark("prepare_query")
 
     stats = {
         "clickhouse_table": source,
-        "final": query.get_final(),
+        "final": clickhouse_query.get_final(),
         "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": query.get_sample(),
+        "sample": clickhouse_query.get_sample(),
     }
 
-    with sentry_sdk.start_span(description=sql_query.format_sql(), op="db") as span:
+    with sentry_sdk.start_span(
+        description=formatted_query.format_sql(), op="db"
+    ) as span:
         span.set_tag("table", source)
         try:
             span.set_tag(
                 "ast_query",
-                AstClickhouseSqlQuery(query, request_settings).format_sql(),
+                AstSqlQuery(clickhouse_query, request_settings).format_sql(),
             )
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
         return raw_query(
-            query,
+            clickhouse_query,
             request_settings,
-            sql_query,
+            formatted_query,
             timer,
             query_metadata,
             stats,
