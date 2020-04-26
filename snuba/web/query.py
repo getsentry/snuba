@@ -151,8 +151,6 @@ def _format_storage_query_and_run(
 
     source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
-        # TODO: Move the performance logic and the pre_where generation into
-        # the Clickhouse Query since they are Clickhouse specific
         formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
     timer.mark("prepare_query")
 
