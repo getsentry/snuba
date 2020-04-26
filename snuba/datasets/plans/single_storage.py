@@ -8,7 +8,7 @@ from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
 )
-from snuba.datasets.plans.translators import CopyTranslator
+from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -54,7 +54,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         # TODO: Clearly the QueryTranslator instance  will be dependent on the storage.
         # Setting the data_source on the query should become part of the translation
         # as well.
-        clickhouse_query = CopyTranslator().translate(request.query)
+        clickhouse_query = QueryTranslator().translate(request.query)
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )

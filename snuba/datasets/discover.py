@@ -15,7 +15,7 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.plans.translators import CopyTranslator, QueryTranslator
+from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
@@ -94,7 +94,7 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         table = detect_table(
             query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
-        translator = CopyTranslator()
+        translator = QueryTranslator()
         return (
             (self.__events_table, translator)
             if table == EVENTS
