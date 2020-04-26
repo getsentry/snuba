@@ -1,10 +1,10 @@
 from snuba import settings as snuba_settings
 from snuba import util
 from snuba.clickhouse.formatter import ClickhouseQueryFormatter
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
-from snuba.clickhouse.query import Query
 from snuba.request.request_settings import RequestSettings
 
 

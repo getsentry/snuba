@@ -3,14 +3,14 @@ import pytest
 from snuba.clickhouse.astquery import AstClickhouseQueryFormatter
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.conditions import binary_condition
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
     FunctionCall,
     Literal,
 )
-from snuba.query.conditions import binary_condition
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [

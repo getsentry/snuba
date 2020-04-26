@@ -3,7 +3,7 @@ from snuba.query.expressions import (
     FunctionCall,
 )
 from snuba.query.logical import Query
-from snuba.query.processors.logical import QueryProcessor
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.performance_expressions import apdex
 from snuba.request.request_settings import RequestSettings
 

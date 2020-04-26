@@ -2,11 +2,11 @@ from abc import ABC, abstractmethod
 from typing import Optional, Sequence, Tuple
 
 
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.logical import Query
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

@@ -19,12 +19,12 @@ from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.logical import Query
-from snuba.query.processors.logical import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
@@ -57,11 +57,16 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage("groupedmessages").get_schemas().get_read_schema().get_data_source()
+            get_storage("groupedmessages")
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = get_storage("events").get_schemas().get_read_schema().get_data_source()
+        events_source = (
+            get_storage("events").get_schemas().get_read_schema().get_data_source()
+        )
 
         join_structure = JoinClause(
             left_node=TableJoinNode(

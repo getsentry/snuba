@@ -1,9 +1,9 @@
 from typing import Mapping, Optional
 
-from snuba.query.dsl import multiply
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.query.dsl import multiply
 from snuba.query.logical import Query
-from snuba.query.processors.logical import QueryProcessor
+from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

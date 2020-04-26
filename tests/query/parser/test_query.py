@@ -7,8 +7,9 @@ from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.parser import parse_query
 from snuba.query.logical import OrderBy, OrderByDirection, Query
+from snuba.query.parser import parse_query
+
 
 test_cases = [
     (

@@ -9,8 +9,8 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.formatter import ClickhouseQueryFormatter
+from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.reader import Reader
 from snuba.util import create_metrics
 

@@ -1,10 +1,12 @@
 from typing import Optional
 
 from snuba import settings
-from snuba.clickhouse.formatter import ClickhouseQueryFormatter
-from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
-from snuba.query.parsing import ParsingContext
+from snuba.clickhouse.formatter import (
+    ClickhouseExpressionFormatter,
+    ClickhouseQueryFormatter,
+)
 from snuba.clickhouse.query import Query
+from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
 
 

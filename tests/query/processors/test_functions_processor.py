@@ -5,8 +5,8 @@ from copy import deepcopy
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, CurriedFunctionCall, FunctionCall, Literal
-from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.logical import Query
+from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [

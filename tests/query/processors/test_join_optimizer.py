@@ -2,7 +2,8 @@ import pytest
 
 from typing import Any, Sequence
 
-from snuba.query.logical import Condition, Groupby, Query
+from snuba.query.logical import Groupby, Query
+from snuba.query.types import Condition
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 from tests.datasets.schemas.join_examples import simple_join_structure

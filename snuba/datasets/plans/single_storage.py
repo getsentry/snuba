@@ -1,5 +1,6 @@
 from typing import Optional, Sequence
 
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
@@ -7,17 +8,16 @@ from snuba.datasets.plans.query_plan import (
     StorageQueryPlan,
     StorageQueryPlanBuilder,
 )
-from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.plans.translators import CopyTranslator
+from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
+from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 
 # TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import QueryResult
-from snuba.clickhouse.processors import QueryProcessor
-from snuba.request import Request
-from snuba.request.request_settings import RequestSettings
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):

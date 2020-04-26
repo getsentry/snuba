@@ -8,8 +8,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import div, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.logical import Query
+from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 

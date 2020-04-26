@@ -3,18 +3,15 @@ from copy import deepcopy
 from snuba.datasets.factory import get_dataset
 from snuba import state
 from snuba.query.columns import column_expr, conditions_expr
-from snuba.query.parsing import ParsingContext
 from snuba.query.logical import Query
+from snuba.query.parsing import ParsingContext
 from snuba.util import tuplify
 
 
 def test_simple_column_expr():
     dataset = get_dataset("groups")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
 
     body = {"granularity": 86400}
@@ -153,10 +150,7 @@ def test_alias_in_alias():
     state.set_config("use_escape_alias", 1)
     dataset = get_dataset("groups")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
     body = {"groupby": ["events.tags_key", "events.tags_value"]}
     query = Query(body, source)
@@ -183,10 +177,7 @@ def test_alias_in_alias():
 def test_conditions_expr():
     dataset = get_dataset("groups")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
     state.set_config("use_escape_alias", 1)
     conditions = [["events.a", "=", 1]]
@@ -265,10 +256,7 @@ def test_conditions_expr():
 def test_duplicate_expression_alias():
     dataset = get_dataset("groups")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
     state.set_config("use_escape_alias", 1)
 
@@ -293,10 +281,7 @@ def test_duplicate_expression_alias():
 def test_order_by():
     dataset = get_dataset("groups")
     source = (
-        dataset.get_all_storages()[0]
-        .get_schemas()
-        .get_read_schema()
-        .get_data_source()
+        dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
     )
     body = {}
     query = Query(body, source)

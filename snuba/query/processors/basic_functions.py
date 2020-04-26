@@ -7,7 +7,7 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.logical import Query
-from snuba.query.processors.logical import QueryProcessor
+from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

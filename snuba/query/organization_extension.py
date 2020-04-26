@@ -1,8 +1,8 @@
 from snuba.query.conditions import binary_condition, ConditionFunctions
 from snuba.query.expressions import Column, Literal
-from snuba.query.extensions import ExtensionQueryProcessor, QueryExtension
+from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
-from snuba.query.processors.logical import ExtensionData
+from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

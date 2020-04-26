@@ -19,10 +19,10 @@ from snuba.datasets.plans.translators import CopyTranslator, QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
-from snuba.query.logical import Query
-from snuba.query.processors.logical import QueryProcessor
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
