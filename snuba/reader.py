@@ -101,14 +101,14 @@ def build_result_transformer(
     return transform_result
 
 
-TQuery = TypeVar("TQuery")
+TQueryFormatter = TypeVar("TQueryFormatter")
 
 
-class Reader(ABC, Generic[TQuery]):
+class Reader(ABC, Generic[TQueryFormatter]):
     @abstractmethod
     def execute(
         self,
-        query: TQuery,
+        formatter: TQueryFormatter,
         settings: Optional[Mapping[str, str]] = None,
         query_id: Optional[str] = None,
         with_totals: bool = False,

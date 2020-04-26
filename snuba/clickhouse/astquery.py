@@ -1,18 +1,17 @@
 from typing import Optional
 
 from snuba import settings
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.formatter import ClickhouseQueryFormatter
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.query.parsing import ParsingContext
 from snuba.query.physical import Query
 from snuba.request.request_settings import RequestSettings
 
 
-class AstClickhouseQuery(ClickhouseQuery):
+class AstClickhouseQueryFormatter(ClickhouseQueryFormatter):
     """
-    Clickhouse query that takes the content from the Snuba Query
-    AST and can be processed (through query processors) for Clickhouse
-    specific customizations.
+    Clickhouse query formatter that takes the content from the Clickhouse Query
+    AST and formats it into a SQL string.
 
     Here the process of formatting the query, is independent from
     the query body dictionary and it is performed starting from the

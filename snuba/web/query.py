@@ -8,8 +8,8 @@ from flask import request as http_request
 from functools import partial
 
 from snuba import environment, settings, state
-from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.astquery import AstClickhouseQueryFormatter
+from snuba.clickhouse.dictquery import DictClickhouseQueryFormatter
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.physical import Query
@@ -133,7 +133,7 @@ def _run_query_pipeline(
 
 
 def _format_storage_query_and_run(
-    # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
+    # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQueryFormatter
     # with the AST this won't be needed.
     dataset: Dataset,
     timer: Timer,
@@ -153,8 +153,8 @@ def _format_storage_query_and_run(
     source = query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
         # TODO: Move the performance logic and the pre_where generation into
-        # ClickhouseQuery since they are Clickhouse specific
-        clickhouse_query = DictClickhouseQuery(dataset, query, request_settings)
+        # ClickhouseQueryFormatter since they are Clickhouse specific
+        formatter = DictClickhouseQueryFormatter(dataset, query, request_settings)
     timer.mark("prepare_query")
 
     stats = {
@@ -165,21 +165,20 @@ def _format_storage_query_and_run(
         "sample": query.get_sample(),
     }
 
-    with sentry_sdk.start_span(
-        description=clickhouse_query.format_sql(), op="db"
-    ) as span:
+    with sentry_sdk.start_span(description=formatter.format_sql(), op="db") as span:
         span.set_tag("table", source)
         try:
             span.set_tag(
-                "ast_query", AstClickhouseQuery(query, request_settings).format_sql(),
+                "ast_query",
+                AstClickhouseQueryFormatter(query, request_settings).format_sql(),
             )
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
         return raw_query(
             query,
-            clickhouse_query,
             request_settings,
+            formatter,
             timer,
             query_metadata,
             stats,

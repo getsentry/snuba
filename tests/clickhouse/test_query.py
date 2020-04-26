@@ -1,34 +1,44 @@
 from tests.base import BaseEventsTest
 from unittest.mock import patch
 
-from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.dictquery import DictClickhouseQueryFormatter
 from snuba.query.logical import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-class TestDictClickhouseQuery(BaseEventsTest):
+class TestDictClickhouseQueryFormatter(BaseEventsTest):
     def test_provided_sample_should_be_used(self):
-        source = self.dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
+        source = (
+            self.dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
         query = Query(
             {"conditions": [], "aggregations": [], "groupby": [], "sample": 0.1},
             source,
         )
         request_settings = HTTPRequestSettings()
 
-        clickhouse_query = DictClickhouseQuery(
+        clickhouse_query = DictClickhouseQueryFormatter(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
         assert "SAMPLE 0.1" in clickhouse_query.format_sql()
 
     def test_provided_sample_should_be_used_with_turbo(self):
-        source = self.dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
+        source = (
+            self.dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
         query = Query(
             {"conditions": [], "aggregations": [], "groupby": [], "sample": 0.1},
             source,
         )
         request_settings = HTTPRequestSettings(turbo=True)
-        clickhouse_query = DictClickhouseQuery(
+        clickhouse_query = DictClickhouseQueryFormatter(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
@@ -36,22 +46,32 @@ class TestDictClickhouseQuery(BaseEventsTest):
 
     @patch("snuba.settings.TURBO_SAMPLE_RATE", 0.2)
     def test_when_sample_is_not_provided_with_turbo(self):
-        source = self.dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
+        source = (
+            self.dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = HTTPRequestSettings(turbo=True)
 
-        clickhouse_query = DictClickhouseQuery(
+        clickhouse_query = DictClickhouseQueryFormatter(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
         assert "SAMPLE 0.2" in clickhouse_query.format_sql()
 
     def test_when_sample_is_not_provided_without_turbo(self):
-        source = self.dataset.get_all_storages()[0].get_schemas().get_read_schema().get_data_source()
+        source = (
+            self.dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
         query = Query({"conditions": [], "aggregations": [], "groupby": []}, source,)
         request_settings = HTTPRequestSettings()
 
-        clickhouse_query = DictClickhouseQuery(
+        clickhouse_query = DictClickhouseQueryFormatter(
             dataset=self.dataset, query=query, settings=request_settings,
         )
 
