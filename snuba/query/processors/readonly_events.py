@@ -1,6 +1,6 @@
 from snuba import state
+from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.physical import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
@@ -16,9 +16,7 @@ class ReadOnlyTableSelector(QueryProcessor):
         self.__table_to_replace = table_to_replace
         self.__read_only_table = read_only_table
 
-    def process_query(
-        self, query: Query, request_settings: RequestSettings
-    ) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         readonly_enabled = state.get_config("enable_events_readonly_table", False)
         if not readonly_enabled:
             return

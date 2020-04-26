@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from snuba.query.physical import Query
+from snuba.clickhouse.query import Query
 from snuba.request.request_settings import RequestSettings
 
 

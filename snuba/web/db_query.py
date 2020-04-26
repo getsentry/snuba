@@ -13,10 +13,10 @@ from typing import (
 from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
+from snuba.clickhouse.query import Query
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.formatter import ClickhouseQueryFormatter
 from snuba.environment import reader
-from snuba.query.physical import Query
 from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings

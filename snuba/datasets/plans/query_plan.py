@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.query.physical import Query
+from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings

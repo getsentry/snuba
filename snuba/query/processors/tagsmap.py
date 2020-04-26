@@ -5,9 +5,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
+from snuba.clickhouse.query import Query
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.expressions import Column, Expression
-from snuba.query.physical import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.datasets.events_format import escape_field
 from snuba.query.types import Condition
@@ -114,9 +114,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
                     return True
         return False
 
-    def process_query(
-        self, query: Query, request_settings: RequestSettings
-    ) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         conditions = query.get_conditions()
         if not conditions:
             return

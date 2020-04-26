@@ -10,9 +10,9 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQueryFormatter
 from snuba.clickhouse.dictquery import DictClickhouseQueryFormatter
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.physical import Query
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -108,14 +108,14 @@ def _run_query_pipeline(
     storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
     # The PhysicalQuery is the one to be used to run the rest of the query pipeline.
-    physical_query = storage_query_plan.query
+    query = storage_query_plan.query
 
     # TODO: This below should be a storage specific query processor.
-    relational_source = physical_query.get_data_source()
-    physical_query.add_conditions(relational_source.get_mandatory_conditions())
+    relational_source = query.get_data_source()
+    query.add_conditions(relational_source.get_mandatory_conditions())
 
     for physical_processor in storage_query_plan.query_processors:
-        physical_processor.process_query(physical_query, request.settings)
+        physical_processor.process_query(query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -128,7 +128,7 @@ def _run_query_pipeline(
     )
 
     return storage_query_plan.execution_strategy.execute(
-        physical_query, request.settings, query_runner
+        query, request.settings, query_runner
     )
 
 

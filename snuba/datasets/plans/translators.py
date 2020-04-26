@@ -2,7 +2,7 @@ import copy
 
 from abc import ABC, abstractmethod
 
-from snuba.query.physical import Query as PhysicalQuery
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.query.logical import Query as LogicalQuery
 
 
@@ -16,7 +16,7 @@ class QueryTranslator(ABC):
     """
 
     @abstractmethod
-    def translate(self, query: LogicalQuery) -> PhysicalQuery:
+    def translate(self, query: LogicalQuery) -> ClickhouseQuery:
         raise NotImplementedError
 
 
@@ -27,5 +27,5 @@ class CopyTranslator(QueryTranslator):
     processing to work on a different object than the Logical Query.
     """
 
-    def translate(self, query: LogicalQuery) -> PhysicalQuery:
+    def translate(self, query: LogicalQuery) -> ClickhouseQuery:
         return copy.deepcopy(query)

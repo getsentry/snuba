@@ -1,7 +1,7 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
-from snuba.query.physical import Query
+from snuba.clickhouse.query import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
@@ -22,9 +22,7 @@ class PrewhereProcessor(QueryProcessor):
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
-    def process_query(
-        self, query: Query, request_settings: RequestSettings,
-    ) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )

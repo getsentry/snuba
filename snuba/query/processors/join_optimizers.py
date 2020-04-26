@@ -1,6 +1,6 @@
+from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.join import JoinClause
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
-from snuba.query.physical import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
@@ -16,9 +16,7 @@ class SimpleJoinOptimizer(QueryProcessor):
     of tables joined together when more than one is referenced in the query.
     """
 
-    def process_query(
-        self, query: Query, request_settings: RequestSettings,
-    ) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
         from_clause = query.get_data_source()
         if not isinstance(from_clause, JoinClause):
             return

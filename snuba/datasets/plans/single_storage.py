@@ -1,5 +1,6 @@
 from typing import Optional, Sequence
 
+from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
@@ -14,7 +15,6 @@ from snuba.datasets.plans.translators import CopyTranslator
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
 from snuba.web import QueryResult
-from snuba.query.physical import Query
 from snuba.query.processors.physical import QueryProcessor
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -54,13 +54,13 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         # TODO: Clearly the QueryTranslator instance  will be dependent on the storage.
         # Setting the data_source on the query should become part of the translation
         # as well.
-        physical_query = CopyTranslator().translate(request.query)
-        physical_query.set_data_source(
+        clickhouse_query = CopyTranslator().translate(request.query)
+        clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
         return StorageQueryPlan(
-            query=physical_query,
+            query=clickhouse_query,
             query_processors=[
                 *self.__storage.get_query_processors(),
                 *self.__post_processors,
@@ -90,13 +90,13 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         # TODO: This code is likely to change with multi-table storages, since the
         # storage will be hiding the translation process. But it will take a while
         # to get there.
-        physical_query = translator.translate(request.query)
-        physical_query.set_data_source(
+        clickhouse_query = translator.translate(request.query)
+        clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
         return StorageQueryPlan(
-            query=physical_query,
+            query=clickhouse_query,
             query_processors=[
                 *storage.get_query_processors(),
                 *self.__post_processors,
