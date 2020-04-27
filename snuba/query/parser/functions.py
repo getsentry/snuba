@@ -2,8 +2,9 @@ import numbers
 from datetime import date, datetime
 from typing import Any, Callable, List, Optional, TypeVar, Tuple, Union
 
-from snuba.query.expressions import Column, Expression, Literal, FunctionCall
-from snuba.util import is_function, QUOTED_LITERAL_RE
+from snuba.query.expressions import Expression, Literal, FunctionCall
+from snuba.query.parser.strings import parse_string
+from snuba.util import is_function
 
 TExpression = TypeVar("TExpression")
 
@@ -81,14 +82,6 @@ def parse_function_to_expr(expr: Any) -> Expression:
     The real parser will be in a different data structure.
     """
 
-    def simple_expression_builder(val: str) -> Expression:
-        # TODO: This will use the schema of the dataset to decide
-        # if the expression is a column or a literal.
-        if QUOTED_LITERAL_RE.match(val):
-            return Literal(None, val[1:-1])
-        else:
-            return Column(None, val, None)
-
     def literal_builder(
         val: Optional[Union[str, datetime, date, List[Any], Tuple[Any], numbers.Number]]
     ) -> Expression:
@@ -100,6 +93,4 @@ def parse_function_to_expr(expr: Any) -> Expression:
     ) -> Expression:
         return FunctionCall(alias, name, tuple(params))
 
-    return parse_function(
-        output_builder, simple_expression_builder, literal_builder, expr, 0,
-    )
+    return parse_function(output_builder, parse_string, literal_builder, expr, 0,)

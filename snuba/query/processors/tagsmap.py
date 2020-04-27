@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
-from snuba.query.expressions import Column, Expression
+from snuba.query.expressions import Column, Expression, SubscriptableReference
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.events_format import escape_field
@@ -108,9 +108,8 @@ class NestedFieldConditionOptimizer(QueryProcessor):
         if not expression:
             return False
         for node in expression:
-            if isinstance(node, Column):
-                tag = NESTED_COL_EXPR_RE.match(node.column_name)
-                if tag and tag[1] == self.__nested_col:
+            if isinstance(node, SubscriptableReference):
+                if node.referenced_column.column_name == self.__nested_col:
                     return True
         return False
 
