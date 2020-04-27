@@ -528,13 +528,13 @@ class TestDiscoverApi(BaseApiTest):
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
 
-    def test_duration_in_event_query(self):
+    def test_duration_in_timeseries_query(self):
         response = self.app.post(
             "/query",
             data=json.dumps(
                 {
                     "dataset": "discover",
-                    "project": self.project_id,
+                    "project": [self.project_id],
                     "aggregations": [["quantile(0.95)", "duration", "p95"]],
                     "conditions": [["type", "=", "error"]],
                     "groupby": ["time"],
@@ -544,6 +544,44 @@ class TestDiscoverApi(BaseApiTest):
                 }
             ),
         )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert len(data["data"]) == 1
+        assert data["data"][0]["p95"] == 0.0
+
+    def test_duration_in_event_query(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "consistent": False,
+                    "dataset": "discover",
+                    "project": [self.project_id],
+                    "aggregations": [
+                        ["quantile(0.95)", "duration", "p95"],
+                        ["argMax", ["event_id", "timestamp"], "latest_event"],
+                        ["argMax", ["project_id", "timestamp"], "projectid"],
+                        [
+                            "transform(projectid, array({}), array('internal'), '')".format(
+                                self.project_id
+                            ),
+                            None,
+                            "project.name",
+                        ],
+                    ],
+                    "conditions": [
+                        ["type", "=", "error"],
+                        ["project_id", "IN", [self.project_id]],
+                    ],
+                    "project": [self.project_id],
+                    "groupby": [],
+                    "selected_columns": [],
+                    "having": [],
+                    "limit": 1000,
+                }
+            ),
+        )
+
         assert response.status_code == 200
         data = json.loads(response.data)
         assert len(data["data"]) == 1
