@@ -198,6 +198,17 @@ def execute_query_with_deduplication(
         return execute()
 
 
+def execute_query_with_readthrough_caching(
+    request: Request,
+    query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+) -> Result:
+    raise NotImplementedError
+
+
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
@@ -239,9 +250,15 @@ def raw_query(
         trace_id,
     )
 
+    execute_query_strategy = (
+        execute_query_with_readthrough_caching
+        if state.get_config("use_readthrough_query_cache", 0)
+        else execute_query_with_deduplication
+    )
+
     try:
-        result = execute_query_with_deduplication(
-            request, query, reader, timer, stats, query_settings,
+        result = execute_query_strategy(
+            request, query, reader, timer, stats, query_settings
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
