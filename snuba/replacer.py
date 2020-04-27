@@ -19,7 +19,10 @@ logger = logging.getLogger("snuba.replacer")
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(
-self, clickhouse: ClickhousePool, storage: WritableTableStorage, metrics: MetricsBackend, optimize: bool = False,
+        self,
+        clickhouse: ClickhousePool,
+        storage: WritableTableStorage,
+        metrics: MetricsBackend,
     ) -> None:
         self.clickhouse = clickhouse
         self.metrics = metrics
@@ -28,10 +31,7 @@ self, clickhouse: ClickhousePool, storage: WritableTableStorage, metrics: Metric
             processor
         ), f"This storage writer does not support replacements {type(storage)}"
         self.__replacer_processor = processor
-
-        # TODO: this is a leaky abstraction, but should serve us for the patchfile
-        self.__replacer_processor.__optimize = optimize
-        self.__optimize_table_name = (
+        self.__table_name = (
             storage.get_table_writer().get_schema().get_local_table_name()
         )
 
@@ -81,7 +81,7 @@ self, clickhouse: ClickhousePool, storage: WritableTableStorage, metrics: Metric
 
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             num_dropped = run_optimize(
-                self.clickhouse, "default", self.__optimize_table_name, before=today,
+                self.clickhouse, "default", self.__table_name, before=today,
             )
             logger.info(
                 "Optimized %s partitions on %s" % (num_dropped, self.clickhouse.host)

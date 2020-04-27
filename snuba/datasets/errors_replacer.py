@@ -141,7 +141,6 @@ class ErrorsReplacer(ReplacerProcessor):
         self.__tag_column_map = tag_column_map
         self.__promoted_tags = promoted_tags
         self.__state_name = state_name
-        self.__optimize = False
 
     def process_message(self, message: ReplacementMessage) -> Optional[Replacement]:
         type_ = message.action_type
@@ -182,7 +181,7 @@ class ErrorsReplacer(ReplacerProcessor):
         else:
             compatibility_double_write = False
 
-        if not self.__optimize:
+        if not settings.REPLACER_IMMEDIATE_OPTIMIZE:
             if flag_type == NEEDS_FINAL:
                 if compatibility_double_write:
                     set_project_needs_final(project_id, None)
