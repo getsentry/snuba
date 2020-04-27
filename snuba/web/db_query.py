@@ -181,7 +181,7 @@ def execute_query_with_deduplication(
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
+            stats.update({"is_duplicate": is_dupe})
             query_settings["query_id"] = query_id
             return execute()
     else:
