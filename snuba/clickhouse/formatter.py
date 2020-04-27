@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Optional, Sequence
 
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
@@ -9,7 +10,7 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    Argument,
+    SubscriptableReference,
 )
 from snuba.query.parsing import ParsingContext
 from snuba.clickhouse.escaping import escape_alias, escape_identifier, escape_string
@@ -82,6 +83,16 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         ret = [p.accept(self) for p in parameters]
         param_list = ", ".join(ret)
         return f"({param_list})"
+
+    def visitSubscriptableReference(self, exp: SubscriptableReference) -> str:
+        # Formatting this type of expression for a clickhouse formatter does not
+        # make much sense, since the Clickhouse does not know what this is.
+        # The Clickhouse Query AST will not have this node at all so this method will
+        # not exist. Still now an implementation has to be provided that does not
+        # throw until we actually resolve tags during query translation.
+        return (
+            f"{self.visitColumn(exp.referenced_column)}[{self.visitLiteral(exp.key)}]"
+        )
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
         ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"

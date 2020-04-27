@@ -86,6 +86,10 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
+    def visitSubscriptableReference(self, exp: SubscriptableReference) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
     def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
@@ -137,6 +141,44 @@ class Column(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visitColumn(self)
+
+
+@dataclass(frozen=True)
+class SubscriptableReference(Expression):
+    """
+    Access one entry of a subscriptable column (like key based access for a mapping
+    column as tags[key]).
+
+    The only subscriptable column we support now is a key-value mapping, the key is
+    required to be a literal (not any expression) and the subscriptable column
+    cannot be the result of an expression itself (func(asd)[key] is not allowed).
+    """
+
+    referenced_column: Column
+    key: Literal
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitSubscriptableReference(self)
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        transformed = replace(
+            self,
+            referenced_column=self.referenced_column.transform(func),
+            key=self.key.transform(func),
+        )
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        # Since referenced_column is a column and key is a literal and since none of
+        # them is a composite expression we would achieve the same result by yielding
+        # directly the column and the key instead of iterating over them.
+        # We iterate over them so that this would work correctly no matter which on
+        # any future changes on their __iter__ methods.
+        for sub in self.referenced_column:
+            yield sub
+        for sub in self.key:
+            yield sub
+        yield self
 
 
 @dataclass(frozen=True)
