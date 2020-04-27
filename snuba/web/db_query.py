@@ -134,6 +134,10 @@ def execute_query_with_rate_limits(
         return execute_query(request, query, reader, timer, stats, query_settings)
 
 
+def get_query_cache_key(query: ClickhouseQuery) -> str:
+    return md5(force_bytes(query.format_sql())).hexdigest()
+
+
 def execute_query_with_caching(
     request: Request,
     query: ClickhouseQuery,
@@ -162,7 +166,7 @@ def execute_query_with_caching(
     )
 
     if use_cache:
-        key = md5(force_bytes(query.format_sql())).hexdigest()
+        key = get_query_cache_key(query)
         result = cache.get(key)
         timer.mark("cache_get")
         stats["cache_hit"] = result is not None
@@ -206,7 +210,21 @@ def execute_query_with_readthrough_caching(
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
 ) -> Result:
-    raise NotImplementedError
+    query_id = get_query_cache_key(query)
+    query_settings["query_id"] = query_id
+    return cache.get_readthrough(
+        query_id,
+        partial(
+            execute_query_with_rate_limits,
+            request,
+            query,
+            reader,
+            timer,
+            stats,
+            query_settings,
+        ),
+        timeout=query_settings.get("max_execution_time", 30),
+    )
 
 
 def raw_query(
