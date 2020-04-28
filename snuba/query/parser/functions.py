@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any, Callable, List, Optional, TypeVar, Tuple, Union
 
 from snuba.query.expressions import Expression, Literal, FunctionCall
-from snuba.query.parser.strings import parse_string
+from snuba.query.parser.strings import parse_string_to_expr
 from snuba.util import is_function
 
 TExpression = TypeVar("TExpression")
@@ -93,4 +93,4 @@ def parse_function_to_expr(expr: Any) -> Expression:
     ) -> Expression:
         return FunctionCall(alias, name, tuple(params))
 
-    return parse_function(output_builder, parse_string, literal_builder, expr, 0,)
+    return parse_function(output_builder, parse_string_to_expr, literal_builder, expr, 0,)

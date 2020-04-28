@@ -3,19 +3,18 @@ from snuba.query.expressions import Column, Expression, Literal, SubscriptableRe
 from snuba.util import QUOTED_LITERAL_RE
 
 
-def parse_string(val: str) -> Expression:
-    if isinstance(val, str):
-        match = NESTED_COL_EXPR_RE.match(val)
-        if match:
-            col_name = match[1]
-            key_name = match[2]
-            return SubscriptableReference(
-                # TODO: apply alias on all AST nodes created during parsing to make the original
-                # column name (that the client expects) available to the translator.
-                alias=val,
-                referenced_column=Column(None, col_name, None),
-                key=Literal(None, key_name),
-            )
+def parse_string_to_expr(val: str) -> Expression:
+    match = NESTED_COL_EXPR_RE.match(val)
+    if match:
+        col_name = match[1]
+        key_name = match[2]
+        return SubscriptableReference(
+            # TODO: apply alias on all AST nodes created during parsing to make the original
+            # column name (that the client expects) available to the translator.
+            alias=val,
+            referenced_column=Column(None, col_name, None),
+            key=Literal(None, key_name),
+        )
 
     if val.isdigit():
         return Literal(None, int(val))

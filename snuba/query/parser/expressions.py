@@ -13,8 +13,8 @@ from snuba.query.expressions import (
     Literal,
 )
 from snuba.query.parser.functions import parse_function_to_expr
-from snuba.query.parser.strings import parse_string
-from snuba.util import is_function, QUOTED_LITERAL_RE
+from snuba.query.parser.strings import parse_string_to_expr
+from snuba.util import is_function
 
 minimal_clickhouse_grammar = Grammar(
     r"""
@@ -133,7 +133,7 @@ def parse_expression(val: Any) -> Expression:
     # TODO: This will use the schema of the dataset to decide
     # if the expression is a column or a literal.
     if isinstance(val, str):
-        return parse_string(val)
+        return parse_string_to_expr(val)
     raise ValueError(f"Expression to parse can only be a function or a string: {val}")
 
 
