@@ -25,7 +25,7 @@ from snuba.writer import BufferedWriterWrapper
 @click.option("--log-level", help="Logging level to use.")
 def bulk_load(
     *,
-    dataset_name: Optional[str],
+    dataset_name: str,
     dest_table: Optional[str],
     source: Optional[str],
     log_level: Optional[str] = None,
@@ -51,4 +51,6 @@ def bulk_load(
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
-    loader.load(writer)
+    clickhouse_ro = dataset.get_writable_storage().get_cluster().get_clickhouse_ro()
+
+    loader.load(writer, clickhouse_ro)

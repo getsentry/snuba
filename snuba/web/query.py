@@ -10,9 +10,11 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
@@ -103,7 +105,8 @@ def _run_query_pipeline(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan_builder = dataset.get_query_plan_builder()
+    storage_query_plan = query_plan_builder.build_plan(request)
 
     # TODO: Break the Query Plan execution out of this method. With the division
     # between plan specific processors and DB query specific processors and with
@@ -139,6 +142,7 @@ def _format_storage_query_and_run(
     from_date: datetime,
     to_date: datetime,
     request: Request,
+    reader: Reader[ClickhouseQuery],
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -171,7 +175,7 @@ def _format_storage_query_and_run(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        return raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)
 
 
 def record_query(

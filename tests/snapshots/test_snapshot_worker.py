@@ -6,6 +6,7 @@ from typing import Optional
 from uuid import uuid1
 
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.processor import ProcessorAction, ProcessedMessage
 from snuba.stateful_consumer.control_protocol import TransactionData
@@ -66,7 +67,7 @@ class TestSnapshotWorker:
     def test_send_message(
         self, value: str, expected: Optional[ProcessedMessage],
     ) -> None:
-        storage = get_storage("groupedmessages")
+        storage = get_storage(StorageKey.GROUPEDMESSAGES)
         snapshot_id = uuid1()
         transact_data = TransactionData(xmin=100, xmax=200, xip_list=[120, 130])
 
