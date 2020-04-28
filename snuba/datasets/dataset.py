@@ -1,14 +1,27 @@
-from typing import Any, Mapping, NamedTuple, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Generic,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+from snuba.datasets.plans.query_plan import QueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.util import parse_datetime, qualified_column
+
+TQueryPlan = TypeVar("TQueryPlan")
+TPhysicalQuery = TypeVar("TPhysicalQuery")
 
 
 class ColumnSplitSpec(NamedTuple):
@@ -26,7 +39,7 @@ class ColumnSplitSpec(NamedTuple):
         return [self.id_column, self.project_column, self.timestamp_column]
 
 
-class Dataset(object):
+class Dataset(Generic[TPhysicalQuery, TQueryPlan]):
     """
     A dataset represents a data model we can run a Snuba Query on.
     A data model provides a logical schema (today it is a flat table,
@@ -64,7 +77,7 @@ class Dataset(object):
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_plan_builder: QueryPlanBuilder[TQueryPlan],
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
@@ -103,7 +116,7 @@ class Dataset(object):
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
 
-    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+    def get_query_plan_builder(self) -> QueryPlanBuilder[TQueryPlan]:
         """
         Returns the component that transforms a Snuba query in a Storage query by selecting
         the storage and provides the directions on how to run the query.
@@ -155,12 +168,14 @@ class Dataset(object):
         return None
 
 
-class TimeSeriesDataset(Dataset):
+class TimeSeriesDataset(
+    Dataset[TPhysicalQuery, TQueryPlan], Generic[TPhysicalQuery, TQueryPlan]
+):
     def __init__(
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_plan_builder: QueryPlanBuilder[TQueryPlan],
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],

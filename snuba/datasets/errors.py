@@ -1,8 +1,10 @@
 from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence, Union
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
@@ -17,7 +19,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class ErrorsDataset(TimeSeriesDataset):
+class ErrorsDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     """
     Represents the collections of all event types that are not transactions.
 

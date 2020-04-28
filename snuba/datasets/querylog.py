@@ -1,12 +1,14 @@
 from typing import Mapping
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.query.extensions import QueryExtension
 
 
-class QuerylogDataset(Dataset):
+class QuerylogDataset(Dataset[ClickhouseQuery, ClickhouseQueryPlan]):
     def __init__(self) -> None:
 
         storage = get_writable_storage("querylog")

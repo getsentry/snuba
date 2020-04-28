@@ -1,7 +1,9 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.extensions import QueryExtension
@@ -15,7 +17,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class SessionsDataset(TimeSeriesDataset):
+class SessionsDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     def __init__(self) -> None:
         writable_storage = get_writable_storage("sessions_raw")
         materialized_storage = get_storage("sessions_hourly")

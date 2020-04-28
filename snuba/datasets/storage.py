@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Generic, Optional, Sequence, TypeVar
 
-
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
+
+TStorageQuery = TypeVar("TStorageQuery")
 
 
 class Storage(ABC):
@@ -35,7 +37,7 @@ class Storage(ABC):
         raise NotImplementedError
 
 
-class ReadableStorage(Storage):
+class ReadableStorage(Storage, Generic[TStorageQuery]):
     """
     ReadableStorage is an abstraction on anything we can run a query onto in our
     database. This means that it generally represents a Clickhouse table
@@ -47,7 +49,7 @@ class ReadableStorage(Storage):
     """
 
     @abstractmethod
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor[TStorageQuery]]:
         """
         Returns a series of transformation functions (in the form of QueryProcessor objects)
         that are applied to queries after parsing and before running them on Clickhouse.
@@ -72,7 +74,7 @@ class WritableStorage(Storage):
         raise NotImplementedError
 
 
-class ReadableTableStorage(ReadableStorage):
+class ReadableTableStorage(ReadableStorage[ClickhouseQuery]):
     """
     A table storage that represents either a table or a view.
     """
@@ -80,7 +82,7 @@ class ReadableTableStorage(ReadableStorage):
     def __init__(
         self,
         schemas: StorageSchemas,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Optional[Sequence[QueryProcessor[ClickhouseQuery]]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
@@ -88,7 +90,7 @@ class ReadableTableStorage(ReadableStorage):
     def get_schemas(self) -> StorageSchemas:
         return self.__schemas
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor[ClickhouseQuery]]:
         return self.__query_processors
 
 
@@ -97,7 +99,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         self,
         schemas: StorageSchemas,
         table_writer: TableWriter,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Optional[Sequence[QueryProcessor[ClickhouseQuery]]] = None,
     ) -> None:
         super().__init__(schemas, query_processors)
         self.__table_writer = table_writer
@@ -106,7 +108,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         return self.__table_writer
 
 
-class QueryStorageSelector(ABC):
+class QueryStorageSelector(ABC, Generic[TStorageQuery]):
     """
     The component provided by a dataset and used at the beginning of the
     execution of a query to pick the storage query should be executed onto.
@@ -115,5 +117,5 @@ class QueryStorageSelector(ABC):
     @abstractmethod
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> ReadableStorage[TStorageQuery]:
         raise NotImplementedError

@@ -1,7 +1,9 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.query.extensions import QueryExtension
@@ -12,7 +14,7 @@ from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnP
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class OutcomesRawDataset(TimeSeriesDataset):
+class OutcomesRawDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     def __init__(self) -> None:
         storage = get_storage("outcomes_raw")
         read_schema = storage.get_schemas().get_read_schema()

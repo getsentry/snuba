@@ -1,10 +1,10 @@
 from typing import Optional, Sequence
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
-    ClickhouseQueryPlanBuilder,
+    QueryPlanBuilder,
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
@@ -27,7 +27,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         return runner(query, request_settings)
 
 
-class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
+class SingleStorageQueryPlanBuilder(QueryPlanBuilder[ClickhouseQueryPlan]):
     """
     Builds the Clickhouse Query Execution Plan for a dataset that is based on
     a single storage.
@@ -35,8 +35,8 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def __init__(
         self,
-        storage: ReadableStorage,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        storage: ReadableStorage[Query],
+        post_processors: Optional[Sequence[QueryProcessor[Query]]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
@@ -69,15 +69,15 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         )
 
 
-class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
+class SelectedStorageQueryPlanBuilder(QueryPlanBuilder[ClickhouseQueryPlan]):
     """
     A query plan builder that selects one of multiple storages in the dataset.
     """
 
     def __init__(
         self,
-        selector: QueryStorageSelector,
-        post_processors: Optional[Sequence[QueryProcessor]] = None,
+        selector: QueryStorageSelector[Query],
+        post_processors: Optional[Sequence[QueryProcessor[Query]]] = None,
     ) -> None:
         self.__selector = selector
         self.__post_processors = post_processors or []

@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence, Union
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
@@ -15,13 +16,13 @@ from snuba.datasets.schemas.join import (
 )
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
-from snuba.query.processors import QueryProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
@@ -29,7 +30,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
-class JoinedStorage(ReadableStorage):
+class JoinedStorage(ReadableStorage[ClickhouseQuery]):
     def __init__(self, join_structure: JoinClause) -> None:
         self.__structure = join_structure
 
@@ -41,7 +42,7 @@ class JoinedStorage(ReadableStorage):
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[QueryProcessor[ClickhouseQuery]]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 

@@ -1,11 +1,11 @@
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.join import JoinClause
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.request.request_settings import RequestSettings
 
 
-class SimpleJoinOptimizer(QueryProcessor):
+class SimpleJoinOptimizer(QueryProcessor[Query]):
     """
     Simplest possible join optimizer. It turns a join expression into a single
     table expression if only one table is referenced in the query.

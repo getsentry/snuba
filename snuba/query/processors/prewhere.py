@@ -1,13 +1,13 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 
 
-class PrewhereProcessor(QueryProcessor):
+class PrewhereProcessor(QueryProcessor[Query]):
     """
     Moves top level conditions into the pre-where clause
     according to the list of candidates provided by the query data source.

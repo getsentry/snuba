@@ -1,17 +1,19 @@
 from abc import ABC, abstractmethod
+from typing import Generic, TypeVar
 
-from snuba.clickhouse.query import Query
 from snuba.request.request_settings import RequestSettings
 
+TStorageQuery = TypeVar("TStorageQuery")
 
-class QueryProcessor(ABC):
+
+class QueryProcessor(ABC, Generic[TStorageQuery]):
     """
-    A transformation applied to a Clickhouse Query. This transformation mutates the
+    A transformation applied to a storage query. This transformation mutates the
     Query object in place.
 
-    Processors that extend this class are executed during the Clickhouse specific part
+    Processors that extend this class are executed during the storage specific part
     of the query execution pipeline.
-    As their logical counterparts, Clickhouse query processors are stateless and are
+    As their logical counterparts, Storage query processors are stateless and are
     independent from each other. Each processor must leave the query in a valid state
     and must not depend on the execution of another processor before or after.
 
@@ -20,6 +22,8 @@ class QueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
+    def process_query(
+        self, query: TStorageQuery, request_settings: RequestSettings
+    ) -> None:
         # TODO: Make the Query class immutable.
         raise NotImplementedError

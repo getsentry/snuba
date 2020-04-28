@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Callable, Generic, Sequence, TypeVar
 
-from snuba.clickhouse.processors import QueryProcessor
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -56,14 +56,17 @@ class QueryPlanExecutionStrategy(ABC):
         raise NotImplementedError
 
 
-class ClickhouseQueryPlanBuilder(ABC):
+TQueryPlan = TypeVar("TQueryPlan")
+
+
+class QueryPlanBuilder(ABC, Generic[TQueryPlan]):
     """
     Embeds the dataset specific logic that selects which storage to use
     to execute the query and produces the storage query.
     This is provided by a dataset and, when executed, it returns a
-    ClickhouseQueryPlan that embeds what is needed to run the storage query.
+    query plan that embeds what is needed to run the storage query.
     """
 
     @abstractmethod
-    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
+    def build_plan(self, request: Request) -> TQueryPlan:
         raise NotImplementedError

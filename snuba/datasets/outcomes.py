@@ -1,7 +1,9 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.extensions import QueryExtension
@@ -12,7 +14,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class OutcomesDataset(TimeSeriesDataset):
+class OutcomesDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     """
     Tracks event ingestion outcomes in Sentry.
     """

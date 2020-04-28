@@ -1,11 +1,11 @@
 from snuba import state
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.tables import TableSource
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
-class ReadOnlyTableSelector(QueryProcessor):
+class ReadOnlyTableSelector(QueryProcessor[Query]):
     """
     Replaces the data source in the query with a TableSource if the table
     name of the original datasource is the one provided to the constructor,

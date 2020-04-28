@@ -5,9 +5,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.datasets.events_format import escape_field
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
 from snuba.query.expressions import Column, Expression
 from snuba.query.types import Condition
@@ -29,7 +29,7 @@ class OptimizableCondition(NamedTuple):
 logger = logging.getLogger(__name__)
 
 
-class NestedFieldConditionOptimizer(QueryProcessor):
+class NestedFieldConditionOptimizer(QueryProcessor[Query]):
     """
     This processor scans the the conditions in the query and converts
     top level eq/neq conditions on specific nested fields, into LIKE/NOT LIKE

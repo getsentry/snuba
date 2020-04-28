@@ -1,7 +1,9 @@
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.events import (
     get_column_tag_map,
@@ -20,7 +22,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
-class EventsDataset(TimeSeriesDataset):
+class EventsDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     """
     Represents the collection of classic sentry "error" type events
     and the particular quirks of storing and querying them.

@@ -1,7 +1,9 @@
 from datetime import timedelta
 from typing import Mapping, Sequence, Union
 
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -17,7 +19,7 @@ from snuba.query.project_extension import ProjectExtension, ProjectExtensionProc
 from snuba.query.timeseries import TimeSeriesExtension
 
 
-class TransactionsDataset(TimeSeriesDataset):
+class TransactionsDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     def __init__(self) -> None:
         storage = get_writable_storage("transactions")
         schema = storage.get_table_writer().get_schema()

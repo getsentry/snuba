@@ -12,10 +12,11 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages.factory import get_storage
 from snuba.query.extensions import QueryExtension
@@ -71,12 +72,12 @@ def detect_table(
     return EVENTS
 
 
-class DiscoverQueryStorageSelector(QueryStorageSelector):
+class DiscoverQueryStorageSelector(QueryStorageSelector[ClickhouseQuery]):
     def __init__(
         self,
-        events_table: ReadableStorage,
+        events_table: ReadableStorage[ClickhouseQuery],
         abstract_events_columns: ColumnSet,
-        transactions_table: ReadableStorage,
+        transactions_table: ReadableStorage[ClickhouseQuery],
         abstract_transactions_columns: ColumnSet,
     ) -> None:
         self.__events_table = events_table
@@ -90,14 +91,14 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
 
     def select_storage(
         self, query: Query, request_settings: RequestSettings
-    ) -> ReadableStorage:
+    ) -> ReadableStorage[ClickhouseQuery]:
         table = detect_table(
             query, self.__abstract_events_columns, self.__abstract_transactions_columns,
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
 
-class DiscoverDataset(TimeSeriesDataset):
+class DiscoverDataset(TimeSeriesDataset[ClickhouseQuery, ClickhouseQueryPlan]):
     """
     Dataset for the Discover product that maps the columns of Events and
     Transactions into a standard format and sends a query to one of the 2 tables

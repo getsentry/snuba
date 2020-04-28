@@ -1,10 +1,10 @@
-from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.datasets.storages.processors import QueryProcessor
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 
 
-class EventsColumnProcessor(QueryProcessor):
+class EventsColumnProcessor(QueryProcessor[Query]):
     """
     Strip any dashes out of the event ID to match what is stored internally.
     """
