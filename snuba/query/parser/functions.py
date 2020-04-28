@@ -77,9 +77,7 @@ def parse_function(
 
 def parse_function_to_expr(expr: Any) -> Expression:
     """
-    A rudimentary parser for functions implemented to test
-    the proper functioning of the function above.
-    The real parser will be in a different data structure.
+    Parses a function expression in the Snuba syntax and produces an AST Expression.
     """
 
     def literal_builder(
@@ -93,4 +91,6 @@ def parse_function_to_expr(expr: Any) -> Expression:
     ) -> Expression:
         return FunctionCall(alias, name, tuple(params))
 
-    return parse_function(output_builder, parse_string_to_expr, literal_builder, expr, 0,)
+    return parse_function(
+        output_builder, parse_string_to_expr, literal_builder, expr, 0,
+    )

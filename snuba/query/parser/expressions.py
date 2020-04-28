@@ -128,10 +128,12 @@ class ClickhouseVisitor(NodeVisitor):
 
 
 def parse_expression(val: Any) -> Expression:
+    """
+    Parse a simple or structured expression encoded in the Snuba query language
+    into an AST Expression.
+    """
     if is_function(val, 0):
         return parse_function_to_expr(val)
-    # TODO: This will use the schema of the dataset to decide
-    # if the expression is a column or a literal.
     if isinstance(val, str):
         return parse_string_to_expr(val)
     raise ValueError(f"Expression to parse can only be a function or a string: {val}")
@@ -142,7 +144,7 @@ def parse_aggregation(
 ) -> Expression:
     """
     Aggregations, unfortunately, support both Snuba syntax and a subset
-    of ClickHosue syntax. In order to preserve this behavior and still build
+    of Clickhouse syntax. In order to preserve this behavior and still build
     a meaningful AST when parsing the query, we need to do some parsing of
     the clickhouse expression. (not that we should support this, but it is
     used in production).
