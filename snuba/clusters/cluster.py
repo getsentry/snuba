@@ -29,7 +29,7 @@ class Cluster(ABC, Generic[TQuery]):
     def __init__(self, storage_sets: Set[str]):
         self.__storage_sets = storage_sets
 
-    def get_storage_sets(self) -> Set[StorageSetKey]:
+    def get_storage_set_keys(self) -> Set[StorageSetKey]:
         return {StorageSetKey(storage_set) for storage_set in self.__storage_sets}
 
     @abstractmethod
@@ -77,7 +77,9 @@ CLUSTERS = [
 ]
 
 _registered_storage_sets = [
-    storage_set for cluster in CLUSTERS for storage_set in cluster.get_storage_sets()
+    storage_set
+    for cluster in CLUSTERS
+    for storage_set in cluster.get_storage_set_keys()
 ]
 
 _unique_registered_storage_sets = set(_registered_storage_sets)
@@ -94,7 +96,7 @@ assert (
 _STORAGE_SET_CLUSTER_MAP = {
     storage_set: cluster
     for cluster in CLUSTERS
-    for storage_set in cluster.get_storage_sets()
+    for storage_set in cluster.get_storage_set_keys()
 }
 
 
