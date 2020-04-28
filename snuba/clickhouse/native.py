@@ -226,15 +226,13 @@ class NativeDriverReader(Reader[SqlQuery]):
         query: SqlQuery,
         # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
-        query_id: Optional[str] = None,
         with_totals: bool = False,
     ) -> Result:
-        if settings is None:
-            settings = {}
+        settings = {**settings} if settings is not None else {}
 
         kwargs = {}
-        if query_id is not None:
-            kwargs["query_id"] = query_id
+        if "query_id" in settings:
+            kwargs["query_id"] = settings.pop("query_id")
 
         return self.__transform_result(
             self.__client.execute(
