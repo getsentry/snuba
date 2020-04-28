@@ -224,6 +224,7 @@ def execute_query_with_readthrough_caching(
             query_settings,
         ),
         timeout=query_settings.get("max_execution_time", 30),
+        timer=timer,
     )
 
 
