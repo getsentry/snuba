@@ -19,16 +19,14 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
-    def __init__(self, cluster: ClickhouseCluster):
+    def __init__(
+        self, cluster: ClickhouseCluster, db_query_processors: Sequence[QueryProcessor]
+    ):
         self.__cluster = cluster
+        self.__query_processors = db_query_processors
 
-    def execute(
-        self,
-        request: Request,
-        db_query_processors: Sequence[QueryProcessor],
-        runner: QueryRunner,
-    ) -> QueryResult:
-        for processor in db_query_processors:
+    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
+        for processor in self.__query_processors:
             processor.process_query(request.query, request.settings)
         return runner(request, self.__cluster.get_reader())
 
@@ -68,11 +66,10 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
 
         return StorageQueryPlan(
             plan_processors=[],
-            db_query_processors=[
-                *self.__storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(cluster),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster,
+                [*self.__storage.get_query_processors(), *self.__post_processors],
+            ),
         )
 
 
@@ -100,9 +97,7 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
 
         return StorageQueryPlan(
             plan_processors=[],
-            db_query_processors=[
-                *storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(cluster),
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster, [*storage.get_query_processors(), *self.__post_processors],
+            ),
         )

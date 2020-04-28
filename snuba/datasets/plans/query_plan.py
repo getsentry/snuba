@@ -17,21 +17,16 @@ QueryRunner = Callable[[Request, Reader[ClickhouseQuery]], QueryResult]
 @dataclass(frozen=True)
 class StorageQueryPlan:
     """
-    Provides the directions to execute the query against one storage
-    or multiple joined ones.
-    This is produced by StorageQueryPlanBuilder (provided by the dataset)
-    after the dataset query processing has been performed and the storage
-    has been selected.
+    Provides the directions to execute the query against one storage or multiple
+    joined ones.
+    This is produced by StorageQueryPlanBuilder (provided by the dataset) after
+    the dataset query processing has been performed and the storage has been selected.
     It provides a plan execution strategy, in case the query is not one individual
     query statement (like for split queries).
     It also embeds the sequence of storage specific QueryProcessors to apply
     to the query after the storage has been selected.
-    These query processors are split into two disjoint sequences: plan_processors
-    and db_query_processors. The first sequence must be executed only once per
-    plan and before we pass the query to the ExecutionStrategy. The second
-    sequence must be executed for every DB query we execute. In case the
-    ExecutionStrategy decides to split the query into multiple DB queries,
-    they have to be executed for each one of them.
+    These query processors must be executed only once per plan and before we
+    pass the query to the ExecutionStrategy.
     """
 
     # TODO: When we will have a separate Query class for Snuba Query and
@@ -43,7 +38,6 @@ class StorageQueryPlan:
     # would be dangerous, so it is probably better not to expose the query
     # here yet.
     plan_processors: Sequence[QueryProcessor]
-    db_query_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
@@ -54,24 +48,21 @@ class QueryPlanExecutionStrategy(ABC):
     It does not know how to run a query against a DB, but it knows how
     and whether to break down a query and how to assemble the results back.
     It receives a runner, that takes care of actually executing one statement
-    against the DB and a sequence of query processors to apply before the query
-    is sent to the DB.
+    against the DB.
+    Implementations are also responsible to execute the DB Query Processors
+    provided by the Query Plan Builder before running any query on the database.
+    As an example, if the ExecutionStrategy decides to split the query
+    into multiple DB queries, DB Query Processors have to be executed for
+    each one of them.
+
     Potentially this could be agnostic to the DB.
     """
 
     @abstractmethod
-    def execute(
-        self,
-        request: Request,
-        db_query_processors: Sequence[QueryProcessor],
-        runner: QueryRunner,
-    ) -> QueryResult:
+    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
         """
         Executes the query plan. The request parameter provides query and query settings.
-        The query_processors have to be executed for every DB query this method decides
-        to trigger. Implementations of this class are responsible to execute all the
-        query processors before each DB query.
-        The runner parameter is a function to actually run one individual query on the
+        The runner parameter is a function that actually runs one individual query on the
         database.
         """
         raise NotImplementedError

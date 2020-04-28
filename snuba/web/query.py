@@ -128,9 +128,7 @@ def _run_query_pipeline(
         to_date,
     )
 
-    return storage_query_plan.execution_strategy.execute(
-        request, storage_query_plan.db_query_processors, query_runner
-    )
+    return storage_query_plan.execution_strategy.execute(request, query_runner)
 
 
 def _format_storage_query_and_run(
@@ -175,7 +173,9 @@ def _format_storage_query_and_run(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, reader, timer, query_metadata, stats, span.trace_id)
+        return raw_query(
+            request, query, reader, timer, query_metadata, stats, span.trace_id
+        )
 
 
 def record_query(

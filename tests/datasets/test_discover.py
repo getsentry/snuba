@@ -52,7 +52,7 @@ class TestDiscover(BaseDatasetTest):
 
         plan = dataset.get_query_plan_builder().build_plan(request)
 
-        for processor in [*plan.plan_processors, *plan.db_query_processors]:
+        for processor in [*plan.plan_processors]:
             processor.process_query(request.query, request.settings)
 
         assert request.query.get_data_source().format_from() == expected_table
