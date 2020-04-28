@@ -5,7 +5,7 @@ from confluent_kafka import KafkaError, KafkaException, Producer
 from snuba import environment
 from snuba.consumer import ConsumerWorker
 from snuba.consumers.snapshot_worker import SnapshotAwareWorker
-from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.snapshots import SnapshotId
 from snuba.stateful_consumer.control_protocol import TransactionData
@@ -33,7 +33,7 @@ class ConsumerBuilder:
 
     def __init__(
         self,
-        storage_name: str,
+        storage_key: StorageKey,
         raw_topic: Optional[str],
         replacements_topic: Optional[str],
         max_batch_size: int,
@@ -48,7 +48,7 @@ class ConsumerBuilder:
         rapidjson_serialize: bool,
         commit_retry_policy: Optional[RetryPolicy] = None,
     ) -> None:
-        self.storage = get_writable_storage(storage_name)
+        self.storage = get_writable_storage(storage_key)
         self.bootstrap_servers = bootstrap_servers
 
         stream_loader = self.storage.get_table_writer().get_stream_loader()
@@ -92,7 +92,7 @@ class ConsumerBuilder:
         self.metrics = MetricsWrapper(
             environment.metrics,
             "consumer",
-            tags={"group": group_id, "storage": storage_name},
+            tags={"group": group_id, "storage": storage_key.value},
         )
 
         self.max_batch_size = max_batch_size

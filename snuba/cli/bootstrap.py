@@ -4,8 +4,9 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
+from snuba.clusters.cluster import CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
-from snuba.environment import clickhouse_rw, setup_logging
+from snuba.environment import setup_logging
 from snuba.migrations.migrate import run
 
 
@@ -94,31 +95,44 @@ def bootstrap(
                 logger.error("Failed to create topic %s", topic, exc_info=e)
 
     attempts = 0
-    while True:
-        try:
-            logger.debug("Attempting to connect to Clickhouse (attempt %d)", attempts)
-            clickhouse_rw.execute("SELECT 1")
-            break
-        except Exception as e:
-            logger.error(
-                "Connection to Clickhouse failed (attempt %d)", attempts, exc_info=e
-            )
-            attempts += 1
-            if attempts == 60:
-                raise
-            time.sleep(1)
+
+    # Attempt to connect with every cluster
+    for cluster in CLUSTERS:
+        clickhouse_rw = cluster.get_clickhouse_rw()
+
+        while True:
+            try:
+                logger.debug(
+                    "Attempting to connect to Clickhouse cluster %s (attempt %d)",
+                    cluster,
+                    attempts,
+                )
+                clickhouse_rw.execute("SELECT 1")
+                break
+            except Exception as e:
+                logger.error(
+                    "Connection to Clickhouse cluster %s failed (attempt %d)",
+                    cluster,
+                    attempts,
+                    exc_info=e,
+                )
+                attempts += 1
+                if attempts == 60:
+                    raise
+                time.sleep(1)
 
     # Need to better figure out if we are configured to use replicated
     # tables or distributed tables, etc.
 
     # Create the tables for every dataset.
-    existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
     for name in ACTIVE_DATASET_NAMES:
         dataset = get_dataset(name)
 
         logger.debug("Creating tables for dataset %s", name)
         run_migrations = False
         for storage in dataset.get_all_storages():
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
             for statement in storage.get_schemas().get_create_statements():
                 if statement.table_name not in existing_tables:
                     # This is a hack to deal with updates to Materialized views.
@@ -141,5 +155,5 @@ def bootstrap(
                     run_migrations = True
         if run_migrations:
             logger.debug("Running missing migrations for dataset %s", name)
-            run(clickhouse_rw, dataset)
+            run(dataset)
         logger.info("Tables for dataset %s created.", name)

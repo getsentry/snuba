@@ -12,11 +12,12 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
-
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 
 
@@ -67,6 +68,8 @@ schema = MergeTreeSchema(
 )
 
 storage = WritableTableStorage(
+    storage_key=StorageKey.QUERYLOG,
+    storage_set_key=StorageSetKey.QUERYLOG,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     table_writer=TableWriter(
         write_schema=schema,

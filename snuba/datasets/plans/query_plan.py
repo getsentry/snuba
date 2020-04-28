@@ -4,12 +4,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from snuba.web import QueryResult
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.query.query_processor import QueryProcessor
+from snuba.reader import Reader
 from snuba.request import Request
+from snuba.web import QueryResult
 
 
-QueryRunner = Callable[[Request], QueryResult]
+QueryRunner = Callable[[Request, Reader[ClickhouseQuery]], QueryResult]
 
 
 @dataclass(frozen=True)

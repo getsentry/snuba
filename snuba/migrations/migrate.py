@@ -34,15 +34,18 @@ def _run_schema(conn: Client, schema: Schema) -> None:
         logger.warn(difference)
 
 
-def run(conn: Client, dataset: Dataset) -> None:
+def run(dataset: Dataset) -> None:
     schemas: MutableSequence[Schema] = []
-
     writable_storage = dataset.get_writable_storage()
     if writable_storage:
         writer = writable_storage.get_table_writer()
         schemas.append(writer.get_schema())
+
     for storage in dataset.get_all_storages():
+        schemas: MutableSequence[Schema] = []
+
         schemas.append(storage.get_schemas().get_read_schema())
 
-    for schema in schemas:
-        _run_schema(conn, schema)
+        for schema in schemas:
+            conn = storage.get_cluster().get_clickhouse_rw()
+            _run_schema(conn, schema)

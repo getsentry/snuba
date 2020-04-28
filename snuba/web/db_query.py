@@ -15,7 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.environment import reader
+from snuba.reader import Reader
 from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
@@ -66,6 +66,7 @@ def update_query_metadata_and_stats(
 def execute_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -103,6 +104,7 @@ def execute_query(
 def execute_query_with_rate_limits(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -129,12 +131,13 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        return execute_query(request, query, timer, stats, query_settings)
+        return execute_query(request, query, reader, timer, stats, query_settings)
 
 
 def execute_query_with_caching(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -149,7 +152,13 @@ def execute_query_with_caching(
         use_cache = False
 
     execute = partial(
-        execute_query_with_rate_limits, request, query, timer, stats, query_settings,
+        execute_query_with_rate_limits,
+        request,
+        query,
+        reader,
+        timer,
+        stats,
+        query_settings,
     )
 
     if use_cache:
@@ -170,12 +179,13 @@ def execute_query_with_caching(
 def execute_query_with_deduplication(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
 ) -> Result:
     execute = partial(
-        execute_query_with_caching, request, query, timer, stats, query_settings
+        execute_query_with_caching, request, query, reader, timer, stats, query_settings
     )
     if state.get_config("use_deduper", 1):
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
@@ -191,6 +201,7 @@ def execute_query_with_deduplication(
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -230,7 +241,7 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            request, query, timer, stats, query_settings,
+            request, query, reader, timer, stats, query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
