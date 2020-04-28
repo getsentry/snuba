@@ -2,6 +2,7 @@ from typing import Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
     ClickhouseQueryPlanBuilder,
@@ -21,10 +22,18 @@ from snuba.web import QueryResult
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+    def __init__(
+        self, cluster: ClickhouseCluster, db_query_processors: Sequence[QueryProcessor]
+    ):
+        self.__cluster = cluster
+        self.__query_processors = db_query_processors
+
     def execute(
-        self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
+        self, query: Query, request_settings: RequestSettings, runner: QueryRunner
     ) -> QueryResult:
-        return runner(query, request_settings)
+        for processor in self.__query_processors:
+            processor.process_query(query, request_settings)
+        return runner(query, request_settings, self.__cluster.get_reader())
 
 
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
@@ -59,13 +68,15 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = self.__storage.get_cluster()
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            query_processors=[
-                *self.__storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            plan_processors=[],
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster,
+                [*self.__storage.get_query_processors(), *self.__post_processors],
+            ),
         )
 
 
@@ -89,11 +100,12 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = storage.get_cluster()
+
         return ClickhouseQueryPlan(
             query=clickhouse_query,
-            query_processors=[
-                *storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            plan_processors=[],
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster, [*storage.get_query_processors(), *self.__post_processors],
+            ),
         )

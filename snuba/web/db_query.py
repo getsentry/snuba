@@ -16,8 +16,7 @@ from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
-from snuba.environment import reader
-from snuba.reader import Result
+from snuba.reader import Reader, Result
 from snuba.redis import redis_client
 from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import Cache
@@ -67,6 +66,7 @@ def execute_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
+    reader: Reader[Query],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -105,6 +105,7 @@ def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
+    reader: Reader[Query],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -135,6 +136,7 @@ def execute_query_with_rate_limits(
             clickhouse_query,
             request_settings,
             formatted_query,
+            reader,
             timer,
             stats,
             query_settings,
@@ -145,6 +147,7 @@ def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
+    reader: Reader[Query],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -163,6 +166,7 @@ def execute_query_with_caching(
         clickhouse_query,
         request_settings,
         formatted_query,
+        reader,
         timer,
         stats,
         query_settings,
@@ -187,6 +191,7 @@ def execute_query_with_deduplication(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
+    reader: Reader[Query],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -196,6 +201,7 @@ def execute_query_with_deduplication(
         clickhouse_query,
         request_settings,
         formatted_query,
+        reader,
         timer,
         stats,
         query_settings,
@@ -218,6 +224,7 @@ def raw_query(
     # will be needed as long as the legacy query representation will be around.
     # See DictSqlQuery.
     formatted_query: SqlQuery,
+    reader: Reader[Query],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -255,6 +262,7 @@ def raw_query(
             clickhouse_query,
             request_settings,
             formatted_query,
+            reader,
             timer,
             stats,
             query_settings,

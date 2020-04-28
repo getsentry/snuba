@@ -128,3 +128,15 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
+
+
+# Snuba currently only supports a single cluster to which all storage sets are assigned.
+# In future this will be configurable.
+CLUSTERS: Sequence[Mapping[str, Any]] = [
+    {
+        "host": CLICKHOUSE_HOST,
+        "port": CLICKHOUSE_PORT,
+        "http_port": CLICKHOUSE_HTTP_PORT,
+        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
+    },
+]

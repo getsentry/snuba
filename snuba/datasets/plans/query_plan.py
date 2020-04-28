@@ -6,11 +6,13 @@ from typing import Callable, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
+from snuba.reader import Reader
 from snuba.web import QueryResult
 
-QueryRunner = Callable[[Query, RequestSettings], QueryResult]
+QueryRunner = Callable[[Query, RequestSettings, Reader[SqlQuery]], QueryResult]
 
 
 @dataclass(frozen=True)
@@ -29,18 +31,24 @@ class ClickhouseQueryPlan:
     """
 
     query: Query
-    query_processors: Sequence[QueryProcessor]
+    plan_processors: Sequence[QueryProcessor]
     execution_strategy: QueryPlanExecutionStrategy
 
 
 class QueryPlanExecutionStrategy(ABC):
     """
-    Orchestrate the executions of a query. An example use case is split
+    Orchestrates the executions of a query. An example use case is split
     queries, when the split is done at storage level.
     It does not know how to run a query against a DB, but it knows how
     and whether to break down a query and how to assemble the results back.
     It receives a runner, that takes care of actually executing one statement
     against the DB.
+    Implementations are also responsible to execute the DB Query Processors
+    provided by the Query Plan Builder before running any query on the database.
+    As an example, if the ExecutionStrategy decides to split the query
+    into multiple DB queries, DB Query Processors have to be executed for
+    each one of them.
+
     Potentially this could be agnostic to the DB.
     """
 
@@ -49,8 +57,8 @@ class QueryPlanExecutionStrategy(ABC):
         self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
     ) -> QueryResult:
         """
-        Executes the query plan.
-        The runner parameter is a function that actually run one individual query on the
+        Executes the query plan. The request parameter provides query and query settings.
+        The runner parameter is a function that actually runs one individual query on the
         database.
         """
         raise NotImplementedError

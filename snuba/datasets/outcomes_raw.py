@@ -2,6 +2,7 @@ from datetime import timedelta
 from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.query.extensions import QueryExtension
@@ -14,7 +15,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 
 class OutcomesRawDataset(TimeSeriesDataset):
     def __init__(self) -> None:
-        storage = get_storage("outcomes_raw")
+        storage = get_storage(StorageKey.OUTCOMES_RAW)
         read_schema = storage.get_schemas().get_read_schema()
 
         self.__time_group_columns = {"time": "timestamp"}

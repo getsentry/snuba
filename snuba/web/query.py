@@ -14,6 +14,7 @@ from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -76,9 +77,9 @@ def _run_query_pipeline(
     - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
       transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
       From this point on none should depend on the dataset.
-    - Executing the storage specific query processors.
-    - Providing the newly built Query and a QueryRunner to the QueryExecutionStrategy to actually
-      run the DB Query.
+    - Executing the plan specific query processors.
+    - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
+      to the QueryExecutionStrategy to actually run the DB Query.
     """
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
@@ -109,11 +110,15 @@ def _run_query_pipeline(
     # From this point on. The logical query should not be used anymore by anyone.
     # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
 
+    # TODO: Break the Query Plan execution out of this method. With the division
+    # between plan specific processors and DB query specific processors and with
+    # the soon to come ClickhouseCluster, there is more coupling between the
+    # components of the query plan.
     # TODO: This below should be a storage specific query processor.
     relational_source = query_plan.query.get_data_source()
     query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for clickhouse_processor in query_plan.query_processors:
+    for clickhouse_processor in query_plan.plan_processors:
         clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
@@ -142,6 +147,7 @@ def _format_storage_query_and_run(
     referrer: str,
     clickhouse_query: Query,
     request_settings: RequestSettings,
+    reader: Reader[Query],
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -178,6 +184,7 @@ def _format_storage_query_and_run(
             clickhouse_query,
             request_settings,
             formatted_query,
+            reader,
             timer,
             query_metadata,
             stats,
