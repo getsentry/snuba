@@ -1,6 +1,7 @@
 import uuid
 
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.processor import ProcessedMessage, ProcessorAction
 from snuba.query.query import Query
@@ -27,7 +28,7 @@ def test_simple():
 
     query = Query(
         request_body,
-        get_storage("events").get_schemas().get_read_schema().get_data_source(),
+        get_storage(StorageKey.EVENTS).get_schemas().get_read_schema().get_data_source(),
     )
 
     request = Request(uuid.UUID("a" * 32).hex, query, HTTPRequestSettings(), {}, "search")

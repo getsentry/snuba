@@ -5,6 +5,7 @@ import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
@@ -32,7 +33,7 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     "--storage",
     "storage_name",
     default="events",
-    type=click.Choice(WRITABLE_STORAGES.keys()),
+    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
     help="The storage to target",
 )
 @click.option(
@@ -112,8 +113,10 @@ def consumer(
     setup_logging(log_level)
     setup_sentry()
 
+    storage_key = StorageKey(storage_name)
+
     consumer_builder = ConsumerBuilder(
-        storage_name=storage_name,
+        storage_key=storage_key,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
@@ -129,8 +132,10 @@ def consumer(
     )
 
     if stateful_consumer:
-        storage = get_cdc_storage(storage_name)
-        assert storage is not None, "Only CDC storages have a control topic thus are supported."
+        storage = get_cdc_storage(storage_key)
+        assert (
+            storage is not None
+        ), "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
             topic=control_topic or storage.get_default_control_topic(),

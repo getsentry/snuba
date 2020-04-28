@@ -7,6 +7,7 @@ from snuba.clickhouse.columns import (
     UInt,
     UUID,
 )
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.outcomes_processor import OutcomesProcessor
 from snuba.datasets.storage import (
@@ -19,6 +20,7 @@ from snuba.datasets.schemas.tables import (
     SummingMergeTreeSchema,
     MaterializedViewSchema,
 )
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -112,6 +114,8 @@ materialized_view_schema = MaterializedViewSchema(
 
 
 raw_storage = WritableTableStorage(
+    storage_key=StorageKey.OUTCOMES_RAW,
+    storage_set_key=StorageSetKey.OUTCOMES,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     table_writer=TableWriter(
         write_schema=raw_schema,
@@ -123,6 +127,8 @@ raw_storage = WritableTableStorage(
 )
 
 materialized_storage = ReadableTableStorage(
+    storage_key=StorageKey.OUTCOMES_HOURLY,
+    storage_set_key=StorageSetKey.OUTCOMES,
     schemas=StorageSchemas(
         read_schema=read_schema,
         write_schema=None,

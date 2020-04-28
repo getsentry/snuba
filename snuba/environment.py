@@ -9,9 +9,6 @@ from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
 
 from snuba import settings
-from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery
-from snuba.reader import Reader
 from snuba.util import create_metrics
 
 
@@ -32,13 +29,4 @@ def setup_sentry() -> None:
     )
 
 
-clickhouse_rw = ClickhousePool(settings.CLICKHOUSE_HOST, settings.CLICKHOUSE_PORT)
-clickhouse_ro = ClickhousePool(
-    settings.CLICKHOUSE_HOST,
-    settings.CLICKHOUSE_PORT,
-    client_settings={"readonly": True},
-)
-
 metrics = create_metrics("snuba")
-
-reader: Reader[ClickhouseQuery] = NativeDriverReader(clickhouse_ro)
