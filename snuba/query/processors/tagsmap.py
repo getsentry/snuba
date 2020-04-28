@@ -109,7 +109,7 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             return False
         for node in expression:
             if isinstance(node, SubscriptableReference):
-                if node.referenced_column.column_name == self.__nested_col:
+                if node.subscriptable_column.column_name == self.__nested_col:
                     return True
         return False
 

@@ -85,14 +85,12 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         return f"({param_list})"
 
     def visitSubscriptableReference(self, exp: SubscriptableReference) -> str:
-        # Formatting this type of expression for a clickhouse formatter does not
-        # make much sense, since the Clickhouse does not know what this is.
+        # Formatting SubscriptableReference does not make sense for a clickhouse
+        # formatter, since the Clickhouse does not support this kind of nodes.
         # The Clickhouse Query AST will not have this node at all so this method will
-        # not exist. Still now an implementation has to be provided that does not
-        # throw until we actually resolve tags during query translation.
-        return (
-            f"{self.visitColumn(exp.referenced_column)}[{self.visitLiteral(exp.key)}]"
-        )
+        # not exist. Still now an implementation that does not throw has to be provided
+        # until we actually resolve tags during query translation.
+        return f"{self.visitColumn(exp.subscriptable_column)}[{self.visitLiteral(exp.key)}]"
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
         ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"

@@ -18,7 +18,7 @@ def parse_string_to_expr(val: str) -> Expression:
             # (that the client expects in the response) available when building the
             # Clickhouse query without leaking the logical schema.
             alias=val,
-            referenced_column=Column(None, col_name, None),
+            subscriptable_column=Column(None, col_name, None),
             key=Literal(None, key_name),
         )
 

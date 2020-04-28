@@ -146,15 +146,16 @@ class Column(Expression):
 @dataclass(frozen=True)
 class SubscriptableReference(Expression):
     """
-    Access one entry of a subscriptable column (like key based access for a mapping
-    column as tags[key]).
+    Accesses one entry of a subscriptable column (for example key based access on
+    a mapping column like tags[key]).
 
-    The only subscriptable column we support now is a key-value mapping, the key is
-    required to be a literal (not any expression) and the subscriptable column
-    cannot be the result of an expression itself (func(asd)[key] is not allowed).
+    The only subscriptable column we support now in the query language is a key-value
+    mapping, the key is required to be a literal (not any expression) and the subscriptable
+    column cannot be the result of an expression itself (func(asd)[key] is not allowed).
+    These constraints could be relaxed should we decided to support them in the query language.
     """
 
-    referenced_column: Column
+    subscriptable_column: Column
     key: Literal
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
@@ -163,18 +164,18 @@ class SubscriptableReference(Expression):
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
             self,
-            referenced_column=self.referenced_column.transform(func),
+            subscriptable_column=self.subscriptable_column.transform(func),
             key=self.key.transform(func),
         )
         return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
-        # Since referenced_column is a column and key is a literal and since none of
+        # Since subscriptable_column is a column and key is a literal and since none of
         # them is a composite expression we would achieve the same result by yielding
         # directly the column and the key instead of iterating over them.
-        # We iterate over them so that this would work correctly no matter which on
-        # any future changes on their __iter__ methods.
-        for sub in self.referenced_column:
+        # We iterate over them so that this would work correctly independently from
+        # any future changes on their __iter__ methods as long as they remain Expressions.
+        for sub in self.subscriptable_column:
             yield sub
         for sub in self.key:
             yield sub
