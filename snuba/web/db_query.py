@@ -70,7 +70,6 @@ def execute_query(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     """
     Execute a query and return a result.
@@ -91,10 +90,7 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        query,
-        query_settings,
-        query_id=query_id,
-        with_totals=request.query.has_totals(),
+        query, query_settings, with_totals=request.query.has_totals(),
     )
 
     timer.mark("execute")
@@ -112,7 +108,6 @@ def execute_query_with_rate_limits(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
@@ -136,9 +131,7 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        return execute_query(
-            request, query, reader, timer, stats, query_settings, query_id
-        )
+        return execute_query(request, query, reader, timer, stats, query_settings)
 
 
 def execute_query_with_caching(
@@ -148,7 +141,6 @@ def execute_query_with_caching(
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
     # cache, as well as the uncompressed cache. These should be independent.
@@ -167,7 +159,6 @@ def execute_query_with_caching(
         timer,
         stats,
         query_settings,
-        query_id,
     )
 
     if use_cache:
@@ -200,10 +191,11 @@ def execute_query_with_deduplication(
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-            return execute(query_id=query_id)
+            stats.update({"is_duplicate": is_dupe})
+            query_settings["query_id"] = query_id
+            return execute()
     else:
-        return execute(query_id=None)
+        return execute()
 
 
 def raw_query(
