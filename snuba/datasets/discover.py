@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba import environment
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -30,18 +31,42 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
 
+metrics = MetricsWrapper(environment.metrics, "api.discover")
+
 
 def detect_table(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
+    query: Query,
+    events_only_columns: ColumnSet,
+    transactions_only_columns: ColumnSet,
+    track_bad_queries: bool,
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" storage. This is going to be wrong in some cases.
     """
+    event_column = None
+    transaction_column = None
+    all_referenced_columns = query.get_all_referenced_columns()
+    for col in all_referenced_columns:
+        if events_only_columns.get(col):
+            event_column = col
+        elif transactions_only_columns.get(col):
+            transaction_column = col
+
+    if event_column is not None and transaction_column is not None:
+        metrics.increment(
+            "impossible_query",
+            tags={
+                "event_column": event_column,
+                "transaction_column": transaction_column,
+            },
+        )
+
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
     conditions = query.get_conditions()
@@ -61,10 +86,9 @@ def detect_table(
         return TRANSACTIONS
 
     # Check for any other references to a table specific field
-    all_referenced_columns = query.get_all_referenced_columns()
-    if any(events_only_columns.get(col) for col in all_referenced_columns):
+    if event_column is not None:
         return EVENTS
-    if any(transactions_only_columns.get(col) for col in all_referenced_columns):
+    if transaction_column is not None:
         return TRANSACTIONS
 
     # Use events by default
@@ -92,7 +116,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         self, query: Query, request_settings: RequestSettings
     ) -> ReadableStorage:
         table = detect_table(
-            query, self.__abstract_events_columns, self.__abstract_transactions_columns,
+            query,
+            self.__abstract_events_columns,
+            self.__abstract_transactions_columns,
+            True,
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
@@ -256,7 +283,7 @@ class DiscoverDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         detected_dataset = detect_table(
-            query, self.__events_columns, self.__transactions_columns
+            query, self.__events_columns, self.__transactions_columns, False,
         )
 
         if detected_dataset == TRANSACTIONS:
