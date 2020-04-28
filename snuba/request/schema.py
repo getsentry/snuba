@@ -5,7 +5,9 @@ import uuid
 
 from typing import Any, Mapping, Type
 
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.extensions import QueryExtension
 from snuba.query.parser import parse_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
@@ -81,7 +83,9 @@ class RequestSchema:
         }
         return cls(generic_schema, settings_schema, extensions_schemas, settings_class)
 
-    def validate(self, value, dataset: Dataset, referrer: str) -> Request:
+    def validate(
+        self, value, dataset: Dataset[ClickhouseQueryPlan, Query], referrer: str
+    ) -> Request:
         value = validate_jsonschema(value, self.__composite_schema)
 
         query_body = {
@@ -105,7 +109,9 @@ class RequestSchema:
 
         query = parse_query(query_body, dataset)
         request_id = uuid.uuid4().hex
-        return Request(request_id, query, self.__setting_class(**settings), extensions, referrer)
+        return Request(
+            request_id, query, self.__setting_class(**settings), extensions, referrer
+        )
 
     def __generate_template_impl(self, schema) -> Any:
         """

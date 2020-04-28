@@ -4,7 +4,9 @@ from typing import Any, MutableMapping, Optional
 
 from snuba import state
 from snuba.clickhouse.escaping import NEGATE_RE
+from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.expressions import Expression
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
@@ -14,7 +16,10 @@ from snuba.util import is_function, to_list, tuplify
 logger = logging.getLogger(__name__)
 
 
-def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def parse_query(
+    body: MutableMapping[str, Any],
+    dataset: Dataset[ClickhouseQueryPlan, ClickhouseQuery],
+) -> Query:
     """
     Parses the query body generating the AST. This only takes into
     account the initial query body. Extensions are parsed by extension
@@ -36,7 +41,10 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
             return Query(body, None)
 
 
-def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def _parse_query_impl(
+    body: MutableMapping[str, Any],
+    dataset: Dataset[ClickhouseQueryPlan, ClickhouseQuery],
+) -> Query:
     aggregate_exprs = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))

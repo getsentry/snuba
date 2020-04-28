@@ -3,7 +3,9 @@ import logging
 from clickhouse_driver import Client
 from typing import MutableSequence
 
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.migrations.parse_schema import get_local_schema
@@ -34,7 +36,7 @@ def _run_schema(conn: Client, schema: Schema) -> None:
         logger.warn(difference)
 
 
-def run(conn: Client, dataset: Dataset) -> None:
+def run(conn: Client, dataset: Dataset[ClickhouseQueryPlan, Query]) -> None:
     schemas: MutableSequence[Schema] = []
 
     writable_storage = dataset.get_writable_storage()

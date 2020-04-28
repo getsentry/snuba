@@ -3,6 +3,7 @@ from snuba import util
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
 from snuba.request.request_settings import RequestSettings
@@ -19,7 +20,10 @@ class DictSqlQuery(SqlQuery):
     """
 
     def __init__(
-        self, dataset: Dataset, query: Query, settings: RequestSettings,
+        self,
+        dataset: Dataset[ClickhouseQueryPlan, Query],
+        query: Query,
+        settings: RequestSettings,
     ) -> None:
         parsing_context = ParsingContext()
 

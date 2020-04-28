@@ -1,7 +1,9 @@
 from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
+from snuba.clickhouse.query import Query
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.plans.query_plan import ClickhouseQueryPlan
 from snuba.query.expressions import (
     Argument,
     Expression,
@@ -32,7 +34,7 @@ def parse_conditions(
     or_builder: Callable[[Sequence[TExpression]], Optional[TExpression]],
     unpack_array_condition_builder: Callable[[TExpression, str, Any], TExpression],
     simple_condition_builder: Callable[[TExpression, str, Any], TExpression],
-    dataset: Dataset,
+    dataset: Dataset[ClickhouseQueryPlan, Query],
     conditions: Any,
     array_join: Optional[str],
     depth: int = 0,
@@ -125,7 +127,9 @@ def parse_conditions(
 
 
 def parse_conditions_to_expr(
-    expr: Sequence[Any], dataset: Dataset, arrayjoin: Optional[str]
+    expr: Sequence[Any],
+    dataset: Dataset[ClickhouseQueryPlan, Query],
+    arrayjoin: Optional[str],
 ) -> Optional[Expression]:
     """
     Relies on parse_conditions to parse a list of conditions into an Expression.
