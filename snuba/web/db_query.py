@@ -15,7 +15,7 @@ from sentry_sdk.api import configure_scope
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.query import ClickhouseQuery
-from snuba.environment import reader
+from snuba.reader import Reader
 from snuba.reader import Result
 from snuba.redis import redis_client
 from snuba.request import Request
@@ -66,10 +66,10 @@ def update_query_metadata_and_stats(
 def execute_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     """
     Execute a query and return a result.
@@ -90,10 +90,7 @@ def execute_query(
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        query,
-        query_settings,
-        query_id=query_id,
-        with_totals=request.query.has_totals(),
+        query, query_settings, with_totals=request.query.has_totals(),
     )
 
     timer.mark("execute")
@@ -107,10 +104,10 @@ def execute_query(
 def execute_query_with_rate_limits(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
@@ -134,16 +131,16 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        return execute_query(request, query, timer, stats, query_settings, query_id)
+        return execute_query(request, query, reader, timer, stats, query_settings)
 
 
 def execute_query_with_caching(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
     # cache, as well as the uncompressed cache. These should be independent.
@@ -158,10 +155,10 @@ def execute_query_with_caching(
         execute_query_with_rate_limits,
         request,
         query,
+        reader,
         timer,
         stats,
         query_settings,
-        query_id,
     )
 
     if use_cache:
@@ -182,26 +179,29 @@ def execute_query_with_caching(
 def execute_query_with_deduplication(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
 ) -> Result:
     execute = partial(
-        execute_query_with_caching, request, query, timer, stats, query_settings
+        execute_query_with_caching, request, query, reader, timer, stats, query_settings
     )
     if state.get_config("use_deduper", 1):
         query_id = md5(force_bytes(query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-            return execute(query_id=query_id)
+            stats.update({"is_duplicate": is_dupe})
+            query_settings["query_id"] = query_id
+            return execute()
     else:
-        return execute(query_id=None)
+        return execute()
 
 
 def raw_query(
     request: Request,
     query: ClickhouseQuery,
+    reader: Reader[ClickhouseQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -241,7 +241,7 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            request, query, timer, stats, query_settings,
+            request, query, reader, timer, stats, query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):

@@ -25,7 +25,6 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.environment import clickhouse_ro, clickhouse_rw
 from snuba.redis import redis_client
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
@@ -71,11 +70,12 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        clickhouse_tables = clickhouse_ro.execute("show tables")
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
+                clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
+                clickhouse_tables = clickhouse_ro.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
@@ -369,10 +369,11 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for storage in dataset.get_all_storages():
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             for statement in storage.get_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
 
-        migrate.run(clickhouse_rw, dataset)
+        migrate.run(dataset)
 
         _ensured[dataset] = True
 
@@ -419,18 +420,16 @@ if application.debug or application.testing:
         )
 
         type_ = record[1]
+
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
-
-            storage = dataset.get_writable_storage()
-
             worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-
-            storage = dataset.get_writable_storage()
-            assert storage is not None
-
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
 
         processed = worker.process_message(message)
@@ -443,6 +442,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 

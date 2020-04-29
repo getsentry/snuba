@@ -10,9 +10,11 @@ from functools import partial
 from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstClickhouseQuery
 from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.query import ClickhouseQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
@@ -74,9 +76,9 @@ def _run_query_pipeline(
     - Using the dataset provided StorageQueryPlanBuilder to build a StorageQueryPlan. This step
       transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
       From this point on none should depend on the dataset.
-    - Executing the storage specific query processors.
-    - Providing the newly built Query and a QueryRunner to the QueryExecutionStrategy to actually
-      run the DB Query.
+    - Executing the plan specific query processors.
+    - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
+      to the QueryExecutionStrategy to actually run the DB Query.
     """
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
@@ -103,13 +105,18 @@ def _run_query_pipeline(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan_builder = dataset.get_query_plan_builder()
+    storage_query_plan = query_plan_builder.build_plan(request)
 
+    # TODO: Break the Query Plan execution out of this method. With the division
+    # between plan specific processors and DB query specific processors and with
+    # the soon to come ClickhouseCluster, there is more coupling between the
+    # components of the query plan.
     # TODO: This below should be a storage specific query processor.
     relational_source = request.query.get_data_source()
     request.query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for processor in storage_query_plan.query_processors:
+    for processor in storage_query_plan.plan_processors:
         processor.process_query(request.query, request.settings)
 
     query_runner = partial(
@@ -133,6 +140,7 @@ def _format_storage_query_and_run(
     from_date: datetime,
     to_date: datetime,
     request: Request,
+    reader: Reader[ClickhouseQuery],
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
@@ -165,7 +173,9 @@ def _format_storage_query_and_run(
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        return raw_query(
+            request, query, reader, timer, query_metadata, stats, span.trace_id
+        )
 
 
 def record_query(

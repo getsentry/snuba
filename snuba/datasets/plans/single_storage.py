@@ -1,5 +1,6 @@
 from typing import Optional, Sequence
 
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
@@ -18,8 +19,16 @@ from snuba.request import Request
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
+    def __init__(
+        self, cluster: ClickhouseCluster, db_query_processors: Sequence[QueryProcessor]
+    ):
+        self.__cluster = cluster
+        self.__query_processors = db_query_processors
+
     def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
-        return runner(request)
+        for processor in self.__query_processors:
+            processor.process_query(request.query, request.settings)
+        return runner(request, self.__cluster.get_reader())
 
 
 class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
@@ -53,12 +62,14 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = self.__storage.get_cluster()
+
         return StorageQueryPlan(
-            query_processors=[
-                *self.__storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            plan_processors=[],
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster,
+                [*self.__storage.get_query_processors(), *self.__post_processors],
+            ),
         )
 
 
@@ -82,10 +93,11 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
+        cluster = storage.get_cluster()
+
         return StorageQueryPlan(
-            query_processors=[
-                *storage.get_query_processors(),
-                *self.__post_processors,
-            ],
-            execution_strategy=SimpleQueryPlanExecutionStrategy(),
+            plan_processors=[],
+            execution_strategy=SimpleQueryPlanExecutionStrategy(
+                cluster, [*storage.get_query_processors(), *self.__post_processors],
+            ),
         )
