@@ -30,7 +30,7 @@ class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
             processor
-        ), f"This storage writer does not support replacements {type(storage)}"
+        ), f"This storage writer does not support replacements {storage.get_storage_key().value}"
         self.__replacer_processor = processor
         self.__table_name = (
             storage.get_table_writer().get_schema().get_local_table_name()

@@ -3,8 +3,8 @@ import pytest
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet, String
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query.logical import Query
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
-from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [

@@ -12,6 +12,8 @@ import uuid
 
 from snuba import settings, state
 from snuba.datasets.factory import enforce_table_writer, get_dataset
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.redis import redis_client
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from tests.base import BaseApiTest
@@ -139,7 +141,8 @@ class TestApi(BaseApiTest):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        res = self.clickhouse.execute("SELECT count() FROM %s" % self.table)
+        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        res = clickhouse.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
         rollup_mins = 60
@@ -1288,7 +1291,9 @@ class TestApi(BaseApiTest):
         assert storage is not None
         writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
-        assert table not in self.clickhouse.execute("SHOW TABLES")
+        storage = get_storage(StorageKey.EVENTS)
+        clickhouse = storage.get_cluster().get_clickhouse_rw()
+        assert table not in clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 
     @pytest.mark.xfail

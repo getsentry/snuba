@@ -3,22 +3,23 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.organization_extension import OrganizationExtension
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
 
 class SessionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
-        writable_storage = get_writable_storage("sessions_raw")
-        materialized_storage = get_storage("sessions_hourly")
+        writable_storage = get_writable_storage(StorageKey.SESSIONS_RAW)
+        materialized_storage = get_storage(StorageKey.SESSIONS_HOURLY)
         read_schema = materialized_storage.get_schemas().get_read_schema()
 
         self.__time_group_columns = {"bucketed_started": "started"}

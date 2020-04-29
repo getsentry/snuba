@@ -14,11 +14,11 @@ from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.query import ClickhouseQuery
-from snuba.environment import reader
-from snuba.reader import Result
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
+from snuba.reader import Reader, Result
 from snuba.redis import redis_client
-from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.state.cache.abstract import Cache
 from snuba.state.cache.redis.backend import RedisCache
 from snuba.state.rate_limit import (
@@ -40,7 +40,6 @@ logger = logging.getLogger("snuba.query")
 
 
 def update_query_metadata_and_stats(
-    request: Request,
     sql: str,
     timer: Timer,
     stats: MutableMapping[str, Any],
@@ -64,12 +63,16 @@ def update_query_metadata_and_stats(
 
 
 def execute_query(
-    request: Request,
-    query: ClickhouseQuery,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
+    # will be needed as long as the legacy query representation will be around.
+    # See DictSqlQuery.
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     """
     Execute a query and return a result.
@@ -77,23 +80,20 @@ def execute_query(
     # Experiment, if we are going to grab more than X columns worth of data,
     # don't use uncompressed_cache in ClickHouse.
     uc_max = state.get_config("uncompressed_cache_max_cols", 5)
-    if len(request.query.get_all_referenced_columns()) > uc_max:
+    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
         query_settings["use_uncompressed_cache"] = 0
 
     # Force query to use the first shard replica, which
     # should have synchronously received any cluster writes
     # before this query is run.
-    consistent = request.settings.get_consistent()
+    consistent = request_settings.get_consistent()
     stats["consistent"] = consistent
     if consistent:
         query_settings["load_balancing"] = "in_order"
         query_settings["max_threads"] = 1
 
     result = reader.execute(
-        query,
-        query_settings,
-        query_id=query_id,
-        with_totals=request.query.has_totals(),
+        formatted_query, query_settings, with_totals=clickhouse_query.has_totals(),
     )
 
     timer.mark("execute")
@@ -105,17 +105,18 @@ def execute_query(
 
 
 def execute_query_with_rate_limits(
-    request: Request,
-    query: ClickhouseQuery,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: We should consider moving this that it applies to the logical query,
     # not the physical query.
     with RateLimitAggregator(
-        request.settings.get_rate_limit_params()
+        request_settings.get_rate_limit_params()
     ) as rate_limit_stats_container:
         stats.update(rate_limit_stats_container.to_dict())
         timer.mark("rate_limit")
@@ -134,16 +135,25 @@ def execute_query_with_rate_limits(
                 1, maxt - project_rate_limit_stats.concurrent + 1
             )
 
-        return execute_query(request, query, timer, stats, query_settings, query_id)
+        return execute_query(
+            clickhouse_query,
+            request_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            query_settings,
+        )
 
 
 def execute_query_with_caching(
-    request: Request,
-    query: ClickhouseQuery,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
-    query_id: Optional[str],
 ) -> Result:
     # XXX: ``uncompressed_cache_max_cols`` is used to control both the result
     # cache, as well as the uncompressed cache. These should be independent.
@@ -151,21 +161,22 @@ def execute_query_with_caching(
         [("use_cache", settings.USE_RESULT_CACHE), ("uncompressed_cache_max_cols", 5)]
     )
 
-    if len(request.query.get_all_referenced_columns()) > uc_max:
+    if len(clickhouse_query.get_all_referenced_columns()) > uc_max:
         use_cache = False
 
     execute = partial(
         execute_query_with_rate_limits,
-        request,
-        query,
+        clickhouse_query,
+        request_settings,
+        formatted_query,
+        reader,
         timer,
         stats,
         query_settings,
-        query_id,
     )
 
     if use_cache:
-        key = md5(force_bytes(query.format_sql())).hexdigest()
+        key = md5(force_bytes(formatted_query.format_sql())).hexdigest()
         result = cache.get(key)
         timer.mark("cache_get")
         stats["cache_hit"] = result is not None
@@ -180,28 +191,43 @@ def execute_query_with_caching(
 
 
 def execute_query_with_deduplication(
-    request: Request,
-    query: ClickhouseQuery,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
 ) -> Result:
     execute = partial(
-        execute_query_with_caching, request, query, timer, stats, query_settings
+        execute_query_with_caching,
+        clickhouse_query,
+        request_settings,
+        formatted_query,
+        reader,
+        timer,
+        stats,
+        query_settings,
     )
     if state.get_config("use_deduper", 1):
-        query_id = md5(force_bytes(query.format_sql())).hexdigest()
+        query_id = md5(force_bytes(formatted_query.format_sql())).hexdigest()
         with state.deduper(query_id) as is_dupe:
             timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe, "query_id": query_id})
-            return execute(query_id=query_id)
+            stats.update({"is_duplicate": is_dupe})
+            query_settings["query_id"] = query_id
+            return execute()
     else:
-        return execute(query_id=None)
+        return execute()
 
 
 def raw_query(
-    request: Request,
-    query: ClickhouseQuery,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
+    # will be needed as long as the legacy query representation will be around.
+    # See DictSqlQuery.
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],
@@ -210,12 +236,8 @@ def raw_query(
     """
     Submits a raw SQL query to the DB and does some post-processing on it to
     fix some of the formatting issues in the result JSON.
-    This function is not supposed to depend on anything higher level than the storage
-    query (ClickhouseQuery as of now). If this function ends up depending on the
-    dataset, something is wrong.
-
-    TODO: As soon as we have a StorageQuery abstraction remove all the references
-    to the original query from the request.
+    This function is not supposed to depend on anything higher level than the clickhouse
+    query. If this function ends up depending on the dataset, something is wrong.
     """
     all_confs = state.get_all_configs()
     query_settings: MutableMapping[str, Any] = {
@@ -226,11 +248,10 @@ def raw_query(
 
     timer.mark("get_configs")
 
-    sql = query.format_sql()
+    sql = formatted_query.format_sql()
 
     update_with_status = partial(
         update_query_metadata_and_stats,
-        request,
         sql,
         timer,
         stats,
@@ -241,7 +262,13 @@ def raw_query(
 
     try:
         result = execute_query_with_deduplication(
-            request, query, timer, stats, query_settings,
+            clickhouse_query,
+            request_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            query_settings,
         )
     except Exception as cause:
         if isinstance(cause, RateLimitExceeded):
