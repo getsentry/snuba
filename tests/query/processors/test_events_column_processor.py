@@ -1,15 +1,9 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
-from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.events_column_processor import EventsColumnProcessor
-from snuba.query.query import Query
+from snuba.query.logical import Query
+from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 

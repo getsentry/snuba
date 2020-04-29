@@ -1,8 +1,8 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 

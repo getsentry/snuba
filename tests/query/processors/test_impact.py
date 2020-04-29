@@ -8,8 +8,8 @@ from snuba.query.conditions import (
 )
 from snuba.query.dsl import div, multiply, plus, minus, countIf, count
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.logical import Query
 from snuba.query.processors.impact_processor import ImpactProcessor
-from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 
