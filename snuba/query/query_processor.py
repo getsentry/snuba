@@ -22,7 +22,7 @@ class QueryProcessor(ABC):
     """
 
     @abstractmethod
-    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         # TODO: Now the query is moved around through the Request object, which
         # is frozen (and it should be), thus the Query itself is mutable since
         # we cannot reassign it.

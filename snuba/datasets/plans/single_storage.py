@@ -35,7 +35,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         (use_split,) = state.get_configs([("use_split", 0)])
         if use_split:
             for splitter in self.__splitters:
-                result = splitter.execute(request, runner)
+                result = splitter.execute(request, runner, self.__query_processors)
                 if result is not None:
                     return result
 

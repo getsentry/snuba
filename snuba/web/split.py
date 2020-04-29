@@ -2,15 +2,17 @@ import copy
 import math
 
 from datetime import timedelta
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Sequence, Union
 
 from snuba import state, util
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import QueryRunner
 from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.query.query import Query
+from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
 from snuba.util import is_condition
-from snuba.web import RawQueryResult
+from snuba.web import QueryResult
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -54,8 +56,12 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_col = timestamp_col
 
     def execute(
-        self, request: Request, runner: QueryRunner
-    ) -> Optional[RawQueryResult]:
+        self,
+        request: Request,
+        cluster: ClickhouseCluster,
+        runner: QueryRunner,
+        db_query_processors: Sequence[QueryProcessor],
+    ) -> Optional[QueryResult]:
         """
         If a query is:
             - ORDER BY timestamp DESC
@@ -131,7 +137,9 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
             # At every iteration we only append the "data" key from the results returned by
             # the runner. The "extra" key is only populated at the first iteration of the
             # loop and never changed.
-            result = runner(split_request)
+            for processor in db_query_processors:
+                processor.process_query(split_request.query, split_request.settings)
+            result = runner(split_request, cluster.get_reader())
 
             if overall_result is None:
                 overall_result = result
@@ -186,8 +194,12 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_column = timestamp_column
 
     def execute(
-        self, request: Request, runner: QueryRunner
-    ) -> Optional[RawQueryResult]:
+        self,
+        request: Request,
+        cluster: ClickhouseCluster,
+        runner: QueryRunner,
+        db_query_processors: Sequence[QueryProcessor],
+    ) -> Optional[QueryResult]:
         """
         Split query in 2 steps if a large number of columns is being selected.
             - First query only selects event_id, project_id and timestamp.
@@ -211,7 +223,9 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         if total_col_count <= len(minimal_request.query.get_all_referenced_columns()):
             return None
 
-        result = runner(minimal_request)
+        for processor in db_query_processors:
+            processor.process_query(minimal_request.query, minimal_request.settings)
+        result = runner(minimal_request, cluster.get_reader())
         del minimal_request
 
         if result.result["data"]:
@@ -254,4 +268,6 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
                 ).isoformat(),
             )
 
-        return runner(request)
+        for processor in db_query_processors:
+            processor.process_query(request.query, request.settings)
+        return runner(request, cluster.get_reader())
