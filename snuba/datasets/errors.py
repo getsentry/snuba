@@ -4,6 +4,7 @@ from typing import FrozenSet, Mapping, Sequence
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.errors import promoted_tag_columns
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -25,7 +26,7 @@ class ErrorsDataset(TimeSeriesDataset):
     """
 
     def __init__(self) -> None:
-        storage = get_writable_storage("errors")
+        storage = get_writable_storage(StorageKey.ERRORS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 

@@ -1,9 +1,11 @@
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence
 
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -31,8 +33,14 @@ from snuba.util import qualified_column
 
 
 class JoinedStorage(ReadableStorage):
-    def __init__(self, join_structure: JoinClause) -> None:
+    def __init__(
+        self,
+        storage_key: StorageKey,
+        storage_set_key: StorageSetKey,
+        join_structure: JoinClause,
+    ) -> None:
         self.__structure = join_structure
+        super().__init__(storage_key, storage_set_key)
 
     def get_schemas(self) -> StorageSchemas:
         return StorageSchemas(
@@ -61,7 +69,7 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage("groupedmessages")
+            get_storage(StorageKey.GROUPEDMESSAGES)
             .get_schemas()
             .get_read_schema()
             .get_data_source()
@@ -69,7 +77,10 @@ class Groups(TimeSeriesDataset):
 
         self.__events = get_dataset("events")
         events_source = (
-            get_storage("events").get_schemas().get_read_schema().get_data_source()
+            get_storage(StorageKey.EVENTS)
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
         )
 
         join_structure = JoinClause(
@@ -122,7 +133,7 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage(join_structure)
+        storage = JoinedStorage(StorageKey.GROUPS, StorageSetKey.EVENTS, join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],

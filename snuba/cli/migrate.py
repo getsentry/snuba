@@ -2,9 +2,7 @@ import sys
 from typing import Optional
 
 import click
-from clickhouse_driver import Client
 
-from snuba import settings
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.util import local_dataset_mode
@@ -34,8 +32,4 @@ def migrate(
         dataset = get_dataset(name)
         logger.info("Migrating dataset %s", name)
 
-        clickhouse = Client(
-            host=settings.CLICKHOUSE_HOST, port=settings.CLICKHOUSE_PORT,
-        )
-
-        run(clickhouse, dataset)
+        run(dataset)

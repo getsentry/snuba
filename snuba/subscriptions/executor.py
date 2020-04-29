@@ -50,9 +50,9 @@ class SubscriptionExecutor:
         )
 
         with self.__concurrent_gauge:
-            # XXX: The ``extra`` is discarded from ``RawQueryResult`` since it
-            # is not particularly useful in this context and duplicates data
-            # that is already being published to the query log.
+            # XXX: The ``extra`` is discarded from ``QueryResult`` since it is
+            # not particularly useful in this context and duplicates data that
+            # is already being published to the query log.
             return parse_and_run_query(self.__dataset, request, timer).result
 
     def execute(self, task: ScheduledTask[Subscription], tick: Tick) -> Future[Result]:

@@ -5,6 +5,7 @@ import click
 
 from snuba import environment, settings
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.environment import setup_logging, setup_sentry
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -99,7 +100,8 @@ def replacer(
     setup_logging(log_level)
     setup_sentry()
 
-    storage = get_writable_storage(storage_name)
+    storage_key = StorageKey(storage_name)
+    storage = get_writable_storage(storage_key)
     metrics_tags = {"group": consumer_group, "storage": storage_name}
 
     # If dataset_name is provided, use the writable storage from that dataset.
@@ -114,7 +116,7 @@ def replacer(
     default_replacement_topic_spec = stream_loader.get_replacement_topic_spec()
     assert (
         default_replacement_topic_spec is not None
-    ), f"Storage {type(storage)} does not have a replacement topic."
+    ), f"Storage {storage.get_storage_key().value} does not have a replacement topic."
     replacements_topic = replacements_topic or default_replacement_topic_spec.topic_name
 
     metrics = MetricsWrapper(

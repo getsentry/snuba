@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.events import (
     get_column_tag_map,
     get_promoted_columns,
@@ -27,7 +28,7 @@ class EventsDataset(TimeSeriesDataset):
     """
 
     def __init__(self) -> None:
-        storage = get_writable_storage("events")
+        storage = get_writable_storage(StorageKey.EVENTS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
         self.__time_group_columns = {"time": "timestamp", "rtime": "received"}

@@ -15,7 +15,7 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.query.query import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
-from snuba.web import RawQueryResult
+from snuba.web import QueryResult
 
 
 def setup_function(function) -> None:
@@ -47,9 +47,9 @@ def test_no_split(
         events.get_all_storages()[0].get_schemas().get_read_schema().get_data_source(),
     )
 
-    def do_query(request: Request) -> RawQueryResult:
+    def do_query(request: Request) -> QueryResult:
         assert request.query == query
-        return RawQueryResult({}, {})
+        return QueryResult({}, {})
 
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
@@ -119,12 +119,12 @@ def test_col_split(
     first_query_data: Sequence[MutableMapping[str, Any]],
     second_query_data: Sequence[MutableMapping[str, Any]],
 ) -> None:
-    def do_query(request: Request) -> RawQueryResult:
+    def do_query(request: Request) -> QueryResult:
         selected_cols = request.query.get_selected_columns()
         if selected_cols == list(first_query_data[0].keys()):
-            return RawQueryResult({"data": first_query_data}, {})
+            return QueryResult({"data": first_query_data}, {})
         elif selected_cols == list(second_query_data[0].keys()):
-            return RawQueryResult({"data": second_query_data}, {})
+            return QueryResult({"data": second_query_data}, {})
         else:
             raise ValueError(f"Unexpected selected columns: {selected_cols}")
 
@@ -226,7 +226,7 @@ column_split_tests = [
         "timestamp",
         Query(
             {
-                "selected_columns": ["event_id",],
+                "selected_columns": ["event_id"],
                 "conditions": [
                     ("timestamp", ">=", "2019-09-19T10:00:00"),
                     ("timestamp", "<", "2019-09-19T12:00:00"),
@@ -251,7 +251,7 @@ def test_col_split_conditions(
     splitter = ColumnSplitQueryStrategy(id_column, project_column, timestamp_column)
     request = Request(uuid.uuid4().hex, query, HTTPRequestSettings(), {}, "tests")
 
-    def do_query(request: Request) -> RawQueryResult:
-        return RawQueryResult({"data": []}, {})
+    def do_query(request: Request) -> QueryResult:
+        return QueryResult({"data": []}, {})
 
     assert (splitter.execute(request, do_query) is not None) == expected_result

@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
@@ -19,7 +20,7 @@ from snuba.query.timeseries import TimeSeriesExtension
 
 class TransactionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
-        storage = get_writable_storage("transactions")
+        storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 
