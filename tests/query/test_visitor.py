@@ -1,6 +1,7 @@
 from typing import List
 
 from snuba.query.expressions import (
+    Argument,
     Column,
     CurriedFunctionCall,
     Expression,
@@ -8,12 +9,12 @@ from snuba.query.expressions import (
     FunctionCall,
     Lambda,
     Literal,
-    Argument,
+    SubscriptableReference,
 )
 
 
 class DummyVisitor(ExpressionVisitor[List[Expression]]):
-    def __init__(self):
+    def __init__(self) -> None:
         self.__visited_nodes: List[Expression] = []
 
     def get_visited_nodes(self) -> List[Expression]:
@@ -26,6 +27,12 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
     def visitColumn(self, exp: Column) -> List[Expression]:
         self.__visited_nodes.append(exp)
         return [exp]
+
+    def visitSubscriptableReference(
+        self, exp: SubscriptableReference
+    ) -> List[Expression]:
+        self.__visited_nodes.append(exp)
+        return [exp, *exp.column.accept(self), *exp.key.accept(self)]
 
     def visitFunctionCall(self, exp: FunctionCall) -> List[Expression]:
         ret = []
@@ -59,7 +66,10 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
 def test_visit_expression():
     col1 = Column("al", "c1", "t1")
     literal1 = Literal("al2", "test")
-    f1 = FunctionCall("al3", "f1", [col1, literal1])
+    mapping = Column("al2", "tags", "t1")
+    key = Literal(None, "myTag")
+    tag = SubscriptableReference(None, mapping, key)
+    f1 = FunctionCall("al3", "f1", [col1, literal1, tag])
 
     col2 = Column("al4", "c2", "t1")
     literal2 = Literal("al5", "test2")
@@ -70,8 +80,18 @@ def test_visit_expression():
     visitor = DummyVisitor()
     ret = curried.accept(visitor)
 
-    expected = [curried, f2, col2, literal2, f1, col1, literal1]
-
+    expected = [
+        curried,
+        f2,
+        col2,
+        literal2,
+        f1,
+        col1,
+        literal1,
+        tag,
+        mapping,
+        key,
+    ]
     # Tests the state changes on the Visitor
     assert visitor.get_visited_nodes() == expected
     # Tests the return value of the visitor

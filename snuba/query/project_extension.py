@@ -1,15 +1,15 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
+from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
 from snuba.query.conditions import (
     in_condition,
     not_in_condition,
 )
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
-from snuba.query.query import Query
-from snuba.query.query_processor import ExtensionData, ExtensionQueryProcessor
-from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
+from snuba.query.logical import Query
+from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
 from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME

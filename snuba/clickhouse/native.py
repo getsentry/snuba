@@ -12,7 +12,7 @@ from dateutil.tz import tz
 from snuba import settings
 from snuba.clickhouse.columns import Array
 from snuba.clickhouse.errors import ClickhouseError
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.reader import Reader, Result, build_result_transformer
 from snuba.writer import BatchWriter, WriterTableRow
 
@@ -181,7 +181,7 @@ transform_column_types = build_result_transformer(
 )
 
 
-class NativeDriverReader(Reader[ClickhouseQuery]):
+class NativeDriverReader(Reader[SqlQuery]):
     def __init__(self, client: ClickhousePool) -> None:
         self.__client = client
 
@@ -219,8 +219,12 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
 
     def execute(
         self,
-        query: ClickhouseQuery,
-        # TODO: move Clickhouse specific arguments into DictClickhouseQuery
+        # TODO: After we remove DictSqlQuery (that does all query processing for the
+        # legacy query representation) we should pass the Clickhouse Query here. and the reader
+        # should rely on the formatter to get a SQL string and, thus, be able to provide parameters
+        # to the formatter (like the format clause itself).
+        query: SqlQuery,
+        # TODO: move Clickhouse specific arguments into clickhouse.query.Query
         settings: Optional[Mapping[str, str]] = None,
         with_totals: bool = False,
     ) -> Result:
@@ -230,10 +234,9 @@ class NativeDriverReader(Reader[ClickhouseQuery]):
         if "query_id" in settings:
             kwargs["query_id"] = settings.pop("query_id")
 
-        sql = query.format_sql()
         return self.__transform_result(
             self.__client.execute(
-                sql, with_column_types=True, settings=settings, **kwargs
+                query.format_sql(), with_column_types=True, settings=settings, **kwargs
             ),
             with_totals=with_totals,
         )

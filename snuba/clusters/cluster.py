@@ -4,7 +4,7 @@ from typing import Any, Generic, Mapping, MutableMapping, Optional, Set, Tuple
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
 
@@ -54,7 +54,7 @@ class Cluster(ABC, Generic[TQuery]):
         raise NotImplementedError
 
 
-class ClickhouseCluster(Cluster[ClickhouseQuery]):
+class ClickhouseCluster(Cluster[SqlQuery]):
     """
     ClickhouseCluster provides a reader and Clickhouse connections that are shared by all
     storages located on the cluster
@@ -65,7 +65,7 @@ class ClickhouseCluster(Cluster[ClickhouseQuery]):
         self.__host = host
         self.__port = port
         self.__http_port = http_port
-        self.__reader: Optional[Reader[ClickhouseQuery]] = None
+        self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
             Tuple[ClickhouseClientSettings, Optional[int]], ClickhousePool
         ] = {}
@@ -93,7 +93,7 @@ class ClickhouseCluster(Cluster[ClickhouseQuery]):
             )
         return self.__connection_cache[cache_key]
 
-    def get_reader(self) -> Reader[ClickhouseQuery]:
+    def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:
             self.__reader = NativeDriverReader(
                 self.get_connection(ClickhouseClientSettings.READONLY)

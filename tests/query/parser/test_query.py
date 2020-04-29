@@ -6,9 +6,15 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.conditions import binary_condition
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.query.expressions import (
+    Column,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
-from snuba.query.query import OrderBy, OrderByDirection, Query
+
 
 test_cases = [
     (
@@ -70,7 +76,11 @@ test_cases = [
             condition=binary_condition(
                 None,
                 "in",
-                Column(None, "tags[sentry:dist]", None),
+                SubscriptableReference(
+                    "tags[sentry:dist]",
+                    Column(None, "tags", None),
+                    Literal(None, "sentry:dist"),
+                ),
                 FunctionCall(
                     None, "tuple", (Literal(None, "dist1"), Literal(None, "dist2"),),
                 ),
@@ -120,6 +130,46 @@ test_cases = [
             order_by=[OrderBy(OrderByDirection.DESC, Column(None, "column1", None))],
         ),
     ),  # Order and group by provided as string
+    (
+        {
+            "selected_columns": ["column1", "tags[test]"],
+            "groupby": [["f", ["tags[test2]"]]],
+        },
+        Query(
+            {},
+            TableSource("events", ColumnSet([])),
+            selected_columns=[
+                FunctionCall(
+                    None,
+                    "f",
+                    (
+                        SubscriptableReference(
+                            "tags[test2]",
+                            Column(None, "tags", None),
+                            Literal(None, "test2"),
+                        ),
+                    ),
+                ),
+                Column(None, "column1", None),
+                SubscriptableReference(
+                    "tags[test]", Column(None, "tags", None), Literal(None, "test")
+                ),
+            ],
+            groupby=[
+                FunctionCall(
+                    None,
+                    "f",
+                    (
+                        SubscriptableReference(
+                            "tags[test2]",
+                            Column(None, "tags", None),
+                            Literal(None, "test2"),
+                        ),
+                    ),
+                )
+            ],
+        ),
+    ),  # Unpack nested column both in a simple expression and in a function call.
 ]
 
 

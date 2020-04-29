@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from deprecation import deprecated
 from typing import Any, Mapping
 
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
 
 
