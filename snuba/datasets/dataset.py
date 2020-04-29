@@ -46,7 +46,7 @@ class Dataset(object):
       query before deciding which Storage to use. These processors are defined
       by the dataset
     - the Storage to run the query onto is selected and the query is transformed
-      into a Storage Query. This is done by a ClickhouseQueryPlanBuilder. This object
+      into a Clickhouse Query. This is done by a ClickhouseQueryPlanBuilder. This object
       produces a plan that includes the Query contextualized on the storage/s, the
       list of processors to apply and the strategy to run the query (in case of
       any strategy more complex than a single DB query like a split).

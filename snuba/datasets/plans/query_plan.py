@@ -25,9 +25,11 @@ class ClickhouseQueryPlan:
     has/have been selected.
     It embeds the Clickhouse Query (the query to run on the storage after translation),
     and the sequence of storage specific QueryProcessors to apply to the query after
-    the the storage has been selected.
-    It also provides a plan execution strategy, that takes care of coordinating the
-    execution of the query against the database. The execution strategy also can decide
+    the the storage has been selected. These have to be executed only once per plan
+    contrarily to the DB Query Processors, still provided by the storage, which
+    are executed by the execution strategy at every DB Query.
+    It also provides a plan execution strategy that takes care of coordinating the
+    execution of the query against the database. The execution strategy can also decide
     to split the query into multiple chunks.
     """
 
@@ -58,7 +60,7 @@ class QueryPlanExecutionStrategy(ABC):
         self, query: Query, request_settings: RequestSettings, runner: QueryRunner,
     ) -> QueryResult:
         """
-        Executes the query plan. The request parameter provides query and query settings.
+        Executes the Query passed in as parameter.
         The runner parameter is a function that actually runs one individual query on the
         database.
         """

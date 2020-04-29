@@ -16,7 +16,7 @@ class QueryProcessor(ABC):
     and must not depend on the execution of another processor before or after.
 
     Processors are designed to be stateless. There is no guarantee whether the same
-    instance may be reused.
+    instance will be reused.
     """
 
     @abstractmethod

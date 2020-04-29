@@ -4,16 +4,12 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.transactions import TransactionsDataset
-from snuba.query.conditions import (
-    binary_condition,
-    BooleanFunctions,
-    ConditionFunctions,
-)
-from snuba.query.dsl import div, multiply, plus
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
+from snuba.query.dsl import multiply
 from snuba.query.logical import Query
+from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.request.request_settings import HTTPRequestSettings
+
 
 tests = [
     (
