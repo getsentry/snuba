@@ -5,11 +5,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.datasets.events_format import escape_field
 from snuba.query.expressions import Expression, SubscriptableReference
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
-from snuba.datasets.events_format import escape_field
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition, is_function, parse_datetime

@@ -19,8 +19,8 @@ from snuba.datasets.events_processor import EventsProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
-from snuba.query.processors.events_column_processor import EventsColumnProcessor
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 

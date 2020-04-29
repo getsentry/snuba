@@ -12,8 +12,9 @@ from snuba.query.expressions import (
     Literal,
     SubscriptableReference,
 )
+from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser import parse_query
-from snuba.query.query import OrderBy, OrderByDirection, Query
+
 
 test_cases = [
     (

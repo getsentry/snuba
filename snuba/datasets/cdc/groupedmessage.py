@@ -4,8 +4,8 @@ from snuba.datasets.dataset import Dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
-from snuba.query.query_processor import QueryProcessor
 
 
 class GroupedMessageDataset(Dataset):
