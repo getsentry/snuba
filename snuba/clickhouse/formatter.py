@@ -90,7 +90,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
         # The Clickhouse Query AST will not have this node at all so this method will
         # not exist. Still now an implementation that does not throw has to be provided
         # until we actually resolve tags during query translation.
-        return f"{self.visitColumn(exp.subscriptable_column)}[{self.visitLiteral(exp.key)}]"
+        return f"{self.visitColumn(exp.column)}[{self.visitLiteral(exp.key)}]"
 
     def visitFunctionCall(self, exp: FunctionCall) -> str:
         ret = f"{escape_identifier(exp.function_name)}{self.__visit_params(exp.parameters)}"

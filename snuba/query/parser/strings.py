@@ -1,6 +1,10 @@
-from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
+import re
+
 from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
 from snuba.util import QUOTED_LITERAL_RE
+
+# A column name like "tags[url]"
+NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 def parse_string_to_expr(val: str) -> Expression:
@@ -13,12 +17,15 @@ def parse_string_to_expr(val: str) -> Expression:
         col_name = match[1]
         key_name = match[2]
         return SubscriptableReference(
-            # TODO: apply aliases on all AST nodes created during parsing and that do not
-            # already have one. This makes the field names from the original query
-            # (that the client expects in the response) available when building the
-            # Clickhouse query without leaking the logical schema.
+            # We set the alias of this expression with the original value found in the Query
+            # (tags[asd]) so that it will be preserved across the query processing pipeline
+            # and it will be applied to the Clickhouse query as alias. As a consequence,
+            # no matter what expression this value is transformed into, the client will receive
+            # the value they provided in the response (as alias).
+            #
+            # TODO: adopt this approach to all expression generated during parsing.
             alias=val,
-            subscriptable_column=Column(None, col_name, None),
+            column=Column(None, col_name, None),
             key=Literal(None, key_name),
         )
 

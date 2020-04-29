@@ -32,7 +32,7 @@ class DummyVisitor(ExpressionVisitor[List[Expression]]):
         self, exp: SubscriptableReference
     ) -> List[Expression]:
         self.__visited_nodes.append(exp)
-        return [exp, *exp.subscriptable_column.accept(self), *exp.key.accept(self)]
+        return [exp, *exp.column.accept(self), *exp.key.accept(self)]
 
     def visitFunctionCall(self, exp: FunctionCall) -> List[Expression]:
         ret = []

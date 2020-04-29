@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import re
-
 from typing import Any, List, Mapping, Optional, Set, Union
 
 from dataclasses import dataclass
@@ -15,6 +13,7 @@ from snuba.query.conditions import (
     is_binary_condition,
     is_in_condition,
 )
+from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.parsing import ParsingContext
 from snuba.query.query import Query
 from snuba.util import (
@@ -22,9 +21,6 @@ from snuba.util import (
     escape_literal,
     qualified_column,
 )
-
-# A column name like "tags[url]"
-NESTED_COL_EXPR_RE = re.compile(r"^([a-zA-Z0-9_\.]+)\[([a-zA-Z0-9_\.:-]+)\]$")
 
 
 @dataclass(frozen=True)

@@ -5,8 +5,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional, List, NamedTuple, Set
 
-from snuba.datasets.tags_column_processor import NESTED_COL_EXPR_RE
-from snuba.query.expressions import Column, Expression, SubscriptableReference
+from snuba.query.expressions import Expression, SubscriptableReference
+from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.query import Query
 from snuba.query.query_processor import QueryProcessor
 from snuba.datasets.events_format import escape_field
@@ -109,7 +109,10 @@ class NestedFieldConditionOptimizer(QueryProcessor):
             return False
         for node in expression:
             if isinstance(node, SubscriptableReference):
-                if node.subscriptable_column.column_name == self.__nested_col:
+                # Unfortunately, being this a storage processor, as soon as we wrap query
+                # translation, here we will only have the resolved tag, so this condition
+                # will be more complex.
+                if node.column.column_name == self.__nested_col:
                     return True
         return False
 

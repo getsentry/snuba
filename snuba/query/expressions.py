@@ -155,7 +155,7 @@ class SubscriptableReference(Expression):
     These constraints could be relaxed should we decided to support them in the query language.
     """
 
-    subscriptable_column: Column
+    column: Column
     key: Literal
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
@@ -164,18 +164,18 @@ class SubscriptableReference(Expression):
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
             self,
-            subscriptable_column=self.subscriptable_column.transform(func),
+            column=self.column.transform(func),
             key=self.key.transform(func),
         )
         return func(transformed)
 
     def __iter__(self) -> Iterator[Expression]:
-        # Since subscriptable_column is a column and key is a literal and since none of
+        # Since column is a column and key is a literal and since none of
         # them is a composite expression we would achieve the same result by yielding
         # directly the column and the key instead of iterating over them.
         # We iterate over them so that this would work correctly independently from
         # any future changes on their __iter__ methods as long as they remain Expressions.
-        for sub in self.subscriptable_column:
+        for sub in self.column:
             yield sub
         for sub in self.key:
             yield sub
