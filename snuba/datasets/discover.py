@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from typing import Mapping, Sequence
 
@@ -37,6 +38,7 @@ EVENTS = "events"
 TRANSACTIONS = "transactions"
 
 metrics = MetricsWrapper(environment.metrics, "api.discover")
+logger = logging.getLogger(__name__)
 
 
 def detect_table(
@@ -49,23 +51,15 @@ def detect_table(
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" storage. This is going to be wrong in some cases.
     """
-    event_column = None
-    transaction_column = None
-    all_referenced_columns = query.get_all_referenced_columns()
-    for col in all_referenced_columns:
+    event_columns = set()
+    transaction_columns = set()
+    for col in query.get_all_referenced_columns():
         if events_only_columns.get(col):
-            event_column = col
+            event_columns.add(col)
         elif transactions_only_columns.get(col):
-            transaction_column = col
+            transaction_columns.add(col)
 
-    if event_column is not None and transaction_column is not None:
-        metrics.increment(
-            "impossible_query",
-            tags={
-                "event_column": event_column,
-                "transaction_column": transaction_column,
-            },
-        )
+    selected_table = None
 
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
@@ -74,25 +68,48 @@ def detect_table(
         for idx, condition in enumerate(conditions):
             if is_condition(condition):
                 if tuple(condition) == ("type", "=", "error"):
-                    return EVENTS
+                    selected_table = EVENTS
                 elif tuple(condition) == ("type", "=", "transaction"):
-                    return TRANSACTIONS
+                    selected_table = TRANSACTIONS
 
-    # Check for any conditions that reference a table specific field
-    condition_columns = query.get_columns_referenced_in_conditions()
-    if any(events_only_columns.get(col) for col in condition_columns):
-        return EVENTS
-    if any(transactions_only_columns.get(col) for col in condition_columns):
-        return TRANSACTIONS
+    if not selected_table:
+        # Check for any conditions that reference a table specific field
+        condition_columns = query.get_columns_referenced_in_conditions()
+        if any(events_only_columns.get(col) for col in condition_columns):
+            selected_table = EVENTS
+        if any(transactions_only_columns.get(col) for col in condition_columns):
+            selected_table = TRANSACTIONS
 
-    # Check for any other references to a table specific field
-    if event_column is not None:
-        return EVENTS
-    if transaction_column is not None:
-        return TRANSACTIONS
+    if not selected_table:
+        # Check for any other references to a table specific field
+        if len(event_columns) > 0:
+            selected_table = EVENTS
+        elif len(transaction_columns) > 0:
+            selected_table = TRANSACTIONS
 
     # Use events by default
-    return EVENTS
+    if selected_table is None:
+        selected_table = EVENTS
+
+    if track_bad_queries:
+        event_mismatch = event_columns and selected_table == TRANSACTIONS
+        transaction_mismatch = transaction_columns and selected_table == EVENTS
+        if event_mismatch or transaction_mismatch:
+            missing_columns = ",".join(
+                sorted(event_columns if event_mismatch else transaction_columns)
+            )
+            metrics.increment(
+                "query.impossible",
+                tags={
+                    "selected_table": selected_table,
+                    "missing_columns": missing_columns,
+                },
+            )
+            logger.warning("Discover generated impossible query", exc_info=True)
+        else:
+            metrics.increment("query.success")
+
+    return selected_table
 
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
