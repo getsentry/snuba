@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     ColumnSet,
@@ -27,46 +27,17 @@ from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
     UNKNOWN_SPAN_STATUS,
 )
-from snuba.writer import BatchWriter
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts
 # columns. It is captured to use the flattened tags optimization only for queries that
 # do not go back this much in time.
 # Will be removed in february.
 BEGINNING_OF_TIME = datetime(2019, 12, 11, 0, 0, 0)
-
-
-class TransactionsTableWriter(TableWriter):
-    def __update_options(
-        self, options: Optional[MutableMapping[str, Any]] = None,
-    ) -> MutableMapping[str, Any]:
-        if options is None:
-            options = {}
-        if "insert_allow_materialized_columns" not in options:
-            options["insert_allow_materialized_columns"] = 1
-        return options
-
-    def get_writer(
-        self,
-        options: Optional[MutableMapping[str, Any]] = None,
-        table_name: Optional[str] = None,
-        rapidjson_serialize: bool = False,
-    ) -> BatchWriter:
-        return super().get_writer(
-            self.__update_options(options), table_name, rapidjson_serialize
-        )
-
-    def get_bulk_writer(
-        self,
-        options: Optional[MutableMapping[str, Any]] = None,
-        table_name: Optional[str] = None,
-    ) -> BatchWriter:
-        return super().get_bulk_writer(self.__update_options(options), table_name,)
 
 
 def transactions_migrations(
@@ -198,16 +169,11 @@ schema = ReplacingMergeTreeSchema(
     migration_function=transactions_migrations,
 )
 
+
 storage = WritableTableStorage(
     storage_key=StorageKey.TRANSACTIONS,
     storage_set_key=StorageSetKey.TRANSACTIONS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TransactionsTableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=TransactionsMessageProcessor(), default_topic="events",
-        ),
-    ),
     query_processors=[
         NestedFieldConditionOptimizer(
             "tags", "_tags_flattened", {"start_ts", "finish_ts"}, BEGINNING_OF_TIME,
@@ -221,4 +187,8 @@ storage = WritableTableStorage(
         TransactionColumnProcessor(),
         PrewhereProcessor(),
     ],
+    stream_loader=KafkaStreamLoader(
+        processor=TransactionsMessageProcessor(), default_topic="events",
+    ),
+    writer_options={"insert_allow_materialized_columns": 1},
 )

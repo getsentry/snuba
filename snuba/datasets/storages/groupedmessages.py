@@ -9,25 +9,7 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.snapshots import BulkLoadSource
-from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
-
-
-class GroupedMessageTableWriter(TableWriter):
-    def __init__(
-        self, postgres_table: str, **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.__postgres_table = postgres_table
-
-    def get_bulk_loader(self, source: BulkLoadSource, dest_table: str) -> SingleTableBulkLoader:
-        return SingleTableBulkLoader(
-            source=source,
-            source_table=self.__postgres_table,
-            dest_table=dest_table,
-            row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
-        )
+from snuba.datasets.table_storage import KafkaStreamLoader
 
 
 columns = ColumnSet(
@@ -69,16 +51,13 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=GroupedMessageTableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=GroupedMessageProcessor(POSTGRES_TABLE),
-            default_topic="cdc",
-            pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
-        ),
-        postgres_table=POSTGRES_TABLE,
+    stream_loader=KafkaStreamLoader(
+        processor=GroupedMessageProcessor(POSTGRES_TABLE),
+        default_topic="cdc",
+        pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
     ),
     query_processors=[],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
+    message_row=GroupedMessageRow,
 )

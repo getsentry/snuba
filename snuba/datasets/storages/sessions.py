@@ -20,7 +20,7 @@ from snuba.datasets.storage import (
     WritableTableStorage,
 )
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.processor import MAX_UINT32, NIL_UUID
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -57,7 +57,7 @@ raw_schema = MergeTreeSchema(
     dist_table_name=WRITE_DIST_TABLE_NAME,
     order_by="(org_id, project_id, release, environment, started)",
     partition_by="(toMonday(started))",
-    settings={"index_granularity": 16384},
+    settings={"index_granularity": "16384"},
 )
 
 read_columns = ColumnSet(
@@ -88,7 +88,7 @@ read_schema = AggregatingMergeTreeSchema(
     prewhere_candidates=["project_id", "org_id"],
     order_by="(org_id, project_id, release, environment, started)",
     partition_by="(toMonday(started))",
-    settings={"index_granularity": 256},
+    settings={"index_granularity": "256"},
 )
 materialized_view_schema = MaterializedViewSchema(
     local_materialized_view_name=READ_LOCAL_MV_NAME,
@@ -131,11 +131,8 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
-    table_writer=TableWriter(
-        write_schema=raw_schema,
-        stream_loader=KafkaStreamLoader(
-            processor=SessionsProcessor(), default_topic="ingest-sessions",
-        ),
+    stream_loader=KafkaStreamLoader(
+        processor=SessionsProcessor(), default_topic="ingest-sessions",
     ),
     query_processors=[],
 )

@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Sequence
+from typing import Any, MutableMapping, Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter
+from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
+from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.request.request_settings import RequestSettings
 
 
@@ -116,11 +117,21 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_key: StorageKey,
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
-        table_writer: TableWriter,
-        query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_processors: Sequence[QueryProcessor],
+        stream_loader: KafkaStreamLoader,
+        replacer_processor: Optional[ReplacerProcessor] = None,
+        writer_options: Optional[MutableMapping[str, Any]] = None,
     ) -> None:
         super().__init__(storage_key, storage_set_key, schemas, query_processors)
-        self.__table_writer = table_writer
+        write_schema = schemas.get_write_schema()
+        assert write_schema is not None
+        self.__table_writer = TableWriter(
+            cluster=get_cluster(storage_set_key),
+            write_schema=write_schema,
+            stream_loader=stream_loader,
+            replacer_processor=replacer_processor,
+            writer_options=writer_options,
+        )
 
     def get_table_writer(self) -> TableWriter:
         return self.__table_writer

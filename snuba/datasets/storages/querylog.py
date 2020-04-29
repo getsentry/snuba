@@ -18,7 +18,7 @@ from snuba.datasets.querylog_processor import QuerylogProcessor
 from snuba.datasets.schemas.tables import MergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import KafkaStreamLoader
 
 
 status_type = Enum([("success", 0), ("error", 1), ("rate-limited", 2)])
@@ -71,11 +71,8 @@ storage = WritableTableStorage(
     storage_key=StorageKey.QUERYLOG,
     storage_set_key=StorageSetKey.QUERYLOG,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
-        ),
+    stream_loader=KafkaStreamLoader(
+        processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
     ),
     query_processors=[],
 )

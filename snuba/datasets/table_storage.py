@@ -3,10 +3,11 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Optional, Sequence
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
+from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -109,13 +110,17 @@ class TableWriter:
 
     def __init__(
         self,
+        cluster: ClickhouseCluster,
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
+        writer_options: Optional[MutableMapping[str, Any]] = None,
     ) -> None:
+        self.__cluster = cluster
         self.__table_schema = write_schema
         self.__stream_loader = stream_loader
         self.__replacer_processor = replacer_processor
+        self.__writer_options = writer_options
 
     def get_schema(self) -> WritableTableSchema:
         return self.__table_schema
@@ -124,7 +129,6 @@ class TableWriter:
         self, options=None, table_name=None, rapidjson_serialize=False
     ) -> BatchWriter:
         from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
 
         def default(value):
             if isinstance(value, datetime):
@@ -132,17 +136,18 @@ class TableWriter:
             else:
                 raise TypeError
 
-        return HTTPBatchWriter(
-            self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_writer(
+            table_name,
             lambda row: (
                 rapidjson.dumps(row, default=default)
                 if rapidjson_serialize
                 else json.dumps(row, default=default)
             ).encode("utf-8"),
             options,
-            table_name,
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
@@ -155,16 +160,16 @@ class TableWriter:
         # once we will be confident it is reliable enough.
 
         from snuba import settings
-        from snuba.clickhouse.http import HTTPBatchWriter
 
-        return HTTPBatchWriter(
-            self.__table_schema,
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+        table_name = table_name or self.__table_schema.get_table_name()
+
+        options = self.__update_writer_options(options)
+
+        return self.__cluster.get_writer(
+            table_name,
             lambda row: rapidjson.dumps(row).encode("utf-8"),
             options,
-            table_name,
-            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
+            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
     def get_bulk_loader(self, source, dest_table) -> BulkLoader:
@@ -183,3 +188,12 @@ class TableWriter:
         replacements on the table it manages.
         """
         return self.__replacer_processor
+
+    def __update_writer_options(
+        self, options: Optional[MutableMapping[str, Any]] = None,
+    ) -> Mapping[str, Any]:
+        if options is None:
+            options = {}
+        if self.__writer_options:
+            return {**options, **self.__writer_options}
+        return options
