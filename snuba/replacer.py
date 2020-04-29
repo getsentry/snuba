@@ -2,6 +2,7 @@ import logging
 import time
 import simplejson as json
 
+from datetime import datetime
 from typing import Optional, Sequence
 
 from snuba.clickhouse.native import ClickhousePool
