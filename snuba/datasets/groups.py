@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence, Union
 
+from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
@@ -23,7 +24,7 @@ from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
-from snuba.query.processors import QueryProcessor
+from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
@@ -49,7 +50,7 @@ class JoinedStorage(ReadableStorage):
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
@@ -204,5 +205,5 @@ class Groups(TimeSeriesDataset):
             timestamp_column="events.timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalProcessor]:
         return [TimeSeriesColumnProcessor(self.__time_group_columns)]

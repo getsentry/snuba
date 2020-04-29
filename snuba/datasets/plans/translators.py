@@ -17,4 +17,4 @@ class QueryTranslator:
     """
 
     def translate(self, query: LogicalQuery) -> ClickhouseQuery:
-        return copy.deepcopy(query)
+        return ClickhouseQuery(copy.deepcopy(query))

@@ -11,6 +11,7 @@ from snuba import environment, settings, state
 from snuba.clickhouse.astquery import AstSqlQuery
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
@@ -147,7 +148,7 @@ def _format_storage_query_and_run(
     referrer: str,
     clickhouse_query: Query,
     request_settings: RequestSettings,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
 ) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.

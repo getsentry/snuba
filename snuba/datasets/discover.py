@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Mapping, Sequence, Tuple
+from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
     Array,
@@ -15,7 +15,6 @@ from snuba.clickhouse.columns import (
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
-from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage

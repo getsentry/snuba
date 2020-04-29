@@ -65,8 +65,11 @@ def update_query_metadata_and_stats(
 def execute_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
+    # TODO: Passing the SqlQuery (which basically wraps the query and formats it)
+    # will be needed as long as the legacy query representation will be around.
+    # See DictSqlQuery.
     formatted_query: SqlQuery,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -105,7 +108,7 @@ def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -147,7 +150,7 @@ def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -191,7 +194,7 @@ def execute_query_with_deduplication(
     clickhouse_query: Query,
     request_settings: RequestSettings,
     formatted_query: SqlQuery,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
     timer: Timer,
     stats: MutableMapping[str, Any],
     query_settings: MutableMapping[str, Any],
@@ -224,7 +227,7 @@ def raw_query(
     # will be needed as long as the legacy query representation will be around.
     # See DictSqlQuery.
     formatted_query: SqlQuery,
-    reader: Reader[Query],
+    reader: Reader[SqlQuery],
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     stats: MutableMapping[str, Any],

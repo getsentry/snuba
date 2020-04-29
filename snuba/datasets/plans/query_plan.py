@@ -27,7 +27,8 @@ class ClickhouseQueryPlan:
     and the sequence of storage specific QueryProcessors to apply to the query after
     the the storage has been selected.
     It also provides a plan execution strategy, that takes care of coordinating the
-    execution of the query against the database and eventually to split it into chunks.
+    execution of the query against the database. The execution strategy also can decide
+    to split the query into multiple chunks.
     """
 
     query: Query

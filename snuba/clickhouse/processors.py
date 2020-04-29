@@ -21,5 +21,5 @@ class QueryProcessor(ABC):
 
     @abstractmethod
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
-        # TODO: Make the Query class immutable.
+        # TODO: Consider making the Query immutable.
         raise NotImplementedError
