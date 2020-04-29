@@ -77,7 +77,7 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["trace_id"] = str(uuid.UUID(trace_id))
             processed["span_id"] = int(transaction_ctx["span_id"], 16)
             processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
-            processed["transaction_name"] = _unicodify(data["transaction"])
+            processed["transaction_name"] = _unicodify(data.get("transaction", ""))
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
