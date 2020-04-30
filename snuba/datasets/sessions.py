@@ -13,7 +13,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.timeseries_extension import TimeSeriesExtension
 
 
 class SessionsDataset(TimeSeriesDataset):
