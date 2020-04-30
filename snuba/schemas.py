@@ -1,51 +1,7 @@
 import copy
-from datetime import datetime, timedelta
 from typing import Any, Mapping, MutableMapping
 
 import jsonschema
-
-from snuba import environment
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.utils.metrics.decorators import track_calls
-
-
-timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")
-
-
-def get_time_series_extension_properties(
-    default_granularity: int, default_window: timedelta
-):
-    return {
-        "type": "object",
-        "properties": {
-            "from_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": track_calls(
-                    timeseries_metrics,
-                    "from_date.default",
-                    lambda: (
-                        datetime.utcnow().replace(microsecond=0) - default_window
-                    ).isoformat(),
-                ),
-            },
-            "to_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": track_calls(
-                    timeseries_metrics,
-                    "to_date.default",
-                    lambda: datetime.utcnow().replace(microsecond=0).isoformat(),
-                ),
-            },
-            "granularity": {
-                "type": "number",
-                "default": default_granularity,
-                "minimum": 1,
-            },
-        },
-        "additionalProperties": False,
-    }
 
 
 Schema = Mapping[str, Any]  # placeholder for JSON schema
