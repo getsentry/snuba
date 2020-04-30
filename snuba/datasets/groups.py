@@ -28,7 +28,7 @@ from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
-from snuba.query.timeseries import TimeSeriesExtension
+from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
