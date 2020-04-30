@@ -27,15 +27,6 @@ class HTTPBatchWriter(BatchWriter):
     ):
         """
         Builds a writer to send a batch to Clickhouse.
-
-        :param table_name: Table name
-        :param host: Clickhouse host
-        :param port: Clickhouse port
-        :param encoder: A function that will be applied to each row to turn it into bytes
-        :param options: options passed to Clickhouse
-        :param chunk_size: The chunk size (in rows).
-            We send data to the server with Transfer-Encoding: chunked. If 0 we send the entire
-            content in one chunk.
         """
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
