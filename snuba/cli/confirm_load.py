@@ -8,7 +8,6 @@ from confluent_kafka import Producer
 from snuba import settings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.storages.factory import get_storage_key
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
@@ -35,7 +34,7 @@ def confirm_load(
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
     dataset_name: str,
-    source: Optional[str],
+    source: str,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -70,7 +69,7 @@ def confirm_load(
     descriptor = snapshot_source.get_descriptor()
 
     if not bootstrap_server:
-        storage_key = get_storage_key(storage)
+        storage_key = storage.get_storage_key().value
         bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
             storage_key, settings.DEFAULT_BROKERS,
         )

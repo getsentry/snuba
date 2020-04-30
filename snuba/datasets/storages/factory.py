@@ -60,9 +60,3 @@ def get_writable_storage(storage_key: StorageKey) -> WritableTableStorage:
 
 def get_cdc_storage(storage_key: StorageKey) -> CdcStorage:
     return CDC_STORAGES[storage_key]
-
-def get_storage_key(storage: ReadableTableStorage) -> str:
-    for k, v in STORAGES.items():
-        if v == storage:
-            return k
-    raise ValueError("Invalid storage")
