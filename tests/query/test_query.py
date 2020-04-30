@@ -1,7 +1,7 @@
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.query import Query
+from snuba.query.logical import Query
 
 
 def test_empty_query():

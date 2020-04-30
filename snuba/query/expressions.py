@@ -86,6 +86,10 @@ class ExpressionVisitor(ABC, Generic[TVisited]):
         raise NotImplementedError
 
     @abstractmethod
+    def visitSubscriptableReference(self, exp: SubscriptableReference) -> TVisited:
+        raise NotImplementedError
+
+    @abstractmethod
     def visitFunctionCall(self, exp: FunctionCall) -> TVisited:
         raise NotImplementedError
 
@@ -137,6 +141,45 @@ class Column(Expression):
 
     def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
         return visitor.visitColumn(self)
+
+
+@dataclass(frozen=True)
+class SubscriptableReference(Expression):
+    """
+    Accesses one entry of a subscriptable column (for example key based access on
+    a mapping column like tags[key]).
+
+    The only subscriptable column we support now in the query language is a key-value
+    mapping, the key is required to be a literal (not any expression) and the subscriptable
+    column cannot be the result of an expression itself (func(asd)[key] is not allowed).
+    These constraints could be relaxed should we decided to support them in the query language.
+    """
+
+    column: Column
+    key: Literal
+
+    def accept(self, visitor: ExpressionVisitor[TVisited]) -> TVisited:
+        return visitor.visitSubscriptableReference(self)
+
+    def transform(self, func: Callable[[Expression], Expression]) -> Expression:
+        transformed = replace(
+            self,
+            column=self.column.transform(func),
+            key=self.key.transform(func),
+        )
+        return func(transformed)
+
+    def __iter__(self) -> Iterator[Expression]:
+        # Since column is a column and key is a literal and since none of
+        # them is a composite expression we would achieve the same result by yielding
+        # directly the column and the key instead of iterating over them.
+        # We iterate over them so that this would work correctly independently from
+        # any future changes on their __iter__ methods as long as they remain Expressions.
+        for sub in self.column:
+            yield sub
+        for sub in self.key:
+            yield sub
+        yield self
 
 
 @dataclass(frozen=True)

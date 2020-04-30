@@ -1,21 +1,24 @@
 from typing import Optional, Sequence
 
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
+    ClickhouseQueryPlan,
+    ClickhouseQueryPlanBuilder,
     QueryPlanExecutionStrategy,
     QueryRunner,
-    StorageQueryPlan,
-    StorageQueryPlanBuilder,
 )
+from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
-
-# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid
-# this dependency is a refactoring of the methods that return QueryResult to
-# make them depend on Result + some debug data structure instead. Also It
-# requires removing extra data from the result of the query.
-from snuba.web import QueryResult
-from snuba.query.query_processor import QueryProcessor
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
+
+# TODO: Importing snuba.web here is just wrong. What's need to be done to avoid this
+# dependency is a refactoring of the methods that return RawQueryResult to make them
+# depend on Result + some debug data structure instead. Also It requires removing
+# extra data from the result of the query.
+from snuba.web import QueryResult
 
 
 class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
@@ -25,15 +28,17 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self.__cluster = cluster
         self.__query_processors = db_query_processors
 
-    def execute(self, request: Request, runner: QueryRunner) -> QueryResult:
+    def execute(
+        self, query: Query, request_settings: RequestSettings, runner: QueryRunner
+    ) -> QueryResult:
         for processor in self.__query_processors:
-            processor.process_query(request.query, request.settings)
-        return runner(request, self.__cluster.get_reader())
+            processor.process_query(query, request_settings)
+        return runner(query, request_settings, self.__cluster.get_reader())
 
 
-class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
+class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
-    Builds the Storage Query Execution Plan for a dataset that is based on
+    Builds the Clickhouse Query Execution Plan for a dataset that is based on
     a single storage.
     """
 
@@ -54,17 +59,19 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         # candidate to be added here as post process.
         self.__post_processors = post_processors or []
 
-    def build_plan(self, request: Request) -> StorageQueryPlan:
-        # the Request object is immutable, the query processing still depends on the same
-        # request object to be moved around, thus the Query has to be mutable and cannot
-        # be simply rebuilt and replaced.
-        request.query.set_data_source(
+    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
+        # TODO: The translator is going to be configured with a mapping between logical
+        # and physical schema that is a property of the relation between dataset (later
+        # entity) and storage.
+        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
 
         cluster = self.__storage.get_cluster()
 
-        return StorageQueryPlan(
+        return ClickhouseQueryPlan(
+            query=clickhouse_query,
             plan_processors=[],
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster,
@@ -73,10 +80,9 @@ class SingleStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         )
 
 
-class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
+class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     """
-    A query plan builder that selects one of multiple storages in the
-    dataset.
+    A query plan builder that selects one of multiple storages in the dataset.
     """
 
     def __init__(
@@ -87,15 +93,17 @@ class SelectedStorageQueryPlanBuilder(StorageQueryPlanBuilder):
         self.__selector = selector
         self.__post_processors = post_processors or []
 
-    def build_plan(self, request: Request) -> StorageQueryPlan:
+    def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        request.query.set_data_source(
+        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
 
         cluster = storage.get_cluster()
 
-        return StorageQueryPlan(
+        return ClickhouseQueryPlan(
+            query=clickhouse_query,
             plan_processors=[],
             execution_strategy=SimpleQueryPlanExecutionStrategy(
                 cluster, [*storage.get_query_processors(), *self.__post_processors],
