@@ -32,7 +32,11 @@ class Cache(Generic[TValue], ABC):
 
     @abstractmethod
     def get_readthrough(
-        self, key: str, function: Callable[[], TValue], timeout: int, timer: Timer,
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        timeout: int,
+        timer: Optional[Timer] = None,
     ) -> TValue:
         """
         Implements a read-through caching pattern for the value at the given
