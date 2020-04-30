@@ -1,12 +1,12 @@
+import pytz
+
 from datetime import datetime, timedelta
 from uuid import UUID
 
-import pytz
-
-from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import ProcessorAction
+from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
 def test_error_processor() -> None:
