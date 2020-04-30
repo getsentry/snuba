@@ -2,9 +2,10 @@ from typing import Optional
 
 import click
 
-from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
+from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -50,18 +51,19 @@ def cleanup(
     dataset = get_dataset(dataset_name)
     table = enforce_table_writer(dataset).get_schema().get_local_table_name()
 
-    if bool(clickhouse_host) ^ bool(clickhouse_port):
-        raise click.ClickException("Provide both Clickhouse host and port or neither")
-
-    # If Clickhouse host and port values are provided, run cleanup on that host,
-    # otherwise run cleanup on each registered cluster.
     if clickhouse_host and clickhouse_port:
         clickhouse_connections = [ClickhousePool(clickhouse_host, clickhouse_port)]
+    elif not local_dataset_mode():
+        raise click.ClickException("Provide Clickhouse host and port for cleanup")
     else:
-        clickhouse_connections = [
-            cluster.get_connection(ClickhouseClientSettings.READWRITE)
-            for cluster in CLUSTERS
-        ]
+        # In local mode, we run cleanup on each cluster relevant to the provided
+        # dataset using the cluster's host/port configuration.
+        clickhouse_connections = list(
+            set(
+                storage.get_cluster().get_connection(ClickhouseClientSettings.READWRITE)
+                for storage in dataset.get_all_storages()
+            )
+        )
 
     for connection in clickhouse_connections:
         num_dropped = run_cleanup(connection, database, table, dry_run=dry_run)

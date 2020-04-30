@@ -2,9 +2,10 @@ from typing import Optional
 
 import click
 
-from snuba.clusters.cluster import CLUSTERS
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import DATASET_NAMES, enforce_table_writer, get_dataset
 from snuba.environment import setup_logging
+from snuba.util import local_dataset_mode
 
 
 @click.command()
@@ -49,21 +50,19 @@ def optimize(
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
-    if bool(clickhouse_host) ^ bool(clickhouse_port):
-        raise click.ClickException("Provide both Clickhouse host and port or neither")
-
-    # If Clickhouse host and port values are provided, run optimize on that host,
-    # otherwise run optimize on each registered cluster.
     if clickhouse_host and clickhouse_port:
-        clickhouse_connections = [
-            ClickhousePool(
-                clickhouse_host, clickhouse_port, send_receive_timeout=timeout
-            )
-        ]
+        clickhouse_connections = [ClickhousePool(clickhouse_host, clickhouse_port)]
+    elif not local_dataset_mode():
+        raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
-        clickhouse_connections = [
-            cluster.get_connection(send_receive_timeout=timeout) for cluster in CLUSTERS
-        ]
+        # In local mode, we run optimize on each cluster relevant to the provided
+        # dataset using the cluster's host/port configuration.
+        clickhouse_connections = list(
+            set(
+                storage.get_cluster().get_connection(ClickhouseClientSettings.READWRITE)
+                for storage in dataset.get_all_storages()
+            )
+        )
 
     for connection in clickhouse_connections:
         num_dropped = run_optimize(connection, database, table, before=today)
