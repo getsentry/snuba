@@ -3,7 +3,7 @@ from typing import Generic, Set
 
 from snuba import settings
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
 
@@ -37,7 +37,7 @@ class Cluster(ABC, Generic[TQuery]):
         raise NotImplementedError
 
 
-class ClickhouseCluster(Cluster[ClickhouseQuery]):
+class ClickhouseCluster(Cluster[SqlQuery]):
     """
     ClickhouseCluster provides a reader and Clickhouse connections that are shared by all
     storages located on the cluster
@@ -62,7 +62,7 @@ class ClickhouseCluster(Cluster[ClickhouseQuery]):
     def get_clickhouse_ro(self) -> ClickhousePool:
         return self.__clickhouse_ro
 
-    def get_reader(self) -> Reader[ClickhouseQuery]:
+    def get_reader(self) -> Reader[SqlQuery]:
         return self.__reader
 
 

@@ -19,11 +19,11 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
-from snuba.query.processors.transaction_column_processor import (
+from snuba.datasets.storages.transaction_column_processor import (
     TransactionColumnProcessor,
 )
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey

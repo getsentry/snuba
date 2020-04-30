@@ -1,20 +1,21 @@
 from snuba import settings as snuba_settings
 from snuba import util
-from snuba.clickhouse.query import ClickhouseQuery
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.query.columns import column_expr, conditions_expr
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
 
-class DictClickhouseQuery(ClickhouseQuery):
+class DictSqlQuery(SqlQuery):
     """
-    Legacy Clickhouse query that transforms the Snuba Query based
-    on the original query body dictionary into a string during construction
-    without additional processing.
+    SqlQuery implementation that transforms the legacy query representation
+    based on the query body dictionary into the SQL string.
+    The legacy query processing mixes processing and formatting together through the
+    column_expr methods. This is the class that runs such process and such methods.
 
-    To be used until the AST is not complete.
+    To be used until the AST is not complete, then this class is supposed to be removed.
     """
 
     def __init__(

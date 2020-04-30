@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.logical import Query
 from snuba.request.request_settings import RequestSettings
 
 
