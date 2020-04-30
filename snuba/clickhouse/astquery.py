@@ -1,28 +1,26 @@
 from typing import Optional
 
 from snuba import settings
-from snuba.clickhouse.query import ClickhouseQuery
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
 from snuba.request.request_settings import RequestSettings
 
 
-class AstClickhouseQuery(ClickhouseQuery):
+class AstSqlQuery(SqlQuery):
     """
-    Clickhouse query that takes the content from the Snuba Query
-    AST and can be processed (through query processors) for Clickhouse
-    specific customizations.
+    SqlQuery implementation that builds the SQL query out of the
+    AST representation present in the Clickhouse Query object.
 
-    Here the process of formatting the query, is independent from
-    the query body dictionary and it is performed starting from the
-    AST.
+    This implementation does not depend on the legacy dictionary based query
+    representation.
     """
 
     def __init__(self, query: Query, settings: RequestSettings,) -> None:
-        # Snuba query structure
+        # Clickhouse query structure
         # Referencing them here directly since it makes it easier
-        # to process this query independently from the Snuba Query
+        # to process this query independently from the Clickhouse Query
         # and there is no risk in doing so since they are immutable.
         self.__selected_columns = query.get_selected_columns_from_ast()
         self.__condition = query.get_condition_from_ast()
@@ -39,14 +37,10 @@ class AstClickhouseQuery(ClickhouseQuery):
         if self.__having:
             assert self.__groupby, "found HAVING clause with no GROUP BY"
 
-        # Clickhouse specific fields. Some are still in the Snuba
-        # query and have to be moved.
         self.__turbo = settings.get_turbo()
         self.__final = query.get_final()
         self.__sample = query.get_sample()
         self.__hastotals = query.has_totals()
-        # TODO: Pre where processing will become a step in Clickhouse Query processing
-        # instead of being pulled from the Snuba Query
         self.__prewhere = query.get_prewhere_ast()
 
         self.__settings = settings
