@@ -1,6 +1,8 @@
+import logging
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba import environment
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
@@ -30,18 +32,35 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 EVENTS = "events"
 TRANSACTIONS = "transactions"
 
+metrics = MetricsWrapper(environment.metrics, "api.discover")
+logger = logging.getLogger(__name__)
+
 
 def detect_table(
-    query: Query, events_only_columns: ColumnSet, transactions_only_columns: ColumnSet
+    query: Query,
+    events_only_columns: ColumnSet,
+    transactions_only_columns: ColumnSet,
+    track_bad_queries: bool,
 ) -> str:
     """
     Given a query, we attempt to guess whether it is better to fetch data from the
     "events" or "transactions" storage. This is going to be wrong in some cases.
     """
+    event_columns = set()
+    transaction_columns = set()
+    for col in query.get_all_referenced_columns():
+        if events_only_columns.get(col):
+            event_columns.add(col)
+        elif transactions_only_columns.get(col):
+            transaction_columns.add(col)
+
+    selected_table = None
+
     # First check for a top level condition that matches either type = transaction
     # type != transaction.
     conditions = query.get_conditions()
@@ -49,26 +68,48 @@ def detect_table(
         for idx, condition in enumerate(conditions):
             if is_condition(condition):
                 if tuple(condition) == ("type", "=", "error"):
-                    return EVENTS
+                    selected_table = EVENTS
                 elif tuple(condition) == ("type", "=", "transaction"):
-                    return TRANSACTIONS
+                    selected_table = TRANSACTIONS
 
-    # Check for any conditions that reference a table specific field
-    condition_columns = query.get_columns_referenced_in_conditions()
-    if any(events_only_columns.get(col) for col in condition_columns):
-        return EVENTS
-    if any(transactions_only_columns.get(col) for col in condition_columns):
-        return TRANSACTIONS
+    if not selected_table:
+        # Check for any conditions that reference a table specific field
+        condition_columns = query.get_columns_referenced_in_conditions()
+        if any(events_only_columns.get(col) for col in condition_columns):
+            selected_table = EVENTS
+        if any(transactions_only_columns.get(col) for col in condition_columns):
+            selected_table = TRANSACTIONS
 
-    # Check for any other references to a table specific field
-    all_referenced_columns = query.get_all_referenced_columns()
-    if any(events_only_columns.get(col) for col in all_referenced_columns):
-        return EVENTS
-    if any(transactions_only_columns.get(col) for col in all_referenced_columns):
-        return TRANSACTIONS
+    if not selected_table:
+        # Check for any other references to a table specific field
+        if len(event_columns) > 0:
+            selected_table = EVENTS
+        elif len(transaction_columns) > 0:
+            selected_table = TRANSACTIONS
 
     # Use events by default
-    return EVENTS
+    if selected_table is None:
+        selected_table = EVENTS
+
+    if track_bad_queries:
+        event_mismatch = event_columns and selected_table == TRANSACTIONS
+        transaction_mismatch = transaction_columns and selected_table == EVENTS
+        if event_mismatch or transaction_mismatch:
+            missing_columns = ",".join(
+                sorted(event_columns if event_mismatch else transaction_columns)
+            )
+            metrics.increment(
+                "query.impossible",
+                tags={
+                    "selected_table": selected_table,
+                    "missing_columns": missing_columns,
+                },
+            )
+            logger.warning("Discover generated impossible query", exc_info=True)
+        else:
+            metrics.increment("query.success")
+
+    return selected_table
 
 
 class DiscoverQueryStorageSelector(QueryStorageSelector):
@@ -92,7 +133,10 @@ class DiscoverQueryStorageSelector(QueryStorageSelector):
         self, query: Query, request_settings: RequestSettings
     ) -> ReadableStorage:
         table = detect_table(
-            query, self.__abstract_events_columns, self.__abstract_transactions_columns,
+            query,
+            self.__abstract_events_columns,
+            self.__abstract_transactions_columns,
+            True,
         )
         return self.__events_table if table == EVENTS else self.__transactions_table
 
@@ -256,7 +300,7 @@ class DiscoverDataset(TimeSeriesDataset):
         table_alias: str = "",
     ):
         detected_dataset = detect_table(
-            query, self.__events_columns, self.__transactions_columns
+            query, self.__events_columns, self.__transactions_columns, False,
         )
 
         if detected_dataset == TRANSACTIONS:
