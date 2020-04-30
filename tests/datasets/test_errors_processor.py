@@ -1,5 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from uuid import UUID
+
+import pytz
 
 from snuba.settings import PAYLOAD_DATETIME_FORMAT
 from snuba.datasets.errors_processor import ErrorsProcessor
@@ -8,7 +10,7 @@ from snuba.processor import ProcessorAction
 
 
 def test_error_processor() -> None:
-    received_timestamp = datetime.now(timezone.utc) - timedelta(minutes=1)
+    received_timestamp = datetime.now() - timedelta(minutes=1)
     error_timestamp = received_timestamp - timedelta(minutes=1)
 
     error = (
@@ -286,7 +288,9 @@ def test_error_processor() -> None:
         "group_id": 100,
         "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
         "event_string": "dcb9d002cac548c795d1c9adbfc68040",
-        "received": received_timestamp.replace(tzinfo=None, microsecond=0),
+        "received": received_timestamp.astimezone(pytz.utc).replace(
+            tzinfo=None, microsecond=0
+        ),
         "message": "",
         "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
         "culprit": "snuba.clickhouse.http in write",
