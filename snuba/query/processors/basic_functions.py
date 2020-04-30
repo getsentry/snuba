@@ -6,8 +6,8 @@ from snuba.query.expressions import (
     FunctionCall,
     Literal,
 )
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.logical import Query
+from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

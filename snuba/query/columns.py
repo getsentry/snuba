@@ -5,11 +5,12 @@ from datetime import date, datetime
 from typing import Any, List, Optional, Sequence, Tuple, Union
 import _strptime  # NOQA fixes _strptime deferred import issue
 
+from snuba import state
 from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
+from snuba.query.logical import Query
 from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import (
     alias_expr,
@@ -56,7 +57,22 @@ def column_expr(
     elif isinstance(column_name, str) and QUOTED_LITERAL_RE.match(column_name):
         return escape_literal(column_name[1:-1])
     else:
-        expr = dataset.column_expr(column_name, query, parsing_context)
+        if state.get_config("fix_orderby_col_processing", 1):
+            # column_name may be prefixed by `-` if this is in an ORDER BY clause that
+            # is not present elsewhere in the query (thus was not given an alias).
+            # This means we need to strip it from the column_name we pass to the column_expr
+            # method and add it back to the result since the column_expr functions should
+            # not deal with the ORDER BY syntax.
+            match = NEGATE_RE.match(column_name)
+            assert (
+                match
+            ), f"Invalid column format: {column_name}. Cannot strip the order by prefix"
+            negate, col = match.groups()
+        else:
+            negate = ""
+            col = column_name
+        expr = f"{negate}{dataset.column_expr(col, query, parsing_context)}"
+
     if aggregate:
         expr = function_expr(aggregate, expr)
 

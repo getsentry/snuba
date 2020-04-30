@@ -8,15 +8,19 @@ from flask import request as http_request
 from functools import partial
 
 from snuba import environment, settings, state
-from snuba.clickhouse.astquery import AstClickhouseQuery
-from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.astquery import AstSqlQuery
+from snuba.clickhouse.dictquery import DictSqlQuery
+from snuba.clickhouse.query import Query
+from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
 from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.reader import Reader
 from snuba.request import Request
+from snuba.request.request_settings import RequestSettings
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
-from snuba.web import RawQueryException, RawQueryResult
+from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
 from snuba.web.split import split_query
@@ -28,7 +32,7 @@ metrics = MetricsWrapper(environment.metrics, "api")
 
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Runs a Snuba Query, then records the metadata about each split query that was run.
     """
@@ -50,7 +54,7 @@ def parse_and_run_query(
             dataset=dataset, request=request, timer=timer, query_metadata=query_metadata
         )
         record_query(request_copy, timer, query_metadata)
-    except RawQueryException as error:
+    except QueryException as error:
         record_query(request_copy, timer, query_metadata)
         raise error
 
@@ -63,7 +67,7 @@ def _run_query_pipeline(
     request: Request,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
-) -> RawQueryResult:
+) -> QueryResult:
     """
     Runs the query processing and execution pipeline for a Snuba Query. This means it takes a Dataset
     and a Request and returns the results of the query.
@@ -71,12 +75,12 @@ def _run_query_pipeline(
     This process includes:
     - Applying dataset specific syntax extensions (QueryExtension)
     - Applying dataset query processors on the abstract Snuba query.
-    - Using the dataset provided StorageQueryPlanBuilder to build a StorageQueryPlan. This step
+    - Using the dataset provided ClickhouseQueryPlanBuilder to build a ClickhouseQueryPlan. This step
       transforms the Snuba Query into the Storage Query (that is contextual to the storage/s).
       From this point on none should depend on the dataset.
-    - Executing the storage specific query processors.
-    - Providing the newly built Query and a QueryRunner to the QueryExecutionStrategy to actually
-      run the DB Query.
+    - Executing the plan specific query processors.
+    - Providing the newly built Query, processors to be run for each DB query and a QueryRunner
+      to the QueryExecutionStrategy to actually run the DB Query.
     """
 
     # TODO: this will work perfectly with datasets that are not time series. Remove it.
@@ -103,14 +107,20 @@ def _run_query_pipeline(
     for processor in dataset.get_query_processors():
         processor.process_query(request.query, request.settings)
 
-    storage_query_plan = dataset.get_query_plan_builder().build_plan(request)
+    query_plan = dataset.get_query_plan_builder().build_plan(request)
+    # From this point on. The logical query should not be used anymore by anyone.
+    # The Clickhouse Query is the one to be used to run the rest of the query pipeline.
 
+    # TODO: Break the Query Plan execution out of this method. With the division
+    # between plan specific processors and DB query specific processors and with
+    # the soon to come ClickhouseCluster, there is more coupling between the
+    # components of the query plan.
     # TODO: This below should be a storage specific query processor.
-    relational_source = request.query.get_data_source()
-    request.query.add_conditions(relational_source.get_mandatory_conditions())
+    relational_source = query_plan.query.get_data_source()
+    query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
 
-    for processor in storage_query_plan.query_processors:
-        processor.process_query(request.query, request.settings)
+    for clickhouse_processor in query_plan.plan_processors:
+        clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,
@@ -119,53 +129,68 @@ def _run_query_pipeline(
         query_metadata,
         from_date,
         to_date,
+        request.referrer,
     )
 
-    return storage_query_plan.execution_strategy.execute(request, query_runner)
+    return query_plan.execution_strategy.execute(
+        query_plan.query, request.settings, query_runner
+    )
 
 
 def _format_storage_query_and_run(
-    # TODO: remove dependency on Dataset. This is only for formatting the legacy ClickhouseQuery
-    # with the AST this won't be needed.
+    # TODO: remove dependency on Dataset. This is only for formatting the legacy
+    # SqlQuery with the AST this won't be needed.
     dataset: Dataset,
     timer: Timer,
     query_metadata: SnubaQueryMetadata,
     from_date: datetime,
     to_date: datetime,
-    request: Request,
-) -> RawQueryResult:
+    referrer: str,
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    reader: Reader[SqlQuery],
+) -> QueryResult:
     """
     Formats the Storage Query and pass it to the DB specific code for execution.
-    TODO: When we will have the AST in production and we will have the StorageQuery
-    abstraction, this function is probably going to collapse and disappear.
+    TODO: When we will have the AST in production this function is probably going
+    to collapse and disappear.
     """
 
-    source = request.query.get_data_source().format_from()
+    source = clickhouse_query.get_data_source().format_from()
     with sentry_sdk.start_span(description="create_query", op="db"):
-        # TODO: Move the performance logic and the pre_where generation into
-        # ClickhouseQuery since they are Clickhouse specific
-        query = DictClickhouseQuery(dataset, request.query, request.settings)
+        formatted_query = DictSqlQuery(dataset, clickhouse_query, request_settings)
     timer.mark("prepare_query")
 
     stats = {
         "clickhouse_table": source,
-        "final": request.query.get_final(),
-        "referrer": request.referrer,
+        "final": clickhouse_query.get_final(),
+        "referrer": referrer,
         "num_days": (to_date - from_date).days,
-        "sample": request.query.get_sample(),
+        "sample": clickhouse_query.get_sample(),
     }
 
-    with sentry_sdk.start_span(description=query.format_sql(), op="db") as span:
+    with sentry_sdk.start_span(
+        description=formatted_query.format_sql(), op="db"
+    ) as span:
         span.set_tag("table", source)
         try:
             span.set_tag(
                 "ast_query",
-                AstClickhouseQuery(request.query, request.settings).format_sql(),
+                AstSqlQuery(clickhouse_query, request_settings).format_sql(),
             )
         except Exception:
             logger.warning("Failed to format ast query", exc_info=True)
 
-        return raw_query(request, query, timer, query_metadata, stats, span.trace_id)
+        return raw_query(
+            clickhouse_query,
+            request_settings,
+            formatted_query,
+            reader,
+            timer,
+            query_metadata,
+            stats,
+            span.trace_id,
+        )
 
 
 def record_query(

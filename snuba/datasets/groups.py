@@ -1,9 +1,14 @@
 from datetime import timedelta
 from typing import Mapping, Optional, Sequence, Union
 
+from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
+from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
+from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.schemas.join import (
     JoinConditionExpression,
@@ -13,25 +18,29 @@ from snuba.datasets.schemas.join import (
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storage import ReadableStorage
 from snuba.datasets.table_storage import TableWriter
-from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 from snuba.util import qualified_column
 
 
 class JoinedStorage(ReadableStorage):
-    def __init__(self, join_structure: JoinClause) -> None:
+    def __init__(
+        self,
+        storage_key: StorageKey,
+        storage_set_key: StorageSetKey,
+        join_structure: JoinClause,
+    ) -> None:
         self.__structure = join_structure
+        super().__init__(storage_key, storage_set_key)
 
     def get_schemas(self) -> StorageSchemas:
         return StorageSchemas(
@@ -41,7 +50,7 @@ class JoinedStorage(ReadableStorage):
     def get_table_writer(self) -> Optional[TableWriter]:
         return None
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[ClickhouseProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
 
@@ -57,11 +66,19 @@ class Groups(TimeSeriesDataset):
     def __init__(self) -> None:
         self.__grouped_message = get_dataset("groupedmessage")
         groupedmessage_source = (
-            get_storage("groupedmessages").get_schemas().get_read_schema().get_data_source()
+            get_storage(StorageKey.GROUPEDMESSAGES)
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
         )
 
         self.__events = get_dataset("events")
-        events_source = get_storage("events").get_schemas().get_read_schema().get_data_source()
+        events_source = (
+            get_storage(StorageKey.EVENTS)
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
 
         join_structure = JoinClause(
             left_node=TableJoinNode(
@@ -113,7 +130,7 @@ class Groups(TimeSeriesDataset):
         )
 
         schema = JoinedSchema(join_structure)
-        storage = JoinedStorage(join_structure)
+        storage = JoinedStorage(StorageKey.GROUPS, StorageSetKey.EVENTS, join_structure)
         self.__time_group_columns = {"events.time": "events.timestamp"}
         super().__init__(
             storages=[storage],
@@ -188,5 +205,5 @@ class Groups(TimeSeriesDataset):
             timestamp_column="events.timestamp",
         )
 
-    def get_query_processors(self) -> Sequence[QueryProcessor]:
+    def get_query_processors(self) -> Sequence[LogicalProcessor]:
         return [TimeSeriesColumnProcessor(self.__time_group_columns)]

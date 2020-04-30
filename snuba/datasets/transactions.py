@@ -3,23 +3,24 @@ from typing import Mapping, Sequence, Union
 
 from snuba.datasets.dataset import ColumnSplitSpec, TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
 from snuba.query.extensions import QueryExtension
+from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
+from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
 from snuba.query.timeseries import TimeSeriesExtension
 
 
 class TransactionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
-        storage = get_writable_storage("transactions")
+        storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
         columns = schema.get_columns()
 

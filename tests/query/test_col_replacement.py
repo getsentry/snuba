@@ -4,7 +4,7 @@ from typing import Any, Mapping, MutableMapping
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.query import Query
+from snuba.query.logical import Query
 
 test_data = [
     (

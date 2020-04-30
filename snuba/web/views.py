@@ -2,7 +2,7 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, NamedTuple
+from typing import Any, Mapping, MutableMapping
 from uuid import UUID
 
 import jsonschema
@@ -14,6 +14,7 @@ from markdown import markdown
 from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
+from snuba.clickhouse.errors import ClickhouseError
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -24,12 +25,11 @@ from snuba.datasets.factory import (
     get_enabled_dataset_names,
 )
 from snuba.datasets.schemas.tables import TableSchema
-from snuba.environment import clickhouse_ro, clickhouse_rw
 from snuba.redis import redis_client
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.request.schema import RequestSchema
 from snuba.request.validation import validate_request_content
+from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
@@ -39,19 +39,13 @@ from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.web.converters import DatasetConverter
-from snuba.web import RawQueryException
+from snuba.web import QueryException
 from snuba.web.query import parse_and_run_query
 
 
 metrics = MetricsWrapper(environment.metrics, "api")
 
 logger = logging.getLogger("snuba.api")
-
-
-class WebQueryResult(NamedTuple):
-    # TODO: Give a better abstraction to QueryResult
-    payload: Mapping[str, Any]
-    status: int
 
 
 try:
@@ -76,11 +70,12 @@ def check_clickhouse() -> bool:
     Checks if all the tables in all the enabled datasets exist in ClickHouse
     """
     try:
-        clickhouse_tables = clickhouse_ro.execute("show tables")
         for name in get_enabled_dataset_names():
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
+                clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
+                clickhouse_tables = clickhouse_ro.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
@@ -269,46 +264,58 @@ def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_not_internal(dataset)
     ensure_table_exists(dataset)
-    return format_result(
-        run_query(
-            dataset,
-            validate_request_content(
-                body,
-                RequestSchema.build_with_extensions(
-                    dataset.get_extensions(), HTTPRequestSettings
-                ),
-                timer,
-                dataset,
-                http_request.referrer,
-            ),
-            timer,
-        )
+
+    request = validate_request_content(
+        body,
+        RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings
+        ),
+        timer,
+        dataset,
+        http_request.referrer,
     )
 
-
-def run_query(dataset: Dataset, request: Request, timer: Timer) -> WebQueryResult:
     try:
         result = parse_and_run_query(dataset, request, timer)
-        payload = {**result.result, "timing": timer.for_json()}
-        if settings.STATS_IN_RESPONSE or request.settings.get_debug():
-            payload.update(result.extra)
-        return WebQueryResult(payload, 200)
-    except RawQueryException as e:
-        return WebQueryResult(
-            {
-                "error": {"type": e.err_type, "message": e.message, **e.meta},
-                "sql": e.sql,
-                "stats": e.stats,
-                "timing": timer.for_json(),
-            },
-            429 if e.err_type == "rate-limited" else 500,
+    except QueryException as exception:
+        status = 500
+        details: Mapping[str, Any]
+
+        cause = exception.__cause__
+        if isinstance(cause, RateLimitExceeded):
+            status = 429
+            details = {
+                "type": "rate-limited",
+                "message": "rate limit exceeded",
+            }
+        elif isinstance(cause, ClickhouseError):
+            details = {
+                "type": "clickhouse",
+                "message": str(cause),
+                "code": cause.code,
+            }
+        elif isinstance(cause, Exception):
+            details = {
+                "type": "unknown",
+                "message": str(cause),
+            }
+        else:
+            raise  # exception should have been chained
+
+        return Response(
+            json.dumps(
+                {"error": details, "timing": timer.for_json(), **exception.extra}
+            ),
+            status,
+            {"Content-Type": "application/json"},
         )
 
+    payload: MutableMapping[str, Any] = {**result.result, "timing": timer.for_json()}
 
-def format_result(result: WebQueryResult) -> Response:
-    return Response(
-        json.dumps(result.payload), result.status, {"Content-Type": "application/json"},
-    )
+    if settings.STATS_IN_RESPONSE or request.settings.get_debug():
+        payload.update(result.extra)
+
+    return Response(json.dumps(payload), 200, {"Content-Type": "application/json"})
 
 
 @application.errorhandler(InvalidSubscriptionError)
@@ -362,10 +369,11 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for storage in dataset.get_all_storages():
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             for statement in storage.get_schemas().get_create_statements():
                 clickhouse_rw.execute(statement.statement)
 
-        migrate.run(clickhouse_rw, dataset)
+        migrate.run(dataset)
 
         _ensured[dataset] = True
 
@@ -412,18 +420,16 @@ if application.debug or application.testing:
         )
 
         type_ = record[1]
+
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
-
-            storage = dataset.get_writable_storage()
-
             worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
-
-            storage = dataset.get_writable_storage()
-            assert storage is not None
-
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
 
         processed = worker.process_message(message)
@@ -436,6 +442,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
+            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 

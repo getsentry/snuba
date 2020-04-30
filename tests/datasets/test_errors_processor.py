@@ -1,12 +1,18 @@
-from datetime import datetime
+import pytz
+
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.consumer import KafkaMessageMetadata
 from snuba.processor import ProcessorAction
+from snuba.settings import PAYLOAD_DATETIME_FORMAT
 
 
 def test_error_processor() -> None:
+    received_timestamp = datetime.now() - timedelta(minutes=1)
+    error_timestamp = received_timestamp - timedelta(minutes=1)
+
     error = (
         2,
         "insert",
@@ -19,7 +25,7 @@ def test_error_processor() -> None:
             "dist": None,
             "platform": "python",
             "message": "",
-            "datetime": "2020-01-30T22:48:49.894703Z",
+            "datetime": error_timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
             "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
             "data": {
                 "event_id": "dcb9d002cac548c795d1c9adbfc68040",
@@ -28,7 +34,7 @@ def test_error_processor() -> None:
                 "dist": None,
                 "platform": "python",
                 "message": "",
-                "datetime": "2020-01-30T22:48:49.894703Z",
+                "datetime": error_timestamp.strftime(PAYLOAD_DATETIME_FORMAT),
                 "tags": [
                     ["handled", "no"],
                     ["level", "error"],
@@ -70,22 +76,30 @@ def test_error_processor() -> None:
                         {
                             "category": "snuba.utils.streams.batching",
                             "level": "info",
-                            "timestamp": 1580424519.772524,
-                            "data": {"asctime": "2020-01-30 22:48:39,772"},
+                            "timestamp": error_timestamp.timestamp(),
+                            "data": {
+                                "asctime": error_timestamp.strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                )
+                            },
                             "message": "New partitions assigned: {}",
                             "type": "default",
                         },
                         {
                             "category": "snuba.utils.streams.batching",
                             "level": "info",
-                            "timestamp": 1580424529.867766,
-                            "data": {"asctime": "2020-01-30 22:48:49,867"},
+                            "timestamp": error_timestamp.timestamp(),
+                            "data": {
+                                "asctime": error_timestamp.strftime(
+                                    PAYLOAD_DATETIME_FORMAT
+                                )
+                            },
                             "message": "Flushing ",
                             "type": "default",
                         },
                         {
                             "category": "httplib",
-                            "timestamp": 1580424529.891891,
+                            "timestamp": error_timestamp.timestamp(),
                             "type": "http",
                             "data": {
                                 "url": "http://127.0.0.1:8123/",
@@ -175,7 +189,7 @@ def test_error_processor() -> None:
                     "ipython-genutils": "0.2.0",
                     "isodate": "0.6.0",
                 },
-                "received": 1580424529.947908,
+                "received": received_timestamp.timestamp(),
                 "sdk": {
                     "version": "0.0.0.0.1",
                     "name": "sentry.python",
@@ -191,7 +205,7 @@ def test_error_processor() -> None:
                         "threading",
                     ],
                 },
-                "timestamp": 1580424529.894703,
+                "timestamp": error_timestamp.timestamp(),
                 "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
                 "type": "error",
                 "version": "7",
@@ -202,7 +216,7 @@ def test_error_processor() -> None:
     expected_result = {
         "org_id": 3,
         "project_id": 300688,
-        "timestamp": datetime(2020, 1, 30, 22, 48, 49, 894703),
+        "timestamp": error_timestamp.replace(tzinfo=None),
         "event_id": str(UUID("dcb9d002cac548c795d1c9adbfc68040")),
         "platform": "python",
         "dist": None,
@@ -274,7 +288,9 @@ def test_error_processor() -> None:
         "group_id": 100,
         "primary_hash": "04233d08ac90cf6fc015b1be5932e7e2",
         "event_string": "dcb9d002cac548c795d1c9adbfc68040",
-        "received": datetime.utcfromtimestamp(1580424529),
+        "received": received_timestamp.astimezone(pytz.utc).replace(
+            tzinfo=None, microsecond=0
+        ),
         "message": "",
         "title": "ClickHouseError: [171] DB::Exception: Block structure mismatch",
         "culprit": "snuba.clickhouse.http in write",
@@ -323,5 +339,6 @@ def test_error_processor() -> None:
     )
     ret = processor.process_message(error, meta)
 
+    assert ret is not None
     assert ret.action == ProcessorAction.INSERT
     assert ret.data == [expected_result]

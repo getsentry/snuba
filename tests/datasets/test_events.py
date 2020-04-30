@@ -3,8 +3,8 @@ from copy import deepcopy
 from tests.base import BaseEventsTest
 
 from snuba.query.columns import column_expr
+from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
-from snuba.query.query import Query
 from snuba.util import tuplify
 
 
@@ -250,4 +250,21 @@ class TestEventsDataset(BaseEventsTest):
                 self.dataset, "-exception_stacks.type", deepcopy(query), context,
             )
             == "-`exception_stacks.type`"
+        )
+
+        assert (
+            column_expr(self.dataset, "-tags[myTag]", deepcopy(query), ParsingContext())
+            == "-(tags.value[indexOf(tags.key, 'myTag')] AS `tags[myTag]`)"
+        )
+
+        context = ParsingContext()
+        context.add_alias("`tags[myTag]`")
+        assert (
+            column_expr(self.dataset, "-tags[myTag]", deepcopy(query), context)
+            == "-`tags[myTag]`"
+        )
+
+        assert (
+            column_expr(self.dataset, "-group_id", deepcopy(query), ParsingContext())
+            == "-(nullIf(group_id, 0) AS group_id)"
         )

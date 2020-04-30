@@ -1,13 +1,12 @@
 import signal
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.cdc import CdcStorage
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.datasets.storages.factory import WRITABLE_STORAGES
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 
@@ -31,16 +30,10 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
-)
-@click.option(
     "--storage",
     "storage_name",
     default="events",
-    type=click.Choice(WRITABLE_STORAGES.keys()),
+    type=click.Choice([storage_key.value for storage_key in WRITABLE_STORAGES.keys()]),
     help="The storage to target",
 )
 @click.option(
@@ -100,7 +93,6 @@ def consumer(
     control_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    dataset_name: Optional[str],
     storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -114,28 +106,17 @@ def consumer(
 ) -> None:
 
     if not bootstrap_server:
-        if dataset_name:
-            bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-                dataset_name, settings.DEFAULT_BROKERS,
-            )
-        else:
-            bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
-                storage_name, settings.DEFAULT_BROKERS,
-            )
+        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_name, settings.DEFAULT_BROKERS,
+        )
 
     setup_logging(log_level)
     setup_sentry()
 
-    # TODO: Remove this once dataset_name is no longer being passed
-    if dataset_name:
-        storage = get_dataset(dataset_name).get_writable_storage()
-        if not storage:
-            raise click.ClickException(f"Dataset {dataset_name} has no writable storage")
-
-        storage_name = {v: k for k, v in WRITABLE_STORAGES.items()}[storage]
+    storage_key = StorageKey(storage_name)
 
     consumer_builder = ConsumerBuilder(
-        storage_name=storage_name,
+        storage_key=storage_key,
         raw_topic=raw_events_topic,
         replacements_topic=replacements_topic,
         max_batch_size=max_batch_size,
@@ -151,8 +132,9 @@ def consumer(
     )
 
     if stateful_consumer:
-        assert isinstance(
-            storage, CdcStorage
+        storage = get_cdc_storage(storage_key)
+        assert (
+            storage is not None
         ), "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
@@ -161,7 +143,7 @@ def consumer(
             storage=storage,
         )
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
@@ -171,7 +153,7 @@ def consumer(
     else:
         consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
