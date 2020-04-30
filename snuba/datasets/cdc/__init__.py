@@ -1,5 +1,6 @@
 from typing import Any, Optional, MutableMapping, Sequence, Type
 
+from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.cluster import get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.cdc.cdcprocessors import CdcMessageRow
@@ -7,7 +8,6 @@ from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
-from snuba.query.processors import QueryProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
 from snuba.snapshots.loaders.single_table import SingleTableBulkLoader
 
