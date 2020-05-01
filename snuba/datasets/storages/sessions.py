@@ -131,10 +131,10 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.SESSIONS_RAW,
     storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+    query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=SessionsProcessor(), default_topic="ingest-sessions",
     ),
-    query_processors=[],
 )
 # The materialized view we query aggregate data from.
 materialized_storage = ReadableTableStorage(

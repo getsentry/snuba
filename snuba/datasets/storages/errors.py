@@ -150,6 +150,7 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    query_processors=[PrewhereProcessor()],
     stream_loader=KafkaStreamLoader(
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic="events",
@@ -163,5 +164,4 @@ storage = WritableTableStorage(
         promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
         state_name=ReplacerState.ERRORS,
     ),
-    query_processors=[PrewhereProcessor()],
 )

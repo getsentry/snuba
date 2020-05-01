@@ -117,10 +117,10 @@ raw_storage = WritableTableStorage(
     storage_key=StorageKey.OUTCOMES_RAW,
     storage_set_key=StorageSetKey.OUTCOMES,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
+    query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=OutcomesProcessor(), default_topic="outcomes",
     ),
-    query_processors=[],
 )
 
 materialized_storage = ReadableTableStorage(

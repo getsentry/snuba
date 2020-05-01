@@ -73,8 +73,8 @@ storage = WritableTableStorage(
     storage_key=StorageKey.QUERYLOG,
     storage_set_key=StorageSetKey.QUERYLOG,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=QuerylogProcessor(), default_topic=settings.QUERIES_TOPIC,
     ),
-    query_processors=[],
 )
