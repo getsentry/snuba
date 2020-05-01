@@ -12,7 +12,9 @@ from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
 from snuba.replacers.replacer_processor import ReplacerProcessor
+from snuba.snapshots import BulkLoadSource
 from snuba.snapshots.loaders import BulkLoader
+from snuba.snapshots.loaders.single_table import RowProcessor, SingleTableBulkLoader
 from snuba.utils.streams.kafka import KafkaPayload
 from snuba.writer import BatchWriter
 
@@ -103,7 +105,7 @@ class TableWriter:
     Eventually, after some heavier refactoring of the consumer scripts,
     we could make the writing process more abstract and hide in this class
     the streaming, processing and writing. The writer in such architecture
-    could coordinate the ingestion process but that requires a reshuffle
+    could coordinate the ingestion process but that rebquires a reshuffle
     of responsibilities in the consumer scripts and a common interface
     between bulk load and stream load.
     """
@@ -172,12 +174,23 @@ class TableWriter:
             chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
         )
 
-    def get_bulk_loader(self, source, dest_table) -> BulkLoader:
+    def get_bulk_loader(
+        self,
+        source: BulkLoadSource,
+        source_table: str,
+        dest_table: str,
+        row_processor: RowProcessor,
+    ) -> BulkLoader:
         """
         Returns the instance of the bulk loader to populate the dataset from an
         external source when present.
         """
-        raise NotImplementedError
+        return SingleTableBulkLoader(
+            source=source,
+            source_table=source_table,
+            dest_table=dest_table,
+            row_processor=row_processor,
+        )
 
     def get_stream_loader(self) -> KafkaStreamLoader:
         return self.__stream_loader

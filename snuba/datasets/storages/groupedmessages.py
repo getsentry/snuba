@@ -59,5 +59,5 @@ storage = CdcStorage(
     query_processors=[],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
-    message_row=GroupedMessageRow,
+    row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
 )

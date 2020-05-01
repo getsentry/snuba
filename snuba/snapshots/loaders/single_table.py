@@ -7,6 +7,9 @@ from snuba.snapshots.loaders import BulkLoader
 from snuba.writer import BufferedWriterWrapper, WriterTableRow
 
 
+RowProcessor = Callable[[SnapshotTableRow], WriterTableRow]
+
+
 class SingleTableBulkLoader(BulkLoader):
     """
     Load data from a source table into one clickhouse destination table.
@@ -17,14 +20,16 @@ class SingleTableBulkLoader(BulkLoader):
         source: BulkLoadSource,
         dest_table: str,
         source_table: str,
-        row_processor: Callable[[SnapshotTableRow], WriterTableRow],
+        row_processor: RowProcessor,
     ):
         self.__source = source
         self.__dest_table = dest_table
         self.__source_table = source_table
         self.__row_processor = row_processor
 
-    def load(self, writer: BufferedWriterWrapper, clickhouse_ro: ClickhousePool) -> None:
+    def load(
+        self, writer: BufferedWriterWrapper, clickhouse_ro: ClickhousePool
+    ) -> None:
         logger = logging.getLogger("snuba.bulk-loader")
 
         clickhouse_tables = clickhouse_ro.execute("show tables")

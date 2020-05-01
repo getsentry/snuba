@@ -51,5 +51,5 @@ storage = CdcStorage(
     query_processors=[PrewhereProcessor()],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
-    message_row=GroupAssigneeRow,
+    row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),
 )
