@@ -51,6 +51,8 @@ class QuerylogProcessor(MessageProcessor):
             num_days.append(query["stats"].get("num_days") or 0)
             clickhouse_table.append(query["stats"].get("clickhouse_table") or "")
             query_id.append(query["stats"].get("query_id") or "")
+            # XXX: ``is_duplicate`` is currently not set when using the
+            # ``Cache.get_readthrough`` query execution path. See GH-902.
             is_duplicate.append(int(query["stats"].get("is_duplicate") or 0))
             consistent.append(int(query["stats"].get("consistent") or 0))
 

@@ -7,6 +7,7 @@ from typing import Optional
 import sentry_sdk
 from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.gnu_backtrace import GnuBacktraceIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 from snuba import settings
 from snuba.util import create_metrics
@@ -24,7 +25,11 @@ def setup_logging(level: Optional[str] = None) -> None:
 def setup_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
-        integrations=[FlaskIntegration(), GnuBacktraceIntegration()],
+        integrations=[
+            FlaskIntegration(),
+            GnuBacktraceIntegration(),
+            LoggingIntegration(event_level=logging.WARNING),
+        ],
         release=os.getenv("SNUBA_RELEASE"),
     )
 
