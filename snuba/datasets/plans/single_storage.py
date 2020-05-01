@@ -37,16 +37,22 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def execute(
         self, query: Query, request_settings: RequestSettings, runner: QueryRunner
     ) -> QueryResult:
+        def split_query_runner(
+            query: Query, request_settings: RequestSettings
+        ) -> QueryResult:
+            for processor in self.__query_processors:
+                processor.process_query(query, request_settings)
+            return runner(query, request_settings, self.__cluster.get_reader())
+
         (use_split,) = state.get_configs([("use_split", 0)])
         if use_split:
+
             for splitter in self.__splitters:
-                result = splitter.execute(query, runner, self.__query_processors)
+                result = splitter.execute(query, request_settings, split_query_runner)
                 if result is not None:
                     return result
 
-        for processor in self.__query_processors:
-            processor.process_query(query, request_settings)
-        return runner(query, request_settings, self.__cluster.get_reader())
+        return split_query_runner(query, request_settings)
 
 
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):

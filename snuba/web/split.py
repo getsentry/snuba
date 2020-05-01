@@ -2,15 +2,15 @@ import copy
 import math
 
 from datetime import timedelta
-from typing import Any, List, Optional, Sequence, Union
+from typing import Any, List, Optional, Union
 
 from snuba import state, util
-from snuba.clusters.cluster import ClickhouseCluster
-from snuba.datasets.plans.query_plan import QueryRunner
-from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
-from snuba.request import Request
+from snuba.clickhouse.query import Query
+from snuba.datasets.plans.split_strategy import (
+    SplitQueryRunner,
+    StorageQuerySplitStrategy,
+)
+from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.web import QueryResult
 
@@ -56,11 +56,7 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_col = timestamp_col
 
     def execute(
-        self,
-        request: Request,
-        cluster: ClickhouseCluster,
-        runner: QueryRunner,
-        db_query_processors: Sequence[QueryProcessor],
+        self, query: Query, request_settings: RequestSettings, runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
         If a query is:
@@ -73,18 +69,18 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         into smaller increments, and start with the last one, so that we can potentially
         avoid querying the entire range.
         """
-        limit = request.query.get_limit()
-        if limit is None or request.query.get_groupby():
+        limit = query.get_limit()
+        if limit is None or query.get_groupby():
             return None
 
-        if request.query.get_offset() >= 1000:
+        if query.get_offset() >= 1000:
             return None
 
-        orderby = request.query.get_orderby()
+        orderby = query.get_orderby()
         if not orderby or orderby[0] != f"-{self.__timestamp_col}":
             return None
 
-        conditions = request.query.get_conditions() or []
+        conditions = query.get_conditions() or []
         from_date_str = next(
             (
                 condition[2]
@@ -112,7 +108,7 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         to_date = util.parse_datetime(to_date_str, date_align)
         from_date = util.parse_datetime(from_date_str, date_align)
 
-        remaining_offset = request.query.get_offset()
+        remaining_offset = query.get_offset()
 
         overall_result = None
         split_end = to_date
@@ -121,25 +117,23 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         while split_start < split_end and total_results < limit:
             # We need to make a copy to use during the query execution because we replace
             # the start-end conditions on the query at each iteration of this loop.
-            split_request = copy.deepcopy(request)
+            split_query = copy.deepcopy(query)
 
             _replace_condition(
-                split_request.query, self.__timestamp_col, ">=", split_start.isoformat()
+                split_query, self.__timestamp_col, ">=", split_start.isoformat()
             )
             _replace_condition(
-                split_request.query, self.__timestamp_col, "<", split_end.isoformat()
+                split_query, self.__timestamp_col, "<", split_end.isoformat()
             )
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
-            split_request.query.set_offset(0)
-            split_request.query.set_limit(limit - total_results + remaining_offset)
+            split_query.set_offset(0)
+            split_query.set_limit(limit - total_results + remaining_offset)
 
             # At every iteration we only append the "data" key from the results returned by
             # the runner. The "extra" key is only populated at the first iteration of the
             # loop and never changed.
-            for processor in db_query_processors:
-                processor.process_query(split_request.query, split_request.settings)
-            result = runner(split_request, cluster.get_reader())
+            result = runner(split_query, request_settings)
 
             if overall_result is None:
                 overall_result = result
@@ -194,11 +188,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         self.__timestamp_column = timestamp_column
 
     def execute(
-        self,
-        request: Request,
-        cluster: ClickhouseCluster,
-        runner: QueryRunner,
-        db_query_processors: Sequence[QueryProcessor],
+        self, query: Query, request_settings: RequestSettings, runner: SplitQueryRunner,
     ) -> Optional[QueryResult]:
         """
         Split query in 2 steps if a large number of columns is being selected.
@@ -207,52 +197,50 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             - Shrink the date range.
         """
         if (
-            not request.query.get_limit()
-            or request.query.get_groupby()
-            or request.query.get_aggregations()
-            or not request.query.get_selected_columns()
+            not query.get_limit()
+            or query.get_groupby()
+            or query.get_aggregations()
+            or not query.get_selected_columns()
         ):
             return None
 
-        total_col_count = len(request.query.get_all_referenced_columns())
-        minimal_request = copy.deepcopy(request)
-        minimal_request.query.set_selected_columns(
+        total_col_count = len(query.get_all_referenced_columns())
+        minimal_query = copy.deepcopy(query)
+        minimal_query.set_selected_columns(
             [self.__id_column, self.__project_column, self.__timestamp_column]
         )
 
-        if total_col_count <= len(minimal_request.query.get_all_referenced_columns()):
+        if total_col_count <= len(minimal_query.get_all_referenced_columns()):
             return None
 
-        for processor in db_query_processors:
-            processor.process_query(minimal_request.query, minimal_request.settings)
-        result = runner(minimal_request, cluster.get_reader())
-        del minimal_request
+        result = runner(minimal_query, request_settings)
+        del minimal_query
 
         if result.result["data"]:
-            request = copy.deepcopy(request)
+            query = copy.deepcopy(query)
 
             event_ids = list(
                 set([event[self.__id_column] for event in result.result["data"]])
             )
-            request.query.add_conditions([(self.__id_column, "IN", event_ids)])
-            request.query.set_offset(0)
+            query.add_conditions([(self.__id_column, "IN", event_ids)])
+            query.set_offset(0)
             # TODO: This is technically wrong. Event ids are unique per project, not globally.
             # So, if the minimal query only returned the same event_id from two projects, we
             # would be underestimating the limit here.
-            request.query.set_limit(len(event_ids))
+            query.set_limit(len(event_ids))
 
             project_ids = list(
                 set([event[self.__project_column] for event in result.result["data"]])
             )
             _replace_condition(
-                request.query, self.__project_column, "IN", project_ids,
+                query, self.__project_column, "IN", project_ids,
             )
 
             timestamps = [
                 event[self.__timestamp_column] for event in result.result["data"]
             ]
             _replace_condition(
-                request.query,
+                query,
                 self.__timestamp_column,
                 ">=",
                 util.parse_datetime(min(timestamps)).isoformat(),
@@ -260,7 +248,7 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
             # We add 1 second since this gets translated to ('timestamp', '<', to_date)
             # and events are stored with a granularity of 1 second.
             _replace_condition(
-                request.query,
+                query,
                 self.__timestamp_column,
                 "<",
                 (
@@ -268,6 +256,4 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
                 ).isoformat(),
             )
 
-        for processor in db_query_processors:
-            processor.process_query(request.query, request.settings)
-        return runner(request, cluster.get_reader())
+        return runner(query, request_settings)
