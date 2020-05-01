@@ -50,6 +50,8 @@ columns = ColumnSet(
                     ("num_days", UInt(32)),
                     ("clickhouse_table", LowCardinality(String())),
                     ("query_id", String()),
+                    # XXX: ``is_duplicate`` is currently not set when using the
+                    # ``Cache.get_readthrough`` query execution path. See GH-902.
                     ("is_duplicate", UInt(8)),
                     ("consistent", UInt(8)),
                 ]
