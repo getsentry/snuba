@@ -1,7 +1,7 @@
 import pytest
 
 from snuba import state
-from snuba.clickhouse.dictquery import DictClickhouseQuery
+from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
 from snuba.request import Request
@@ -168,9 +168,9 @@ def test_tags_processor(query_body, expected_query) -> None:
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
     request = Request("a", query, request_settings, {}, "r")
-    _ = dataset.get_query_plan_builder().build_plan(request)
+    plan = dataset.get_query_plan_builder().build_plan(request)
 
     assert (
-        DictClickhouseQuery(dataset, query, request_settings).format_sql()
+        DictSqlQuery(dataset, plan.query, request_settings).format_sql()
         == expected_query
     )

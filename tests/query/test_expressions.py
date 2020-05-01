@@ -6,6 +6,7 @@ from snuba.query.expressions import (
     Lambda,
     Literal,
     FunctionCall,
+    SubscriptableReference,
 )
 
 
@@ -152,6 +153,23 @@ def test_mapping_curried_function() -> None:
         CurriedFunctionCall(None, replaced_function, (replaced_col,)),
     ]
     assert list(f3) == expected
+
+
+def test_subscriptable() -> None:
+    c1 = Column(None, "tags", "t1")
+    l1 = Literal(None, "myTag")
+    s = SubscriptableReference("alias", c1, l1)
+
+    assert list(s) == [c1, l1, s]
+
+    def replace_col(e: Expression) -> Expression:
+        if isinstance(e, Literal):
+            return Literal(None, "myOtherTag")
+        return e
+
+    replaced = s.transform(replace_col)
+    l2 = Literal(None, "myOtherTag")
+    assert list(replaced) == [c1, l2, SubscriptableReference("alias", c1, l2)]
 
 
 def test_hash() -> None:

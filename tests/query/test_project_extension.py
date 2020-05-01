@@ -17,7 +17,7 @@ from snuba.query.project_extension import (
     ProjectExtensionProcessor,
     ProjectWithGroupsProcessor,
 )
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.query.types import Condition
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.schemas import validate_jsonschema

@@ -12,7 +12,7 @@ from snuba.web.split import (
     TimeSplitQueryStrategy,
 )
 from snuba.datasets.schemas.tables import TableSource
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 from snuba.web import QueryResult

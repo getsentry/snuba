@@ -1,7 +1,7 @@
+from snuba.clickhouse.processors import QueryProcessor
+from snuba.clickhouse.query import Query
 from snuba.datasets.schemas.join import JoinClause
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
-from snuba.query.query import Query
-from snuba.query.query_processor import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 

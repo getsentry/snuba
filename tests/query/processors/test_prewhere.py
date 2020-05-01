@@ -3,8 +3,8 @@ import pytest
 from snuba import settings
 from snuba.clickhouse.columns import ColumnSet
 from snuba.datasets.schemas.tables import TableSource
+from snuba.query.logical import Query
 from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.query import Query
 from snuba.request.request_settings import HTTPRequestSettings
 
 

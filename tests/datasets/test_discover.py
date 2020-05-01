@@ -3,7 +3,7 @@ from typing import Any, MutableMapping
 from tests.base import BaseDatasetTest
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.query import Query
+from snuba.query.logical import Query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -52,7 +52,7 @@ class TestDiscover(BaseDatasetTest):
 
         plan = dataset.get_query_plan_builder().build_plan(request)
 
-        for processor in [*plan.plan_processors]:
-            processor.process_query(request.query, request.settings)
+        for physical_processor in plan.plan_processors:
+            physical_processor.process_query(plan.query, request.settings)
 
-        assert request.query.get_data_source().format_from() == expected_table
+        assert plan.query.get_data_source().format_from() == expected_table

@@ -1,11 +1,10 @@
 import signal
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import click
 
 from snuba import settings
 from snuba.consumers.consumer_builder import ConsumerBuilder
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage, WRITABLE_STORAGES
 from snuba.environment import setup_logging, setup_sentry
@@ -29,12 +28,6 @@ from snuba.stateful_consumer.consumer_state_machine import ConsumerStateMachine
 )
 @click.option(
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
-)
-@click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to target",
 )
 @click.option(
     "--storage",
@@ -100,7 +93,6 @@ def consumer(
     control_topic: Optional[str],
     consumer_group: str,
     bootstrap_server: Sequence[str],
-    dataset_name: Optional[str],
     storage_name: str,
     max_batch_size: int,
     max_batch_time_ms: int,
@@ -114,27 +106,14 @@ def consumer(
 ) -> None:
 
     if not bootstrap_server:
-        if dataset_name:
-            bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-                dataset_name, settings.DEFAULT_BROKERS,
-            )
-        else:
-            bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
-                storage_name, settings.DEFAULT_BROKERS,
-            )
+        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_name, settings.DEFAULT_BROKERS,
+        )
 
     setup_logging(log_level)
     setup_sentry()
 
     storage_key = StorageKey(storage_name)
-
-    # TODO: Remove this once dataset_name is no longer being passed
-    if dataset_name:
-        dataset_writable_storage = get_dataset(dataset_name).get_writable_storage()
-        if not dataset_writable_storage:
-            raise click.ClickException(f"Dataset {dataset_name} has no writable storage")
-
-        storage_key = dataset_writable_storage.get_storage_key()
 
     consumer_builder = ConsumerBuilder(
         storage_key=storage_key,
@@ -154,7 +133,9 @@ def consumer(
 
     if stateful_consumer:
         storage = get_cdc_storage(storage_key)
-        assert storage is not None, "Only CDC storages have a control topic thus are supported."
+        assert (
+            storage is not None
+        ), "Only CDC storages have a control topic thus are supported."
         context = ConsumerStateMachine(
             consumer_builder=consumer_builder,
             topic=control_topic or storage.get_default_control_topic(),
@@ -162,7 +143,7 @@ def consumer(
             storage=storage,
         )
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             context.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
@@ -172,7 +153,7 @@ def consumer(
     else:
         consumer = consumer_builder.build_base_consumer()
 
-        def handler(signum, frame) -> None:
+        def handler(signum: int, frame: Any) -> None:
             consumer.signal_shutdown()
 
         signal.signal(signal.SIGINT, handler)
