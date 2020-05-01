@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Generic, Optional, TypeVar
 
+from snuba.utils.metrics.timer import Timer
+
 
 TValue = TypeVar("TValue")
 
@@ -30,7 +32,11 @@ class Cache(Generic[TValue], ABC):
 
     @abstractmethod
     def get_readthrough(
-        self, key: str, function: Callable[[], TValue], timeout: int
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        timeout: int,
+        timer: Optional[Timer] = None,
     ) -> TValue:
         """
         Implements a read-through caching pattern for the value at the given

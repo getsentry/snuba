@@ -16,6 +16,7 @@ from snuba.state.cache.abstract import (
     TValue,
 )
 from snuba.utils.codecs import Codec
+from snuba.utils.metrics.timer import Timer
 
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,11 @@ class RedisCache(Cache[TValue]):
         )
 
     def get_readthrough(
-        self, key: str, function: Callable[[], TValue], timeout: int
+        self,
+        key: str,
+        function: Callable[[], TValue],
+        timeout: int,
+        timer: Optional[Timer] = None,
     ) -> TValue:
         # This method is designed with the following goals in mind:
         # 1. The value generation function is only executed when no value
@@ -123,6 +128,9 @@ class RedisCache(Cache[TValue]):
             [result_key, wait_queue_key, task_ident_key], [timeout, uuid.uuid1().hex]
         )
 
+        if timer is not None:
+            timer.mark("cache_get")
+
         if result[0] == RESULT_VALUE:
             # If we got a cache hit, this is easy -- we just return it.
             logger.debug("Immediately returning result from cache hit.")
@@ -172,6 +180,9 @@ class RedisCache(Cache[TValue]):
                     # put the result value in the cache. This doesn't affect
                     # _our_ evaluation of the task, so log it and move on.
                     logger.warning("Error setting cache result!", exc_info=True)
+                else:
+                    if timer is not None:
+                        timer.mark("cache_set")
             return value
         elif result[0] == RESULT_WAIT:
             # If we were not the first in line, we need to wait for the first
@@ -191,6 +202,9 @@ class RedisCache(Cache[TValue]):
             if not self.__client.blpop(
                 build_notify_queue_key(task_ident), effective_timeout
             ):
+                if timer is not None:
+                    timer.mark("dedupe_wait")
+
                 if effective_timeout == task_timeout_remaining:
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
