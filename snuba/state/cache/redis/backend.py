@@ -199,12 +199,32 @@ class RedisCache(Cache[TValue]):
                 effective_timeout,
             )
 
-            if not self.__client.blpop(
-                build_notify_queue_key(task_ident), effective_timeout
-            ):
-                if timer is not None:
-                    timer.mark("dedupe_wait")
+            notification_recieved = (
+                self.__client.blpop(
+                    build_notify_queue_key(task_ident), effective_timeout
+                )
+                is not None
+            )
 
+            if timer is not None:
+                timer.mark("dedupe_wait")
+
+            if notification_recieved:
+                # There should be a value waiting for us at the result key.
+                raw_value = self.__client.get(result_key)
+
+                # If there is no value, that means that the client responsible
+                # for generating the cache value errored while generating it.
+                if raw_value is None:
+                    # TODO: If we wanted to get clever, this could include the
+                    # error message from the other client, or a Sentry ID or
+                    # something.
+                    raise ExecutionError("no value at key")
+                else:
+                    return self.__codec.decode(raw_value)
+            else:
+                # We timed out waiting for the notification -- something went
+                # wrong with the client that was generating the cache value.
                 if effective_timeout == task_timeout_remaining:
                     # If the effective timeout was the remaining task timeout,
                     # this means that the client responsible for generating the
@@ -218,17 +238,5 @@ class RedisCache(Cache[TValue]):
                     # (smaller) than the execution timeout. The other client
                     # may still be working, but we're not waiting.
                     raise TimeoutError("timed out waiting for result")
-            else:
-                # If we didn't timeout, there should be a value waiting for us.
-                # If there is no value, that means that the client responsible
-                # for generating the cache value errored while generating it.
-                raw_value = self.__client.get(result_key)
-                if raw_value is None:
-                    # TODO: If we wanted to get clever, this could include the
-                    # error message from the other client, or a Sentry ID or
-                    # something.
-                    raise ExecutionError("no value at key")
-                else:
-                    return self.__codec.decode(raw_value)
         else:
             raise ValueError("unexpected result from script")
