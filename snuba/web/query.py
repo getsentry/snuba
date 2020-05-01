@@ -14,7 +14,7 @@ from snuba.clickhouse.query import Query
 from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import get_dataset_name
-from snuba.query.timeseries import TimeSeriesExtensionProcessor
+from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings

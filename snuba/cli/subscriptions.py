@@ -118,8 +118,11 @@ def subscriptions(
     dataset = get_dataset(dataset_name)
 
     if not bootstrap_servers:
-        bootstrap_servers = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset_name, settings.DEFAULT_BROKERS
+        storage = dataset.get_writable_storage()
+        assert storage is not None
+        storage_key = storage.get_storage_key().value
+        bootstrap_servers = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_key, settings.DEFAULT_BROKERS
         )
 
     loader = enforce_table_writer(dataset).get_stream_loader()

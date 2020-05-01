@@ -34,7 +34,7 @@ def confirm_load(
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
     dataset_name: str,
-    source: Optional[str],
+    source: str,
     log_level: Optional[str] = None,
 ) -> None:
     """
@@ -69,8 +69,9 @@ def confirm_load(
     descriptor = snapshot_source.get_descriptor()
 
     if not bootstrap_server:
-        bootstrap_server = settings.DEFAULT_DATASET_BROKERS.get(
-            dataset, settings.DEFAULT_BROKERS,
+        storage_key = storage.get_storage_key().value
+        bootstrap_server = settings.DEFAULT_STORAGE_BROKERS.get(
+            storage_key, settings.DEFAULT_BROKERS,
         )
 
     producer = Producer(
