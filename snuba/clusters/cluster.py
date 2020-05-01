@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Generic, Mapping, Optional, Set
+from typing import Any, Callable, Generic, Mapping, Optional, Set, TypeVar
 
 from snuba import settings
 from snuba.clickhouse.http import HTTPBatchWriter
@@ -10,7 +10,10 @@ from snuba.reader import Reader, TQuery
 from snuba.writer import BatchWriter, WriterTableRow
 
 
-class Cluster(ABC, Generic[TQuery]):
+TWriterOptions = TypeVar("TWriterOptions")
+
+
+class Cluster(ABC, Generic[TQuery, TWriterOptions]):
     """
     A cluster is responsible for managing a collection of database nodes.
 
@@ -43,13 +46,16 @@ class Cluster(ABC, Generic[TQuery]):
         self,
         table_name: str,
         encoder: Callable[[WriterTableRow], bytes],
-        options: Optional[Mapping[str, Any]],
+        options: TWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter:
         raise NotImplementedError
 
 
-class ClickhouseCluster(Cluster[SqlQuery]):
+WriterOptions = Optional[Mapping[str, Any]]
+
+
+class ClickhouseCluster(Cluster[SqlQuery, WriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
     shared by all storages located on the cluster
@@ -82,7 +88,7 @@ class ClickhouseCluster(Cluster[SqlQuery]):
         self,
         table_name: str,
         encoder: Callable[[WriterTableRow], bytes],
-        options: Optional[Mapping[str, Any]],
+        options: WriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter:
         return HTTPBatchWriter(
