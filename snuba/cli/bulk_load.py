@@ -20,7 +20,7 @@ from snuba.writer import BufferedWriterWrapper
 )
 @click.option(
     "--source",
-    help="Source of the dump. Depending on the dataset it may have different meaning.",
+    help="Source of the dump. Depending on the storage it may have different meaning.",
 )
 @click.option("--dest-table", help="Clickhouse destination table.")
 @click.option("--log-level", help="Logging level to use.")
