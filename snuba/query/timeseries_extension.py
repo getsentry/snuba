@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Tuple
 
-from snuba import environment, state
+from snuba import state
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -13,11 +13,6 @@ from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.util import parse_datetime
-from snuba.utils.metrics.backends.wrapper import MetricsWrapper
-from snuba.utils.metrics.decorators import track_calls
-
-
-timeseries_metrics = MetricsWrapper(environment.metrics, "extensions.timeseries")
 
 
 def get_time_series_extension_properties(
@@ -26,26 +21,8 @@ def get_time_series_extension_properties(
     return {
         "type": "object",
         "properties": {
-            "from_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": track_calls(
-                    timeseries_metrics,
-                    "from_date.default",
-                    lambda: (
-                        datetime.utcnow().replace(microsecond=0) - default_window
-                    ).isoformat(),
-                ),
-            },
-            "to_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": track_calls(
-                    timeseries_metrics,
-                    "to_date.default",
-                    lambda: datetime.utcnow().replace(microsecond=0).isoformat(),
-                ),
-            },
+            "from_date": {"type": "string", "format": "date-time"},
+            "to_date": {"type": "string", "format": "date-time"},
             "granularity": {
                 "type": "number",
                 "default": default_granularity,
