@@ -1,15 +1,11 @@
 import copy
 import math
-
 from datetime import timedelta
 from typing import Any, List, Optional, Union
 
 from snuba import state, util
 from snuba.clickhouse.query import Query
-from snuba.datasets.plans.split_strategy import (
-    SplitQueryRunner,
-    StorageQuerySplitStrategy,
-)
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.web import QueryResult
@@ -28,14 +24,6 @@ def _identify_condition(condition: Any, field: str, operand: str) -> bool:
 def _replace_condition(
     query: Query, field: str, operand: str, new_literal: Union[str, List[Any]]
 ) -> None:
-    query.set_prewhere(
-        [
-            cond
-            if not _identify_condition(cond, field, operand)
-            else [field, operand, new_literal]
-            for cond in query.get_prewhere() or []
-        ]
-    )
     query.set_conditions(
         [
             cond
@@ -46,7 +34,7 @@ def _replace_condition(
     )
 
 
-class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
+class TimeSplitQueryStrategy(QuerySplitStrategy):
     """
     A strategy that breaks the time window into smaller ones and executes
     them in sequence.
@@ -172,7 +160,7 @@ class TimeSplitQueryStrategy(StorageQuerySplitStrategy):
         return overall_result
 
 
-class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
+class ColumnSplitQueryStrategy(QuerySplitStrategy):
     """
     A strategy that performs column based splitting: if the client requests enough columns,
     a first query on the minimum set of columns is ran to load as little Clickhouse data
@@ -216,44 +204,44 @@ class ColumnSplitQueryStrategy(StorageQuerySplitStrategy):
         result = runner(minimal_query, request_settings)
         del minimal_query
 
-        if result.result["data"]:
-            query = copy.deepcopy(query)
+        if not result.result["data"]:
+            return None
 
-            event_ids = list(
-                set([event[self.__id_column] for event in result.result["data"]])
-            )
-            query.add_conditions([(self.__id_column, "IN", event_ids)])
-            query.set_offset(0)
-            # TODO: This is technically wrong. Event ids are unique per project, not globally.
-            # So, if the minimal query only returned the same event_id from two projects, we
-            # would be underestimating the limit here.
-            query.set_limit(len(event_ids))
+        # Making a copy just in case runner returned None (which would drive the execution
+        # strategy to ignore the result of this splitter and try the next one).
+        query = copy.deepcopy(query)
 
-            project_ids = list(
-                set([event[self.__project_column] for event in result.result["data"]])
-            )
-            _replace_condition(
-                query, self.__project_column, "IN", project_ids,
-            )
+        event_ids = list(
+            set([event[self.__id_column] for event in result.result["data"]])
+        )
+        query.add_conditions([(self.__id_column, "IN", event_ids)])
+        query.set_offset(0)
+        # TODO: This is technically wrong. Event ids are unique per project, not globally.
+        # So, if the minimal query only returned the same event_id from two projects, we
+        # would be underestimating the limit here.
+        query.set_limit(len(event_ids))
 
-            timestamps = [
-                event[self.__timestamp_column] for event in result.result["data"]
-            ]
-            _replace_condition(
-                query,
-                self.__timestamp_column,
-                ">=",
-                util.parse_datetime(min(timestamps)).isoformat(),
-            )
-            # We add 1 second since this gets translated to ('timestamp', '<', to_date)
-            # and events are stored with a granularity of 1 second.
-            _replace_condition(
-                query,
-                self.__timestamp_column,
-                "<",
-                (
-                    util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-                ).isoformat(),
-            )
+        project_ids = list(
+            set([event[self.__project_column] for event in result.result["data"]])
+        )
+        _replace_condition(
+            query, self.__project_column, "IN", project_ids,
+        )
+
+        timestamps = [event[self.__timestamp_column] for event in result.result["data"]]
+        _replace_condition(
+            query,
+            self.__timestamp_column,
+            ">=",
+            util.parse_datetime(min(timestamps)).isoformat(),
+        )
+        # We add 1 second since this gets translated to ('timestamp', '<', to_date)
+        # and events are stored with a granularity of 1 second.
+        _replace_condition(
+            query,
+            self.__timestamp_column,
+            "<",
+            (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat(),
+        )
 
         return runner(query, request_settings)

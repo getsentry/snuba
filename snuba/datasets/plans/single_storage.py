@@ -10,7 +10,7 @@ from snuba.datasets.plans.query_plan import (
     QueryPlanExecutionStrategy,
     QueryRunner,
 )
-from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.plans.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.request import Request
@@ -28,7 +28,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self,
         cluster: ClickhouseCluster,
         db_query_processors: Sequence[QueryProcessor],
-        splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None,
+        splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__cluster = cluster
         self.__query_processors = db_query_processors
@@ -37,7 +37,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
     def execute(
         self, query: Query, request_settings: RequestSettings, runner: QueryRunner
     ) -> QueryResult:
-        def split_query_runner(
+        def process_and_run_query(
             query: Query, request_settings: RequestSettings
         ) -> QueryResult:
             for processor in self.__query_processors:
@@ -46,13 +46,14 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
 
         (use_split,) = state.get_configs([("use_split", 0)])
         if use_split:
-
             for splitter in self.__splitters:
-                result = splitter.execute(query, request_settings, split_query_runner)
+                result = splitter.execute(
+                    query, request_settings, process_and_run_query
+                )
                 if result is not None:
                     return result
 
-        return split_query_runner(query, request_settings)
+        return process_and_run_query(query, request_settings)
 
 
 class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
@@ -93,9 +94,12 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             query=clickhouse_query,
             plan_processors=[],
             execution_strategy=SimpleQueryPlanExecutionStrategy(
-                cluster,
-                [*self.__storage.get_query_processors(), *self.__post_processors],
-                self.__storage.get_query_splitters(),
+                cluster=cluster,
+                db_query_processors=[
+                    *self.__storage.get_query_processors(),
+                    *self.__post_processors,
+                ],
+                splitters=self.__storage.get_query_splitters(),
             ),
         )
 
@@ -126,8 +130,11 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
             query=clickhouse_query,
             plan_processors=[],
             execution_strategy=SimpleQueryPlanExecutionStrategy(
-                cluster,
-                [*storage.get_query_processors(), *self.__post_processors],
-                storage.get_query_splitters(),
+                cluster=cluster,
+                db_query_processors=[
+                    *storage.get_query_processors(),
+                    *self.__post_processors,
+                ],
+                splitters=storage.get_query_splitters(),
             ),
         )

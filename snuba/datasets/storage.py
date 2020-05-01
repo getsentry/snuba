@@ -5,7 +5,7 @@ from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.logical import Query
@@ -73,7 +73,7 @@ class ReadableStorage(Storage):
         raise NotImplementedError
 
     @abstractmethod
-    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
         """
         If this storage supports splitting queries as optimizations, they are provided here.
         These are optimizations, the query plan builder may decide to override the storage
@@ -109,7 +109,7 @@ class ReadableTableStorage(ReadableStorage):
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
-        query_splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
@@ -122,7 +122,7 @@ class ReadableTableStorage(ReadableStorage):
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
 
-    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
         return self.__query_splitters
 
 
@@ -134,7 +134,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         schemas: StorageSchemas,
         table_writer: TableWriter,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
-        query_splitters: Optional[Sequence[StorageQuerySplitStrategy]] = None,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         super().__init__(
             storage_key, storage_set_key, schemas, query_processors, query_splitters

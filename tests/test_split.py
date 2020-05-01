@@ -17,7 +17,6 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.query.logical import Query as LogicalQuery
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.reader import Reader
-from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
 
@@ -105,7 +104,7 @@ test_data_col = [
             {
                 "events.event_id": "a",
                 "events.project_id": "1",
-                "events.timestamp": " 2019-10-01 22:33:42",
+                "events.timestamp": "2019-10-01 22:33:42",
             }
         ],
         [
@@ -113,7 +112,7 @@ test_data_col = [
                 "events.event_id": "a",
                 "events.project_id": "1",
                 "events.level": "error",
-                "events.timestamp": " 2019-10-01 22:33:42",
+                "events.timestamp": "2019-10-01 22:33:42",
             }
         ],
     ),
@@ -268,7 +267,18 @@ def test_col_split_conditions(
     def do_query(
         query: ClickhouseQuery, request_settings: RequestSettings,
     ) -> QueryResult:
-        return QueryResult({"data": []}, {})
+        return QueryResult(
+            {
+                "data": [
+                    {
+                        id_column: "asd123",
+                        project_column: 123,
+                        timestamp_column: "2019-10-01 22:33:42",
+                    }
+                ]
+            },
+            {},
+        )
 
     assert (
         splitter.execute(query, HTTPRequestSettings(), do_query) is not None

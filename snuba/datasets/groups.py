@@ -7,20 +7,18 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.storage import ReadableStorage
-from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.factory import get_storage
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas.join import (
-    JoinConditionExpression,
-    JoinCondition,
-    JoinedSchema,
     JoinClause,
+    JoinCondition,
+    JoinConditionExpression,
+    JoinedSchema,
     JoinType,
     TableJoinNode,
 )
-from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.plans.split_strategy import StorageQuerySplitStrategy
 from snuba.datasets.storage import ReadableStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.datasets.table_storage import TableWriter
 from snuba.query.columns import QUALIFIED_COLUMN_REGEX
 from snuba.query.extensions import QueryExtension
@@ -56,7 +54,7 @@ class JoinedStorage(ReadableStorage):
     def get_query_processors(self) -> Sequence[ClickhouseProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
-    def get_query_splitters(self) -> Sequence[StorageQuerySplitStrategy]:
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
         return []
 
 
