@@ -117,7 +117,7 @@ class RedisCache(Cache[TValue]):
         # tasks where it was also a member of the wait queue, the notify queue
         # includes the unique task identity as part of it's key.
         def build_notify_queue_key(task_ident: str) -> str:
-            return self.__build_key("key", "tasks", f"notify/{task_ident}")
+            return self.__build_key(key, "tasks", f"notify/{task_ident}")
 
         # At this point, we have all of the information we need to figure out
         # if the key exists, and if it doesn't, if we should start working or
