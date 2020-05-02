@@ -75,10 +75,10 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                clickhouse_ro = storage.get_cluster().get_connection(
-                    ClickhouseClientSettings.READONLY
+                clickhouse = storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.QUERY
                 )
-                clickhouse_tables = clickhouse_ro.execute("show tables")
+                clickhouse_tables = clickhouse.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
@@ -372,11 +372,11 @@ if application.debug or application.testing:
         # We cannot build distributed tables this way. So this only works in local
         # mode.
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_connection(
-                ClickhouseClientSettings.READWRITE
+            clickhouse = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
             )
             for statement in storage.get_schemas().get_create_statements():
-                clickhouse_rw.execute(statement.statement)
+                clickhouse.execute(statement.statement)
 
         migrate.run(dataset)
 
@@ -448,11 +448,11 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_connection(
-                ClickhouseClientSettings.READWRITE
+            clickhouse = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
             )
             for statement in storage.get_schemas().get_drop_statements():
-                clickhouse_rw.execute(statement.statement)
+                clickhouse.execute(statement.statement)
 
         ensure_table_exists(dataset, force=True)
         redis_client.flushdb()

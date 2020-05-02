@@ -19,7 +19,7 @@ logger = logging.getLogger("snuba.replacer")
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
     def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
         self.clickhouse = storage.get_cluster().get_connection(
-            ClickhouseClientSettings.REPLACER
+            ClickhouseClientSettings.REPLACE
         )
         self.metrics = metrics
         processor = storage.get_table_writer().get_replacer_processor()

@@ -59,7 +59,7 @@ def optimize(
         # dataset using the cluster's host/port configuration.
         clickhouse_connections = list(
             set(
-                storage.get_cluster().get_connection(ClickhouseClientSettings.READWRITE)
+                storage.get_cluster().get_connection(ClickhouseClientSettings.OPTIMIZE)
                 for storage in dataset.get_all_storages()
             )
         )

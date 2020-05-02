@@ -24,14 +24,14 @@ class SingleTableBulkLoader(BulkLoader):
         self.__source_table = source_table
         self.__row_processor = row_processor
 
-    def load(self, writer: BufferedWriterWrapper, clickhouse_ro: ClickhousePool) -> None:
+    def load(self, writer: BufferedWriterWrapper, clickhouse: ClickhousePool) -> None:
         logger = logging.getLogger("snuba.bulk-loader")
 
-        clickhouse_tables = clickhouse_ro.execute("show tables")
+        clickhouse_tables = clickhouse.execute("show tables")
         if (self.__dest_table,) not in clickhouse_tables:
             raise ValueError("Destination table %s does not exists" % self.__dest_table)
 
-        table_content = clickhouse_ro.execute(
+        table_content = clickhouse.execute(
             "select count(*) from %s" % self.__dest_table
         )
         if table_content != [(0,)]:

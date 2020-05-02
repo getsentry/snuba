@@ -10,9 +10,12 @@ from snuba.reader import Reader, TQuery
 
 
 class ClickhouseClientSettings(Enum):
-    READONLY = {"readonly": True}
-    READWRITE: Mapping[str, Any] = {}
-    REPLACER = {
+    CLEANUP: Mapping[str, Any] = {}
+    INSERT: Mapping[str, Any] = {}
+    MIGRATE: Mapping[str, Any] = {}
+    OPTIMIZE: Mapping[str, Any] = {}
+    QUERY = {"readonly": True}
+    REPLACE = {
         # Replacing existing rows requires reconstructing the entire tuple for each
         # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
         # the default settings it's common for ClickHouse to go over the default max_memory_usage
@@ -96,7 +99,7 @@ class ClickhouseCluster(Cluster[SqlQuery]):
     def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:
             self.__reader = NativeDriverReader(
-                self.get_connection(ClickhouseClientSettings.READONLY)
+                self.get_connection(ClickhouseClientSettings.QUERY)
             )
         return self.__reader
 

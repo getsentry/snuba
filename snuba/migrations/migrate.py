@@ -46,5 +46,5 @@ def run(dataset: Dataset) -> None:
         schemas.append(storage.get_schemas().get_read_schema())
 
     for schema in schemas:
-        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.READWRITE)
+        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.MIGRATE)
         _run_schema(conn, schema)
