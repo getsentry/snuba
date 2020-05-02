@@ -57,7 +57,7 @@ class BaseTest(object):
 
             for storage in self.dataset.get_all_storages():
                 clickhouse = storage.get_cluster().get_connection(
-                    ClickhouseClientSettings.READWRITE
+                    ClickhouseClientSettings.MIGRATE
                 )
                 for statement in storage.get_schemas().get_drop_statements():
                     clickhouse.execute(statement.statement)
@@ -71,7 +71,7 @@ class BaseTest(object):
         if self.dataset_name:
             for storage in self.dataset.get_all_storages():
                 clickhouse = storage.get_cluster().get_connection(
-                    ClickhouseClientSettings.READWRITE
+                    ClickhouseClientSettings.MIGRATE
                 )
                 for statement in storage.get_schemas().get_drop_statements():
                     clickhouse.execute(statement.statement)

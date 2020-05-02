@@ -35,7 +35,7 @@ class TestMigrate(BaseDatasetTest):
                 continue
 
             clickhouse = writable_storage.get_cluster().get_connection(
-                ClickhouseClientSettings.READWRITE
+                ClickhouseClientSettings.MIGRATE
             )
             table_writer = writable_storage.get_table_writer()
             dataset_schema = table_writer.get_schema()

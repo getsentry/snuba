@@ -18,7 +18,7 @@ class TestCleanup(BaseEventsTest):
         clickhouse = (
             get_storage(StorageKey.EVENTS)
             .get_cluster()
-            .get_connection(ClickhouseClientSettings.READWRITE)
+            .get_connection(ClickhouseClientSettings.CLEANUP)
         )
 
         parts = cleanup.get_active_partitions(clickhouse, self.database, self.table)

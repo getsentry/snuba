@@ -145,7 +145,7 @@ class TestApi(BaseApiTest):
         clickhouse = (
             get_storage(StorageKey.EVENTS)
             .get_cluster()
-            .get_connection(ClickhouseClientSettings.READONLY)
+            .get_connection(ClickhouseClientSettings.QUERY)
         )
         res = clickhouse.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
@@ -1298,7 +1298,7 @@ class TestApi(BaseApiTest):
         table = writer.get_schema().get_table_name()
         storage = get_storage(StorageKey.EVENTS)
         clickhouse = storage.get_cluster().get_connection(
-            ClickhouseClientSettings.READONLY
+            ClickhouseClientSettings.QUERY
         )
         assert table not in clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0

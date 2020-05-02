@@ -5,9 +5,9 @@ def test_cache_connections() -> None:
     cluster = ClickhouseCluster("localhost", 8000, 8001, {"events"})
 
     assert cluster.get_connection(
-        ClickhouseClientSettings.READONLY
-    ) == cluster.get_connection(ClickhouseClientSettings.READONLY)
+        ClickhouseClientSettings.QUERY
+    ) == cluster.get_connection(ClickhouseClientSettings.QUERY)
 
     assert cluster.get_connection(
-        ClickhouseClientSettings.REPLACER, 5
-    ) == cluster.get_connection(ClickhouseClientSettings.REPLACER, 5)
+        ClickhouseClientSettings.REPLACE, 5
+    ) == cluster.get_connection(ClickhouseClientSettings.REPLACE, 5)
