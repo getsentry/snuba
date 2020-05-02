@@ -190,6 +190,7 @@ class TableWriter:
             source_table=source_table,
             dest_table=dest_table,
             row_processor=row_processor,
+            clickhouse_ro=self.__cluster.get_clickhouse_ro(),
         )
 
     def get_stream_loader(self) -> KafkaStreamLoader:

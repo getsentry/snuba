@@ -55,6 +55,4 @@ def bulk_load(
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
-    clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
-
-    loader.load(writer, clickhouse_ro)
+    loader.load(writer)
