@@ -17,7 +17,7 @@ from snuba.subscriptions.data import PartitionId
 from snuba.subscriptions.scheduler import SubscriptionScheduler
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.worker import (
-    SubscriptionResultCodec,
+    SubscriptionTaskResultCodec,
     SubscriptionWorker,
 )
 from snuba.utils.codecs import PassthroughCodec
@@ -165,7 +165,7 @@ def subscriptions(
             "partitioner": "consistent",
             "message.max.bytes": 50000000,  # 50MB, default is 1MB
         },
-        SubscriptionResultCodec(),
+        SubscriptionTaskResultCodec(),
     )
 
     executor = ThreadPoolExecutor(max_workers=max_query_workers)
