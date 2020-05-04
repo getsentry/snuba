@@ -199,7 +199,7 @@ class RedisCache(Cache[TValue]):
                 effective_timeout,
             )
 
-            notification_recieved = (
+            notification_received = (
                 self.__client.blpop(
                     build_notify_queue_key(task_ident), effective_timeout
                 )
@@ -209,7 +209,7 @@ class RedisCache(Cache[TValue]):
             if timer is not None:
                 timer.mark("dedupe_wait")
 
-            if notification_recieved:
+            if notification_received:
                 # There should be a value waiting for us at the result key.
                 raw_value = self.__client.get(result_key)
 
