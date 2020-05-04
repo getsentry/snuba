@@ -23,7 +23,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
 from snuba.web.db_query import raw_query
 from snuba.web.query_metadata import SnubaQueryMetadata
-from snuba.web.split import split_query
 
 logger = logging.getLogger("snuba.query")
 
@@ -61,7 +60,6 @@ def parse_and_run_query(
     return result
 
 
-@split_query
 def _run_query_pipeline(
     dataset: Dataset,
     request: Request,
