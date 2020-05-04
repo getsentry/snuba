@@ -54,9 +54,6 @@ class JoinedStorage(ReadableStorage):
     def get_query_processors(self) -> Sequence[ClickhouseProcessor]:
         return [SimpleJoinOptimizer(), PrewhereProcessor()]
 
-    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
-        return []
-
 
 class Groups(TimeSeriesDataset):
     """

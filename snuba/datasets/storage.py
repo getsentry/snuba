@@ -72,7 +72,6 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
-    @abstractmethod
     def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
         """
         If this storage supports splitting queries as optimizations, they are provided here.
@@ -80,7 +79,7 @@ class ReadableStorage(Storage):
         and to skip the splitters. So correctness of the query must not depend on these
         strategies to be applied.
         """
-        raise NotImplementedError
+        return []
 
 
 class WritableStorage(Storage):
