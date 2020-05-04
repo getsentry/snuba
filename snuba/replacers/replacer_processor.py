@@ -51,12 +51,12 @@ class ReplacerProcessor(ABC):
     def get_read_schema(self) -> TableSchema:
         return self.__read_schema
 
-    def pre_replacement(self, replacement: Replacement, matching_records: int) -> None:
+    def pre_replacement(self, replacement: Replacement, matching_records: int) -> bool:
         """
         Custom actions to run before the replacements when we already know how
         many rows will be impacted.
         """
-        pass
+        return False
 
     def post_replacement(
         self, replacement: Replacement, duration: int, matching_records: int
