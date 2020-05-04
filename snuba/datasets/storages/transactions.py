@@ -225,12 +225,5 @@ storage = WritableTableStorage(
         TransactionColumnProcessor(),
         PrewhereProcessor(),
     ],
-    query_splitters=[
-        ColumnSplitQueryStrategy(
-            id_column="event_id",
-            project_column="project_id",
-            timestamp_column="finish_ts",
-        ),
-        TimeSplitQueryStrategy(timestamp_col="finish_ts"),
-    ],
+    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
 )
