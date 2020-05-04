@@ -17,11 +17,13 @@ from snuba.clickhouse.columns import (
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.processors.replaced_groups import ExcludeReplacedGroups
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -34,8 +36,7 @@ all_columns = ColumnSet(
         (
             "event_hash",
             WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",),
-                ["NONE"],
+                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
             ),
         ),
         ("platform", LowCardinality(String())),
@@ -56,10 +57,7 @@ all_columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-        (
-            "transaction_hash",
-            Materialized(UInt(64), "cityHash64(transaction_name)"),
-        ),
+        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
         ("span_id", Nullable(UInt(64))),
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
@@ -165,16 +163,18 @@ storage = WritableTableStorage(
             write_schema=schema,
             read_schema=schema,
             required_columns=required_columns,
-            tag_column_map={
-                "tags": promoted_tag_columns,
-                "contexts": {},
-            },
-            promoted_tags={
-                "tags": promoted_tag_columns.keys(),
-                "contexts": {},
-            },
+            tag_column_map={"tags": promoted_tag_columns, "contexts": {},},
+            promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {},},
             state_name=ReplacerState.ERRORS,
         ),
     ),
-    query_processors=[PrewhereProcessor()],
+    query_processors=[
+        ExcludeReplacedGroups(
+            project_column="project_id",
+            # key migration is on going. As soon as all the keys we are interested
+            # into in redis are stored with "EVENTS" in the name, we can change this.
+            replacer_state_name=ReplacerState.ERRORS,
+        ),
+        PrewhereProcessor(),
+    ],
 )

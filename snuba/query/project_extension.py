@@ -1,17 +1,13 @@
-from typing import Optional, Sequence
+from typing import Sequence
 
-from snuba import settings, util
-from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
-from snuba.query.conditions import (
-    in_condition,
-    not_in_condition,
-)
-from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba import util
+from snuba.query.conditions import in_condition
+from snuba.query.expressions import Column, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
-from snuba.state import get_config, get_configs
+from snuba.state import get_configs
 from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME
 
 
@@ -69,14 +65,6 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             concurrent_limit=concurr,
         )
 
-    def do_post_processing(
-        self,
-        project_ids: Sequence[int],
-        query: Query,
-        request_settings: RequestSettings,
-    ) -> None:
-        pass
-
     def process_query(
         self,
         query: Query,
@@ -97,61 +85,10 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
 
         request_settings.add_rate_limit(self._get_rate_limit_params(project_ids))
 
-        self.do_post_processing(project_ids, query, request_settings)
-
-
-class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
-    """
-    Extension processor that makes changes to the query by
-    1. Adding the project
-    2. Taking into consideration groups that should be excluded (groups are excluded because of replacement).
-    """
-
-    def __init__(
-        self, project_column: str, replacer_state_name: Optional[ReplacerState]
-    ) -> None:
-        super().__init__(project_column)
-        # This is used to allow us to keep the replacement state in redis for multiple
-        # replacer on multiple tables. replacer_state_name is part of the redis key.
-        self.__replacer_state_name = replacer_state_name
-
-    def do_post_processing(
-        self,
-        project_ids: Sequence[int],
-        query: Query,
-        request_settings: RequestSettings,
-    ) -> None:
-        if not request_settings.get_turbo():
-            final, exclude_group_ids = get_projects_query_flags(
-                project_ids, self.__replacer_state_name
-            )
-            if not final and exclude_group_ids:
-                # If the number of groups to exclude exceeds our limit, the query
-                # should just use final instead of the exclusion set.
-                max_group_ids_exclude = get_config(
-                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
-                )
-                if len(exclude_group_ids) > max_group_ids_exclude:
-                    query.set_final(True)
-                else:
-                    query.add_conditions(
-                        [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
-                    )
-                    query.add_condition_to_ast(
-                        not_in_condition(
-                            None,
-                            FunctionCall(
-                                None, "assumeNotNull", (Column(None, "group_id", None),)
-                            ),
-                            [Literal(None, p) for p in exclude_group_ids],
-                        )
-                    )
-            else:
-                query.set_final(final)
-
 
 class ProjectExtension(QueryExtension):
-    def __init__(self, processor: ProjectExtensionProcessor) -> None:
+    def __init__(self, project_column: str) -> None:
         super().__init__(
-            schema=PROJECT_EXTENSION_SCHEMA, processor=processor,
+            schema=PROJECT_EXTENSION_SCHEMA,
+            processor=ProjectExtensionProcessor(project_column),
         )

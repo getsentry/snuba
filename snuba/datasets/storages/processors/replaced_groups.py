@@ -33,30 +33,32 @@ class ExcludeReplacedGroups(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        final, exclude_group_ids = get_projects_query_flags(
-            list(get_project_ids_in_query(query, self.__project_column)),
-            self.__replacer_state_name,
-        )
-        if not final and exclude_group_ids:
-            # If the number of groups to exclude exceeds our limit, the query
-            # should just use final instead of the exclusion set.
-            max_group_ids_exclude = get_config(
-                "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
+        project_ids = get_project_ids_in_query(query, self.__project_column)
+
+        if project_ids:
+            final, exclude_group_ids = get_projects_query_flags(
+                list(project_ids), self.__replacer_state_name,
             )
-            if len(exclude_group_ids) > max_group_ids_exclude:
-                query.set_final(True)
-            else:
-                query.add_conditions(
-                    [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
+            if not final and exclude_group_ids:
+                # If the number of groups to exclude exceeds our limit, the query
+                # should just use final instead of the exclusion set.
+                max_group_ids_exclude = get_config(
+                    "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
                 )
-                query.add_condition_to_ast(
-                    not_in_condition(
-                        None,
-                        FunctionCall(
-                            None, "assumeNotNull", (Column(None, "group_id", None),)
-                        ),
-                        [Literal(None, p) for p in exclude_group_ids],
+                if len(exclude_group_ids) > max_group_ids_exclude:
+                    query.set_final(True)
+                else:
+                    query.add_conditions(
+                        [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
                     )
-                )
-        else:
-            query.set_final(final)
+                    query.add_condition_to_ast(
+                        not_in_condition(
+                            None,
+                            FunctionCall(
+                                None, "assumeNotNull", (Column(None, "group_id", None),)
+                            ),
+                            [Literal(None, p) for p in exclude_group_ids],
+                        )
+                    )
+            else:
+                query.set_final(final)
