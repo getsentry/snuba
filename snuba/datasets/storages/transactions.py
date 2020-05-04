@@ -32,6 +32,10 @@ from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
     UNKNOWN_SPAN_STATUS,
 )
+from snuba.web.split import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.writer import BatchWriter
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts
@@ -220,5 +224,13 @@ storage = WritableTableStorage(
         ),
         TransactionColumnProcessor(),
         PrewhereProcessor(),
+    ],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="finish_ts",
+        ),
+        TimeSplitQueryStrategy(timestamp_col="finish_ts"),
     ],
 )

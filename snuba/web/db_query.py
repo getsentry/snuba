@@ -146,6 +146,10 @@ def execute_query_with_rate_limits(
         )
 
 
+def get_query_cache_key(formatted_query: SqlQuery) -> str:
+    return md5(force_bytes(formatted_query.format_sql())).hexdigest()
+
+
 def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -176,7 +180,7 @@ def execute_query_with_caching(
     )
 
     if use_cache:
-        key = md5(force_bytes(formatted_query.format_sql())).hexdigest()
+        key = get_query_cache_key(formatted_query)
         result = cache.get(key)
         timer.mark("cache_get")
         stats["cache_hit"] = result is not None
@@ -220,6 +224,34 @@ def execute_query_with_deduplication(
         return execute()
 
 
+def execute_query_with_readthrough_caching(
+    clickhouse_query: Query,
+    request_settings: RequestSettings,
+    formatted_query: SqlQuery,
+    reader: Reader[SqlQuery],
+    timer: Timer,
+    stats: MutableMapping[str, Any],
+    query_settings: MutableMapping[str, Any],
+) -> Result:
+    query_id = get_query_cache_key(formatted_query)
+    query_settings["query_id"] = query_id
+    return cache.get_readthrough(
+        query_id,
+        partial(
+            execute_query_with_rate_limits,
+            clickhouse_query,
+            request_settings,
+            formatted_query,
+            reader,
+            timer,
+            stats,
+            query_settings,
+        ),
+        timeout=query_settings.get("max_execution_time", 30),
+        timer=timer,
+    )
+
+
 def raw_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -260,8 +292,14 @@ def raw_query(
         trace_id,
     )
 
+    execute_query_strategy = (
+        execute_query_with_readthrough_caching
+        if state.get_config("use_readthrough_query_cache", 0)
+        else execute_query_with_deduplication
+    )
+
     try:
-        result = execute_query_with_deduplication(
+        result = execute_query_strategy(
             clickhouse_query,
             request_settings,
             formatted_query,

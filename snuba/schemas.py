@@ -1,36 +1,7 @@
 import copy
-from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Mapping, MutableMapping
 
 import jsonschema
-
-
-def get_time_series_extension_properties(
-    default_granularity: int, default_window: timedelta
-):
-    return {
-        "type": "object",
-        "properties": {
-            "from_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": lambda: (
-                    datetime.utcnow().replace(microsecond=0) - default_window
-                ).isoformat(),
-            },
-            "to_date": {
-                "type": "string",
-                "format": "date-time",
-                "default": lambda: datetime.utcnow().replace(microsecond=0).isoformat(),
-            },
-            "granularity": {
-                "type": "number",
-                "default": default_granularity,
-                "minimum": 1,
-            },
-        },
-        "additionalProperties": False,
-    }
 
 
 Schema = Mapping[str, Any]  # placeholder for JSON schema
@@ -44,13 +15,19 @@ def validate_jsonschema(value, schema, set_defaults=True):
     """
     orig = jsonschema.Draft6Validator.VALIDATORS["properties"]
 
-    def validate_and_default(validator, properties, instance, schema):
+    def validate_and_default(
+        validator,
+        properties: Mapping[str, Any],
+        instance: MutableMapping[str, Any],
+        schema,
+    ):
         for property, subschema in properties.items():
-            if "default" in subschema:
+            if property not in instance and "default" in subschema:
                 if callable(subschema["default"]):
-                    instance.setdefault(property, subschema["default"]())
+                    default_value = subschema["default"]()
                 else:
-                    instance.setdefault(property, copy.deepcopy(subschema["default"]))
+                    default_value = copy.deepcopy(subschema["default"])
+                instance[property] = default_value
 
         for error in orig(validator, properties, instance, schema):
             yield error
