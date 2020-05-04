@@ -26,7 +26,7 @@ test_cases = [
     ),  # Multiple projects in the query provided as tuple
     (
         {"selected_columns": ["column1"], "conditions": []},
-        set(),
+        None,
     ),  # No project condition
     (
         {
@@ -49,7 +49,76 @@ test_cases = [
             ],
         },
         {100, 200, 300, 400, 500},
-    ),  # Multiple project conditions, in unnion
+    ),  # Multiple project conditions, in union
+    (
+        {
+            "selected_columns": ["column1"],
+            "conditions": [
+                ["project_id", "IN", [100, 200, 300]],
+                ["project_id", "=", 400],
+            ],
+        },
+        set(),
+    ),  # A fairly stupid query
+    (
+        {
+            "selected_columns": ["column1"],
+            "conditions": [
+                ["column1", "=", "something"],
+                [["ifNull", ["column2", 0]], "=", 1],
+                ["project_id", "IN", [100, 200, 300]],
+                [("count", ["column3"]), "=", 10],
+                ["project_id", "=", 100],
+            ],
+        },
+        {100},
+    ),  # Multiple conditions in AND. Two project conditions
+    (
+        {
+            "selected_columns": ["column1"],
+            "conditions": [
+                ["project_id", "IN", [100, 200, 300]],
+                [["project_id", "=", 100], ["project_id", "=", 200]],
+            ],
+        },
+        {100, 200},
+    ),  # Main project list in a conditions and multiple project conditions in OR
+    (
+        {
+            "selected_columns": ["column1"],
+            "conditions": [
+                ["project_id", "IN", [100, 200, 300]],
+                [
+                    [["ifNull", ["project_id", 1000]], "=", 100],
+                    [("count", ["column3"]), "=", 10],
+                    [["ifNull", ["project_id", 1000]], "=", 200],
+                ],
+            ],
+        },
+        {100, 200},
+    ),  # Main project list in a conditions and multiple project conditions within function calls
+    (
+        {
+            "selected_columns": ["column1"],
+            "conditions": [
+                [
+                    ["and", [["project_id", "=", 100], ["column1", "=", "something"]]],
+                    "=",
+                    1,
+                ],
+                [
+                    [
+                        "and",
+                        [["project_id", "=", 200], ["column3", "=", "something_else"]],
+                    ],
+                    "=",
+                    1,
+                ],
+            ],
+        },
+        None,
+    ),  # project_id in unsupported functions (cannot navigate into an "and" function)
+    # TODO: make this work as it should through the AST.
 ]
 
 
