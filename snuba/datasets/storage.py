@@ -5,6 +5,7 @@ from snuba.clickhouse.processors import QueryProcessor
 from snuba.clusters.cluster import ClickhouseCluster, get_cluster
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.logical import Query
@@ -72,6 +73,15 @@ class ReadableStorage(Storage):
         """
         raise NotImplementedError
 
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
+        """
+        If this storage supports splitting queries as optimizations, they are provided here.
+        These are optimizations, the query plan builder may decide to override the storage
+        and to skip the splitters. So correctness of the query must not depend on these
+        strategies to be applied.
+        """
+        return []
+
 
 class WritableStorage(Storage):
     """
@@ -99,9 +109,11 @@ class ReadableTableStorage(ReadableStorage):
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
         query_processors: Optional[Sequence[QueryProcessor]] = None,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
     ) -> None:
         self.__schemas = schemas
         self.__query_processors = query_processors or []
+        self.__query_splitters = query_splitters or []
         super().__init__(storage_key, storage_set_key)
 
     def get_schemas(self) -> StorageSchemas:
@@ -109,6 +121,9 @@ class ReadableTableStorage(ReadableStorage):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return self.__query_processors
+
+    def get_query_splitters(self) -> Sequence[QuerySplitStrategy]:
+        return self.__query_splitters
 
 
 class WritableTableStorage(ReadableTableStorage, WritableStorage):
@@ -118,11 +133,14 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
         query_processors: Sequence[QueryProcessor],
+        query_splitters: Sequence[QuerySplitStrategy],
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
         writer_options: Optional[MutableMapping[str, Any]] = None,
     ) -> None:
-        super().__init__(storage_key, storage_set_key, schemas, query_processors)
+        super().__init__(
+            storage_key, storage_set_key, schemas, query_processors, query_splitters
+        )
         write_schema = schemas.get_write_schema()
         assert write_schema is not None
         self.__table_writer = TableWriter(

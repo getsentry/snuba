@@ -57,6 +57,7 @@ storage = CdcStorage(
         pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
     ),
     query_processors=[],
+    query_splitters=[],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
     row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),

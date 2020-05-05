@@ -49,6 +49,7 @@ storage = CdcStorage(
         pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
     ),
     query_processors=[PrewhereProcessor()],
+    query_splitters=[],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
     row_processor=lambda row: GroupAssigneeRow.from_bulk(row).to_clickhouse(),

@@ -151,6 +151,7 @@ storage = WritableTableStorage(
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     query_processors=[PrewhereProcessor()],
+    query_splitters=[],
     stream_loader=KafkaStreamLoader(
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic="events",

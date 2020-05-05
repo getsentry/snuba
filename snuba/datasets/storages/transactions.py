@@ -32,6 +32,7 @@ from snuba.datasets.transactions_processor import (
     TransactionsMessageProcessor,
     UNKNOWN_SPAN_STATUS,
 )
+from snuba.web.split import TimeSplitQueryStrategy
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts
 # columns. It is captured to use the flattened tags optimization only for queries that
@@ -187,6 +188,7 @@ storage = WritableTableStorage(
         TransactionColumnProcessor(),
         PrewhereProcessor(),
     ],
+    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     stream_loader=KafkaStreamLoader(
         processor=TransactionsMessageProcessor(), default_topic="events",
     ),

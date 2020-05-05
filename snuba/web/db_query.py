@@ -194,36 +194,6 @@ def execute_query_with_caching(
         return execute()
 
 
-def execute_query_with_deduplication(
-    clickhouse_query: Query,
-    request_settings: RequestSettings,
-    formatted_query: SqlQuery,
-    reader: Reader[SqlQuery],
-    timer: Timer,
-    stats: MutableMapping[str, Any],
-    query_settings: MutableMapping[str, Any],
-) -> Result:
-    execute = partial(
-        execute_query_with_caching,
-        clickhouse_query,
-        request_settings,
-        formatted_query,
-        reader,
-        timer,
-        stats,
-        query_settings,
-    )
-    if state.get_config("use_deduper", 1):
-        query_id = md5(force_bytes(formatted_query.format_sql())).hexdigest()
-        with state.deduper(query_id) as is_dupe:
-            timer.mark("dedupe_wait")
-            stats.update({"is_duplicate": is_dupe})
-            query_settings["query_id"] = query_id
-            return execute()
-    else:
-        return execute()
-
-
 def execute_query_with_readthrough_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -295,7 +265,7 @@ def raw_query(
     execute_query_strategy = (
         execute_query_with_readthrough_caching
         if state.get_config("use_readthrough_query_cache", 0)
-        else execute_query_with_deduplication
+        else execute_query_with_caching
     )
 
     try:
