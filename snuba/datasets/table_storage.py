@@ -105,7 +105,7 @@ class TableWriter:
     Eventually, after some heavier refactoring of the consumer scripts,
     we could make the writing process more abstract and hide in this class
     the streaming, processing and writing. The writer in such architecture
-    could coordinate the ingestion process but that rebquires a reshuffle
+    could coordinate the ingestion process but that requires a reshuffle
     of responsibilities in the consumer scripts and a common interface
     between bulk load and stream load.
     """
