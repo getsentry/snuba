@@ -1,20 +1,24 @@
 from __future__ import absolute_import
 
-from confluent_kafka import Producer
-from contextlib import contextmanager
 import logging
 import random
 import re
-import simplejson as json
 import time
 import uuid
+from contextlib import contextmanager
 from functools import partial
 from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
 
-from snuba import settings
+import simplejson as json
+from confluent_kafka import KafkaError
+from confluent_kafka import Message as KafkaMessage
+from confluent_kafka import Producer
+
+from snuba import environment, settings
 from snuba.redis import redis_client as rds
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
-
+metrics = MetricsWrapper(environment.metrics, "snuba.state")
 logger = logging.getLogger("snuba.state")
 
 kfk = None
@@ -222,6 +226,18 @@ def safe_dumps_default(value: Any) -> Any:
 safe_dumps = partial(json.dumps, for_json=True, default=safe_dumps_default)
 
 
+def _record_query_delivery_callback(
+    error: Optional[KafkaError], message: KafkaMessage
+) -> None:
+    metrics.increment(
+        "record_query.delivery_callback",
+        tags={"status": "success" if error is None else "failure"},
+    )
+
+    if error is not None:
+        logger.warning("Could not record query due to error: %r", error)
+
+
 def record_query(query_metadata: Mapping[str, Any]) -> None:
     global kfk
     max_redis_queries = 200
@@ -235,7 +251,9 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
             kfk = Producer({"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)})
 
         kfk.produce(
-            settings.QUERIES_TOPIC, data.encode("utf-8"),
+            settings.QUERIES_TOPIC,
+            data.encode("utf-8"),
+            on_delivery=_record_query_delivery_callback,
         )
     except Exception as ex:
         logger.exception("Could not record query due to error: %r", ex)
