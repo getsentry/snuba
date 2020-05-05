@@ -6,6 +6,19 @@ from snuba.clickhouse.query import Query
 from snuba.query.types import Condition
 from snuba.request.request_settings import RequestSettings
 
+ALLOWED_OPERATORS = [
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "=",
+    "!=",
+    "IN",
+    "IS NULL",
+    "IS NOT NULL",
+    "LIKE",
+]
+
 
 class PrewhereProcessor(QueryProcessor):
     """
@@ -40,7 +53,7 @@ class PrewhereProcessor(QueryProcessor):
             (util.columns_in_expr(cond[0]), cond)
             for cond in conditions
             if util.is_condition(cond)
-            and cond[1] != "NOT IN"
+            and cond[1] in ALLOWED_OPERATORS
             and any(col in prewhere_keys for col in util.columns_in_expr(cond[0]))
         ]
         # Use the condition that has the highest priority (based on the
