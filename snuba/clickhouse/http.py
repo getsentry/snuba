@@ -27,6 +27,9 @@ class HTTPBatchWriter(BatchWriter):
     ):
         """
         Builds a writer to send a batch to Clickhouse.
+        The encoder function will be applied to each row to turn it into bytes.
+        We send data to the server with Transfer-Encoding: chunked. If chunk size is 0
+        we send the entire content in one chunk, otherwise it is the rows per chunk.
         """
         self.__pool = HTTPConnectionPool(host, port)
         self.__options = options if options is not None else {}
