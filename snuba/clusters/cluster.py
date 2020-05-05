@@ -61,7 +61,7 @@ class ClickhouseCluster(Cluster[SqlQuery]):
         storage_sets: Set[str],
         is_distributed: bool,
         # The cluster name if is_distributed is set to True
-        cluster_name: Optional[str],
+        cluster_name: Optional[str] = None,
     ):
         super().__init__(storage_sets)
         if is_distributed:
