@@ -16,6 +16,10 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
+from snuba.web.split import (
+    ColumnSplitQueryStrategy,
+    TimeSplitQueryStrategy,
+)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -239,6 +243,7 @@ schema = ReplacingMergeTreeSchema(
         "group_id",
         "tags[sentry:release]",
         "message",
+        "title",
         "environment",
         "project_id",
     ],
@@ -322,5 +327,13 @@ storage = WritableTableStorage(
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         EventsColumnProcessor(),
         PrewhereProcessor(),
+    ],
+    query_splitters=[
+        ColumnSplitQueryStrategy(
+            id_column="event_id",
+            project_column="project_id",
+            timestamp_column="timestamp",
+        ),
+        TimeSplitQueryStrategy(timestamp_col="timestamp"),
     ],
 )
