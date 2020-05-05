@@ -40,6 +40,7 @@ class PrewhereProcessor(QueryProcessor):
             (util.columns_in_expr(cond[0]), cond)
             for cond in conditions
             if util.is_condition(cond)
+            and cond[1] != "NOT IN"
             and any(col in prewhere_keys for col in util.columns_in_expr(cond[0]))
         ]
         # Use the condition that has the highest priority (based on the

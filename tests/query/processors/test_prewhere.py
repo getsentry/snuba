@@ -43,6 +43,14 @@ test_data = [
         [[["a", "=", "1"], ["b", "=", "2"]]],
         [["c", "=", "3"]],
     ),
+    (
+        # Exclude NOT IN condition from the prewhere as they are generally not excluding
+        # most of the dataset.
+        {"conditions": [["a", "NOT IN", [1, 2, 3]], ["b", "=", "2"], ["c", "=", "3"]]},
+        ["a", "b"],
+        [["a", "NOT IN", [1, 2, 3]], ["c", "=", "3"]],
+        [["b", "=", "2"]],
+    ),
 ]
 
 
