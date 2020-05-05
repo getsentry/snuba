@@ -132,7 +132,6 @@ raw_storage = WritableTableStorage(
     storage_set_key=StorageSetKey.SESSIONS,
     schemas=StorageSchemas(read_schema=raw_schema, write_schema=raw_schema),
     query_processors=[],
-    query_splitters=[],
     stream_loader=KafkaStreamLoader(
         processor=SessionsProcessor(), default_topic="ingest-sessions",
     ),

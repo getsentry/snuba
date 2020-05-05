@@ -311,6 +311,12 @@ storage = WritableTableStorage(
         EventsColumnProcessor(),
         PrewhereProcessor(),
     ],
+    stream_loader=KafkaStreamLoader(
+        processor=EventsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="event-replacements",
+        commit_log_topic="snuba-commit-log",
+    ),
     query_splitters=[
         ColumnSplitQueryStrategy(
             id_column="event_id",
@@ -319,12 +325,6 @@ storage = WritableTableStorage(
         ),
         TimeSplitQueryStrategy(timestamp_col="timestamp"),
     ],
-    stream_loader=KafkaStreamLoader(
-        processor=EventsProcessor(promoted_tag_columns),
-        default_topic="events",
-        replacement_topic="event-replacements",
-        commit_log_topic="snuba-commit-log",
-    ),
     replacer_processor=ErrorsReplacer(
         write_schema=schema,
         read_schema=schema,

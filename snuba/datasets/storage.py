@@ -133,8 +133,8 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         storage_set_key: StorageSetKey,
         schemas: StorageSchemas,
         query_processors: Sequence[QueryProcessor],
-        query_splitters: Sequence[QuerySplitStrategy],
         stream_loader: KafkaStreamLoader,
+        query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         replacer_processor: Optional[ReplacerProcessor] = None,
         writer_options: Optional[MutableMapping[str, Any]] = None,
     ) -> None:

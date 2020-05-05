@@ -188,9 +188,9 @@ storage = WritableTableStorage(
         TransactionColumnProcessor(),
         PrewhereProcessor(),
     ],
-    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     stream_loader=KafkaStreamLoader(
         processor=TransactionsMessageProcessor(), default_topic="events",
     ),
+    query_splitters=[TimeSplitQueryStrategy(timestamp_col="finish_ts")],
     writer_options={"insert_allow_materialized_columns": 1},
 )
