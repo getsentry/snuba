@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import time
@@ -76,7 +77,15 @@ class SubscriptionWorker(
             # XXX: The ``extra`` is discarded from ``QueryResult`` since it is
             # not particularly useful in this context and duplicates data that
             # is already being published to the query log.
-            return request, parse_and_run_query(self.__dataset, request, timer).result
+            # XXX: The ``request`` instance is copied when passed to
+            # ``parse_and_run_query`` since it can/will be mutated during
+            # processing.
+            return (
+                request,
+                parse_and_run_query(
+                    self.__dataset, copy.deepcopy(request), timer
+                ).result,
+            )
 
     def process_message(
         self, message: Message[Tick]
