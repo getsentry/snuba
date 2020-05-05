@@ -3,11 +3,11 @@ import logging
 from typing import Optional, Sequence
 
 import click
-from confluent_kafka import Producer
+from confluent_kafka import KafkaError, Message, Producer
 
 from snuba import settings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
-from snuba.datasets.cdc import CdcStorage
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_cdc_storage, CDC_STORAGES
 from snuba.environment import setup_logging, setup_sentry
 from snuba.snapshots.postgres_snapshot import PostgresSnapshot
 from snuba.stateful_consumer.control_protocol import SnapshotLoaded, TransactionData
@@ -19,21 +19,21 @@ from snuba.stateful_consumer.control_protocol import SnapshotLoaded, Transaction
     "--bootstrap-server", multiple=True, help="Kafka bootstrap server to use.",
 )
 @click.option(
-    "--dataset",
-    "dataset_name",
-    type=click.Choice(DATASET_NAMES),
-    help="The dataset to bulk load",
+    "--storage",
+    "storage_name",
+    type=click.Choice([storage_key.value for storage_key in CDC_STORAGES.keys()]),
+    help="The CDC storage to confirm load",
 )
 @click.option(
     "--source",
-    help="Source of the dump. Depending on the dataset it may have different meaning.",
+    help="Source of the dump. Depending on the storage it may have different meaning.",
 )
 @click.option("--log-level", help="Logging level to use.")
 def confirm_load(
     *,
     control_topic: Optional[str],
     bootstrap_server: Sequence[str],
-    dataset_name: str,
+    storage_name: str,
     source: str,
     log_level: Optional[str] = None,
 ) -> None:
@@ -47,18 +47,12 @@ def confirm_load(
 
     logger = logging.getLogger("snuba.loaded-snapshot")
     logger.info(
-        "Sending load completion message for dataset %s, from source %s",
-        dataset_name,
+        "Sending load completion message for storage %s, from source %s",
+        storage_name,
         source,
     )
 
-    dataset = get_dataset(dataset_name)
-
-    storage = dataset.get_writable_storage()
-
-    assert isinstance(
-        storage, CdcStorage
-    ), "Only CDC storages have a control topic thus are supported."
+    storage = get_cdc_storage(StorageKey(storage_name))
 
     control_topic = control_topic or storage.get_default_control_topic()
 
@@ -90,7 +84,7 @@ def confirm_load(
     )
     json_string = json.dumps(msg.to_dict())
 
-    def delivery_callback(error, message) -> None:
+    def delivery_callback(error: KafkaError, message: Message) -> None:
         if error is not None:
             raise error
         else:
