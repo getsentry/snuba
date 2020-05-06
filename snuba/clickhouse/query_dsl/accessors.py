@@ -1,30 +1,9 @@
 from functools import reduce
-from typing import Any, Optional, Sequence, Set, List
+from typing import Optional, Sequence, Set, List
 
 from snuba.clickhouse.query import Query
 from snuba.query.types import Condition
-from snuba.util import is_condition, is_function
-
-
-def _is_project_column_in_function(function: Any, project_column: str) -> bool:
-    """
-    Looks for the project_id referenced as parameter of a whitelisted set of
-    functions.
-    """
-    verified_function = is_function(function)
-    if not verified_function:
-        return False
-
-    if not verified_function[0] in ("assumeNotNull", "ifNull"):
-        return False
-
-    if len(verified_function[1]) < 1:
-        return False
-
-    return (
-        isinstance(verified_function[1][0], str)
-        and project_column == verified_function[1][0]
-    )
+from snuba.util import is_condition
 
 
 def _find_projects_in_condition(
@@ -36,16 +15,13 @@ def _find_projects_in_condition(
     It supports these formats:
     ["col", "=", 1]
     ["col", "IN", [1,2,3]]
-    [["f", ["col"]], "=", 1] if f is one of assumeNotNull, ifNull
 
-    We cannot blindly support project_id columns referenced in any function because
-    several may not be meant to return the project_id itself:
-    [["uniq", ["project_id]], "=", 10]
+    This function does not support project columns referenced as function arguments
+    like assertNotNull(project_id) == x
+    TODO: extend this to support projects when they are function arguments with the AST
     """
 
-    if not project_column == condition[0] and not _is_project_column_in_function(
-        condition[0], project_column
-    ):
+    if not project_column == condition[0]:
         return None
 
     if condition[1] == "=" and isinstance(condition[2], int):
@@ -63,13 +39,12 @@ def get_project_ids_in_query(query: Query, project_column: str) -> Optional[Set[
     representation.
 
     This function looks into first level AND conditions, second level OR conditions but
-    it cannot fully support project ids used as function parameters.
+    it cannot support project ids used as function parameters.
     Specific limitations:
     - If a project_id is a parameter of a function that returns the project_id itself
-      this works only on a whitelisted set of functions. It would be very hard to support
-      every function without a whitelist/blacklist of allowed functions in Snuba
-      queries.
-    - boolean functions are not in the whitelist above. So we do unpack and/or/not conditions
+      this is not supported. It would be very hard to support every function without a
+      whitelist/blacklist of allowed functions in Snuba queries.
+    - boolean functions are not supported. So we do not unpack and/or/not conditions
       expressed as functions. We will be able to do that with the AST.
     - does not exclude projects referenced in NOT conditions.
 

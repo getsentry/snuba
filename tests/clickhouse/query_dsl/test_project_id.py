@@ -95,8 +95,8 @@ test_cases = [
                 ],
             ],
         },
-        {100, 200},
-    ),  # Main project list in a conditions and multiple project conditions within function calls
+        {100, 200, 300},
+    ),  # Main project list in a conditions and multiple project conditions within unsupported function calls
     (
         {
             "selected_columns": ["column1"],
