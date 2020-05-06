@@ -216,6 +216,7 @@ def record_query(query_metadata: Mapping[str, Any]) -> None:
         if kfk is None:
             kfk = Producer({"bootstrap.servers": ",".join(settings.DEFAULT_BROKERS)})
 
+        kfk.poll(0)  # trigger queued delivery callbacks
         kfk.produce(
             settings.QUERIES_TOPIC,
             data.encode("utf-8"),
