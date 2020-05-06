@@ -24,7 +24,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
     There is a period of time between the replacement executing its query and Clickhouse
     merging the rows to achieve consistency. During this period of time we either
-    have to remvoe those rows manually or to run the query in FINAL mode.
+    have to remove those rows manually or to run the query in FINAL mode.
     """
 
     def __init__(

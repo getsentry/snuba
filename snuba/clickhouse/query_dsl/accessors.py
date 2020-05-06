@@ -49,7 +49,7 @@ def get_project_ids_in_query(query: Query, project_column: str) -> Optional[Set[
                 if c[0] == project_column:
                     if c[1] == "=" and isinstance(c[2], int):
                         project_id_sets.append({c[2]})
-                    if c[1] == "IN" and all(
+                    elif c[1] == "IN" and all(
                         isinstance(project, int) for project in c[2]
                     ):
                         project_id_sets.append(set(c[2]))

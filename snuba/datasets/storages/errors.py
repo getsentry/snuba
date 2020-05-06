@@ -155,10 +155,7 @@ storage = WritableTableStorage(
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
     query_processors=[
         PostReplacementConsistencyEnforcer(
-            project_column="project_id",
-            # key migration is on going. As soon as all the keys we are interested
-            # into in redis are stored with "EVENTS" in the name, we can change this.
-            replacer_state_name=ReplacerState.ERRORS,
+            project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
         PrewhereProcessor(),
     ],
