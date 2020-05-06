@@ -52,10 +52,10 @@ class Cluster(ABC, Generic[TQuery, TWriterOptions]):
         raise NotImplementedError
 
 
-WriterOptions = Optional[Mapping[str, Any]]
+ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 
 
-class ClickhouseCluster(Cluster[SqlQuery, WriterOptions]):
+class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
     shared by all storages located on the cluster
@@ -88,7 +88,7 @@ class ClickhouseCluster(Cluster[SqlQuery, WriterOptions]):
         self,
         table_name: str,
         encoder: Callable[[WriterTableRow], bytes],
-        options: WriterOptions,
+        options: ClickhouseWriterOptions,
         chunk_size: Optional[int],
     ) -> BatchWriter:
         return HTTPBatchWriter(

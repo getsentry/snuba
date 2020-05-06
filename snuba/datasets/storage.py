@@ -2,7 +2,11 @@ from abc import ABC, abstractmethod
 from typing import Optional, Sequence
 
 from snuba.clickhouse.processors import QueryProcessor
-from snuba.clusters.cluster import ClickhouseCluster, get_cluster, WriterOptions
+from snuba.clusters.cluster import (
+    ClickhouseCluster,
+    ClickhouseWriterOptions,
+    get_cluster,
+)
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
@@ -136,7 +140,7 @@ class WritableTableStorage(ReadableTableStorage, WritableStorage):
         stream_loader: KafkaStreamLoader,
         query_splitters: Optional[Sequence[QuerySplitStrategy]] = None,
         replacer_processor: Optional[ReplacerProcessor] = None,
-        writer_options: WriterOptions = None,
+        writer_options: ClickhouseWriterOptions = None,
     ) -> None:
         super().__init__(
             storage_key, storage_set_key, schemas, query_processors, query_splitters
