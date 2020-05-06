@@ -51,12 +51,12 @@ storage = CdcStorage(
     storage_key=StorageKey.GROUPEDMESSAGES,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
+    query_processors=[],
     stream_loader=KafkaStreamLoader(
         processor=GroupedMessageProcessor(POSTGRES_TABLE),
         default_topic="cdc",
         pre_filter=CdcTableNameMessageFilter(POSTGRES_TABLE),
     ),
-    query_processors=[],
     default_control_topic="cdc_control",
     postgres_table=POSTGRES_TABLE,
     row_processor=lambda row: GroupedMessageRow.from_bulk(row).to_clickhouse(),
