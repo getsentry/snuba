@@ -1,9 +1,10 @@
-import pytest
 from typing import Any, MutableMapping, Set
 
-from snuba.query.logical import Query as LogicalQuery
+import pytest
+
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query
+from snuba.query.logical import Query as LogicalQuery
 
 test_cases = [
     (

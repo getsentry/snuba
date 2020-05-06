@@ -1,4 +1,5 @@
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -11,20 +12,20 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
     WithCodecs,
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.errors_processor import ErrorsProcessor
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.processors.replaced_groups import PostReplacementConsistencyEnforcer
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 all_columns = ColumnSet(
