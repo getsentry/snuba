@@ -47,12 +47,11 @@ class TestHTTPBatchWriter(BaseEventsTest):
     @pytest.mark.parametrize("chunk_size, input, expected_chunks", test_data)
     def test_chunks(self, chunk_size, input, expected_chunks):
         writer = FakeHTTPWriter(
-            None,
+            "mysterious_inexistent_table",
             settings.CLICKHOUSE_HOST,
             settings.CLICKHOUSE_HTTP_PORT,
             lambda a: a,
             None,
-            "mysterious_inexistent_table",
             chunk_size,
         )
         chunks = writer.chunk(input)

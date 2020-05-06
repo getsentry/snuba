@@ -39,8 +39,9 @@ def run(dataset: Dataset) -> None:
     schemas: MutableSequence[Schema] = []
     writable_storage = dataset.get_writable_storage()
     if writable_storage:
-        writer = writable_storage.get_table_writer()
-        schemas.append(writer.get_schema())
+        # This ensures that the writable storage table is always migrated before
+        # other storages required for that dataset
+        schemas.append(writable_storage.get_table_writer().get_schema())
 
     for storage in dataset.get_all_storages():
         schemas.append(storage.get_schemas().get_read_schema())
