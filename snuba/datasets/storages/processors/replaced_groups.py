@@ -107,7 +107,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
             if len(existing_groups_conditions) > 1:
                 metrics.increment("mismatch.multiple_group_condition")
-                logger.warning("Multiple group exclusion condition in the Query")
+                logger.warning("Multiple group exclusion conditions in the Query")
                 return
 
             if (condition_to_add[2] if condition_to_add else None) != (
