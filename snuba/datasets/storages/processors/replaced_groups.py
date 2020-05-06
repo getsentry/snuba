@@ -1,24 +1,23 @@
 from typing import Optional
 
-from snuba import environment
-from snuba import settings
+from snuba import environment, settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.query_dsl.accessors import get_project_ids_in_query
-from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
-from snuba.request.request_settings import RequestSettings
+from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
+from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
-REPLACED_GROUPS_PROCESSOR_ENABLED = "replaced_groups_processor_enabled"
+CONSISTENCY_ENFORCER_PROCESSOR_ENABLED = "consistency_enforcer_processor_enabled"
 
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 
 
-class ExcludeReplacedGroups(QueryProcessor):
+class PostReplacementConsistencyEnforcer(QueryProcessor):
     """
     This processor tweaks the query to ensure that groups that have been manipulated
     by a replacer (like after a deletion) are excluded if they need to be.
@@ -33,7 +32,7 @@ class ExcludeReplacedGroups(QueryProcessor):
     ) -> None:
         self.__project_column = project_column
         # This is used to allow us to keep the replacement state in redis for multiple
-        # replacer on multiple tables. replacer_state_name is part of the redis key.
+        # replacers on multiple tables. replacer_state_name is part of the redis key.
         self.__replacer_state_name = replacer_state_name
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -74,17 +73,18 @@ class ExcludeReplacedGroups(QueryProcessor):
             else:
                 set_final = final
 
-        if get_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 0):
+        if get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0):
             query.set_final(set_final)
             if condition_to_add:
                 query.add_conditions([condition_to_add])
         else:
             # This is disabled. We assume the query was modified accordingly by the extension
             # and compare the results.
+            # TODO: Swap all this with logger warnings after verifying this does not flood the logs
             if set_final != query.get_final():
                 metrics.increment("mismatch.final")
 
-            groups_conditions = [
+            existing_groups_conditions = [
                 c[2]
                 for c in query.get_conditions() or []
                 if is_condition(c)
@@ -92,16 +92,19 @@ class ExcludeReplacedGroups(QueryProcessor):
                 and c[1] == "NOT IN"
             ]
 
-            if len(groups_conditions) > 1:
-                metrics.increment("mismatch.multiple_groups_condition")
+            if len(existing_groups_conditions) > 1:
+                metrics.increment("mismatch.multiple_group_condition")
+                return
 
             if (condition_to_add[2] if condition_to_add else None) != (
-                groups_conditions[0] if len(groups_conditions) else None
+                existing_groups_conditions[0]
+                if len(existing_groups_conditions) > 0
+                else None
             ):
                 metrics.increment(
                     "mismatch.group_id",
                     tags={
-                        "extension": "yes" if len(groups_conditions) > 0 else "no",
-                        "processor": "yes" if condition_to_add is not None else "no",
+                        "extension": str(len(existing_groups_conditions) > 0),
+                        "processor": str(condition_to_add is not None),
                     },
                 )

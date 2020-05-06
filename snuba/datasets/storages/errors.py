@@ -23,7 +23,7 @@ from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.storages.processors.replaced_groups import ExcludeReplacedGroups
+from snuba.datasets.storages.processors.replaced_groups import PostReplacementConsistencyEnforcer
 from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -169,7 +169,7 @@ storage = WritableTableStorage(
         ),
     ),
     query_processors=[
-        ExcludeReplacedGroups(
+        PostReplacementConsistencyEnforcer(
             project_column="project_id",
             # key migration is on going. As soon as all the keys we are interested
             # into in redis are stored with "EVENTS" in the name, we can change this.

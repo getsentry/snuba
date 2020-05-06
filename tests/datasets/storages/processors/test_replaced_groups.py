@@ -12,8 +12,8 @@ from snuba.datasets.errors_replacer import (
 )
 from snuba.datasets.schemas.tables import TableSource
 from snuba.datasets.storages.processors.replaced_groups import (
-    REPLACED_GROUPS_PROCESSOR_ENABLED,
-    ExcludeReplacedGroups,
+    CONSISTENCY_ENFORCER_PROCESSOR_ENABLED,
+    PostReplacementConsistencyEnforcer,
 )
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -44,53 +44,52 @@ def query() -> ClickhouseQuery:
     )
 
 
-def test_with_turbo(query):
-    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
-    request_settings = HTTPRequestSettings(turbo=True)
+def setup_function() -> None:
+    state.set_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 1)
 
-    ExcludeReplacedGroups("project_id", None).process_query(query, request_settings)
 
-    assert query.get_conditions() == [("project_id", "IN", [2])]
-    assert query.get_condition_from_ast() == build_in("project_id", [2])
+def teardown_function() -> None:
     redis_client.flushdb()
 
 
-def test_without_turbo_with_projects_needing_final(query):
-    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
-    request_settings = HTTPRequestSettings()
+def test_with_turbo(query: ClickhouseQuery) -> None:
+    PostReplacementConsistencyEnforcer("project_id", None).process_query(
+        query, HTTPRequestSettings(turbo=True)
+    )
+
+    assert query.get_conditions() == [("project_id", "IN", [2])]
+    assert query.get_condition_from_ast() == build_in("project_id", [2])
+
+
+def test_without_turbo_with_projects_needing_final(query: ClickhouseQuery) -> None:
     set_project_needs_final(2, ReplacerState.EVENTS)
 
-    ExcludeReplacedGroups("project_id", ReplacerState.EVENTS).process_query(
-        query, request_settings
-    )
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.EVENTS
+    ).process_query(query, HTTPRequestSettings())
 
     assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert query.get_final()
-    redis_client.flushdb()
 
 
-def test_without_turbo_without_projects_needing_final(query):
-    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
-    request_settings = HTTPRequestSettings()
-
-    ExcludeReplacedGroups("project_id", None).process_query(query, request_settings)
+def test_without_turbo_without_projects_needing_final(query: ClickhouseQuery) -> None:
+    PostReplacementConsistencyEnforcer("project_id", None).process_query(
+        query, HTTPRequestSettings()
+    )
 
     assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert not query.get_final()
-    redis_client.flushdb()
 
 
-def test_when_there_are_not_many_groups_to_exclude(query):
-    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
-    request_settings = HTTPRequestSettings()
+def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 5)
     set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
 
-    ExcludeReplacedGroups("project_id", ReplacerState.EVENTS).process_query(
-        query, request_settings
-    )
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.EVENTS
+    ).process_query(query, HTTPRequestSettings())
 
     expected = [
         ("project_id", "IN", [2]),
@@ -119,20 +118,16 @@ def test_when_there_are_not_many_groups_to_exclude(query):
         ),
     )
     assert not query.get_final()
-    redis_client.flushdb()
 
 
-def test_when_there_are_too_many_groups_to_exclude(query):
-    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
-    request_settings = HTTPRequestSettings()
+def test_too_many_groups_to_exclude(query: ClickhouseQuery) -> None:
     state.set_config("max_group_ids_exclude", 2)
     set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
 
-    ExcludeReplacedGroups("project_id", ReplacerState.EVENTS).process_query(
-        query, request_settings
-    )
+    PostReplacementConsistencyEnforcer(
+        "project_id", ReplacerState.EVENTS
+    ).process_query(query, HTTPRequestSettings())
 
     assert query.get_conditions() == [("project_id", "IN", [2])]
     assert query.get_condition_from_ast() == build_in("project_id", [2])
     assert query.get_final()
-    redis_client.flushdb()
