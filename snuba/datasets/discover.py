@@ -28,7 +28,7 @@ from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension
+from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
@@ -280,7 +280,11 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         return {
-            "project": ProjectExtension(project_column="project_id"),
+            "project": ProjectExtension(
+                processor=ProjectWithGroupsProcessor(
+                    project_column="project_id", replacer_state_name=None,
+                )
+            ),
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),

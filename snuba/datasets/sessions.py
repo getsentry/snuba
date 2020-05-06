@@ -12,7 +12,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
-from snuba.query.project_extension import ProjectExtension
+from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
 
 
@@ -45,7 +45,9 @@ class SessionsDataset(TimeSeriesDataset):
                 timestamp_column="started",
             ),
             "organization": OrganizationExtension(),
-            "project": ProjectExtension(project_column="project_id"),
+            "project": ProjectExtension(
+                processor=ProjectExtensionProcessor(project_column="project_id")
+            ),
         }
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
