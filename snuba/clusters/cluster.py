@@ -1,13 +1,16 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Generic, Optional, Sequence, Set
+from typing import Any, Callable, Generic, Mapping, Optional, Sequence, Set, TypeVar
+
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
+from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
+from snuba.writer import BatchWriter, WriterTableRow
 
 
 @dataclass(frozen=True)
@@ -18,7 +21,10 @@ class ClickhouseHost:
     replica: Optional[int] = None
 
 
-class Cluster(ABC, Generic[TQuery]):
+TWriterOptions = TypeVar("TWriterOptions")
+
+
+class Cluster(ABC, Generic[TQuery, TWriterOptions]):
     """
     A cluster is responsible for managing a collection of database nodes.
 
@@ -46,11 +52,24 @@ class Cluster(ABC, Generic[TQuery]):
     def get_reader(self) -> Reader[TQuery]:
         raise NotImplementedError
 
+    @abstractmethod
+    def get_writer(
+        self,
+        table_name: str,
+        encoder: Callable[[WriterTableRow], bytes],
+        options: TWriterOptions,
+        chunk_size: Optional[int],
+    ) -> BatchWriter:
+        raise NotImplementedError
 
-class ClickhouseCluster(Cluster[SqlQuery]):
+
+ClickhouseWriterOptions = Optional[Mapping[str, Any]]
+
+
+class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     """
-    ClickhouseCluster provides a reader and Clickhouse connections that are shared by all
-    storages located on the cluster
+    ClickhouseCluster provides a reader, writer and Clickhouse connections that are
+    shared by all storages located on the cluster
     """
 
     def __init__(
@@ -68,6 +87,7 @@ class ClickhouseCluster(Cluster[SqlQuery]):
             assert cluster_name
         self.__host = host
         self.__port = port
+        self.__http_port = http_port
         self.__is_distributed = is_distributed
         self.__clickhouse_rw = ClickhousePool(host, port)
         self.__clickhouse_ro = ClickhousePool(
@@ -87,6 +107,17 @@ class ClickhouseCluster(Cluster[SqlQuery]):
 
     def get_reader(self) -> Reader[SqlQuery]:
         return self.__reader
+
+    def get_writer(
+        self,
+        table_name: str,
+        encoder: Callable[[WriterTableRow], bytes],
+        options: ClickhouseWriterOptions,
+        chunk_size: Optional[int],
+    ) -> BatchWriter:
+        return HTTPBatchWriter(
+            table_name, self.__host, self.__http_port, encoder, options, chunk_size
+        )
 
     def get_nodes(self) -> Sequence[ClickhouseHost]:
         if self.__is_distributed:

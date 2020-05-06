@@ -22,7 +22,7 @@ from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 all_columns = ColumnSet(
@@ -34,8 +34,7 @@ all_columns = ColumnSet(
         (
             "event_hash",
             WithCodecs(
-                Materialized(UInt(64), "cityHash64(toString(event_id))",),
-                ["NONE"],
+                Materialized(UInt(64), "cityHash64(toString(event_id))",), ["NONE"],
             ),
         ),
         ("platform", LowCardinality(String())),
@@ -56,10 +55,7 @@ all_columns = ColumnSet(
         ("contexts", Nested([("key", String()), ("value", String())])),
         ("_contexts_flattened", String()),
         ("transaction_name", WithDefault(LowCardinality(String()), "''")),
-        (
-            "transaction_hash",
-            Materialized(UInt(64), "cityHash64(transaction_name)"),
-        ),
+        ("transaction_hash", Materialized(UInt(64), "cityHash64(transaction_name)"),),
         ("span_id", Nullable(UInt(64))),
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
@@ -154,27 +150,18 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=ErrorsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="errors-replacements",
-        ),
-        replacer_processor=ErrorsReplacer(
-            write_schema=schema,
-            read_schema=schema,
-            required_columns=required_columns,
-            tag_column_map={
-                "tags": promoted_tag_columns,
-                "contexts": {},
-            },
-            promoted_tags={
-                "tags": promoted_tag_columns.keys(),
-                "contexts": {},
-            },
-            state_name=ReplacerState.ERRORS,
-        ),
-    ),
     query_processors=[PrewhereProcessor()],
+    stream_loader=KafkaStreamLoader(
+        processor=ErrorsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="errors-replacements",
+    ),
+    replacer_processor=ErrorsReplacer(
+        write_schema=schema,
+        read_schema=schema,
+        required_columns=required_columns,
+        tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
+        promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
+        state_name=ReplacerState.ERRORS,
+    ),
 )
