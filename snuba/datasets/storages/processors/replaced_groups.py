@@ -1,5 +1,6 @@
 from typing import Optional
 
+from snuba import environment
 from snuba import settings
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -9,6 +10,12 @@ from snuba.request.request_settings import RequestSettings
 from snuba.query.conditions import not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.state import get_config
+from snuba.util import is_condition
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+REPLACED_GROUPS_PROCESSOR_ENABLED = "replaced_groups_processor_enabled"
+
+metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 
 
 class ExcludeReplacedGroups(QueryProcessor):
@@ -35,6 +42,8 @@ class ExcludeReplacedGroups(QueryProcessor):
 
         project_ids = get_project_ids_in_query(query, self.__project_column)
 
+        set_final = False
+        condition_to_add = None
         if project_ids:
             final, exclude_group_ids = get_projects_query_flags(
                 list(project_ids), self.__replacer_state_name,
@@ -46,10 +55,12 @@ class ExcludeReplacedGroups(QueryProcessor):
                     "max_group_ids_exclude", settings.REPLACER_MAX_GROUP_IDS_TO_EXCLUDE
                 )
                 if len(exclude_group_ids) > max_group_ids_exclude:
-                    query.set_final(True)
+                    set_final = True
                 else:
-                    query.add_conditions(
-                        [(["assumeNotNull", ["group_id"]], "NOT IN", exclude_group_ids)]
+                    condition_to_add = (
+                        ["assumeNotNull", ["group_id"]],
+                        "NOT IN",
+                        exclude_group_ids,
                     )
                     query.add_condition_to_ast(
                         not_in_condition(
@@ -61,4 +72,36 @@ class ExcludeReplacedGroups(QueryProcessor):
                         )
                     )
             else:
-                query.set_final(final)
+                set_final = final
+
+        if get_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 0):
+            query.set_final(set_final)
+            if condition_to_add:
+                query.add_conditions([condition_to_add])
+        else:
+            # This is disabled. We assume the query was modified accordingly by the extension
+            # and compare the results.
+            if set_final != query.get_final():
+                metrics.increment("mismatch.final")
+
+            groups_conditions = [
+                c[2]
+                for c in query.get_conditions() or []
+                if is_condition(c)
+                and c[0] == ["assumeNotNull", ["group_id"]]
+                and c[1] == "NOT IN"
+            ]
+
+            if len(groups_conditions) > 1:
+                metrics.increment("mismatch.multiple_groups_condition")
+
+            if (condition_to_add[2] if condition_to_add else None) != (
+                groups_conditions[0] if len(groups_conditions) else None
+            ):
+                metrics.increment(
+                    "mismatch.group_id",
+                    tags={
+                        "extension": "yes" if len(groups_conditions) > 0 else "no",
+                        "processor": "yes" if condition_to_add is not None else "no",
+                    },
+                )

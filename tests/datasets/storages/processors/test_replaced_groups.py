@@ -1,17 +1,20 @@
-import pytest
-
 from typing import Sequence
+
+import pytest
 
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.errors_replacer import (
+    ReplacerState,
     set_project_exclude_groups,
     set_project_needs_final,
-    ReplacerState,
 )
 from snuba.datasets.schemas.tables import TableSource
-from snuba.datasets.storages.processors.replaced_groups import ExcludeReplacedGroups
+from snuba.datasets.storages.processors.replaced_groups import (
+    REPLACED_GROUPS_PROCESSOR_ENABLED,
+    ExcludeReplacedGroups,
+)
 from snuba.query.conditions import BooleanFunctions
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
@@ -42,6 +45,7 @@ def query() -> ClickhouseQuery:
 
 
 def test_with_turbo(query):
+    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
     request_settings = HTTPRequestSettings(turbo=True)
 
     ExcludeReplacedGroups("project_id", None).process_query(query, request_settings)
@@ -52,6 +56,7 @@ def test_with_turbo(query):
 
 
 def test_without_turbo_with_projects_needing_final(query):
+    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
     request_settings = HTTPRequestSettings()
     set_project_needs_final(2, ReplacerState.EVENTS)
 
@@ -66,6 +71,7 @@ def test_without_turbo_with_projects_needing_final(query):
 
 
 def test_without_turbo_without_projects_needing_final(query):
+    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
     request_settings = HTTPRequestSettings()
 
     ExcludeReplacedGroups("project_id", None).process_query(query, request_settings)
@@ -77,6 +83,7 @@ def test_without_turbo_without_projects_needing_final(query):
 
 
 def test_when_there_are_not_many_groups_to_exclude(query):
+    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
     request_settings = HTTPRequestSettings()
     state.set_config("max_group_ids_exclude", 5)
     set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)
@@ -116,6 +123,7 @@ def test_when_there_are_not_many_groups_to_exclude(query):
 
 
 def test_when_there_are_too_many_groups_to_exclude(query):
+    state.set_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 1)
     request_settings = HTTPRequestSettings()
     state.set_config("max_group_ids_exclude", 2)
     set_project_exclude_groups(2, [100, 101, 102], ReplacerState.EVENTS)

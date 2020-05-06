@@ -2,6 +2,9 @@ from typing import Optional, Sequence
 
 from snuba import settings, util
 from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
+from snuba.datasets.storages.processors.replaced_groups import (
+    REPLACED_GROUPS_PROCESSOR_ENABLED,
+)
 from snuba.query.conditions import (
     in_condition,
     not_in_condition,
@@ -121,6 +124,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         query: Query,
         request_settings: RequestSettings,
     ) -> None:
+        if get_config(REPLACED_GROUPS_PROCESSOR_ENABLED, 0):
+            return
+
         if not request_settings.get_turbo():
             final, exclude_group_ids = get_projects_query_flags(
                 project_ids, self.__replacer_state_name
