@@ -97,7 +97,7 @@ class KafkaStreamLoader:
 
 class TableWriter:
     """
-    This class provides to a dataset write support on a Clickhouse table.
+    This class provides to a storage write support on a Clickhouse table.
     It is schema aware (the Clickhouse write schema), it provides a writer
     to write on Clickhouse and a two loaders: one for bulk load of the table
     and the other for streaming load.
