@@ -1,3 +1,5 @@
+import logging
+
 from typing import Optional
 
 from snuba import environment, settings
@@ -14,6 +16,7 @@ from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 
 CONSISTENCY_ENFORCER_PROCESSOR_ENABLED = "consistency_enforcer_processor_enabled"
 
+logger = logging.getLogger(__name__)
 metrics = MetricsWrapper(environment.metrics, "processors.replaced_groups")
 
 
@@ -39,7 +42,15 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         if request_settings.get_turbo():
             return
 
-        project_ids = get_project_ids_in_query(query, self.__project_column)
+        activated = get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0)
+        try:
+            project_ids = get_project_ids_in_query(query, self.__project_column)
+        except Exception as e:
+            if activated:
+                raise e
+            else:
+                logger.warning("Failed to find project ids in the Query", exc_info=True)
+                return
 
         set_final = False
         condition_to_add = None
@@ -73,7 +84,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             else:
                 set_final = final
 
-        if get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0):
+        if activated:
             query.set_final(set_final)
             if condition_to_add:
                 query.add_conditions([condition_to_add])
