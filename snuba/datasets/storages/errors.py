@@ -1,5 +1,4 @@
 from snuba.clickhouse.columns import (
-    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -12,6 +11,7 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
+    UUID,
     WithCodecs,
     WithDefault,
 )
@@ -25,7 +25,7 @@ from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
-from snuba.datasets.table_storage import KafkaStreamLoader, TableWriter
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 all_columns = ColumnSet(
@@ -153,22 +153,6 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=ErrorsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="errors-replacements",
-        ),
-        replacer_processor=ErrorsReplacer(
-            write_schema=schema,
-            read_schema=schema,
-            required_columns=required_columns,
-            tag_column_map={"tags": promoted_tag_columns, "contexts": {},},
-            promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {},},
-            state_name=ReplacerState.ERRORS,
-        ),
-    ),
     query_processors=[
         PostReplacementConsistencyEnforcer(
             project_column="project_id",
@@ -178,4 +162,17 @@ storage = WritableTableStorage(
         ),
         PrewhereProcessor(),
     ],
+    stream_loader=KafkaStreamLoader(
+        processor=ErrorsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="errors-replacements",
+    ),
+    replacer_processor=ErrorsReplacer(
+        write_schema=schema,
+        read_schema=schema,
+        required_columns=required_columns,
+        tag_column_map={"tags": promoted_tag_columns, "contexts": {}},
+        promoted_tags={"tags": promoted_tag_columns.keys(), "contexts": {}},
+        state_name=ReplacerState.ERRORS,
+    ),
 )

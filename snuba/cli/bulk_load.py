@@ -25,11 +25,7 @@ from snuba.writer import BufferedWriterWrapper
 @click.option("--dest-table", help="Clickhouse destination table.")
 @click.option("--log-level", help="Logging level to use.")
 def bulk_load(
-    *,
-    storage_name: str,
-    dest_table: Optional[str],
-    source: str,
-    log_level: Optional[str] = None,
+    *, storage_name: str, dest_table: str, source: str, log_level: Optional[str] = None,
 ) -> None:
     setup_logging(log_level)
     setup_sentry()
@@ -47,13 +43,16 @@ def bulk_load(
         product=settings.SNAPSHOT_LOAD_PRODUCT, path=source,
     )
 
-    loader = table_writer.get_bulk_loader(snapshot_source, dest_table)
+    loader = table_writer.get_bulk_loader(
+        snapshot_source,
+        storage.get_postgres_table(),
+        dest_table,
+        storage.get_row_processor(),
+    )
     # TODO: see whether we need to pass options to the writer
     writer = BufferedWriterWrapper(
         table_writer.get_bulk_writer(table_name=dest_table),
         settings.BULK_CLICKHOUSE_BUFFER,
     )
 
-    clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
-
-    loader.load(writer, clickhouse_ro)
+    loader.load(writer)
