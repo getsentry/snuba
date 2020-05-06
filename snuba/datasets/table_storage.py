@@ -171,7 +171,7 @@ class TableWriter:
             table_name,
             lambda row: rapidjson.dumps(row).encode("utf-8"),
             options,
-            chunk_size=settings.CLICKHOUSE_HTTP_CHUNK_SIZE,
+            chunk_size=settings.BULK_CLICKHOUSE_BUFFER,
         )
 
     def get_bulk_loader(
