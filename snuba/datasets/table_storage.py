@@ -3,11 +3,11 @@ import json
 import rapidjson
 
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clusters.cluster import ClickhouseCluster
+from snuba.clusters.cluster import ClickhouseCluster, WriterOptions
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -116,7 +116,7 @@ class TableWriter:
         write_schema: WritableTableSchema,
         stream_loader: KafkaStreamLoader,
         replacer_processor: Optional[ReplacerProcessor] = None,
-        writer_options: Optional[MutableMapping[str, Any]] = None,
+        writer_options: WriterOptions = None,
     ) -> None:
         self.__cluster = cluster
         self.__table_schema = write_schema
@@ -204,7 +204,7 @@ class TableWriter:
         return self.__replacer_processor
 
     def __update_writer_options(
-        self, options: Optional[MutableMapping[str, Any]] = None,
+        self, options: WriterOptions = None,
     ) -> Mapping[str, Any]:
         if options is None:
             options = {}
