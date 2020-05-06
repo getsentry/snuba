@@ -4,10 +4,8 @@ import logging
 import random
 import re
 import time
-import uuid
-from contextlib import contextmanager
 from functools import partial
-from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Optional, Sequence, Tuple
 
 import simplejson as json
 from confluent_kafka import KafkaError
@@ -53,38 +51,6 @@ def get_rates(bucket: str, rollup: int = 60) -> Sequence[Any]:
     for i in reversed(range(now - rollup, now - rate_history_s, -rollup)):
         pipe.zcount(bucket, i, "({:f}".format(i + rollup))
     return [c / float(rollup) for c in pipe.execute()]
-
-
-@contextmanager
-def deduper(query_id: str) -> Iterator[bool]:
-    """
-    A simple redis distributed lock on a query_id to prevent multiple
-    concurrent queries running with the same id. Blocks subsequent
-    queries until the first is finished.
-
-    When used in conjunction with caching this means that the subsequent
-    queries can then use the cached result from the first query.
-    """
-
-    unlock = """
-        if redis.call('get', KEYS[1]) == ARGV[1]
-        then
-            return redis.call('del', KEYS[1])
-        else
-            return 0
-        end
-    """
-
-    lock = "{}{}".format(query_lock_prefix, query_id)
-    nonce = uuid.uuid4()
-    try:
-        is_dupe = False
-        while not rds.set(lock, nonce, nx=True, ex=max_query_duration_s):
-            is_dupe = True
-            time.sleep(0.01)
-        yield is_dupe
-    finally:
-        rds.eval(unlock, 1, lock, nonce)
 
 
 # Runtime Configuration
