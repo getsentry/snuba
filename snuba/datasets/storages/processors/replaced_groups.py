@@ -92,7 +92,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             # This is disabled. We assume the query was modified accordingly by the extension
             # and compare the results.
             # TODO: Swap all this with logger warnings after verifying this does not flood the logs
+            log_issue = False
             if set_final != query.get_final():
+                log_issue = True
                 metrics.increment("mismatch.final")
 
             existing_groups_conditions = [
@@ -105,6 +107,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
             if len(existing_groups_conditions) > 1:
                 metrics.increment("mismatch.multiple_group_condition")
+                logger.warning("Multiple group exclusion condition in the Query")
                 return
 
             if (condition_to_add[2] if condition_to_add else None) != (
@@ -119,3 +122,11 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         "processor": str(condition_to_add is not None),
                     },
                 )
+                log_issue = True
+
+            if log_issue:
+                logger.warning(
+                    "Discrepancy between project_extension and replacement consistency processor"
+                )
+            else:
+                metrics.increment("match")
