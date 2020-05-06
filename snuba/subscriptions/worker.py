@@ -8,8 +8,8 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Mapping, NamedTuple, Optional, Sequence, Tuple
 
 from snuba.datasets.dataset import Dataset
-from snuba.request import Request
 from snuba.reader import Result
+from snuba.request import Request
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import Subscription
 from snuba.subscriptions.scheduler import ScheduledTask, Scheduler
