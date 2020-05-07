@@ -53,16 +53,17 @@ def detect_table(
     """
     event_columns = set()
     transaction_columns = set()
+    using_duration = False
     for col in query.get_all_referenced_columns():
         if events_only_columns.get(col):
             event_columns.add(col)
         elif transactions_only_columns.get(col):
             transaction_columns.add(col)
+            using_duration = using_duration or col == "duration"
 
     selected_table = None
 
-    # First check for a top level condition that matches either type = transaction
-    # type != transaction.
+    # If the user has explicity defined what type they want, show them that
     conditions = query.get_conditions()
     if conditions:
         for idx, condition in enumerate(conditions):
@@ -71,6 +72,12 @@ def detect_table(
                     selected_table = EVENTS
                 elif tuple(condition) == ("type", "=", "transaction"):
                     selected_table = TRANSACTIONS
+
+    # Most "impossible" queries happen because duration is being used along with
+    # event specific columns. To try and avoid as many of these as possible, if duration
+    # is being used, always use the transactions dataset.
+    if using_duration:
+        selected_table = TRANSACTIONS
 
     if not selected_table:
         # Check for any conditions that reference a table specific field

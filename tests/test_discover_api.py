@@ -1,5 +1,5 @@
 import calendar
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 import simplejson as json
 import uuid
@@ -60,7 +60,9 @@ class TestDiscoverApi(BaseApiTest):
                             "type": "transaction",
                             "transaction": "/api/do_things",
                             "start_timestamp": datetime.timestamp(self.base_time),
-                            "timestamp": datetime.timestamp(self.base_time),
+                            "timestamp": datetime.timestamp(
+                                self.base_time + timedelta(minutes=1)
+                            ),
                             "tags": {
                                 # Sentry
                                 "environment": u"prød",
@@ -527,3 +529,21 @@ class TestDiscoverApi(BaseApiTest):
             ).data
         )
         assert result["data"] == [{"contexts[device.online]": "True"}]
+
+    def test_duration_defaults_to_transactions(self):
+        result = json.loads(
+            self.app.post(
+                "/query",
+                data=json.dumps(
+                    {
+                        "dataset": "discover",
+                        "project": self.project_id,
+                        "selected_columns": ["group_id", "server_name"],
+                        "aggregations": [["avg", "duration", "avg_duration"]],
+                    }
+                ),
+            ).data
+        )
+        assert result["data"][0]["group_id"] == 0
+        assert result["data"][0]["server_name"] == None
+        assert result["data"][0]["avg_duration"] > 0
