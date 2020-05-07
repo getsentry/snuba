@@ -16,17 +16,17 @@ from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.events_processor import EventsProcessor
-from snuba.web.split import (
-    ColumnSplitQueryStrategy,
-    TimeSplitQueryStrategy,
-)
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.events_column_processor import EventsColumnProcessor
-from snuba.datasets.table_storage import TableWriter, KafkaStreamLoader
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
+from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
+from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
 
 
 def events_migrations(
@@ -304,30 +304,25 @@ storage = WritableTableStorage(
     storage_key=StorageKey.EVENTS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    table_writer=TableWriter(
-        write_schema=schema,
-        stream_loader=KafkaStreamLoader(
-            processor=EventsProcessor(promoted_tag_columns),
-            default_topic="events",
-            replacement_topic="event-replacements",
-            commit_log_topic="snuba-commit-log",
-        ),
-        replacer_processor=ErrorsReplacer(
-            write_schema=schema,
-            read_schema=schema,
-            required_columns=[col.escaped for col in required_columns],
-            tag_column_map=get_tag_column_map(),
-            promoted_tags=get_promoted_tags(),
-            state_name=ReplacerState.EVENTS,
-        ),
-    ),
     query_processors=[
+        PostReplacementConsistencyEnforcer(
+            project_column="project_id",
+            # key migration is on going. As soon as all the keys we are interested
+            # into in redis are stored with "EVENTS" in the name, we can change this.
+            replacer_state_name=None,
+        ),
         # TODO: This one should become an entirely separate storage and picked
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         EventsColumnProcessor(),
         PrewhereProcessor(),
     ],
+    stream_loader=KafkaStreamLoader(
+        processor=EventsProcessor(promoted_tag_columns),
+        default_topic="events",
+        replacement_topic="event-replacements",
+        commit_log_topic="snuba-commit-log",
+    ),
     query_splitters=[
         ColumnSplitQueryStrategy(
             id_column="event_id",
@@ -336,4 +331,12 @@ storage = WritableTableStorage(
         ),
         TimeSplitQueryStrategy(timestamp_col="timestamp"),
     ],
+    replacer_processor=ErrorsReplacer(
+        write_schema=schema,
+        read_schema=schema,
+        required_columns=[col.escaped for col in required_columns],
+        tag_column_map=get_tag_column_map(),
+        promoted_tags=get_promoted_tags(),
+        state_name=ReplacerState.EVENTS,
+    ),
 )

@@ -1,19 +1,18 @@
 from typing import Optional, Sequence
 
 from snuba import settings, util
-from snuba.datasets.errors_replacer import get_projects_query_flags, ReplacerState
-from snuba.query.conditions import (
-    in_condition,
-    not_in_condition,
+from snuba.datasets.errors_replacer import ReplacerState, get_projects_query_flags
+from snuba.datasets.storages.processors.replaced_groups import (
+    CONSISTENCY_ENFORCER_PROCESSOR_ENABLED,
 )
+from snuba.query.conditions import in_condition, not_in_condition
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.processors import ExtensionData, ExtensionQueryProcessor
 from snuba.request.request_settings import RequestSettings
 from snuba.state import get_config, get_configs
-from snuba.state.rate_limit import RateLimitParameters, PROJECT_RATE_LIMIT_NAME
-
+from snuba.state.rate_limit import PROJECT_RATE_LIMIT_NAME, RateLimitParameters
 
 PROJECT_EXTENSION_SCHEMA = {
     "type": "object",
@@ -121,6 +120,9 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
         query: Query,
         request_settings: RequestSettings,
     ) -> None:
+        if get_config(CONSISTENCY_ENFORCER_PROCESSOR_ENABLED, 0):
+            return
+
         if not request_settings.get_turbo():
             final, exclude_group_ids = get_projects_query_flags(
                 project_ids, self.__replacer_state_name
