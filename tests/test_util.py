@@ -451,18 +451,14 @@ class TestUtil(BaseTest):
                 tuplify(
                     [
                         "if",
-                        [
-                            ["in", ["release", "tuple", ["'foo'"]]],
-                            "release",
-                            "'other'",
-                        ],
-                        "release",
+                        [["in", ["val", "tuple", ["'foo'"]]], "val", "'other'"],
+                        "val",
                     ]
                 ),
                 deepcopy(query),
                 ParsingContext(),
             )
-            == "(if(in(release, tuple('foo')), release, 'other') AS release)"
+            == "(if(in(val, tuple('foo')), val, 'other') AS val)"
         )
         assert (
             complex_column_expr(
@@ -470,14 +466,14 @@ class TestUtil(BaseTest):
                 tuplify(
                     [
                         "if",
-                        ["in", ["release", "tuple", ["'foo'"]], "release", "'other'"],
-                        "release",
+                        ["in", ["val", "tuple", ["'foo'"]], "val", "'other'"],
+                        "val",
                     ]
                 ),
                 deepcopy(query),
                 ParsingContext(),
             )
-            == "(if(in(release, tuple('foo')), release, 'other') AS release)"
+            == "(if(in(val, tuple('foo')), val, 'other') AS val)"
         )
 
         # TODO once search_message is filled in everywhere, this can be just 'message' again.
