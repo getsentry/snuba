@@ -94,9 +94,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
             if set_final != query.get_final():
                 metrics.increment("mismatch.final")
                 logger.warning(
-                    "Discrepancy between project_extension and processor. Ext final: %r. Processor final: %r.",
-                    query.get_final(),
-                    set_final,
+                    "Final discrepancy between project_extension and processor.",
+                    extra={"extension": query.get_final(), "processor": set_final},
                     exc_info=True,
                 )
 
@@ -127,8 +126,10 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     },
                 )
                 logger.warning(
-                    "Discrepancy between project_extension and processor. Ext condition: %r. Processor condition: %r.",
-                    existing_groups_conditions,
-                    condition_to_add,
+                    "Groups discrepancy between project_extension and processor.",
+                    extra={
+                        "extension": existing_groups_conditions,
+                        "processor": condition_to_add,
+                    },
                     exc_info=True,
                 )
