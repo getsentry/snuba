@@ -1,3 +1,5 @@
+from typing import Set
+
 TESTING = True
 
 REDIS_DB = 2
@@ -6,3 +8,4 @@ CONFIG_MEMOIZE_TIMEOUT = 0
 
 RECORD_QUERIES = True
 USE_RESULT_CACHE = True
+DISABLED_DATASETS: Set[str] = set()
