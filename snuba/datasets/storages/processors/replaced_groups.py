@@ -107,7 +107,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
             if len(existing_groups_conditions) > 1:
                 metrics.increment("mismatch.multiple_group_condition")
-                logger.warning("Multiple group exclusion conditions in the Query")
+                logger.warning(
+                    "Multiple group exclusion conditions in the Query", exc_info=True
+                )
                 return
 
             if (condition_to_add[2] if condition_to_add else None) != (
@@ -126,7 +128,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
 
             if log_issue:
                 logger.warning(
-                    "Discrepancy between project_extension and replacement consistency processor"
+                    "Discrepancy between project_extension and replacement consistency processor",
+                    exc_info=True,
                 )
             else:
                 metrics.increment("match")
