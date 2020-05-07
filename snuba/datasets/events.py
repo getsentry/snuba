@@ -54,6 +54,17 @@ class EventsDataset(TimeSeriesDataset):
         parsing_context: ParsingContext,
         table_alias: str = "",
     ):
+        # These column aliases originally existed in the ``discover`` dataset,
+        # but now live here to maintain compatibility between the discover data
+        # model and the events data model that is used for subscriptions. In
+        # the future, these should be resolved at the entity level.
+        if column_name == "release":
+            column_name = "tags[sentry:release]"
+        elif column_name == "dist":
+            column_name = "tags[sentry:dist]"
+        elif column_name == "user":
+            column_name = "tags[sentry:user]"
+
         processed_column = self.__tags_processor.process_column_expression(
             column_name, query, parsing_context, table_alias
         )

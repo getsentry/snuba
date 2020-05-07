@@ -338,12 +338,6 @@ class DiscoverDataset(TimeSeriesDataset):
         else:
             if column_name == "time":
                 return self.time_expr("timestamp", query.get_granularity(), table_alias)
-            if column_name == "release":
-                column_name = "tags[sentry:release]"
-            if column_name == "dist":
-                column_name = "tags[sentry:dist]"
-            if column_name == "user":
-                column_name = "tags[sentry:user]"
             if self.__transactions_columns.get(column_name):
                 return "NULL"
 
