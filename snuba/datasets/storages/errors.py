@@ -22,6 +22,9 @@ from snuba.datasets.errors_replacer import ErrorsReplacer, ReplacerState
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.processors.replaced_groups import (
+    PostReplacementConsistencyEnforcer,
+)
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
 
@@ -150,7 +153,12 @@ storage = WritableTableStorage(
     storage_key=StorageKey.ERRORS,
     storage_set_key=StorageSetKey.EVENTS,
     schemas=StorageSchemas(read_schema=schema, write_schema=schema),
-    query_processors=[PrewhereProcessor()],
+    query_processors=[
+        PostReplacementConsistencyEnforcer(
+            project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
+        ),
+        PrewhereProcessor(),
+    ],
     stream_loader=KafkaStreamLoader(
         processor=ErrorsProcessor(promoted_tag_columns),
         default_topic="events",
