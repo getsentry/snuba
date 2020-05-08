@@ -51,7 +51,11 @@ def optimize(
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
     if clickhouse_host and clickhouse_port:
-        clickhouse_connections = [ClickhousePool(clickhouse_host, clickhouse_port)]
+        clickhouse_connections = [
+            ClickhousePool(
+                clickhouse_host, clickhouse_port, send_receive_timeout=timeout
+            )
+        ]
     elif not local_dataset_mode():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
@@ -59,7 +63,9 @@ def optimize(
         # dataset using the cluster's host/port configuration.
         clickhouse_connections = list(
             set(
-                storage.get_cluster().get_connection(ClickhouseClientSettings.OPTIMIZE)
+                storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.OPTIMIZE, send_receive_timeout=timeout
+                )
                 for storage in dataset.get_all_storages()
             )
         )
