@@ -79,7 +79,8 @@ class DefaultLambdaMapper(StructuredExpressionMapper[Lambda, Expression]):
         self, expression: Lambda, children_translator: ExpressionVisitor[Expression],
     ) -> Optional[Expression]:
         return replace(
-            expression, transformation=expression.accept(children_translator),
+            expression,
+            transformation=expression.transformation.accept(children_translator),
         )
 
 

@@ -18,9 +18,9 @@ from snuba.query.expressions import (
 @dataclass(frozen=True)
 class ColumnMapper(SimpleExpressionMapper[Column, Expression]):
     from_col_name: str
-    from_table_name: str
+    from_table_name: Optional[str]
     to_col_name: str
-    to_table_name: str
+    to_table_name: Optional[str]
 
     def attemptMap(self, expression: Column) -> Optional[Expression]:
         if (
@@ -30,7 +30,7 @@ class ColumnMapper(SimpleExpressionMapper[Column, Expression]):
             return Column(
                 alias=expression.alias,
                 table_name=self.to_table_name,
-                column_name=self.to_table_name,
+                column_name=self.to_col_name,
             )
         else:
             return None
