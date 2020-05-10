@@ -7,13 +7,13 @@ TExpIn = TypeVar("TExpIn", bound=Expression)
 TExpOut = TypeVar("TExpOut")
 
 
-class SimpleExpressionMappingRule(ABC, Generic[TExpIn, TExpOut]):
+class SimpleExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
     @abstractmethod
     def attemptMap(self, expression: TExpIn) -> Optional[TExpOut]:
         raise NotImplementedError
 
 
-class StructuredExpressionMappingRule(ABC, Generic[TExpIn, TExpOut]):
+class StructuredExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
     @abstractmethod
     def attemptMap(
         self, expression: TExpIn, children_translator: ExpressionVisitor[TExpOut]
@@ -30,7 +30,7 @@ StructuredRuleExecutor = Callable[
 
 
 class StructuredMatchingMappingRule(
-    StructuredExpressionMappingRule[TExpIn, TExpOut], Generic[TExpIn, TExpOut]
+    StructuredExpressionMapper[TExpIn, TExpOut], Generic[TExpIn, TExpOut]
 ):
     def __init__(
         self,

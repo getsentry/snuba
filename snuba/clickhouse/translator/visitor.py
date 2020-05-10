@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from copy import deepcopy
 from dataclasses import replace
 from typing import Optional, TypeVar
@@ -7,8 +5,8 @@ from typing import Optional, TypeVar
 
 from snuba.clickhouse.query import Expression
 from snuba.datasets.plans.translator.mapping_rules import (
-    SimpleExpressionMappingRule,
-    StructuredExpressionMappingRule,
+    SimpleExpressionMapper,
+    StructuredExpressionMapper,
 )
 from snuba.datasets.plans.translator.visitor import (
     ExpressionMappingSpec,
@@ -25,12 +23,12 @@ from snuba.query.expressions import (
 TSimpleExp = TypeVar("TSimpleExp", bound=Expression)
 
 
-class DefaultSimpleMapper(SimpleExpressionMappingRule[TSimpleExp, Expression]):
+class DefaultSimpleMapper(SimpleExpressionMapper[TSimpleExp, Expression]):
     def attemptMap(self, expression: TSimpleExp) -> Optional[Expression]:
         return deepcopy(expression)
 
 
-class DefaultFunctionMapper(StructuredExpressionMappingRule[FunctionCall, Expression]):
+class DefaultFunctionMapper(StructuredExpressionMapper[FunctionCall, Expression]):
     def attemptMap(
         self,
         expression: FunctionCall,
@@ -45,7 +43,7 @@ class DefaultFunctionMapper(StructuredExpressionMappingRule[FunctionCall, Expres
 
 
 class DefaultCurriedFunctionMapper(
-    StructuredExpressionMappingRule[CurriedFunctionCall, Expression]
+    StructuredExpressionMapper[CurriedFunctionCall, Expression]
 ):
     def attemptMap(
         self,
@@ -62,7 +60,7 @@ class DefaultCurriedFunctionMapper(
 
 
 class DefaultSubscriptableFunctionMapper(
-    StructuredExpressionMappingRule[SubscriptableReference, Expression]
+    StructuredExpressionMapper[SubscriptableReference, Expression]
 ):
     def attemptMap(
         self,
@@ -76,7 +74,7 @@ class DefaultSubscriptableFunctionMapper(
         )
 
 
-class DefaultLambdaMapper(StructuredExpressionMappingRule[Lambda, Expression]):
+class DefaultLambdaMapper(StructuredExpressionMapper[Lambda, Expression]):
     def attemptMap(
         self, expression: Lambda, children_translator: ExpressionVisitor[Expression],
     ) -> Optional[Expression]:

@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import Generic, Optional, Sequence, TypeVar
 
 from snuba.datasets.plans.translator.mapping_rules import (
-    SimpleExpressionMappingRule,
-    StructuredExpressionMappingRule,
+    SimpleExpressionMapper,
+    StructuredExpressionMapper,
 )
 from snuba.query.expressions import (
     Argument,
@@ -24,17 +24,17 @@ TExpOut = TypeVar("TExpOut")
 
 @dataclass(frozen=True)
 class ExpressionMappingSpec(Generic[TExpOut]):
-    literals: Sequence[SimpleExpressionMappingRule[Literal, TExpOut]]
-    columns: Sequence[SimpleExpressionMappingRule[Column, TExpOut]]
+    literals: Sequence[SimpleExpressionMapper[Literal, TExpOut]]
+    columns: Sequence[SimpleExpressionMapper[Column, TExpOut]]
     subscriptables: Sequence[
-        StructuredExpressionMappingRule[SubscriptableReference, TExpOut]
+        StructuredExpressionMapper[SubscriptableReference, TExpOut]
     ]
-    functions: Sequence[StructuredExpressionMappingRule[FunctionCall, TExpOut]]
+    functions: Sequence[StructuredExpressionMapper[FunctionCall, TExpOut]]
     curried_functions: Sequence[
-        StructuredExpressionMappingRule[CurriedFunctionCall, TExpOut]
+        StructuredExpressionMapper[CurriedFunctionCall, TExpOut]
     ]
-    arguments: Sequence[SimpleExpressionMappingRule[Argument, TExpOut]]
-    lambdas: Sequence[StructuredExpressionMappingRule[Lambda, TExpOut]]
+    arguments: Sequence[SimpleExpressionMapper[Argument, TExpOut]]
+    lambdas: Sequence[StructuredExpressionMapper[Lambda, TExpOut]]
 
     def concat(
         self, spec: ExpressionMappingSpec[TExpOut]
@@ -85,7 +85,7 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
         return self.__map_structured_column(exp, self.__mapping_specs.lambdas)
 
     def __map_simple_column(
-        self, exp: TExpIn, rules: Sequence[SimpleExpressionMappingRule[TExpIn, TExpOut]]
+        self, exp: TExpIn, rules: Sequence[SimpleExpressionMapper[TExpIn, TExpOut]]
     ) -> TExpOut:
         for r in rules:
             ret = r.attemptMap(exp)
@@ -94,9 +94,7 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
         raise ValueError(f"Cannot map expression {exp}")
 
     def __map_structured_column(
-        self,
-        exp: TExpIn,
-        rules: Sequence[StructuredExpressionMappingRule[TExpIn, TExpOut]],
+        self, exp: TExpIn, rules: Sequence[StructuredExpressionMapper[TExpIn, TExpOut]],
     ) -> TExpOut:
         for r in rules:
             ret = r.attemptMap(exp, self)
