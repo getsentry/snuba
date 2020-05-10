@@ -1,6 +1,6 @@
 from typing import NewType
 
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.logical import Query as LogicalQuery
 
 
@@ -9,4 +9,4 @@ from snuba.query.logical import Query as LogicalQuery
 # logical query type.
 Query = NewType("Query", LogicalQuery)
 
-ClickhouseExpression = Expression
+Expression = SnubaExpression

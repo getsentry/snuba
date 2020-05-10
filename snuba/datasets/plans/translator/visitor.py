@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, Sequence, TypeVar
+from typing import Generic, Optional, Sequence, TypeVar
 
 from snuba.datasets.plans.translator.mapping_rules import (
     SimpleExpressionMappingRule,
@@ -54,8 +54,14 @@ TExpIn = TypeVar("TExpIn", bound=Expression)
 
 
 class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
-    def __init__(self, mapping_specs: ExpressionMappingSpec[TExpOut]):
-        self.__mapping_specs = mapping_specs
+    def __init__(
+        self,
+        mapping_specs: ExpressionMappingSpec[TExpOut],
+        default_rules: Optional[ExpressionMappingSpec[TExpOut]],
+    ) -> None:
+        self.__mapping_specs = (
+            mapping_specs if not default_rules else mapping_specs.concat(default_rules)
+        )
 
     def visitLiteral(self, exp: Literal) -> TExpOut:
         return self.__map_simple_column(exp, self.__mapping_specs.literals)

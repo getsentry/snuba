@@ -1,17 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Generic, Callable, Mapping, Optional, TypeVar, Tuple
 
-from snuba.query.expressions import (
-    Argument,
-    Column,
-    CurriedFunctionCall,
-    Expression,
-    ExpressionVisitor,
-    FunctionCall,
-    Lambda,
-    Literal,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Expression, ExpressionVisitor
 
 TExpIn = TypeVar("TExpIn", bound=Expression)
 TExpOut = TypeVar("TExpOut")
@@ -61,35 +51,3 @@ class StructuredMatchingMappingRule(
             for param, exp in to_translate.items()
         }
         return self.__executor(expression, parameters, translated_params)
-
-
-class ColumnMapper(SimpleExpressionMappingRule[Column, TExpOut], ABC):
-    pass
-
-
-class LiteralMapper(SimpleExpressionMappingRule[Literal, TExpOut], ABC):
-    pass
-
-
-class ArgumentMapper(SimpleExpressionMappingRule[Argument, TExpOut], ABC):
-    pass
-
-
-class FunctionMapper(StructuredExpressionMappingRule[FunctionCall, TExpOut], ABC):
-    pass
-
-
-class CurriedFunctionMapper(
-    StructuredExpressionMappingRule[CurriedFunctionCall, TExpOut], ABC
-):
-    pass
-
-
-class SubscriptableMapper(
-    StructuredExpressionMappingRule[SubscriptableReference, TExpOut], ABC
-):
-    pass
-
-
-class LambdaMapper(StructuredExpressionMappingRule[Lambda, TExpOut], ABC):
-    pass
