@@ -11,14 +11,25 @@ from snuba.query.expressions import (
     Lambda,
     Expression,
 )
-from snuba.datasets.plans.translator.visitor import ExpressionMappingSpec
-from snuba.clickhouse.translator.visitor import ClickhouseExpressionVisitor
+from snuba.datasets.plans.translator.visitor import TranslationRules
+from snuba.clickhouse.translator.visitor import ExpressionTranslator
 from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
 
 
 def test_column_translation() -> None:
     col = Column(None, "col", "table")
-    translated = ColumnMapper("col", "table", "col2", "table2").attemptMap(col)
+    mappings = TranslationRules(
+        columns=[],
+        literals=[],
+        functions=[],
+        subscriptables=[],
+        curried_functions=[],
+        arguments=[],
+        lambdas=[],
+    )
+    translated = ColumnMapper("col", "table", "col2", "table2").attemptMap(
+        col, ExpressionTranslator(mappings)
+    )
 
     assert translated == Column(None, "col2", "table2")
 
@@ -27,7 +38,7 @@ def test_tag_translation() -> None:
     col = SubscriptableReference(
         "tags[release]", Column(None, "tags", None), Literal(None, "release")
     )
-    mappings = ExpressionMappingSpec(
+    mappings = TranslationRules(
         columns=[],
         literals=[],
         functions=[],
@@ -37,7 +48,7 @@ def test_tag_translation() -> None:
         lambdas=[],
     )
     translated = TagMapper("tags", "tags").attemptMap(
-        col, ClickhouseExpressionVisitor(mappings)
+        col, ExpressionTranslator(mappings)
     )
 
     assert translated == FunctionCall(
@@ -56,7 +67,7 @@ def test_tag_translation() -> None:
 
 test_data = [
     (
-        ExpressionMappingSpec(
+        TranslationRules(
             columns=[ColumnMapper("col", None, "col2", None)],
             literals=[],
             functions=[],
@@ -69,7 +80,7 @@ test_data = [
         Column(None, "col3", None),
     ),
     (
-        ExpressionMappingSpec(
+        TranslationRules(
             columns=[ColumnMapper("col", None, "col2", None)],
             literals=[],
             functions=[],
@@ -82,7 +93,7 @@ test_data = [
         Column(None, "col2", None),
     ),
     (
-        ExpressionMappingSpec(
+        TranslationRules(
             columns=[],
             literals=[],
             functions=[],
@@ -108,7 +119,7 @@ test_data = [
         ),
     ),
     (
-        ExpressionMappingSpec(
+        TranslationRules(
             columns=[
                 ColumnMapper("col", None, "col2", None),
                 ColumnMapper("cola", None, "colb", None),
@@ -188,11 +199,11 @@ test_data = [
 
 @pytest.mark.parametrize("mappings, expression, expected", test_data)
 def test_translation(
-    mappings: ExpressionMappingSpec[ClickhouseExpression],
+    mappings: TranslationRules[ClickhouseExpression],
     expression: Expression,
     expected: ClickhouseExpression,
 ) -> None:
-    translator = ClickhouseExpressionVisitor(mappings)
+    translator = ExpressionTranslator(mappings)
     translated = expression.accept(translator)
 
     assert translated == expected

@@ -2,33 +2,45 @@ from copy import deepcopy
 from dataclasses import replace
 from typing import Optional, TypeVar
 
-
 from snuba.clickhouse.query import Expression
-from snuba.datasets.plans.translator.mapping_rules import (
-    SimpleExpressionMapper,
-    StructuredExpressionMapper,
-)
 from snuba.datasets.plans.translator.visitor import (
-    ExpressionMappingSpec,
+    ExpressionMapper,
     MappingExpressionTranslator,
+    TranslationRules,
 )
 from snuba.query.expressions import (
     CurriedFunctionCall,
-    FunctionCall,
     ExpressionVisitor,
-    SubscriptableReference,
+    FunctionCall,
     Lambda,
+    SubscriptableReference,
 )
 
 TSimpleExp = TypeVar("TSimpleExp", bound=Expression)
 
 
-class DefaultSimpleMapper(SimpleExpressionMapper[TSimpleExp, Expression]):
-    def attemptMap(self, expression: TSimpleExp) -> Optional[Expression]:
+class ExpressionTranslator(MappingExpressionTranslator[Expression]):
+    def __init__(self, translation_rules: TranslationRules[Expression]) -> None:
+        default = TranslationRules(
+            literals=[DefaultSimpleMapper()],
+            columns=[DefaultSimpleMapper()],
+            subscriptables=[DefaultSubscriptableFunctionMapper()],
+            functions=[DefaultFunctionMapper()],
+            curried_functions=[DefaultCurriedFunctionMapper()],
+            arguments=[DefaultSimpleMapper()],
+            lambdas=[DefaultLambdaMapper()],
+        )
+        super().__init__(translation_rules=translation_rules, default_rules=default)
+
+
+class DefaultSimpleMapper(ExpressionMapper[TSimpleExp, Expression]):
+    def attemptMap(
+        self, expression: TSimpleExp, children_translator: ExpressionVisitor[Expression]
+    ) -> Optional[Expression]:
         return deepcopy(expression)
 
 
-class DefaultFunctionMapper(StructuredExpressionMapper[FunctionCall, Expression]):
+class DefaultFunctionMapper(ExpressionMapper[FunctionCall, Expression]):
     def attemptMap(
         self,
         expression: FunctionCall,
@@ -42,9 +54,7 @@ class DefaultFunctionMapper(StructuredExpressionMapper[FunctionCall, Expression]
         )
 
 
-class DefaultCurriedFunctionMapper(
-    StructuredExpressionMapper[CurriedFunctionCall, Expression]
-):
+class DefaultCurriedFunctionMapper(ExpressionMapper[CurriedFunctionCall, Expression]):
     def attemptMap(
         self,
         expression: CurriedFunctionCall,
@@ -60,7 +70,7 @@ class DefaultCurriedFunctionMapper(
 
 
 class DefaultSubscriptableFunctionMapper(
-    StructuredExpressionMapper[SubscriptableReference, Expression]
+    ExpressionMapper[SubscriptableReference, Expression]
 ):
     def attemptMap(
         self,
@@ -74,7 +84,7 @@ class DefaultSubscriptableFunctionMapper(
         )
 
 
-class DefaultLambdaMapper(StructuredExpressionMapper[Lambda, Expression]):
+class DefaultLambdaMapper(ExpressionMapper[Lambda, Expression]):
     def attemptMap(
         self, expression: Lambda, children_translator: ExpressionVisitor[Expression],
     ) -> Optional[Expression]:
@@ -82,17 +92,3 @@ class DefaultLambdaMapper(StructuredExpressionMapper[Lambda, Expression]):
             expression,
             transformation=expression.transformation.accept(children_translator),
         )
-
-
-class ClickhouseExpressionVisitor(MappingExpressionTranslator[Expression]):
-    def __init__(self, mapping_specs: ExpressionMappingSpec[Expression]) -> None:
-        default = ExpressionMappingSpec(
-            literals=[DefaultSimpleMapper()],
-            columns=[DefaultSimpleMapper()],
-            subscriptables=[DefaultSubscriptableFunctionMapper()],
-            functions=[DefaultFunctionMapper()],
-            curried_functions=[DefaultCurriedFunctionMapper()],
-            arguments=[DefaultSimpleMapper()],
-            lambdas=[DefaultLambdaMapper()],
-        )
-        super().__init__(mapping_specs=mapping_specs, default_rules=default)

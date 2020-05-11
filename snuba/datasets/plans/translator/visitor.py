@@ -1,12 +1,9 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Generic, Optional, Sequence, TypeVar
 
-from snuba.datasets.plans.translator.mapping_rules import (
-    SimpleExpressionMapper,
-    StructuredExpressionMapper,
-)
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -23,23 +20,17 @@ TExpOut = TypeVar("TExpOut")
 
 
 @dataclass(frozen=True)
-class ExpressionMappingSpec(Generic[TExpOut]):
-    literals: Sequence[SimpleExpressionMapper[Literal, TExpOut]]
-    columns: Sequence[SimpleExpressionMapper[Column, TExpOut]]
-    subscriptables: Sequence[
-        StructuredExpressionMapper[SubscriptableReference, TExpOut]
-    ]
-    functions: Sequence[StructuredExpressionMapper[FunctionCall, TExpOut]]
-    curried_functions: Sequence[
-        StructuredExpressionMapper[CurriedFunctionCall, TExpOut]
-    ]
-    arguments: Sequence[SimpleExpressionMapper[Argument, TExpOut]]
-    lambdas: Sequence[StructuredExpressionMapper[Lambda, TExpOut]]
+class TranslationRules(Generic[TExpOut]):
+    literals: Sequence[ExpressionMapper[Literal, TExpOut]]
+    columns: Sequence[ExpressionMapper[Column, TExpOut]]
+    subscriptables: Sequence[ExpressionMapper[SubscriptableReference, TExpOut]]
+    functions: Sequence[ExpressionMapper[FunctionCall, TExpOut]]
+    curried_functions: Sequence[ExpressionMapper[CurriedFunctionCall, TExpOut]]
+    arguments: Sequence[ExpressionMapper[Argument, TExpOut]]
+    lambdas: Sequence[ExpressionMapper[Lambda, TExpOut]]
 
-    def concat(
-        self, spec: ExpressionMappingSpec[TExpOut]
-    ) -> ExpressionMappingSpec[TExpOut]:
-        return ExpressionMappingSpec(
+    def concat(self, spec: TranslationRules[TExpOut]) -> TranslationRules[TExpOut]:
+        return TranslationRules(
             literals=[*self.literals, *spec.literals],
             columns=[*self.columns, *spec.columns],
             subscriptables=[*self.subscriptables, *spec.subscriptables],
@@ -53,48 +44,49 @@ class ExpressionMappingSpec(Generic[TExpOut]):
 TExpIn = TypeVar("TExpIn", bound=Expression)
 
 
+class ExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
+    @abstractmethod
+    def attemptMap(
+        self, expression: TExpIn, children_translator: ExpressionVisitor[TExpOut]
+    ) -> Optional[TExpOut]:
+        raise NotImplementedError
+
+
 class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
     def __init__(
         self,
-        mapping_specs: ExpressionMappingSpec[TExpOut],
-        default_rules: Optional[ExpressionMappingSpec[TExpOut]],
+        translation_rules: TranslationRules[TExpOut],
+        default_rules: Optional[TranslationRules[TExpOut]],
     ) -> None:
-        self.__mapping_specs = (
-            mapping_specs if not default_rules else mapping_specs.concat(default_rules)
+        self.__translation_rules = (
+            translation_rules
+            if not default_rules
+            else translation_rules.concat(default_rules)
         )
 
     def visitLiteral(self, exp: Literal) -> TExpOut:
-        return self.__map_simple_column(exp, self.__mapping_specs.literals)
+        return self.__map_column(exp, self.__translation_rules.literals)
 
     def visitColumn(self, exp: Column) -> TExpOut:
-        return self.__map_simple_column(exp, self.__mapping_specs.columns)
+        return self.__map_column(exp, self.__translation_rules.columns)
 
     def visitSubscriptableReference(self, exp: SubscriptableReference) -> TExpOut:
-        return self.__map_structured_column(exp, self.__mapping_specs.subscriptables)
+        return self.__map_column(exp, self.__translation_rules.subscriptables)
 
     def visitFunctionCall(self, exp: FunctionCall) -> TExpOut:
-        return self.__map_structured_column(exp, self.__mapping_specs.functions)
+        return self.__map_column(exp, self.__translation_rules.functions)
 
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TExpOut:
-        return self.__map_structured_column(exp, self.__mapping_specs.curried_functions)
+        return self.__map_column(exp, self.__translation_rules.curried_functions)
 
     def visitArgument(self, exp: Argument) -> TExpOut:
-        return self.__map_simple_column(exp, self.__mapping_specs.arguments)
+        return self.__map_column(exp, self.__translation_rules.arguments)
 
     def visitLambda(self, exp: Lambda) -> TExpOut:
-        return self.__map_structured_column(exp, self.__mapping_specs.lambdas)
+        return self.__map_column(exp, self.__translation_rules.lambdas)
 
-    def __map_simple_column(
-        self, exp: TExpIn, rules: Sequence[SimpleExpressionMapper[TExpIn, TExpOut]]
-    ) -> TExpOut:
-        for r in rules:
-            ret = r.attemptMap(exp)
-            if ret is not None:
-                return ret
-        raise ValueError(f"Cannot map expression {exp}")
-
-    def __map_structured_column(
-        self, exp: TExpIn, rules: Sequence[StructuredExpressionMapper[TExpIn, TExpOut]],
+    def __map_column(
+        self, exp: TExpIn, rules: Sequence[ExpressionMapper[TExpIn, TExpOut]],
     ) -> TExpOut:
         for r in rules:
             ret = r.attemptMap(exp, self)

@@ -10,8 +10,8 @@ from snuba.query.expressions import (
     Lambda,
     Expression,
 )
-from snuba.datasets.plans.translator.visitor import ExpressionMappingSpec
-from snuba.clickhouse.translator.visitor import ClickhouseExpressionVisitor
+from snuba.datasets.plans.translator.visitor import TranslationRules
+from snuba.clickhouse.translator.visitor import ExpressionTranslator
 
 test_data = [
     Column("alias", "col", "table"),
@@ -40,8 +40,8 @@ test_data = [
 
 @pytest.mark.parametrize("expression", test_data)
 def test_default_translation(expression: Expression) -> None:
-    translator = ClickhouseExpressionVisitor(
-        ExpressionMappingSpec(
+    translator = ExpressionTranslator(
+        TranslationRules(
             columns=[],
             literals=[],
             subscriptables=[],
