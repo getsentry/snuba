@@ -18,17 +18,8 @@ from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
 
 def test_column_translation() -> None:
     col = Column(None, "col", "table")
-    mappings = TranslationRules(
-        columns=[],
-        literals=[],
-        functions=[],
-        subscriptables=[],
-        curried_functions=[],
-        arguments=[],
-        lambdas=[],
-    )
     translated = ColumnMapper("col", "table", "col2", "table2").attemptMap(
-        col, ExpressionTranslator(mappings)
+        col, ExpressionTranslator(TranslationRules())
     )
 
     assert translated == Column(None, "col2", "table2")
@@ -38,17 +29,8 @@ def test_tag_translation() -> None:
     col = SubscriptableReference(
         "tags[release]", Column(None, "tags", None), Literal(None, "release")
     )
-    mappings = TranslationRules(
-        columns=[],
-        literals=[],
-        functions=[],
-        subscriptables=[],
-        curried_functions=[],
-        arguments=[],
-        lambdas=[],
-    )
     translated = TagMapper("tags", "tags").attemptMap(
-        col, ExpressionTranslator(mappings)
+        col, ExpressionTranslator(TranslationRules())
     )
 
     assert translated == FunctionCall(
@@ -67,41 +49,17 @@ def test_tag_translation() -> None:
 
 test_data = [
     (
-        TranslationRules(
-            columns=[ColumnMapper("col", None, "col2", None)],
-            literals=[],
-            functions=[],
-            subscriptables=[],
-            curried_functions=[],
-            arguments=[],
-            lambdas=[],
-        ),
+        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)],),
         Column(None, "col3", None),
         Column(None, "col3", None),
     ),
     (
-        TranslationRules(
-            columns=[ColumnMapper("col", None, "col2", None)],
-            literals=[],
-            functions=[],
-            subscriptables=[],
-            curried_functions=[],
-            arguments=[],
-            lambdas=[],
-        ),
+        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)],),
         Column(None, "col", None),
         Column(None, "col2", None),
     ),
     (
-        TranslationRules(
-            columns=[],
-            literals=[],
-            functions=[],
-            subscriptables=[TagMapper("tags", "tags")],
-            curried_functions=[],
-            arguments=[],
-            lambdas=[],
-        ),
+        TranslationRules(subscriptables=[TagMapper("tags", "tags")],),
         SubscriptableReference(
             "tags[release]", Column(None, "tags", None), Literal(None, "release")
         ),
@@ -124,12 +82,7 @@ test_data = [
                 ColumnMapper("col", None, "col2", None),
                 ColumnMapper("cola", None, "colb", None),
             ],
-            literals=[],
-            functions=[],
             subscriptables=[TagMapper("tags", "tags")],
-            curried_functions=[],
-            arguments=[],
-            lambdas=[],
         ),
         FunctionCall(
             None,

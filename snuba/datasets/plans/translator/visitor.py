@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Generic, Optional, Sequence, TypeVar
 
 from snuba.query.expressions import (
@@ -21,13 +21,21 @@ TExpOut = TypeVar("TExpOut")
 
 @dataclass(frozen=True)
 class TranslationRules(Generic[TExpOut]):
-    literals: Sequence[ExpressionMapper[Literal, TExpOut]]
-    columns: Sequence[ExpressionMapper[Column, TExpOut]]
-    subscriptables: Sequence[ExpressionMapper[SubscriptableReference, TExpOut]]
-    functions: Sequence[ExpressionMapper[FunctionCall, TExpOut]]
-    curried_functions: Sequence[ExpressionMapper[CurriedFunctionCall, TExpOut]]
-    arguments: Sequence[ExpressionMapper[Argument, TExpOut]]
-    lambdas: Sequence[ExpressionMapper[Lambda, TExpOut]]
+    literals: Sequence[ExpressionMapper[Literal, TExpOut]] = field(default_factory=list)
+    columns: Sequence[ExpressionMapper[Column, TExpOut]] = field(default_factory=list)
+    subscriptables: Sequence[ExpressionMapper[SubscriptableReference, TExpOut]] = field(
+        default_factory=list
+    )
+    functions: Sequence[ExpressionMapper[FunctionCall, TExpOut]] = field(
+        default_factory=list
+    )
+    curried_functions: Sequence[ExpressionMapper[CurriedFunctionCall, TExpOut]] = field(
+        default_factory=list
+    )
+    arguments: Sequence[ExpressionMapper[Argument, TExpOut]] = field(
+        default_factory=list
+    )
+    lambdas: Sequence[ExpressionMapper[Lambda, TExpOut]] = field(default_factory=list)
 
     def concat(self, spec: TranslationRules[TExpOut]) -> TranslationRules[TExpOut]:
         return TranslationRules(

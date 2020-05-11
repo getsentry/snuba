@@ -40,17 +40,7 @@ test_data = [
 
 @pytest.mark.parametrize("expression", test_data)
 def test_default_translation(expression: Expression) -> None:
-    translator = ExpressionTranslator(
-        TranslationRules(
-            columns=[],
-            literals=[],
-            subscriptables=[],
-            functions=[],
-            curried_functions=[],
-            arguments=[],
-            lambdas=[],
-        )
-    )
+    translator = ExpressionTranslator(TranslationRules())
 
     translated = expression.accept(translator)
 
