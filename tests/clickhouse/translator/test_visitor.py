@@ -40,6 +40,11 @@ test_data = [
 
 @pytest.mark.parametrize("expression", test_data)
 def test_default_translation(expression: Expression) -> None:
+    """
+    Ensures that a translation that relies on the default translation rules
+    produces a deep copy of the original expression.
+    """
+
     translator = ExpressionTranslator(TranslationRules())
     translated = expression.accept(translator)
 

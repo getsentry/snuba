@@ -8,9 +8,9 @@ from snuba.datasets.plans.translator.visitor import (
     MappingExpressionTranslator,
     TranslationRules,
 )
-from snuba.query.expressions import CurriedFunctionCall
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import (
+    CurriedFunctionCall,
     ExpressionVisitor,
     FunctionCall,
     Lambda,
@@ -19,12 +19,21 @@ from snuba.query.expressions import (
 
 
 class ExpressionTranslator(MappingExpressionTranslator[ClickhouseExpression]):
+    """
+    Translates a Snuba expression into a Clickhouse expression.
+
+    As long as the Clickhouse query AST is basically the same as the Snuba one
+    we add a default rule that makes a copy of the original expression.
+    """
+
     def __init__(
         self, translation_rules: TranslationRules[ClickhouseExpression]
     ) -> None:
         default_rules = TranslationRules(
             literals=[DefaultSimpleMapper()],
             columns=[DefaultSimpleMapper()],
+            # TODO: remove the DefaultSubscriptableMapper translation rule as
+            # soon as we finalize the tags translation rule.
             subscriptables=[DefaultSubscriptableMapper()],
             functions=[DefaultFunctionMapper()],
             curried_functions=[DefaultCurriedFunctionMapper()],
