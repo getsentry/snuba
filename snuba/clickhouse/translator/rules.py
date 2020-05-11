@@ -50,8 +50,10 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
     into a Clickhouse array access.
     """
 
-    tag_column_name: str
-    tag_column_table: str
+    from_column_name: str
+    from_column_table: Optional[str]
+    to_col_name: str
+    to_table_name: Optional[str]
 
     def attemptMap(
         self,
@@ -59,20 +61,20 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
         children_translator: ExpressionVisitor[Expression],
     ) -> Optional[Expression]:
         if (
-            expression.column.column_name != self.tag_column_name
-            or expression.column.table_name == self.tag_column_table
+            expression.column.column_name != self.from_column_name
+            or expression.column.table_name != self.from_column_table
         ):
             return None
 
         return Expression(
             array_element(
                 expression.alias,
-                Column(None, f"{self.tag_column_name}.value", None),
+                Column(None, f"{self.to_col_name}.value", self.to_table_name),
                 FunctionCall(
                     None,
                     "indexOf",
                     (
-                        Column(None, f"{self.tag_column_name}.key", None),
+                        Column(None, f"{self.to_col_name}.key", self.to_table_name,),
                         expression.key.accept(children_translator),
                     ),
                 ),

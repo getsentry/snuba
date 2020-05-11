@@ -27,7 +27,7 @@ def test_tag_translation() -> None:
     col = SubscriptableReference(
         "tags[release]", Column(None, "tags", None), Literal(None, "release")
     )
-    translated = TagMapper("tags", "tags").attemptMap(
+    translated = TagMapper("tags", None, "tags", None).attemptMap(
         col, ExpressionTranslator(TranslationRules())
     )
 
@@ -57,7 +57,7 @@ test_data = [
         Column(None, "col2", None),
     ),
     (
-        TranslationRules(subscriptables=[TagMapper("tags", "tags")]),
+        TranslationRules(subscriptables=[TagMapper("tags", None, "tags", "table")]),
         SubscriptableReference(
             "tags[release]", Column(None, "tags", None), Literal(None, "release")
         ),
@@ -65,11 +65,11 @@ test_data = [
             "tags[release]",
             "arrayElement",
             (
-                Column(None, "tags.value", None),
+                Column(None, "tags.value", "table"),
                 FunctionCall(
                     None,
                     "indexOf",
-                    (Column(None, "tags.key", None), Literal(None, "release")),
+                    (Column(None, "tags.key", "table"), Literal(None, "release")),
                 ),
             ),
         ),
@@ -80,7 +80,7 @@ test_data = [
                 ColumnMapper("col", None, "col2", None),
                 ColumnMapper("cola", None, "colb", None),
             ],
-            subscriptables=[TagMapper("tags", "tags")],
+            subscriptables=[TagMapper("tags", None, "tags", None)],
         ),
         FunctionCall(
             None,
