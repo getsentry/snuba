@@ -1,6 +1,12 @@
 import re
 
-from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.util import QUOTED_LITERAL_RE
 
 # A column name like "tags[url]"
@@ -28,6 +34,9 @@ def parse_string_to_expr(val: str) -> Expression:
             column=Column(None, col_name, None),
             key=Literal(None, key_name),
         )
+
+    if val in ("tags_key", "tags_value"):
+        return FunctionCall(None, val, tuple())
 
     # TODO: This will use the schema of the dataset/entity to decide if the expression is
     # a column or a literal.
