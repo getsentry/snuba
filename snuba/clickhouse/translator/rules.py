@@ -26,10 +26,12 @@ class ColumnMapper(ExpressionMapper[Column, Expression]):
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
-            return Column(
-                alias=expression.alias,
-                table_name=self.to_table_name,
-                column_name=self.to_col_name,
+            return Expression(
+                Column(
+                    alias=expression.alias,
+                    table_name=self.to_table_name,
+                    column_name=self.to_col_name,
+                )
             )
         else:
             return None
@@ -51,15 +53,17 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
         ):
             return None
 
-        return array_element(
-            expression.alias,
-            Column(None, f"{self.tag_column_name}.value", None),
-            FunctionCall(
-                None,
-                "indexOf",
-                (
-                    Column(None, f"{self.tag_column_name}.key", None),
-                    expression.key.accept(children_translator),
+        return Expression(
+            array_element(
+                expression.alias,
+                Column(None, f"{self.tag_column_name}.value", None),
+                FunctionCall(
+                    None,
+                    "indexOf",
+                    (
+                        Column(None, f"{self.tag_column_name}.key", None),
+                        expression.key.accept(children_translator),
+                    ),
                 ),
-            ),
+            )
         )

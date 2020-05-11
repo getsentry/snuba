@@ -1,19 +1,17 @@
 import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
+from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
+from snuba.clickhouse.translator.visitor import ExpressionTranslator
+from snuba.datasets.plans.translator.visitor import TranslationRules
 from snuba.query.expressions import (
     Column,
-    Literal,
-    Argument,
-    SubscriptableReference,
-    FunctionCall,
     CurriedFunctionCall,
-    Lambda,
     Expression,
+    FunctionCall,
+    Literal,
+    SubscriptableReference,
 )
-from snuba.datasets.plans.translator.visitor import TranslationRules
-from snuba.clickhouse.translator.visitor import ExpressionTranslator
-from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
 
 
 def test_column_translation() -> None:
@@ -49,17 +47,17 @@ def test_tag_translation() -> None:
 
 test_data = [
     (
-        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)],),
+        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)]),
         Column(None, "col3", None),
         Column(None, "col3", None),
     ),
     (
-        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)],),
+        TranslationRules(columns=[ColumnMapper("col", None, "col2", None)]),
         Column(None, "col", None),
         Column(None, "col2", None),
     ),
     (
-        TranslationRules(subscriptables=[TagMapper("tags", "tags")],),
+        TranslationRules(subscriptables=[TagMapper("tags", "tags")]),
         SubscriptableReference(
             "tags[release]", Column(None, "tags", None), Literal(None, "release")
         ),
@@ -91,7 +89,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "anotherFunc",
-                    (Column(None, "col", None), Literal(None, 123),),
+                    (Column(None, "col", None), Literal(None, 123)),
                 ),
                 CurriedFunctionCall(
                     None,
@@ -106,7 +104,7 @@ test_data = [
                             ),
                         ),
                     ),
-                    (Column(None, "cola", None), Literal(None, 123),),
+                    (Column(None, "cola", None), Literal(None, 123)),
                 ),
             ),
         ),
@@ -117,7 +115,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "anotherFunc",
-                    (Column(None, "col2", None), Literal(None, 123),),
+                    (Column(None, "col2", None), Literal(None, 123)),
                 ),
                 CurriedFunctionCall(
                     None,
@@ -142,7 +140,7 @@ test_data = [
                             ),
                         ),
                     ),
-                    (Column(None, "colb", None), Literal(None, 123),),
+                    (Column(None, "colb", None), Literal(None, 123)),
                 ),
             ),
         ),

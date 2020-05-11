@@ -73,27 +73,27 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
         )
 
     def visitLiteral(self, exp: Literal) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.literals)
+        return self.__map_expression(exp, self.__translation_rules.literals)
 
     def visitColumn(self, exp: Column) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.columns)
+        return self.__map_expression(exp, self.__translation_rules.columns)
 
     def visitSubscriptableReference(self, exp: SubscriptableReference) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.subscriptables)
+        return self.__map_expression(exp, self.__translation_rules.subscriptables)
 
     def visitFunctionCall(self, exp: FunctionCall) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.functions)
+        return self.__map_expression(exp, self.__translation_rules.functions)
 
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.curried_functions)
+        return self.__map_expression(exp, self.__translation_rules.curried_functions)
 
     def visitArgument(self, exp: Argument) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.arguments)
+        return self.__map_expression(exp, self.__translation_rules.arguments)
 
     def visitLambda(self, exp: Lambda) -> TExpOut:
-        return self.__map_column(exp, self.__translation_rules.lambdas)
+        return self.__map_expression(exp, self.__translation_rules.lambdas)
 
-    def __map_column(
+    def __map_expression(
         self, exp: TExpIn, rules: Sequence[ExpressionMapper[TExpIn, TExpOut]],
     ) -> TExpOut:
         for r in rules:

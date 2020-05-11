@@ -9,4 +9,4 @@ from snuba.query.logical import Query as LogicalQuery
 # logical query type.
 Query = NewType("Query", LogicalQuery)
 
-Expression = SnubaExpression
+Expression = NewType("Expression", SnubaExpression)

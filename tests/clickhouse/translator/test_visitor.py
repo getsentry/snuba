@@ -1,17 +1,17 @@
 import pytest
 
-from snuba.query.expressions import (
-    Column,
-    Literal,
-    Argument,
-    SubscriptableReference,
-    FunctionCall,
-    CurriedFunctionCall,
-    Lambda,
-    Expression,
-)
-from snuba.datasets.plans.translator.visitor import TranslationRules
 from snuba.clickhouse.translator.visitor import ExpressionTranslator
+from snuba.datasets.plans.translator.visitor import TranslationRules
+from snuba.query.expressions import (
+    Argument,
+    Column,
+    CurriedFunctionCall,
+    Expression,
+    FunctionCall,
+    Lambda,
+    Literal,
+    SubscriptableReference,
+)
 
 test_data = [
     Column("alias", "col", "table"),
@@ -41,7 +41,6 @@ test_data = [
 @pytest.mark.parametrize("expression", test_data)
 def test_default_translation(expression: Expression) -> None:
     translator = ExpressionTranslator(TranslationRules())
-
     translated = expression.accept(translator)
 
     assert translated == expression
