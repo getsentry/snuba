@@ -2,7 +2,7 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
+from snuba.clickhouse.planner.query_plan import QueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
@@ -31,7 +31,7 @@ class Dataset(object):
       query before deciding which Storage to use. These processors are defined
       by the dataset
     - the Storage to run the query onto is selected and the query is transformed
-      into a Clickhouse Query. This is done by a ClickhouseQueryPlanBuilder. This object
+      into a Clickhouse Query. This is done by a QueryPlanBuilder. This object
       produces a plan that includes the Query contextualized on the storage/s, the
       list of processors to apply and the strategy to run the query (in case of
       any strategy more complex than a single DB query like a split).
@@ -49,7 +49,7 @@ class Dataset(object):
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_plan_builder: QueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
     ) -> None:
@@ -88,7 +88,7 @@ class Dataset(object):
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
 
-    def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
+    def get_query_plan_builder(self) -> QueryPlanBuilder:
         """
         Returns the component that transforms a Snuba query in a Storage query by selecting
         the storage and provides the directions on how to run the query.
@@ -139,7 +139,7 @@ class TimeSeriesDataset(Dataset):
         self,
         *,
         storages: Sequence[Storage],
-        query_plan_builder: ClickhouseQueryPlanBuilder,
+        query_plan_builder: QueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
         time_group_columns: Mapping[str, str],
