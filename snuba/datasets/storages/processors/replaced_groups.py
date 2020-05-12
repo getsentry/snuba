@@ -98,6 +98,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     extra={"extension": query.get_final(), "processor": set_final},
                     exc_info=True,
                 )
+            else:
+                metrics.increment("match.final", tags={"value": str(set_final)})
 
             existing_groups_conditions = [
                 c[2]
@@ -132,4 +134,9 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         "processor": condition_to_add,
                     },
                     exc_info=True,
+                )
+            else:
+                metrics.increment(
+                    "match.group_id",
+                    tags={"condition_present": str(condition_to_add is not None)},
                 )
