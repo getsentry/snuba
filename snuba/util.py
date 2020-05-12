@@ -231,9 +231,9 @@ def escape_literal(
         return escape_string(value)
     elif isinstance(value, datetime):
         value = value.replace(tzinfo=None, microsecond=0)
-        return "toDateTime('{}')".format(value.isoformat())
+        return "toDateTime('{}', 'Universal')".format(value.isoformat())
     elif isinstance(value, date):
-        return "toDate('{}')".format(value.isoformat())
+        return "toDate('{}', 'Universal')".format(value.isoformat())
     elif isinstance(value, (list, tuple)):
         return "({})".format(", ".join(escape_literal(v) for v in value))
     elif isinstance(value, numbers.Number):
