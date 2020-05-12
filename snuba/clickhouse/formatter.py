@@ -65,9 +65,9 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             return str(exp.value)
         elif isinstance(exp.value, datetime):
             value = exp.value.replace(tzinfo=None, microsecond=0)
-            return "toDateTime('{}')".format(value.isoformat())
+            return "toDateTime('{}', 'Universal')".format(value.isoformat())
         elif isinstance(exp.value, date):
-            return "toDate('{}')".format(exp.value.isoformat())
+            return "toDate('{}', 'Universal')".format(exp.value.isoformat())
         else:
             raise ValueError(f"Unexpected literal type {type(exp.value)}")
 
