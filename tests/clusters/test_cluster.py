@@ -16,14 +16,14 @@ class TestClusters:
                 "port": 9000,
                 "http_port": 8123,
                 "storage_sets": {"events", "outcomes", "querylog", "sessions"},
-                "distributed": False,
+                "single_node": True,
             },
             {
                 "host": "host_2",
                 "port": 9000,
                 "http_port": 8123,
                 "storage_sets": {"transactions"},
-                "distributed": True,
+                "single_node": False,
                 "cluster_name": "test_distributed_cluster",
             },
         ]
