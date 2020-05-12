@@ -1,5 +1,6 @@
 import logging
 
+from copy import deepcopy
 from typing import Optional
 
 from snuba import environment, settings
@@ -130,8 +131,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 logger.warning(
                     "Groups discrepancy between project_extension and processor.",
                     extra={
-                        "extension": existing_groups_conditions,
-                        "processor": condition_to_add,
+                        "extension": deepcopy(existing_groups_conditions),
+                        "processor": deepcopy(condition_to_add),
                     },
                     exc_info=True,
                 )
