@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 from typing import Any, List, Optional, Union
 
-from snuba import state, util
+from snuba import environment, state, util
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.split_strategy import (
     QuerySplitStrategy,
@@ -21,7 +21,11 @@ from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.web import QueryResult
+
+
+metrics = MetricsWrapper(environment.metrics, "query.splitter")
 
 # Every time we find zero results for a given step, expand the search window by
 # this factor. Based on the assumption that the initial window is 2 hours, the
@@ -36,13 +40,19 @@ def _identify_condition(condition: Any, field: str, operator: str) -> bool:
     )
 
 
-def _identify_ast_condition(condition: Expression, field: str, operator: str) -> bool:
-    return (
-        isinstance(condition, FunctionCall)
-        and condition.function_name == OPERATOR_TO_FUNCTION[operator]
-        and isinstance(condition.parameters[0], Column)
-        and condition.parameters[0].column_name == field
-    )
+def _extract_timestamp_condition(
+    condition: Expression, field: str, operator: str
+) -> Optional[Literal]:
+    for c in condition:
+        if (
+            isinstance(c, FunctionCall)
+            and c.function_name == OPERATOR_TO_FUNCTION[operator]
+            and isinstance(c.parameters[0], Column)
+            and c.parameters[0].column_name == field
+            and isinstance(c.parameters[1], Literal)
+        ):
+            return c.parameters[1]
+    return None
 
 
 def _replace_ast_condition(
@@ -136,6 +146,22 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
+        ast_condition = query.get_condition_from_ast()
+        if ast_condition:
+            from_date_literal = _extract_timestamp_condition(
+                ast_condition, self.__timestamp_col, "<"
+            )
+            to_date_literal = _extract_timestamp_condition(
+                ast_condition, self.__timestamp_col, ">="
+            )
+        else:
+            from_date_literal = None
+            to_date_literal = None
+
+        if from_date_str != (from_date_literal.value if from_date_literal else None):
+            metrics.increment("mismatch.ast_from_date")
+        if to_date_str != (to_date_literal.value if to_date_literal else None):
+            metrics.increment("mismatch.ast_to_date")
 
         if not from_date_str or not to_date_str:
             return None
@@ -260,6 +286,10 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             return None
 
         total_col_count = len(query.get_all_referenced_columns())
+        total_ast_count = len(query.get_all_ast_referenced_columns())
+        if total_col_count != total_ast_count:
+            metrics.increment("mismatch.total_referenced_columns")
+
         minimal_query = copy.deepcopy(query)
         minimal_query.set_selected_columns(
             [self.__id_column, self.__project_column, self.__timestamp_column]
@@ -272,7 +302,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             ]
         )
 
-        if total_col_count <= len(minimal_query.get_all_referenced_columns()):
+        minimal_ast_count = len(minimal_query.get_all_ast_referenced_columns())
+        minimal_count = len(minimal_query.get_all_referenced_columns())
+        if minimal_count != minimal_ast_count:
+            metrics.increment("mismatch.minimaL_query_referenced_columns")
+
+        if total_col_count <= minimal_count:
             return None
 
         result = runner(minimal_query, request_settings)

@@ -13,6 +13,7 @@ from typing import (
     MutableSequence,
     Optional,
     Sequence,
+    Set,
     Tuple,
     TypeVar,
     Union,
@@ -21,7 +22,7 @@ from typing import (
 from snuba.clickhouse.escaping import SAFE_COL_RE
 from snuba.datasets.schemas import RelationalSource
 from snuba.query.conditions import binary_condition, BooleanFunctions
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, Column
 from snuba.query.types import Condition
 from snuba.util import columns_in_expr, is_condition, to_list
 
@@ -361,6 +362,13 @@ class Query:
 
         # Return the set of all columns referenced in any expression
         return self.__get_referenced_columns(col_exprs)
+
+    def get_all_ast_referenced_columns(self) -> Set[Column]:
+        ret: Set[Column] = set()
+        all_expressions = self.get_all_expressions()
+        for expression in all_expressions:
+            ret |= {c for c in expression if isinstance(c, Column)}
+        return ret
 
     def get_columns_referenced_in_conditions(self) -> Sequence[Any]:
         col_exprs: MutableSequence[Any] = []
