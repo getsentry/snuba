@@ -14,7 +14,7 @@ from snuba.writer import BatchWriter, WriterTableRow
 
 
 @dataclass(frozen=True)
-class ClickhouseHost:
+class StorageNode:
     host_name: str
     port: int
     shard: Optional[int] = None
@@ -119,17 +119,17 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name, self.__host, self.__http_port, encoder, options, chunk_size
         )
 
-    def get_nodes(self) -> Sequence[ClickhouseHost]:
+    def get_storage_nodes(self) -> Sequence[StorageNode]:
         if self.__is_distributed:
             # Get the nodes from system.clusters
             return [
-                ClickhouseHost(*host)
+                StorageNode(*host)
                 for host in self.get_clickhouse_ro().execute(
                     f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(self.__cluster_name)}"
                 )
             ]
         else:
-            return [ClickhouseHost(self.__host, self.__port)]
+            return [StorageNode(self.__host, self.__port)]
 
 
 CLUSTERS = [
