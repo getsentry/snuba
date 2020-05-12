@@ -138,6 +138,6 @@ CLUSTERS: Sequence[Mapping[str, Any]] = [
         "port": CLICKHOUSE_PORT,
         "http_port": CLICKHOUSE_HTTP_PORT,
         "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
-        "distributed": False,
+        "single_node": DATASET_MODE == "local",
     },
 ]

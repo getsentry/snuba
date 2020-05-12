@@ -78,17 +78,17 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         port: int,
         http_port: int,
         storage_sets: Set[str],
-        is_distributed: bool,
-        # The cluster name if is_distributed is set to True
+        single_node: bool,
+        # The cluster name if single_node is set to False
         cluster_name: Optional[str] = None,
     ):
         super().__init__(storage_sets)
-        if is_distributed:
+        if not single_node:
             assert cluster_name
         self.__host = host
         self.__port = port
         self.__http_port = http_port
-        self.__is_distributed = is_distributed
+        self.__single_node = single_node
         self.__clickhouse_rw = ClickhousePool(host, port)
         self.__clickhouse_ro = ClickhousePool(
             host, port, client_settings={"readonly": True},
@@ -120,7 +120,9 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         )
 
     def get_storage_nodes(self) -> Sequence[StorageNode]:
-        if self.__is_distributed:
+        if self.__single_node:
+            return [StorageNode(self.__host, self.__port)]
+        else:
             # Get the nodes from system.clusters
             return [
                 StorageNode(*host)
@@ -128,8 +130,6 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
                     f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(self.__cluster_name)}"
                 )
             ]
-        else:
-            return [StorageNode(self.__host, self.__port)]
 
 
 CLUSTERS = [
@@ -138,7 +138,7 @@ CLUSTERS = [
         port=cluster["port"],
         http_port=cluster["http_port"],
         storage_sets=cluster["storage_sets"],
-        is_distributed=cluster["distributed"],
+        single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
     )
     for cluster in settings.CLUSTERS
