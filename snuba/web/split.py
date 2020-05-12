@@ -149,19 +149,14 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         ast_condition = query.get_condition_from_ast()
         if ast_condition:
             from_date_literal = _extract_timestamp_condition(
-                ast_condition, self.__timestamp_col, "<"
+                ast_condition, self.__timestamp_col, ">="
             )
             to_date_literal = _extract_timestamp_condition(
-                ast_condition, self.__timestamp_col, ">="
+                ast_condition, self.__timestamp_col, "<"
             )
         else:
             from_date_literal = None
             to_date_literal = None
-
-        if from_date_str != (from_date_literal.value if from_date_literal else None):
-            metrics.increment("mismatch.ast_from_date")
-        if to_date_str != (to_date_literal.value if to_date_literal else None):
-            metrics.increment("mismatch.ast_to_date")
 
         if not from_date_str or not to_date_str:
             return None
@@ -171,6 +166,11 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
         )
         to_date = util.parse_datetime(to_date_str, date_align)
         from_date = util.parse_datetime(from_date_str, date_align)
+
+        if from_date != (from_date_literal.value if from_date_literal else None):
+            metrics.increment("mismatch.ast_from_date")
+        if to_date != (to_date_literal.value if to_date_literal else None):
+            metrics.increment("mismatch.ast_to_date")
 
         remaining_offset = query.get_offset()
 
@@ -186,25 +186,26 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             _replace_condition(
                 split_query, self.__timestamp_col, ">=", split_start.isoformat()
             )
+            _replace_condition(
+                split_query, self.__timestamp_col, "<", split_end.isoformat()
+            )
+
             ast_condition = query.get_condition_from_ast()
             if ast_condition:
                 ast_condition = _replace_ast_condition(
                     ast_condition,
                     self.__timestamp_col,
                     ">=",
-                    Literal(None, split_start.isoformat()),
+                    Literal(None, split_start),
                 )
-                query.replace_ast_condition(
+                split_query.replace_ast_condition(
                     _replace_ast_condition(
                         ast_condition,
                         self.__timestamp_col,
                         "<",
-                        Literal(None, split_end.isoformat()),
+                        Literal(None, split_end),
                     )
                 )
-            _replace_condition(
-                split_query, self.__timestamp_col, "<", split_end.isoformat()
-            )
 
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.

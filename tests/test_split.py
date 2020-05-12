@@ -1,6 +1,6 @@
 import pytest
-import uuid
 
+from datetime import datetime
 from typing import Any, MutableMapping, Sequence
 
 from snuba import state
@@ -10,12 +10,14 @@ from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SimpleQueryPlanExecutionStrategy
 from snuba.web.split import (
+    _extract_timestamp_condition,
     ColumnSplitQueryStrategy,
     TimeSplitQueryStrategy,
 )
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.logical import Query as LogicalQuery
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
@@ -283,3 +285,76 @@ def test_col_split_conditions(
     assert (
         splitter.execute(query, HTTPRequestSettings(), do_query) is not None
     ) == expected_result
+
+
+def test_time_split_ast() -> None:
+    expected_timestamps = [
+        ("2019-09-19T11:00:00", "2019-09-19T12:00:00"),
+        ("2019-09-19T01:00:00", "2019-09-19T11:00:00"),
+        ("2019-09-18T10:00:00", "2019-09-19T01:00:00"),
+    ]
+
+    found_timestamps = []
+
+    def do_query(
+        query: ClickhouseQuery, request_settings: RequestSettings,
+    ) -> QueryResult:
+        ast_condition = query.get_condition_from_ast()
+        assert ast_condition is not None
+        from_date_ast = _extract_timestamp_condition(ast_condition, "timestamp", ">=")
+        assert from_date_ast is not None and isinstance(from_date_ast.value, datetime)
+        to_date_ast = _extract_timestamp_condition(ast_condition, "timestamp", "<")
+        assert to_date_ast is not None and isinstance(to_date_ast.value, datetime)
+
+        conditions = query.get_conditions() or []
+        from_date_str = next(
+            (
+                condition[2]
+                for condition in conditions
+                if condition[0] == "timestamp" and condition[1] == ">="
+            ),
+            None,
+        )
+        to_date_str = next(
+            (
+                condition[2]
+                for condition in conditions
+                if condition[0] == "timestamp" and condition[1] == "<"
+            ),
+            None,
+        )
+        assert from_date_str == from_date_ast.value.isoformat()
+        assert to_date_str == to_date_ast.value.isoformat()
+
+        found_timestamps.append(
+            (from_date_ast.value.isoformat(), to_date_ast.value.isoformat())
+        )
+
+        return QueryResult({"data": []}, {})
+
+    body = {
+        "selected_columns": [
+            "event_id",
+            "level",
+            "logger",
+            "server_name",
+            "transaction",
+            "timestamp",
+            "project_id",
+        ],
+        "conditions": [
+            ("timestamp", ">=", "2019-09-18T10:00:00"),
+            ("timestamp", "<", "2019-09-19T12:00:00"),
+            ("project_id", "IN", [1]),
+        ],
+        "limit": 10,
+        "orderby": ["-timestamp"],
+    }
+
+    events = get_dataset("events")
+    query = parse_query(body, events)
+
+    splitter = TimeSplitQueryStrategy("timestamp")
+    splitter.execute(ClickhouseQuery(query), HTTPRequestSettings(), do_query)
+
+    assert found_timestamps == expected_timestamps
