@@ -301,9 +301,9 @@ def test_time_split_ast() -> None:
     ) -> QueryResult:
         ast_condition = query.get_condition_from_ast()
         assert ast_condition is not None
-        from_date_ast = _extract_timestamp_condition(ast_condition, "timestamp", ">=")
+        from_date_ast = _extract_timestamp_condition(query, "timestamp", ">=")
         assert from_date_ast is not None and isinstance(from_date_ast.value, datetime)
-        to_date_ast = _extract_timestamp_condition(ast_condition, "timestamp", "<")
+        to_date_ast = _extract_timestamp_condition(query, "timestamp", "<")
         assert to_date_ast is not None and isinstance(to_date_ast.value, datetime)
 
         conditions = query.get_conditions() or []

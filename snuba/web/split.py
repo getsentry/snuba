@@ -6,16 +6,13 @@ from typing import Any, List, Optional, Union
 
 from snuba import environment, state, util
 from snuba.clickhouse.query import Query
-from snuba.datasets.plans.split_strategy import (
-    QuerySplitStrategy,
-    SplitQueryRunner,
-)
+from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
-    binary_condition,
+    OPERATOR_TO_FUNCTION,
     BooleanFunctions,
+    binary_condition,
     in_condition,
     is_binary_condition,
-    OPERATOR_TO_FUNCTION,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
@@ -23,7 +20,6 @@ from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.web import QueryResult
-
 
 metrics = MetricsWrapper(environment.metrics, "query.splitter")
 
@@ -41,8 +37,12 @@ def _identify_condition(condition: Any, field: str, operator: str) -> bool:
 
 
 def _extract_timestamp_condition(
-    condition: Expression, field: str, operator: str
+    query: Query, field: str, operator: str
 ) -> Optional[Literal]:
+    condition = query.get_condition_from_ast()
+    if not condition:
+        return None
+
     for c in condition:
         if (
             isinstance(c, FunctionCall)
@@ -56,30 +56,41 @@ def _extract_timestamp_condition(
 
 
 def _replace_ast_condition(
-    expression: Expression, field: str, operator: str, new_operand: Expression
-) -> Expression:
-    if isinstance(expression, FunctionCall) and is_binary_condition(
-        expression, BooleanFunctions.AND
-    ):
-        return binary_condition(
-            expression.alias,
-            BooleanFunctions.AND,
-            _replace_ast_condition(
-                expression.parameters[0], field, operator, new_operand
-            ),
-            _replace_ast_condition(
-                expression.parameters[1], field, operator, new_operand
-            ),
+    query: Query, field: str, operator: str, new_operand: Expression
+) -> None:
+    def replace_condition_in_expression(
+        expression: Expression, field: str, operator: str, new_operand: Expression
+    ) -> Expression:
+        if isinstance(expression, FunctionCall) and is_binary_condition(
+            expression, BooleanFunctions.AND
+        ):
+            return binary_condition(
+                expression.alias,
+                BooleanFunctions.AND,
+                replace_condition_in_expression(
+                    expression.parameters[0], field, operator, new_operand
+                ),
+                replace_condition_in_expression(
+                    expression.parameters[1], field, operator, new_operand
+                ),
+            )
+        elif (
+            isinstance(expression, FunctionCall)
+            and expression.function_name == OPERATOR_TO_FUNCTION[operator]
+            and isinstance(expression.parameters[0], Column)
+            and expression.parameters[0].column_name == field
+        ):
+            return replace(
+                expression, parameters=(expression.parameters[0], new_operand)
+            )
+        else:
+            return expression
+
+    ast_condition = query.get_condition_from_ast()
+    if ast_condition:
+        query.replace_ast_condition(
+            replace_condition_in_expression(ast_condition, field, operator, new_operand)
         )
-    elif (
-        isinstance(expression, FunctionCall)
-        and expression.function_name == OPERATOR_TO_FUNCTION[operator]
-        and isinstance(expression.parameters[0], Column)
-        and expression.parameters[0].column_name == field
-    ):
-        return replace(expression, parameters=(expression.parameters[0], new_operand))
-    else:
-        return expression
 
 
 def _replace_condition(
@@ -138,6 +149,10 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
+        from_date_literal = _extract_timestamp_condition(
+            query, self.__timestamp_col, ">="
+        )
+
         to_date_str = next(
             (
                 condition[2]
@@ -146,17 +161,7 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
-        ast_condition = query.get_condition_from_ast()
-        if ast_condition:
-            from_date_literal = _extract_timestamp_condition(
-                ast_condition, self.__timestamp_col, ">="
-            )
-            to_date_literal = _extract_timestamp_condition(
-                ast_condition, self.__timestamp_col, "<"
-            )
-        else:
-            from_date_literal = None
-            to_date_literal = None
+        to_date_literal = _extract_timestamp_condition(query, self.__timestamp_col, "<")
 
         if not from_date_str or not to_date_str:
             return None
@@ -186,26 +191,16 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             _replace_condition(
                 split_query, self.__timestamp_col, ">=", split_start.isoformat()
             )
+            _replace_ast_condition(
+                split_query, self.__timestamp_col, ">=", Literal(None, split_start)
+            )
+
             _replace_condition(
                 split_query, self.__timestamp_col, "<", split_end.isoformat()
             )
-
-            ast_condition = query.get_condition_from_ast()
-            if ast_condition:
-                ast_condition = _replace_ast_condition(
-                    ast_condition,
-                    self.__timestamp_col,
-                    ">=",
-                    Literal(None, split_start),
-                )
-                split_query.replace_ast_condition(
-                    _replace_ast_condition(
-                        ast_condition,
-                        self.__timestamp_col,
-                        "<",
-                        Literal(None, split_end),
-                    )
-                )
+            _replace_ast_condition(
+                split_query, self.__timestamp_col, "<", Literal(None, split_end)
+            )
 
             # Because its paged, we have to ask for (limit+offset) results
             # and set offset=0 so we can then trim them ourselves.
@@ -295,7 +290,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         minimal_query.set_selected_columns(
             [self.__id_column, self.__project_column, self.__timestamp_column]
         )
-        minimal_query.set_ast_selected_columns(
+        minimal_query.replace_ast_selected_columns(
             [
                 Column(None, self.__id_column, None),
                 Column(None, self.__project_column, None),
@@ -344,6 +339,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         _replace_condition(
             query, self.__project_column, "IN", project_ids,
         )
+        _replace_ast_condition(
+            query,
+            self.__project_column,
+            "IN",
+            literals_tuple(None, [Literal(None, p_id) for p_id in project_ids]),
+        )
 
         timestamps = [event[self.__timestamp_column] for event in result.result["data"]]
         _replace_condition(
@@ -351,6 +352,12 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             self.__timestamp_column,
             ">=",
             util.parse_datetime(min(timestamps)).isoformat(),
+        )
+        _replace_ast_condition(
+            query,
+            self.__timestamp_column,
+            ">=",
+            Literal(None, util.parse_datetime(min(timestamps)).isoformat()),
         )
         # We add 1 second since this gets translated to ('timestamp', '<', to_date)
         # and events are stored with a granularity of 1 second.
@@ -360,31 +367,16 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
             "<",
             (util.parse_datetime(max(timestamps)) + timedelta(seconds=1)).isoformat(),
         )
-        ast_condition = query.get_condition_from_ast()
-        if ast_condition:
-            ast_condition = _replace_ast_condition(
-                ast_condition,
-                self.__project_column,
-                "IN",
-                literals_tuple(None, [Literal(None, p_id) for p_id in project_ids]),
-            )
-            ast_condition = _replace_ast_condition(
-                ast_condition,
-                self.__timestamp_column,
-                ">=",
-                Literal(None, util.parse_datetime(min(timestamps)).isoformat()),
-            )
-            ast_condition = _replace_ast_condition(
-                ast_condition,
-                self.__timestamp_column,
-                "<",
-                Literal(
-                    None,
-                    (
-                        util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
-                    ).isoformat(),
-                ),
-            )
-            query.replace_ast_condition(ast_condition)
+        _replace_ast_condition(
+            query,
+            self.__timestamp_column,
+            "<",
+            Literal(
+                None,
+                (
+                    util.parse_datetime(max(timestamps)) + timedelta(seconds=1)
+                ).isoformat(),
+            ),
+        )
 
         return runner(query, request_settings)
