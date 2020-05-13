@@ -1,5 +1,6 @@
 import logging
 
+from copy import deepcopy
 from typing import Optional
 
 from snuba import environment, settings
@@ -91,11 +92,15 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
         else:
             # This is disabled. We assume the query was modified accordingly by the extension
             # and compare the results.
-            # TODO: Swap all this with logger warnings after verifying this does not flood the logs
-            log_issue = False
             if set_final != query.get_final():
-                log_issue = True
                 metrics.increment("mismatch.final")
+                logger.warning(
+                    "Final discrepancy between project_extension and processor.",
+                    extra={"extension": query.get_final(), "processor": set_final},
+                    exc_info=True,
+                )
+            else:
+                metrics.increment("match.final", tags={"value": str(set_final)})
 
             existing_groups_conditions = [
                 c[2]
@@ -111,7 +116,6 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "Multiple group exclusion conditions in the Query", exc_info=True
                 )
                 return
-
             if (condition_to_add[2] if condition_to_add else None) != (
                 existing_groups_conditions[0]
                 if len(existing_groups_conditions) > 0
@@ -124,12 +128,16 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         "processor": str(condition_to_add is not None),
                     },
                 )
-                log_issue = True
-
-            if log_issue:
                 logger.warning(
-                    "Discrepancy between project_extension and replacement consistency processor",
+                    "Groups discrepancy between project_extension and processor.",
+                    extra={
+                        "extension": deepcopy(existing_groups_conditions),
+                        "processor": deepcopy(condition_to_add),
+                    },
                     exc_info=True,
                 )
             else:
-                metrics.increment("match")
+                metrics.increment(
+                    "match.group_id",
+                    tags={"condition_present": str(condition_to_add is not None)},
+                )
