@@ -1,8 +1,8 @@
 import copy
 import math
 from dataclasses import replace
-from datetime import timedelta
-from typing import Any, List, Optional, Union
+from datetime import datetime, timedelta
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 from snuba import environment, state, util
 from snuba.clickhouse.query import Query
@@ -36,28 +36,73 @@ def _identify_condition(condition: Any, field: str, operator: str) -> bool:
     )
 
 
-def _extract_timestamp_condition(
-    query: Query, field: str, operator: str
-) -> Optional[Literal]:
-    condition = query.get_condition_from_ast()
-    if not condition:
-        return None
+def _get_time_range(
+    query: Query, timestamp_field: str
+) -> Tuple[Optional[Literal], Optional[Literal]]:
+    """
+    Finds the time range for this query. Which means, finds the timestamp condition
+    with the highest datetime literal and the timestamp condition with the smallest
+    and returns the interval in the form of a tuple of Literals. It only looks into
+    first level AND conditions.
 
-    for c in condition:
+    TODO: Consider making this part of the AST manipulation api if there are more use
+    cases. It would require managing a few more corner cases for being part of the api.
+    """
+
+    def get_first_level_conditions(exp: Expression) -> Sequence[Expression]:
+        """
+        Traverse the tree as long as it runs into AND conditions and return all the
+        top level conditions.
+        """
+        if isinstance(exp, FunctionCall) and is_binary_condition(
+            exp, BooleanFunctions.AND
+        ):
+            return [
+                *get_first_level_conditions(exp.parameters[0]),
+                *get_first_level_conditions(exp.parameters[1]),
+            ]
+        else:
+            return [exp]
+
+    condition_clause = query.get_condition_from_ast()
+    if not condition_clause:
+        return (None, None)
+
+    max_lower_bound = None
+    mix_upper_bound = None
+    for c in get_first_level_conditions(condition_clause):
         if (
             isinstance(c, FunctionCall)
-            and c.function_name == OPERATOR_TO_FUNCTION[operator]
+            and c.function_name
+            in (OPERATOR_TO_FUNCTION[">="], OPERATOR_TO_FUNCTION["<"])
             and isinstance(c.parameters[0], Column)
-            and c.parameters[0].column_name == field
+            and c.parameters[0].column_name == timestamp_field
             and isinstance(c.parameters[1], Literal)
+            and isinstance(c.parameters[1].value, datetime)
         ):
-            return c.parameters[1]
-    return None
+            if c.function_name == OPERATOR_TO_FUNCTION[">="]:
+                if not max_lower_bound or max_lower_bound.value < c.parameters[1].value:
+                    max_lower_bound = c.parameters[1]
+            else:
+                if not mix_upper_bound or mix_upper_bound.value > c.parameters[1].value:
+                    mix_upper_bound = c.parameters[1]
+
+    return (max_lower_bound, mix_upper_bound)
 
 
 def _replace_ast_condition(
     query: Query, field: str, operator: str, new_operand: Expression
 ) -> None:
+    """
+    Replaces a condition in the top level AND boolean condition in the query WHERE
+    clause.
+
+    This is more complex than the one on the legacy representation because, with
+    the AST, we can express complex nested conditions and we do not only have two
+    levels only (AND and OR) so we need to recursively traverse the tree stopping
+    when we run into an OR.
+    """
+
     def replace_condition_in_expression(
         expression: Expression, field: str, operator: str, new_operand: Expression
     ) -> Expression:
@@ -86,10 +131,12 @@ def _replace_ast_condition(
         else:
             return expression
 
-    ast_condition = query.get_condition_from_ast()
-    if ast_condition:
+    condition_clause = query.get_condition_from_ast()
+    if condition_clause:
         query.replace_ast_condition(
-            replace_condition_in_expression(ast_condition, field, operator, new_operand)
+            replace_condition_in_expression(
+                condition_clause, field, operator, new_operand
+            )
         )
 
 
@@ -149,9 +196,6 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
-        from_date_literal = _extract_timestamp_condition(
-            query, self.__timestamp_col, ">="
-        )
 
         to_date_str = next(
             (
@@ -161,7 +205,9 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             ),
             None,
         )
-        to_date_literal = _extract_timestamp_condition(query, self.__timestamp_col, "<")
+        from_date_literal, to_date_literal = _get_time_range(
+            query, self.__timestamp_col
+        )
 
         if not from_date_str or not to_date_str:
             return None
@@ -258,7 +304,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
     """
 
     def __init__(
-        self, id_column: str, project_column: str, timestamp_column: str
+        self, id_column: str, project_column: str, timestamp_column: str,
     ) -> None:
         self.__id_column = id_column
         self.__project_column = project_column
@@ -290,6 +336,8 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         minimal_query.set_selected_columns(
             [self.__id_column, self.__project_column, self.__timestamp_column]
         )
+        # TODO: provide the table alias name to this splitter if we ever use it
+        # in joins.
         minimal_query.replace_ast_selected_columns(
             [
                 Column(None, self.__id_column, None),
