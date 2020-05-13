@@ -17,27 +17,37 @@ from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
+from snuba.optimize import OPTIMIZE_SEND_RECEIVE_TIMEOUT
 from snuba.reader import Reader, TQuery
 from snuba.writer import BatchWriter, WriterTableRow
 
 
+ClickhouseClientSettingsType = Tuple[Mapping[str, Any], Optional[int]]
+
+
 class ClickhouseClientSettings(Enum):
-    CLEANUP: Mapping[str, Any] = {}
-    INSERT: Mapping[str, Any] = {}
-    MIGRATE: Mapping[str, Any] = {}
-    OPTIMIZE: Mapping[str, Any] = {}
-    QUERY = {"readonly": True}
-    REPLACE = {
-        # Replacing existing rows requires reconstructing the entire tuple for each
-        # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
-        # the default settings it's common for ClickHouse to go over the default max_memory_usage
-        # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
-        # max_memory_usage gives the query more breathing room.
-        "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
-        "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-        # Don't use up production cache for the count() queries.
-        "use_uncompressed_cache": 0,
-    }
+    CLEANUP: ClickhouseClientSettingsType = ({}, None)
+    INSERT: ClickhouseClientSettingsType = ({}, None)
+    MIGRATE: ClickhouseClientSettingsType = ({}, None)
+    OPTIMIZE: ClickhouseClientSettingsType = (
+        {},
+        OPTIMIZE_SEND_RECEIVE_TIMEOUT,
+    )
+    QUERY = ({"readonly": True}, None)
+    REPLACE = (
+        {
+            # Replacing existing rows requires reconstructing the entire tuple for each
+            # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
+            # the default settings it's common for ClickHouse to go over the default max_memory_usage
+            # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
+            # max_memory_usage gives the query more breathing room.
+            "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
+            "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
+            # Don't use up production cache for the count() queries.
+            "use_uncompressed_cache": 0,
+        },
+        None,
+    )
 
 
 TWriterOptions = TypeVar("TWriterOptions")
@@ -98,31 +108,29 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self.__http_port = http_port
         self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
-            Tuple[ClickhouseClientSettings, Optional[int]], ClickhousePool
+            ClickhouseClientSettings, ClickhousePool
         ] = {}
 
     def __str__(self) -> str:
         return f"{self.__host}:{self.__port}"
 
     def get_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-        send_receive_timeout: Optional[int] = None,
+        self, client_settings: ClickhouseClientSettings,
     ) -> ClickhousePool:
         """
-        Get a Clickhouse connection given client settings an a timeout.
-        Reuse any connection to the cluster with the same settings and timeout values
-        otherwise establish a new connection.
+        Get a Clickhouse connection using the client settings provided. Reuse any
+        connection to the cluster with the same settings otherwise establish a new
+        connection.
         """
-        cache_key = (client_settings, send_receive_timeout)
-        if cache_key not in self.__connection_cache:
-            self.__connection_cache[cache_key] = ClickhousePool(
+        if client_settings not in self.__connection_cache:
+            [settings, timeout] = client_settings.value
+            self.__connection_cache[client_settings] = ClickhousePool(
                 self.__host,
                 self.__port,
-                client_settings=client_settings.value,
-                send_receive_timeout=send_receive_timeout,
+                client_settings=settings,
+                send_receive_timeout=timeout,
             )
-        return self.__connection_cache[cache_key]
+        return self.__connection_cache[client_settings]
 
     def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:

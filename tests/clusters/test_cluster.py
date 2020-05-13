@@ -7,7 +7,3 @@ def test_cache_connections() -> None:
     assert cluster.get_connection(
         ClickhouseClientSettings.QUERY
     ) == cluster.get_connection(ClickhouseClientSettings.QUERY)
-
-    assert cluster.get_connection(
-        ClickhouseClientSettings.REPLACE, 5
-    ) == cluster.get_connection(ClickhouseClientSettings.REPLACE, 5)

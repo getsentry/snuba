@@ -23,12 +23,6 @@ from snuba.util import local_dataset_mode
     type=click.Choice(DATASET_NAMES),
     help="The dataset to target",
 )
-@click.option(
-    "--timeout",
-    default=10000,
-    type=int,
-    help="Clickhouse connection send/receive timeout, must be long enough for OPTIMIZE to complete.",
-)
 @click.option("--log-level", help="Logging level to use.")
 def optimize(
     *,
@@ -36,12 +30,11 @@ def optimize(
     clickhouse_port: Optional[int],
     database: str,
     dataset_name: str,
-    timeout: int,
     log_level: Optional[str] = None,
 ) -> None:
     from datetime import datetime
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import run_optimize, logger
+    from snuba.optimize import OPTIMIZE_SEND_RECEIVE_TIMEOUT, run_optimize, logger
 
     setup_logging(log_level)
 
@@ -53,7 +46,9 @@ def optimize(
     if clickhouse_host and clickhouse_port:
         clickhouse_connections = [
             ClickhousePool(
-                clickhouse_host, clickhouse_port, send_receive_timeout=timeout
+                clickhouse_host,
+                clickhouse_port,
+                send_receive_timeout=OPTIMIZE_SEND_RECEIVE_TIMEOUT,
             )
         ]
     elif not local_dataset_mode():
@@ -63,9 +58,7 @@ def optimize(
         # dataset using the cluster's host/port configuration.
         clickhouse_connections = list(
             set(
-                storage.get_cluster().get_connection(
-                    ClickhouseClientSettings.OPTIMIZE, send_receive_timeout=timeout
-                )
+                storage.get_cluster().get_connection(ClickhouseClientSettings.OPTIMIZE)
                 for storage in dataset.get_all_storages()
             )
         )
