@@ -172,12 +172,12 @@ def _format_storage_query_and_run(
     ) as span:
         span.set_tag("table", source)
         try:
-            span.set_tag(
-                "ast_query",
-                AstSqlQuery(clickhouse_query, request_settings).format_sql(),
-            )
+            sql_data = AstSqlQuery(clickhouse_query, request_settings).sql_data()
         except Exception:
-            logger.warning("Failed to format ast query", exc_info=True)
+            sql_data = formatted_query.sql_data()
+
+        for k, v in sql_data.items():
+            span.set_data(k, v)
 
         return raw_query(
             clickhouse_query,

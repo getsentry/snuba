@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict
 
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -118,6 +118,20 @@ class AstSqlQuery(SqlQuery):
         if self.__limit is not None:
             limit_clause = f"LIMIT {self.__limit} OFFSET {self.__offset}"
 
+        self.__sql_data = {
+            "query_type": "ast_query",
+            "select": select_clause,
+            "from": from_clause,
+            "join": array_join_clause,
+            "prewhere": prewhere_clause,
+            "where": where_clause,
+            "group": group_clause,
+            "having": having_clause,
+            "order": order_clause,
+            "limitby": limitby_clause,
+            "limit": limit_clause,
+        }
+
         self.__formatted_query = " ".join(
             [
                 c
@@ -138,3 +152,6 @@ class AstSqlQuery(SqlQuery):
         )
 
         return self.__formatted_query
+
+    def _sql_data_impl(self) -> Dict[str, str]:
+        return self.__sql_data

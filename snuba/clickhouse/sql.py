@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Dict
 
 
 class SqlQuery(ABC):
@@ -33,3 +33,9 @@ class SqlQuery(ABC):
         if format is not None:
             query = f"{query} FORMAT {format}"
         return query
+
+    def _sql_data_impl(self) -> Dict[str, str]:
+        raise NotImplementedError
+
+    def sql_data(self) -> Dict[str, str]:
+        return self._sql_data_impl()
