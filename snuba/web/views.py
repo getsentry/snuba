@@ -263,7 +263,7 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
     ensure_not_internal(dataset)
-    ensure_table_exists(dataset)
+    ensure_tables_migrated()
 
     request = validate_request_content(
         body,
@@ -356,32 +356,26 @@ if application.debug or application.testing:
     # These should only be used for testing/debugging. Note that the database name
     # is checked to avoid scary production mishaps.
 
-    _ensured: MutableMapping[Dataset, bool] = {}
+    _ensured = False
 
-    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
-        if not force and _ensured.get(dataset, False):
+    def ensure_tables_migrated(force: bool = False) -> None:
+        global _ensured
+        if not force and _ensured:
             return
 
         assert local_dataset_mode(), "Cannot create table in distributed mode"
 
         from snuba.migrations import migrate
 
-        # We cannot build distributed tables this way. So this only works in local
-        # mode.
-        for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            for statement in storage.get_schemas().get_create_statements():
-                clickhouse_rw.execute(statement.statement)
+        migrate.run()
 
-        migrate.run(dataset)
-
-        _ensured[dataset] = True
+        _ensured = True
 
     @application.route("/tests/<dataset:dataset>/insert", methods=["POST"])
     def write(*, dataset: Dataset):
         from snuba.processor import ProcessorAction
 
-        ensure_table_exists(dataset)
+        ensure_tables_migrated()
 
         rows = []
         offset_base = int(round(time.time() * 1000))
@@ -405,7 +399,7 @@ if application.debug or application.testing:
 
     @application.route("/tests/<dataset:dataset>/eventstream", methods=["POST"])
     def eventstream(*, dataset: Dataset):
-        ensure_table_exists(dataset)
+        ensure_tables_migrated()
         record = json.loads(http_request.data)
 
         version = record[0]
@@ -426,9 +420,11 @@ if application.debug or application.testing:
 
         if type_ == "insert":
             from snuba.consumer import ConsumerWorker
+
             worker = ConsumerWorker(storage, metrics=metrics)
         else:
             from snuba.replacer import ReplacerWorker
+
             clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
             worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
 
@@ -446,7 +442,7 @@ if application.debug or application.testing:
             for statement in storage.get_schemas().get_drop_statements():
                 clickhouse_rw.execute(statement.statement)
 
-        ensure_table_exists(dataset, force=True)
+        ensure_tables_migrated(force=True)
         redis_client.flushdb()
         return ("ok", 200, {"Content-Type": "text/plain"})
 
@@ -457,5 +453,5 @@ if application.debug or application.testing:
 
 else:
 
-    def ensure_table_exists(dataset: Dataset, force: bool = False) -> None:
+    def ensure_tables_migrated(force: bool = False) -> None:
         pass
