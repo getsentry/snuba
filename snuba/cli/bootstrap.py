@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 import click
 
 from snuba import settings
-from snuba.clusters.cluster import CLUSTERS
+from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
 from snuba.migrations.migrate import run
@@ -98,7 +98,7 @@ def bootstrap(
 
     # Attempt to connect with every cluster
     for cluster in CLUSTERS:
-        clickhouse_rw = cluster.get_clickhouse_rw()
+        clickhouse = cluster.get_connection(ClickhouseClientSettings.MIGRATE)
 
         while True:
             try:
@@ -107,7 +107,7 @@ def bootstrap(
                     cluster,
                     attempts,
                 )
-                clickhouse_rw.execute("SELECT 1")
+                clickhouse.execute("SELECT 1")
                 break
             except Exception as e:
                 logger.error(
@@ -131,8 +131,10 @@ def bootstrap(
         logger.debug("Creating tables for dataset %s", name)
         run_migrations = False
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            existing_tables = {row[0] for row in clickhouse_rw.execute("show tables")}
+            clickhouse = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
+            existing_tables = {row[0] for row in clickhouse.execute("show tables")}
             for statement in storage.get_schemas().get_create_statements():
                 if statement.table_name not in existing_tables:
                     # This is a hack to deal with updates to Materialized views.
@@ -149,7 +151,7 @@ def bootstrap(
                     # In order to break this dependency we skip bootstrap DDL calls here if the
                     # table/view already exists, so it is always safe to run bootstrap first.
                     logger.debug("Executing:\n%s", statement.statement)
-                    clickhouse_rw.execute(statement.statement)
+                    clickhouse.execute(statement.statement)
                 else:
                     logger.debug("Skipping existing table %s", statement.table_name)
                     run_migrations = True

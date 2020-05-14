@@ -116,8 +116,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "Multiple group exclusion conditions in the Query", exc_info=True
                 )
                 return
-            if (condition_to_add[2] if condition_to_add else None) != (
-                existing_groups_conditions[0]
+            if (tuple(condition_to_add[2]) if condition_to_add else None) != (
+                tuple(existing_groups_conditions[0])
                 if len(existing_groups_conditions) > 0
                 else None
             ):
@@ -133,6 +133,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     extra={
                         "extension": deepcopy(existing_groups_conditions),
                         "processor": deepcopy(condition_to_add),
+                        "processor_projects": project_ids,
                     },
                     exc_info=True,
                 )
