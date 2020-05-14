@@ -1,5 +1,6 @@
 import logging
 
+from copy import deepcopy
 from typing import Optional
 
 from snuba import environment, settings
@@ -98,6 +99,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     extra={"extension": query.get_final(), "processor": set_final},
                     exc_info=True,
                 )
+            else:
+                metrics.increment("match.final", tags={"value": str(set_final)})
 
             existing_groups_conditions = [
                 c[2]
@@ -113,8 +116,8 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                     "Multiple group exclusion conditions in the Query", exc_info=True
                 )
                 return
-            if (condition_to_add[2] if condition_to_add else None) != (
-                existing_groups_conditions[0]
+            if (tuple(condition_to_add[2]) if condition_to_add else None) != (
+                tuple(existing_groups_conditions[0])
                 if len(existing_groups_conditions) > 0
                 else None
             ):
@@ -128,8 +131,14 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 logger.warning(
                     "Groups discrepancy between project_extension and processor.",
                     extra={
-                        "extension": existing_groups_conditions,
-                        "processor": condition_to_add,
+                        "extension": deepcopy(existing_groups_conditions),
+                        "processor": deepcopy(condition_to_add),
+                        "processor_projects": project_ids,
                     },
                     exc_info=True,
+                )
+            else:
+                metrics.increment(
+                    "match.group_id",
+                    tags={"condition_present": str(condition_to_add is not None)},
                 )

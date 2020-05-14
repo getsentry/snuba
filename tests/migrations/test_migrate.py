@@ -1,10 +1,13 @@
 from tests.base import BaseDatasetTest
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
 # TODO: Remove this once querylog is in prod and no longer disabled
 from snuba import settings
+
 settings.DISABLED_DATASETS = set()
+
 
 class TestMigrate(BaseDatasetTest):
     def setup_method(self, test_method):
@@ -31,7 +34,9 @@ class TestMigrate(BaseDatasetTest):
             if not writable_storage:
                 continue
 
-            clickhouse = writable_storage.get_cluster().get_clickhouse_rw()
+            clickhouse = writable_storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
             table_writer = writable_storage.get_table_writer()
             dataset_schema = table_writer.get_schema()
             local_table_name = dataset_schema.get_local_table_name()

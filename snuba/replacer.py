@@ -5,7 +5,7 @@ import simplejson as json
 from datetime import datetime
 from typing import Optional, Sequence
 
-from snuba.clickhouse.native import ClickhousePool
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.storage import WritableTableStorage
 from snuba.processor import InvalidMessageVersion
 from snuba.replacers.replacer_processor import Replacement, ReplacementMessage
@@ -19,13 +19,11 @@ logger = logging.getLogger("snuba.replacer")
 
 
 class ReplacerWorker(AbstractBatchWorker[KafkaPayload, Replacement]):
-    def __init__(
-        self,
-        clickhouse: ClickhousePool,
-        storage: WritableTableStorage,
-        metrics: MetricsBackend,
-    ) -> None:
-        self.clickhouse = clickhouse
+    def __init__(self, storage: WritableTableStorage, metrics: MetricsBackend) -> None:
+        self.clickhouse = storage.get_cluster().get_connection(
+            ClickhouseClientSettings.REPLACE
+        )
+
         self.metrics = metrics
         processor = storage.get_table_writer().get_replacer_processor()
         assert (
