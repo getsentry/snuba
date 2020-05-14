@@ -32,6 +32,7 @@ class TransactionsDataset(TimeSeriesDataset):
         self.__time_group_columns = {
             "bucketed_start": "start_ts",
             "bucketed_end": "finish_ts",
+            "time": "finish_ts",
         }
         super().__init__(
             storages=[storage],

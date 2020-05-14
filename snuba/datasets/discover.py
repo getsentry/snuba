@@ -304,8 +304,6 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
         if detected_dataset == TRANSACTIONS:
-            if column_name == "time":
-                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
             if column_name == "group_id":
                 # TODO: We return 0 here instead of NULL so conditions like group_id
                 # in (1, 2, 3) will work, since Clickhouse won't run a query like:
@@ -316,8 +314,6 @@ class DiscoverDataset(TimeSeriesDataset):
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
-            if column_name == "time":
-                return self.time_expr("timestamp", query.get_granularity(), table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":
