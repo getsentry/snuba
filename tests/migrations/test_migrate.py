@@ -1,5 +1,6 @@
 from tests.base import BaseDatasetTest
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import DATASET_NAMES, get_dataset
 
 
@@ -28,7 +29,9 @@ class TestMigrate(BaseDatasetTest):
             if not writable_storage:
                 continue
 
-            clickhouse = writable_storage.get_cluster().get_clickhouse_rw()
+            clickhouse = writable_storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
             table_writer = writable_storage.get_table_writer()
             dataset_schema = table_writer.get_schema()
             local_table_name = dataset_schema.get_local_table_name()

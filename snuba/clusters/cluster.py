@@ -1,7 +1,18 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Mapping, Optional, Sequence, Set, TypeVar
-
+from enum import Enum
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Mapping,
+    MutableMapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    TypeVar,
+)
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_string
@@ -11,6 +22,33 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.reader import Reader, TQuery
 from snuba.writer import BatchWriter, WriterTableRow
+
+
+class ClickhouseClientSettingsType(NamedTuple):
+    settings: Mapping[str, Any]
+    timeout: Optional[int]
+
+
+class ClickhouseClientSettings(Enum):
+    CLEANUP = ClickhouseClientSettingsType({}, None)
+    INSERT = ClickhouseClientSettingsType({}, None)
+    MIGRATE = ClickhouseClientSettingsType({}, None)
+    OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
+    QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
+    REPLACE = ClickhouseClientSettingsType(
+        {
+            # Replacing existing rows requires reconstructing the entire tuple for each
+            # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
+            # the default settings it's common for ClickHouse to go over the default max_memory_usage
+            # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
+            # max_memory_usage gives the query more breathing room.
+            "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
+            "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
+            # Don't use up production cache for the count() queries.
+            "use_uncompressed_cache": 0,
+        },
+        None,
+    )
 
 
 @dataclass(frozen=True)
@@ -89,23 +127,38 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self.__port = port
         self.__http_port = http_port
         self.__single_node = single_node
-        self.__clickhouse_rw = ClickhousePool(host, port)
-        self.__clickhouse_ro = ClickhousePool(
-            host, port, client_settings={"readonly": True},
-        )
-        self.__reader = NativeDriverReader(self.__clickhouse_ro)
         self.__cluster_name = cluster_name
+        self.__reader: Optional[Reader[SqlQuery]] = None
+        self.__connection_cache: MutableMapping[
+            ClickhouseClientSettings, ClickhousePool
+        ] = {}
 
     def __str__(self) -> str:
         return f"{self.__host}:{self.__port}"
 
-    def get_clickhouse_rw(self) -> ClickhousePool:
-        return self.__clickhouse_rw
-
-    def get_clickhouse_ro(self) -> ClickhousePool:
-        return self.__clickhouse_ro
+    def get_connection(
+        self, client_settings: ClickhouseClientSettings,
+    ) -> ClickhousePool:
+        """
+        Get a Clickhouse connection using the client settings provided. Reuse any
+        connection to the cluster with the same settings otherwise establish a new
+        connection.
+        """
+        if client_settings not in self.__connection_cache:
+            settings, timeout = client_settings.value
+            self.__connection_cache[client_settings] = ClickhousePool(
+                self.__host,
+                self.__port,
+                client_settings=settings,
+                send_receive_timeout=timeout,
+            )
+        return self.__connection_cache[client_settings]
 
     def get_reader(self) -> Reader[SqlQuery]:
+        if not self.__reader:
+            self.__reader = NativeDriverReader(
+                self.get_connection(ClickhouseClientSettings.QUERY)
+            )
         return self.__reader
 
     def get_writer(
@@ -126,7 +179,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             # Get the nodes from system.clusters
             return [
                 StorageNode(*host)
-                for host in self.get_clickhouse_ro().execute(
+                for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
                     f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(self.__cluster_name)}"
                 )
             ]

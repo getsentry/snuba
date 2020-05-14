@@ -2,6 +2,7 @@ import calendar
 from datetime import datetime, timedelta
 import simplejson as json
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import ConsumerWorker
 from snuba.datasets.factory import enforce_table_writer
 from snuba.datasets.storages import StorageKey
@@ -44,7 +45,11 @@ class TestConsumer(BaseEventsTest):
         batch = [test_worker.process_message(message)]
         test_worker.flush_batch(batch)
 
-        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_connection(ClickhouseClientSettings.QUERY)
+        )
 
         assert clickhouse.execute(
             "SELECT project_id, event_id, offset, partition FROM %s" % self.table
