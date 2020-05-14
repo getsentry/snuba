@@ -34,7 +34,7 @@ def optimize(
 ) -> None:
     from datetime import datetime
     from snuba.clickhouse.native import ClickhousePool
-    from snuba.optimize import OPTIMIZE_SEND_RECEIVE_TIMEOUT, run_optimize, logger
+    from snuba.optimize import run_optimize, logger
 
     setup_logging(log_level)
 
@@ -43,12 +43,17 @@ def optimize(
 
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # TODO: In distributed mode, optimize currently must be run once for each node
+    # with the host and port of that node provided via the CLI. In the future,
+    # passing this information won't be necessary, and running this command once
+    # will ensure that optimize is performed on all of the individual nodes for
+    # that cluster.
     if clickhouse_host and clickhouse_port:
         clickhouse_connections = [
             ClickhousePool(
                 clickhouse_host,
                 clickhouse_port,
-                send_receive_timeout=OPTIMIZE_SEND_RECEIVE_TIMEOUT,
+                send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
             )
         ]
     elif not local_dataset_mode():

@@ -4,9 +4,6 @@ import logging
 
 from snuba import util
 
-OPTIMIZE_SEND_RECEIVE_TIMEOUT = 10000
-
-
 logger = logging.getLogger("snuba.optimize")
 
 

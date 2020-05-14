@@ -6,9 +6,9 @@ from typing import (
     Generic,
     Mapping,
     MutableMapping,
+    NamedTuple,
     Optional,
     Set,
-    Tuple,
     TypeVar,
 )
 
@@ -17,24 +17,22 @@ from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.clickhouse.native import ClickhousePool, NativeDriverReader
 from snuba.clickhouse.sql import SqlQuery
 from snuba.clusters.storage_sets import StorageSetKey
-from snuba.optimize import OPTIMIZE_SEND_RECEIVE_TIMEOUT
 from snuba.reader import Reader, TQuery
 from snuba.writer import BatchWriter, WriterTableRow
 
 
-ClickhouseClientSettingsType = Tuple[Mapping[str, Any], Optional[int]]
+class ClickhouseClientSettingsType(NamedTuple):
+    settings: Mapping[str, Any]
+    timeout: Optional[int]
 
 
 class ClickhouseClientSettings(Enum):
-    CLEANUP: ClickhouseClientSettingsType = ({}, None)
-    INSERT: ClickhouseClientSettingsType = ({}, None)
-    MIGRATE: ClickhouseClientSettingsType = ({}, None)
-    OPTIMIZE: ClickhouseClientSettingsType = (
-        {},
-        OPTIMIZE_SEND_RECEIVE_TIMEOUT,
-    )
-    QUERY = ({"readonly": True}, None)
-    REPLACE = (
+    CLEANUP = ClickhouseClientSettingsType({}, None)
+    INSERT = ClickhouseClientSettingsType({}, None)
+    MIGRATE = ClickhouseClientSettingsType({}, None)
+    OPTIMIZE = ClickhouseClientSettingsType({}, 10000)
+    QUERY = ClickhouseClientSettingsType({"readonly": True}, None)
+    REPLACE = ClickhouseClientSettingsType(
         {
             # Replacing existing rows requires reconstructing the entire tuple for each
             # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
@@ -123,7 +121,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         connection.
         """
         if client_settings not in self.__connection_cache:
-            [settings, timeout] = client_settings.value
+            settings, timeout = client_settings.value
             self.__connection_cache[client_settings] = ClickhousePool(
                 self.__host,
                 self.__port,
