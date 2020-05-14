@@ -111,9 +111,9 @@ materialized_view_schema = MaterializedViewSchema(
             countIfState(session_id, status == 2) as sessions_crashed,
             countIfState(session_id, status == 3) as sessions_abnormal,
             uniqIfState(session_id, errors > 0) as sessions_errored,
-            uniqIfState(distinct_id, status == 2) as users_crashed,
-            uniqIfState(distinct_id, status == 3) as users_abnormal,
-            uniqIfState(distinct_id, errors > 0) as users_errored
+            uniqIfState(distinct_id, distinct_id != '{NIL_UUID}' and status == 2) as users_crashed,
+            uniqIfState(distinct_id, distinct_id != '{NIL_UUID}' and status == 3) as users_abnormal,
+            uniqIfState(distinct_id, distinct_id != '{NIL_UUID}' and errors > 0) as users_errored
         FROM
             %(source_table_name)s
         GROUP BY
