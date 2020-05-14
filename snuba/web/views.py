@@ -15,6 +15,7 @@ from werkzeug.exceptions import BadRequest
 
 from snuba import environment, settings, state, util
 from snuba.clickhouse.errors import ClickhouseError
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import (
@@ -74,8 +75,10 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                clickhouse_ro = storage.get_cluster().get_clickhouse_ro()
-                clickhouse_tables = clickhouse_ro.execute("show tables")
+                clickhouse = storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.QUERY
+                )
+                clickhouse_tables = clickhouse.execute("show tables")
                 source = storage.get_schemas().get_read_schema()
                 if isinstance(source, TableSchema):
                     table_name = source.get_table_name()
@@ -425,8 +428,7 @@ if application.debug or application.testing:
         else:
             from snuba.replacer import ReplacerWorker
 
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
-            worker = ReplacerWorker(clickhouse_rw, storage, metrics=metrics)
+            worker = ReplacerWorker(storage, metrics=metrics)
 
         processed = worker.process_message(message)
         if processed is not None:
@@ -438,9 +440,11 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+            clickhouse = storage.get_cluster().get_connection(
+                ClickhouseClientSettings.MIGRATE
+            )
             for statement in storage.get_schemas().get_drop_statements():
-                clickhouse_rw.execute(statement.statement)
+                clickhouse.execute(statement.statement)
 
         ensure_tables_migrated(force=True)
         redis_client.flushdb()

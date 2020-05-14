@@ -3,6 +3,7 @@ import logging
 from clickhouse_driver import Client
 from typing import MutableSequence
 
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
 from snuba.datasets.storages import StorageKey
@@ -53,11 +54,11 @@ def run() -> None:
         storage_name = storage_key.value
         logger.info("Creating tables for storage %s", storage_name)
         storage = get_storage(storage_key)
-        clickhouse_rw = storage.get_cluster().get_clickhouse_rw()
+        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.MIGRATE)
 
         for statement in storage.get_schemas().get_create_statements():
             logger.debug("Executing:\n%s", statement.statement)
-            clickhouse_rw.execute(statement.statement)
+            conn.execute(statement.statement)
 
         # Run migrations
         logger.info("Migrating storage %s", storage_name)
@@ -72,5 +73,4 @@ def run() -> None:
         schemas.append(read_schema)
 
         for schema in schemas:
-            conn = storage.get_cluster().get_clickhouse_rw()
             _run_schema(conn, schema)
