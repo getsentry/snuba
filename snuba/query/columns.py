@@ -172,11 +172,12 @@ def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
 
     if expr == alias:
         return expr
-    elif parsing_context.is_alias_present(alias):
-        aliased_expr = parsing_context.get_expression_for_alias(alias)
-        if aliased_expr != expr:
-            metrics.increment("alias_shadowing")
-        return alias
     else:
-        parsing_context.add_alias(alias, expr)
-        return "({} AS {})".format(expr, alias)
+        aliased_expr = parsing_context.get_expression_for_alias(alias)
+        if aliased_expr:
+            if aliased_expr != expr:
+                metrics.increment("alias_shadowing")
+            return alias
+        else:
+            parsing_context.add_alias(alias, expr)
+            return "({} AS {})".format(expr, alias)
