@@ -306,20 +306,6 @@ class DiscoverDataset(TimeSeriesDataset):
         if detected_dataset == TRANSACTIONS:
             if column_name == "time":
                 return self.time_expr("finish_ts", query.get_granularity(), table_alias)
-            if column_name == "type":
-                return "'transaction'"
-            if column_name == "timestamp":
-                return "finish_ts"
-            if column_name == "username":
-                return "user_name"
-            if column_name == "email":
-                return "user_email"
-            if column_name == "transaction":
-                return "transaction_name"
-            if column_name == "message":
-                return "transaction_name"
-            if column_name == "title":
-                return "transaction_name"
             if column_name == "group_id":
                 # TODO: We return 0 here instead of NULL so conditions like group_id
                 # in (1, 2, 3) will work, since Clickhouse won't run a query like:
@@ -327,12 +313,6 @@ class DiscoverDataset(TimeSeriesDataset):
                 # When we have the query AST, we should solve this by transforming the
                 # nonsensical conditions instead.
                 return "0"
-            if column_name == "geo_country_code":
-                column_name = "contexts[geo.country_code]"
-            if column_name == "geo_region":
-                column_name = "contexts[geo.region]"
-            if column_name == "geo_city":
-                column_name = "contexts[geo.city]"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
