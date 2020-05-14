@@ -1,4 +1,4 @@
-from typing import Optional, Dict
+from typing import Optional, List, Tuple
 
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -45,10 +45,19 @@ class AstSqlQuery(SqlQuery):
 
         self.__settings = settings
         self.__formatted_query: Optional[str] = None
+        self.__sql_data: Optional[List[Tuple[str, str]]] = None
 
     def _format_query_impl(self) -> str:
         if self.__formatted_query:
             return self.__formatted_query
+
+        self.__formatted_query = " ".join([c for n, c in self.sql_data() if c])
+
+        return self.__formatted_query
+
+    def _sql_data_impl(self) -> List[Tuple[str, str]]:
+        if self.__sql_data:
+            return self.__sql_data
 
         parsing_context = ParsingContext()
         formatter = ClickhouseExpressionFormatter(parsing_context)
@@ -118,40 +127,17 @@ class AstSqlQuery(SqlQuery):
         if self.__limit is not None:
             limit_clause = f"LIMIT {self.__limit} OFFSET {self.__offset}"
 
-        self.__sql_data = {
-            "query_type": "ast_query",
-            "select": select_clause,
-            "from": from_clause,
-            "join": array_join_clause,
-            "prewhere": prewhere_clause,
-            "where": where_clause,
-            "group": group_clause,
-            "having": having_clause,
-            "order": order_clause,
-            "limitby": limitby_clause,
-            "limit": limit_clause,
-        }
+        self.__sql_data = [
+            ("select", select_clause),
+            ("from", from_clause),
+            ("join", array_join_clause),
+            ("prewhere", prewhere_clause),
+            ("where", where_clause),
+            ("group", group_clause),
+            ("having", having_clause),
+            ("order", order_clause),
+            ("limitby", limitby_clause),
+            ("limit", limit_clause),
+        ]
 
-        self.__formatted_query = " ".join(
-            [
-                c
-                for c in [
-                    select_clause,
-                    from_clause,
-                    array_join_clause,
-                    prewhere_clause,
-                    where_clause,
-                    group_clause,
-                    having_clause,
-                    order_clause,
-                    limitby_clause,
-                    limit_clause,
-                ]
-                if c
-            ]
-        )
-
-        return self.__formatted_query
-
-    def _sql_data_impl(self) -> Dict[str, str]:
         return self.__sql_data

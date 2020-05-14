@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict
+from typing import Optional, List, Tuple
 
 
 class SqlQuery(ABC):
@@ -34,8 +34,14 @@ class SqlQuery(ABC):
             query = f"{query} FORMAT {format}"
         return query
 
-    def _sql_data_impl(self) -> Dict[str, str]:
+    def _sql_data_impl(self) -> List[Tuple[str, str]]:
+        """
+        Returns a list of parsed SQL elements for logging, must be
+        implemented by the subclass to provide functionality to the ``sql_data``
+        function.
+        """
         raise NotImplementedError
 
-    def sql_data(self) -> Dict[str, str]:
+    def sql_data(self) -> List[Tuple[str, str]]:
+        """Returns a lust of parsed SQL elements from this query"""
         return self._sql_data_impl()
