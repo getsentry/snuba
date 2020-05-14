@@ -49,7 +49,7 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             assert ret is not None
             return ret
         else:
-            self.__parsing_context.add_alias(alias)
+            self.__parsing_context.add_alias(alias, formatted_exp)
             return f"({formatted_exp} AS {escape_alias(alias)})"
 
     def visitLiteral(self, exp: Literal) -> str:

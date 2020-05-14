@@ -1,24 +1,21 @@
 import numbers
 import re
-
 from datetime import date, datetime
 from typing import Any, List, Optional, Sequence, Tuple, Union
-import _strptime  # NOQA fixes _strptime deferred import issue
 
-from snuba import state
-from snuba.clickhouse.escaping import escape_alias, NEGATE_RE
+import _strptime  # NOQA fixes _strptime deferred import issue
+from snuba import environment, state
+from snuba.clickhouse.escaping import NEGATE_RE, escape_alias
 from snuba.query.logical import Query
 from snuba.query.parser.conditions import parse_conditions
 from snuba.query.parser.functions import parse_function
 from snuba.query.parsing import ParsingContext
 from snuba.query.schema import POSITIVE_OPERATORS
-from snuba.util import (
-    alias_expr,
-    escape_literal,
-    function_expr,
-    is_function,
-    QUOTED_LITERAL_RE,
-)
+from snuba.util import QUOTED_LITERAL_RE, escape_literal, function_expr, is_function
+from snuba.utils.metrics.backends.wrapper import MetricsWrapper
+
+metrics = MetricsWrapper(environment.metrics, "query")
+
 
 QUALIFIED_COLUMN_REGEX = re.compile(
     r"^([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z0-9_\.\[\]]+)$"
@@ -159,3 +156,27 @@ def conditions_expr(
     )
 
     return condition or ""
+
+
+def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
+    """
+    Return the correct expression to use in the final SQL. Keeps a cache of
+    the previously created expressions and aliases, so it knows when it can
+    subsequently replace a redundant expression with an alias.
+
+    1. If the expression and alias are equal, just return that.
+    2. Otherwise, if the expression is new, add it to the cache and its alias so
+       it can be reused later and return `expr AS alias`
+    3. If the expression has been aliased before, return the alias
+    """
+
+    if expr == alias:
+        return expr
+    elif parsing_context.is_alias_present(alias):
+        aliased_expr = parsing_context.get_expression_for_alias(alias)
+        if aliased_expr != expr:
+            metrics.increment("alias_shadowing")
+        return alias
+    else:
+        parsing_context.add_alias(alias, expr)
+        return "({} AS {})".format(expr, alias)

@@ -220,7 +220,7 @@ class TestEventsDataset(BaseEventsTest):
         )
 
         context = ParsingContext()
-        context.add_alias("al1")
+        context.add_alias("al1", "something")
         assert (
             column_expr(self.dataset, "-timestamp", deepcopy(query), context, "al1")
             == "-al1"
@@ -244,7 +244,7 @@ class TestEventsDataset(BaseEventsTest):
         )
 
         context = ParsingContext()
-        context.add_alias("`exception_stacks.type`")
+        context.add_alias("`exception_stacks.type`", "something")
         assert (
             column_expr(
                 self.dataset, "-exception_stacks.type", deepcopy(query), context,
@@ -258,7 +258,7 @@ class TestEventsDataset(BaseEventsTest):
         )
 
         context = ParsingContext()
-        context.add_alias("`tags[myTag]`")
+        context.add_alias("`tags[myTag]`", "something")
         assert (
             column_expr(self.dataset, "-tags[myTag]", deepcopy(query), context)
             == "-`tags[myTag]`"

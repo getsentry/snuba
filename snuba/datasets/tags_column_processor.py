@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, List, Mapping, Optional, Set, Union
 
-from dataclasses import dataclass
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
+from snuba.query.columns import alias_expr
 from snuba.query.conditions import (
     BooleanFunctions,
     ConditionFunctions,
@@ -13,15 +14,10 @@ from snuba.query.conditions import (
     is_in_condition,
 )
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.parser.strings import NESTED_COL_EXPR_RE
-
 from snuba.query.logical import Query
+from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.parsing import ParsingContext
-from snuba.util import (
-    alias_expr,
-    escape_literal,
-    qualified_column,
-)
+from snuba.util import escape_literal, qualified_column
 
 
 @dataclass(frozen=True)

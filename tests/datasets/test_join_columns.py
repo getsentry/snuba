@@ -292,7 +292,7 @@ def test_order_by():
     )
 
     context = ParsingContext()
-    context.add_alias("`events.event_id`")
+    context.add_alias("`events.event_id`", "something")
     assert (
         column_expr(dataset, "-events.event_id", deepcopy(query), context,)
         == "-`events.event_id`"

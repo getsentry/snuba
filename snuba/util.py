@@ -21,14 +21,12 @@ import _strptime  # NOQA fixes _strptime deferred import issue
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_identifier, escape_string
-from snuba.query.parsing import ParsingContext
 from snuba.query.schema import CONDITION_OPERATORS
 from snuba.utils.metrics.backends.abstract import MetricsBackend
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.metrics.types import Tags
 
 logger = logging.getLogger("snuba.util")
-
 
 T = TypeVar("T")
 
@@ -157,27 +155,6 @@ def is_function(column_expr: Any, depth: int = 0) -> Optional[Tuple[Any, ...]]:
             return tuple(column_expr)
     else:
         return None
-
-
-def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
-    """
-    Return the correct expression to use in the final SQL. Keeps a cache of
-    the previously created expressions and aliases, so it knows when it can
-    subsequently replace a redundant expression with an alias.
-
-    1. If the expression and alias are equal, just return that.
-    2. Otherwise, if the expression is new, add it to the cache and its alias so
-       it can be reused later and return `expr AS alias`
-    3. If the expression has been aliased before, return the alias
-    """
-
-    if expr == alias:
-        return expr
-    elif parsing_context.is_alias_present(alias):
-        return alias
-    else:
-        parsing_context.add_alias(alias)
-        return "({} AS {})".format(expr, alias)
 
 
 def is_condition(cond_or_list: Sequence[Any]) -> bool:
