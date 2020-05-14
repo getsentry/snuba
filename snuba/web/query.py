@@ -176,7 +176,7 @@ def _format_storage_query_and_run(
             span.set_tag("query_type", "ast")
         except Exception:
             sql_data = formatted_query.sql_data()
-            span.set_data("query_type", "dict")
+            span.set_tag("query_type", "dict")
 
         for k, v in sql_data:
             span.set_data(k, v)
