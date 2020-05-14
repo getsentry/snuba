@@ -6,6 +6,7 @@ from hashlib import md5
 import uuid
 
 from snuba import settings
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.redis import redis_client
 
@@ -55,7 +56,9 @@ class BaseTest(object):
             self.dataset = get_dataset(self.dataset_name)
 
             for storage in self.dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_clickhouse_rw()
+                clickhouse = storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.MIGRATE
+                )
                 for statement in storage.get_schemas().get_drop_statements():
                     clickhouse.execute(statement.statement)
 
@@ -67,7 +70,9 @@ class BaseTest(object):
     def teardown_method(self, test_method):
         if self.dataset_name:
             for storage in self.dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_clickhouse_rw()
+                clickhouse = storage.get_cluster().get_connection(
+                    ClickhouseClientSettings.MIGRATE
+                )
                 for statement in storage.get_schemas().get_drop_statements():
                     clickhouse.execute(statement.statement)
 
