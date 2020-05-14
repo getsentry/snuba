@@ -64,8 +64,8 @@ class TestClusters:
             assert distributed_cluster.get_storage_nodes()[1].host_name == "host_2"
 
     def test_cache_connections(self) -> None:
-        clustera = cluster.ClickhouseCluster("localhost", 8000, 8001, True, {"events"})
+        cluster_1 = cluster.ClickhouseCluster("localhost", 8000, 8001, {"events"}, True)
 
-        assert clustera.get_connection(
+        assert cluster_1.get_connection(
             cluster.ClickhouseClientSettings.QUERY
-        ) == clustera.get_connection(cluster.ClickhouseClientSettings.QUERY)
+        ) == cluster_1.get_connection(cluster.ClickhouseClientSettings.QUERY)
