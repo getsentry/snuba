@@ -13,7 +13,6 @@ from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from tests.assertions import assert_changes
 from tests.base import redis_manager
-from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture

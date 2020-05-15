@@ -27,7 +27,6 @@ from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
-from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture

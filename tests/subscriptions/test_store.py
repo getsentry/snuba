@@ -9,7 +9,6 @@ from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.store import SubscriptionDataStore, RedisSubscriptionDataStore
 from tests.assertions import assert_changes, assert_does_not_change
 from tests.base import redis_manager
-from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture
