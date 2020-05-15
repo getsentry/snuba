@@ -22,9 +22,7 @@ class TestMigrate(BaseDatasetTest):
     def test_runs_migrations_without_errors(self):
         from snuba.migrations.migrate import run
 
-        for dataset_name in DATASET_NAMES:
-            dataset = get_dataset(dataset_name)
-            run(dataset)
+        run()
 
     def test_no_schema_diffs(self):
         from snuba.migrations.parse_schema import get_local_schema
