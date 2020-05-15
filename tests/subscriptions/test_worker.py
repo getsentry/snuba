@@ -1,13 +1,17 @@
+import string
+from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Iterable, Iterator
-from uuid import uuid1
+from random import Random
+from typing import Any, Iterable, Iterator, Mapping, Type
+from uuid import UUID, uuid1
 
 import pytest
 
+from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import get_dataset
+from snuba.datasets.factory import enforce_table_writer, get_dataset, get_dataset_name
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
@@ -24,10 +28,17 @@ from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
 
 
+@pytest.fixture
+def random() -> Random:
+    return Random()
+
+
 @pytest.fixture(params=["events", "transactions"])
 def dataset(request) -> Iterator[Dataset]:
     dataset = get_dataset(request.param)
 
+    # XXX: This setup and teardown logic should be shared with ``BaseTest``
+    # instead of copied here.
     for storage in dataset.get_all_storages():
         clickhouse = storage.get_cluster().get_connection(
             ClickhouseClientSettings.MIGRATE
@@ -49,6 +60,53 @@ def dataset(request) -> Iterator[Dataset]:
                 clickhouse.execute(statement.statement)
 
 
+Payload = Any  # XXX: yuck
+
+
+class PayloadBuilder(ABC):
+    def __init__(self, random: Random) -> None:
+        self.random = random
+
+    @abstractmethod
+    def build(self, project_id: int, timestamp: datetime) -> Payload:
+        raise NotImplementedError
+
+
+class EventPayloadBuilder(PayloadBuilder):
+    def build(self, project_id: int, timestamp: datetime) -> Payload:
+        scale = 1
+        return {
+            "event_id": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+            "project_id": project_id,
+            "group_id": (
+                ((project_id - 1) * (10 * scale)) + self.random.randint(0, 10 * scale)
+            ),
+            "datetime": timestamp.strftime(settings.PAYLOAD_DATETIME_FORMAT),
+            "platform": self.random.choice(["python", "javascript"]),
+            "primary_hash": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+            "message": "".join(
+                self.random.choice(string.printable)
+                for i in range(self.random.randint(10, 255))
+            ),
+            "data": {
+                "received": (
+                    timestamp - timedelta(seconds=int(self.random.random() * 30))
+                ).timestamp()
+            },
+        }
+
+
+builders: Mapping[str, Type[PayloadBuilder]] = {
+    "events": EventPayloadBuilder,
+}
+
+
+@pytest.fixture
+def builder(random: Random, dataset: Dataset) -> PayloadBuilder:
+    builder_type = builders[get_dataset_name(dataset)]
+    return builder_type(random)
+
+
 class DummyScheduler(Scheduler[Subscription]):
     def __init__(self, tasks: Iterable[ScheduledTask[Subscription]]):
         self.__tasks = tasks
@@ -60,9 +118,23 @@ class DummyScheduler(Scheduler[Subscription]):
             yield task
 
 
-def test_worker(dataset):
+def test_worker(dataset: Dataset, builder: PayloadBuilder) -> None:
     project_id = 1
     minutes = 20  # XXX?
+    start_time = datetime.utcnow().replace(
+        minute=0, second=0, microsecond=0
+    ) - timedelta(minutes=minutes)
+
+    payloads = [
+        builder.build(project_id, timestamp)
+        for timestamp in (start_time + timedelta(minutes=i) for i in range(minutes))
+    ]
+
+    table_writer = enforce_table_writer(dataset)
+    event_processor = table_writer.get_stream_loader().get_processor()
+    batch_writer = table_writer.get_writer()
+    batch_writer.write(map(event_processor.process_insert, payloads))
+
     result_topic = Topic("subscription-results")
 
     broker: DummyBroker[SubscriptionTaskResult] = DummyBroker()
@@ -72,7 +144,7 @@ def test_worker(dataset):
         SubscriptionIdentifier(PartitionId(0), uuid1()),
         SubscriptionData(
             project_id=project_id,
-            conditions=[["platform", "IN", ["a"]]],
+            conditions=[],
             aggregations=[["count()", "", "count"]],
             time_window=timedelta(minutes=500),
             resolution=timedelta(minutes=1),
@@ -136,7 +208,7 @@ def test_worker(dataset):
     }
     assert result == {
         "meta": [{"name": "count", "type": "UInt64"}],
-        "data": [{"count": 10}],
+        "data": [{"count": 20}],
     }
 
     message = consumer.poll()
