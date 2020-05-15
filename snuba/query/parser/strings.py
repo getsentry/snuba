@@ -35,18 +35,6 @@ def parse_string_to_expr(val: str) -> Expression:
             key=Literal(None, key_name),
         )
 
-    if val in ("tags_key", "tags_value"):
-        # Nested columns are usually accessed through array operations like elementAt
-        # and these operations are exposed in the Snuba syntax as functions.
-        # tags_key and tags_value also have this special syntax but the content of the SQL
-        # query is in the end another array operation (arrayJoin).
-        #
-        # The question remains whether we should expose arrayJoin at all but that would
-        # not be a backward compatible change.
-        return FunctionCall(
-            val, "arrayJoin", (Column(None, val.replace("_", "."), None),)
-        )
-
     # TODO: This will use the schema of the dataset/entity to decide if the expression is
     # a column or a literal.
     if val.isdigit():
