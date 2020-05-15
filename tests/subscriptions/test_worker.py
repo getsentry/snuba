@@ -10,9 +10,8 @@ from uuid import UUID, uuid1
 import pytest
 
 from snuba import settings
-from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.factory import enforce_table_writer, get_dataset, get_dataset_name
+from snuba.datasets.factory import enforce_table_writer, get_dataset_name
 from snuba.processor import ProcessorAction
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
@@ -28,6 +27,7 @@ from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
+from tests.base import dataset_manager
 
 
 @pytest.fixture
@@ -37,29 +37,8 @@ def random() -> Random:
 
 @pytest.fixture(params=["events", "transactions"])
 def dataset(request) -> Iterator[Dataset]:
-    dataset = get_dataset(request.param)
-
-    # XXX: This setup and teardown logic should be shared with ``BaseTest``
-    # instead of copied here.
-    for storage in dataset.get_all_storages():
-        clickhouse = storage.get_cluster().get_connection(
-            ClickhouseClientSettings.MIGRATE
-        )
-        for statement in storage.get_schemas().get_drop_statements():
-            clickhouse.execute(statement.statement)
-
-        for statement in storage.get_schemas().get_create_statements():
-            clickhouse.execute(statement.statement)
-
-    try:
-        yield dataset
-    finally:
-        for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            for statement in storage.get_schemas().get_drop_statements():
-                clickhouse.execute(statement.statement)
+    with dataset_manager(request.param) as instance:
+        yield instance
 
 
 Payload = Any  # XXX: yuck
