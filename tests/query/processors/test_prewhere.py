@@ -64,12 +64,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "d", None), Literal(None, 1)),
+                    (Column(None, "d", None), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "c", None), Literal(None, 3)),
+                    (Column(None, "c", None), Literal(None, "3")),
                 ),
             ),
         ),
@@ -81,12 +81,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "a", None), Literal(None, 1)),
+                    (Column(None, "a", None), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "b", None), Literal(None, 2)),
+                    (Column(None, "b", None), Literal(None, "2")),
                 ),
             ),
         ),
@@ -103,12 +103,12 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "a", None), Literal(None, 1)),
+                    (Column(None, "a", None), Literal(None, "1")),
                 ),
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "b", None), Literal(None, 2)),
+                    (Column(None, "b", None), Literal(None, "2")),
                 ),
             ),
         ),
@@ -116,7 +116,7 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column(None, "c", None), Literal(None, 3)),
+            (Column(None, "c", None), Literal(None, "3")),
         ),
     ),
     (
@@ -137,7 +137,7 @@ test_data = [
                 FunctionCall(
                     None,
                     OPERATOR_TO_FUNCTION["="],
-                    (Column(None, "c", None), Literal(None, 3)),
+                    (Column(None, "c", None), Literal(None, "3")),
                 ),
             ),
         ),
@@ -145,7 +145,7 @@ test_data = [
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["="],
-            (Column(None, "b", None), Literal(None, 2)),
+            (Column(None, "b", None), Literal(None, "2")),
         ),
     ),
 ]
@@ -173,6 +173,6 @@ def test_prewhere(
     processor.process_query(Query(query), request_settings)
 
     assert query.get_conditions() == new_conditions
-    # assert query.get_condition_from_ast() == new_ast_condition
+    assert query.get_condition_from_ast() == new_ast_condition
     assert query.get_prewhere() == prewhere_conditions
-    # assert query.get_prewhere_ast() == new_prewhere_ast_condition
+    assert query.get_prewhere_ast() == new_prewhere_ast_condition
