@@ -112,3 +112,42 @@ def is_unary_condition(exp: Expression, operator: str) -> bool:
         and exp.function_name == operator
         and len(exp.parameters) == 1
     )
+
+
+def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
+    """
+    Utility function to implement several conditions related functionalities that were
+    trivial with the legacy query representation where the top level conditions for a
+    query were a simple list of conditions (like finding prewhere candidates).
+    In the AST, the condition is a tree, so we need some additional logic to extract
+    the operands of the top level AND condition.
+    """
+    if (
+        isinstance(condition, FunctionCall)
+        and condition.function_name == BooleanFunctions.AND
+    ):
+        return [
+            *get_first_level_conditions(condition.parameters[0]),
+            *get_first_level_conditions(condition.parameters[1]),
+        ]
+    else:
+        return [condition]
+
+
+def combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
+    """
+    Combine multiple independent conditions in a single function representing an AND or
+    an OR.
+    This is the opposite of get_first_level_conditions with the difference that it can
+    actually combine both ORs and ANDs.
+    """
+
+    # TODO: Make BooleanFunctions an enum for stricter typing.
+    assert function in (BooleanFunctions.AND, BooleanFunctions.OR)
+    assert len(conditions) > 0
+    if len(conditions) == 1:
+        return conditions[0]
+
+    return binary_condition(
+        None, function, conditions[0], combine_conditions(conditions[1:], function)
+    )

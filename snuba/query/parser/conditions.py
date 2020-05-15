@@ -11,6 +11,7 @@ from snuba.query.expressions import (
 )
 from snuba.query.conditions import (
     binary_condition,
+    combine_conditions,
     BooleanFunctions,
     OPERATOR_TO_FUNCTION,
 )
@@ -131,29 +132,15 @@ def parse_conditions_to_expr(
     Relies on parse_conditions to parse a list of conditions into an Expression.
     """
 
-    def multi_expression_builder(
-        expressions: Sequence[Expression], function: str
-    ) -> Expression:
-        assert len(expressions) > 0
-        if len(expressions) == 1:
-            return expressions[0]
-
-        return binary_condition(
-            None,
-            function,
-            expressions[0],
-            multi_expression_builder(expressions[1:], function),
-        )
-
     def and_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return multi_expression_builder(expressions, BooleanFunctions.AND)
+        return combine_conditions(expressions, BooleanFunctions.AND)
 
     def or_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return multi_expression_builder(expressions, BooleanFunctions.OR)
+        return combine_conditions(expressions, BooleanFunctions.OR)
 
     def preprocess_literal(op: str, literal: Any) -> Expression:
         """
