@@ -8,13 +8,8 @@ from snuba.redis import RedisClientType
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.store import SubscriptionDataStore, RedisSubscriptionDataStore
 from tests.assertions import assert_changes, assert_does_not_change
-from tests.base import dataset_manager, redis_manager
-
-
-@pytest.fixture  # TODO: This could be parameterized, if useful.
-def dataset() -> Iterator[Dataset]:
-    with dataset_manager("events") as instance:
-        yield instance
+from tests.base import redis_manager
+from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture

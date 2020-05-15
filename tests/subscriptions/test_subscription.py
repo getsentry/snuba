@@ -12,13 +12,8 @@ from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDe
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from tests.assertions import assert_changes
-from tests.base import dataset_manager, redis_manager
-
-
-@pytest.fixture  # TODO: This could be parameterized, if useful.
-def dataset() -> Iterator[Dataset]:
-    with dataset_manager("events") as instance:
-        yield instance
+from tests.base import redis_manager
+from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture

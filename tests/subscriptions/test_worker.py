@@ -27,18 +27,12 @@ from snuba.utils.streams.consumer import Consumer
 from snuba.utils.streams.dummy import DummyBroker, DummyConsumer, DummyProducer
 from snuba.utils.streams.types import Message, Partition, Topic
 from snuba.utils.types import Interval
-from tests.base import dataset_manager
+from tests.subscriptions.fixtures import dataset  # NOQA
 
 
 @pytest.fixture
 def random() -> Random:
     return Random()
-
-
-@pytest.fixture(params=["events", "transactions"])
-def dataset(request) -> Iterator[Dataset]:
-    with dataset_manager(request.param) as instance:
-        yield instance
 
 
 Payload = Any  # XXX: yuck
