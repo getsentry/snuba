@@ -104,8 +104,36 @@ class EventPayloadBuilder(PayloadBuilder):
         ]
 
 
+class TransactionPayloadBuilder(PayloadBuilder):
+    def build(self, project_id: int, timestamp: datetime) -> Payload:
+        return [
+            2,
+            "insert",
+            {
+                "event_id": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+                "project_id": project_id,
+                "platform": self.random.choice(["python", "javascript"]),
+                "data": {
+                    "type": "transaction",
+                    "start_timestamp": (
+                        timestamp - timedelta(seconds=self.random.random() * 300)
+                    ).timestamp(),
+                    "timestamp": timestamp.timestamp(),  # WHY
+                    "contexts": {
+                        "trace": {
+                            "trace_id": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+                            "span_id": f"{self.random.randint(0, 2 ** 64):x}",
+                        }
+                    },
+                },
+            },
+            {},  # XXX
+        ]
+
+
 builders: Mapping[str, Type[PayloadBuilder]] = {
     "events": EventPayloadBuilder,
+    "transactions": TransactionPayloadBuilder,
 }
 
 
