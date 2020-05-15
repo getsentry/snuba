@@ -1,3 +1,4 @@
+import itertools
 import string
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,7 @@ from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset, get_dataset_name
+from snuba.processor import ProcessorAction
 from snuba.subscriptions.consumer import Tick
 from snuba.subscriptions.data import (
     PartitionId,
@@ -132,8 +134,18 @@ def test_worker(dataset: Dataset, builder: PayloadBuilder) -> None:
 
     table_writer = enforce_table_writer(dataset)
     event_processor = table_writer.get_stream_loader().get_processor()
+
+    # XXX: This is pretty clunky...
+    rows = [
+        message.data
+        for message in [
+            event_processor.process_message(payload) for payload in payloads
+        ]
+        if message is not None and message.action is ProcessorAction.INSERT
+    ]
+
     batch_writer = table_writer.get_writer()
-    batch_writer.write(map(event_processor.process_insert, payloads))
+    batch_writer.write(itertools.chain.from_iterable(rows))
 
     result_topic = Topic("subscription-results")
 
