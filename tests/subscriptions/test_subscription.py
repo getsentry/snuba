@@ -1,119 +1,130 @@
 from datetime import timedelta
+from typing import Iterator
 
+import pytest
 from pytest import raises
 
-from snuba.redis import redis_client
-from snuba.subscriptions.store import RedisSubscriptionDataStore
+from snuba.datasets.dataset import Dataset
+from snuba.redis import RedisClientType, redis_client
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
+from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
-from tests.subscriptions import BaseSubscriptionTest
+from tests.assertions import assert_changes
+from tests.base import dataset_manager
 
 
-class TestSubscriptionCreator(BaseSubscriptionTest):
+@pytest.fixture  # TODO: This could be parameterized, if useful.
+def dataset() -> Iterator[Dataset]:
+    with dataset_manager("events") as instance:
+        yield instance
 
-    timer = Timer("test")
 
-    def test(self):
-        creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
-            project_id=123,
-            conditions=[["platform", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+@pytest.fixture
+def redis() -> RedisClientType:
+    redis_client.flushdb()
+    try:
+        yield redis_client
+    finally:
+        redis_client.flushdb()
+
+
+@pytest.fixture
+def creator(redis: RedisClientType, dataset: Dataset) -> SubscriptionCreator:
+    # XXX: Weird coupling to RedisClientType here.
+    return SubscriptionCreator(dataset)
+
+
+timer = Timer("test")
+
+
+def test_basic_operations(
+    redis: RedisClientType, dataset: Dataset, creator: SubscriptionCreator
+) -> None:
+    subscription_data = SubscriptionData(
+        project_id=123,
+        conditions=[["platform", "IN", ["a"]]],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=10),
+        resolution=timedelta(minutes=1),
+    )
+
+    identifier = creator.create(subscription_data, timer)
+
+    # NOTE: This can't use ``assert_changes`` since we don't know the partition
+    # until after the write has completed -- we just have to assume the data
+    # wasn't already there for some reason.
+    store = RedisSubscriptionDataStore(redis, dataset, identifier.partition)
+    assert dict(store.all())[identifier.uuid] == subscription_data
+
+    with assert_changes(store.all, [(identifier.uuid, subscription_data)], []):
+        SubscriptionDeleter(dataset, identifier.partition).delete(identifier.uuid)
+
+
+def test_invalid_condition_column(creator: SubscriptionCreator) -> None:
+    with raises(QueryException):
+        creator.create(
+            SubscriptionData(
+                123,
+                [["platfo", "IN", ["a"]]],  # invalid column
+                [["count()", "", "count"]],
+                timedelta(minutes=10),
+                timedelta(minutes=1),
+            ),
+            timer,
         )
-        identifier = creator.create(subscription, self.timer)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
-
-    def test_invalid_condition_column(self):
-        creator = SubscriptionCreator(self.dataset)
-        with raises(QueryException):
-            creator.create(
-                SubscriptionData(
-                    123,
-                    [["platfo", "IN", ["a"]]],
-                    [["count()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
-                ),
-                self.timer,
-            )
-
-    def test_invalid_aggregation(self):
-        creator = SubscriptionCreator(self.dataset)
-        with raises(QueryException):
-            creator.create(
-                SubscriptionData(
-                    123,
-                    [["platform", "IN", ["a"]]],
-                    [["cout()", "", "count"]],
-                    timedelta(minutes=10),
-                    timedelta(minutes=1),
-                ),
-                self.timer,
-            )
-
-    def test_invalid_time_window(self):
-        creator = SubscriptionCreator(self.dataset)
-        with raises(InvalidSubscriptionError):
-            creator.create(
-                SubscriptionData(
-                    123,
-                    [["platfo", "IN", ["a"]]],
-                    [["count()", "", "count"]],
-                    timedelta(),
-                    timedelta(minutes=1),
-                ),
-                self.timer,
-            )
-
-        with raises(InvalidSubscriptionError):
-            creator.create(
-                SubscriptionData(
-                    123,
-                    [["platfo", "IN", ["a"]]],
-                    [["count()", "", "count"]],
-                    timedelta(hours=48),
-                    timedelta(minutes=1),
-                ),
-                self.timer,
-            )
-
-    def test_invalid_resolution(self):
-        creator = SubscriptionCreator(self.dataset)
-        with raises(InvalidSubscriptionError):
-            creator.create(
-                SubscriptionData(
-                    123,
-                    [["platfo", "IN", ["a"]]],
-                    [["count()", "", "count"]],
-                    timedelta(minutes=1),
-                    timedelta(),
-                ),
-                self.timer,
-            )
 
 
-class TestSubscriptionDeleter(BaseSubscriptionTest):
-    def test(self):
-        creator = SubscriptionCreator(self.dataset)
-        subscription = SubscriptionData(
-            project_id=1,
-            conditions=[],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=10),
-            resolution=timedelta(minutes=1),
+def test_invalid_aggregation(creator: SubscriptionCreator) -> None:
+    with raises(QueryException):
+        creator.create(
+            SubscriptionData(
+                123,
+                [["platform", "IN", ["a"]]],
+                [["cout()", "", "count"]],
+                timedelta(minutes=10),
+                timedelta(minutes=1),
+            ),
+            timer,
         )
-        identifier = creator.create(subscription, Timer("test"))
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all()[0][1] == subscription
 
-        SubscriptionDeleter(self.dataset, identifier.partition).delete(identifier.uuid)
-        RedisSubscriptionDataStore(
-            redis_client, self.dataset, identifier.partition,
-        ).all() == []
+
+def test_invalid_time_window(creator: SubscriptionCreator) -> None:
+    with raises(InvalidSubscriptionError):
+        creator.create(
+            SubscriptionData(
+                123,
+                [["platfo", "IN", ["a"]]],
+                [["count()", "", "count"]],
+                timedelta(),
+                timedelta(minutes=1),
+            ),
+            timer,
+        )
+
+    with raises(InvalidSubscriptionError):
+        creator.create(
+            SubscriptionData(
+                123,
+                [["platfo", "IN", ["a"]]],
+                [["count()", "", "count"]],
+                timedelta(hours=48),
+                timedelta(minutes=1),
+            ),
+            timer,
+        )
+
+
+def test_invalid_resolution(creator: SubscriptionCreator) -> None:
+    with raises(InvalidSubscriptionError):
+        creator.create(
+            SubscriptionData(
+                123,
+                [["platfo", "IN", ["a"]]],
+                [["count()", "", "count"]],
+                timedelta(minutes=1),
+                timedelta(),
+            ),
+            timer,
+        )
