@@ -15,14 +15,16 @@ DISABLED_DATASETS: Set[str] = {"querylog"}
 DATASET_MODE = "local"
 
 # Clickhouse Options
-# TODO: Warn about using `CLICKHOUSE_SERVER`, users should use the new settings instead.
-[default_clickhouse_host, default_clickhouse_port] = os.environ.get(
-    "CLICKHOUSE_SERVER", "localhost:9000"
-).split(":", 1)
-CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", default_clickhouse_host)
-CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", default_clickhouse_port))
-CLICKHOUSE_HTTP_PORT = int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123))
 CLICKHOUSE_MAX_POOL_SIZE = 25
+
+CLUSTERS: Sequence[Mapping[str, Any]] = [
+    {
+        "host": os.environ.get("CLICKHOUSE_HOST", "localhost"),
+        "port": int(os.environ.get("CLICKHOUSE_PORT", 9000)),
+        "http_port": int(os.environ.get("CLICKHOUSE_HTTP_PORT", 8123)),
+        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
+    },
+]
 
 # Dogstatsd Options
 DOGSTATSD_HOST = "localhost"
@@ -128,15 +130,3 @@ def _load_settings(obj: MutableMapping[str, Any] = locals()) -> None:
 
 
 _load_settings()
-
-
-# Snuba currently only supports a single cluster to which all storage sets are assigned.
-# In future this will be configurable.
-CLUSTERS: Sequence[Mapping[str, Any]] = [
-    {
-        "host": CLICKHOUSE_HOST,
-        "port": CLICKHOUSE_PORT,
-        "http_port": CLICKHOUSE_HTTP_PORT,
-        "storage_sets": {"events", "outcomes", "querylog", "sessions", "transactions"},
-    },
-]
