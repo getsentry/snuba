@@ -1,76 +1,125 @@
+from typing import Iterator
+import pytest
 from datetime import timedelta
 from uuid import uuid1
 
-from snuba.redis import redis_client
+from snuba.datasets.dataset import Dataset
+from snuba.redis import RedisClientType, redis_client
 from snuba.subscriptions.data import SubscriptionData
-from snuba.subscriptions.store import RedisSubscriptionDataStore
-from tests.subscriptions import BaseSubscriptionTest
+from snuba.subscriptions.store import SubscriptionDataStore, RedisSubscriptionDataStore
+from tests.assertions import assert_changes, assert_does_not_change
+from tests.base import dataset_manager
 
 
-class TestRedisSubscriptionStore(BaseSubscriptionTest):
-    @property
-    def subscription(self) -> SubscriptionData:
-        return SubscriptionData(
-            project_id=self.project_id,
-            conditions=[["platform", "IN", ["a"]]],
-            aggregations=[["count()", "", "count"]],
-            time_window=timedelta(minutes=500),
-            resolution=timedelta(minutes=1),
-        )
+@pytest.fixture  # TODO: This could be parameterized, if useful.
+def dataset() -> Iterator[Dataset]:
+    with dataset_manager("events") as instance:
+        yield instance
 
-    def build_store(self, key="1") -> RedisSubscriptionDataStore:
-        return RedisSubscriptionDataStore(redis_client, self.dataset, key)
 
-    def test_create(self):
-        store = self.build_store()
-        subscription_id = uuid1()
-        store.create(subscription_id, self.subscription)
-        assert store.all() == [(subscription_id, self.subscription)]
+@pytest.fixture
+def redis() -> RedisClientType:
+    redis_client.flushdb()
+    try:
+        yield redis_client
+    finally:
+        redis_client.flushdb()
 
-    def test_delete(self):
-        store = self.build_store()
-        subscription_id = uuid1()
-        store.create(subscription_id, self.subscription)
-        assert store.all() == [(subscription_id, self.subscription)]
+
+def test_basic_operations(redis: RedisClientType, dataset: Dataset) -> None:
+    store: SubscriptionDataStore = RedisSubscriptionDataStore(redis, dataset, 1)
+
+    subscription_id = uuid1()
+    subscription_data = SubscriptionData(
+        project_id=1,
+        conditions=[["platform", "IN", ["a"]]],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+    )
+
+    # Deleting a key that does not exist should work without erroring.
+    with assert_does_not_change(store.all, []):
         store.delete(subscription_id)
-        assert store.all() == []
 
-    def test_all(self):
-        store = self.build_store()
-        assert store.all() == []
-        subscription_id = uuid1()
-        store.create(subscription_id, self.subscription)
-        assert store.all() == [(subscription_id, self.subscription)]
-        new_subscription = SubscriptionData(
-            project_id=self.project_id,
-            conditions=[["platform", "IN", ["b"]]],
-            aggregations=[["count()", "", "something"]],
-            time_window=timedelta(minutes=400),
-            resolution=timedelta(minutes=2),
-        )
-        new_subscription_id = uuid1()
-        store.create(new_subscription_id, new_subscription)
-        assert sorted(store.all(), key=lambda row: row[0]) == [
-            (subscription_id, self.subscription),
-            (new_subscription_id, new_subscription),
-        ]
+    with assert_changes(store.all, [], [(subscription_id, subscription_data)]):
+        store.create(subscription_id, subscription_data)
 
-    def test_partitions(self):
-        store_1 = self.build_store("1")
-        store_2 = self.build_store("2")
-        subscription_id = uuid1()
-        store_1.create(subscription_id, self.subscription)
-        assert store_2.all() == []
-        assert store_1.all() == [(subscription_id, self.subscription)]
+    new_subscription_id = uuid1()
+    new_subscription_data = SubscriptionData(
+        project_id=1,
+        conditions=[["platform", "IN", ["b"]]],
+        aggregations=[["count()", "", "something"]],
+        time_window=timedelta(minutes=400),
+        resolution=timedelta(minutes=2),
+    )
 
-        new_subscription = SubscriptionData(
-            project_id=self.project_id,
-            conditions=[["platform", "IN", ["b"]]],
-            aggregations=[["count()", "", "something"]],
-            time_window=timedelta(minutes=400),
-            resolution=timedelta(minutes=2),
-        )
-        new_subscription_id = uuid1()
-        store_2.create(new_subscription_id, new_subscription)
-        assert store_1.all() == [(subscription_id, self.subscription)]
-        assert store_2.all() == [(new_subscription_id, new_subscription)]
+    with assert_changes(
+        lambda: sorted(store.all()),
+        [(subscription_id, subscription_data)],
+        sorted(
+            [
+                (subscription_id, subscription_data),
+                (new_subscription_id, new_subscription_data),
+            ]
+        ),
+    ):
+        store.create(new_subscription_id, new_subscription_data)
+
+    with assert_changes(
+        lambda: sorted(store.all()),
+        sorted(
+            [
+                (subscription_id, subscription_data),
+                (new_subscription_id, new_subscription_data),
+            ]
+        ),
+        [(new_subscription_id, new_subscription_data)],
+    ):
+        store.delete(subscription_id)
+
+    new_subscription_data_updated = SubscriptionData(
+        project_id=1,
+        conditions=[["platform", "IN", ["a", "b"]]],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+    )
+
+    # Overwriting a key that already exists should not create a duplicate
+    # record but replace the previous state.
+    with assert_changes(
+        store.all,
+        [(new_subscription_id, new_subscription_data)],
+        [(new_subscription_id, new_subscription_data_updated)],
+    ):
+        store.create(new_subscription_id, new_subscription_data_updated)
+
+    with assert_changes(
+        store.all, [(new_subscription_id, new_subscription_data_updated)], []
+    ):
+        store.delete(new_subscription_id)
+
+
+def test_partition_isolation(redis: RedisClientType, dataset: Dataset) -> None:
+    store_1: SubscriptionDataStore = RedisSubscriptionDataStore(redis, dataset, 1)
+    store_2: SubscriptionDataStore = RedisSubscriptionDataStore(redis, dataset, 2)
+
+    subscription_id = uuid1()
+    subscription_data = SubscriptionData(
+        project_id=1,
+        conditions=[["platform", "IN", ["a"]]],
+        aggregations=[["count()", "", "count"]],
+        time_window=timedelta(minutes=500),
+        resolution=timedelta(minutes=1),
+    )
+
+    with assert_changes(
+        store_1.all, [], [(subscription_id, subscription_data)]
+    ), assert_does_not_change(store_2.all, []):
+        store_1.create(subscription_id, subscription_data)
+
+    with assert_changes(
+        store_2.all, [], [(subscription_id, subscription_data)]
+    ), assert_does_not_change(store_1.all, [(subscription_id, subscription_data)]):
+        store_2.create(subscription_id, subscription_data)
