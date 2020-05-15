@@ -5,14 +5,14 @@ import pytest
 from pytest import raises
 
 from snuba.datasets.dataset import Dataset
-from snuba.redis import RedisClientType, redis_client
+from snuba.redis import RedisClientType
 from snuba.subscriptions.data import InvalidSubscriptionError, SubscriptionData
 from snuba.subscriptions.store import RedisSubscriptionDataStore
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException
 from tests.assertions import assert_changes
-from tests.base import dataset_manager
+from tests.base import dataset_manager, redis_manager
 
 
 @pytest.fixture  # TODO: This could be parameterized, if useful.
@@ -22,12 +22,9 @@ def dataset() -> Iterator[Dataset]:
 
 
 @pytest.fixture
-def redis() -> RedisClientType:
-    redis_client.flushdb()
-    try:
-        yield redis_client
-    finally:
-        redis_client.flushdb()
+def redis() -> Iterator[RedisClientType]:
+    with redis_manager() as instance:
+        yield instance
 
 
 @pytest.fixture

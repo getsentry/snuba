@@ -10,7 +10,7 @@ from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.factory import enforce_table_writer, get_dataset
-from snuba.redis import redis_client
+from snuba.redis import RedisClientType, redis_client
 
 
 def wrap_raw_event(event):
@@ -70,6 +70,15 @@ def dataset_manager(name: str) -> Iterator[Dataset]:
                 clickhouse.execute(statement.statement)
 
 
+@contextmanager
+def redis_manager() -> Iterator[RedisClientType]:
+    redis_client.flushdb()
+    try:
+        yield redis_client
+    finally:
+        redis_client.flushdb()
+
+
 class BaseTest(object):
     def setup_method(self, test_method, dataset_name: Optional[str] = None):
         assert (
@@ -86,13 +95,14 @@ class BaseTest(object):
             self.__dataset_manager = None
             self.dataset = None
 
-        redis_client.flushdb()
+        self.__redis_manager = redis_manager()
+        self.__redis_manager.__enter__()
 
     def teardown_method(self, test_method):
         if self.__dataset_manager:
             self.__dataset_manager.__exit__(None, None, None)
 
-        redis_client.flushdb()
+        self.__redis_manager.__exit__(None, None, None)
 
 
 class BaseDatasetTest(BaseTest):

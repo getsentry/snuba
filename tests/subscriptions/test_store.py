@@ -4,11 +4,11 @@ from datetime import timedelta
 from uuid import uuid1
 
 from snuba.datasets.dataset import Dataset
-from snuba.redis import RedisClientType, redis_client
+from snuba.redis import RedisClientType
 from snuba.subscriptions.data import SubscriptionData
 from snuba.subscriptions.store import SubscriptionDataStore, RedisSubscriptionDataStore
 from tests.assertions import assert_changes, assert_does_not_change
-from tests.base import dataset_manager
+from tests.base import dataset_manager, redis_manager
 
 
 @pytest.fixture  # TODO: This could be parameterized, if useful.
@@ -18,12 +18,9 @@ def dataset() -> Iterator[Dataset]:
 
 
 @pytest.fixture
-def redis() -> RedisClientType:
-    redis_client.flushdb()
-    try:
-        yield redis_client
-    finally:
-        redis_client.flushdb()
+def redis() -> Iterator[RedisClientType]:
+    with redis_manager() as instance:
+        yield instance
 
 
 def test_basic_operations(redis: RedisClientType, dataset: Dataset) -> None:
