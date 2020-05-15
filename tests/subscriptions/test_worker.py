@@ -154,8 +154,8 @@ class DummyScheduler(Scheduler[Subscription]):
             yield task
 
 
-def test_worker(dataset: Dataset, builder: PayloadBuilder) -> None:
-    project_id = 1
+def test_worker(random: Random, dataset: Dataset, builder: PayloadBuilder) -> None:
+    project_id = random.randint(1, 2 ** 32)
     minutes = 20  # XXX?
     start_time = datetime.utcnow().replace(
         minute=0, second=0, microsecond=0
