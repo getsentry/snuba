@@ -77,25 +77,31 @@ class PayloadBuilder(ABC):
 class EventPayloadBuilder(PayloadBuilder):
     def build(self, project_id: int, timestamp: datetime) -> Payload:
         scale = 1
-        return {
-            "event_id": UUID(int=self.random.randint(0, 2 ** 128)).hex,
-            "project_id": project_id,
-            "group_id": (
-                ((project_id - 1) * (10 * scale)) + self.random.randint(0, 10 * scale)
-            ),
-            "datetime": timestamp.strftime(settings.PAYLOAD_DATETIME_FORMAT),
-            "platform": self.random.choice(["python", "javascript"]),
-            "primary_hash": UUID(int=self.random.randint(0, 2 ** 128)).hex,
-            "message": "".join(
-                self.random.choice(string.printable)
-                for i in range(self.random.randint(10, 255))
-            ),
-            "data": {
-                "received": (
-                    timestamp - timedelta(seconds=int(self.random.random() * 30))
-                ).timestamp()
+        return [
+            2,
+            "insert",
+            {
+                "event_id": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+                "project_id": project_id,
+                "group_id": (
+                    ((project_id - 1) * (10 * scale))
+                    + self.random.randint(0, 10 * scale)
+                ),
+                "datetime": timestamp.strftime(settings.PAYLOAD_DATETIME_FORMAT),
+                "platform": self.random.choice(["python", "javascript"]),
+                "primary_hash": UUID(int=self.random.randint(0, 2 ** 128)).hex,
+                "message": "".join(
+                    self.random.choice(string.printable)
+                    for i in range(self.random.randint(10, 255))
+                ),
+                "data": {
+                    "received": (
+                        timestamp - timedelta(seconds=int(self.random.random() * 30))
+                    ).timestamp()
+                },
             },
-        }
+            {},  # XXX
+        ]
 
 
 builders: Mapping[str, Type[PayloadBuilder]] = {
@@ -143,6 +149,7 @@ def test_worker(dataset: Dataset, builder: PayloadBuilder) -> None:
         ]
         if message is not None and message.action is ProcessorAction.INSERT
     ]
+    assert len(rows) == len(payloads)  # sanity check
 
     batch_writer = table_writer.get_writer()
     batch_writer.write(itertools.chain.from_iterable(rows))
