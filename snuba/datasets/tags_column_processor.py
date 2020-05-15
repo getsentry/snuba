@@ -12,7 +12,7 @@ from snuba.query.conditions import (
     is_binary_condition,
     is_in_condition,
 )
-from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 
 from snuba.query.logical import Query
@@ -174,7 +174,9 @@ class TagColumnProcessor:
             assert isinstance(condition, FunctionCall)
             if (
                 isinstance(condition.parameters[0], FunctionCall)
-                and condition.parameters[0].function_name == "tags_key"
+                and condition.parameters[0].function_name == "arrayJoin"
+                and condition.parameters[0].parameters
+                == (Column(None, "tags.key", None),)
                 and isinstance(condition.parameters[1], Literal)
             ):
                 # Tags are strings, but mypy does not know that
@@ -184,7 +186,9 @@ class TagColumnProcessor:
             assert isinstance(condition, FunctionCall)
             if (
                 isinstance(condition.parameters[0], FunctionCall)
-                and condition.parameters[0].function_name == "tags_key"
+                and condition.parameters[0].function_name == "arrayJoin"
+                and condition.parameters[0].parameters
+                == (Column(None, "tags.key", None),)
             ):
                 # The parameters of the inner function `a IN tuple(b,c,d)`
                 assert isinstance(condition.parameters[1], FunctionCall)
@@ -215,7 +219,8 @@ class TagColumnProcessor:
         select_clause = query.get_selected_columns_from_ast() or []
 
         tags_key_found = any(
-            f.function_name == "tags_key"
+            f.function_name == "arrayJoin"
+            and f.parameters == (Column(None, "tags.key", None),)
             for expression in select_clause
             for f in expression
             if isinstance(f, FunctionCall)
