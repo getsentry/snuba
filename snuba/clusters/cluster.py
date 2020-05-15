@@ -52,7 +52,7 @@ class ClickhouseClientSettings(Enum):
 
 
 @dataclass(frozen=True)
-class StorageNode:
+class ClickhouseNode:
     host_name: str
     port: int
     shard: Optional[int] = None
@@ -172,13 +172,13 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name, self.__host, self.__http_port, encoder, options, chunk_size
         )
 
-    def get_storage_nodes(self) -> Sequence[StorageNode]:
+    def get_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
-            return [StorageNode(self.__host, self.__port)]
+            return [ClickhouseNode(self.__host, self.__port)]
         else:
             # Get the nodes from system.clusters
             return [
-                StorageNode(*host)
+                ClickhouseNode(*host)
                 for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
                     f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(self.__cluster_name)}"
                 )
