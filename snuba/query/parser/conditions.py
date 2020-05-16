@@ -2,23 +2,16 @@ from collections import OrderedDict
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import (
-    Argument,
-    Expression,
-    Lambda,
-    Literal,
-    FunctionCall,
-)
 from snuba.query.conditions import (
+    OPERATOR_TO_FUNCTION,
+    BooleanFunctions,
     binary_condition,
     combine_conditions,
-    BooleanFunctions,
-    OPERATOR_TO_FUNCTION,
 )
+from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.expressions import parse_expression
 from snuba.query.schema import POSITIVE_OPERATORS
 from snuba.util import is_condition
-
 
 TExpression = TypeVar("TExpression")
 
