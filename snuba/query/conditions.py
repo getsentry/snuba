@@ -1,7 +1,7 @@
 from typing import Mapping, Optional, Sequence
 
 from snuba.query.dsl import literals_tuple
-from snuba.query.expressions import Expression, Literal, FunctionCall
+from snuba.query.expressions import Expression, FunctionCall, Literal
 
 
 class ConditionFunctions:
@@ -118,7 +118,7 @@ def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
     """
     Utility function to implement several conditions related functionalities that were
     trivial with the legacy query representation where the top level conditions for a
-    query were a simple list of conditions (like finding prewhere candidates).
+    query were a simple list of conditions.
     In the AST, the condition is a tree, so we need some additional logic to extract
     the operands of the top level AND condition.
     """
@@ -138,7 +138,7 @@ def combine_conditions(conditions: Sequence[Expression], function: str) -> Expre
     """
     Combine multiple independent conditions in a single function representing an AND or
     an OR.
-    This is the opposite of get_first_level_conditions with the difference that it can
+    This is the inverse of get_first_level_conditions with the difference that it can
     actually combine both ORs and ANDs.
     """
 

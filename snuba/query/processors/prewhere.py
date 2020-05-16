@@ -34,8 +34,7 @@ class PrewhereProcessor(QueryProcessor):
     Moves top level conditions into the pre-where clause
     according to the list of candidates provided by the query data source.
 
-    In order for a condition to become a pre-where condition it has
-    to be:
+    In order for a condition to become a pre-where condition it has to be:
     - a single top-level condition (not in an OR statement)
     - any of its referenced columns must be in the list provided by the query
       data source.
@@ -52,6 +51,9 @@ class PrewhereProcessor(QueryProcessor):
         if not prewhere_keys:
             return
 
+        # While both implementations modify the query, they do not interfere with each
+        # other since one depend on the legacy representation and the other on the AST
+        # Thus we can execute the two independently.
         LegacyPrewhereProcessor().process_query(
             query, max_prewhere_conditions, prewhere_keys
         )
@@ -75,8 +77,6 @@ class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
     def process_query(
         self, query: Query, max_prewhere_conditions: int, prewhere_keys: Sequence[str]
     ) -> None:
-        prewhere_candidates = self._get_prewhere_candidates(query, prewhere_keys)
-
         # Use the condition that has the highest priority (based on the
         # position of its columns in the prewhere keys list)
         sorted_candidates = sorted(
@@ -89,7 +89,7 @@ class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
                     ),
                     cond,
                 )
-                for cols, cond in prewhere_candidates
+                for cols, cond in self._get_prewhere_candidates(query, prewhere_keys)
             ],
             key=lambda priority_and_col: priority_and_col[0],
         )
@@ -156,12 +156,18 @@ class LegacyPrewhereProcessor(PrewhereProcessorDelegate[Condition, str]):
             return
 
         query.set_conditions(
-            list(filter(lambda cond: cond not in prewhere_conditions, conditions))
+            [cond for cond in conditions if cond not in prewhere_conditions]
         )
         query.set_prewhere(prewhere_conditions)
 
 
 class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
+    """
+    This class MUST not depend on anything from the legacy implementation because,
+    as long as we have both ast and legacy representation coexisting, this class
+    cannot be sure whether the legacy representation has already been modified
+    to process the pre-where conditions.
+    """
 
     allowed_ast_operators = [OPERATOR_TO_FUNCTION[o] for o in ALLOWED_OPERATORS]
 
@@ -195,11 +201,15 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
     ) -> None:
         ast_condition = query.get_condition_from_ast()
         if not ast_condition:
+            # This should never happen at this point, but for mypy this can be None.
             return
-        top_level_conditions = get_first_level_conditions(ast_condition)
-        new_conditions = list(
-            filter(lambda cond: cond not in prewhere_conditions, top_level_conditions)
-        )
+
+        new_conditions = [
+            cond
+            for cond in get_first_level_conditions(ast_condition)
+            if cond not in prewhere_conditions
+        ]
+
         query.replace_ast_condition(
             combine_conditions(new_conditions, BooleanFunctions.AND)
             if new_conditions
