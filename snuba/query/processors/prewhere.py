@@ -37,14 +37,14 @@ class PrewhereProcessor(QueryProcessor):
     In order for a condition to become a pre-where condition it has
     to be:
     - a single top-level condition (not in an OR statement)
-    - any of its referenced columns must be in the list provided to the
-      constructor.
+    - any of its referenced columns must be in the list provided by the query
+      data source.
     """
 
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
         self.__max_prewhere_conditions: Optional[int] = max_prewhere_conditions
 
-    def process_query(self, query: Query, request_settings: RequestSettings,) -> None:
+    def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         max_prewhere_conditions: int = (
             self.__max_prewhere_conditions or settings.MAX_PREWHERE_CONDITIONS
         )
@@ -65,6 +65,13 @@ TColumn = TypeVar("TColumn")
 
 
 class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
+    """
+    Runs the prewhere generation algorithm on behalf of PrewhereProcessor. There
+    are two implementation following a template method pattern. One for the AST
+    and one for the legacy query representation so that the prewhere generation
+    code does not have to be duplicated.
+    """
+
     def process_query(
         self, query: Query, max_prewhere_conditions: int, prewhere_keys: Sequence[str]
     ) -> None:
@@ -91,12 +98,17 @@ class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
             :max_prewhere_conditions
         ]
 
-        self._update_conditions(query, prewhere_conditions)
+        if prewhere_conditions:
+            self._update_conditions(query, prewhere_conditions)
 
     @abstractmethod
     def _get_prewhere_candidates(
         self, query: Query, prewhere_keys: Sequence[str]
     ) -> Sequence[Tuple[Iterable[TColumn], TCondition]]:
+        """
+        Extract the conditions from the query that could be moved to the
+        pre-where clause.
+        """
         raise NotImplementedError
 
     @abstractmethod
@@ -107,6 +119,10 @@ class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
     def _update_conditions(
         self, query: Query, prewhere_conditions: Sequence[TCondition]
     ) -> None:
+        """
+        Updates the query with the new pre-where conditions by removing them
+        from the main condition clause and adding them to the pre-where clause.
+        """
         raise NotImplementedError
 
 
@@ -136,7 +152,9 @@ class LegacyPrewhereProcessor(PrewhereProcessorDelegate[Condition, str]):
     ) -> None:
         conditions = query.get_conditions()
         if not conditions:
+            # This should never happen at this point, but for mypy this can be None.
             return
+
         query.set_conditions(
             list(filter(lambda cond: cond not in prewhere_conditions, conditions))
         )
@@ -150,13 +168,15 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
     def _get_prewhere_candidates(
         self, query: Query, prewhere_keys: Sequence[str]
     ) -> Sequence[Tuple[Iterable[Column], Expression]]:
+        # Add any condition to PREWHERE if:
+        # - It is a single top-level condition (not OR-nested), and
+        # - Any of its referenced columns are in prewhere_keys
         ast_condition = query.get_condition_from_ast()
         return (
             [
                 (get_columns_in_expression(cond), cond)
                 for cond in get_first_level_conditions(ast_condition)
                 if isinstance(cond, FunctionCall)
-                and len(cond.parameters) > 0
                 and cond.function_name in self.allowed_ast_operators
                 and any(
                     col.column_name in prewhere_keys
