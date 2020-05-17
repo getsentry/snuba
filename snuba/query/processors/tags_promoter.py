@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, NamedTuple
 
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.processors import QueryProcessor
@@ -6,24 +6,26 @@ from snuba.clickhouse.query import Query
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.request.request_settings import RequestSettings
 
-KeyColumnMapping = Mapping[str, str]
-NestedMappingSpec = Mapping[str, KeyColumnMapping]
+
+class NestedColumnMapping(NamedTuple):
+    # The name of the key field in the nested column
+    key_field: str
+    # The name of the value field in the nested column
+    val_field: str
+    # The mapping between keys in the nested column and real columns
+    column_mapping: Mapping[str, str]
 
 
-class NestedColumnPromoted(QueryProcessor):
-    def __init__(
-        self,
-        columns: ColumnSet,
-        mapping_spec: NestedMappingSpec,
-        key_field: str,
-        val_field: str,
-    ) -> None:
+NestedMappingSpec = Mapping[str, NestedColumnMapping]
+
+
+class NestedColumnPromoter(QueryProcessor):
+    def __init__(self, columns: ColumnSet, mapping_spec: NestedMappingSpec) -> None:
         # The ColumnSet of the dataset. Used to format promoted
         # columns with the right type.
         self.__columns = columns
+        # Maps nested column keys to real column names.
         self.__spec = mapping_spec
-        self.__key_field = key_field
-        self.__val_field = val_field
 
     def __string_col(self, col_name: str, alias: str, table_name: str) -> Expression:
         col_type = self.__columns.get(col_name, None)
@@ -69,8 +71,6 @@ class NestedColumnPromoted(QueryProcessor):
                 len(val_column_splits) == 2
                 and len(key_column_splits) == 2
                 and val_column_splits[0] == key_column_splits[0]
-                and val_column_splits[1] == self.__val_field
-                and key_column_splits[1] == self.__key_field
             ):
                 return exp
 
@@ -78,8 +78,12 @@ class NestedColumnPromoted(QueryProcessor):
             key = exp.parameters[1].parameters[1]
             if not isinstance(key, str):
                 return exp
-            if column_name in self.__spec:
-                promoted_col = self.__spec[column_name].get(key.value)
+            if (
+                column_name in self.__spec
+                and val_column_splits[1] == self.__spec[column_name].val_field
+                and key_column_splits[1] == self.__spec[column_name].key_field
+            ):
+                promoted_col = self.__spec[column_name].column_mapping.get(key.value)
                 if promoted_col:
                     return self.__string_col(
                         promoted_col, exp.alias, key_column.table_name

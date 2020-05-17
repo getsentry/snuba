@@ -1,16 +1,14 @@
 import pytest
 
-from snuba.query.logical import Query as LogicalQuery
-from snuba.clickhouse.columns import (
-    ColumnSet,
-    Nested,
-    Nullable,
-    String,
-)
+from snuba.clickhouse.columns import ColumnSet, Nested, Nullable, String
 from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
-from snuba.query.processors.tags_promoter import NestedColumnPromoted
+from snuba.query.logical import Query as LogicalQuery
+from snuba.query.processors.tags_promoter import (
+    NestedColumnMapping,
+    NestedColumnPromoter,
+)
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
@@ -107,8 +105,9 @@ def test_format_expressions(
             ("tags", Nested([("key", String()), ("value", String())])),
         ]
     )
-    NestedColumnPromoted(
-        columns, {"tags": {"promtoed_tag": "promtoed"}}, "key", "value"
+    NestedColumnPromoter(
+        columns,
+        {"tags": NestedColumnMapping("key", "value", {"promtoed_tag": "promtoed"})},
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
