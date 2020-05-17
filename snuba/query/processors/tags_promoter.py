@@ -16,21 +16,23 @@ class PromotedColumnsSpec(NamedTuple):
     column_mapping: Mapping[str, str]
 
 
-NestedMappingSpec = Mapping[str, PromotedColumnsSpec]
+MappingColumnPromotionSpec = Mapping[str, PromotedColumnsSpec]
 
 
 class MappingColumnPromoter(QueryProcessor):
     """
-    Promotes mapping expressions by replacing them with the corresponding promoted
-    column.
+    Promotes expression to access the value of a mapping column by replacing them with
+    the corresponding promoted column.
 
     Example: tags["myTag"] -> arrayElement("tags.value", indexOf("tags.key", "myTag"))
      -> toString(promoted_MyTag)
 
-    if there is a promoted_MyTag column in the storage that maps to the myTag tag.
+    This happens if there is a promoted_MyTag column in the storage that maps to the myTag tag.
     """
 
-    def __init__(self, columns: ColumnSet, mapping_spec: NestedMappingSpec) -> None:
+    def __init__(
+        self, columns: ColumnSet, mapping_spec: MappingColumnPromotionSpec
+    ) -> None:
         # The ColumnSet of the dataset. Used to format promoted
         # columns with the right type.
         self.__columns = columns
@@ -57,6 +59,9 @@ class MappingColumnPromoter(QueryProcessor):
             ):
                 return exp
 
+            # TODO: There is should be a structured Column class to deal with references
+            # to nested columns instead of splitting the column name string. Resolution
+            # of such column is tightly coupled to how we will do entity resolution.
             val_column = exp.parameters[0]
             val_column_splits = val_column.column_name.split(".", 2)
 
