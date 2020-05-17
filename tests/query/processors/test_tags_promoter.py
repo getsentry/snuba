@@ -6,8 +6,8 @@ from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.tags_promoter import (
-    NestedColumnMapping,
-    NestedColumnPromoter,
+    MappingColumnPromoter,
+    PromotedColumnsSpec,
 )
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -105,9 +105,9 @@ def test_format_expressions(
             ("tags", Nested([("key", String()), ("value", String())])),
         ]
     )
-    NestedColumnPromoter(
+    MappingColumnPromoter(
         columns,
-        {"tags": NestedColumnMapping("key", "value", {"promtoed_tag": "promtoed"})},
+        {"tags": PromotedColumnsSpec("key", "value", {"promtoed_tag": "promtoed"})},
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()
