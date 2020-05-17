@@ -10,6 +10,7 @@ from snuba.query.matcher import (
     Column,
     Function,
     MatchResult,
+    Or,
     Param,
     Pattern,
     String,
@@ -31,6 +32,16 @@ test_cases = [
         ColumnExpr(None, "something_irrelevant", None),
         MatchResult(),
     ),  # Pattern that matches anything
+    (
+        Or(
+            [
+                Param("option1", Column(None, String("col_name"), None)),
+                Param("option2", Column(None, String("other_col_name"), None)),
+            ]
+        ),
+        ColumnExpr(None, "other_col_name", None),
+        MatchResult(expressions={"option2": ColumnExpr(None, "other_col_name", None)},),
+    ),
     (
         Column(None, Param("col_name", AnyString()), None),
         ColumnExpr(None, "something_relevant", "not_that_we_care_about_the_table"),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Generic, Mapping, Optional, Tuple, TypeVar
+from typing import Generic, Mapping, Optional, Sequence, Tuple, TypeVar
 
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression, FunctionCall
@@ -124,6 +124,18 @@ class String(Pattern[Optional[str]]):
 
     def match(self, node: Optional[str]) -> Optional[MatchResult]:
         return MatchResult() if node == self.value else None
+
+
+@dataclass(frozen=True)
+class Or(Pattern[TNode], Generic[TNode]):
+    patterns: Sequence[Pattern[TNode]]
+
+    def match(self, node: TNode) -> Optional[MatchResult]:
+        for p in self.patterns:
+            ret = p.match(node)
+            if ret:
+                return ret
+        return None
 
 
 @dataclass(frozen=True)
