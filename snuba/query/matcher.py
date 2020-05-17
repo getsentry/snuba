@@ -128,6 +128,11 @@ class String(Pattern[Optional[str]]):
 
 @dataclass(frozen=True)
 class Or(Pattern[TNode], Generic[TNode]):
+    """
+    Union of multiple patterns. Matches if at least one is a valid match
+    and returns the first valid one.
+    """
+
     patterns: Sequence[Pattern[TNode]]
 
     def match(self, node: TNode) -> Optional[MatchResult]:
