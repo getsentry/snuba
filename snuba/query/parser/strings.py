@@ -3,7 +3,6 @@ import re
 from snuba.query.expressions import (
     Column,
     Expression,
-    FunctionCall,
     Literal,
     SubscriptableReference,
 )

@@ -1,8 +1,8 @@
 from dataclasses import replace
 
-from snuba.query.processors import QueryProcessor
 from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.query.logical import Query
+from snuba.query.processors import QueryProcessor
 from snuba.request.request_settings import RequestSettings
 
 
