@@ -15,6 +15,8 @@ class TestDiscoverApi(BaseApiTest):
     def setup_method(self, test_method):
         super().setup_method(test_method)
 
+        # XXX: This should use the ``discover`` dataset directly, but that will
+        # require some updates to the test base classes to work correctly.
         self.__dataset_manager = ExitStack()
         for dataset_name in ["events", "transactions"]:
             self.__dataset_manager.enter_context(dataset_manager(dataset_name))
