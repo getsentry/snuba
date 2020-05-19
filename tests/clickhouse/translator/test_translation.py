@@ -3,7 +3,7 @@ import pytest
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
 from snuba.clickhouse.translator.visitor import ExpressionTranslator
-from snuba.datasets.plans.translator.visitor import TranslationRules
+from snuba.clickhouse.translator.visitor import ClickhouseTranslationRules
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,
@@ -15,12 +15,12 @@ from snuba.query.expressions import (
 
 
 def test_column_translation() -> None:
-    col = ClickhouseExpression(Column(None, "col", "table"))
+    col = Column(None, "col", "table")
     translated = ColumnMapper("col", "table", "col2", "table2").attempt_map(
-        col, ExpressionTranslator(TranslationRules())
+        col, ExpressionTranslator(ClickhouseTranslationRules())
     )
 
-    assert translated == ClickhouseExpression(Column(None, "col2", "table2"))
+    assert translated == Column(None, "col2", "table2")
 
 
 def test_tag_translation() -> None:
@@ -30,7 +30,7 @@ def test_tag_translation() -> None:
         )
     )
     translated = TagMapper("tags", None, "tags", None).attempt_map(
-        col, ExpressionTranslator(TranslationRules())
+        col, ExpressionTranslator(ClickhouseTranslationRules())
     )
 
     assert translated == ClickhouseExpression(
@@ -51,17 +51,23 @@ def test_tag_translation() -> None:
 
 test_data = [
     (
-        TranslationRules(generic_exp=[ColumnMapper("col", None, "col2", None)]),
+        ClickhouseTranslationRules(
+            strict_columns=[ColumnMapper("col", None, "col2", None)]
+        ),
         Column(None, "col3", None),
         Column(None, "col3", None),
     ),
     (
-        TranslationRules(generic_exp=[ColumnMapper("col", None, "col2", None)]),
+        ClickhouseTranslationRules(
+            strict_columns=[ColumnMapper("col", None, "col2", None)]
+        ),
         Column(None, "col", None),
         Column(None, "col2", None),
     ),
     (
-        TranslationRules(generic_exp=[TagMapper("tags", None, "tags", "table")]),
+        ClickhouseTranslationRules(
+            generic_exp=[TagMapper("tags", None, "tags", "table")]
+        ),
         SubscriptableReference(
             "tags[release]", Column(None, "tags", None), Literal(None, "release")
         ),
@@ -79,11 +85,11 @@ test_data = [
         ),
     ),
     (
-        TranslationRules(
-            generic_exp=[
+        ClickhouseTranslationRules(
+            generic_exp=[TagMapper("tags", None, "tags", None)],
+            strict_columns=[
                 ColumnMapper("col", None, "col2", None),
                 ColumnMapper("cola", None, "colb", None),
-                TagMapper("tags", None, "tags", None),
             ],
         ),
         FunctionCall(
@@ -154,7 +160,7 @@ test_data = [
 
 @pytest.mark.parametrize("mappings, expression, expected", test_data)
 def test_translation(
-    mappings: TranslationRules[ClickhouseExpression, FunctionCall, Column, Literal],
+    mappings: ClickhouseTranslationRules,
     expression: Expression,
     expected: ClickhouseExpression,
 ) -> None:

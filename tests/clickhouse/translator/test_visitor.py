@@ -1,7 +1,9 @@
 import pytest
 
-from snuba.clickhouse.translator.visitor import ExpressionTranslator
-from snuba.datasets.plans.translator.visitor import TranslationRules
+from snuba.clickhouse.translator.visitor import (
+    ClickhouseTranslationRules,
+    ExpressionTranslator,
+)
 from snuba.query.expressions import (
     Argument,
     Column,
@@ -45,9 +47,9 @@ def test_default_translation(expression: Expression) -> None:
     produces a deep copy of the original expression.
     """
 
-    translated = ExpressionTranslator(TranslationRules()).translate_expression(
-        expression
-    )
+    translated = ExpressionTranslator(
+        ClickhouseTranslationRules()
+    ).translate_expression(expression)
 
     assert translated == expression
     for e_translated, e_pre_translation in zip(translated, expression):

@@ -1,16 +1,17 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from snuba.clickhouse.query import Expression
-from snuba.clickhouse.translator.visitor import ClickhouseMapper, TranslatorAlias
+from snuba.clickhouse.query import Expression as ClickhouseExpression
+from snuba.query.expressions import Expression as SnubaExpression
+from snuba.clickhouse.translator.visitor import ExpressionTranslator
+from snuba.datasets.plans.translator.visitor import ExpressionMapper
 from snuba.query.dsl import array_element
 from snuba.query.expressions import Column
-from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import FunctionCall, SubscriptableReference
 
 
 @dataclass(frozen=True)
-class ColumnMapper(ClickhouseMapper[SnubaExpression, Expression]):
+class ColumnMapper(ExpressionMapper[Column, Column, ExpressionTranslator]):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -23,27 +24,27 @@ class ColumnMapper(ClickhouseMapper[SnubaExpression, Expression]):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Expression, children_translator: TranslatorAlias,
-    ) -> Optional[Expression]:
+        self, expression: Column, children_translator: ExpressionTranslator,
+    ) -> Optional[Column]:
         if not isinstance(expression, Column):
             return None
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
-            return Expression(
-                Column(
-                    alias=expression.alias,
-                    table_name=self.to_table_name,
-                    column_name=self.to_col_name,
-                )
+            return Column(
+                alias=expression.alias,
+                table_name=self.to_table_name,
+                column_name=self.to_col_name,
             )
         else:
             return None
 
 
 @dataclass(frozen=True)
-class TagMapper(ClickhouseMapper[SnubaExpression, Expression]):
+class TagMapper(
+    ExpressionMapper[SnubaExpression, ClickhouseExpression, ExpressionTranslator]
+):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
     into a Clickhouse array access.
@@ -55,8 +56,8 @@ class TagMapper(ClickhouseMapper[SnubaExpression, Expression]):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Expression, children_translator: TranslatorAlias,
-    ) -> Optional[Expression]:
+        self, expression: SnubaExpression, children_translator: ExpressionTranslator,
+    ) -> Optional[ClickhouseExpression]:
         if not isinstance(expression, SubscriptableReference):
             return None
         if (
@@ -65,7 +66,7 @@ class TagMapper(ClickhouseMapper[SnubaExpression, Expression]):
         ):
             return None
 
-        return Expression(
+        return ClickhouseExpression(
             array_element(
                 expression.alias,
                 Column(None, f"{self.to_col_name}.value", self.to_table_name),
@@ -74,7 +75,7 @@ class TagMapper(ClickhouseMapper[SnubaExpression, Expression]):
                     "indexOf",
                     (
                         Column(None, f"{self.to_col_name}.key", self.to_table_name,),
-                        children_translator.translate_subscript_key(expression.key),
+                        children_translator.translate_expression(expression.key),
                     ),
                 ),
             )
