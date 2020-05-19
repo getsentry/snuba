@@ -17,10 +17,12 @@ from snuba.query.expressions import (
 )
 
 TExpOut = TypeVar("TExpOut")
+TInnerFunctionOut = TypeVar("TInnerFunctionOut")
+TSubscriptableColumn = TypeVar("TSubscriptableColumn")
 
 
 @dataclass(frozen=True)
-class TranslationRules(Generic[TExpOut]):
+class TranslationRules(Generic[TExpOut, TInnerFunctionOut, TSubscriptableColumn]):
     """
     Represents the set of rules to be used to configure a MappingExpressionTranslator.
     It encapsulates a sequence or rules for each AST node type.
@@ -29,38 +31,94 @@ class TranslationRules(Generic[TExpOut]):
     see MappingExpressionTranslator for more context
     """
 
-    literals: Sequence[ExpressionMapper[Literal, TExpOut]] = field(default_factory=list)
-    columns: Sequence[ExpressionMapper[Column, TExpOut]] = field(default_factory=list)
-    subscriptables: Sequence[ExpressionMapper[SubscriptableReference, TExpOut]] = field(
-        default_factory=list
-    )
-    functions: Sequence[ExpressionMapper[FunctionCall, TExpOut]] = field(
-        default_factory=list
-    )
-    curried_functions: Sequence[ExpressionMapper[CurriedFunctionCall, TExpOut]] = field(
-        default_factory=list
-    )
-    arguments: Sequence[ExpressionMapper[Argument, TExpOut]] = field(
-        default_factory=list
-    )
-    lambdas: Sequence[ExpressionMapper[Lambda, TExpOut]] = field(default_factory=list)
+    literals: Sequence[
+        ExpressionMapper[
+            Literal, TExpOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ]
+    ] = field(default_factory=list)
+    columns: Sequence[
+        ExpressionMapper[
+            Column, TExpOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ]
+    ] = field(default_factory=list)
+    subscriptables: Sequence[
+        ExpressionMapper[
+            SubscriptableReference,
+            TExpOut,
+            TExpOut,
+            TInnerFunctionOut,
+            TSubscriptableColumn,
+        ]
+    ] = field(default_factory=list)
+    subscriptables_columns: Sequence[
+        ExpressionMapper[
+            Column,
+            TSubscriptableColumn,
+            TExpOut,
+            TInnerFunctionOut,
+            TSubscriptableColumn,
+        ]
+    ] = field(default_factory=list)
+    functions: Sequence[
+        ExpressionMapper[
+            FunctionCall, TExpOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ]
+    ] = field(default_factory=list)
+    curried_functions: Sequence[
+        ExpressionMapper[
+            CurriedFunctionCall,
+            TExpOut,
+            TExpOut,
+            TInnerFunctionOut,
+            TSubscriptableColumn,
+        ]
+    ] = field(default_factory=list)
+    inner_functions: Sequence[
+        ExpressionMapper[
+            FunctionCall,
+            TInnerFunctionOut,
+            TExpOut,
+            TInnerFunctionOut,
+            TSubscriptableColumn,
+        ]
+    ] = field(default_factory=list)
+    arguments: Sequence[
+        ExpressionMapper[
+            Argument, TExpOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ]
+    ] = field(default_factory=list)
+    lambdas: Sequence[
+        ExpressionMapper[
+            Lambda, TExpOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ]
+    ] = field(default_factory=list)
 
-    def concat(self, spec: TranslationRules[TExpOut]) -> TranslationRules[TExpOut]:
+    def concat(
+        self, spec: TranslationRules[TExpOut, TInnerFunctionOut, TSubscriptableColumn]
+    ) -> TranslationRules[TExpOut, TInnerFunctionOut, TSubscriptableColumn]:
         return TranslationRules(
             literals=[*self.literals, *spec.literals],
             columns=[*self.columns, *spec.columns],
             subscriptables=[*self.subscriptables, *spec.subscriptables],
+            subscriptables_columns=[
+                *self.subscriptables_columns,
+                *spec.subscriptables_columns,
+            ],
             functions=[*self.functions, *spec.functions],
             curried_functions=[*self.curried_functions, *spec.curried_functions],
+            inner_functions=[*self.inner_functions, *spec.inner_functions],
             arguments=[*self.arguments, *spec.arguments],
             lambdas=[*self.lambdas, *spec.lambdas],
         )
 
 
 TExpIn = TypeVar("TExpIn", bound=Expression)
+TRuleOut = TypeVar("TRuleOut")
 
 
-class ExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
+class ExpressionMapper(
+    ABC, Generic[TExpIn, TRuleOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn]
+):
     """
     One translation rule used by the MappingExpressionTranslator to translate an
     expression.
@@ -70,8 +128,12 @@ class ExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
 
     @abstractmethod
     def attempt_map(
-        self, expression: TExpIn, children_translator: ExpressionVisitor[TExpOut]
-    ) -> Optional[TExpOut]:
+        self,
+        expression: TExpIn,
+        children_translator: MappingExpressionTranslator[
+            TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ],
+    ) -> Optional[TRuleOut]:
         """
         Translates an expression if this rule matches such expression. If not, it
         returns None.
@@ -83,7 +145,10 @@ class ExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
         raise NotImplementedError
 
 
-class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
+class MappingExpressionTranslator(
+    Generic[TExpOut, TInnerFunctionOut, TSubscriptableColumn],
+    ExpressionVisitor[TExpOut],
+):
     """
     Translates a Snuba query expression into an physical query expression (like a
     Clickhouse query expression).
@@ -118,8 +183,12 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
 
     def __init__(
         self,
-        translation_rules: TranslationRules[TExpOut],
-        default_rules: Optional[TranslationRules[TExpOut]],
+        translation_rules: TranslationRules[
+            TExpOut, TInnerFunctionOut, TSubscriptableColumn
+        ],
+        default_rules: Optional[
+            TranslationRules[TExpOut, TInnerFunctionOut, TSubscriptableColumn]
+        ],
     ) -> None:
         self.__translation_rules = (
             translation_rules
@@ -136,11 +205,19 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
     def visitSubscriptableReference(self, exp: SubscriptableReference) -> TExpOut:
         return self.__map_expression(exp, self.__translation_rules.subscriptables)
 
+    def translate_subscriptable_column(self, exp: Column) -> TSubscriptableColumn:
+        return self.__map_expression(
+            exp, self.__translation_rules.subscriptables_columns
+        )
+
     def visitFunctionCall(self, exp: FunctionCall) -> TExpOut:
         return self.__map_expression(exp, self.__translation_rules.functions)
 
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> TExpOut:
         return self.__map_expression(exp, self.__translation_rules.curried_functions)
+
+    def translate_inner_function(self, exp: FunctionCall) -> TInnerFunctionOut:
+        return self.__map_expression(exp, self.__translation_rules.inner_functions)
 
     def visitArgument(self, exp: Argument) -> TExpOut:
         return self.__map_expression(exp, self.__translation_rules.arguments)
@@ -149,8 +226,14 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
         return self.__map_expression(exp, self.__translation_rules.lambdas)
 
     def __map_expression(
-        self, exp: TExpIn, rules: Sequence[ExpressionMapper[TExpIn, TExpOut]],
-    ) -> TExpOut:
+        self,
+        exp: TExpIn,
+        rules: Sequence[
+            ExpressionMapper[
+                TExpIn, TRuleOut, TExpOut, TInnerFunctionOut, TSubscriptableColumn
+            ]
+        ],
+    ) -> TRuleOut:
         for r in rules:
             ret = r.attempt_map(exp, self)
             if ret is not None:

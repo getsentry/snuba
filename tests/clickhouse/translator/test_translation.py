@@ -150,7 +150,7 @@ test_data = [
 
 @pytest.mark.parametrize("mappings, expression, expected", test_data)
 def test_translation(
-    mappings: TranslationRules[ClickhouseExpression],
+    mappings: TranslationRules[ClickhouseExpression, FunctionCall, Column],
     expression: Expression,
     expected: ClickhouseExpression,
 ) -> None:

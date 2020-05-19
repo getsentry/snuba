@@ -13,7 +13,9 @@ from snuba.query.expressions import (
 
 
 @dataclass(frozen=True)
-class ColumnMapper(ExpressionMapper[Column, Expression]):
+class ColumnMapper(
+    ExpressionMapper[Column, Expression, Expression, FunctionCall, Column]
+):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -44,7 +46,11 @@ class ColumnMapper(ExpressionMapper[Column, Expression]):
 
 
 @dataclass(frozen=True)
-class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
+class TagMapper(
+    ExpressionMapper[
+        SubscriptableReference, Expression, Expression, FunctionCall, Column
+    ]
+):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
     into a Clickhouse array access.
