@@ -13,6 +13,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -30,8 +31,6 @@ class TransactionsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
         self.__time_group_columns = {
-            "bucketed_start": "start_ts",
-            "bucketed_end": "finish_ts",
             "time": "finish_ts",
         }
         super().__init__(
@@ -123,6 +122,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),

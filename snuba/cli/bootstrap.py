@@ -7,7 +7,7 @@ from snuba import settings
 from snuba.clusters.cluster import ClickhouseClientSettings, CLUSTERS
 from snuba.datasets.factory import ACTIVE_DATASET_NAMES, get_dataset
 from snuba.environment import setup_logging
-from snuba.migrations.migrate import run
+from snuba.migrations import migrate
 
 
 @click.command()
@@ -121,41 +121,4 @@ def bootstrap(
                     raise
                 time.sleep(1)
 
-    # Need to better figure out if we are configured to use replicated
-    # tables or distributed tables, etc.
-
-    # Create the tables for every dataset.
-    for name in ACTIVE_DATASET_NAMES:
-        dataset = get_dataset(name)
-
-        logger.debug("Creating tables for dataset %s", name)
-        run_migrations = False
-        for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            existing_tables = {row[0] for row in clickhouse.execute("show tables")}
-            for statement in storage.get_schemas().get_create_statements():
-                if statement.table_name not in existing_tables:
-                    # This is a hack to deal with updates to Materialized views.
-                    # It seems that ClickHouse would parse the SELECT statement that defines a
-                    # materialized view even if the view already exists and the CREATE statement
-                    # includes the IF NOT EXISTS clause.
-                    # When we add a column to a matview, though, we will be in a state where, by
-                    # running bootstrap, ClickHouse will parse the SQL statement to try to create
-                    # the view and fail because the column does not exist yet on the underlying table,
-                    # since the migration on the underlying table has not ran yet.
-                    # Migrations are per dataset so they can only run after the bootstrap of an
-                    # entire dataset has run. So we would have bootstrap depending on migration
-                    # and migration depending on bootstrap.
-                    # In order to break this dependency we skip bootstrap DDL calls here if the
-                    # table/view already exists, so it is always safe to run bootstrap first.
-                    logger.debug("Executing:\n%s", statement.statement)
-                    clickhouse.execute(statement.statement)
-                else:
-                    logger.debug("Skipping existing table %s", statement.table_name)
-                    run_migrations = True
-        if run_migrations:
-            logger.debug("Running missing migrations for dataset %s", name)
-            run(dataset)
-        logger.info("Tables for dataset %s created.", name)
+    migrate.run()
