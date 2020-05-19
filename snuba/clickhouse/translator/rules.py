@@ -2,18 +2,15 @@ from dataclasses import dataclass
 from typing import Optional
 
 from snuba.clickhouse.query import Expression
-from snuba.datasets.plans.translator.visitor import ExpressionMapper
+from snuba.clickhouse.translator.visitor import ClickhouseMapper, TranslatorAlias
 from snuba.query.dsl import array_element
-from snuba.query.expressions import (
-    Column,
-    ExpressionVisitor,
-    FunctionCall,
-    SubscriptableReference,
-)
+from snuba.query.expressions import Column
+from snuba.query.expressions import Expression as SnubaExpression
+from snuba.query.expressions import FunctionCall, SubscriptableReference
 
 
 @dataclass(frozen=True)
-class ColumnMapper(ExpressionMapper[Column, Expression]):
+class ColumnMapper(ClickhouseMapper[SnubaExpression, Expression]):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -26,8 +23,10 @@ class ColumnMapper(ExpressionMapper[Column, Expression]):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Column, children_translator: ExpressionVisitor[Expression],
+        self, expression: Expression, children_translator: TranslatorAlias,
     ) -> Optional[Expression]:
+        if not isinstance(expression, Column):
+            return None
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
@@ -44,7 +43,7 @@ class ColumnMapper(ExpressionMapper[Column, Expression]):
 
 
 @dataclass(frozen=True)
-class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
+class TagMapper(ClickhouseMapper[SnubaExpression, Expression]):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
     into a Clickhouse array access.
@@ -56,10 +55,10 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self,
-        expression: SubscriptableReference,
-        children_translator: ExpressionVisitor[Expression],
+        self, expression: Expression, children_translator: TranslatorAlias,
     ) -> Optional[Expression]:
+        if not isinstance(expression, SubscriptableReference):
+            return None
         if (
             expression.column.column_name != self.from_column_name
             or expression.column.table_name != self.from_column_table
@@ -75,7 +74,7 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
                     "indexOf",
                     (
                         Column(None, f"{self.to_col_name}.key", self.to_table_name,),
-                        expression.key.accept(children_translator),
+                        children_translator.translate_subscript_key(expression.key),
                     ),
                 ),
             )

@@ -45,8 +45,9 @@ def test_default_translation(expression: Expression) -> None:
     produces a deep copy of the original expression.
     """
 
-    translator = ExpressionTranslator(TranslationRules())
-    translated = expression.accept(translator)
+    translated = ExpressionTranslator(TranslationRules()).translate_expression(
+        expression
+    )
 
     assert translated == expression
     for e_translated, e_pre_translation in zip(translated, expression):
