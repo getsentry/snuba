@@ -10,17 +10,15 @@ from snuba.datasets.plans.translator.visitor import (
 )
 from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import (
-    Column,
     CurriedFunctionCall,
+    ExpressionVisitor,
     FunctionCall,
     Lambda,
     SubscriptableReference,
 )
 
 
-class ExpressionTranslator(
-    MappingExpressionTranslator[ClickhouseExpression, FunctionCall, Column]
-):
+class ExpressionTranslator(MappingExpressionTranslator[ClickhouseExpression]):
     """
     Translates a Snuba expression into a Clickhouse expression.
 
@@ -29,8 +27,7 @@ class ExpressionTranslator(
     """
 
     def __init__(
-        self,
-        translation_rules: TranslationRules[ClickhouseExpression, FunctionCall, Column],
+        self, translation_rules: TranslationRules[ClickhouseExpression]
     ) -> None:
         default_rules = TranslationRules(
             literals=[DefaultSimpleMapper()],
@@ -38,10 +35,8 @@ class ExpressionTranslator(
             # TODO: remove the DefaultSubscriptableMapper translation rule as
             # soon as we finalize the tags translation rule.
             subscriptables=[DefaultSubscriptableMapper()],
-            subscriptables_columns=[DefaultSubscriptableColumn()],
             functions=[DefaultFunctionMapper()],
             curried_functions=[DefaultCurriedFunctionMapper()],
-            inner_functions=[DefaultInnerFunctionMapper()],
             arguments=[DefaultSimpleMapper()],
             lambdas=[DefaultLambdaMapper()],
         )
@@ -53,45 +48,20 @@ class ExpressionTranslator(
 TSimpleExp = TypeVar("TSimpleExp", bound=SnubaExpression)
 
 
-class DefaultSimpleMapper(
-    ExpressionMapper[
-        TSimpleExp, ClickhouseExpression, ClickhouseExpression, FunctionCall, Column
-    ]
-):
+class DefaultSimpleMapper(ExpressionMapper[TSimpleExp, ClickhouseExpression]):
     def attempt_map(
         self,
         expression: TSimpleExp,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
+        children_translator: ExpressionVisitor[ClickhouseExpression],
     ) -> Optional[ClickhouseExpression]:
         return ClickhouseExpression(deepcopy(expression))
 
 
-class DefaultSubscriptableColumn(
-    ExpressionMapper[Column, Column, ClickhouseExpression, FunctionCall, Column]
-):
-    def attempt_map(
-        self,
-        expression: Column,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
-    ) -> Optional[Column]:
-        return deepcopy(expression)
-
-
-class DefaultFunctionMapper(
-    ExpressionMapper[
-        FunctionCall, ClickhouseExpression, ClickhouseExpression, FunctionCall, Column
-    ]
-):
+class DefaultFunctionMapper(ExpressionMapper[FunctionCall, ClickhouseExpression]):
     def attempt_map(
         self,
         expression: FunctionCall,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
+        children_translator: ExpressionVisitor[ClickhouseExpression],
     ) -> Optional[ClickhouseExpression]:
         return ClickhouseExpression(
             replace(
@@ -103,47 +73,19 @@ class DefaultFunctionMapper(
         )
 
 
-class DefaultInnerFunctionMapper(
-    ExpressionMapper[
-        FunctionCall, FunctionCall, ClickhouseExpression, FunctionCall, Column
-    ]
-):
-    def attempt_map(
-        self,
-        expression: FunctionCall,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
-    ) -> Optional[FunctionCall]:
-        return replace(
-            expression,
-            parameters=tuple(
-                p.accept(children_translator) for p in expression.parameters
-            ),
-        )
-
-
 class DefaultCurriedFunctionMapper(
-    ExpressionMapper[
-        CurriedFunctionCall,
-        ClickhouseExpression,
-        ClickhouseExpression,
-        FunctionCall,
-        Column,
-    ]
+    ExpressionMapper[CurriedFunctionCall, ClickhouseExpression]
 ):
     def attempt_map(
         self,
         expression: CurriedFunctionCall,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
+        children_translator: ExpressionVisitor[ClickhouseExpression],
     ) -> Optional[ClickhouseExpression]:
         return ClickhouseExpression(
-            CurriedFunctionCall(
-                alias=expression.alias,
-                internal_function=children_translator.translate_inner_function(
-                    expression.internal_function
+            replace(
+                expression,
+                internal_function=expression.internal_function.accept(
+                    children_translator
                 ),
                 parameters=tuple(
                     p.accept(children_translator) for p in expression.parameters
@@ -153,43 +95,27 @@ class DefaultCurriedFunctionMapper(
 
 
 class DefaultSubscriptableMapper(
-    ExpressionMapper[
-        SubscriptableReference,
-        ClickhouseExpression,
-        ClickhouseExpression,
-        FunctionCall,
-        Column,
-    ]
+    ExpressionMapper[SubscriptableReference, ClickhouseExpression]
 ):
     def attempt_map(
         self,
         expression: SubscriptableReference,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
+        children_translator: ExpressionVisitor[ClickhouseExpression],
     ) -> Optional[ClickhouseExpression]:
         return ClickhouseExpression(
-            SubscriptableReference(
-                alias=expression.alias,
-                column=children_translator.translate_subscriptable_column(
-                    expression.column
-                ),
-                key=deepcopy(expression.key),
+            replace(
+                expression,
+                column=expression.column.accept(children_translator),
+                key=expression.key.accept(children_translator),
             )
         )
 
 
-class DefaultLambdaMapper(
-    ExpressionMapper[
-        Lambda, ClickhouseExpression, ClickhouseExpression, FunctionCall, Column
-    ]
-):
+class DefaultLambdaMapper(ExpressionMapper[Lambda, ClickhouseExpression]):
     def attempt_map(
         self,
         expression: Lambda,
-        children_translator: MappingExpressionTranslator[
-            ClickhouseExpression, FunctionCall, Column
-        ],
+        children_translator: ExpressionVisitor[ClickhouseExpression],
     ) -> Optional[ClickhouseExpression]:
         return ClickhouseExpression(
             replace(
