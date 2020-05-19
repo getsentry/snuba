@@ -174,12 +174,11 @@ def _format_storage_query_and_run(
         try:
             sql_data = AstSqlQuery(clickhouse_query, request_settings).sql_data()
             span.set_tag("query_type", "ast")
+            span.set_data("ast_query", sql_data)
         except Exception:
-            sql_data = formatted_query.sql_data()
             span.set_tag("query_type", "dict")
 
-        for k, v in sql_data:
-            span.set_data(k, v)
+        span.set_data("dict_query", formatted_query.sql_data())
 
         return raw_query(
             clickhouse_query,
