@@ -168,6 +168,8 @@ def test_tags_processor(query_body, expected_query) -> None:
     query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
     request = Request("a", query, request_settings, {}, "r")
+    for p in dataset.get_query_processors():
+        p.process_query(query, request_settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
 
     assert (
