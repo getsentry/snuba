@@ -98,13 +98,13 @@ class TimeSeriesExtensionProcessor(ExtensionQueryProcessor):
                 binary_condition(
                     None,
                     ConditionFunctions.GTE,
-                    Column(None, self.__timestamp_column, None),
+                    Column(None, None, self.__timestamp_column),
                     Literal(None, from_date),
                 ),
                 binary_condition(
                     None,
                     ConditionFunctions.LT,
-                    Column(None, self.__timestamp_column, None),
+                    Column(None, None, self.__timestamp_column),
                     Literal(None, to_date),
                 ),
             )

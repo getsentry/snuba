@@ -18,14 +18,14 @@ def test_impact_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             FunctionCall(
                 "perf",
                 "impact",
                 (
-                    Column(None, "column1", None),
+                    Column(None, None, "column1"),
                     Literal(None, 300),
-                    Column(None, "user", None),
+                    Column(None, None, "user"),
                 ),
             ),
         ],
@@ -34,7 +34,7 @@ def test_impact_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             plus(
                 minus(
                     Literal(None, 1),
@@ -44,7 +44,7 @@ def test_impact_format_expressions() -> None:
                                 binary_condition(
                                     None,
                                     ConditionFunctions.LTE,
-                                    Column(None, "column1", None),
+                                    Column(None, None, "column1"),
                                     Literal(None, 300),
                                 ),
                             ),
@@ -56,13 +56,13 @@ def test_impact_format_expressions() -> None:
                                         binary_condition(
                                             None,
                                             ConditionFunctions.GT,
-                                            Column(None, "column1", None),
+                                            Column(None, None, "column1"),
                                             Literal(None, 300),
                                         ),
                                         binary_condition(
                                             None,
                                             ConditionFunctions.LTE,
-                                            Column(None, "column1", None),
+                                            Column(None, None, "column1"),
                                             multiply(
                                                 Literal(None, 300), Literal(None, 4)
                                             ),

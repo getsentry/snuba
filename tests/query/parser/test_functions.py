@@ -9,7 +9,7 @@ def test_complex_conditions_expr() -> None:
         None, "count", ()
     )
     assert parse_function_to_expr(tuplify(["notEmpty", ["foo"]]),) == FunctionCall(
-        None, "notEmpty", (Column(None, "foo", None),)
+        None, "notEmpty", (Column(None, None, "foo"),)
     )
     assert parse_function_to_expr(
         tuplify(["notEmpty", ["arrayElement", ["foo", 1]]]),
@@ -18,7 +18,7 @@ def test_complex_conditions_expr() -> None:
         "notEmpty",
         (
             FunctionCall(
-                None, "arrayElement", (Column(None, "foo", None), Literal(None, 1))
+                None, "arrayElement", (Column(None, None, "foo"), Literal(None, 1))
             ),
         ),
     )
@@ -28,25 +28,25 @@ def test_complex_conditions_expr() -> None:
         None,
         "foo",
         (
-            FunctionCall(None, "bar", (Column(None, "qux", None),)),
-            Column(None, "baz", None),
+            FunctionCall(None, "bar", (Column(None, None, "qux"),)),
+            Column(None, None, "baz"),
         ),
     )
     assert parse_function_to_expr(tuplify(["foo", [], "a"]),) == FunctionCall(
         "a", "foo", ()
     )
     assert parse_function_to_expr(tuplify(["foo", ["b", "c"], "d"]),) == FunctionCall(
-        "d", "foo", (Column(None, "b", None), Column(None, "c", None))
+        "d", "foo", (Column(None, None, "b"), Column(None, None, "c"))
     )
     assert parse_function_to_expr(tuplify(["foo", ["b", "c", ["d"]]]),) == FunctionCall(
         None,
         "foo",
-        (Column(None, "b", None), FunctionCall(None, "c", (Column(None, "d", None),))),
+        (Column(None, None, "b"), FunctionCall(None, "c", (Column(None, None, "d"),))),
     )
 
     assert parse_function_to_expr(
         tuplify(["emptyIfNull", ["project_id"]]),
-    ) == FunctionCall(None, "emptyIfNull", (Column(None, "project_id", None),))
+    ) == FunctionCall(None, "emptyIfNull", (Column(None, None, "project_id"),))
 
     assert parse_function_to_expr(
         tuplify(["or", [["or", ["a", "b"]], "c"]]),
@@ -54,9 +54,9 @@ def test_complex_conditions_expr() -> None:
         None,
         BooleanFunctions.OR,
         binary_condition(
-            None, BooleanFunctions.OR, Column(None, "a", None), Column(None, "b", None)
+            None, BooleanFunctions.OR, Column(None, None, "a"), Column(None, None, "b")
         ),
-        Column(None, "c", None),
+        Column(None, None, "c"),
     )
     assert parse_function_to_expr(
         tuplify(["and", [["and", ["a", "b"]], "c"]]),
@@ -64,9 +64,9 @@ def test_complex_conditions_expr() -> None:
         None,
         BooleanFunctions.AND,
         binary_condition(
-            None, BooleanFunctions.AND, Column(None, "a", None), Column(None, "b", None)
+            None, BooleanFunctions.AND, Column(None, None, "a"), Column(None, None, "b")
         ),
-        Column(None, "c", None),
+        Column(None, None, "c"),
     )
     # (A OR B) AND C
     assert parse_function_to_expr(
@@ -75,9 +75,9 @@ def test_complex_conditions_expr() -> None:
         None,
         BooleanFunctions.AND,
         binary_condition(
-            None, BooleanFunctions.OR, Column(None, "a", None), Column(None, "b", None)
+            None, BooleanFunctions.OR, Column(None, None, "a"), Column(None, None, "b")
         ),
-        Column(None, "c", None),
+        Column(None, None, "c"),
     )
     # A OR B OR C OR D
     assert parse_function_to_expr(
@@ -91,12 +91,12 @@ def test_complex_conditions_expr() -> None:
             binary_condition(
                 None,
                 BooleanFunctions.OR,
-                Column(None, "c", None),
-                Column(None, "d", None),
+                Column(None, None, "c"),
+                Column(None, None, "d"),
             ),
-            Column(None, "b", None),
+            Column(None, None, "b"),
         ),
-        Column(None, "a", None),
+        Column(None, None, "a"),
     )
 
     assert parse_function_to_expr(
@@ -115,11 +115,11 @@ def test_complex_conditions_expr() -> None:
                 None,
                 "in",
                 (
-                    Column(None, "release", None),
+                    Column(None, None, "release"),
                     FunctionCall(None, "tuple", (Literal(None, "foo"),)),
                 ),
             ),
-            Column(None, "release", None),
+            Column(None, None, "release"),
             Literal(None, "other"),
         ),
     )
@@ -130,5 +130,5 @@ def test_complex_conditions_expr() -> None:
     ) == FunctionCall(
         None,
         "positionCaseInsensitive",
-        (Column(None, "message", None), Literal(None, "lol 'single' quotes")),
+        (Column(None, None, "message"), Literal(None, "lol 'single' quotes")),
     )

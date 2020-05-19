@@ -15,12 +15,12 @@ def test_iterate() -> None:
     Test iteration over a subtree. The subtree is a function call in the form
     f2(c3, f1(c1, c2))
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
     function_1 = FunctionCall(None, "f1", (column1, column2))
 
-    column3 = Column(None, "c2", "t1")
-    column4 = Column(None, "c3", "t1")
+    column3 = Column(None, "t1", "c2")
+    column4 = Column(None, "t1", "c3")
     literal = Literal(None, "blablabla")
     function_2i = FunctionCall(None, "f2", (column3, function_1, literal))
     function_2 = CurriedFunctionCall(None, function_2i, (column4,))
@@ -43,10 +43,10 @@ def test_aliased_cols() -> None:
     Test iteration whan columns have aliases. This is the expression
     f2(t1.c2, f1(t1.c1, t1.c2 as a2)) as af1
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column("a2", "c2", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column("a2", "t1", "c2")
     function_1 = FunctionCall(None, "f1", (column1, column2))
-    column3 = Column(None, "c2", "t1")
+    column3 = Column(None, "t1", "c2")
     function_2 = FunctionCall("af1", "f2", (column3, function_1))
 
     expected = [column3, column1, column2, function_1, function_2]
@@ -63,9 +63,9 @@ def test_mapping_column_list() -> None:
             return FunctionCall(None, "f", (e,))
         return e
 
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t2")
-    column3 = Column(None, "c3", "t3")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t2", "c2")
+    column3 = Column(None, "t3", "c3")
     selected_cols = [column1, column2, column3]
     new_selected_cols = list(map(replace_col, selected_cols))
 
@@ -82,8 +82,8 @@ def test_add_alias() -> None:
     Adds an alias to a column referenced in a function
     f(t1.c1) -> f(t1.c1 as a)
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column("a", "c1", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column("a", "t1", "c1")
 
     def replace_expr(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c1":
@@ -112,7 +112,7 @@ def test_mapping_complex_expression() -> None:
             return f4
         return e
 
-    c1 = Column(None, "c1", "t1")
+    c1 = Column(None, "t1", "c1")
     f2 = FunctionCall(None, "fB", (f3,))
     f1 = FunctionCall(None, "f0", (c1, f2))
 
@@ -132,19 +132,19 @@ def test_mapping_complex_expression() -> None:
 
 
 def test_mapping_curried_function() -> None:
-    c1 = Column(None, "c1", "t1")
+    c1 = Column(None, "t1", "c1")
     f1 = FunctionCall(None, "f1", (c1,))
-    c2 = Column(None, "c1", "t1")
+    c2 = Column(None, "t1", "c1")
     f2 = CurriedFunctionCall(None, f1, (c2,))
 
     def replace_col(e: Expression) -> Expression:
         if isinstance(e, Column) and e.column_name == "c1":
-            return Column(None, "c2", "t1")
+            return Column(None, "t1", "c2")
         return e
 
     f3 = f2.transform(replace_col)
 
-    replaced_col = Column(None, "c2", "t1")
+    replaced_col = Column(None, "t1", "c2")
     replaced_function = FunctionCall(None, "f1", (replaced_col,))
     expected = [
         replaced_col,
@@ -156,7 +156,7 @@ def test_mapping_curried_function() -> None:
 
 
 def test_subscriptable() -> None:
-    c1 = Column(None, "tags", "t1")
+    c1 = Column(None, "t1", "tags")
     l1 = Literal(None, "myTag")
     s = SubscriptableReference("alias", c1, l1)
 
@@ -176,8 +176,8 @@ def test_hash() -> None:
     """
     Ensures expressions are hashable
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
     function_1 = FunctionCall(None, "f1", (column1, column2))
     literal = Literal(None, "blablabla")
     function_2 = CurriedFunctionCall(None, function_1, (column1,))

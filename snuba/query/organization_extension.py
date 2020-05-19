@@ -31,7 +31,7 @@ class OrganizationExtensionProcessor(ExtensionQueryProcessor):
             binary_condition(
                 None,
                 ConditionFunctions.EQ,
-                Column(None, "org_id", None),
+                Column(None, None, "org_id"),
                 Literal(None, organization_id),
             )
         )

@@ -77,7 +77,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                         not_in_condition(
                             None,
                             FunctionCall(
-                                None, "assumeNotNull", (Column(None, "group_id", None),)
+                                None, "assumeNotNull", (Column(None, None, "group_id"),)
                             ),
                             [Literal(None, p) for p in exclude_group_ids],
                         )

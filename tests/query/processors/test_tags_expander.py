@@ -28,14 +28,14 @@ def test_tags_expander() -> None:
     processor.process_query(query, request_settings)
 
     assert query.get_selected_columns_from_ast() == [
-        FunctionCall("platforms", "count", (Column(None, "platform", None),)),
+        FunctionCall("platforms", "count", (Column(None, None, "platform"),)),
         FunctionCall(
             "top_platforms",
             "testF",
             (
-                Column(None, "platform", None),
+                Column(None, None, "platform"),
                 FunctionCall(
-                    "tags_value", "arrayJoin", (Column(None, "tags.value", None),)
+                    "tags_value", "arrayJoin", (Column(None, None, "tags.value"),)
                 ),
             ),
         ),
@@ -44,9 +44,9 @@ def test_tags_expander() -> None:
             "f1",
             (
                 FunctionCall(
-                    "tags_key", "arrayJoin", (Column(None, "tags.key", None),)
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),)
                 ),
-                Column(None, "column2", None),
+                Column(None, None, "column2"),
             ),
         ),
         FunctionCall("f2_alias", "f2", tuple()),
@@ -55,12 +55,12 @@ def test_tags_expander() -> None:
     assert query.get_condition_from_ast() == binary_condition(
         None,
         OPERATOR_TO_FUNCTION["="],
-        FunctionCall("tags_key", "arrayJoin", (Column(None, "tags.key", None),)),
+        FunctionCall("tags_key", "arrayJoin", (Column(None, None, "tags.key"),)),
         Literal(None, "tags_key"),
     )
 
     assert query.get_having_from_ast() == in_condition(
         None,
-        FunctionCall("tags_value", "arrayJoin", (Column(None, "tags.value", None),)),
+        FunctionCall("tags_value", "arrayJoin", (Column(None, None, "tags.value"),)),
         [Literal(None, "tag")],
     )
