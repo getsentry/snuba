@@ -35,7 +35,7 @@ class TestClickhouse(BaseEventsTest):
             errors.NetworkError,
             '{"data": "to my face"}',
         ]
-        cp = ClickhousePool("localhost", 9000)
+        cp = ClickhousePool("0:0:0:0", 9000)
         cp.execute("SHOW TABLES")
         assert FakeClient.return_value.execute.mock_calls == [
             call("SHOW TABLES"),

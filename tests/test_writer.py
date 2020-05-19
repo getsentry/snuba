@@ -47,7 +47,7 @@ class TestHTTPBatchWriter(BaseEventsTest):
     def test_chunks(self, chunk_size, input, expected_chunks):
         writer = FakeHTTPWriter(
             "mysterious_inexistent_table",
-            "localhost",
+            "0:0:0:0",
             9000,
             lambda a: a,
             None,
