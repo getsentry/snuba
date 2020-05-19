@@ -49,7 +49,7 @@ TSimpleExp = TypeVar("TSimpleExp", bound=SnubaExpression)
 
 
 class DefaultSimpleMapper(ExpressionMapper[TSimpleExp, ClickhouseExpression]):
-    def attemptMap(
+    def attempt_map(
         self,
         expression: TSimpleExp,
         children_translator: ExpressionVisitor[ClickhouseExpression],
@@ -58,7 +58,7 @@ class DefaultSimpleMapper(ExpressionMapper[TSimpleExp, ClickhouseExpression]):
 
 
 class DefaultFunctionMapper(ExpressionMapper[FunctionCall, ClickhouseExpression]):
-    def attemptMap(
+    def attempt_map(
         self,
         expression: FunctionCall,
         children_translator: ExpressionVisitor[ClickhouseExpression],
@@ -76,7 +76,7 @@ class DefaultFunctionMapper(ExpressionMapper[FunctionCall, ClickhouseExpression]
 class DefaultCurriedFunctionMapper(
     ExpressionMapper[CurriedFunctionCall, ClickhouseExpression]
 ):
-    def attemptMap(
+    def attempt_map(
         self,
         expression: CurriedFunctionCall,
         children_translator: ExpressionVisitor[ClickhouseExpression],
@@ -97,7 +97,7 @@ class DefaultCurriedFunctionMapper(
 class DefaultSubscriptableMapper(
     ExpressionMapper[SubscriptableReference, ClickhouseExpression]
 ):
-    def attemptMap(
+    def attempt_map(
         self,
         expression: SubscriptableReference,
         children_translator: ExpressionVisitor[ClickhouseExpression],
@@ -112,7 +112,7 @@ class DefaultSubscriptableMapper(
 
 
 class DefaultLambdaMapper(ExpressionMapper[Lambda, ClickhouseExpression]):
-    def attemptMap(
+    def attempt_map(
         self,
         expression: Lambda,
         children_translator: ExpressionVisitor[ClickhouseExpression],

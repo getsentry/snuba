@@ -69,7 +69,7 @@ class ExpressionMapper(ABC, Generic[TExpIn, TExpOut]):
     """
 
     @abstractmethod
-    def attemptMap(
+    def attempt_map(
         self, expression: TExpIn, children_translator: ExpressionVisitor[TExpOut]
     ) -> Optional[TExpOut]:
         """
@@ -152,7 +152,7 @@ class MappingExpressionTranslator(ExpressionVisitor[TExpOut]):
         self, exp: TExpIn, rules: Sequence[ExpressionMapper[TExpIn, TExpOut]],
     ) -> TExpOut:
         for r in rules:
-            ret = r.attemptMap(exp, self)
+            ret = r.attempt_map(exp, self)
             if ret is not None:
                 return ret
         raise ValueError(f"Cannot map expression {exp}")

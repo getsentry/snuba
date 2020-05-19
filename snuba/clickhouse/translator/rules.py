@@ -25,7 +25,7 @@ class ColumnMapper(ExpressionMapper[Column, Expression]):
     to_col_name: str
     to_table_name: Optional[str]
 
-    def attemptMap(
+    def attempt_map(
         self, expression: Column, children_translator: ExpressionVisitor[Expression],
     ) -> Optional[Expression]:
         if (
@@ -55,7 +55,7 @@ class TagMapper(ExpressionMapper[SubscriptableReference, Expression]):
     to_col_name: str
     to_table_name: Optional[str]
 
-    def attemptMap(
+    def attempt_map(
         self,
         expression: SubscriptableReference,
         children_translator: ExpressionVisitor[Expression],

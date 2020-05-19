@@ -16,7 +16,7 @@ from snuba.query.expressions import (
 
 def test_column_translation() -> None:
     col = Column(None, "col", "table")
-    translated = ColumnMapper("col", "table", "col2", "table2").attemptMap(
+    translated = ColumnMapper("col", "table", "col2", "table2").attempt_map(
         col, ExpressionTranslator(TranslationRules())
     )
 
@@ -27,7 +27,7 @@ def test_tag_translation() -> None:
     col = SubscriptableReference(
         "tags[release]", Column(None, "tags", None), Literal(None, "release")
     )
-    translated = TagMapper("tags", None, "tags", None).attemptMap(
+    translated = TagMapper("tags", None, "tags", None).attempt_map(
         col, ExpressionTranslator(TranslationRules())
     )
 
