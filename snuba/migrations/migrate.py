@@ -3,13 +3,27 @@ import logging
 from clickhouse_driver import Client
 from typing import MutableSequence
 
-from snuba.datasets.dataset import Dataset
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.schemas import Schema
 from snuba.datasets.schemas.tables import TableSchema
+from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.factory import get_storage
 from snuba.migrations.parse_schema import get_local_schema
 
 
 logger = logging.getLogger("snuba.migrate")
+
+STORAGES_TO_MIGRATE = [
+    StorageKey.EVENTS,
+    StorageKey.ERRORS,
+    StorageKey.GROUPEDMESSAGES,
+    StorageKey.GROUPASSIGNEES,
+    StorageKey.OUTCOMES_RAW,
+    StorageKey.OUTCOMES_HOURLY,
+    StorageKey.SESSIONS_RAW,
+    StorageKey.SESSIONS_HOURLY,
+    StorageKey.TRANSACTIONS,
+]
 
 
 def _run_schema(conn: Client, schema: Schema) -> None:
@@ -34,17 +48,29 @@ def _run_schema(conn: Client, schema: Schema) -> None:
         logger.warn(difference)
 
 
-def run(dataset: Dataset) -> None:
-    schemas: MutableSequence[Schema] = []
-    writable_storage = dataset.get_writable_storage()
-    if writable_storage:
-        # This ensures that the writable storage table is always migrated before
-        # other storages required for that dataset
-        schemas.append(writable_storage.get_table_writer().get_schema())
+def run() -> None:
+    # Create the tables for all of the storages to be migrated.
+    for storage_key in STORAGES_TO_MIGRATE:
+        storage_name = storage_key.value
+        logger.info("Creating tables for storage %s", storage_name)
+        storage = get_storage(storage_key)
+        conn = storage.get_cluster().get_connection(ClickhouseClientSettings.MIGRATE)
 
-    for storage in dataset.get_all_storages():
-        schemas.append(storage.get_schemas().get_read_schema())
+        for statement in storage.get_schemas().get_create_statements():
+            logger.debug("Executing:\n%s", statement.statement)
+            conn.execute(statement.statement)
 
-    for schema in schemas:
-        conn = storage.get_cluster().get_clickhouse_rw()
-        _run_schema(conn, schema)
+        # Run migrations
+        logger.info("Migrating storage %s", storage_name)
+        schemas: MutableSequence[Schema] = []
+
+        read_schema = storage.get_schemas().get_read_schema()
+        write_schema = storage.get_schemas().get_write_schema()
+
+        if write_schema:
+            schemas.append(write_schema)
+
+        schemas.append(read_schema)
+
+        for schema in schemas:
+            _run_schema(conn, schema)

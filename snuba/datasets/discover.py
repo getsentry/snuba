@@ -27,6 +27,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -269,6 +270,7 @@ class DiscoverDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             # Apdex and Impact seem very good candidates for
             # being defined by the Transaction entity when it will
@@ -304,22 +306,6 @@ class DiscoverDataset(TimeSeriesDataset):
         )
 
         if detected_dataset == TRANSACTIONS:
-            if column_name == "time":
-                return self.time_expr("finish_ts", query.get_granularity(), table_alias)
-            if column_name == "type":
-                return "'transaction'"
-            if column_name == "timestamp":
-                return "finish_ts"
-            if column_name == "username":
-                return "user_name"
-            if column_name == "email":
-                return "user_email"
-            if column_name == "transaction":
-                return "transaction_name"
-            if column_name == "message":
-                return "transaction_name"
-            if column_name == "title":
-                return "transaction_name"
             if column_name == "group_id":
                 # TODO: We return 0 here instead of NULL so conditions like group_id
                 # in (1, 2, 3) will work, since Clickhouse won't run a query like:
@@ -327,17 +313,9 @@ class DiscoverDataset(TimeSeriesDataset):
                 # When we have the query AST, we should solve this by transforming the
                 # nonsensical conditions instead.
                 return "0"
-            if column_name == "geo_country_code":
-                column_name = "contexts[geo.country_code]"
-            if column_name == "geo_region":
-                column_name = "contexts[geo.region]"
-            if column_name == "geo_city":
-                column_name = "contexts[geo.city]"
             if self.__events_columns.get(column_name):
                 return "NULL"
         else:
-            if column_name == "time":
-                return self.time_expr("timestamp", query.get_granularity(), table_alias)
             if column_name == "release":
                 column_name = "tags[sentry:release]"
             if column_name == "dist":

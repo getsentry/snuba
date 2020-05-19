@@ -165,12 +165,12 @@ class TimeSeriesDataset(Dataset):
     def time_expr(self, column_name: str, granularity: int, table_alias: str) -> str:
         real_column = qualified_column(column_name, table_alias)
         template = {
-            3600: "toStartOfHour({column})",
-            60: "toStartOfMinute({column})",
-            86400: "toDate({column})",
+            3600: "toStartOfHour({column}, 'Universal')",
+            60: "toStartOfMinute({column}, 'Universal')",
+            86400: "toDate({column}, 'Universal')",
         }.get(
             granularity,
-            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity})",
+            "toDateTime(intDiv(toUInt32({column}), {granularity}) * {granularity}, 'Universal')",
         )
         return template.format(column=real_column, granularity=granularity)
 

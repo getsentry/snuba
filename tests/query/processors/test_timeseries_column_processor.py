@@ -14,23 +14,35 @@ from snuba.request.request_settings import HTTPRequestSettings
 tests = [
     (
         3600,
-        FunctionCall("my_start", "toStartOfHour", (Column(None, "start_ts", None),)),
-        "(toStartOfHour(start_ts) AS my_start)",
+        FunctionCall(
+            "my_time",
+            "toStartOfHour",
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+        ),
+        "(toStartOfHour(finish_ts, 'Universal') AS my_time)",
     ),
     (
         60,
-        FunctionCall("my_start", "toStartOfMinute", (Column(None, "start_ts", None),)),
-        "(toStartOfMinute(start_ts) AS my_start)",
+        FunctionCall(
+            "my_time",
+            "toStartOfMinute",
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+        ),
+        "(toStartOfMinute(finish_ts, 'Universal') AS my_time)",
     ),
     (
         86400,
-        FunctionCall("my_start", "toDate", (Column(None, "start_ts", None),)),
-        "(toDate(start_ts) AS my_start)",
+        FunctionCall(
+            "my_time",
+            "toDate",
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+        ),
+        "(toDate(finish_ts, 'Universal') AS my_time)",
     ),
     (
         1440,
         FunctionCall(
-            "my_start",
+            "my_time",
             "toDateTime",
             (
                 multiply(
@@ -39,16 +51,17 @@ tests = [
                         "intDiv",
                         (
                             FunctionCall(
-                                None, "toUInt32", (Column(None, "start_ts", None),),
+                                None, "toUInt32", (Column(None, "finish_ts", None),),
                             ),
                             Literal(None, 1440),
                         ),
                     ),
                     Literal(None, 1440),
                 ),
+                Literal(None, "Universal"),
             ),
         ),
-        "(toDateTime(multiply(intDiv(toUInt32(start_ts), 1440), 1440)) AS my_start)",
+        "(toDateTime(multiply(intDiv(toUInt32(finish_ts), 1440), 1440), 'Universal') AS my_time)",
     ),
 ]
 
@@ -62,13 +75,13 @@ def test_timeseries_column_format_expressions(
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
             Column("transaction.duration", "duration", None),
-            Column("my_start", "bucketed_start", None),
+            Column("my_time", "time", None),
         ],
     )
     expected = Query(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
-        selected_columns=[Column("transaction.duration", "duration", None), ast_value,],
+        selected_columns=[Column("transaction.duration", "duration", None), ast_value],
     )
 
     dataset = TransactionsDataset()

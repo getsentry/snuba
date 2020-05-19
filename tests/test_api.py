@@ -5,12 +5,13 @@ from functools import partial
 from unittest.mock import patch
 import pytest
 import pytz
-from sentry_sdk import Hub, Client
 import simplejson as json
 import time
 import uuid
 
 from snuba import settings, state
+from sentry_sdk import Hub, Client
+from snuba.clusters.cluster import ClickhouseClientSettings
 from snuba.datasets.factory import enforce_table_writer, get_dataset
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -141,7 +142,11 @@ class TestApi(BaseApiTest):
         """
         Test total counts are correct in the hourly time buckets for each project
         """
-        clickhouse = get_storage(StorageKey.EVENTS).get_cluster().get_clickhouse_rw()
+        clickhouse = (
+            get_storage(StorageKey.EVENTS)
+            .get_cluster()
+            .get_connection(ClickhouseClientSettings.QUERY)
+        )
         res = clickhouse.execute("SELECT count() FROM %s" % self.table)
         assert res[0][0] == 330
 
@@ -1292,7 +1297,9 @@ class TestApi(BaseApiTest):
         writer = storage.get_table_writer()
         table = writer.get_schema().get_table_name()
         storage = get_storage(StorageKey.EVENTS)
-        clickhouse = storage.get_cluster().get_clickhouse_rw()
+        clickhouse = storage.get_cluster().get_connection(
+            ClickhouseClientSettings.QUERY
+        )
         assert table not in clickhouse.execute("SHOW TABLES")
         assert self.redis_db_size() == 0
 
@@ -1706,7 +1713,17 @@ class TestApi(BaseApiTest):
                 self.app.post(
                     "/query",
                     data=json.dumps(
-                        {"project": 1, "selected_columns": ["event_id", "title", "transaction", "tags[a]", "tags[b]"], "limit": 5}
+                        {
+                            "project": 1,
+                            "selected_columns": [
+                                "event_id",
+                                "title",
+                                "transaction",
+                                "tags[a]",
+                                "tags[b]",
+                            ],
+                            "limit": 5,
+                        }
                     ),
                 ).data
             )
