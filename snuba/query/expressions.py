@@ -130,8 +130,12 @@ class Column(Expression):
     Represent a column in the schema of the dataset.
     """
 
-    column_name: str
     table_name: Optional[str]
+    column_name: str
+    # For nested column, this is the path following the main column name.
+    # For tags.key as an example, tags is the column_name and (value,) would
+    # be the path
+    path: Tuple[str, ...] = tuple()
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
@@ -163,9 +167,7 @@ class SubscriptableReference(Expression):
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         transformed = replace(
-            self,
-            column=self.column.transform(func),
-            key=self.key.transform(func),
+            self, column=self.column.transform(func), key=self.key.transform(func),
         )
         return func(transformed)
 
