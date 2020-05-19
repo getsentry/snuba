@@ -172,9 +172,10 @@ def _format_storage_query_and_run(
     ) as span:
         span.set_tag("table", source)
         try:
-            sql_data = AstSqlQuery(clickhouse_query, request_settings).sql_data()
+            span.set_data(
+                "ast_query", AstSqlQuery(clickhouse_query, request_settings).sql_data()
+            )
             span.set_tag("query_type", "ast")
-            span.set_data("ast_query", sql_data)
         except Exception:
             span.set_tag("query_type", "dict")
 
