@@ -3,8 +3,8 @@ from typing import Optional
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.query.expressions import Expression as SnubaExpression
-from snuba.clickhouse.translator.visitor import ClickhouseExpressionTranslator
-from snuba.datasets.plans.translator.visitor import ExpressionMapper
+from snuba.clickhouse.translator import ClickhouseExpressionTranslator
+from snuba.datasets.plans.translator.mapper import ExpressionMapper
 from snuba.query.dsl import array_element
 from snuba.query.expressions import Column
 from snuba.query.expressions import FunctionCall, SubscriptableReference
@@ -13,7 +13,9 @@ from snuba.query.expressions import FunctionCall, SubscriptableReference
 @dataclass(frozen=True)
 class ColumnMapper(
     ExpressionMapper[
-        SnubaExpression, Column, ClickhouseExpressionTranslator[SnubaExpression]
+        SnubaExpression,
+        ClickhouseExpression,
+        ClickhouseExpressionTranslator[SnubaExpression],
     ]
 ):
     """
@@ -31,17 +33,19 @@ class ColumnMapper(
         self,
         expression: SnubaExpression,
         children_translator: ClickhouseExpressionTranslator[SnubaExpression],
-    ) -> Optional[Column]:
+    ) -> Optional[ClickhouseExpression]:
         if not isinstance(expression, Column):
             return None
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
-            return Column(
-                alias=expression.alias,
-                table_name=self.to_table_name,
-                column_name=self.to_col_name,
+            return ClickhouseExpression(
+                Column(
+                    alias=expression.alias,
+                    table_name=self.to_table_name,
+                    column_name=self.to_col_name,
+                )
             )
         else:
             return None
