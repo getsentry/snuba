@@ -3,7 +3,7 @@ from typing import Optional
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.query.expressions import Expression as SnubaExpression
-from snuba.clickhouse.translator.visitor import ExpressionTranslator
+from snuba.clickhouse.translator.visitor import ClickhouseExpressionTranslator
 from snuba.datasets.plans.translator.visitor import ExpressionMapper
 from snuba.query.dsl import array_element
 from snuba.query.expressions import Column
@@ -11,7 +11,11 @@ from snuba.query.expressions import FunctionCall, SubscriptableReference
 
 
 @dataclass(frozen=True)
-class ColumnMapper(ExpressionMapper[Column, Column, ExpressionTranslator]):
+class ColumnMapper(
+    ExpressionMapper[
+        SnubaExpression, Column, ClickhouseExpressionTranslator[SnubaExpression]
+    ]
+):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -24,7 +28,9 @@ class ColumnMapper(ExpressionMapper[Column, Column, ExpressionTranslator]):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Column, children_translator: ExpressionTranslator,
+        self,
+        expression: SnubaExpression,
+        children_translator: ClickhouseExpressionTranslator[SnubaExpression],
     ) -> Optional[Column]:
         if not isinstance(expression, Column):
             return None
@@ -43,7 +49,11 @@ class ColumnMapper(ExpressionMapper[Column, Column, ExpressionTranslator]):
 
 @dataclass(frozen=True)
 class TagMapper(
-    ExpressionMapper[SnubaExpression, ClickhouseExpression, ExpressionTranslator]
+    ExpressionMapper[
+        SnubaExpression,
+        ClickhouseExpression,
+        ClickhouseExpressionTranslator[SnubaExpression],
+    ]
 ):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
@@ -56,7 +66,9 @@ class TagMapper(
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: SnubaExpression, children_translator: ExpressionTranslator,
+        self,
+        expression: SnubaExpression,
+        children_translator: ClickhouseExpressionTranslator[SnubaExpression],
     ) -> Optional[ClickhouseExpression]:
         if not isinstance(expression, SubscriptableReference):
             return None

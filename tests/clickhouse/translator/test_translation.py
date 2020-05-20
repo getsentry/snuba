@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translator.rules import ColumnMapper, TagMapper
-from snuba.clickhouse.translator.visitor import ExpressionTranslator
+from snuba.clickhouse.translator.visitor import SnubaClickhouseExpressionTranslator
 from snuba.clickhouse.translator.visitor import ClickhouseTranslationRules
 from snuba.query.expressions import (
     Column,
@@ -17,7 +17,7 @@ from snuba.query.expressions import (
 def test_column_translation() -> None:
     col = Column(None, "col", "table")
     translated = ColumnMapper("col", "table", "col2", "table2").attempt_map(
-        col, ExpressionTranslator(ClickhouseTranslationRules())
+        col, SnubaClickhouseExpressionTranslator(ClickhouseTranslationRules())
     )
 
     assert translated == Column(None, "col2", "table2")
@@ -30,7 +30,7 @@ def test_tag_translation() -> None:
         )
     )
     translated = TagMapper("tags", None, "tags", None).attempt_map(
-        col, ExpressionTranslator(ClickhouseTranslationRules())
+        col, SnubaClickhouseExpressionTranslator(ClickhouseTranslationRules())
     )
 
     assert translated == ClickhouseExpression(
@@ -160,11 +160,11 @@ test_data = [
 
 @pytest.mark.parametrize("mappings, expression, expected", test_data)
 def test_translation(
-    mappings: ClickhouseTranslationRules,
+    mappings: ClickhouseTranslationRules[Expression],
     expression: Expression,
     expected: ClickhouseExpression,
 ) -> None:
-    translator = ExpressionTranslator(mappings)
+    translator = SnubaClickhouseExpressionTranslator(mappings)
     translated = translator.translate_expression(expression)
 
     assert translated == expected

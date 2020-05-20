@@ -2,7 +2,7 @@ import pytest
 
 from snuba.clickhouse.translator.visitor import (
     ClickhouseTranslationRules,
-    ExpressionTranslator,
+    SnubaClickhouseExpressionTranslator,
 )
 from snuba.query.expressions import (
     Argument,
@@ -47,7 +47,7 @@ def test_default_translation(expression: Expression) -> None:
     produces a deep copy of the original expression.
     """
 
-    translated = ExpressionTranslator(
+    translated = SnubaClickhouseExpressionTranslator(
         ClickhouseTranslationRules()
     ).translate_expression(expression)
 
