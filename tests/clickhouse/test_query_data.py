@@ -46,18 +46,14 @@ test_cases = [
                 OrderBy(OrderByDirection.DESC, Column(None, "column2", "table1")),
             ],
         ),
-        [
-            ("select", "SELECT column1, table1.column2, (column3 AS al)"),
-            ("from", "FROM my_table"),
-            ("join", ""),
-            ("prewhere", ""),
-            ("where", "WHERE eq(al, 'blabla')"),
-            ("group", "GROUP BY (column1, table1.column2, al, column4)"),
-            ("having", "HAVING eq(column1, 123)"),
-            ("order", "ORDER BY column1 ASC, table1.column2 DESC"),
-            ("limitby", ""),
-            ("limit", ""),
-        ],
+        {
+            "from": "FROM my_table",
+            "group": "GROUP BY (column1, table1.column2, al, column4)",
+            "having": "HAVING eq(column1, 123)",
+            "order": "ORDER BY column1 ASC, table1.column2 DESC",
+            "select": "SELECT column1, table1.column2, (column3 AS al)",
+            "where": "WHERE eq(al, 'blabla')",
+        },
     ),
     (
         # Query with complex functions
@@ -117,22 +113,14 @@ test_cases = [
                 )
             ],
         ),
-        [
-            (
-                "select",
-                "SELECT (doSomething(column1, table1.column2, (column3 AS al))(column1) AS "
-                "my_complex_math)",
-            ),
-            ("from", "FROM my_table"),
-            ("join", ""),
-            ("prewhere", ""),
-            ("where", "WHERE and(eq(al, 'blabla'), neq(al, 'blabla'))"),
-            ("group", "GROUP BY (my_complex_math)"),
-            ("having", ""),
-            ("order", "ORDER BY f(column1) ASC"),
-            ("limitby", ""),
-            ("limit", ""),
-        ],
+        {
+            "from": "FROM my_table",
+            "group": "GROUP BY (my_complex_math)",
+            "order": "ORDER BY f(column1) ASC",
+            "select": "SELECT (doSomething(column1, table1.column2, (column3 AS "
+            "al))(column1) AS my_complex_math)",
+            "where": "WHERE and(eq(al, 'blabla'), neq(al, 'blabla'))",
+        },
     ),
     (
         # Query with escaping
@@ -149,18 +137,12 @@ test_cases = [
             ],
             order_by=[OrderBy(OrderByDirection.ASC, Column(None, "column1", None))],
         ),
-        [
-            ("select", "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)"),
-            ("from", "FROM my_table"),
-            ("join", ""),
-            ("prewhere", ""),
-            ("where", ""),
-            ("group", "GROUP BY (al1, al2)"),
-            ("having", ""),
-            ("order", "ORDER BY column1 ASC"),
-            ("limitby", ""),
-            ("limit", ""),
-        ],
+        {
+            "from": "FROM my_table",
+            "group": "GROUP BY (al1, al2)",
+            "order": "ORDER BY column1 ASC",
+            "select": "SELECT (`field_##$$%` AS al1), (`t&^%$`.`f@!@` AS al2)",
+        },
     ),
 ]
 
@@ -202,17 +184,16 @@ def test_format_clickhouse_specific_query() -> None:
     request_settings = HTTPRequestSettings()
     clickhouse_query = AstSqlQuery(query, request_settings)
 
-    expected = [
-        ("select", "SELECT column1, table1.column2"),
-        ("from", "FROM my_table FINAL SAMPLE 0.1"),
-        ("join", "ARRAY JOIN column1"),
-        ("prewhere", ""),
-        ("where", "WHERE eq(column1, 'blabla')"),
-        ("group", "GROUP BY (column1, table1.column2) WITH TOTALS"),
-        ("having", "HAVING eq(column1, 123)"),
-        ("order", "ORDER BY column1 ASC"),
-        ("limitby", "LIMIT 10 BY environment"),
-        ("limit", "LIMIT 100 OFFSET 50"),
-    ]
+    expected = {
+        "from": "FROM my_table FINAL SAMPLE 0.1",
+        "group": "GROUP BY (column1, table1.column2) WITH TOTALS",
+        "having": "HAVING eq(column1, 123)",
+        "join": "ARRAY JOIN column1",
+        "limit": "LIMIT 100 OFFSET 50",
+        "limitby": "LIMIT 10 BY environment",
+        "order": "ORDER BY column1 ASC",
+        "select": "SELECT column1, table1.column2",
+        "where": "WHERE eq(column1, 'blabla')",
+    }
 
     assert clickhouse_query.sql_data() == expected
