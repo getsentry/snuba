@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import ChainMap
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Generic, Mapping, Optional, Sequence, Tuple, TypeVar
+from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
 
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import Expression
+from snuba.query.expressions import FunctionCall as FunctionCallExpr
 
-TNode = TypeVar("TNode")
+ScalarType = Optional[Union[str, int, float, date, datetime]]
+MatchType = Union[Expression, ScalarType]
+TNode = TypeVar("TNode", bound=MatchType)
 
 
 @dataclass(frozen=True)
@@ -20,22 +24,20 @@ class MatchResult:
     when a valid match is found.
     """
 
-    expressions: Mapping[str, Expression] = field(default_factory=dict)
-    strings: Mapping[str, Optional[str]] = field(default_factory=dict)
-    ints: Mapping[str, Optional[int]] = field(default_factory=dict)
-    floats: Mapping[str, Optional[float]] = field(default_factory=dict)
-    dates: Mapping[str, Optional[date]] = field(default_factory=dict)
-    datetimes: Mapping[str, Optional[datetime]] = field(default_factory=dict)
+    results: Mapping[str, MatchType] = field(default_factory=dict)
+
+    def expression(self, name: str) -> Expression:
+        ret = self.results[name]
+        assert isinstance(ret, Expression)
+        return ret
+
+    def scalar(self, name: str) -> ScalarType:
+        ret = self.results[name]
+        assert ret is None or isinstance(ret, (str, int, float, date, datetime))
+        return ret
 
     def merge(self, values: MatchResult) -> MatchResult:
-        return MatchResult(
-            expressions={**self.expressions, **values.expressions},
-            strings={**self.strings, **values.strings},
-            ints={**self.ints, **values.ints},
-            floats={**self.floats, **values.floats},
-            dates={**self.dates, **values.dates},
-            datetimes={**self.datetimes, **values.datetimes},
-        )
+        return MatchResult(ChainMap(self.results, values.results))
 
 
 class Pattern(ABC, Generic[TNode]):
@@ -64,7 +66,7 @@ class Pattern(ABC, Generic[TNode]):
 
 
 @dataclass(frozen=True)
-class Param(Pattern[TNode], Generic[TNode]):
+class Param(Pattern[TNode]):
     """
     Defines a named parameter in a Pattern. When matching the overall Pattern,
     if the Pattern nested in this object matches, the corresponding input node
@@ -81,23 +83,15 @@ class Param(Pattern[TNode], Generic[TNode]):
         result = self.pattern.match(node)
         if not result:
             return None
-
-        return result.merge(
-            MatchResult(
-                expressions={self.name: node} if isinstance(node, Expression) else {},
-                strings={self.name: node} if isinstance(node, str) else {},
-                ints={self.name: node} if isinstance(node, int) else {},
-                floats={self.name: node} if isinstance(node, float) else {},
-                dates={self.name: node} if isinstance(node, date) else {},
-                datetimes={self.name: node} if isinstance(node, datetime) else {},
-            )
-        )
+        return result.merge(MatchResult({self.name: node}))
 
 
 @dataclass(frozen=True)
 class AnyExpression(Pattern[Expression]):
     """
-    Successfully matches any expression
+    Match any expression of the type provided.
+    This allows us to match any Expression since the Any class cannot
+    match abstract classes (like Expression)
     """
 
     def match(self, node: Expression) -> Optional[MatchResult]:
@@ -107,15 +101,27 @@ class AnyExpression(Pattern[Expression]):
 @dataclass(frozen=True)
 class AnyString(Pattern[Optional[str]]):
     """
-    Successfully matches any string
+    Match any string including the None value
     """
 
     def match(self, node: Optional[str]) -> Optional[MatchResult]:
-        return MatchResult()
+        return MatchResult() if node is None or isinstance(node, str) else None
 
 
 @dataclass(frozen=True)
-class String(Pattern[Optional[str]]):
+class Any(Pattern[TNode]):
+    """
+    Match any concrete expression/scalar of the type provided
+    """
+
+    type: Type[TNode]
+
+    def match(self, node: TNode) -> Optional[MatchResult]:
+        return MatchResult() if isinstance(node, self.type) else None
+
+
+@dataclass(frozen=True)
+class OptionalString(Pattern[Optional[str]]):
     """
     Matches one specific string (or None).
     """
@@ -127,7 +133,19 @@ class String(Pattern[Optional[str]]):
 
 
 @dataclass(frozen=True)
-class Or(Pattern[TNode], Generic[TNode]):
+class String(Pattern[str]):
+    """
+    Matches one specific string.
+    """
+
+    value: Optional[str]
+
+    def match(self, node: str) -> Optional[MatchResult]:
+        return MatchResult() if node == self.value else None
+
+
+@dataclass(frozen=True)
+class Or(Pattern[TNode]):
     """
     Union of multiple patterns. Matches if at least one is a valid match
     and returns the first valid one.
@@ -148,12 +166,12 @@ class Column(Pattern[Expression]):
     """
     Matches a Column in an AST expression.
     The column is defined by alias, name and table. For each a Pattern can be
-    provided. If one of these Patters is left None, that field will be ignored
+    provided. If one of these Patterns is left None, that field will be ignored
     when matching (equivalent to Any, but less verbose).
     """
 
     alias: Optional[Pattern[Optional[str]]] = None
-    column_name: Optional[Pattern[Optional[str]]] = None
+    column_name: Optional[Pattern[str]] = None
     table_name: Optional[Pattern[Optional[str]]] = None
 
     def match(self, node: Expression) -> Optional[MatchResult]:
@@ -163,20 +181,25 @@ class Column(Pattern[Expression]):
         result = MatchResult()
         for pattern, value in (
             (self.alias, node.alias),
-            (self.column_name, node.column_name),
             (self.table_name, node.table_name),
         ):
-            if pattern:
+            if pattern is not None:
                 partial_result = pattern.match(value)
                 if not partial_result:
                     return None
                 result = result.merge(partial_result)
 
+        if self.column_name is not None:
+            partial_result = self.column_name.match(node.column_name)
+            if not partial_result:
+                return None
+            result = result.merge(partial_result)
+
         return result
 
 
 @dataclass(frozen=True)
-class Function(Pattern[Expression]):
+class FunctionCall(Pattern[Expression]):
     """
     Matches a Function in the AST expression.
     It works like the Column Pattern. if alias, function_name and function_parameters
@@ -184,28 +207,40 @@ class Function(Pattern[Expression]):
     """
 
     alias: Optional[Pattern[Optional[str]]] = None
-    function_name: Optional[Pattern[Optional[str]]] = None
-    function_parameters: Optional[Tuple[Pattern[Expression], ...]] = None
+    function_name: Optional[Pattern[str]] = None
+    parameters: Optional[Tuple[Pattern[Expression], ...]] = None
+    # Specifies whether we allow optional parameters when matching.
+    # if this is False, all patterns of the function to match must match
+    # one by one. If with_optionals is True, this will allow additional
+    # parameters to exist in the function to match that are not present
+    # in this pattern.
+    with_optionals = bool = False
 
     def match(self, node: Expression) -> Optional[MatchResult]:
-        if not isinstance(node, FunctionCall):
+        if not isinstance(node, FunctionCallExpr):
             return None
 
         result = MatchResult()
-        for pattern, value in (
-            (self.alias, node.alias),
-            (self.function_name, node.function_name),
-        ):
-            if pattern:
-                partial_result = pattern.match(value)
-                if not partial_result:
-                    return None
-                result = result.merge(partial_result)
-
-        if self.function_parameters:
-            if len(self.function_parameters) != len(node.parameters):
+        if self.alias is not None:
+            partial_result = self.alias.match(node.alias)
+            if not partial_result:
                 return None
-            for index, param_pattern in enumerate(self.function_parameters):
+            result = result.merge(partial_result)
+        if self.function_name is not None:
+            partial_result = self.function_name.match(node.function_name)
+            if not partial_result:
+                return None
+            result = result.merge(partial_result)
+
+        if self.parameters:
+            if not self.with_optionals:
+                if len(self.parameters) != len(node.parameters):
+                    return None
+            else:
+                if len(self.parameters) > len(node.parameters):
+                    return None
+
+            for index, param_pattern in enumerate(self.parameters):
                 p_result = param_pattern.match(node.parameters[index])
                 if not p_result:
                     return None
