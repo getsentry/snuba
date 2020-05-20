@@ -49,8 +49,8 @@ class AstSqlQuery(SqlQuery):
         self.__sql_data: Optional[Dict[str, str]] = None
 
     def _sql_data_list(self) -> List[Tuple[str, str]]:
-        if self.__sql_data:
-            return self.__sql_data
+        if self.__sql_data_list:
+            return self.__sql_data_list
 
         parsing_context = ParsingContext()
         formatter = ClickhouseExpressionFormatter(parsing_context)
