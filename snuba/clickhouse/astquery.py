@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple, Dict
+from typing import Dict, List, Optional, Tuple
 
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -143,7 +143,7 @@ class AstSqlQuery(SqlQuery):
         if self.__formatted_query:
             return self.__formatted_query
 
-        self.__formatted_query = " ".join([c for n, c in self._sql_data_list()])
+        self.__formatted_query = " ".join([c for _, c in self._sql_data_list()])
 
         return self.__formatted_query
 

@@ -114,24 +114,22 @@ class DictSqlQuery(SqlQuery):
         if query.get_limit() is not None:
             limit_clause = "LIMIT {}, {}".format(query.get_offset(), query.get_limit())
 
-        self.__sql_data = dict(
-            [
-                (k, v)
-                for k, v in [
-                    ("select", select_clause),
-                    ("from", from_clause),
-                    ("join", join_clause),
-                    ("prewhere", prewhere_clause),
-                    ("where", where_clause),
-                    ("group", group_clause),
-                    ("having", having_clause),
-                    ("order", order_clause),
-                    ("limitby", limitby_clause),
-                    ("limit", limit_clause),
-                ]
-                if v
+        self.__sql_data = {
+            k: v
+            for k, v in [
+                ("select", select_clause),
+                ("from", from_clause),
+                ("join", join_clause),
+                ("prewhere", prewhere_clause),
+                ("where", where_clause),
+                ("group", group_clause),
+                ("having", having_clause),
+                ("order", order_clause),
+                ("limitby", limitby_clause),
+                ("limit", limit_clause),
             ]
-        )
+            if v
+        }
 
         self.__formatted_query = " ".join(
             [

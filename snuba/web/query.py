@@ -177,6 +177,7 @@ def _format_storage_query_and_run(
             )
             span.set_tag("query_type", "ast")
         except Exception:
+            logger.warning("Failed to format ast query", exc_info=True)
             span.set_tag("query_type", "dict")
 
         span.set_data("dict_query", formatted_query.sql_data())
