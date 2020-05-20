@@ -157,8 +157,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["offset"] = metadata.offset
 
         sdk = data.get("sdk", None) or {}
-        processed["sdk_name"] = _unicodify(sdk.get("name", "") or "")
-        processed["sdk_version"] = _unicodify(sdk.get("version", "") or "")
+        processed["sdk_name"] = _unicodify(sdk.get("name") or "")
+        processed["sdk_version"] = _unicodify(sdk.get("version") or "")
 
         if processed["sdk_name"] == "":
             metrics.increment("missing_sdk_name")
