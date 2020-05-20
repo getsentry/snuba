@@ -107,7 +107,19 @@ ClickhouseWriterOptions = Optional[Mapping[str, Any]]
 class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     """
     ClickhouseCluster provides a reader, writer and Clickhouse connections that are
-    shared by all storages located on the cluster
+    shared by all storages located on the cluster.
+
+    ClickhouseCluster is initialized with a single address (host/port/http_port),
+    which is used for all read and write operations related to the cluster. This
+    address can refer to either the address of the actual ClickHouse server, or a
+    proxy server (e.g. for load balancing).
+
+    However there are other operations (like some DDL operations) that must be executed
+    on each individual server node, not just on the distributed table. If we are
+    operating a single node cluster, this is straightforward since there is only one
+    server on which to run our command and no distributed table. If we are operating
+    a multi node cluster we need to know the full set of shards and replicas on which
+    to run our commands. This is provided by the `get_nodes()` method.
     """
 
     def __init__(
