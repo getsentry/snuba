@@ -14,10 +14,14 @@ from typing import (
     TypeVar,
     Union,
 )
+
+import inspect
 import logging
 import numbers
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
+
+import sentry_sdk
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_identifier, escape_string
@@ -325,3 +329,21 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
             else None,
         ),
     )
+
+
+def with_span(op="function", var=None):
+    def decorator(func):
+        frame_info = inspect.stack()[1]
+        filename = frame_info.filename
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
+                span.set_data("filename", filename)
+                if var:
+                    kwargs[var] = span
+                return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
