@@ -148,7 +148,7 @@ test_cases = [
     ),
     (
         "Match String Literal",
-        Literal(None, String("value")),
+        Literal(None, OptionalString("value")),
         LiteralExpr("irrelevant", "value"),
         MatchResult(),
     ),
