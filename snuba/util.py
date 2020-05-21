@@ -103,7 +103,7 @@ def function_expr(fn: str, args_expr: str = "") -> str:
         match = ERROR_RATE_FUNCTION_RE.match(fn)
         if match:
             return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
-                success=SPAN_STATUS_NAME_TO_CODE["ok"],
+                ok=SPAN_STATUS_NAME_TO_CODE["ok"],
                 unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
             )
         raise ValueError("Invalid format for error_rate()")
