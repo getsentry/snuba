@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Mapping, Optional
 
 
 class SqlQuery(ABC):
@@ -33,3 +33,8 @@ class SqlQuery(ABC):
         if format is not None:
             query = f"{query} FORMAT {format}"
         return query
+
+    @abstractmethod
+    def sql_data(self) -> Mapping[str, str]:
+        """Returns a lust of parsed SQL elements from this query"""
+        raise NotImplementedError
