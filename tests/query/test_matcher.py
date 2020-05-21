@@ -171,7 +171,7 @@ test_cases = [
 @pytest.mark.parametrize("name, pattern, expression, expected_result", test_cases)
 def test_base_expression(
     name: str,
-    pattern: Pattern[Expression, Expression],
+    pattern: Pattern[Expression],
     expression: Expression,
     expected_result: Optional[MatchResult],
 ) -> None:
