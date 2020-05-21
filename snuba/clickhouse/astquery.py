@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -44,11 +44,11 @@ class AstSqlQuery(SqlQuery):
         self.__prewhere = query.get_prewhere_ast()
 
         self.__settings = settings
-        self.__sql_data_list: Optional[List[Tuple[str, str]]] = None
+        self.__sql_data_list: Optional[Sequence[Tuple[str, str]]] = None
         self.__formatted_query: Optional[str] = None
-        self.__sql_data: Optional[Dict[str, str]] = None
+        self.__sql_data: Optional[Sequence[str, str]] = None
 
-    def _sql_data_list(self) -> List[Tuple[str, str]]:
+    def _sql_data_list(self) -> Sequence[Tuple[str, str]]:
         if self.__sql_data_list:
             return self.__sql_data_list
 
@@ -125,7 +125,7 @@ class AstSqlQuery(SqlQuery):
             for k, v in [
                 ("select", select_clause),
                 ("from", from_clause),
-                ("join", array_join_clause),
+                ("array_join", array_join_clause),
                 ("prewhere", prewhere_clause),
                 ("where", where_clause),
                 ("group", group_clause),
@@ -147,7 +147,7 @@ class AstSqlQuery(SqlQuery):
 
         return self.__formatted_query
 
-    def sql_data(self) -> Dict[str, str]:
+    def sql_data(self) -> Mapping[str, str]:
         if self.__sql_data:
             return self.__sql_data
 

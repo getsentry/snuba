@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Mapping
 
 from snuba import settings as snuba_settings
 from snuba import util
@@ -153,5 +153,5 @@ class DictSqlQuery(SqlQuery):
     def _format_query_impl(self) -> str:
         return self.__formatted_query
 
-    def sql_data(self) -> Dict[str, str]:
+    def sql_data(self) -> Mapping[str, str]:
         return self.__sql_data

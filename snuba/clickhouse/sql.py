@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Mapping, Optional
 
 
 class SqlQuery(ABC):
@@ -35,6 +35,6 @@ class SqlQuery(ABC):
         return query
 
     @abstractmethod
-    def sql_data(self) -> Dict[str, str]:
+    def sql_data(self) -> Mapping[str, str]:
         """Returns a lust of parsed SQL elements from this query"""
         raise NotImplementedError

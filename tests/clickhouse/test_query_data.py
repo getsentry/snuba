@@ -188,7 +188,7 @@ def test_format_clickhouse_specific_query() -> None:
         "from": "FROM my_table FINAL SAMPLE 0.1",
         "group": "GROUP BY (column1, table1.column2) WITH TOTALS",
         "having": "HAVING eq(column1, 123)",
-        "join": "ARRAY JOIN column1",
+        "array_join": "ARRAY JOIN column1",
         "limit": "LIMIT 100 OFFSET 50",
         "limitby": "LIMIT 10 BY environment",
         "order": "ORDER BY column1 ASC",
