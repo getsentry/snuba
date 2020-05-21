@@ -7,7 +7,6 @@ from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
-from snuba.datasets.plans.split_strategy import QuerySplitStrategy
 from snuba.datasets.schemas.join import (
     JoinClause,
     JoinCondition,
@@ -27,6 +26,7 @@ from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor as LogicalProcessor
 from snuba.query.processors.join_optimizers import SimpleJoinOptimizer
 from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -200,4 +200,7 @@ class Groups(TimeSeriesDataset):
         }
 
     def get_query_processors(self) -> Sequence[LogicalProcessor]:
-        return [TimeSeriesColumnProcessor(self.__time_group_columns)]
+        return [
+            TagsExpanderProcessor(),
+            TimeSeriesColumnProcessor(self.__time_group_columns),
+        ]
