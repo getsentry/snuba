@@ -148,7 +148,7 @@ test_cases = [
     ),
     (
         "Match String Literal",
-        Literal(None, OptionalString("value")),
+        Literal(None, String("value")),
         LiteralExpr("irrelevant", "value"),
         MatchResult(),
     ),
@@ -189,6 +189,50 @@ test_cases = [
                 "p_2": ColumnExpr("another_irrelevant_alias", "c_name2", None),
             }
         ),
+    ),
+    (
+        "matches a function with optional params",
+        FunctionCall(
+            None,
+            None,
+            (
+                Param("p_1", Column(None, Any(str), None)),
+                Param("p_2", Column(None, Any(str), None)),
+            ),
+            with_optionals=True,
+        ),
+        FunctionCallExpr(
+            "irrelevant",
+            "irrelevant",
+            (
+                ColumnExpr(None, "c_name1", None),
+                ColumnExpr("another_irrelevant_alias", "c_name2", None),
+                ColumnExpr("optional_1", "optional_1", None),
+                ColumnExpr("optional_2", "optional_2", None),
+            ),
+        ),
+        MatchResult(
+            {
+                "p_1": ColumnExpr(None, "c_name1", None),
+                "p_2": ColumnExpr("another_irrelevant_alias", "c_name2", None),
+            }
+        ),
+    ),
+    (
+        "dows not match even with optionals",
+        FunctionCall(
+            None,
+            None,
+            (
+                Param("p_1", Column(None, Any(str), None)),
+                Param("p_2", Column(None, Any(str), None)),
+            ),
+            with_optionals=True,
+        ),
+        FunctionCallExpr(
+            "irrelevant", "irrelevant", (ColumnExpr(None, "c_name1", None),),
+        ),
+        None,
     ),
     (
         "nested parameters no match",
