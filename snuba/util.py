@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 from dateutil.parser import parse as dateutil_parse
 from functools import wraps
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import (
     Any,
     Iterator,
@@ -101,8 +102,8 @@ def function_expr(fn: str, args_expr: str = "") -> str:
     elif fn.startswith("error_rate("):
         match = ERROR_RATE_FUNCTION_RE.match(fn)
         if match:
-            return "countIf((transaction_status != {success} AND transaction_status != {unknown})) / count()".format(
-                success=SPAN_STATUS_NAME_TO_CODE["success"],
+            return "countIf((transaction_status != {ok} AND transaction_status != {unknown})) / count()".format(
+                success=SPAN_STATUS_NAME_TO_CODE["ok"],
                 unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
             )
         raise ValueError("Invalid format for error_rate()")

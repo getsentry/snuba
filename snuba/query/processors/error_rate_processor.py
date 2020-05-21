@@ -18,7 +18,7 @@ from snuba.request.request_settings import RequestSettings
 
 class ErrorRateProcessor(QueryProcessor):
     """
-    A percentage of transactions with a bad status. "Bad" status is defined as anything other than success and unknown.
+    A percentage of transactions with a bad status. "Bad" status is defined as anything other than "ok" and "unknown".
     See here (https://github.com/getsentry/relay/blob/master/py/sentry_relay/consts.py) for the full list of errors.
     """
 
@@ -37,7 +37,7 @@ class ErrorRateProcessor(QueryProcessor):
                                     None,
                                     ConditionFunctions.NEQ,
                                     Column(None, "transaction_status", None),
-                                    Literal(None, SPAN_STATUS_NAME_TO_CODE["success"]),
+                                    Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
                                 ),
                                 binary_condition(
                                     None,

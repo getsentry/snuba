@@ -48,6 +48,7 @@ def test_error_rate_format_expressions() -> None:
                     )
                 ),
                 count(),
+                "perf",
             ),
         ],
     )
@@ -62,5 +63,5 @@ def test_error_rate_format_expressions() -> None:
         ClickhouseExpressionFormatter()
     )
     assert ret == (
-        "div(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count())"
+        "(div(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count()) AS perf)"
     )
