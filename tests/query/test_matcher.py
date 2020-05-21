@@ -8,7 +8,7 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.matchers import (
     Any,
     AnyExpression,
-    AnyString,
+    AnyOptionalString,
     Column,
     FunctionCall,
     MatchResult,
@@ -34,16 +34,16 @@ test_cases = [
     ),  # Simple single node column that does not match
     (
         "Matches a None table name",
-        Column(None, None, Param("table_name", AnyString())),
+        Column(None, None, Param("table_name", AnyOptionalString())),
         ColumnExpr(None, "not_a_test_col", None),
         MatchResult({"table_name": None}),
     ),  # Matches a None table name
     (
         "Matches a column with all fields",
         Column(
-            Param("alias", AnyString()),
+            Param("alias", AnyOptionalString()),
             Param("column_name", Any(str)),
-            Param("table_name", AnyString()),
+            Param("table_name", AnyOptionalString()),
         ),
         ColumnExpr("alias", "test_col", "table_name"),
         MatchResult(

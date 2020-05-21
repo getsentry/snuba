@@ -10,8 +10,9 @@ from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 
-ScalarType = Optional[Union[str, int, float, date, datetime]]
-MatchType = Union[Expression, ScalarType]
+ScalarType = Union[str, int, float, date, datetime]
+OptionalScalarType = Optional[ScalarType]
+MatchType = Union[Expression, OptionalScalarType]
 TNode = TypeVar("TNode", bound=MatchType)
 
 
@@ -19,19 +20,33 @@ TNode = TypeVar("TNode", bound=MatchType)
 class MatchResult:
     """
     Contains the parameters found in an expression by a Pattern.
-    Parameters are the equivalent to groups in regular expressions, they
-    are named parts of the expression we are matching that are identified
-    when a valid match is found.
+    Parameters are the equivalent to groups in regular expressions, they are named parts
+    of the expression we are matching that are identified when a valid match is found.
     """
 
     results: Mapping[str, MatchType] = field(default_factory=dict)
 
     def expression(self, name: str) -> Expression:
+        """
+        Return an expression from the results given the name of the parameter it matched.
+        Since we cannot match None expressions (because they do not exist in the AST)
+        this does not need to return Optional.
+        """
         ret = self.results[name]
         assert isinstance(ret, Expression)
         return ret
 
-    def scalar(self, name: str) -> ScalarType:
+    def scalar(self, name: str) -> OptionalScalarType:
+        """
+        Return a scalar from the results given the name of the parameter it matched.
+        Scalars are all individual types in the AST that are not structured expressions.
+        There are several places in the AST where a scalar can be None (like aliases)
+        thus it is possible that the matched node is None, thus we need to be able to
+        return None.
+
+        TODO: Consider adding more utility method to assert and return specific types
+        from the Results if needed.
+        """
         ret = self.results[name]
         assert ret is None or isinstance(ret, (str, int, float, date, datetime))
         return ret
@@ -99,12 +114,12 @@ class AnyExpression(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
-class AnyString(Pattern[Optional[str]]):
+class AnyOptionalString(Pattern[OptionalScalarType]):
     """
     Match any string including the None value
     """
 
-    def match(self, node: Optional[str]) -> Optional[MatchResult]:
+    def match(self, node: OptionalScalarType) -> Optional[MatchResult]:
         return MatchResult() if node is None or isinstance(node, str) else None
 
 
@@ -121,26 +136,26 @@ class Any(Pattern[TNode]):
 
 
 @dataclass(frozen=True)
-class OptionalString(Pattern[Optional[str]]):
+class OptionalString(Pattern[OptionalScalarType]):
     """
     Matches one specific string (or None).
     """
 
     value: Optional[str]
 
-    def match(self, node: Optional[str]) -> Optional[MatchResult]:
+    def match(self, node: OptionalScalarType) -> Optional[MatchResult]:
         return MatchResult() if node == self.value else None
 
 
 @dataclass(frozen=True)
-class String(Pattern[str]):
+class String(Pattern[ScalarType]):
     """
     Matches one specific string.
     """
 
-    value: Optional[str]
+    value: str
 
-    def match(self, node: str) -> Optional[MatchResult]:
+    def match(self, node: ScalarType) -> Optional[MatchResult]:
         return MatchResult() if node == self.value else None
 
 
@@ -170,9 +185,9 @@ class Column(Pattern[Expression]):
     when matching (equivalent to Any, but less verbose).
     """
 
-    alias: Optional[Pattern[Optional[str]]] = None
-    column_name: Optional[Pattern[str]] = None
-    table_name: Optional[Pattern[Optional[str]]] = None
+    alias: Optional[Pattern[OptionalScalarType]] = None
+    column_name: Optional[Pattern[ScalarType]] = None
+    table_name: Optional[Pattern[OptionalScalarType]] = None
 
     def match(self, node: Expression) -> Optional[MatchResult]:
         if not isinstance(node, ColumnExpr):
@@ -199,6 +214,31 @@ class Column(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
+class Literal(Pattern[Expression]):
+    alias: Optional[Pattern[OptionalScalarType]] = None
+    value: Optional[Pattern[ScalarType]] = None
+
+    def match(self, node: Expression) -> Optional[MatchResult]:
+        if not isinstance(node, Literal):
+            return None
+
+        result = MatchResult()
+        if self.alias is not None:
+            partial_result = self.alias.match(node.alias)
+            if not partial_result:
+                return None
+            result = result.merge(partial_result)
+
+        if self.value is not None:
+            partial_result = self.value.match(node.value)
+            if not partial_result:
+                return None
+            result = result.merge(partial_result)
+
+        return result
+
+
+@dataclass(frozen=True)
 class FunctionCall(Pattern[Expression]):
     """
     Matches a Function in the AST expression.
@@ -206,8 +246,8 @@ class FunctionCall(Pattern[Expression]):
     are provided, they have to match, otherwise they are ignored.
     """
 
-    alias: Optional[Pattern[Optional[str]]] = None
-    function_name: Optional[Pattern[str]] = None
+    alias: Optional[Pattern[OptionalScalarType]] = None
+    function_name: Optional[Pattern[ScalarType]] = None
     parameters: Optional[Tuple[Pattern[Expression], ...]] = None
     # Specifies whether we allow optional parameters when matching.
     # if this is False, all patterns of the function to match must match
