@@ -332,11 +332,8 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     )
 
 
-def with_span(op="function", var=None):
+def with_span(op="function"):
     """ Wraps a function call in a Sentry AM span
-
-    If a name is provided to `var` the called function will receive the span
-    object as a kwarg with the provided name.
     """
 
     def decorator(func: Callable):
@@ -347,8 +344,6 @@ def with_span(op="function", var=None):
         def wrapper(*args, **kwargs) -> Any:
             with sentry_sdk.start_span(description=func.__name__, op=op) as span:
                 span.set_data("filename", filename)
-                if var:
-                    kwargs[var] = span
                 return func(*args, **kwargs)
 
         return wrapper
