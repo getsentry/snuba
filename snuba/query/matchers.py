@@ -242,7 +242,7 @@ class Column(Pattern[ColumnExpr]):
 @dataclass(frozen=True)
 class Literal(Pattern[LiteralExpr]):
     alias: Optional[Pattern[Optional[str]]] = None
-    value: Optional[Pattern[Optional[str]]] = None
+    value: Optional[Pattern[OptionalScalarType]] = None
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, LiteralExpr):
