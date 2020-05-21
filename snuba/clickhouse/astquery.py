@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Mapping, Optional, Sequence, Tuple
 
 from snuba import settings
 from snuba.clickhouse.formatter import ClickhouseExpressionFormatter
@@ -44,11 +44,13 @@ class AstSqlQuery(SqlQuery):
         self.__prewhere = query.get_prewhere_ast()
 
         self.__settings = settings
+        self.__sql_data_list: Optional[Sequence[Tuple[str, str]]] = None
         self.__formatted_query: Optional[str] = None
+        self.__sql_data: Optional[Sequence[str, str]] = None
 
-    def _format_query_impl(self) -> str:
-        if self.__formatted_query:
-            return self.__formatted_query
+    def _sql_data_list(self) -> Sequence[Tuple[str, str]]:
+        if self.__sql_data_list:
+            return self.__sql_data_list
 
         parsing_context = ParsingContext()
         formatter = ClickhouseExpressionFormatter(parsing_context)
@@ -118,23 +120,37 @@ class AstSqlQuery(SqlQuery):
         if self.__limit is not None:
             limit_clause = f"LIMIT {self.__limit} OFFSET {self.__offset}"
 
-        self.__formatted_query = " ".join(
-            [
-                c
-                for c in [
-                    select_clause,
-                    from_clause,
-                    array_join_clause,
-                    prewhere_clause,
-                    where_clause,
-                    group_clause,
-                    having_clause,
-                    order_clause,
-                    limitby_clause,
-                    limit_clause,
-                ]
-                if c
+        self.__sql_data_list = [
+            (k, v)
+            for k, v in [
+                ("select", select_clause),
+                ("from", from_clause),
+                ("array_join", array_join_clause),
+                ("prewhere", prewhere_clause),
+                ("where", where_clause),
+                ("group", group_clause),
+                ("having", having_clause),
+                ("order", order_clause),
+                ("limitby", limitby_clause),
+                ("limit", limit_clause),
             ]
-        )
+            if v
+        ]
+
+        return self.__sql_data_list
+
+    def _format_query_impl(self) -> str:
+        if self.__formatted_query:
+            return self.__formatted_query
+
+        self.__formatted_query = " ".join([c for _, c in self._sql_data_list()])
 
         return self.__formatted_query
+
+    def sql_data(self) -> Mapping[str, str]:
+        if self.__sql_data:
+            return self.__sql_data
+
+        self.__sql_data = dict(self._sql_data_list())
+
+        return self.__sql_data
