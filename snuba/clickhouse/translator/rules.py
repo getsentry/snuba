@@ -1,23 +1,76 @@
+from abc import ABC
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
-from snuba.clickhouse.query import Expression as ClickhouseExpression
-from snuba.query.expressions import Expression as SnubaExpression
-from snuba.clickhouse.translator import ClickhouseExpressionTranslator
+from snuba.clickhouse.translator.snuba import SnubaClickhouseTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
 from snuba.query.dsl import array_element
-from snuba.query.expressions import Column
-from snuba.query.expressions import FunctionCall, SubscriptableReference
+from snuba.query.expressions import (
+    Argument,
+    Column,
+    CurriedFunctionCall,
+    FunctionCall,
+    Lambda,
+    Literal,
+    SubscriptableReference,
+)
+
+
+class LiteralMapper(
+    ExpressionMapper[Literal, Literal, SnubaClickhouseTranslator], ABC,
+):
+    pass
+
+
+class ColumnMapper(
+    ExpressionMapper[
+        Column, Union[Column, Literal, FunctionCall], SnubaClickhouseTranslator,
+    ],
+    ABC,
+):
+    pass
+
+
+class FunctionCallMapper(
+    ExpressionMapper[FunctionCall, FunctionCall, SnubaClickhouseTranslator], ABC,
+):
+    pass
+
+
+class CurriedFunctionCallMapper(
+    ExpressionMapper[
+        CurriedFunctionCall, CurriedFunctionCall, SnubaClickhouseTranslator,
+    ],
+    ABC,
+):
+    pass
+
+
+class SubscriptableReferenceMapper(
+    ExpressionMapper[
+        SubscriptableReference,
+        Union[FunctionCall, SubscriptableReference],
+        SnubaClickhouseTranslator,
+    ],
+    ABC,
+):
+    pass
+
+
+class LambdaMapper(
+    ExpressionMapper[Lambda, Lambda, SnubaClickhouseTranslator], ABC,
+):
+    pass
+
+
+class ArgumentMapper(
+    ExpressionMapper[Argument, Argument, SnubaClickhouseTranslator], ABC,
+):
+    pass
 
 
 @dataclass(frozen=True)
-class ColumnMapper(
-    ExpressionMapper[
-        SnubaExpression,
-        ClickhouseExpression,
-        ClickhouseExpressionTranslator[SnubaExpression],
-    ]
-):
+class SimpleColumnMapper(ColumnMapper):
     """
     Maps a column with a name and a table into a column with a different name and table.
 
@@ -30,35 +83,23 @@ class ColumnMapper(
     to_table_name: Optional[str]
 
     def attempt_map(
-        self,
-        expression: SnubaExpression,
-        children_translator: ClickhouseExpressionTranslator[SnubaExpression],
-    ) -> Optional[ClickhouseExpression]:
-        if not isinstance(expression, Column):
-            return None
+        self, expression: Column, children_translator: SnubaClickhouseTranslator,
+    ) -> Optional[Column]:
         if (
             expression.column_name == self.from_col_name
             and expression.table_name == self.from_table_name
         ):
-            return ClickhouseExpression(
-                Column(
-                    alias=expression.alias,
-                    table_name=self.to_table_name,
-                    column_name=self.to_col_name,
-                )
+            return Column(
+                alias=expression.alias,
+                table_name=self.to_table_name,
+                column_name=self.to_col_name,
             )
         else:
             return None
 
 
 @dataclass(frozen=True)
-class TagMapper(
-    ExpressionMapper[
-        SnubaExpression,
-        ClickhouseExpression,
-        ClickhouseExpressionTranslator[SnubaExpression],
-    ]
-):
+class TagMapper(SubscriptableReferenceMapper):
     """
     Basic implementation of a tag mapper that transforms a subscriptable
     into a Clickhouse array access.
@@ -71,30 +112,26 @@ class TagMapper(
 
     def attempt_map(
         self,
-        expression: SnubaExpression,
-        children_translator: ClickhouseExpressionTranslator[SnubaExpression],
-    ) -> Optional[ClickhouseExpression]:
-        if not isinstance(expression, SubscriptableReference):
-            return None
+        expression: SubscriptableReference,
+        children_translator: SnubaClickhouseTranslator,
+    ) -> Optional[FunctionCall]:
         if (
             expression.column.column_name != self.from_column_name
             or expression.column.table_name != self.from_column_table
         ):
             return None
 
-        return ClickhouseExpression(
-            array_element(
-                expression.alias,
-                Column(None, f"{self.to_col_name}.value", self.to_table_name),
-                FunctionCall(
-                    None,
-                    "indexOf",
-                    (
-                        Column(None, f"{self.to_col_name}.key", self.to_table_name,),
-                        children_translator.translate_expression(expression.key),
-                    ),
+        return array_element(
+            expression.alias,
+            Column(None, f"{self.to_col_name}.value", self.to_table_name),
+            FunctionCall(
+                None,
+                "indexOf",
+                (
+                    Column(None, f"{self.to_col_name}.key", self.to_table_name,),
+                    children_translator.translate_expression(expression.key),
                 ),
-            )
+            ),
         )
 
 

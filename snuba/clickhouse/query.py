@@ -10,4 +10,4 @@ Query = NewType("Query", LogicalQuery)
 
 # This defines the type of a Clickhouse query expression. It is used to make
 # the interface of the expression translator more clear.
-Expression = NewType("Expression", SnubaExpression)
+Expression = SnubaExpression
