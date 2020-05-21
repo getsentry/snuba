@@ -13,7 +13,8 @@ from snuba.query.expressions import FunctionCall as FunctionCallExpr
 ScalarType = Union[str, int, float, date, datetime]
 OptionalScalarType = Optional[ScalarType]
 MatchType = Union[Expression, OptionalScalarType]
-TNode = TypeVar("TNode", bound=MatchType)
+TNodeToMatch = TypeVar("TNodeToMatch", bound=MatchType)
+TMatchedNode = TypeVar("TMatchedNode", bound=MatchType)
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,7 @@ class MatchResult:
         return MatchResult(ChainMap(self.results, values.results))
 
 
-class Pattern(ABC, Generic[TNode]):
+class Pattern(ABC, Generic[TNodeToMatch, TMatchedNode]):
     """
     Tries to match a given node (like an AST Expression) with the rules provided
     when instantiating this class. This is meant to work like a regular expression
@@ -72,7 +73,7 @@ class Pattern(ABC, Generic[TNode]):
     """
 
     @abstractmethod
-    def match(self, node: TNode) -> Optional[MatchResult]:
+    def match(self, node: TNodeToMatch) -> Optional[MatchResult]:
         """
         Returns a MatchResult if the node provided matches this pattern
         otherwise it returns None.
@@ -81,7 +82,7 @@ class Pattern(ABC, Generic[TNode]):
 
 
 @dataclass(frozen=True)
-class Param(Pattern[TNode]):
+class Param(Pattern[TNodeToMatch, TMatchedNode]):
     """
     Defines a named parameter in a Pattern. When matching the overall Pattern,
     if the Pattern nested in this object matches, the corresponding input node
@@ -92,9 +93,9 @@ class Param(Pattern[TNode]):
     """
 
     name: str
-    pattern: Pattern[TNode]
+    pattern: Pattern[TNodeToMatch, TMatchedNode]
 
-    def match(self, node: TNode) -> Optional[MatchResult]:
+    def match(self, node: TNodeToMatch) -> Optional[MatchResult]:
         result = self.pattern.match(node)
         if not result:
             return None
@@ -102,7 +103,7 @@ class Param(Pattern[TNode]):
 
 
 @dataclass(frozen=True)
-class AnyExpression(Pattern[Expression]):
+class AnyExpression(Pattern[Expression, Expression]):
     """
     Match any expression of the type provided.
     This allows us to match any Expression since the Any class cannot
@@ -114,7 +115,7 @@ class AnyExpression(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
-class AnyOptionalString(Pattern[OptionalScalarType]):
+class AnyOptionalString(Pattern[OptionalScalarType, Optional[str]]):
     """
     Match any string including the None value
     """
@@ -124,19 +125,19 @@ class AnyOptionalString(Pattern[OptionalScalarType]):
 
 
 @dataclass(frozen=True)
-class Any(Pattern[TNode]):
+class Any(Pattern[TNodeToMatch, TMatchedNode]):
     """
     Match any concrete expression/scalar of the type provided
     """
 
-    type: Type[TNode]
+    type: Type[TNodeToMatch]
 
-    def match(self, node: TNode) -> Optional[MatchResult]:
+    def match(self, node: TNodeToMatch) -> Optional[MatchResult]:
         return MatchResult() if isinstance(node, self.type) else None
 
 
 @dataclass(frozen=True)
-class OptionalString(Pattern[OptionalScalarType]):
+class OptionalString(Pattern[OptionalScalarType, Optional[str]]):
     """
     Matches one specific string (or None).
     """
@@ -148,7 +149,7 @@ class OptionalString(Pattern[OptionalScalarType]):
 
 
 @dataclass(frozen=True)
-class String(Pattern[ScalarType]):
+class String(Pattern[ScalarType, str]):
     """
     Matches one specific string.
     """
@@ -160,15 +161,15 @@ class String(Pattern[ScalarType]):
 
 
 @dataclass(frozen=True)
-class Or(Pattern[TNode]):
+class Or(Pattern[TNodeToMatch, TMatchedNode]):
     """
     Union of multiple patterns. Matches if at least one is a valid match
     and returns the first valid one.
     """
 
-    patterns: Sequence[Pattern[TNode]]
+    patterns: Sequence[Pattern[TNodeToMatch, TMatchedNode]]
 
-    def match(self, node: TNode) -> Optional[MatchResult]:
+    def match(self, node: TNodeToMatch) -> Optional[MatchResult]:
         for p in self.patterns:
             ret = p.match(node)
             if ret:
@@ -177,7 +178,7 @@ class Or(Pattern[TNode]):
 
 
 @dataclass(frozen=True)
-class Column(Pattern[Expression]):
+class Column(Pattern[Expression, Expression]):
     """
     Matches a Column in an AST expression.
     The column is defined by alias, name and table. For each a Pattern can be
@@ -185,9 +186,9 @@ class Column(Pattern[Expression]):
     when matching (equivalent to Any, but less verbose).
     """
 
-    alias: Optional[Pattern[OptionalScalarType]] = None
-    column_name: Optional[Pattern[ScalarType]] = None
-    table_name: Optional[Pattern[OptionalScalarType]] = None
+    alias: Optional[Pattern[OptionalScalarType, Optional[str]]] = None
+    column_name: Optional[Pattern[ScalarType, str]] = None
+    table_name: Optional[Pattern[OptionalScalarType, Optional[str]]] = None
 
     def match(self, node: Expression) -> Optional[MatchResult]:
         if not isinstance(node, ColumnExpr):
@@ -214,9 +215,9 @@ class Column(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
-class Literal(Pattern[Expression]):
-    alias: Optional[Pattern[OptionalScalarType]] = None
-    value: Optional[Pattern[ScalarType]] = None
+class Literal(Pattern[Expression, Expression]):
+    alias: Optional[Pattern[OptionalScalarType, Optional[str]]] = None
+    value: Optional[Pattern[ScalarType, str]] = None
 
     def match(self, node: Expression) -> Optional[MatchResult]:
         if not isinstance(node, Literal):
@@ -239,16 +240,16 @@ class Literal(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
-class FunctionCall(Pattern[Expression]):
+class FunctionCall(Pattern[Expression, Expression]):
     """
     Matches a Function in the AST expression.
     It works like the Column Pattern. if alias, function_name and function_parameters
     are provided, they have to match, otherwise they are ignored.
     """
 
-    alias: Optional[Pattern[OptionalScalarType]] = None
-    function_name: Optional[Pattern[ScalarType]] = None
-    parameters: Optional[Tuple[Pattern[Expression], ...]] = None
+    alias: Optional[Pattern[OptionalScalarType, Optional[str]]] = None
+    function_name: Optional[Pattern[ScalarType, str]] = None
+    parameters: Optional[Tuple[Pattern[Expression, Expression], ...]] = None
     # Specifies whether we allow optional parameters when matching.
     # if this is False, all patterns of the function to match must match
     # one by one. If with_optionals is True, this will allow additional
