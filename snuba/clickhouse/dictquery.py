@@ -1,3 +1,5 @@
+from typing import Mapping
+
 from snuba import settings as snuba_settings
 from snuba import util
 from snuba.clickhouse.query import Query
@@ -112,6 +114,23 @@ class DictSqlQuery(SqlQuery):
         if query.get_limit() is not None:
             limit_clause = "LIMIT {}, {}".format(query.get_offset(), query.get_limit())
 
+        self.__sql_data = {
+            k: v
+            for k, v in [
+                ("select", select_clause),
+                ("from", from_clause),
+                ("join", join_clause),
+                ("prewhere", prewhere_clause),
+                ("where", where_clause),
+                ("group", group_clause),
+                ("having", having_clause),
+                ("order", order_clause),
+                ("limitby", limitby_clause),
+                ("limit", limit_clause),
+            ]
+            if v
+        }
+
         self.__formatted_query = " ".join(
             [
                 c
@@ -133,3 +152,6 @@ class DictSqlQuery(SqlQuery):
 
     def _format_query_impl(self) -> str:
         return self.__formatted_query
+
+    def sql_data(self) -> Mapping[str, str]:
+        return self.__sql_data
