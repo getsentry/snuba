@@ -9,6 +9,7 @@ from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, U
 from snuba.query.expressions import Column as ColumnExpr
 from snuba.query.expressions import Expression
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
+from snuba.query.expressions import Literal as LiteralExpr
 
 ScalarType = Union[str, int, float, date, datetime]
 OptionalScalarType = Optional[ScalarType]
@@ -114,16 +115,6 @@ class AnyExpression(Pattern[Expression]):
 
 
 @dataclass(frozen=True)
-class AnyOptionalString(Pattern[OptionalScalarType]):
-    """
-    Match any string including the None value
-    """
-
-    def match(self, node: OptionalScalarType) -> Optional[MatchResult]:
-        return MatchResult() if node is None or isinstance(node, str) else None
-
-
-@dataclass(frozen=True)
 class Any(Pattern[TNode]):
     """
     Match any concrete expression/scalar of the type provided
@@ -133,6 +124,16 @@ class Any(Pattern[TNode]):
 
     def match(self, node: TNode) -> Optional[MatchResult]:
         return MatchResult() if isinstance(node, self.type) else None
+
+
+@dataclass(frozen=True)
+class AnyOptionalString(Pattern[OptionalScalarType]):
+    """
+    Match any string including the None value
+    """
+
+    def match(self, node: OptionalScalarType) -> Optional[MatchResult]:
+        return MatchResult() if node is None or isinstance(node, str) else None
 
 
 @dataclass(frozen=True)
@@ -216,10 +217,10 @@ class Column(Pattern[Expression]):
 @dataclass(frozen=True)
 class Literal(Pattern[Expression]):
     alias: Optional[Pattern[OptionalScalarType]] = None
-    value: Optional[Pattern[ScalarType]] = None
+    value: Optional[Pattern[OptionalScalarType]] = None
 
     def match(self, node: Expression) -> Optional[MatchResult]:
-        if not isinstance(node, Literal):
+        if not isinstance(node, LiteralExpr):
             return None
 
         result = MatchResult()
