@@ -87,7 +87,7 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-    @with_span(op="db")
+    @with_span(var="span", op="db")
     def execute_robust(self, *args, span: Span = None, **kwargs):
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
