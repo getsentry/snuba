@@ -1,13 +1,15 @@
+from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
+
 from snuba.query.conditions import (
     binary_condition,
     ConditionFunctions,
 )
 from snuba.query.dsl import count, countIf, div
 from snuba.query.expressions import (
+    Column,
     Expression,
     FunctionCall,
     Literal,
-    Column,
 )
 from snuba.query.logical import Query
 from snuba.query.processors import QueryProcessor
@@ -16,10 +18,8 @@ from snuba.request.request_settings import RequestSettings
 
 class ErrorRateProcessor(QueryProcessor):
     """
-    A percentage of transactions with a bad status. "Bad" status is defined as anything other than 0 (success) and 2 (unknown).
+    A percentage of transactions with a bad status. "Bad" status is defined as anything other than success and unknown.
     See here (https://github.com/getsentry/relay/blob/master/py/sentry_relay/consts.py) for the full list of errors.
-
-    divide(countIf(and(notEquals(transaction_status, 0), notEquals(transaction_status, 2))), count())
     """
 
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
@@ -37,18 +37,21 @@ class ErrorRateProcessor(QueryProcessor):
                                     None,
                                     ConditionFunctions.NEQ,
                                     Column(None, "transaction_status", None),
-                                    Literal(None, 0),
+                                    Literal(None, SPAN_STATUS_NAME_TO_CODE["success"]),
                                 ),
                                 binary_condition(
                                     None,
                                     ConditionFunctions.NEQ,
                                     Column(None, "transaction_status", None),
-                                    Literal(None, 2),
+                                    Literal(
+                                        None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
+                                    ),
                                 ),
                             ),
                         )
                     ),
                     count(),
+                    exp.alias,
                 )
 
             return exp

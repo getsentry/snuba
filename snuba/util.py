@@ -101,7 +101,10 @@ def function_expr(fn: str, args_expr: str = "") -> str:
     elif fn.startswith("error_rate("):
         match = ERROR_RATE_FUNCTION_RE.match(fn)
         if match:
-            return "countIf((transaction_status != 0 AND transaction_status != 2)) / count()"
+            return "countIf((transaction_status != {success} AND transaction_status != {unknown})) / count()".format(
+                success=SPAN_STATUS_NAME_TO_CODE["success"],
+                unknown=SPAN_STATUS_NAME_TO_CODE["unknown_error"],
+            )
         raise ValueError("Invalid format for error_rate()")
     # For functions with no args, (or static args) we allow them to already
     # include them as part of the function name, eg, "count()" or "sleep(1)"
