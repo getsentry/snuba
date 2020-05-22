@@ -5,7 +5,7 @@ from snuba.clickhouse.translators.snuba.rulesbased import (
     ColumnMapper,
     SubscriptableReferenceMapper,
 )
-from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
+from snuba.clickhouse.translators.snuba.rulesbased import SnubaClickhouseRulesTranslator
 from snuba.query.dsl import array_element
 from snuba.query.expressions import (
     Column,
@@ -28,7 +28,7 @@ class SimpleColumnMapper(ColumnMapper):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Column, children_translator: SnubaClickhouseTranslator,
+        self, expression: Column, children_translator: SnubaClickhouseRulesTranslator,
     ) -> Optional[Column]:
         if (
             expression.column_name == self.from_col_name
@@ -58,7 +58,7 @@ class TagMapper(SubscriptableReferenceMapper):
     def attempt_map(
         self,
         expression: SubscriptableReference,
-        children_translator: SnubaClickhouseTranslator,
+        children_translator: SnubaClickhouseRulesTranslator,
     ) -> Optional[FunctionCall]:
         if (
             expression.column.column_name != self.from_column_name
