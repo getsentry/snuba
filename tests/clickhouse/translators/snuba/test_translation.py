@@ -1,9 +1,9 @@
 import pytest
 
 from snuba.clickhouse.query import Expression as ClickhouseExpression
-from snuba.clickhouse.translator.rules import SimpleColumnMapper, TagMapper
-from snuba.clickhouse.translator.rulesbased import SnubaClickhouseRulesTranslator
-from snuba.clickhouse.translator.rulesbased import TranslationRules
+from snuba.clickhouse.translators.snuba.rules import SimpleColumnMapper, TagMapper
+from snuba.clickhouse.translators.snuba.rulesbased import SnubaClickhouseRulesTranslator
+from snuba.clickhouse.translators.snuba.rulesbased import TranslationRules
 from snuba.query.expressions import (
     Column,
     CurriedFunctionCall,

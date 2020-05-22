@@ -1,21 +1,13 @@
 from __future__ import annotations
 
+from abc import ABC
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from typing import Optional, Sequence, TypeVar, Union
 
-from snuba.clickhouse.translator.snuba import SnubaClickhouseSafeTranslator
 from snuba.clickhouse.query import Expression
-from snuba.datasets.plans.translator.mapper import apply_mappers
-from snuba.clickhouse.translator.rules import (
-    ColumnMapper,
-    ArgumentMapper,
-    LiteralMapper,
-    FunctionCallMapper,
-    CurriedFunctionCallMapper,
-    SubscriptableReferenceMapper,
-    LambdaMapper,
-)
+from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
+from snuba.datasets.plans.translator.mapper import apply_mappers, ExpressionMapper
 from snuba.query.expressions import (
     Column,
     Argument,
@@ -28,6 +20,49 @@ from snuba.query.expressions import (
 
 TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
+
+
+class SnubaClickhouseRule(
+    ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseTranslator], ABC,
+):
+    pass
+
+
+class LiteralMapper(SnubaClickhouseRule[Literal, Literal], ABC):
+    pass
+
+
+class ColumnMapper(
+    SnubaClickhouseRule[Column, Union[Column, Literal, FunctionCall]], ABC
+):
+    pass
+
+
+class FunctionCallMapper(SnubaClickhouseRule[FunctionCall, FunctionCall], ABC):
+    pass
+
+
+class CurriedFunctionCallMapper(
+    SnubaClickhouseRule[CurriedFunctionCall, CurriedFunctionCall], ABC
+):
+    pass
+
+
+class SubscriptableReferenceMapper(
+    SnubaClickhouseRule[
+        SubscriptableReference, Union[FunctionCall, SubscriptableReference],
+    ],
+    ABC,
+):
+    pass
+
+
+class LambdaMapper(SnubaClickhouseRule[Lambda, Lambda], ABC):
+    pass
+
+
+class ArgumentMapper(SnubaClickhouseRule[Argument, Argument], ABC):
+    pass
 
 
 @dataclass(frozen=True)
@@ -69,7 +104,7 @@ class TranslationRules:
         )
 
 
-class SnubaClickhouseRulesTranslator(SnubaClickhouseSafeTranslator):
+class SnubaClickhouseRulesTranslator(SnubaClickhouseTranslator):
     """
     Translates an expression into an clickhouse query expression.
 
@@ -137,21 +172,21 @@ class SnubaClickhouseRulesTranslator(SnubaClickhouseSafeTranslator):
 
 class DefaultColumnMapper(ColumnMapper):
     def attempt_map(
-        self, expression: Column, children_translator: SnubaClickhouseSafeTranslator,
+        self, expression: Column, children_translator: SnubaClickhouseTranslator,
     ) -> Optional[Column]:
         return deepcopy(expression)
 
 
 class DefaultLiteralMapper(LiteralMapper):
     def attempt_map(
-        self, expression: Literal, children_translator: SnubaClickhouseSafeTranslator,
+        self, expression: Literal, children_translator: SnubaClickhouseTranslator,
     ) -> Optional[Literal]:
         return deepcopy(expression)
 
 
 class DefaultArgumentMapper(ArgumentMapper):
     def attempt_map(
-        self, expression: Argument, children_translator: SnubaClickhouseSafeTranslator,
+        self, expression: Argument, children_translator: SnubaClickhouseTranslator,
     ) -> Optional[Argument]:
         return deepcopy(expression)
 
@@ -160,7 +195,7 @@ class DefaultFunctionMapper(FunctionCallMapper):
     def attempt_map(
         self,
         expression: Union[CurriedFunctionCall, FunctionCall],
-        children_translator: SnubaClickhouseSafeTranslator,
+        children_translator: SnubaClickhouseTranslator,
     ) -> Optional[FunctionCall]:
         if not isinstance(expression, FunctionCall):
             return None
@@ -177,7 +212,7 @@ class DefaultCurriedFunctionMapper(CurriedFunctionCallMapper):
     def attempt_map(
         self,
         expression: CurriedFunctionCall,
-        children_translator: SnubaClickhouseSafeTranslator,
+        children_translator: SnubaClickhouseTranslator,
     ) -> Optional[CurriedFunctionCall]:
         if not isinstance(expression, CurriedFunctionCall):
             return None
@@ -197,7 +232,7 @@ class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
     def attempt_map(
         self,
         expression: SubscriptableReference,
-        children_translator: SnubaClickhouseSafeTranslator,
+        children_translator: SnubaClickhouseTranslator,
     ) -> Optional[SubscriptableReference]:
         column = expression.column.accept(children_translator)
         assert isinstance(column, Column)
@@ -208,7 +243,7 @@ class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
 
 class DefaultLambdaMapper(LambdaMapper):
     def attempt_map(
-        self, expression: Lambda, children_translator: SnubaClickhouseSafeTranslator,
+        self, expression: Lambda, children_translator: SnubaClickhouseTranslator,
     ) -> Optional[Lambda]:
         return replace(
             expression,

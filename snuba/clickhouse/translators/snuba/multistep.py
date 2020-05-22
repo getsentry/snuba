@@ -1,10 +1,7 @@
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
-
 from typing import Sequence
 
 from snuba.query.expressions import Expression as SnubaExpression
+from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.query.expressions import (
     Column,
@@ -18,19 +15,11 @@ from snuba.query.expressions import (
 )
 
 
-class SnubaClickhouseSafeTranslator(
-    ExpressionVisitor[ClickhouseExpression], ABC,
-):
-    @abstractmethod
-    def translate_function_enforce(self, exp: FunctionCall) -> FunctionCall:
-        raise NotImplementedError
-
-
 class MultiStepSnubaClickhouseTranslator(ExpressionVisitor[ClickhouseExpression]):
     def __init__(
         self,
         snuba_steps: Sequence[ExpressionVisitor[SnubaExpression]],
-        snuba_clickhouse_step: ExpressionVisitor[ClickhouseExpression],
+        snuba_clickhouse_step: SnubaClickhouseTranslator,
         clickhouse_steps: Sequence[ExpressionVisitor[ClickhouseExpression]],
     ) -> None:
         self.__snuba_steps = snuba_steps

@@ -1,7 +1,9 @@
 import pytest
 
-from snuba.clickhouse.translator.rulesbased import TranslationRules
-from snuba.clickhouse.translator.rulesbased import SnubaClickhouseRulesTranslator
+from snuba.clickhouse.translators.snuba.rulesbased import (
+    TranslationRules,
+    SnubaClickhouseRulesTranslator,
+)
 from snuba.query.expressions import (
     Argument,
     Column,

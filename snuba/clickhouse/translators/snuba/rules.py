@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.clickhouse.translators.snuba.rulesbased import (
     ColumnMapper,
     SubscriptableReferenceMapper,
 )
+from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.query.dsl import array_element
 from snuba.query.expressions import (
     Column,
