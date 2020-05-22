@@ -4,6 +4,8 @@ from dateutil.parser import parse as dateutil_parse
 from functools import wraps
 from typing import (
     Any,
+    Callable,
+    cast,
     Iterator,
     List,
     Mapping,
@@ -13,7 +15,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    Callable,
 )
 
 import inspect
@@ -332,11 +333,14 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
     )
 
 
-def with_span(op="function"):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def with_span(op: str = "function") -> Callable[[F], F]:
     """ Wraps a function call in a Sentry AM span
     """
 
-    def decorator(func: Callable):
+    def decorator(func: F) -> F:
         frame_info = inspect.stack()[1]
         filename = frame_info.filename
 
@@ -346,6 +350,6 @@ def with_span(op="function"):
                 span.set_data("filename", filename)
                 return func(*args, **kwargs)
 
-        return wrapper
+        return cast(F, wrapper)
 
     return decorator
