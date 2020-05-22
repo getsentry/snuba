@@ -11,7 +11,7 @@ class ExpressionMapper(
     ABC, Generic[TExpIn, TExpOut, TTranslator],
 ):
     """
-    One translation rule used by the a rule based expression translator to translate an
+    One translation rule used by the a mapping expression translator to translate an
     expression.
 
     An ExpressionMapper is supposed to know how to map an expression but it is not
@@ -37,6 +37,12 @@ def apply_mappers(
     mappers: Sequence[ExpressionMapper[TExpIn, TExpOut, TTranslator]],
     children_translator: TTranslator,
 ) -> TExpOut:
+    """
+    Applies several mappers in sequence to an expression and returns the result of the
+    first mapper that matches.
+    If no mapper capable of translating the expression is found, this throws.
+    """
+
     for r in mappers:
         ret = r.attempt_map(expression, children_translator)
         if ret is not None:

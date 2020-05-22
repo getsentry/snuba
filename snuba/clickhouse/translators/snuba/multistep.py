@@ -14,6 +14,19 @@ from snuba.query.expressions import (
 
 
 class MultiStepSnubaClickhouseTranslator(SnubaClickhouseTranslator):
+    """
+    A translator that turns a Snuba expression into a Clickhouse expression in multiple
+    independent step.
+    The pipeline includes:
+    - a sequence of Snuba to Snuba translations.
+    - one snuba to clickhouse translation step.
+    - a sequence of Clickhouse to Clickhouse translations.
+
+    This can be used for multi table storages where a SnubaClickhouseTranslator (configured
+    with translation rules) does the first pass and a second translation step translates
+    the result of the first step into the aggregated table schema.
+    """
+
     def __init__(
         self,
         snuba_steps: Sequence[ExpressionVisitor[SnubaExpression]],

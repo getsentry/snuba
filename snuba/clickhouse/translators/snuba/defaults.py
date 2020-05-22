@@ -42,6 +42,10 @@ class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
         expression: SubscriptableReference,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[SubscriptableReference]:
+        # TODO: remove a default for SubscriptableReference entirely. Since there is not
+        # SubscriptableReference in clickhouse, such columns have to be translated by
+        # a valid rule. They cannot have a default translation that makes a copy.
+        # The assertion will be removed as well.
         column = expression.column.accept(children_translator)
         assert isinstance(column, Column)
         key = expression.key.accept(children_translator)
