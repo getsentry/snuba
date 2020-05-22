@@ -6,7 +6,7 @@ from typing import Optional, Sequence, TypeVar, Union
 
 from snuba.clickhouse.translator.snuba import SnubaClickhouseSafeTranslator
 from snuba.clickhouse.query import Expression
-from snuba.datasets.plans.translator.mapper import ExpressionMapper
+from snuba.datasets.plans.translator.mapper import apply_mappers
 from snuba.clickhouse.translator.rules import (
     ColumnMapper,
     ArgumentMapper,
@@ -109,43 +109,30 @@ class SnubaClickhouseRulesTranslator(SnubaClickhouseSafeTranslator):
         self.__translation_rules = translation_rules.concat(default_rules)
 
     def visitLiteral(self, exp: Literal) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.literals)
+        return apply_mappers(exp, self.__translation_rules.literals, self)
 
     def visitColumn(self, exp: Column) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.columns)
+        return apply_mappers(exp, self.__translation_rules.columns, self)
 
     def visitSubscriptableReference(self, exp: SubscriptableReference) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.subscriptables)
+        return apply_mappers(exp, self.__translation_rules.subscriptables, self)
 
     def visitFunctionCall(self, exp: FunctionCall) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.functions)
+        return apply_mappers(exp, self.__translation_rules.functions, self)
 
     def visitCurriedFunctionCall(self, exp: CurriedFunctionCall) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.curried_functions)
+        return apply_mappers(exp, self.__translation_rules.curried_functions, self)
 
     def visitArgument(self, exp: Argument) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.arguments)
+        return apply_mappers(exp, self.__translation_rules.arguments, self)
 
     def visitLambda(self, exp: Lambda) -> Expression:
-        return self.__map_expression(exp, self.__translation_rules.lambdas)
+        return apply_mappers(exp, self.__translation_rules.lambdas, self)
 
     def translate_function_enforce(self, exp: FunctionCall) -> FunctionCall:
         f = exp.accept(self)
         assert isinstance(f, FunctionCall)
         return f
-
-    def __map_expression(
-        self,
-        exp: TExpIn,
-        rules: Sequence[
-            ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseSafeTranslator]
-        ],
-    ) -> TExpOut:
-        for r in rules:
-            ret = r.attempt_map(exp, self)
-            if ret is not None:
-                return ret
-        raise ValueError(f"Cannot map expression {exp}")
 
 
 class DefaultColumnMapper(ColumnMapper):

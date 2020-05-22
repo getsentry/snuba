@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, Sequence, TypeVar
 
 
 TExpIn = TypeVar("TExpIn")
@@ -31,3 +31,15 @@ class ExpressionMapper(
         Maps an expression if this rule matches such expression. If not, it returns None.
         """
         raise NotImplementedError
+
+
+def apply_mappers(
+    exp: TExpIn,
+    rules: Sequence[ExpressionMapper[TExpIn, TExpOut, TTranslator]],
+    children_translator: TTranslator,
+) -> TExpOut:
+    for r in rules:
+        ret = r.attempt_map(exp, children_translator)
+        if ret is not None:
+            return ret
+    raise ValueError(f"Cannot map expression {exp}")
