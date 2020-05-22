@@ -64,7 +64,7 @@ class TransactionsDataset(TimeSeriesDataset):
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
-                timestamp_column="start_ts",
+                timestamp_column="finish_ts",
             ),
         }
 
