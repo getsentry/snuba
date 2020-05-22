@@ -45,9 +45,7 @@ def test_default_translation(expression: Expression) -> None:
     produces a deep copy of the original expression.
     """
 
-    translated = SnubaClickhouseRulesTranslator(
-        TranslationRules()
-    ).translate_expression(expression)
+    translated = expression.accept(SnubaClickhouseRulesTranslator(TranslationRules()))
 
     assert translated == expression
     for e_translated, e_pre_translation in zip(translated, expression):

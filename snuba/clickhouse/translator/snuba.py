@@ -1,60 +1,72 @@
 from __future__ import annotations
 
-from typing import Union
+from abc import ABC, abstractmethod
 
-from snuba.clickhouse.query import Expression as ClickhouseExpression
-from snuba.datasets.plans.translator.expressions import ExpressionTranslator
-from snuba.query.expressions import Argument, Column, CurriedFunctionCall
+from typing import Sequence
+
 from snuba.query.expressions import Expression as SnubaExpression
+from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.query.expressions import (
-    FunctionCall,
-    Lambda,
+    Column,
     Literal,
+    ExpressionVisitor,
+    FunctionCall,
+    CurriedFunctionCall,
+    Lambda,
+    Argument,
     SubscriptableReference,
 )
 
 
-class SnubaClickhouseTranslator(
-    ExpressionTranslator[SnubaExpression, ClickhouseExpression]
+class SnubaClickhouseSafeTranslator(
+    ExpressionVisitor[ClickhouseExpression], ABC,
 ):
-    def translate_expression(self, expression: SnubaExpression) -> ClickhouseExpression:
-        if isinstance(expression, Column):
-            return self.translate_column(expression)
-        if isinstance(expression, Literal):
-            return self.translate_literal(expression)
-        if isinstance(expression, FunctionCall):
-            return self.translate_function_call(expression)
-        if isinstance(expression, CurriedFunctionCall):
-            return self.translate_curried_function_call(expression)
-        if isinstance(expression, SubscriptableReference):
-            return self.translate_subscriptable_reference(expression)
-        if isinstance(expression, Lambda):
-            return self.translate_lambda(expression)
-        if isinstance(expression, Argument):
-            return self.translate_argument(expression)
-        raise ValueError("Invalid expression to translate f{expression}")
-
-    def translate_column(self, exp: Column) -> Union[Column, Literal, FunctionCall]:
+    @abstractmethod
+    def translate_function_enforce(self, exp: FunctionCall) -> FunctionCall:
         raise NotImplementedError
 
-    def translate_literal(self, exp: Literal) -> Union[Literal]:
-        raise NotImplementedError
 
-    def translate_function_call(self, exp: FunctionCall) -> FunctionCall:
-        raise NotImplementedError
+class MultiStepSnubaClickhouseTranslator(ExpressionVisitor[ClickhouseExpression]):
+    def __init__(
+        self,
+        snuba_steps: Sequence[ExpressionVisitor[SnubaExpression]],
+        snuba_clickhouse_step: ExpressionVisitor[ClickhouseExpression],
+        clickhouse_steps: Sequence[ExpressionVisitor[ClickhouseExpression]],
+    ) -> None:
+        self.__snuba_steps = snuba_steps
+        self.__snuba_clickhouse_step = snuba_clickhouse_step
+        self.__clickhouse_steps = clickhouse_steps
 
-    def translate_curried_function_call(
-        self, exp: CurriedFunctionCall,
-    ) -> CurriedFunctionCall:
-        raise NotImplementedError
+    def visitLiteral(self, exp: Literal) -> ClickhouseExpression:
+        return self.__translate(exp)
 
-    def translate_subscriptable_reference(
+    def visitColumn(self, exp: Column) -> ClickhouseExpression:
+        return self.__translate(exp)
+
+    def visitSubscriptableReference(
         self, exp: SubscriptableReference
-    ) -> Union[FunctionCall, SubscriptableReference]:
-        raise NotImplementedError
+    ) -> ClickhouseExpression:
+        return self.__translate(exp)
 
-    def translate_lambda(self, exp: Lambda) -> Lambda:
-        raise NotImplementedError
+    def visitFunctionCall(self, exp: FunctionCall) -> ClickhouseExpression:
+        return self.__translate(exp)
 
-    def translate_argument(self, exp: Argument) -> Argument:
-        raise NotImplementedError
+    def visitCurriedFunctionCall(
+        self, exp: CurriedFunctionCall
+    ) -> ClickhouseExpression:
+        return self.__translate(exp)
+
+    def visitArgument(self, exp: Argument) -> ClickhouseExpression:
+        return self.__translate(exp)
+
+    def visitLambda(self, exp: Lambda) -> ClickhouseExpression:
+        return self.__translate(exp)
+
+    def __translate(self, expr: SnubaExpression) -> ClickhouseExpression:
+        snuba_expression = expr
+        for step in self.__snuba_steps:
+            snuba_expression = snuba_expression.accept(step)
+        clickhouse_expression = snuba_expression.accept(self.__snuba_clickhouse_step)
+        for step in self.__clickhouse_steps:
+            clickhouse_expression = clickhouse_expression.accept(step)
+        return clickhouse_expression

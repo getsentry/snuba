@@ -153,6 +153,6 @@ def test_translation(
     mappings: TranslationRules, expression: Expression, expected: ClickhouseExpression,
 ) -> None:
     translator = SnubaClickhouseRulesTranslator(mappings)
-    translated = translator.translate_expression(expression)
+    translated = expression.accept(translator)
 
     assert translated == expected

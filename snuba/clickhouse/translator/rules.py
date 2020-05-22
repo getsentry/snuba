@@ -1,8 +1,8 @@
 from abc import ABC
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Optional, Union, TypeVar
 
-from snuba.clickhouse.translator.snuba import SnubaClickhouseTranslator
+from snuba.clickhouse.translator.snuba import SnubaClickhouseSafeTranslator
 from snuba.datasets.plans.translator.mapper import ExpressionMapper
 from snuba.query.dsl import array_element
 from snuba.query.expressions import (
@@ -15,42 +15,43 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 
+TExpIn = TypeVar("TExpIn")
+TExpOut = TypeVar("TExpOut")
+
+
+class SnubaClickhouseRule(
+    ExpressionMapper[TExpIn, TExpOut, SnubaClickhouseSafeTranslator], ABC
+):
+    pass
+
 
 class LiteralMapper(
-    ExpressionMapper[Literal, Literal, SnubaClickhouseTranslator], ABC,
+    SnubaClickhouseRule[Literal, Literal], ABC,
 ):
     pass
 
 
 class ColumnMapper(
-    ExpressionMapper[
-        Column, Union[Column, Literal, FunctionCall], SnubaClickhouseTranslator,
-    ],
-    ABC,
+    SnubaClickhouseRule[Column, Union[Column, Literal, FunctionCall]], ABC,
 ):
     pass
 
 
 class FunctionCallMapper(
-    ExpressionMapper[FunctionCall, FunctionCall, SnubaClickhouseTranslator], ABC,
+    SnubaClickhouseRule[FunctionCall, FunctionCall], ABC,
 ):
     pass
 
 
 class CurriedFunctionCallMapper(
-    ExpressionMapper[
-        CurriedFunctionCall, CurriedFunctionCall, SnubaClickhouseTranslator,
-    ],
-    ABC,
+    SnubaClickhouseRule[CurriedFunctionCall, CurriedFunctionCall], ABC,
 ):
     pass
 
 
 class SubscriptableReferenceMapper(
-    ExpressionMapper[
-        SubscriptableReference,
-        Union[FunctionCall, SubscriptableReference],
-        SnubaClickhouseTranslator,
+    SnubaClickhouseRule[
+        SubscriptableReference, Union[FunctionCall, SubscriptableReference],
     ],
     ABC,
 ):
@@ -58,13 +59,13 @@ class SubscriptableReferenceMapper(
 
 
 class LambdaMapper(
-    ExpressionMapper[Lambda, Lambda, SnubaClickhouseTranslator], ABC,
+    SnubaClickhouseRule[Lambda, Lambda], ABC,
 ):
     pass
 
 
 class ArgumentMapper(
-    ExpressionMapper[Argument, Argument, SnubaClickhouseTranslator], ABC,
+    SnubaClickhouseRule[Argument, Argument], ABC,
 ):
     pass
 
@@ -83,7 +84,7 @@ class SimpleColumnMapper(ColumnMapper):
     to_table_name: Optional[str]
 
     def attempt_map(
-        self, expression: Column, children_translator: SnubaClickhouseTranslator,
+        self, expression: Column, children_translator: SnubaClickhouseSafeTranslator,
     ) -> Optional[Column]:
         if (
             expression.column_name == self.from_col_name
@@ -113,7 +114,7 @@ class TagMapper(SubscriptableReferenceMapper):
     def attempt_map(
         self,
         expression: SubscriptableReference,
-        children_translator: SnubaClickhouseTranslator,
+        children_translator: SnubaClickhouseSafeTranslator,
     ) -> Optional[FunctionCall]:
         if (
             expression.column.column_name != self.from_column_name
@@ -129,7 +130,7 @@ class TagMapper(SubscriptableReferenceMapper):
                 "indexOf",
                 (
                     Column(None, f"{self.to_col_name}.key", self.to_table_name,),
-                    children_translator.translate_expression(expression.key),
+                    expression.key.accept(children_translator),
                 ),
             ),
         )
