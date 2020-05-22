@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
-from snuba.clickhouse.translators.snuba.rulesbased import (
+from snuba.clickhouse.translators.snuba.mapping import (
     ColumnMapper,
     SubscriptableReferenceMapper,
 )

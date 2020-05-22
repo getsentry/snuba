@@ -9,14 +9,14 @@ from snuba.query.expressions import (
     Argument,
     Lambda,
 )
-from snuba.clickhouse.translators.snuba.rulesbased import (
-    TranslationRules,
-    SnubaClickhouseRulesTranslator,
+from snuba.clickhouse.translators.snuba.mapping import (
+    TranslationMappers,
+    SnubaClickhouseMappingTranslator,
 )
 from snuba.clickhouse.translators.snuba.multistep import (
     MultiStepSnubaClickhouseTranslator,
 )
-from snuba.clickhouse.translators.snuba.rules import SimpleColumnMapper
+from snuba.clickhouse.translators.snuba.mappers import SimpleColumnMapper
 
 
 class FakeMultiTableStorageTranslator(ExpressionVisitor[Expression]):
@@ -46,12 +46,12 @@ class FakeMultiTableStorageTranslator(ExpressionVisitor[Expression]):
 
 
 def test_multistep() -> None:
-    snuba_clickhouse_rules = TranslationRules(
+    snuba_clickhouse_rules = TranslationMappers(
         columns=[SimpleColumnMapper("col", None, "col_2", None)]
     )
     translator = MultiStepSnubaClickhouseTranslator(
         snuba_steps=[],
-        snuba_clickhouse_step=SnubaClickhouseRulesTranslator(snuba_clickhouse_rules),
+        snuba_clickhouse_step=SnubaClickhouseMappingTranslator(snuba_clickhouse_rules),
         clickhouse_steps=[FakeMultiTableStorageTranslator()],
     )
     expression = Column("alias", "col", None)

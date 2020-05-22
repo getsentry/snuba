@@ -1,16 +1,14 @@
 from typing import Sequence
 
-from snuba.query.expressions import Expression as SnubaExpression
 from snuba.clickhouse.query import Expression as ClickhouseExpression
 from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
+from snuba.query.expressions import Argument, Column, CurriedFunctionCall
+from snuba.query.expressions import Expression as SnubaExpression
 from snuba.query.expressions import (
-    Column,
-    Literal,
     ExpressionVisitor,
     FunctionCall,
-    CurriedFunctionCall,
     Lambda,
-    Argument,
+    Literal,
     SubscriptableReference,
 )
 

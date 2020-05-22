@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Generic, Optional, Sequence, TypeVar
 
-
 TExpIn = TypeVar("TExpIn")
 TExpOut = TypeVar("TExpOut")
 # The translator to be recursively applied to the children of an expression
@@ -34,12 +33,12 @@ class ExpressionMapper(
 
 
 def apply_mappers(
-    exp: TExpIn,
-    rules: Sequence[ExpressionMapper[TExpIn, TExpOut, TTranslator]],
+    expression: TExpIn,
+    mappers: Sequence[ExpressionMapper[TExpIn, TExpOut, TTranslator]],
     children_translator: TTranslator,
 ) -> TExpOut:
-    for r in rules:
-        ret = r.attempt_map(exp, children_translator)
+    for r in mappers:
+        ret = r.attempt_map(expression, children_translator)
         if ret is not None:
             return ret
-    raise ValueError(f"Cannot map expression {exp}")
+    raise ValueError(f"Cannot map expression {expression}")
