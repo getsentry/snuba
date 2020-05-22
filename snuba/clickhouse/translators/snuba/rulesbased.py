@@ -7,13 +7,12 @@ from typing import Optional, Sequence, TypeVar, Union
 
 from snuba.clickhouse.query import Expression
 
-# from snuba.clickhouse.translators.snuba import SnubaClickhouseRulesTranslator
+from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.datasets.plans.translator.mapper import apply_mappers, ExpressionMapper
 from snuba.query.expressions import (
     Column,
     Argument,
     CurriedFunctionCall,
-    ExpressionVisitor,
     FunctionCall,
     Lambda,
     Literal,
@@ -63,7 +62,7 @@ class TranslationRules:
         )
 
 
-class SnubaClickhouseRulesTranslator(ExpressionVisitor[Expression]):
+class SnubaClickhouseRulesTranslator(SnubaClickhouseTranslator):
     """
     Translates an expression into an clickhouse query expression.
 

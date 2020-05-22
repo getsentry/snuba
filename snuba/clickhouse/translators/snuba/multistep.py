@@ -1,8 +1,8 @@
 from typing import Sequence
 
 from snuba.query.expressions import Expression as SnubaExpression
-from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.clickhouse.query import Expression as ClickhouseExpression
+from snuba.clickhouse.translators.snuba import SnubaClickhouseTranslator
 from snuba.query.expressions import (
     Column,
     Literal,
@@ -15,7 +15,7 @@ from snuba.query.expressions import (
 )
 
 
-class MultiStepSnubaClickhouseTranslator(ExpressionVisitor[ClickhouseExpression]):
+class MultiStepSnubaClickhouseTranslator(SnubaClickhouseTranslator):
     def __init__(
         self,
         snuba_steps: Sequence[ExpressionVisitor[SnubaExpression]],
