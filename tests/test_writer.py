@@ -6,7 +6,6 @@ from tests.base import BaseEventsTest
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.http import HTTPBatchWriter
 from snuba.datasets.factory import enforce_table_writer
-from snuba import settings
 from snuba.writer import WriterTableRow
 
 
@@ -48,8 +47,8 @@ class TestHTTPBatchWriter(BaseEventsTest):
     def test_chunks(self, chunk_size, input, expected_chunks):
         writer = FakeHTTPWriter(
             "mysterious_inexistent_table",
-            settings.CLICKHOUSE_HOST,
-            settings.CLICKHOUSE_HTTP_PORT,
+            "0:0:0:0",
+            9000,
             lambda a: a,
             None,
             chunk_size,
