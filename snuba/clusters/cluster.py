@@ -115,11 +115,12 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     proxy server (e.g. for load balancing).
 
     However there are other operations (like some DDL operations) that must be executed
-    on each individual server node, not just on the distributed table. If we are
-    operating a single node cluster, this is straightforward since there is only one
-    server on which to run our command and no distributed table. If we are operating
-    a multi node cluster we need to know the full set of shards and replicas on which
-    to run our commands. This is provided by the `get_nodes()` method.
+    on each individual server node, as well as each distributed table node if there
+    are multiple. If we are operating a single node cluster, this is straightforward
+    since there is only one server on which to run our command and no distributed table.
+    If we are operating a multi node cluster we need to know the full set of shards
+    and replicas on which to run our commands. This is provided by the `get_local_nodes()`
+    and `get_distributed_nodes()` methods.
     """
 
     def __init__(
@@ -129,8 +130,9 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         http_port: int,
         storage_sets: Set[str],
         single_node: bool,
-        # The cluster name if single_node is set to False
+        # The cluster name and distributed cluster name only apply if single_node is set to False
         cluster_name: Optional[str] = None,
+        distributed_cluster_name: Optional[str] = None,
     ):
         super().__init__(storage_sets)
         if not single_node:
@@ -140,6 +142,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         self.__http_port = http_port
         self.__single_node = single_node
         self.__cluster_name = cluster_name
+        self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
             ClickhouseClientSettings, ClickhousePool
@@ -184,15 +187,22 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name, self.__host, self.__http_port, encoder, options, chunk_size
         )
 
-    def get_nodes(self) -> Sequence[ClickhouseNode]:
+    def get_local_nodes(self) -> Sequence[ClickhouseNode]:
+        return self.__get_cluster_nodes(self.__cluster_name)
+
+    def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
+        return self.__get_cluster_nodes(self.__distributed_cluster_name)
+
+    def __get_cluster_nodes(
+        self, cluster_name: Optional[str]
+    ) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return [ClickhouseNode(self.__host, self.__port)]
         else:
-            # Get the nodes from system.clusters
             return [
                 ClickhouseNode(*host)
                 for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
-                    f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(self.__cluster_name)}"
+                    f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
                 )
             ]
 
@@ -205,6 +215,9 @@ CLUSTERS = [
         storage_sets=cluster["storage_sets"],
         single_node=cluster["single_node"],
         cluster_name=cluster["cluster_name"] if "cluster_name" in cluster else None,
+        distributed_cluster_name=cluster["distributed_cluster_name"]
+        if "distributed_cluster_name" in cluster
+        else None,
     )
     for cluster in settings.CLUSTERS
 ]
