@@ -52,5 +52,3 @@ def test_default_translation(expression: Expression) -> None:
     )
 
     assert translated == expression
-    for e_translated, e_pre_translation in zip(translated, expression):
-        assert e_translated is not e_pre_translation

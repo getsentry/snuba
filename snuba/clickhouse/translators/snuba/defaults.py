@@ -26,14 +26,14 @@ class DefaultLiteralMapper(LiteralMapper):
     def attempt_map(
         self, expression: Literal, children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Literal]:
-        return deepcopy(expression)
+        return expression
 
 
 class DefaultColumnMapper(ColumnMapper):
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Column]:
-        return deepcopy(expression)
+        return expression
 
 
 class DefaultSubscriptableMapper(SubscriptableReferenceMapper):
@@ -91,7 +91,7 @@ class DefaultArgumentMapper(ArgumentMapper):
         expression: Argument,
         children_translator: SnubaClickhouseStrictTranslator,
     ) -> Optional[Argument]:
-        return deepcopy(expression)
+        return expression
 
 
 class DefaultLambdaMapper(LambdaMapper):
