@@ -1,11 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import NamedTuple, Optional, Sequence
+from typing import Mapping, NamedTuple, Optional, Sequence
 
 from snuba.clickhouse.columns import ColumnSet
-from snuba.query.expressions import Column
-
-
-ColumnParts = Sequence[str]
+from snuba.datasets.schemas.join import JoinNode
 
 
 class ResolvedCol(NamedTuple):
@@ -36,11 +33,40 @@ class ColumnResolver(ABC):
     @abstractmethod
     def resolve_column(self, query_column: str) -> Optional[ResolvedCol]:
         """
-        Transforms the column parts found in the query (like ["events", "tags", "value"]) into
-        a valid Column object for the logical AST. If the column cannot be resolved, this
-        returns None.
+        Transforms the column found in the query string into a ResolvedCol if such expression is
+        valid with respect to the logical schema of the dataset.
         """
         raise NotImplementedError
+
+
+def _resolve_column_in_set(
+    table_name: Optional[str],
+    column_set: ColumnSet,
+    virtual_column_names: Sequence[str],
+    column_name: str,
+) -> Optional[ResolvedCol]:
+    """
+    Resolves a column expressed as `<base>.<path>` which is what our schema, the ColumnSet
+    class and Clickhouse itself currently support. The query language is fairly agnostic
+    to this limitation.
+    ColumnSet would not support multi-level nesting (col.nested.more_nested), nor flat column
+    names with `.` inside (my.column.name). So if Clickhouse first and our schema abstraction
+    started supporting more flexible nesting, this implementation would have to be expanded.
+    """
+    flattened_col = column_set.get(column_name)
+    if flattened_col:
+        return ResolvedCol(
+            table_name=table_name,
+            column_name=flattened_col.base_name or flattened_col.name,
+            path=[flattened_col.name] if flattened_col.base_name else [],
+        )
+    elif (
+        any(c for c in column_set.columns if c.name == column_name)
+        or column_name in virtual_column_names
+    ):
+        return ResolvedCol(table_name=table_name, column_name=column_name, path=[])
+    else:
+        return None
 
 
 class SingleTableResolver(ColumnResolver):
@@ -54,12 +80,32 @@ class SingleTableResolver(ColumnResolver):
         self.__virtual_column_names = virtual_column_names
         self.__table_name = table_name
 
-    def resolve_column(self, query_column: str) -> Optional[Column]:
-        schema_column = self.__columns.columns.get(query_column)
-        if schema_column:
-            return ResolvedCol(table_name=self.__table_name,)
+    def resolve_column(self, query_column: str) -> Optional[ResolvedCol]:
+        return _resolve_column_in_set(
+            self.__table_name, self.__columns, self.__virtual_column_names, query_column
+        )
 
-        elif query_column[0] in self.__virtual_column_names:
-            pass
-        else:
+
+class JoinedTablesResolver(ColumnResolver):
+    """
+    Resolves columns in a join query where all columns are supposed to be fully qualified
+    with the table alias prepended.
+    """
+
+    def __init__(
+        self, join_root: JoinNode, virtual_column_names: Mapping[str, Sequence[str]],
+    ) -> None:
+        self.__join_root = join_root
+        self.__virtual_column_names = virtual_column_names
+
+    def resolve_column(self, query_column: str) -> Optional[ResolvedCol]:
+        split_col = query_column.split(".")
+        table = self.__join_root.get_tables().get(split_col[0])
+        if table is None:
             return None
+        return _resolve_column_in_set(
+            split_col[0],
+            table.get_columns(),
+            self.__virtual_column_names.get(split_col[0], []),
+            ".".join(split_col[1:]),
+        )
