@@ -3,7 +3,7 @@ from snuba.clickhouse.sql import SqlQuery
 from snuba.datasets.factory import get_dataset
 from snuba.query.expressions import Column
 from snuba.query.parser import parse_query
-from snuba.reader import Reader, Result
+from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
 from snuba.web import QueryResult
