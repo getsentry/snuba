@@ -76,8 +76,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["event_id"] = str(uuid.UUID(processed["event_id"]))
             processed["trace_id"] = str(uuid.UUID(trace_id))
             processed["span_id"] = int(transaction_ctx["span_id"], 16)
-            processed["transaction_op"] = _unicodify(transaction_ctx.get("op", ""))
-            processed["transaction_name"] = _unicodify(data.get("transaction", "") or "")
+            processed["transaction_op"] = _unicodify(transaction_ctx.get("op") or "")
+            processed["transaction_name"] = _unicodify(data.get("transaction") or "")
             processed["start_ts"], processed["start_ms"] = self.__extract_timestamp(
                 data["start_timestamp"],
             )
@@ -155,8 +155,8 @@ class TransactionsMessageProcessor(MessageProcessor):
             processed["offset"] = metadata.offset
 
         sdk = data.get("sdk", None) or {}
-        processed["sdk_name"] = _unicodify(sdk.get("name", ""))
-        processed["sdk_version"] = _unicodify(sdk.get("version", ""))
+        processed["sdk_name"] = _unicodify(sdk.get("name") or "")
+        processed["sdk_version"] = _unicodify(sdk.get("version") or "")
 
         if processed["sdk_name"] == "":
             metrics.increment("missing_sdk_name")
