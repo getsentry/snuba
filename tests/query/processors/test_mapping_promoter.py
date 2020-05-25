@@ -5,7 +5,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.tags_promoter import (
+from snuba.query.processors.mapping_promoter import (
     MappingColumnPromoter,
     PromotedColumnsSpec,
 )
