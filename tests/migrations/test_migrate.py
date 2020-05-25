@@ -1,43 +1,43 @@
-from tests.base import BaseDatasetTest
+from typing import Iterator
 
-from snuba.clusters.cluster import ClickhouseClientSettings
-from snuba.datasets.factory import DATASET_NAMES, get_dataset
+import pytest
 
 # TODO: Remove this once querylog is in prod and no longer disabled
 from snuba import settings
+from snuba.clusters.cluster import ClickhouseClientSettings
+from snuba.datasets.dataset import Dataset
+from snuba.datasets.factory import DATASET_NAMES
+from tests.base import dataset_manager
+
 
 settings.DISABLED_DATASETS = set()
 
 
-class TestMigrate(BaseDatasetTest):
-    def setup_method(self, test_method):
-        # Create every table
-        for dataset_name in DATASET_NAMES:
-            super().setup_method(test_method, dataset_name)
+def test_runs_all_migrations_without_errors() -> None:
+    from snuba.migrations.migrate import run
 
-    def teardown_method(self, test_method):
-        for dataset_name in DATASET_NAMES:
-            super().teardown_method(test_method)
+    run()
 
-    def test_runs_migrations_without_errors(self):
-        from snuba.migrations.migrate import run
 
-        run()
+@pytest.fixture(params=DATASET_NAMES)
+def dataset(request) -> Iterator[Dataset]:
+    with dataset_manager(request.param) as instance:
+        yield instance
 
-    def test_no_schema_diffs(self):
-        from snuba.migrations.parse_schema import get_local_schema
 
-        for dataset_name in DATASET_NAMES:
-            writable_storage = get_dataset(dataset_name).get_writable_storage()
-            if not writable_storage:
-                continue
+def test_no_schema_diffs(dataset: Dataset) -> None:
+    from snuba.migrations.parse_schema import get_local_schema
 
-            clickhouse = writable_storage.get_cluster().get_connection(
-                ClickhouseClientSettings.MIGRATE
-            )
-            table_writer = writable_storage.get_table_writer()
-            dataset_schema = table_writer.get_schema()
-            local_table_name = dataset_schema.get_local_table_name()
-            local_schema = get_local_schema(clickhouse, local_table_name)
+    writable_storage = dataset.get_writable_storage()
+    if not writable_storage:
+        pytest.skip(f"{dataset!r} has no writable storage")
 
-            assert not dataset_schema.get_column_differences(local_schema)
+    clickhouse = writable_storage.get_cluster().get_connection(
+        ClickhouseClientSettings.MIGRATE
+    )
+    table_writer = writable_storage.get_table_writer()
+    dataset_schema = table_writer.get_schema()
+    local_table_name = dataset_schema.get_local_table_name()
+    local_schema = get_local_schema(clickhouse, local_table_name)
+
+    assert not dataset_schema.get_column_differences(local_schema)
