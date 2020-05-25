@@ -2,6 +2,7 @@ from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 
 from snuba.query.conditions import (
     binary_condition,
+    BooleanFunctions,
     ConditionFunctions,
 )
 from snuba.query.dsl import count, countIf, div
@@ -29,23 +30,21 @@ class ErrorRateProcessor(QueryProcessor):
 
                 return div(
                     countIf(
-                        FunctionCall(
+                        binary_condition(
                             None,
-                            "and",
-                            (
-                                binary_condition(
-                                    None,
-                                    ConditionFunctions.NEQ,
-                                    Column(None, "transaction_status", None),
-                                    Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
-                                ),
-                                binary_condition(
-                                    None,
-                                    ConditionFunctions.NEQ,
-                                    Column(None, "transaction_status", None),
-                                    Literal(
-                                        None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
-                                    ),
+                            BooleanFunctions.AND,
+                            binary_condition(
+                                None,
+                                ConditionFunctions.NEQ,
+                                Column(None, "transaction_status", None),
+                                Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
+                            ),
+                            binary_condition(
+                                None,
+                                ConditionFunctions.NEQ,
+                                Column(None, "transaction_status", None),
+                                Literal(
+                                    None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
                                 ),
                             ),
                         )
