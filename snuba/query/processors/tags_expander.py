@@ -22,6 +22,7 @@ class TagsExpanderProcessor(QueryProcessor):
                 "tags_key",
                 "tags_value",
             ):
+                name_split = exp.column_name.split("_")
                 return FunctionCall(
                     exp.alias or exp.column_name,
                     "arrayJoin",
@@ -29,7 +30,8 @@ class TagsExpanderProcessor(QueryProcessor):
                         replace(
                             exp,
                             alias=None,
-                            column_name=exp.column_name.replace("_", "."),
+                            column_name=name_split[0],
+                            path=(name_split[1],),
                         ),
                     ),
                 )

@@ -3,7 +3,7 @@ import pytest
 from snuba import state
 from snuba.clickhouse.dictquery import DictSqlQuery
 from snuba.datasets.factory import get_dataset
-from snuba.query.parser import parse_query
+from snuba.query.parser import build_query
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -11,12 +11,12 @@ from snuba.request.request_settings import HTTPRequestSettings
 test_data = [
     (
         {
-            "selected_columns": ["c1", "c2", "c3"],
+            "selected_columns": ["platform", "transaction_name", "trace_id"],
             "aggregations": [],
             "groupby": [],
-            "conditions": [["c3", "IN", ["t1", "t2"]]],
+            "conditions": [["trace_id", "IN", ["t1", "t2"]]],
         },
-        "SELECT c1, c2, c3 FROM test_transactions_local WHERE c3 IN ('t1', 't2')",
+        "SELECT platform, transaction_name, trace_id FROM test_transactions_local WHERE trace_id IN ('t1', 't2')",
     ),
     (
         {
@@ -51,13 +51,13 @@ test_data = [
             "aggregations": [],
             "groupby": [],
             "selected_columns": ["tags_key", "tags_value"],
-            "conditions": [["col", "IN", ["t1", "t2"]]],
+            "conditions": [["trace_id", "IN", ["t1", "t2"]]],
         },
         (
             "SELECT (((arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)) AS all_tags))[1] "
             "AS tags_key), ((all_tags)[2] AS tags_value) "
             "FROM test_transactions_local "
-            "WHERE col IN ('t1', 't2')"
+            "WHERE trace_id IN ('t1', 't2')"
         ),
     ),  # tags_key and value in select but no condition on it. No change
     (
@@ -165,7 +165,7 @@ test_data = [
 def test_tags_processor(query_body, expected_query) -> None:
     state.set_config("ast_tag_processor_enabled", 1)
     dataset = get_dataset("transactions")
-    query = parse_query(query_body, dataset)
+    query = build_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
     request = Request("a", query, request_settings, {}, "r")
     for p in dataset.get_query_processors():

@@ -176,7 +176,7 @@ class TagColumnProcessor:
                 isinstance(condition.parameters[0], FunctionCall)
                 and condition.parameters[0].function_name == "arrayJoin"
                 and condition.parameters[0].parameters
-                == (Column(None, None, "tags.key"),)
+                == (Column(None, None, "tags", ("key",)),)
                 and isinstance(condition.parameters[1], Literal)
             ):
                 # Tags are strings, but mypy does not know that
@@ -188,7 +188,7 @@ class TagColumnProcessor:
                 isinstance(condition.parameters[0], FunctionCall)
                 and condition.parameters[0].function_name == "arrayJoin"
                 and condition.parameters[0].parameters
-                == (Column(None, None, "tags.key"),)
+                == (Column(None, None, "tags", ("key",)),)
             ):
                 # The parameters of the inner function `a IN tuple(b,c,d)`
                 assert isinstance(condition.parameters[1], FunctionCall)
@@ -220,7 +220,7 @@ class TagColumnProcessor:
 
         tags_key_found = any(
             f.function_name == "arrayJoin"
-            and f.parameters == (Column(None, None, "tags.key"),)
+            and f.parameters == (Column(None, None, "tags", ("key",)),)
             for expression in select_clause
             for f in expression
             if isinstance(f, FunctionCall)

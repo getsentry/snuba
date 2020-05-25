@@ -3,7 +3,7 @@ import pytest
 from datetime import datetime
 
 from snuba.datasets.factory import get_dataset
-from snuba.query.parser import parse_query
+from snuba.query.parser import build_query
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
 
@@ -11,23 +11,27 @@ test_data = [
     (
         {
             "conditions": [
-                ["d", "=", "1"],
-                ["c", "=", "3"],
+                ["event_id", "=", "1"],
+                ["trace_id", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
-        [["d", "=", "1"], ["c", "=", "3"], ["start_ts", ">", "2019-12-18T06:35:17"]],
+        [
+            ["event_id", "=", "1"],
+            ["trace_id", "=", "3"],
+            ["start_ts", ">", "2019-12-18T06:35:17"],
+        ],
     ),  # No tags
     (
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%"],
         ],
@@ -36,12 +40,12 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["finish_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["finish_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%"],
         ],
@@ -50,13 +54,13 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["start_ts", ">", "2019-01-01T06:35:17"],
             ]
         },
         [
             ["tags[test.tag]", "=", "1"],
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-01-01T06:35:17"],
         ],
     ),  # Query start from before the existence of tagsmap
@@ -64,13 +68,13 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["start_ts", ">", "2019-01-01T06:35:17"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-01-01T06:35:17"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%"],
@@ -80,14 +84,14 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["tags[test2.tag]", "=", "2"],
                 ["tags[test3.tag]", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%|test3.tag=3|%"],
         ],
@@ -97,13 +101,13 @@ test_data = [
             "conditions": [
                 ["tags[test2.tag]", "=", "2"],
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["tags[test3.tag]", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%|test3.tag=3|%"],
         ],
@@ -112,14 +116,14 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "!=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["tags[test2.tag]", "=", "2"],
                 ["tags[test3.tag]", "!=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test2.tag=2|%"],
             ["tags_map", "NOT LIKE", "%|test.tag=1|%"],
@@ -130,13 +134,13 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 [["func", ["tags[test2.tag]"]], "=", "2"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             [["func", ["tags[test2.tag]"]], "=", "2"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%"],
@@ -146,13 +150,13 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 [["ifNull", ["tags[test2.tag]", ""]], "=", "2"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%|test2.tag=2|%"],
         ],
@@ -161,13 +165,13 @@ test_data = [
         {
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["contexts[test.context]", "=", "1"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ]
         },
         [
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["contexts[test.context]", "=", "1"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
             ["tags_map", "LIKE", "%|test.tag=1|%"],
@@ -193,13 +197,13 @@ test_data = [
             "having": [["tags[yet_another_tag]", "=", "1"]],
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ],
         },
         [
             ["tags[test.tag]", "=", "1"],
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
         ],
     ),  # Skip using flattened tags if the query requires tags unpacking anyway
@@ -208,13 +212,13 @@ test_data = [
             "orderby": ["tags[test.tag]"],
             "conditions": [
                 ["tags[test.tag]", "=", "1"],
-                ["c", "=", "3"],
+                ["transaction_name", "=", "3"],
                 ["start_ts", ">", "2019-12-18T06:35:17"],
             ],
         },
         [
             ["tags[test.tag]", "=", "1"],
-            ["c", "=", "3"],
+            ["transaction_name", "=", "3"],
             ["start_ts", ">", "2019-12-18T06:35:17"],
         ],
     ),  # Skip using flattened tags if the query requires tags unpacking anyway
@@ -223,7 +227,7 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
-    query = parse_query(query_body, get_dataset("transactions"))
+    query = build_query(query_body, get_dataset("transactions"))
     request_settings = HTTPRequestSettings()
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",

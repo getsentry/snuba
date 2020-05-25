@@ -36,7 +36,9 @@ class EventsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=columns,
             writable_storage=storage,
-            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
+            column_resolver=SingleTableResolver(
+                columns, ["tags_key", "tags_value", "time", "rtime"]
+            ),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp", "received"),
         )

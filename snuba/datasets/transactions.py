@@ -39,7 +39,9 @@ class TransactionsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
-            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
+            column_resolver=SingleTableResolver(
+                columns, ["tags_key", "tags_value", "time"]
+            ),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("start_ts", "finish_ts"),
         )

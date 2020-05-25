@@ -1,11 +1,10 @@
 import logging
-
 from typing import Any, MutableMapping, Optional
 
 from snuba import state
 from snuba.clickhouse.escaping import NEGATE_RE
 from snuba.datasets.dataset import Dataset
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Column, Expression
 from snuba.query.logical import OrderBy, OrderByDirection, Query
 from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.parser.expressions import parse_aggregation, parse_expression
@@ -14,14 +13,16 @@ from snuba.util import is_function, to_list, tuplify
 logger = logging.getLogger(__name__)
 
 
-def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def build_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     """
-    Parses the query body generating the AST. This only takes into
-    account the initial query body. Extensions are parsed by extension
-    processors and are supposed to update the AST.
+    Parses the query body generating the AST and resolves the columns.
+    This only takes into account the initial query body.
+    Extensions are parsed by extension processors and are supposed to update the AST.
     """
     try:
-        return _parse_query_impl(body, dataset)
+        query = parse_query(body, dataset)
+        resolve_columns(query, dataset)
+        return query
     except Exception as e:
         # During the development there is no need to fail Snuba queries if the parser
         # has an issue, anyway the production query is ran based on the old query
@@ -36,7 +37,26 @@ def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
             return Query(body, None)
 
 
-def _parse_query_impl(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
+def resolve_columns(query: Query, dataset: Dataset) -> None:
+    def resolve_col(expr: Expression) -> Expression:
+        if not isinstance(expr, Column):
+            return expr
+
+        resolved_col = dataset.get_column_resolver().resolve_column(expr.column_name)
+        assert (
+            resolved_col is not None
+        ), f"Invalid column expression {expr.column_name} for dataset {type(dataset).__name__}."
+        return Column(
+            expr.alias,
+            resolved_col.table_name,
+            resolved_col.column_name,
+            tuple(resolved_col.path),
+        )
+
+    query.transform_expressions(resolve_col)
+
+
+def parse_query(body: MutableMapping[str, Any], dataset: Dataset) -> Query:
     aggregate_exprs = []
     for aggregation in body.get("aggregations", []):
         assert isinstance(aggregation, (list, tuple))

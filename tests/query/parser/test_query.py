@@ -13,43 +13,43 @@ from snuba.query.expressions import (
     SubscriptableReference,
 )
 from snuba.query.logical import OrderBy, OrderByDirection, Query
-from snuba.query.parser import parse_query
+from snuba.query.parser import build_query
 
 
 test_cases = [
     (
         {
-            "selected_columns": ["column1"],
-            "groupby": ["column2", "column3"],
-            "aggregations": [["test_func", "column4", "test_func_alias"]],
+            "selected_columns": ["event_id"],
+            "groupby": ["group_id", "message"],
+            "aggregations": [["test_func", "level", "test_func_alias"]],
         },
         Query(
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column2"),
-                Column(None, None, "column3"),
+                Column(None, None, "group_id"),
+                Column(None, None, "message"),
                 FunctionCall(
-                    "test_func_alias", "test_func", (Column(None, None, "column4"),)
+                    "test_func_alias", "test_func", (Column(None, None, "level"),)
                 ),
-                Column(None, None, "column1"),
+                Column(None, None, "event_id"),
             ],
-            groupby=[Column(None, None, "column2"), Column(None, None, "column3")],
+            groupby=[Column(None, None, "group_id"), Column(None, None, "message")],
         ),
     ),  # Basic SELECT composed through the selectedcols and aggregations
     (
         {
             "selected_columns": [
-                ["f1", ["column1", "column2"], "f1_alias"],
+                ["f1", ["level", "group_id"], "f1_alias"],
                 ["f2", [], "f2_alias"],
             ],
             "aggregations": [
                 ["count", "platform", "platforms"],
                 ["uniq", "platform", "uniq_platforms"],
-                ["testF", ["platform", "field2"], "top_platforms"],
+                ["testF", ["platform", "message"], "top_platforms"],
             ],
             "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
-            "having": [["times_seen", ">", 1]],
+            "having": [["timestamp", ">", 1]],
             "groupby": [["format_eventid", ["event_id"]]],
         },
         Query(
@@ -64,12 +64,12 @@ test_cases = [
                 FunctionCall(
                     "top_platforms",
                     "testF",
-                    (Column(None, None, "platform"), Column(None, None, "field2")),
+                    (Column(None, None, "platform"), Column(None, None, "message")),
                 ),
                 FunctionCall(
                     "f1_alias",
                     "f1",
-                    (Column(None, None, "column1"), Column(None, None, "column2")),
+                    (Column(None, None, "level"), Column(None, None, "group_id")),
                 ),
                 FunctionCall("f2_alias", "f2", ()),
             ],
@@ -86,7 +86,7 @@ test_cases = [
                 ),
             ),
             having=binary_condition(
-                None, "greater", Column(None, None, "times_seen"), Literal(None, 1)
+                None, "greater", Column(None, None, "timestamp"), Literal(None, 1)
             ),
             groupby=[
                 FunctionCall(None, "format_eventid", (Column(None, None, "event_id"),))
@@ -95,44 +95,44 @@ test_cases = [
     ),  # Format a query with functions in all fields
     (
         {
-            "selected_columns": ["column1", "column2"],
-            "orderby": ["column1", "-column2", ["-func", ["column3"]]],
+            "selected_columns": ["event_id", "time"],
+            "orderby": ["event_id", "-time", ["-func", ["level"]]],
         },
         Query(
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, None, "column1"),
-                Column(None, None, "column2"),
+                Column(None, None, "event_id"),
+                Column(None, None, "time"),
             ],
             condition=None,
             groupby=None,
             having=None,
             order_by=[
-                OrderBy(OrderByDirection.ASC, Column(None, None, "column1")),
-                OrderBy(OrderByDirection.DESC, Column(None, None, "column2")),
+                OrderBy(OrderByDirection.ASC, Column(None, None, "event_id")),
+                OrderBy(OrderByDirection.DESC, Column(None, None, "time")),
                 OrderBy(
                     OrderByDirection.DESC,
-                    FunctionCall(None, "func", (Column(None, None, "column3"),)),
+                    FunctionCall(None, "func", (Column(None, None, "level"),)),
                 ),
             ],
         ),
     ),  # Order by with functions
     (
-        {"selected_columns": [], "groupby": "column1", "orderby": "-column1"},
+        {"selected_columns": [], "groupby": "timestamp", "orderby": "-timestamp"},
         Query(
             {},
             TableSource("events", ColumnSet([])),
-            selected_columns=[Column(None, None, "column1")],
+            selected_columns=[Column(None, None, "timestamp")],
             condition=None,
-            groupby=[Column(None, None, "column1")],
+            groupby=[Column(None, None, "timestamp")],
             having=None,
-            order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "column1"))],
+            order_by=[OrderBy(OrderByDirection.DESC, Column(None, None, "timestamp"))],
         ),
     ),  # Order and group by provided as string
     (
         {
-            "selected_columns": ["column1", "tags[test]"],
+            "selected_columns": ["event_id", "tags[test]"],
             "groupby": [["f", ["tags[test2]"]]],
         },
         Query(
@@ -150,7 +150,7 @@ test_cases = [
                         ),
                     ),
                 ),
-                Column(None, None, "column1"),
+                Column(None, None, "event_id"),
                 SubscriptableReference(
                     "tags[test]", Column(None, None, "tags"), Literal(None, "test")
                 ),
@@ -178,7 +178,7 @@ def test_format_expressions(
     query_body: MutableMapping[str, Any], expected_query: Query
 ) -> None:
     events = get_dataset("events")
-    query = parse_query(query_body, events)
+    query = build_query(query_body, events)
 
     # We cannot just run == on the query objects. The content of the two
     # objects is different, being one the AST and the ont the AST + raw body

@@ -7,7 +7,7 @@ from typing import Any, Mapping, Type
 
 from snuba.datasets.dataset import Dataset
 from snuba.query.extensions import QueryExtension
-from snuba.query.parser import parse_query
+from snuba.query.parser import build_query
 from snuba.query.schema import GENERIC_QUERY_SCHEMA
 from snuba.request import Request
 from snuba.request.request_settings import (
@@ -103,7 +103,7 @@ class RequestSchema:
                 if key in value
             }
 
-        query = parse_query(query_body, dataset)
+        query = build_query(query_body, dataset)
         request_id = uuid.uuid4().hex
         return Request(request_id, query, self.__setting_class(**settings), extensions, referrer)
 

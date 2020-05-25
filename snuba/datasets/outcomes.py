@@ -39,7 +39,7 @@ class OutcomesDataset(TimeSeriesDataset):
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
-            column_resolver=SingleTableResolver(read_schema.get_columns()),
+            column_resolver=SingleTableResolver(read_schema.get_columns(), ["time"]),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp",),
         )
