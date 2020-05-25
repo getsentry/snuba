@@ -13,6 +13,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
     (
+        "not promoted",
         ClickhouseQuery(
             LogicalQuery(
                 {},
@@ -55,6 +56,7 @@ test_cases = [
         ),
     ),
     (
+        "replaced with promoted col",
         ClickhouseQuery(
             LogicalQuery(
                 {},
@@ -95,9 +97,9 @@ test_cases = [
 ]
 
 
-@pytest.mark.parametrize("query, expected_query", test_cases)
+@pytest.mark.parametrize("name, query, expected_query", test_cases)
 def test_format_expressions(
-    query: ClickhouseQuery, expected_query: ClickhouseQuery
+    name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
     columns = ColumnSet(
         [
