@@ -1,8 +1,8 @@
 from typing import Sequence
 
 from snuba.datasets.dataset import Dataset
-from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.query.processors import QueryProcessor

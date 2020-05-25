@@ -19,7 +19,7 @@ class ColumnResolver(ABC):
     This assumes the parser does not have enough information from the query language alone to
     decompose a column expression found in a query into entity (table), base column name and
     path for nested columns. Should we change the query language in such a way that a reference
-    to a column had non ambiguous information about entity name and nested columns this will
+    to a column had non ambiguous information about entity name and nested columns this would
     become a simple validator.
 
     TODO: Revisit this interface when we introduce entities. We may have to increase its
@@ -39,7 +39,7 @@ class ColumnResolver(ABC):
         valid with respect to the logical schema of the dataset. If not it returns None.
 
         This does not return a Column object to avoid having to deal with the alias, that this
-        class should not have the right of changing.
+        class should not have the right to know or change.
         """
         raise NotImplementedError
 

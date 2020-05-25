@@ -3,8 +3,8 @@ from typing import Any, Mapping, Optional, Sequence, Tuple
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
-from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.datasets.schemas.resolver import ColumnResolver
+from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
