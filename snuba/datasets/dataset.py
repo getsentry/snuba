@@ -175,12 +175,12 @@ class TimeSeriesDataset(Dataset):
         )
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.
-        # The bucketed time column names cannot be overlapping with existing
-        # schema columns
+        # The bucketed time column names must reference columns defined in the logical
+        # schema
         for bucketed_column in time_group_columns.keys():
             assert (
-                bucketed_column not in abstract_column_set
-            ), f"Bucketed column {bucketed_column} is already defined in the schema"
+                bucketed_column in abstract_column_set
+            ), f"Bucketed column {bucketed_column} is not defined in the schema"
         self.__time_group_columns = time_group_columns
         self.__time_parse_columns = time_parse_columns
 

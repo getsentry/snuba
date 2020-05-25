@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.resolver import SingleTableResolver
@@ -24,6 +25,9 @@ class SessionsDataset(TimeSeriesDataset):
         read_schema = materialized_storage.get_schemas().get_read_schema()
 
         self.__time_group_columns = {"bucketed_started": "started"}
+        columns = read_schema.get_columns() + ColumnSet(
+            [("bucketed_started", DateTime())]
+        )
         super().__init__(
             storages=[writable_storage, materialized_storage],
             # TODO: Once we are ready to expose the raw data model and select whether to use
@@ -32,11 +36,9 @@ class SessionsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(
                 storage=materialized_storage,
             ),
-            abstract_column_set=read_schema.get_columns(),
+            abstract_column_set=columns,
             writable_storage=writable_storage,
-            column_resolver=SingleTableResolver(
-                read_schema.get_columns(), ["bucketed_started"]
-            ),
+            column_resolver=SingleTableResolver(columns),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("started", "received"),
         )

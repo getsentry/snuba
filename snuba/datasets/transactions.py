@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
+from snuba.clickhouse.columns import Array, ColumnSet, DateTime, String
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.schemas.resolver import SingleTableResolver
@@ -24,7 +25,7 @@ class TransactionsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         storage = get_writable_storage(StorageKey.TRANSACTIONS)
         schema = storage.get_table_writer().get_schema()
-        columns = schema.get_columns()
+        columns = schema.get_columns() + ColumnSet([("time", DateTime())])
 
         self.__tags_processor = TagColumnProcessor(
             columns=columns,
@@ -37,11 +38,9 @@ class TransactionsDataset(TimeSeriesDataset):
         super().__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
-            abstract_column_set=schema.get_columns(),
+            abstract_column_set=columns,
             writable_storage=storage,
-            column_resolver=SingleTableResolver(
-                columns, ["tags_key", "tags_value", "time"]
-            ),
+            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("start_ts", "finish_ts"),
         )

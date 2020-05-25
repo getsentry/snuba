@@ -14,17 +14,19 @@ class ResolvedCol(NamedTuple):
 class ColumnResolver(ABC):
     """
     A ColumnResolver is a component that knows the logical schema of a data set and is capable
-    of resolving entities and nested column from the representation that we receive in the query.
+    of resolving tables and nested columns from the representation we receive in the query.
 
     This assumes the parser does not have enough information from the query language alone to
     decompose a column expression found in a query into entity (table), base column name and
-    path for nested columns.
+    path for nested columns. Should we change the query language in such a way that a reference
+    to a column had non ambiguous information about entity name and nested columns this will
+    become a simple validator.
 
     TODO: Revisit this interface when we introduce entities. We may have to increase its
     responsibilities depending on how we decide to infer, given a column, which entity defines it.
     If we require the query to fully qualify all columns (errors.message for example), this can
     stay as it is. If instead we will infer the requested entity from the context of the query
-    like we do today, this will need to know a lot more about the query, be coupled to that
+    like we do today this will need to know a lot more about the query, be coupled to that
     structure and being potentially able to make wider changes to the query itself.
     Moving such responsibility here would be easy enough that we can keep this simpler till
     entities are introduced.
@@ -33,8 +35,11 @@ class ColumnResolver(ABC):
     @abstractmethod
     def resolve_column(self, query_column: str) -> Optional[ResolvedCol]:
         """
-        Transforms the column found in the query string into a ResolvedCol if such expression is
-        valid with respect to the logical schema of the dataset.
+        Transforms the column string found in the query into a ResolvedCol if such expression is
+        valid with respect to the logical schema of the dataset. If not it returns None.
+
+        This does not return a Column object to avoid having to deal with the alias, that this
+        class should not have the right of changing.
         """
         raise NotImplementedError
 
@@ -57,10 +62,15 @@ def _resolve_column_in_set(
     if flattened_col:
         return ResolvedCol(
             table_name=table_name,
+            # FlattenedColumn.name is the name of the column for non nested columns while
+            # it is the first and only level of nesting if the column is nested.
             column_name=flattened_col.base_name or flattened_col.name,
             path=[flattened_col.name] if flattened_col.base_name else [],
         )
     elif (
+        # This `any` call is to identify nested column referenced with the base name without
+        # a path (like `tags`). That is not present at all as a flattened column in
+        # the ColumnSet object.
         any(c for c in column_set.columns if c.name == column_name)
         or column_name in virtual_column_names
     ):
@@ -77,6 +87,11 @@ class SingleTableResolver(ColumnResolver):
         table_name: Optional[str] = None,
     ) -> None:
         self.__columns = columns
+        # virtual_column_names includes those columns we accept in a query for a dataset that
+        # are not part of the schema officially. Examples tags_key and tags_value and that's
+        # it.
+        # TODO: Consider moving the resolution of tags_key/tags_value to arrayJoin before
+        # column resolution.
         self.__virtual_column_names = virtual_column_names or []
         self.__table_name = table_name
 

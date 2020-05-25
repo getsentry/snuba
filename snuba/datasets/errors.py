@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import FrozenSet, Mapping, Sequence
 
+from snuba.clickhouse.columns import ColumnSet, DateTime
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.errors_replacer import ReplacerState
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -30,7 +31,9 @@ class ErrorsDataset(TimeSeriesDataset):
     def __init__(self) -> None:
         storage = get_writable_storage(StorageKey.ERRORS)
         schema = storage.get_table_writer().get_schema()
-        columns = schema.get_columns()
+        columns = schema.get_columns() + ColumnSet(
+            [("time", DateTime()), ("rtime", DateTime())]
+        )
 
         self.__time_group_columns = {"time": "timestamp", "rtime": "received"}
         super().__init__(
@@ -38,9 +41,7 @@ class ErrorsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=columns,
             writable_storage=storage,
-            column_resolver=SingleTableResolver(
-                columns, ["tags_key", "tags_value", "time", "rtime"]
-            ),
+            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp", "received"),
         )
