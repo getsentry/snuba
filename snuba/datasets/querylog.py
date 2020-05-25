@@ -2,6 +2,7 @@ from typing import Mapping
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.query.extensions import QueryExtension
@@ -18,6 +19,7 @@ class QuerylogDataset(Dataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=columns,
             writable_storage=storage,
+            column_resolver=SingleTableResolver(columns),
         )
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:

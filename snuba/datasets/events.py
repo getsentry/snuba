@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.events import get_column_tag_map, get_promoted_columns
 from snuba.datasets.storages.factory import get_writable_storage
@@ -35,6 +36,7 @@ class EventsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=columns,
             writable_storage=storage,
+            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("timestamp", "received"),
         )

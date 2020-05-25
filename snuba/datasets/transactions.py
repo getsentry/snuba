@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_writable_storage
 from snuba.datasets.tags_column_processor import TagColumnProcessor
@@ -38,6 +39,7 @@ class TransactionsDataset(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
+            column_resolver=SingleTableResolver(columns, ["tags_key", "tags_value"]),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("start_ts", "finish_ts"),
         )

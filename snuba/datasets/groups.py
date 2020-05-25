@@ -4,6 +4,7 @@ from typing import Mapping, Optional, Sequence
 from snuba.clickhouse.processors import QueryProcessor as ClickhouseProcessor
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset import TimeSeriesDataset
+from snuba.datasets.schemas.resolver import JoinedTablesResolver
 from snuba.datasets.dataset_schemas import StorageSchemas
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -138,6 +139,9 @@ class Groups(TimeSeriesDataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=None,
+            column_resolver=JoinedTablesResolver(
+                join_structure, {self.EVENTS_ALIAS: ["tags_key", "tags_value"],}
+            ),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=[
                 "events.timestamp",

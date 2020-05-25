@@ -2,6 +2,7 @@ from typing import Sequence
 
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
 from snuba.query.processors import QueryProcessor
@@ -23,6 +24,7 @@ class GroupedMessageDataset(Dataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
+            column_resolver=SingleTableResolver(schema.get_columns()),
         )
 
     def get_prewhere_keys(self) -> Sequence[str]:

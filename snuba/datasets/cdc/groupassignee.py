@@ -1,6 +1,7 @@
 from typing import Sequence
 
 from snuba.datasets.dataset import Dataset
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_cdc_storage
@@ -26,6 +27,7 @@ class GroupAssigneeDataset(Dataset):
             query_plan_builder=SingleStorageQueryPlanBuilder(storage=storage),
             abstract_column_set=schema.get_columns(),
             writable_storage=storage,
+            column_resolver=SingleTableResolver(schema.get_columns()),
         )
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:

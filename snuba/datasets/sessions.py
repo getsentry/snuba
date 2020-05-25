@@ -3,6 +3,7 @@ from typing import Mapping, Sequence
 
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage, get_writable_storage
 from snuba.query.extensions import QueryExtension
@@ -33,6 +34,7 @@ class SessionsDataset(TimeSeriesDataset):
             ),
             abstract_column_set=read_schema.get_columns(),
             writable_storage=writable_storage,
+            column_resolver=SingleTableResolver(read_schema.get_columns()),
             time_group_columns=self.__time_group_columns,
             time_parse_columns=("started", "received"),
         )

@@ -4,6 +4,7 @@ from typing import Mapping, Sequence
 
 from snuba import environment
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -12,11 +13,11 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
 )
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.factory import get_dataset
 from snuba.datasets.plans.single_storage import SelectedStorageQueryPlanBuilder
+from snuba.datasets.schemas.resolver import SingleTableResolver
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.datasets.storages import StorageKey
 from snuba.datasets.storages.factory import get_storage
@@ -248,6 +249,10 @@ class DiscoverDataset(TimeSeriesDataset):
         events_storage = get_storage(StorageKey.EVENTS)
         transactions_storage = get_storage(StorageKey.TRANSACTIONS)
 
+        abstract_column_set = (
+            self.__common_columns + self.__events_columns + self.__transactions_columns
+        )
+
         super().__init__(
             storages=[events_storage, transactions_storage],
             query_plan_builder=SelectedStorageQueryPlanBuilder(
@@ -258,12 +263,13 @@ class DiscoverDataset(TimeSeriesDataset):
                     abstract_transactions_columns=self.__transactions_columns,
                 ),
             ),
-            abstract_column_set=(
-                self.__common_columns
-                + self.__events_columns
-                + self.__transactions_columns
-            ),
+            abstract_column_set=abstract_column_set,
             writable_storage=None,
+            # In terms of logical schema this is still a single table until we introduce
+            # entities.
+            column_resolver=SingleTableResolver(
+                abstract_column_set, ["tags_key", "tags_value"]
+            ),
             time_group_columns={},
             time_parse_columns=["timestamp"],
         )

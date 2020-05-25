@@ -4,6 +4,7 @@ from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
 from snuba.datasets.plans.query_plan import ClickhouseQueryPlanBuilder
 from snuba.datasets.storage import Storage, WritableStorage, WritableTableStorage
+from snuba.datasets.schemas.resolver import ColumnResolver
 from snuba.query.extensions import QueryExtension
 from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
@@ -52,11 +53,13 @@ class Dataset(object):
         query_plan_builder: ClickhouseQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
+        column_resolver: ColumnResolver,
     ) -> None:
         self.__storages = storages
         self.__query_plan_builder = query_plan_builder
         self.__abstract_column_set = abstract_column_set
         self.__writable_storage = writable_storage
+        self.__column_resolver = column_resolver
 
     def get_extensions(self) -> Mapping[str, QueryExtension]:
         """
@@ -87,6 +90,23 @@ class Dataset(object):
         """
         # TODO: Make this available to the dataset query processors.
         return self.__abstract_column_set
+
+    def get_column_resolver(self) -> ColumnResolver:
+        """
+        Returns the component that resolves the columns referenced in the query as strings in
+        columns present in the logical schema defined by get_abstract_columnset, thus identifying
+        the table and the structure of the columns.
+
+        The resolver is provided by the dataset and not by the Schema or by the ColumnSet because
+        they are still shared abstractions we use for both the logical schema and the physical schema
+        (which should change). A ColumnResolver is a concept related to the logical schema only,
+        so a storage schema should not provide it.
+
+        TODO: Entities are likely to change the structure of the logical schema, which is just
+        a ColumnSet now. Then we should be able to have only one implementation of ColumnResolver
+        that is built out of the logical schema.
+        """
+        return self.__column_resolver
 
     def get_query_plan_builder(self) -> ClickhouseQueryPlanBuilder:
         """
@@ -142,6 +162,7 @@ class TimeSeriesDataset(Dataset):
         query_plan_builder: ClickhouseQueryPlanBuilder,
         abstract_column_set: ColumnSet,
         writable_storage: Optional[WritableStorage],
+        column_resolver: ColumnResolver,
         time_group_columns: Mapping[str, str],
         time_parse_columns: Sequence[str],
     ) -> None:
@@ -150,6 +171,7 @@ class TimeSeriesDataset(Dataset):
             query_plan_builder=query_plan_builder,
             abstract_column_set=abstract_column_set,
             writable_storage=writable_storage,
+            column_resolver=column_resolver,
         )
         # Convenience columns that evaluate to a bucketed time. The bucketing
         # depends on the granularity parameter.

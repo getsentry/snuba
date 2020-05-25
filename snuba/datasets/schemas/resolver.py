@@ -73,11 +73,11 @@ class SingleTableResolver(ColumnResolver):
     def __init__(
         self,
         columns: ColumnSet,
-        virtual_column_names: Sequence[str],
+        virtual_column_names: Optional[Sequence[str]] = None,
         table_name: Optional[str] = None,
     ) -> None:
         self.__columns = columns
-        self.__virtual_column_names = virtual_column_names
+        self.__virtual_column_names = virtual_column_names or []
         self.__table_name = table_name
 
     def resolve_column(self, query_column: str) -> Optional[ResolvedCol]:
