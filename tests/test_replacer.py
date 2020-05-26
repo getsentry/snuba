@@ -28,10 +28,9 @@ class TestReplacer(BaseEventsTest):
         self.app = application.test_client()
         self.app.post = partial(self.app.post, headers={"referer": "test"})
         storage = get_storage(StorageKey.EVENTS)
-        clickhouse = storage.get_cluster().get_clickhouse_rw()
 
         self.replacer = replacer.ReplacerWorker(
-            clickhouse, storage, DummyMetricsBackend(strict=True)
+            storage, DummyMetricsBackend(strict=True)
         )
 
         self.project_id = 1

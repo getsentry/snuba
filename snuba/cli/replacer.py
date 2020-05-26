@@ -77,7 +77,6 @@ def replacer(
     log_level: Optional[str] = None,
 ) -> None:
 
-    from snuba.clickhouse.native import ClickhousePool
     from snuba.replacer import ReplacerWorker
     from snuba.utils.codecs import PassthroughCodec
     from snuba.utils.streams.batching import BatchingConsumer
@@ -105,24 +104,6 @@ def replacer(
 
     metrics = MetricsWrapper(environment.metrics, "replacer", tags=metrics_tags,)
 
-    client_settings = {
-        # Replacing existing rows requires reconstructing the entire tuple for each
-        # event (via a SELECT), which is a Hard Thing (TM) for columnstores to do. With
-        # the default settings it's common for ClickHouse to go over the default max_memory_usage
-        # of 10GB per query. Lowering the max_block_size reduces memory usage, and increasing the
-        # max_memory_usage gives the query more breathing room.
-        "max_block_size": settings.REPLACER_MAX_BLOCK_SIZE,
-        "max_memory_usage": settings.REPLACER_MAX_MEMORY_USAGE,
-        # Don't use up production cache for the count() queries.
-        "use_uncompressed_cache": 0,
-    }
-
-    clickhouse = ClickhousePool(
-        settings.CLICKHOUSE_HOST,
-        settings.CLICKHOUSE_PORT,
-        client_settings=client_settings,
-    )
-
     codec: PassthroughCodec[KafkaPayload] = PassthroughCodec()
     replacer = BatchingConsumer(
         KafkaConsumer(
@@ -136,7 +117,7 @@ def replacer(
             codec=codec,
         ),
         Topic(replacements_topic),
-        worker=ReplacerWorker(clickhouse, storage, metrics=metrics),
+        worker=ReplacerWorker(storage, metrics=metrics),
         max_batch_size=max_batch_size,
         max_batch_time=max_batch_time_ms,
         metrics=metrics,

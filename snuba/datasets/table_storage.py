@@ -7,7 +7,11 @@ from typing import Any, Mapping, Optional, Sequence
 
 from snuba import settings
 from snuba.clickhouse import DATETIME_FORMAT
-from snuba.clusters.cluster import ClickhouseCluster, ClickhouseWriterOptions
+from snuba.clusters.cluster import (
+    ClickhouseClientSettings,
+    ClickhouseCluster,
+    ClickhouseWriterOptions,
+)
 from snuba.datasets.message_filters import StreamMessageFilter
 from snuba.datasets.schemas.tables import WritableTableSchema
 from snuba.processor import MessageProcessor
@@ -190,7 +194,7 @@ class TableWriter:
             source_table=source_table,
             dest_table=dest_table,
             row_processor=row_processor,
-            clickhouse_ro=self.__cluster.get_clickhouse_ro(),
+            clickhouse=self.__cluster.get_connection(ClickhouseClientSettings.QUERY),
         )
 
     def get_stream_loader(self) -> KafkaStreamLoader:

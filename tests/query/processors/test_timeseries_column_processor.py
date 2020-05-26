@@ -15,34 +15,34 @@ tests = [
     (
         3600,
         FunctionCall(
-            "my_start",
+            "my_time",
             "toStartOfHour",
-            (Column(None, "start_ts", None), Literal(None, "Universal")),
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
         ),
-        "(toStartOfHour(start_ts, 'Universal') AS my_start)",
+        "(toStartOfHour(finish_ts, 'Universal') AS my_time)",
     ),
     (
         60,
         FunctionCall(
-            "my_start",
+            "my_time",
             "toStartOfMinute",
-            (Column(None, "start_ts", None), Literal(None, "Universal")),
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
         ),
-        "(toStartOfMinute(start_ts, 'Universal') AS my_start)",
+        "(toStartOfMinute(finish_ts, 'Universal') AS my_time)",
     ),
     (
         86400,
         FunctionCall(
-            "my_start",
+            "my_time",
             "toDate",
-            (Column(None, "start_ts", None), Literal(None, "Universal")),
+            (Column(None, "finish_ts", None), Literal(None, "Universal")),
         ),
-        "(toDate(start_ts, 'Universal') AS my_start)",
+        "(toDate(finish_ts, 'Universal') AS my_time)",
     ),
     (
         1440,
         FunctionCall(
-            "my_start",
+            "my_time",
             "toDateTime",
             (
                 multiply(
@@ -51,7 +51,7 @@ tests = [
                         "intDiv",
                         (
                             FunctionCall(
-                                None, "toUInt32", (Column(None, "start_ts", None),),
+                                None, "toUInt32", (Column(None, "finish_ts", None),),
                             ),
                             Literal(None, 1440),
                         ),
@@ -61,7 +61,7 @@ tests = [
                 Literal(None, "Universal"),
             ),
         ),
-        "(toDateTime(multiply(intDiv(toUInt32(start_ts), 1440), 1440), 'Universal') AS my_start)",
+        "(toDateTime(multiply(intDiv(toUInt32(finish_ts), 1440), 1440), 'Universal') AS my_time)",
     ),
 ]
 
@@ -75,13 +75,13 @@ def test_timeseries_column_format_expressions(
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
             Column("transaction.duration", "duration", None),
-            Column("my_start", "bucketed_start", None),
+            Column("my_time", "time", None),
         ],
     )
     expected = Query(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
-        selected_columns=[Column("transaction.duration", "duration", None), ast_value,],
+        selected_columns=[Column("transaction.duration", "duration", None), ast_value],
     )
 
     dataset = TransactionsDataset()
