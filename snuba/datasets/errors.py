@@ -13,6 +13,7 @@ from snuba.query.logical import Query
 from snuba.query.parsing import ParsingContext
 from snuba.query.processors import QueryProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -89,6 +90,7 @@ class ErrorsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             TimeSeriesColumnProcessor(self.__time_group_columns),
         ]

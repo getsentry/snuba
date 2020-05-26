@@ -1,6 +1,11 @@
 import re
 
-from snuba.query.expressions import Column, Expression, Literal, SubscriptableReference
+from snuba.query.expressions import (
+    Column,
+    Expression,
+    Literal,
+    SubscriptableReference,
+)
 from snuba.util import QUOTED_LITERAL_RE
 
 # A column name like "tags[url]"
