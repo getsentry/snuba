@@ -24,6 +24,7 @@ from snuba.datasets.storages.transaction_column_processor import (
 )
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
+from snuba.query.processors.uuid_column_processor import UUIDColumnProcessor
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
@@ -174,6 +175,7 @@ storage = WritableTableStorage(
             BEGINNING_OF_TIME,
         ),
         TransactionColumnProcessor(),
+        UUIDColumnProcessor(set(["event_id", "trace_id"])),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

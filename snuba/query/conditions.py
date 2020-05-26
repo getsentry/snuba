@@ -38,6 +38,10 @@ OPERATOR_TO_FUNCTION: Mapping[str, str] = {
     "NOT LIKE": ConditionFunctions.NOT_LIKE,
 }
 
+FUNCTION_TO_OPERATOR: Mapping[str, str] = {
+    func: op for op, func in OPERATOR_TO_FUNCTION.items()
+}
+
 
 class BooleanFunctions:
     """
@@ -111,4 +115,12 @@ def is_unary_condition(exp: Expression, operator: str) -> bool:
         isinstance(exp, FunctionCall)
         and exp.function_name == operator
         and len(exp.parameters) == 1
+    )
+
+
+def is_condition(exp: Expression) -> bool:
+    return (
+        isinstance(exp, FunctionCall)
+        and exp.function_name in FUNCTION_TO_OPERATOR
+        and len(exp.parameters) > 0
     )
