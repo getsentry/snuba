@@ -195,7 +195,7 @@ class Query:
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
-    def replace_ast_selected_columns(
+    def set_ast_selected_columns(
         self, selected_columns: Sequence[Expression]
     ) -> None:
         self.__selected_columns = selected_columns
@@ -224,7 +224,7 @@ class Query:
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
-    def replace_ast_condition(self, condition: Expression) -> None:
+    def set_ast_condition(self, condition: Expression) -> None:
         self.__condition = condition
 
     def set_conditions(self, conditions: Sequence[Condition]) -> None:

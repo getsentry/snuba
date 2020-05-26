@@ -40,13 +40,14 @@ def _get_time_range(
     query: Query, timestamp_field: str
 ) -> Tuple[Optional[Literal], Optional[Literal]]:
     """
-    Finds the time range for this query. Which means, finds the timestamp condition
-    with the highest datetime literal and the timestamp condition with the smallest
-    and returns the interval in the form of a tuple of Literals. It only looks into
-    first level AND conditions.
+    Finds the time range for this query. Which means, finds the timestamp
+    condition with the highest datetime literal and the timestamp condition
+    with the smallest and returns the interval in the form of a tuple of
+    Literals. It only looks into first level AND conditions.
 
-    TODO: Consider making this part of the AST manipulation api if there are more use
-    cases. It would require managing a few more corner cases for being part of the api.
+    TODO: Consider making this part of the AST api if there are more use
+    cases. It would require managing a few more corner cases for being part
+    of the api.
     """
 
     def get_first_level_conditions(exp: Expression) -> Sequence[Expression]:
@@ -94,13 +95,13 @@ def _replace_ast_condition(
     query: Query, field: str, operator: str, new_operand: Expression
 ) -> None:
     """
-    Replaces a condition in the top level AND boolean condition in the query WHERE
-    clause.
+    Replaces a condition in the top level AND boolean condition
+    in the query WHERE clause.
 
-    This is more complex than the one on the legacy representation because, with
-    the AST, we can express complex nested conditions and we do not only have two
-    levels only (AND and OR) so we need to recursively traverse the tree stopping
-    when we run into an OR.
+    This is more complex than the one on the legacy representation because,
+    with the AST, we can express complex nested conditions and we do not
+    only have two levels only (AND and OR) so we need to recursively traverse
+    the tree stopping when we run into an OR.
     """
 
     def replace_condition_in_expression(
@@ -133,7 +134,7 @@ def _replace_ast_condition(
 
     condition_clause = query.get_condition_from_ast()
     if condition_clause:
-        query.replace_ast_condition(
+        query.set_ast_condition(
             replace_condition_in_expression(
                 condition_clause, field, operator, new_operand
             )
@@ -338,7 +339,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         )
         # TODO: provide the table alias name to this splitter if we ever use it
         # in joins.
-        minimal_query.replace_ast_selected_columns(
+        minimal_query.set_ast_selected_columns(
             [
                 Column(None, self.__id_column, None),
                 Column(None, self.__project_column, None),
