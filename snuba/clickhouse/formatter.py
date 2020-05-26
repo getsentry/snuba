@@ -77,7 +77,6 @@ class ClickhouseExpressionFormatter(ExpressionVisitor[str]):
             ret.append(escape_identifier(exp.table_name) or "")
             ret.append(".")
         ret.append(escape_identifier(exp.column_name) or "")
-
         return self.__alias("".join(ret), exp.alias)
 
     def __visit_params(self, parameters: Sequence[Expression]) -> str:
