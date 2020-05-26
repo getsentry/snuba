@@ -18,7 +18,6 @@ from snuba.query.timeseries_extension import TimeSeriesExtensionProcessor
 from snuba.reader import Reader
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
-from snuba.util import with_span
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
@@ -30,7 +29,6 @@ logger = logging.getLogger("snuba.query")
 metrics = MetricsWrapper(environment.metrics, "api")
 
 
-@with_span()
 def parse_and_run_query(
     dataset: Dataset, request: Request, timer: Timer
 ) -> QueryResult:
@@ -95,12 +93,9 @@ def _run_query_pipeline(
 
     extensions = dataset.get_extensions()
     for name, extension in extensions.items():
-        with sentry_sdk.start_span(
-            description=type(extension.get_processor()).__name__, op="extension"
-        ):
-            extension.get_processor().process_query(
-                request.query, request.extensions[name], request.settings
-            )
+        extension.get_processor().process_query(
+            request.query, request.extensions[name], request.settings
+        )
 
     # TODO: Fit this in a query processor. All query transformations should be driven by
     # datasets/storages and never hardcoded.
@@ -108,10 +103,7 @@ def _run_query_pipeline(
         request.query.set_final(False)
 
     for processor in dataset.get_query_processors():
-        with sentry_sdk.start_span(
-            description=type(processor).__name__, op="processor"
-        ):
-            processor.process_query(request.query, request.settings)
+        processor.process_query(request.query, request.settings)
 
     query_plan = dataset.get_query_plan_builder().build_plan(request)
     # From this point on. The logical query should not be used anymore by anyone.
@@ -126,10 +118,7 @@ def _run_query_pipeline(
     query_plan.query.add_conditions(relational_source.get_mandatory_conditions())
 
     for clickhouse_processor in query_plan.plan_processors:
-        with sentry_sdk.start_span(
-            description=type(clickhouse_processor).__name__, op="processor"
-        ):
-            clickhouse_processor.process_query(query_plan.query, request.settings)
+        clickhouse_processor.process_query(query_plan.query, request.settings)
 
     query_runner = partial(
         _format_storage_query_and_run,

@@ -3,7 +3,7 @@ from typing import Callable, MutableMapping, Set, Sequence
 from snuba import settings
 from snuba.datasets.dataset import Dataset
 from snuba.datasets.table_storage import TableWriter
-from snuba.util import with_span
+
 
 DATASETS_IMPL: MutableMapping[str, Dataset] = {}
 DATASETS_NAME_LOOKUP: MutableMapping[Dataset, str] = {}
@@ -33,7 +33,6 @@ class InvalidDatasetError(Exception):
     """Exception raised on invalid dataset access."""
 
 
-@with_span()
 def get_dataset(name: str) -> Dataset:
     if name in DATASETS_IMPL:
         return DATASETS_IMPL[name]
