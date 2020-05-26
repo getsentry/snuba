@@ -188,23 +188,24 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         )
 
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
+        if self.__single_node:
+            return [ClickhouseNode(self.__host, self.__port)]
         return self.__get_cluster_nodes(self.__cluster_name)
 
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:
+        if self.__single_node:
+            return []
         return self.__get_cluster_nodes(self.__distributed_cluster_name)
 
     def __get_cluster_nodes(
         self, cluster_name: Optional[str]
     ) -> Sequence[ClickhouseNode]:
-        if self.__single_node:
-            return [ClickhouseNode(self.__host, self.__port)]
-        else:
-            return [
-                ClickhouseNode(*host)
-                for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
-                    f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
-                )
-            ]
+        return [
+            ClickhouseNode(*host)
+            for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
+                f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
+            )
+        ]
 
 
 CLUSTERS = [
