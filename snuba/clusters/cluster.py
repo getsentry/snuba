@@ -11,6 +11,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
     TypeVar,
 )
 
@@ -57,6 +58,9 @@ class ClickhouseNode:
     port: int
     shard: Optional[int] = None
     replica: Optional[int] = None
+
+    def __str__(self) -> str:
+        return f"{self.host_name}:{self.port}"
 
 
 TWriterOptions = TypeVar("TWriterOptions")
@@ -137,37 +141,46 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         super().__init__(storage_sets)
         if not single_node:
             assert cluster_name
-        self.__host = host
-        self.__port = port
+
+        self.__query_node = ClickhouseNode(host, port)
         self.__http_port = http_port
         self.__single_node = single_node
         self.__cluster_name = cluster_name
         self.__distributed_cluster_name = distributed_cluster_name
         self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
-            ClickhouseClientSettings, ClickhousePool
+            Tuple[ClickhouseNode, ClickhouseClientSettings], ClickhousePool
         ] = {}
 
     def __str__(self) -> str:
-        return f"{self.__host}:{self.__port}"
+        return str(self.__query_node)
 
     def get_connection(
-        self, client_settings: ClickhouseClientSettings,
+        self,
+        client_settings: ClickhouseClientSettings,
+        node: Optional[ClickhouseNode] = None,
     ) -> ClickhousePool:
         """
         Get a Clickhouse connection using the client settings provided. Reuse any
-        connection to the cluster with the same settings otherwise establish a new
+        connection to the same node with the same settings otherwise establish a new
         connection.
+
+        If no node is passed, we get a connection to the query node.
         """
-        if client_settings not in self.__connection_cache:
-            settings, timeout = client_settings.value
-            self.__connection_cache[client_settings] = ClickhousePool(
-                self.__host,
-                self.__port,
+        if not node:
+            node = self.__query_node
+
+        settings, timeout = client_settings.value
+        cache_key = (node, client_settings)
+        if cache_key not in self.__connection_cache:
+            self.__connection_cache[cache_key] = ClickhousePool(
+                node.host_name,
+                node.port,
                 client_settings=settings,
                 send_receive_timeout=timeout,
             )
-        return self.__connection_cache[client_settings]
+
+        return self.__connection_cache[cache_key]
 
     def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:
@@ -184,12 +197,17 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         chunk_size: Optional[int],
     ) -> BatchWriter:
         return HTTPBatchWriter(
-            table_name, self.__host, self.__http_port, encoder, options, chunk_size
+            table_name,
+            self.__query_node.host_name,
+            self.__http_port,
+            encoder,
+            options,
+            chunk_size,
         )
 
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
-            return [ClickhouseNode(self.__host, self.__port)]
+            return [self.__query_node]
         return self.__get_cluster_nodes(self.__cluster_name)
 
     def get_distributed_nodes(self) -> Sequence[ClickhouseNode]:

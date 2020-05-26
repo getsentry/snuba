@@ -70,3 +70,11 @@ class TestClusters:
         assert cluster_1.get_connection(
             cluster.ClickhouseClientSettings.QUERY
         ) == cluster_1.get_connection(cluster.ClickhouseClientSettings.QUERY)
+
+        assert cluster_1.get_connection(
+            cluster.ClickhouseClientSettings.OPTIMIZE,
+            cluster.ClickhouseNode("localhost", 8002),
+        ) == cluster_1.get_connection(
+            cluster.ClickhouseClientSettings.OPTIMIZE,
+            cluster.ClickhouseNode("localhost", 8002),
+        )
