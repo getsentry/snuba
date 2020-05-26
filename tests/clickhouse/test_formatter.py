@@ -26,21 +26,21 @@ test_expressions = [
         "(table1.column1 AS alias)",
     ),  # Column with table and alias
     (
-        Column("alias", "table1", "column1", ("sub_col1", "sub_col2")),
-        "(table1.column1.sub_col1.sub_col2 AS alias)",
+        Column("alias", "table1", "column1"),
+        "(table1.column1 AS alias)",
     ),  # Column with table, alias and path
     (
         FunctionCall(
             None,
             "f1",
             (
-                Column(None, "table1", "tags", ("value",)),
+                Column(None, "table1", "tags"),
                 Column(None, "table1", "param2"),
                 Literal(None, None),
                 Literal(None, "test_string"),
             ),
         ),
-        "f1(table1.tags.value, table1.param2, NULL, 'test_string')",
+        "f1(table1.tags, table1.param2, NULL, 'test_string')",
     ),  # Simple function call with columns and literals
     (
         FunctionCall(

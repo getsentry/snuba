@@ -132,10 +132,6 @@ class Column(Expression):
 
     table_name: Optional[str]
     column_name: str
-    # For nested column, this is the path following the main column name.
-    # For tags.key as an example, tags is the column_name and (value,) would
-    # be the path
-    path: Tuple[str, ...] = tuple()
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
