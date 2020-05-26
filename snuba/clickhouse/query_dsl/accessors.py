@@ -21,7 +21,7 @@ def get_project_ids_in_query(query: Query, project_column: str) -> Optional[Set[
     - If a project_id is a parameter of a function that returns the project_id itself
       it is not supported. It would be very hard to support every function without a
       whitelist/blacklist of allowed functions in Snuba queries.
-    - boolean functions are not supported. So we do\ not unpack and/or/not conditions
+    - boolean functions are not supported. So we do not unpack and/or/not conditions
       expressed as functions. We will be able to do that with the AST.
     - does not exclude projects referenced in NOT conditions.
 
