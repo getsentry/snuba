@@ -132,7 +132,7 @@ def test_get_all_columns() -> None:
         "aggregations": [
             ["count", "platform", "platforms"],
             ["uniq", "platform", "uniq_platforms"],
-            ["testF", ["platform", "field2"], "top_platforms"],
+            ["testF", ["platform", ["anotherF", ["field2"]]], "top_platforms"],
         ],
         "conditions": [["tags[sentry:dist]", "IN", ["dist1", "dist2"]]],
         "having": [["times_seen", ">", 1]],
