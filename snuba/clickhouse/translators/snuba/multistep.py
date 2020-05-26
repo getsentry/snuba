@@ -22,9 +22,10 @@ class MultiStepSnubaClickhouseTranslator(SnubaClickhouseTranslator):
     - one snuba to clickhouse translation step.
     - a sequence of Clickhouse to Clickhouse translations.
 
-    This can be used for multi table storages where a SnubaClickhouseTranslator (configured
-    with translation rules) does the first pass and a second translation step translates
-    the result of the first step into the aggregated table schema.
+    This can be used for multi table storages where a SnubaClickhouseTranslator
+    (configured with translation rules) does the first pass and a second
+    translation step translates the result of the first step into the aggregated
+    table schema.
     """
 
     def __init__(

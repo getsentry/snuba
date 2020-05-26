@@ -11,15 +11,15 @@ class ExpressionMapper(
     ABC, Generic[TExpIn, TExpOut, TTranslator],
 ):
     """
-    One translation rule used by the a mapping expression translator to translate an
-    expression.
+    One translation rule used by the a mapping expression translator to
+    translate an expression.
 
-    An ExpressionMapper is supposed to know how to map an expression but it is not
-    required to map its children. For that it receives a translator of TTranslator
-    type.
+    An ExpressionMapper is supposed to know how to map an expression but
+    it is not required to map its children. For that it receives a
+    translator of TTranslator type.
 
-    An ExpressionMapper should not throw under any circumstance. If it does not apply to
-    the input expression, it should return None.
+    An ExpressionMapper should not throw under any circumstance. If it does
+    not apply to the input expression, it should return None.
     """
 
     @abstractmethod

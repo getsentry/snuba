@@ -9,5 +9,5 @@ from snuba.query.logical import Query as LogicalQuery
 Query = NewType("Query", LogicalQuery)
 
 # This defines the type of a Clickhouse query expression. It is used to make
-# the interface of the expression translator more clear.
+# the interface of the expression translator more intuitive.
 Expression = SnubaExpression

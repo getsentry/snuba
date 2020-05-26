@@ -38,15 +38,18 @@ from snuba.query.expressions import (
 @dataclass(frozen=True)
 class TranslationMappers:
     """
-    Represents the set of rules to be used to configure a SnubaClickhouseMappingTranslator.
-    It encapsulates different sequences of rules.
-    Each one translates a different expression type. The types of the mappers impose the
-    subset of valid translations rules since each one of the mappers types limits what can
-    be translated into what (like Columns can only become Columns, Functions or Literals).
+    Represents the set of rules to be used to configure a
+    SnubaClickhouseMappingTranslator. It encapsulates different sequences
+    of rules.
+    Each one translates a different expression type. The types of the
+    mappers impose the subset of valid translations rules since each one
+    of the mappers types limits what can be translated into what (like
+    Columns can only become Columns, Functions or Literals).
 
-    This is because only some pairs of expression types (Snuba, Clickhouse)
-    are allowed during translation so we can guarantee any configuration provided by the
-    user will either produce a valid AST or refuse to translate.
+    This is because only some pairs of expression types (Snuba,
+    Clickhouse) are allowed during translation so we can guarantee any
+    configuration provided by the user will either produce a valid AST
+    or refuse to translate.
 
     See allowed.py for the valid translation rules and their reasoning.
     """
@@ -73,31 +76,32 @@ class TranslationMappers:
 
 class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
     """
-    Translates an Snuba expression into an clickhouse query expression according to
-    a specification provide by the caller.
+    Translates a Snuba expression into an clickhouse query expression
+    according to a specification provide by the caller.
 
-    The translation of every node in the expression is performed by a series of rules
-    that extend ExpressionMapper.
-    Rules are applied in sequence. Given an expression, the first valid rule for such
-    expression is applied and the result is returned. If no rule can translate such
-    expression an exception is raised.
-    A rule can delegate the translation of its children back to this translator.
+    The translation of every node in the expression is performed by a
+    series of rules that extend ExpressionMapper.
+    Rules are applied in sequence. Given an expression, the first valid
+    rule for such expression is applied and the result is returned. If
+    no rule can translate such expression an exception is raised.
+    A rule can delegate the translation of its children back to this
+    translator.
 
-    Each rule only has context around the expression provided and its children. It does
-    not have general context around the query or around the expression's ancestors in
-    the AST.
-    This approach implies that, while rules are specific to the relationship between
-    dataset (later entities) and storage, this class keeps the responsibility of
-    orchestrating the translation process.
+    Each rule only has context around the expression provided and its
+    children. It does not have general context around the query or around
+    the expression's ancestors in the AST.
+    This approach implies that, while rules are specific to the
+    relationship between dataset (later entities) and storage, this class
+    keeps the responsibility of orchestrating the translation process.
 
-    It is possible to compose different, independently defined, sets of rules that are
-    applied in a single pass over the AST.
-    This allows us to support joins which can be supported by simply concatenating rule
-    sets associated with each storage.
+    It is possible to compose different, independently defined, sets of
+    rules that are applied in a single pass over the AST.
+    This allows us to support joins which can be translated by simply
+    concatenating rule sets associated with each storage involved.
 
-    This relies on a visitor so that we can statically enforce that, no expression type
-    is added to the code base without properly support it in all translators. The
-    downside is verbosity.
+    This relies on a visitor so that we can statically enforce that no
+    expression subtype is added to the code base without properly support
+    it in all translators. The downside is verbosity.
     """
 
     def __init__(self, translation_rules: TranslationMappers) -> None:
@@ -135,12 +139,13 @@ class SnubaClickhouseMappingTranslator(SnubaClickhouseStrictTranslator):
 
     def translate_function_strict(self, exp: FunctionCall) -> FunctionCall:
         """
-        Unfortunately it is not possible to avoid this assertion. Though the structure
-        of TranslationMappers guarantees that this assertion can never fail since
-        it defines the valid translations and it statically requires a FunctionCallMapper
-        to translate a FunctionCall.
-        FunctionCallMapper returns FunctionCall as return type, thus always satisfying
-        the assertion.
+        Unfortunately it is not possible to avoid this assertion.
+        Though the structure of TranslationMappers guarantees that this
+        assertion can never fail since it defines the valid translations
+        and it statically requires a FunctionCallMapper to translate a
+        FunctionCall.
+        FunctionCallMapper returns FunctionCall as return type, thus
+        always satisfying the assertion.
         """
         f = exp.accept(self)
         assert isinstance(f, FunctionCall)
