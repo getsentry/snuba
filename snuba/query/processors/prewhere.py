@@ -210,12 +210,12 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
             if cond not in prewhere_conditions
         ]
 
-        query.replace_ast_condition(
+        query.set_ast_condition(
             combine_conditions(new_conditions, BooleanFunctions.AND)
             if new_conditions
             else None
         )
-        query.replace_prewhere_ast_condition(
+        query.set_prewhere_ast_condition(
             combine_conditions(prewhere_conditions, BooleanFunctions.AND)
             if prewhere_conditions
             else None

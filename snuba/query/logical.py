@@ -217,7 +217,7 @@ class Query:
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
-    def replace_ast_condition(self, condition: Optional[Expression]) -> None:
+    def set_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__condition = condition
 
     def set_conditions(self, conditions: Sequence[Condition]) -> None:
@@ -246,7 +246,7 @@ class Query:
         """
         return self.__prewhere
 
-    def replace_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
+    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__prewhere = condition
 
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
