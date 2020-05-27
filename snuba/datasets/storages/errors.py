@@ -1,6 +1,8 @@
+from typing import Mapping, Sequence
 from snuba.clickhouse.columns import (
     Array,
     ColumnSet,
+    ColumnType,
     DateTime,
     FixedString,
     IPv4,
@@ -27,6 +29,20 @@ from snuba.datasets.storages.processors.replaced_groups import (
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.query.processors.prewhere import PrewhereProcessor
+
+
+def errors_migrations(
+    clickhouse_table: str, current_schema: Mapping[str, ColumnType]
+) -> Sequence[str]:
+    ret = []
+
+    if "message_timestamp" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
+        )
+
+    return ret
+
 
 all_columns = ColumnSet(
     [
@@ -138,6 +154,7 @@ schema = ReplacingMergeTreeSchema(
     sample_expr="event_hash",
     ttl_expr="timestamp + toIntervalDay(retention_days)",
     settings={"index_granularity": "8192"},
+    migration_function=errors_migrations,
 )
 
 required_columns = [
