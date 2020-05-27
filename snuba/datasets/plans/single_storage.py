@@ -13,7 +13,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
-from snuba.datasets.plans.translators import QueryTranslator
+from snuba.datasets.plans.translator.translators import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings

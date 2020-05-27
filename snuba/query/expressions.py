@@ -133,8 +133,8 @@ class Column(Expression):
     Represent a column in the schema of the dataset.
     """
 
-    column_name: str
     table_name: Optional[str]
+    column_name: str
 
     def transform(self, func: Callable[[Expression], Expression]) -> Expression:
         return func(self)
