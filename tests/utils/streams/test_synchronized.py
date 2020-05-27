@@ -19,7 +19,8 @@ T = TypeVar("T")
 def wait_for_consumer(consumer: Consumer[T], message: Message[T], attempts: int = 10):
     """Block until the provided consumer has received the provided message."""
     for i in range(attempts):
-        if consumer.tell().get(message.partition) >= message.get_next_offset():
+        part = consumer.tell().get(message.partition)
+        if part is not None and part >= message.get_next_offset():
             return
 
         time.sleep(0.1)
