@@ -138,6 +138,7 @@ columns = ColumnSet(
         ("_contexts_flattened", String()),
         ("partition", UInt(16)),
         ("offset", UInt(64)),
+        ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
     ]
