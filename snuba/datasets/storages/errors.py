@@ -63,6 +63,7 @@ all_columns = ColumnSet(
         ("trace_id", Nullable(UUID())),
         ("partition", UInt(16)),
         ("offset", WithCodecs(UInt(64), ["DoubleDelta", "LZ4"])),
+        ("message_timestamp", DateTime()),
         ("retention_days", UInt(16)),
         ("deleted", UInt(8)),
         ("group_id", UInt(64)),
