@@ -169,8 +169,10 @@ class TagColumnProcessor:
             # This is to make mypy happy.
             assert isinstance(condition, FunctionCall)
             if (
-                isinstance(condition.parameters[0], Column)
-                and condition.parameters[0].column_name == "tags_key"
+                isinstance(condition.parameters[0], FunctionCall)
+                and condition.parameters[0].function_name == "arrayJoin"
+                and condition.parameters[0].parameters
+                == (Column(None, "tags.key", None),)
                 and isinstance(condition.parameters[1], Literal)
             ):
                 # Tags are strings, but mypy does not know that
@@ -179,8 +181,10 @@ class TagColumnProcessor:
         if is_in_condition(condition):
             assert isinstance(condition, FunctionCall)
             if (
-                isinstance(condition.parameters[0], Column)
-                and condition.parameters[0].column_name == "tags_key"
+                isinstance(condition.parameters[0], FunctionCall)
+                and condition.parameters[0].function_name == "arrayJoin"
+                and condition.parameters[0].parameters
+                == (Column(None, "tags.key", None),)
             ):
                 # The parameters of the inner function `a IN tuple(b,c,d)`
                 assert isinstance(condition.parameters[1], FunctionCall)
@@ -211,10 +215,11 @@ class TagColumnProcessor:
         select_clause = query.get_selected_columns_from_ast() or []
 
         tags_key_found = any(
-            col.column_name == "tags_key"
+            f.function_name == "arrayJoin"
+            and f.parameters == (Column(None, "tags.key", None),)
             for expression in select_clause
-            for col in expression
-            if isinstance(col, Column)
+            for f in expression
+            if isinstance(f, FunctionCall)
         )
 
         if not tags_key_found:

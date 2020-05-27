@@ -35,6 +35,14 @@ class SessionsProcessor(MessageProcessor):
         if duration is None:
             duration = MAX_UINT32
 
+        errors = _collapse_uint16(message["errors"]) or 0
+
+        # If a session ends in crashed or abnormal we want to make sure that
+        # they count as errored too, so we can get the number of health and
+        # errored sessions correctly.
+        if message["status"] in ("crashed", "abnormal"):
+            errors = max(errors, 1)
+
         processed = {
             "session_id": str(uuid.UUID(message["session_id"])),
             "distinct_id": str(uuid.UUID(message.get("distinct_id") or NIL_UUID)),
@@ -44,7 +52,7 @@ class SessionsProcessor(MessageProcessor):
             "retention_days": message["retention_days"],
             "duration": duration,
             "status": STATUS_MAPPING[message["status"]],
-            "errors": _collapse_uint16(message["errors"]) or 0,
+            "errors": errors,
             "received": _ensure_valid_date(
                 datetime.utcfromtimestamp(message["received"])
             ),

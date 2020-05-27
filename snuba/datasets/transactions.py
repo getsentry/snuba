@@ -13,6 +13,7 @@ from snuba.query.processors import QueryProcessor
 from snuba.query.processors.apdex_processor import ApdexProcessor
 from snuba.query.processors.basic_functions import BasicFunctionsProcessor
 from snuba.query.processors.impact_processor import ImpactProcessor
+from snuba.query.processors.tags_expander import TagsExpanderProcessor
 from snuba.query.processors.timeseries_column_processor import TimeSeriesColumnProcessor
 from snuba.query.project_extension import ProjectExtension, ProjectExtensionProcessor
 from snuba.query.timeseries_extension import TimeSeriesExtension
@@ -30,8 +31,7 @@ class TransactionsDataset(TimeSeriesDataset):
             column_tag_map=self._get_column_tag_map(),
         )
         self.__time_group_columns = {
-            "bucketed_start": "start_ts",
-            "bucketed_end": "finish_ts",
+            "time": "finish_ts",
         }
         super().__init__(
             storages=[storage],
@@ -64,7 +64,7 @@ class TransactionsDataset(TimeSeriesDataset):
             "timeseries": TimeSeriesExtension(
                 default_granularity=3600,
                 default_window=timedelta(days=5),
-                timestamp_column="start_ts",
+                timestamp_column="finish_ts",
             ),
         }
 
@@ -84,6 +84,34 @@ class TransactionsDataset(TimeSeriesDataset):
             return f"coalesce(IPv4NumToString(ip_address_v4), IPv6NumToString(ip_address_v6))"
         if column_name == "event_id":
             return "replaceAll(toString(event_id), '-', '')"
+
+        # These column aliases originally existed in the ``discover`` dataset,
+        # but now live here to maintain compatibility between the composite
+        # ``discover`` dataset and the standalone ``transaction`` dataset. In
+        # the future, these aliases hould be defined on the Transaction entity
+        # instead of the dataset.
+        if column_name == "type":
+            return "'transaction'"
+        if column_name == "timestamp":
+            return "finish_ts"
+        if column_name == "username":
+            return "user_name"
+        if column_name == "email":
+            return "user_email"
+        if column_name == "transaction":
+            return "transaction_name"
+        if column_name == "message":
+            return "transaction_name"
+        if column_name == "title":
+            return "transaction_name"
+
+        if column_name == "geo_country_code":
+            column_name = "contexts[geo.country_code]"
+        if column_name == "geo_region":
+            column_name = "contexts[geo.region]"
+        if column_name == "geo_city":
+            column_name = "contexts[geo.city]"
+
         processed_column = self.__tags_processor.process_column_expression(
             column_name, query, parsing_context, table_alias
         )
@@ -94,6 +122,7 @@ class TransactionsDataset(TimeSeriesDataset):
 
     def get_query_processors(self) -> Sequence[QueryProcessor]:
         return [
+            TagsExpanderProcessor(),
             BasicFunctionsProcessor(),
             ApdexProcessor(),
             ImpactProcessor(),
