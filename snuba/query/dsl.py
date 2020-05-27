@@ -11,7 +11,7 @@ def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> Functio
 
 
 # Array functions
-def array_element(
+def arrayElement(
     alias: Optional[str], array_col: Column, index: Expression
 ) -> FunctionCall:
     return FunctionCall(alias, "arrayElement", (array_col, index))

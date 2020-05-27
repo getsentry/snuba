@@ -18,9 +18,8 @@ class SnubaClickhouseStrictTranslator(SnubaClickhouseTranslator):
     """
     Type strict Snuba to Clickhouse translator.
 
-    When translating an expression from an AST to another one we cannot
-    assume that any expression type of the first AST can be translated
-    into any type of expression in the second AST in any context.
+    When translating an expression from an AST to another there are some
+    type constraints to be respected in the destination AST.
     An example is the inner function of a CurriedFunction. That is not
     of type Expression but it has to be a FunctionCall. So whatever
     translates the inner function is forced to produce a FunctionCall

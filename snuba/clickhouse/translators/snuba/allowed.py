@@ -52,10 +52,11 @@ class FunctionCallMapper(SnubaClickhouseMapper[FunctionCall, FunctionCall]):
     Functions are only allowed to become Functions so that we can ensure
     CurriedFunctions internal functions can be successfully translated.
 
-    TODO: We actually need to loosen this constraint (for functions
-    translating into pre aggregated Column). Though before doing so we
-    need to give a dedicated type that will be stricter for the
-    CurriedFunction internal function.
+    TODO: We actually need to loosen this constraint since we will have
+    cases of functions that have to be translated into columns when we
+    rely on pre-aggregated tables. Though, before doing so, we need to give
+    a dedicated type to the CurriedFunction internal function since that
+    requires a function to be translated into a function as of now.
     """
 
     pass

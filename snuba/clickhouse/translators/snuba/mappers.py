@@ -6,7 +6,7 @@ from snuba.clickhouse.translators.snuba.allowed import (
     ColumnMapper,
     SubscriptableReferenceMapper,
 )
-from snuba.query.dsl import array_element
+from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column, FunctionCall, SubscriptableReference
 
 
@@ -62,7 +62,7 @@ class TagMapper(SubscriptableReferenceMapper):
         ):
             return None
 
-        return array_element(
+        return arrayElement(
             expression.alias,
             Column(None, f"{self.to_col_name}.value", self.to_table_name),
             FunctionCall(
