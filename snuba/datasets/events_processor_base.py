@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
     EventTooOld,
@@ -246,6 +245,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         if metadata is not None:
             processed["offset"] = metadata.offset
             processed["partition"] = metadata.partition
+            processed["message_timestamp"] = metadata.timestamp
 
         return processed
 

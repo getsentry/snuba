@@ -283,6 +283,7 @@ def test_error_processor() -> None:
         ),
         "partition": 1,
         "offset": 2,
+        "message_timestamp": datetime(1970, 1, 1),
         "retention_days": 90,
         "deleted": 0,
         "group_id": 100,
