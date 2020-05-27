@@ -27,7 +27,7 @@ def test_no_schema_diffs(dataset: Dataset) -> None:
     if not writable_storage:
         pytest.skip(f"{dataset!r} has no writable storage")
 
-    clickhouse = writable_storage.get_cluster().get_connection(
+    clickhouse = writable_storage.get_cluster().get_query_connection(
         ClickhouseClientSettings.MIGRATE
     )
     table_writer = writable_storage.get_table_writer()

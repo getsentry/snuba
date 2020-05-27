@@ -155,20 +155,22 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def __str__(self) -> str:
         return str(self.__query_node)
 
-    def get_connection(
-        self,
-        client_settings: ClickhouseClientSettings,
-        node: Optional[ClickhouseNode] = None,
+    def get_query_connection(
+        self, client_settings: ClickhouseClientSettings,
+    ) -> ClickhousePool:
+        """
+        Get a connection to the query node
+        """
+        return self.get_node_connection(client_settings, self.__query_node)
+
+    def get_node_connection(
+        self, client_settings: ClickhouseClientSettings, node: ClickhouseNode,
     ) -> ClickhousePool:
         """
         Get a Clickhouse connection using the client settings provided. Reuse any
         connection to the same node with the same settings otherwise establish a new
         connection.
-
-        If no node is passed, we get a connection to the query node.
         """
-        if not node:
-            node = self.__query_node
 
         settings, timeout = client_settings.value
         cache_key = (node, client_settings)
@@ -185,7 +187,7 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     def get_reader(self) -> Reader[SqlQuery]:
         if not self.__reader:
             self.__reader = NativeDriverReader(
-                self.get_connection(ClickhouseClientSettings.QUERY)
+                self.get_query_connection(ClickhouseClientSettings.QUERY)
             )
         return self.__reader
 
@@ -220,7 +222,9 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     ) -> Sequence[ClickhouseNode]:
         return [
             ClickhouseNode(*host)
-            for host in self.get_connection(ClickhouseClientSettings.QUERY).execute(
+            for host in self.get_query_connection(
+                ClickhouseClientSettings.QUERY
+            ).execute(
                 f"select host_name, port, shard_num, replica_num from system.clusters where cluster={escape_string(cluster_name)}"
             )
         ]

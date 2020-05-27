@@ -67,14 +67,14 @@ class TestClusters:
     def test_cache_connections(self) -> None:
         cluster_1 = cluster.ClickhouseCluster("localhost", 8000, 8001, {"events"}, True)
 
-        assert cluster_1.get_connection(
+        assert cluster_1.get_query_connection(
             cluster.ClickhouseClientSettings.QUERY
-        ) == cluster_1.get_connection(cluster.ClickhouseClientSettings.QUERY)
+        ) == cluster_1.get_query_connection(cluster.ClickhouseClientSettings.QUERY)
 
-        assert cluster_1.get_connection(
+        assert cluster_1.get_node_connection(
             cluster.ClickhouseClientSettings.OPTIMIZE,
             cluster.ClickhouseNode("localhost", 8002),
-        ) == cluster_1.get_connection(
+        ) == cluster_1.get_node_connection(
             cluster.ClickhouseClientSettings.OPTIMIZE,
             cluster.ClickhouseNode("localhost", 8002),
         )

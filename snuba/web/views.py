@@ -75,7 +75,7 @@ def check_clickhouse() -> bool:
             dataset = get_dataset(name)
 
             for storage in dataset.get_all_storages():
-                clickhouse = storage.get_cluster().get_connection(
+                clickhouse = storage.get_cluster().get_query_connection(
                     ClickhouseClientSettings.QUERY
                 )
                 clickhouse_tables = clickhouse.execute("show tables")
@@ -440,7 +440,7 @@ if application.debug or application.testing:
     @application.route("/tests/<dataset:dataset>/drop", methods=["POST"])
     def drop(*, dataset: Dataset):
         for storage in dataset.get_all_storages():
-            clickhouse = storage.get_cluster().get_connection(
+            clickhouse = storage.get_cluster().get_query_connection(
                 ClickhouseClientSettings.MIGRATE
             )
             for statement in storage.get_schemas().get_drop_statements():
