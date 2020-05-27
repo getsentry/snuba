@@ -187,6 +187,14 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name, self.__host, self.__http_port, encoder, options, chunk_size
         )
 
+    def is_single_node(self) -> bool:
+        """
+        This will be used to determine:
+        - which migrations will be run (either just local or local and distributed tables)
+        - Differences in the query - such as whether the _local or _dist table is picked
+        """
+        return self.__single_node
+
     def get_local_nodes(self) -> Sequence[ClickhouseNode]:
         if self.__single_node:
             return [ClickhouseNode(self.__host, self.__port)]
