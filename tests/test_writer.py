@@ -49,6 +49,8 @@ class TestHTTPBatchWriter(BaseEventsTest):
             "mysterious_inexistent_table",
             "0:0:0:0",
             9000,
+            "default",
+            "",
             lambda a: a,
             None,
             chunk_size,
