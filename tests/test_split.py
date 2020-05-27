@@ -298,8 +298,8 @@ def test_time_split_ast() -> None:
         query: ClickhouseQuery, request_settings: RequestSettings,
     ) -> QueryResult:
         from_date_ast, to_date_ast = _get_time_range(query, "timestamp")
-        assert from_date_ast is not None and isinstance(from_date_ast.value, datetime)
-        assert to_date_ast is not None and isinstance(to_date_ast.value, datetime)
+        assert from_date_ast is not None and isinstance(from_date_ast, datetime)
+        assert to_date_ast is not None and isinstance(to_date_ast, datetime)
 
         conditions = query.get_conditions() or []
         from_date_str = next(
@@ -318,12 +318,10 @@ def test_time_split_ast() -> None:
             ),
             None,
         )
-        assert from_date_str == from_date_ast.value.isoformat()
-        assert to_date_str == to_date_ast.value.isoformat()
+        assert from_date_str == from_date_ast.isoformat()
+        assert to_date_str == to_date_ast.isoformat()
 
-        found_timestamps.append(
-            (from_date_ast.value.isoformat(), to_date_ast.value.isoformat())
-        )
+        found_timestamps.append((from_date_ast.isoformat(), to_date_ast.isoformat()))
 
         return QueryResult({"data": []}, {})
 
@@ -380,11 +378,11 @@ def test_get_time_range() -> None:
     from_date_ast, to_date_ast = _get_time_range(ClickhouseQuery(query), "timestamp")
     assert (
         from_date_ast is not None
-        and isinstance(from_date_ast.value, datetime)
-        and from_date_ast.value.isoformat() == "2019-09-18T10:00:00"
+        and isinstance(from_date_ast, datetime)
+        and from_date_ast.isoformat() == "2019-09-18T10:00:00"
     )
     assert (
         to_date_ast is not None
-        and isinstance(to_date_ast.value, datetime)
-        and to_date_ast.value.isoformat() == "2019-09-19T12:00:00"
+        and isinstance(to_date_ast, datetime)
+        and to_date_ast.isoformat() == "2019-09-19T12:00:00"
     )
