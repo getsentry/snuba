@@ -24,31 +24,31 @@ from snuba.query.matchers import (
 test_cases = [
     (
         "Single node match",
-        Column(None, String("test_col"), OptionalString("table")),
+        Column(None, OptionalString("table"), String("test_col")),
         ColumnExpr("alias_we_don't_care_of", "test_col", "table"),
         MatchResult(),
     ),
     (
         "Single node no match",
-        Column(None, String("test_col"), None),
+        Column(None, None, String("test_col")),
         ColumnExpr(None, "not_a_test_col", None),
         None,
     ),
     (
         "Matches a None table name",
-        Column(None, None, Param("table_name", AnyOptionalString())),
+        Column(None, Param("table_name", AnyOptionalString()), None),
         ColumnExpr(None, "not_a_test_col", None),
         MatchResult({"table_name": None}),
     ),
     (
         "Matches None as table name",
-        Column(None, None, Param("table_name", OptionalString(None))),
+        Column(None, Param("table_name", OptionalString(None)), None),
         ColumnExpr(None, "not_a_test_col", None),
         MatchResult({"table_name": None}),
     ),
     (
         "Not matching a non None table",
-        Column(None, None, Param("table_name", OptionalString(None))),
+        Column(None, Param("table_name", OptionalString(None)), None),
         ColumnExpr(None, "not_a_test_col", "not None"),
         None,
     ),
@@ -56,8 +56,8 @@ test_cases = [
         "Matches a column with all fields",
         Column(
             Param("alias", AnyOptionalString()),
-            Param("column_name", Any(str)),
             Param("table_name", AnyOptionalString()),
+            Param("column_name", Any(str)),
         ),
         ColumnExpr("alias", "test_col", "table_name"),
         MatchResult(
@@ -96,7 +96,7 @@ test_cases = [
     ),
     (
         "Match any expression of Column type within function",
-        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),),),
+        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr(
             "irrelevant",
             "irrelevant",
@@ -106,7 +106,7 @@ test_cases = [
     ),
     (
         "Does not match any Column",
-        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),),),
+        FunctionCall(None, None, (Param("p1", Any(ColumnExpr)),)),
         FunctionCallExpr("irrelevant", "irrelevant", (LiteralExpr(None, "str"),),),
         None,
     ),
@@ -114,8 +114,8 @@ test_cases = [
         "Union of two patterns - match",
         Or(
             [
-                Param("option1", Column(None, String("col_name"), None)),
-                Param("option2", Column(None, String("other_col_name"), None)),
+                Param("option1", Column(None, None, String("col_name"))),
+                Param("option2", Column(None, None, String("other_col_name"))),
             ]
         ),
         ColumnExpr(None, "other_col_name", None),
@@ -125,8 +125,8 @@ test_cases = [
         "Union of two patterns - no match",
         Or(
             [
-                Param("option1", Column(None, String("col_name"), None)),
-                Param("option2", Column(None, String("other_col_name"), None)),
+                Param("option1", Column(None, None, String("col_name"))),
+                Param("option2", Column(None, None, String("other_col_name"))),
             ]
         ),
         ColumnExpr(None, "none_of_the_two", None),
@@ -138,8 +138,8 @@ test_cases = [
             "one_of_the_two",
             Or(
                 [
-                    Column(None, String("col_name1"), None),
-                    Column(None, String("col_name2"), None),
+                    Column(None, None, String("col_name1")),
+                    Column(None, None, String("col_name2")),
                 ]
             ),
         ),
@@ -170,8 +170,8 @@ test_cases = [
             Param("alias", OptionalString(None)),
             String("f_name"),
             (
-                Param("p_1", Column(None, Any(str), None)),
-                Param("p_2", Column(None, Any(str), None)),
+                Param("p_1", Column(None, None, Any(str))),
+                Param("p_2", Column(None, None, Any(str))),
             ),
         ),
         FunctionCallExpr(
@@ -196,8 +196,8 @@ test_cases = [
             None,
             None,
             (
-                Param("p_1", Column(None, Any(str), None)),
-                Param("p_2", Column(None, Any(str), None)),
+                Param("p_1", Column(None, None, Any(str))),
+                Param("p_2", Column(None, None, Any(str))),
             ),
             with_optionals=True,
         ),
@@ -224,8 +224,8 @@ test_cases = [
             None,
             None,
             (
-                Param("p_1", Column(None, Any(str), None)),
-                Param("p_2", Column(None, Any(str), None)),
+                Param("p_1", Column(None, None, Any(str))),
+                Param("p_2", Column(None, None, Any(str))),
             ),
             with_optionals=True,
         ),
@@ -241,7 +241,7 @@ test_cases = [
             String("f_name"),
             (
                 FunctionCall(
-                    None, String("f"), (Column(None, String("my_col"), None),)
+                    None, String("f"), (Column(None, None, String("my_col")),)
                 ),
                 Param(
                     "second_function",
@@ -266,7 +266,7 @@ test_cases = [
             String("f_name"),
             (
                 FunctionCall(
-                    None, String("f"), (Column(None, String("my_col"), None),)
+                    None, String("f"), (Column(None, None, String("my_col")),)
                 ),
                 Param(
                     "second_function",
@@ -308,7 +308,7 @@ def test_accessors() -> None:
         None,
         String("f_name"),
         (
-            FunctionCall(None, String("f"), (Column(None, String("my_col"), None),)),
+            FunctionCall(None, String("f"), (Column(None, None, String("my_col")),)),
             Param(
                 "second_function",
                 FunctionCall(None, Param("second_function_name", Any(str)), None),

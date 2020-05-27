@@ -8,11 +8,10 @@ from typing import Any as AnyType
 from typing import Generic, Mapping, Optional, Sequence, Tuple, Type, TypeVar, Union
 
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
+from snuba.query.expressions import Expression, OptionalScalarType
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
 from snuba.query.expressions import Literal as LiteralExpr
 
-OptionalScalarType = Union[None, str, int, float, date, datetime]
 MatchType = Union[Expression, OptionalScalarType]
 
 TMatchedType = TypeVar("TMatchedType", covariant=True)
@@ -111,6 +110,9 @@ class Param(Pattern[TMatchedType]):
     This is meant to represent what a group is in a regex.
 
     Params can be nested, and they can wrap any valid Pattern.
+
+    There is no defined behavior for duplicated parameter names in a Pattern.
+    These names should be disjoint for a deterministic behavior.
     """
 
     name: str
@@ -118,7 +120,7 @@ class Param(Pattern[TMatchedType]):
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         result = self.pattern.match(node)
-        if not result:
+        if result is None:
             return None
         return result.merge(MatchResult({self.name: node}))
 
@@ -209,8 +211,8 @@ class Column(Pattern[ColumnExpr]):
     """
 
     alias: Optional[Pattern[Optional[str]]] = None
-    column_name: Optional[Pattern[str]] = None
     table_name: Optional[Pattern[Optional[str]]] = None
+    column_name: Optional[Pattern[str]] = None
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
         if not isinstance(node, ColumnExpr):
@@ -220,21 +222,13 @@ class Column(Pattern[ColumnExpr]):
         for pattern, value in (
             (self.alias, node.alias),
             (self.table_name, node.table_name),
+            (self.column_name, node.column_name),
         ):
             if pattern is not None:
                 partial_result = pattern.match(value)
-                if not partial_result:
+                if partial_result is None:
                     return None
                 result = result.merge(partial_result)
-
-        # column_name does not have the same type as alias and table_name
-        # so this case cannot be handled in the loop above as it does not
-        # type check.
-        if self.column_name is not None:
-            partial_result = self.column_name.match(node.column_name)
-            if not partial_result:
-                return None
-            result = result.merge(partial_result)
 
         return result
 
@@ -255,7 +249,7 @@ class Literal(Pattern[LiteralExpr]):
         ):
             if pattern is not None:
                 partial_result = pattern.match(value)
-                if not partial_result:
+                if partial_result is None:
                     return None
                 result = result.merge(partial_result)
 
@@ -272,12 +266,17 @@ class FunctionCall(Pattern[FunctionCallExpr]):
 
     alias: Optional[Pattern[Optional[str]]] = None
     function_name: Optional[Pattern[str]] = None
+    # This is a tuple instead of a sequence to match the data structure
+    # we use in the actual FunctionCall class. There it has to be a tuple
+    # to be hashable.
     parameters: Optional[Tuple[Pattern[Expression], ...]] = None
     # Specifies whether we allow optional parameters when matching.
     # if this is False, all patterns of the function to match must match
     # one by one. If with_optionals is True, this will allow additional
     # parameters to exist in the function to match that are not present
-    # in this pattern.
+    # in this pattern. When it is False the parameters of the FunctionCall
+    # must match one by one the ones of the Pattern thus the two tuples
+    # must have the same length.
     with_optionals: bool = False
 
     def match(self, node: AnyType) -> Optional[MatchResult]:
@@ -285,19 +284,18 @@ class FunctionCall(Pattern[FunctionCallExpr]):
             return None
 
         result = MatchResult()
-        if self.alias is not None:
-            partial_result = self.alias.match(node.alias)
-            if not partial_result:
-                return None
-            result = result.merge(partial_result)
-        if self.function_name is not None:
-            partial_result = self.function_name.match(node.function_name)
-            if not partial_result:
-                return None
-            result = result.merge(partial_result)
+        for pattern, value in (
+            (self.alias, node.alias),
+            (self.function_name, node.function_name),
+        ):
+            if pattern is not None:
+                partial_result = pattern.match(value)
+                if partial_result is None:
+                    return None
+                result = result.merge(partial_result)
 
         if self.parameters:
-            if not self.with_optionals:
+            if self.with_optionals is None:
                 if len(self.parameters) != len(node.parameters):
                     return None
             else:
@@ -306,7 +304,7 @@ class FunctionCall(Pattern[FunctionCallExpr]):
 
             for index, param_pattern in enumerate(self.parameters):
                 p_result = param_pattern.match(node.parameters[index])
-                if not p_result:
+                if p_result is None:
                     return None
                 else:
                     result = result.merge(p_result)
