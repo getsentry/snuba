@@ -74,14 +74,14 @@ def test_timeseries_column_format_expressions(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
+            Column("transaction.duration", None, "duration"),
             Column("my_time", None, "time"),
         ],
     )
     expected = Query(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
-        selected_columns=[Column("transaction.duration", "duration", None), ast_value],
+        selected_columns=[Column("transaction.duration", None, "duration"), ast_value],
     )
 
     dataset = TransactionsDataset()

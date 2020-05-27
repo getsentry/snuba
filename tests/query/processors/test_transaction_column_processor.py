@@ -14,7 +14,7 @@ def test_transaction_column_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
+            Column("transaction.duration", None, "duration"),
             Column("the_event_id", None, "event_id"),
         ],
     )
@@ -22,7 +22,7 @@ def test_transaction_column_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
+            Column("transaction.duration", None, "duration"),
             FunctionCall(
                 "the_event_id",
                 "replaceAll",
