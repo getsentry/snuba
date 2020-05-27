@@ -1,4 +1,4 @@
-from coverage.data import os
+import os
 
 TESTING = True
 
