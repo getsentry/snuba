@@ -21,17 +21,19 @@ TMatchedType = TypeVar("TMatchedType", covariant=True)
 class MatchResult:
     """
     Contains the parameters found in an expression by a Pattern.
-    Parameters are the equivalent to groups in regular expressions, they are named parts
-    of the expression we are matching that are identified when a valid match is found.
+    Parameters are the equivalent to groups in regular expressions,
+    they are named parts of the expression we are matching that are
+    identified when a valid match is found.
     """
 
     results: Mapping[str, MatchType] = field(default_factory=dict)
 
     def expression(self, name: str) -> Expression:
         """
-        Return an expression from the results given the name of the parameter it matched.
-        Since we cannot match None Expressions (because they do not exist in the AST)
-        this does not need to return Optional.
+        Return an expression from the results given the name of the
+        parameter it matched.
+        Since we cannot match None Expressions (because they do not
+        exist in the AST) this does not need to return Optional.
         """
         ret = self.results[name]
         assert isinstance(ret, Expression)
@@ -39,11 +41,13 @@ class MatchResult:
 
     def scalar(self, name: str) -> OptionalScalarType:
         """
-        Return a scalar from the results given the name of the parameter it matched.
-        Scalars are all individual types in the AST that are not structured expressions.
-        There are several places in the AST where a scalar can be None (like aliases)
-        thus it is possible that the matched node is None, thus we need to be able to
-        return None.
+        Return a scalar from the results given the name of the parameter
+        it matched.
+        Scalars are all individual types in the AST that are not
+        structured expressions.
+        There are several places in the AST where a scalar can be None
+        (like aliases) thus it is possible that the matched node is None,
+        thus we need to be able to return None.
         """
         ret = self.results[name]
         assert ret is None or isinstance(ret, (str, int, float, date, datetime))
@@ -51,7 +55,8 @@ class MatchResult:
 
     def string(self, name: str) -> str:
         """
-        Returns a string present in the result, guaranteeing the string is there or throws.
+        Returns a string present in the result, guaranteeing the string
+        is there or throws.
         """
         ret = self.results[name]
         assert isinstance(ret, str)
@@ -66,24 +71,25 @@ class MatchResult:
 
 class Pattern(ABC, Generic[TMatchedType]):
     """
-    Tries to match a given node (like an AST Expression) with the rules provided
-    when instantiating this class. This is meant to work like a regular expression
-    but for AST expressions.
+    Tries to match a given node (like an AST Expression) with the rules
+    provided when instantiating this class. This is meant to work like
+    a regular expression but for AST expressions.
 
-    When a node is provided to this method, if this method returns an instance of
-    MatchResult, it means the node fully matches the pattern.
-    If the pattern defines named parameters, their value is returned as part of
-    the MatchResult object returned.
+    When a node is provided to this method, if this method returns an
+    instance of MatchResult, it means the node fully matches the pattern.
+    If the pattern defines named parameters, their value is returned
+    as part of the MatchResult object returned.
     More on how to define parameters in the Param class.
 
-    This is not supposed to ever throw as long as the node is properly is a valid
-    data structure, even if it does not match the pattern.
+    This is not supposed to ever throw as long as the node is properly
+    is a valid data structure, even if it does not match the pattern.
 
-    This is parametric but the parameter is not used in the class. This is because
-    the parameter is meant only to statically type check that patterns are composed
-    in a way that makes sense (like not try to match a table name as a Column since
-    it is impossible). It represent the type effectively matched by the expression
-    thus covariant, not the type of the object the Pattern can try to match so that
+    This is parametric but the parameter is not used in the class.
+    This is because the parameter is meant only to statically type check
+    that patterns are composed in a way that makes sense (like not try
+    to match a table name as a Column since it is impossible). It
+    represent the type effectively matched by the expression thus covariant,
+    not the type of the object the Pattern can try to match so that
     Pattern[Column] is a subtype of Pattern[Expression].
     """
 
@@ -93,10 +99,11 @@ class Pattern(ABC, Generic[TMatchedType]):
         Returns a MatchResult if the node provided matches this pattern
         otherwise it returns None.
 
-        The parameter is not TMatchedType in that TMatchedType is the type of the
-        Node effectively matched. That would be a subtype of the type we try to match.
-        For example a Column Pattern should be able to get an Expression and match
-        a Column. TMatchedType is Column.
+        The parameter is not TMatchedType in that TMatchedType is the
+        type of the Node effectively matched. That would be a subtype
+        of the type we try to match.
+        For example a Column Pattern should be able to get an Expression
+        and match a Column. TMatchedType is Column.
         """
         raise NotImplementedError
 
@@ -104,10 +111,11 @@ class Pattern(ABC, Generic[TMatchedType]):
 @dataclass(frozen=True)
 class Param(Pattern[TMatchedType]):
     """
-    Defines a named parameter in a Pattern. When matching the overall Pattern,
-    if the Pattern nested in this object matches, the corresponding input node
-    will be given a name and returned as part of the MatchResult return value.
-    This is meant to represent what a group is in a regex.
+    Defines a named parameter in a Pattern. When matching the overall
+    Pattern, if the Pattern nested in this object matches, the
+    corresponding input node will be given a name and returned as part
+    of the MatchResult return value. This is meant to represent what
+    a group is in a regex.
 
     Params can be nested, and they can wrap any valid Pattern.
 
@@ -205,9 +213,10 @@ class Or(Pattern[TMatchedType]):
 class Column(Pattern[ColumnExpr]):
     """
     Matches a Column in an AST expression.
-    The column is defined by alias, name and table. For each, a Pattern can be
-    provided. If one of these Patterns is left None, that field will be ignored
-    when matching (equivalent to Any, but less verbose).
+    The column is defined by alias, name and table. For each,
+    a Pattern can be provided. If one of these Patterns is
+    left None, that field will be ignored when matching
+    (equivalent to Any, but less verbose).
     """
 
     alias: Optional[Pattern[Optional[str]]] = None
