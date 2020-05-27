@@ -326,7 +326,7 @@ def test_error_processor() -> None:
         "transaction_name": "",
     }
 
-    meta = KafkaMessageMetadata(offset=2, partition=1)
+    meta = KafkaMessageMetadata(offset=2, partition=1, timestamp=datetime(1970, 1, 1))
     processor = ErrorsProcessor(
         {
             "environment": "environment",
