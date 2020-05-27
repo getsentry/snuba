@@ -18,10 +18,10 @@ class SimpleColumnMapper(ColumnMapper):
     The alias is not transformed.
     """
 
-    from_col_name: str
     from_table_name: Optional[str]
-    to_col_name: str
+    from_col_name: str
     to_table_name: Optional[str]
+    to_col_name: str
 
     def attempt_map(
         self, expression: Column, children_translator: SnubaClickhouseStrictTranslator,
@@ -32,8 +32,8 @@ class SimpleColumnMapper(ColumnMapper):
         ):
             return Column(
                 alias=expression.alias,
-                table_name=self.to_table_name,
                 column_name=self.to_col_name,
+                table_name=self.to_table_name,
             )
         else:
             return None
@@ -46,10 +46,10 @@ class TagMapper(SubscriptableReferenceMapper):
     into a Clickhouse array access.
     """
 
-    from_column_name: str
     from_column_table: Optional[str]
-    to_col_name: str
+    from_column_name: str
     to_table_name: Optional[str]
+    to_col_name: str
 
     def attempt_map(
         self,
@@ -64,12 +64,12 @@ class TagMapper(SubscriptableReferenceMapper):
 
         return arrayElement(
             expression.alias,
-            Column(None, f"{self.to_col_name}.value", self.to_table_name),
+            Column(None, self.to_table_name, f"{self.to_col_name}.value"),
             FunctionCall(
                 None,
                 "indexOf",
                 (
-                    Column(None, f"{self.to_col_name}.key", self.to_table_name,),
+                    Column(None, self.to_table_name, f"{self.to_col_name}.key"),
                     expression.key.accept(children_translator),
                 ),
             ),
