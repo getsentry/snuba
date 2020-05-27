@@ -17,7 +17,7 @@ def test_error_rate_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             FunctionCall("perf", "error_rate", ()),
         ],
     )
@@ -25,7 +25,7 @@ def test_error_rate_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             div(
                 countIf(
                     FunctionCall(
@@ -35,13 +35,13 @@ def test_error_rate_format_expressions() -> None:
                             binary_condition(
                                 None,
                                 ConditionFunctions.NEQ,
-                                Column(None, "transaction_status", None),
+                                Column(None, None, "transaction_status"),
                                 Literal(None, 0),
                             ),
                             binary_condition(
                                 None,
                                 ConditionFunctions.NEQ,
-                                Column(None, "transaction_status", None),
+                                Column(None, None, "transaction_status"),
                                 Literal(None, 2),
                             ),
                         ),
