@@ -174,7 +174,7 @@ def alias_expr(expr: str, alias: str, parsing_context: ParsingContext) -> str:
         return expr
     else:
         aliased_expr = parsing_context.get_expression_for_alias(alias)
-        if aliased_expr:
+        if aliased_expr is not None:
             if aliased_expr != expr:
                 metrics.increment("alias_shadowing")
             return alias
