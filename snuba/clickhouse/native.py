@@ -6,8 +6,6 @@ from datetime import date, datetime
 from typing import Iterable, Mapping, Optional
 from uuid import UUID
 
-import sentry_sdk
-
 from clickhouse_driver import Client, errors
 from dateutil.tz import tz
 
@@ -16,7 +14,6 @@ from snuba.clickhouse.columns import Array
 from snuba.clickhouse.errors import ClickhouseError
 from snuba.clickhouse.sql import SqlQuery
 from snuba.reader import Reader, Result, build_result_transformer
-from snuba.util import with_span
 from snuba.writer import BatchWriter, WriterTableRow
 
 
@@ -45,7 +42,6 @@ class ClickhousePool(object):
         for _ in range(max_pool_size):
             self.pool.put(None)
 
-    @with_span(op="db")
     def execute(self, *args, **kwargs):
         """
         Execute a clickhouse query with a single quick retry in case of
@@ -55,10 +51,6 @@ class ClickhousePool(object):
         return relatively quickly with an error in case of more persistent
         failures.
         """
-        with sentry_sdk.configure_scope() as scope:
-            if scope.span and len(args):
-                scope.span.set_data("query", args[0])
-
         try:
             conn = self.pool.get(block=True)
 
@@ -89,7 +81,6 @@ class ClickhousePool(object):
         finally:
             self.pool.put(conn, block=False)
 
-    @with_span(op="db")
     def execute_robust(self, *args, **kwargs):
         """
         Execute a clickhouse query with a bit more tenacity. Make more retry
@@ -101,17 +92,8 @@ class ClickhousePool(object):
         loop will be doubled by the retry in execute()
         """
         attempts_remaining = 3
-
-        with sentry_sdk.configure_scope() as scope:
-            span = scope.span
-
-        if span and len(args):
-            span.set_data("query", args[0])
-
         while True:
             try:
-                if span:
-                    span.set_data("attempt", 4 - attempts_remaining)
                 return self.execute(*args, **kwargs)
             except (errors.NetworkError, errors.SocketTimeoutError, EOFError) as e:
                 # Try 3 times on connection issues.
@@ -274,7 +256,6 @@ class NativeDriverBatchWriter(BatchWriter):
             values.append(value)
         return values
 
-    @with_span(op="db")
     def write(self, rows: Iterable[WriterTableRow]):
         columns = self.__schema.get_columns()
         self.__connection.execute_robust(

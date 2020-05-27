@@ -10,7 +10,6 @@ from typing import (
     Optional,
 )
 
-import sentry_sdk
 from sentry_sdk.api import configure_scope
 
 from snuba import settings, state
@@ -27,7 +26,7 @@ from snuba.state.rate_limit import (
     RateLimitAggregator,
     RateLimitExceeded,
 )
-from snuba.util import force_bytes, with_span
+from snuba.util import force_bytes
 from snuba.utils.codecs import JSONCodec
 from snuba.utils.metrics.timer import Timer
 from snuba.web import QueryException, QueryResult
@@ -105,7 +104,6 @@ def execute_query(
     return result
 
 
-@with_span()
 def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -181,26 +179,21 @@ def execute_query_with_caching(
         query_settings,
     )
 
-    with sentry_sdk.start_span(description="execute", op="db") as span:
-        if use_cache:
-            key = get_query_cache_key(formatted_query)
-            result = cache.get(key)
-            timer.mark("cache_get")
-            stats["cache_hit"] = result is not None
-            if result is not None:
-                span.set_tag("cache", "hit")
-                return result
-
-            span.set_tag("cache", "miss")
-            result = execute()
-            cache.set(key, result)
-            timer.mark("cache_set")
+    if use_cache:
+        key = get_query_cache_key(formatted_query)
+        result = cache.get(key)
+        timer.mark("cache_get")
+        stats["cache_hit"] = result is not None
+        if result is not None:
             return result
-        else:
-            return execute()
+        result = execute()
+        cache.set(key, result)
+        timer.mark("cache_set")
+        return result
+    else:
+        return execute()
 
 
-@with_span()
 def execute_query_with_readthrough_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,

@@ -34,7 +34,7 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import local_dataset_mode, with_span
+from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
@@ -263,21 +263,19 @@ def dataset_query_view(*, dataset: Dataset, timer: Timer):
         assert False, "unexpected fallthrough"
 
 
-@with_span()
 def dataset_query(dataset: Dataset, body, timer: Timer) -> Response:
     assert http_request.method == "POST"
-
-    with sentry_sdk.start_span(description="ensure_dataset", op="validate"):
-        ensure_not_internal(dataset)
-        ensure_tables_migrated()
-
-    with sentry_sdk.start_span(description="build_schema", op="validate"):
-        schema = RequestSchema.build_with_extensions(
-            dataset.get_extensions(), HTTPRequestSettings
-        )
+    ensure_not_internal(dataset)
+    ensure_tables_migrated()
 
     request = validate_request_content(
-        body, schema, timer, dataset, http_request.referrer,
+        body,
+        RequestSchema.build_with_extensions(
+            dataset.get_extensions(), HTTPRequestSettings
+        ),
+        timer,
+        dataset,
+        http_request.referrer,
     )
 
     try:
