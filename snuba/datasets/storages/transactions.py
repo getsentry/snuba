@@ -101,6 +101,11 @@ def transactions_migrations(
                 f"ALTER TABLE {clickhouse_table} MODIFY COLUMN {col_name} {col.for_schema()}"
             )
 
+    if "message_timestamp" not in current_schema:
+        ret.append(
+            f"ALTER TABLE {clickhouse_table} ADD COLUMN message_timestamp DateTime AFTER offset"
+        )
+
     return ret
 
 
