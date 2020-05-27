@@ -88,6 +88,7 @@ metadata_columns = ColumnSet(
         # optional stream related data
         ("offset", Nullable(UInt(64))),
         ("partition", Nullable(UInt(16))),
+        ("message_timestamp", Nullable(DateTime())),
     ]
 )
 
