@@ -7,7 +7,6 @@ from snuba.clickhouse.query import Query
 from snuba.query.accessors import get_columns_in_expression
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
-    BooleanFunctions,
     combine_and_conditions,
     get_first_level_conditions,
 )
@@ -31,13 +30,13 @@ ALLOWED_OPERATORS = [
 
 class PrewhereProcessor(QueryProcessor):
     """
-    Moves top level conditions into the pre-where clause
-    according to the list of candidates provided by the query data source.
+    Moves top level conditions into the pre-where clause according to
+    the list of candidates provided by the query data source.
 
     In order for a condition to become a pre-where condition it has to be:
     - a single top-level condition (not in an OR statement)
-    - any of its referenced columns must be in the list provided by the query
-      data source.
+    - any of its referenced columns must be in the list provided by
+      the query data source.
     """
 
     def __init__(self, max_prewhere_conditions: Optional[int] = None) -> None:
@@ -51,9 +50,10 @@ class PrewhereProcessor(QueryProcessor):
         if not prewhere_keys:
             return
 
-        # While both implementations modify the query, they do not interfere with each
-        # other since one depend on the legacy representation and the other on the AST
-        # Thus we can execute the two independently.
+        # While both implementations modify the query, they do not
+        # interfere with each other since one depend on the legacy
+        # representation and the other on the AST thus we can execute
+        # the two independently.
         LegacyPrewhereProcessor().process_query(
             query, max_prewhere_conditions, prewhere_keys
         )
@@ -68,10 +68,10 @@ TColumn = TypeVar("TColumn")
 
 class PrewhereProcessorDelegate(ABC, Generic[TCondition, TColumn]):
     """
-    Runs the prewhere generation algorithm on behalf of PrewhereProcessor. There
-    are two implementation following a template method pattern. One for the AST
-    and one for the legacy query representation so that the prewhere generation
-    code does not have to be duplicated.
+    Runs the prewhere generation algorithm on behalf of PrewhereProcessor.
+    There are two implementation following a template method pattern. One
+    for the AST and one for the legacy query representation so that the
+    prewhere generation code does not have to be duplicated.
     """
 
     def process_query(
@@ -151,9 +151,8 @@ class LegacyPrewhereProcessor(PrewhereProcessorDelegate[Condition, str]):
         self, query: Query, prewhere_conditions: Sequence[Condition]
     ) -> None:
         conditions = query.get_conditions()
-        if not conditions:
-            # This should never happen at this point, but for mypy this can be None.
-            return
+        # This should never ne None at this point, but for mypy this can be None.
+        assert conditions is not None
 
         query.set_conditions(
             [cond for cond in conditions if cond not in prewhere_conditions]
@@ -163,10 +162,10 @@ class LegacyPrewhereProcessor(PrewhereProcessorDelegate[Condition, str]):
 
 class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
     """
-    This class MUST not depend on anything from the legacy implementation because,
-    as long as we have both ast and legacy representation coexisting, this class
-    cannot be sure whether the legacy representation has already been modified
-    to process the pre-where conditions.
+    This class MUST not depend on anything from the legacy implementation
+    because, as long as we have both ast and legacy representation
+    coexisting, this class cannot be sure whether the legacy representation
+    has already been modified to process the pre-where conditions.
     """
 
     allowed_ast_operators = [OPERATOR_TO_FUNCTION[o] for o in ALLOWED_OPERATORS]
@@ -200,9 +199,8 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
         self, query: Query, prewhere_conditions: Sequence[Expression]
     ) -> None:
         ast_condition = query.get_condition_from_ast()
-        if not ast_condition:
-            # This should never happen at this point, but for mypy this can be None.
-            return
+        # This should never be None at this point, but for mypy this can be None.
+        assert ast_condition is not None
 
         new_conditions = [
             cond

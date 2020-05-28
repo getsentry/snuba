@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Any, MutableMapping, Optional, Sequence
 
 import pytest
 
@@ -156,8 +156,8 @@ test_data = [
     test_data,
 )
 def test_prewhere(
-    query_body,
-    keys,
+    query_body: MutableMapping[str, Any],
+    keys: Sequence[str],
     new_conditions: Sequence[Condition],
     new_ast_condition: Optional[Expression],
     prewhere_conditions: Sequence[Condition],

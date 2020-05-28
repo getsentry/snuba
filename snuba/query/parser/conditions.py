@@ -4,7 +4,6 @@ from typing import Any, Callable, Optional, Sequence, TypeVar
 from snuba.datasets.dataset import Dataset
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
-    BooleanFunctions,
     binary_condition,
     combine_and_conditions,
     combine_or_conditions,
