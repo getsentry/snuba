@@ -122,6 +122,7 @@ schema = ReplacingMergeTreeSchema(
     columns=all_columns,
     local_table_name="errors_local",
     dist_table_name="errors_dist",
+    storage_set_key=StorageSetKey.EVENTS,
     mandatory_conditions=[("deleted", "=", 0)],
     prewhere_candidates=[
         "event_id",

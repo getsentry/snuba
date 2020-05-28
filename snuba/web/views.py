@@ -34,7 +34,6 @@ from snuba.state.rate_limit import RateLimitExceeded
 from snuba.subscriptions.codecs import SubscriptionDataCodec
 from snuba.subscriptions.data import InvalidSubscriptionError, PartitionId
 from snuba.subscriptions.subscription import SubscriptionCreator, SubscriptionDeleter
-from snuba.util import local_dataset_mode
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
 from snuba.utils.metrics.timer import Timer
 from snuba.utils.streams.kafka import KafkaPayload
@@ -365,8 +364,6 @@ if application.debug or application.testing:
         global _ensured
         if not force and _ensured:
             return
-
-        assert local_dataset_mode(), "Cannot create table in distributed mode"
 
         from snuba.migrations import migrate
 

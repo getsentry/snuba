@@ -44,10 +44,6 @@ IMPACT_FUNCTION_RE = re.compile(
 )
 
 
-def local_dataset_mode() -> bool:
-    return settings.DATASET_MODE == "local"
-
-
 def to_list(value: Union[T, List[T]]) -> List[T]:
     return value if isinstance(value, list) else [value]
 

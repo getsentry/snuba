@@ -99,11 +99,19 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
     shared by all storages located on the cluster
     """
 
-    def __init__(self, host: str, port: int, http_port: int, storage_sets: Set[str]):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        http_port: int,
+        storage_sets: Set[str],
+        single_node: bool,
+    ):
         super().__init__(storage_sets)
         self.__host = host
         self.__port = port
         self.__http_port = http_port
+        self.__single_node = single_node
         self.__reader: Optional[Reader[SqlQuery]] = None
         self.__connection_cache: MutableMapping[
             ClickhouseClientSettings, ClickhousePool
@@ -148,6 +156,14 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
             table_name, self.__host, self.__http_port, encoder, options, chunk_size
         )
 
+    def is_single_node(self) -> bool:
+        """
+        This will be used to determine:
+        - which migrations will be run (either just local or local and distributed tables)
+        - Differences in the query - such as whether the _local or _dist table is picked
+        """
+        return self.__single_node
+
 
 CLUSTERS = [
     ClickhouseCluster(
@@ -155,6 +171,7 @@ CLUSTERS = [
         port=cluster["port"],
         http_port=cluster["http_port"],
         storage_sets=cluster["storage_sets"],
+        single_node=cluster["single_node"],
     )
     for cluster in settings.CLUSTERS
 ]
