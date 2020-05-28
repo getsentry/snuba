@@ -66,10 +66,14 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
     def __init__(
         self,
         storage: ReadableStorage,
+        mappers: Optional[TranslationMappers] = None,
         post_processors: Optional[Sequence[QueryProcessor]] = None,
     ) -> None:
         # The storage the query is based on
         self.__storage = storage
+        # The translation mappers to be used when translating the query from
+        # the logical query into the clickhouse query.
+        self.__mappers = mappers or TranslationMappers()
         # This is a set of query processors that have to be executed on the
         # query after the storage selection but that are defined by the dataset.
         # Query processors defined by a Storage must be executable independently
@@ -81,12 +85,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__post_processors = post_processors or []
 
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
-        # TODO: The translator is going to be configured with a mapping between logical
-        # and physical schema that is a property of the relation between dataset (later
-        # entity) and storage.
-        clickhouse_query = QueryTranslator(TranslationMappers()).translate(
-            request.query
-        )
+        clickhouse_query = QueryTranslator(self.__mappers).translate(request.query)
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
