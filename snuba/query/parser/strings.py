@@ -30,7 +30,7 @@ def parse_string_to_expr(val: str) -> Expression:
             #
             # TODO: adopt this approach to all expression generated during parsing.
             alias=val,
-            column=Column(None, col_name, None),
+            column=Column(None, None, col_name),
             key=Literal(None, key_name),
         )
 
@@ -45,4 +45,4 @@ def parse_string_to_expr(val: str) -> Expression:
             if QUOTED_LITERAL_RE.match(val):
                 return Literal(None, val[1:-1])
             else:
-                return Column(None, val, None)
+                return Column(None, None, val)

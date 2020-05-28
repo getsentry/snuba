@@ -18,7 +18,7 @@ class TransactionColumnProcessor(QueryProcessor):
                         "replaceAll",
                         (
                             FunctionCall(
-                                None, "toString", (Column(None, "event_id", None),),
+                                None, "toString", (Column(None, None, "event_id"),),
                             ),
                             Literal(None, "-"),
                             Literal(None, ""),

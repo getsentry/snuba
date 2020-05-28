@@ -27,13 +27,13 @@ def build_time_condition(
         binary_condition(
             None,
             ConditionFunctions.GTE,
-            Column(None, time_columns, None),
+            Column(None, None, time_columns),
             Literal(None, from_date),
         ),
         binary_condition(
             None,
             ConditionFunctions.LT,
-            Column(None, time_columns, None),
+            Column(None, None, time_columns),
             Literal(None, to_date),
         ),
     )

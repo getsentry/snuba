@@ -27,7 +27,7 @@ def build_in(project_column: str, projects: Sequence[int]) -> Expression:
         None,
         "in",
         (
-            Column(None, project_column, None),
+            Column(None, None, project_column),
             FunctionCall(None, "tuple", tuple([Literal(None, p) for p in projects])),
         ),
     )
@@ -105,7 +105,7 @@ def test_not_many_groups_to_exclude(query: ClickhouseQuery) -> None:
                 "notIn",
                 (
                     FunctionCall(
-                        None, "assumeNotNull", (Column(None, "group_id", None),)
+                        None, "assumeNotNull", (Column(None, None, "group_id"),)
                     ),
                     FunctionCall(
                         None,
