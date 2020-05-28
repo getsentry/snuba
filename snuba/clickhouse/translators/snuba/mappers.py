@@ -99,15 +99,15 @@ tag_pattern = FunctionCall(
     (
         Column(
             None,
-            Param("table_name", AnyOptionalString()),
-            Param("value_column", Any(str)),
+            Param(TABLE_TAG_PARAM, AnyOptionalString()),
+            Param(VALUE_COL_TAG_PARAM, Any(str)),
         ),
         FunctionCall(
             None,
             String("indexOf"),
             (
-                Column(None, None, Param("key_column", Any(str))),
-                Literal(None, Param("key", Any(str))),
+                Column(None, None, Param(KEY_COL_TAG_PARAM, Any(str))),
+                Literal(None, Param(KEY_TAG_PARAM, Any(str))),
             ),
         ),
     ),
