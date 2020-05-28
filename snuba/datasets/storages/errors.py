@@ -158,9 +158,7 @@ storage = WritableTableStorage(
         PostReplacementConsistencyEnforcer(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
-        MappingColumnPromoter(
-            columns=all_columns, mapping_spec={"tags": promoted_tag_columns},
-        ),
+        MappingColumnPromoter(mapping_spec={"tags": promoted_tag_columns}),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

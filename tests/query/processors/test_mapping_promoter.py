@@ -8,13 +8,20 @@ from snuba.query.logical import Query as LogicalQuery
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
 
+columns = ColumnSet(
+    [
+        ("promtoed", Nullable(String())),
+        ("tags", Nested([("key", String()), ("value", String())])),
+    ]
+)
+
 test_cases = [
     (
         "not promoted",
         ClickhouseQuery(
             LogicalQuery(
                 {},
-                TableSource("events", ColumnSet([])),
+                TableSource("events", columns),
                 selected_columns=[
                     FunctionCall(
                         "tags[foo]",
@@ -34,7 +41,7 @@ test_cases = [
         ClickhouseQuery(
             LogicalQuery(
                 {},
-                TableSource("events", ColumnSet([])),
+                TableSource("events", columns),
                 selected_columns=[
                     FunctionCall(
                         "tags[foo]",
@@ -57,7 +64,7 @@ test_cases = [
         ClickhouseQuery(
             LogicalQuery(
                 {},
-                TableSource("events", ColumnSet([])),
+                TableSource("events", columns),
                 selected_columns=[
                     FunctionCall(
                         "tags[promoted_tag]",
@@ -80,7 +87,7 @@ test_cases = [
         ClickhouseQuery(
             LogicalQuery(
                 {},
-                TableSource("events", ColumnSet([])),
+                TableSource("events", columns),
                 selected_columns=[
                     FunctionCall(
                         "tags[promoted_tag]",
@@ -98,14 +105,8 @@ test_cases = [
 def test_format_expressions(
     name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
-    columns = ColumnSet(
-        [
-            ("promtoed", Nullable(String())),
-            ("tags", Nested([("key", String()), ("value", String())])),
-        ]
+    MappingColumnPromoter({"tags": {"promtoed_tag": "promtoed"}}).process_query(
+        query, HTTPRequestSettings()
     )
-    MappingColumnPromoter(
-        columns, {"tags": {"promtoed_tag": "promtoed"}},
-    ).process_query(query, HTTPRequestSettings())
 
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()

@@ -318,7 +318,6 @@ storage = WritableTableStorage(
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         EventsColumnProcessor(),
         MappingColumnPromoter(
-            columns=all_columns,
             mapping_spec={
                 "tags": ChainMap(
                     {col.flattened: col.flattened for col in promoted_tag_columns},

@@ -1,6 +1,5 @@
 from typing import Mapping, NamedTuple, Optional
 
-from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.clickhouse.translators.snuba.mappers import (
@@ -79,12 +78,7 @@ class MappingColumnPromoter(QueryProcessor):
     that maps to the myTag tag.
     """
 
-    def __init__(
-        self, columns: ColumnSet, mapping_spec: Mapping[str, Mapping[str, str]]
-    ) -> None:
-        # The ColumnSet of the dataset. Used to format promoted
-        # columns with the right type.
-        self.__columns = columns
+    def __init__(self, mapping_spec: Mapping[str, Mapping[str, str]]) -> None:
         # The configuration for this processor. The key of the
         # mapping is the name of the nested column. The value is
         # a mapping between key in the mapping column and promoted
@@ -102,7 +96,11 @@ class MappingColumnPromoter(QueryProcessor):
                     subscript.key
                 )
                 if promoted_col_name:
-                    col_type = self.__columns.get(promoted_col_name, None)
+                    col_type = (
+                        query.get_data_source()
+                        .get_columns()
+                        .get(promoted_col_name, None)
+                    )
                     col_type_name = str(col_type) if col_type else None
 
                     ret_col = Column(exp.alias, subscript.table_name, promoted_col_name)
