@@ -98,7 +98,7 @@ def bootstrap(
 
     # Attempt to connect with every cluster
     for cluster in CLUSTERS:
-        clickhouse = cluster.get_connection(ClickhouseClientSettings.MIGRATE)
+        clickhouse = cluster.get_query_connection(ClickhouseClientSettings.MIGRATE)
 
         while True:
             try:

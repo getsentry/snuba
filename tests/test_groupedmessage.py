@@ -132,7 +132,7 @@ class TestGroupedMessage(BaseDatasetTest):
         self.write_processed_records(ret.data)
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_connection(ClickhouseClientSettings.INSERT)
+            .get_query_connection(ClickhouseClientSettings.INSERT)
             .execute("SELECT * FROM test_groupedmessage_local;")
         )
         assert ret[0] == (
@@ -187,7 +187,7 @@ class TestGroupedMessage(BaseDatasetTest):
         self.write_processed_records(row.to_clickhouse())
         ret = (
             get_cluster(StorageSetKey.EVENTS)
-            .get_connection(ClickhouseClientSettings.QUERY)
+            .get_query_connection(ClickhouseClientSettings.QUERY)
             .execute("SELECT * FROM test_groupedmessage_local;")
         )
         assert ret[0] == (
