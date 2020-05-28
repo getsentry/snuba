@@ -51,7 +51,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
                     processor.process_query(query, request_settings)
             return runner(query, request_settings, self.__cluster.get_reader())
 
-        use_split = state.get_config("use_split", 0)
+        use_split = state.get_config("use_split", 1)
         if use_split:
             for splitter in self.__splitters:
                 with sentry_sdk.start_span(
