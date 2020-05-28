@@ -15,8 +15,8 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                FunctionCall("alias", "uniq", (Column(None, "column1", None),)),
-                FunctionCall("alias2", "emptyIfNull", (Column(None, "column2", None),)),
+                FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
+                FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
             ],
         ),
         Query(
@@ -27,7 +27,7 @@ test_data = [
                     "alias",
                     "ifNull",
                     (
-                        FunctionCall(None, "uniq", (Column(None, "column1", None),)),
+                        FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
                         Literal(None, 0),
                     ),
                 ),
@@ -36,7 +36,7 @@ test_data = [
                     "ifNull",
                     (
                         FunctionCall(
-                            None, "emptyIfNull", (Column(None, "column2", None),)
+                            None, "emptyIfNull", (Column(None, None, "column2"),)
                         ),
                         Literal(None, ""),
                     ),
@@ -49,28 +49,28 @@ test_data = [
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, "column1", None),
-                FunctionCall("alias", "uniq", (Column(None, "column1", None),)),
-                FunctionCall("alias2", "emptyIfNull", (Column(None, "column2", None),)),
+                Column(None, None, "column1"),
+                FunctionCall("alias", "uniq", (Column(None, None, "column1"),)),
+                FunctionCall("alias2", "emptyIfNull", (Column(None, None, "column2"),)),
             ],
             condition=FunctionCall(
-                None, "eq", (Column(None, "column1", None), Literal(None, "a"))
+                None, "eq", (Column(None, None, "column1"), Literal(None, "a"))
             ),
             groupby=[
-                FunctionCall("alias3", "uniq", (Column(None, "column5", None),)),
-                FunctionCall("alias4", "emptyIfNull", (Column(None, "column6", None),)),
+                FunctionCall("alias3", "uniq", (Column(None, None, "column5"),)),
+                FunctionCall("alias4", "emptyIfNull", (Column(None, None, "column6"),)),
             ],
         ),
         Query(
             {},
             TableSource("events", ColumnSet([])),
             selected_columns=[
-                Column(None, "column1", None),
+                Column(None, None, "column1"),
                 FunctionCall(
                     "alias",
                     "ifNull",
                     (
-                        FunctionCall(None, "uniq", (Column(None, "column1", None),)),
+                        FunctionCall(None, "uniq", (Column(None, None, "column1"),)),
                         Literal(None, 0),
                     ),
                 ),
@@ -79,21 +79,21 @@ test_data = [
                     "ifNull",
                     (
                         FunctionCall(
-                            None, "emptyIfNull", (Column(None, "column2", None),)
+                            None, "emptyIfNull", (Column(None, None, "column2"),)
                         ),
                         Literal(None, ""),
                     ),
                 ),
             ],
             condition=FunctionCall(
-                None, "eq", (Column(None, "column1", None), Literal(None, "a"))
+                None, "eq", (Column(None, None, "column1"), Literal(None, "a"))
             ),
             groupby=[
                 FunctionCall(
                     "alias3",
                     "ifNull",
                     (
-                        FunctionCall(None, "uniq", (Column(None, "column5", None),)),
+                        FunctionCall(None, "uniq", (Column(None, None, "column5"),)),
                         Literal(None, 0),
                     ),
                 ),
@@ -102,7 +102,7 @@ test_data = [
                     "ifNull",
                     (
                         FunctionCall(
-                            None, "emptyIfNull", (Column(None, "column6", None),)
+                            None, "emptyIfNull", (Column(None, None, "column6"),)
                         ),
                         Literal(None, ""),
                     ),
@@ -118,7 +118,7 @@ test_data = [
                 CurriedFunctionCall(
                     None,
                     FunctionCall(None, "top", (Literal(None, 10),)),
-                    (Column(None, "column1", None),),
+                    (Column(None, None, "column1"),),
                 )
             ],
         ),
@@ -129,7 +129,7 @@ test_data = [
                 CurriedFunctionCall(
                     None,
                     FunctionCall(None, "topK", (Literal(None, 10),)),
-                    (Column(None, "column1", None),),
+                    (Column(None, None, "column1"),),
                 )
             ],
         ),

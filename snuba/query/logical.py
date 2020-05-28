@@ -217,6 +217,9 @@ class Query:
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
+    def set_ast_condition(self, condition: Optional[Expression]) -> None:
+        self.__condition = condition
+
     def set_conditions(self, conditions: Sequence[Condition]) -> None:
         self.__body["conditions"] = conditions
 
@@ -242,6 +245,9 @@ class Query:
         Temporary method until pre where management is moved to Clickhouse query
         """
         return self.__prewhere
+
+    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
+        self.__prewhere = condition
 
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """

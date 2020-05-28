@@ -309,3 +309,28 @@ class TestTransactionsApi(BaseApiTest):
             # we select duration to make debugging easier on failure
             "duration": 1000,
         }
+
+    def test_error_rate_function(self):
+        response = self.app.post(
+            "/query",
+            data=json.dumps(
+                {
+                    "dataset": "transactions",
+                    "project": 1,
+                    "selected_columns": ["transaction_name", "duration"],
+                    "aggregations": [["error_rate()", "", "error_percentage"]],
+                    "orderby": "transaction_name",
+                    "groupby": ["transaction_name", "duration"],
+                }
+            ),
+        )
+        data = json.loads(response.data)
+        assert response.status_code == 200, response.data
+        assert len(data["data"]) == 1, data
+        assert "error_percentage" in data["data"][0]
+        assert data["data"][0] == {
+            "transaction_name": "/api/do_things",
+            "error_percentage": 0,
+            # we select duration to make debugging easier on failure
+            "duration": 1000,
+        }

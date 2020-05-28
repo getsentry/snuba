@@ -23,7 +23,7 @@ def test_organization_extension_query_processing_happy_path():
 
     assert query.get_conditions() == [("org_id", "=", 2)]
     assert query.get_condition_from_ast() == binary_condition(
-        None, ConditionFunctions.EQ, Column(None, "org_id", None), Literal(None, 2)
+        None, ConditionFunctions.EQ, Column(None, None, "org_id"), Literal(None, 2)
     )
 
 
