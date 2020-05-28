@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
+from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.clusters.cluster import ClickhouseCluster
 from snuba.datasets.plans.query_plan import (
     ClickhouseQueryPlan,
@@ -11,7 +12,7 @@ from snuba.datasets.plans.query_plan import (
     QueryRunner,
 )
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy
-from snuba.datasets.plans.translator.translators import QueryTranslator
+from snuba.datasets.plans.translator.query import QueryTranslator
 from snuba.datasets.storage import QueryStorageSelector, ReadableStorage
 from snuba.request import Request
 from snuba.request.request_settings import RequestSettings
@@ -83,7 +84,9 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         # TODO: The translator is going to be configured with a mapping between logical
         # and physical schema that is a property of the relation between dataset (later
         # entity) and storage.
-        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query = QueryTranslator(TranslationMappers()).translate(
+            request.query
+        )
         clickhouse_query.set_data_source(
             self.__storage.get_schemas().get_read_schema().get_data_source()
         )
@@ -119,7 +122,9 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
 
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
-        clickhouse_query = QueryTranslator().translate(request.query)
+        clickhouse_query = QueryTranslator(TranslationMappers()).translate(
+            request.query
+        )
         clickhouse_query.set_data_source(
             storage.get_schemas().get_read_schema().get_data_source()
         )
