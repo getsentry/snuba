@@ -139,9 +139,6 @@ class ClickhouseCluster(Cluster[SqlQuery, ClickhouseWriterOptions]):
         distributed_cluster_name: Optional[str] = None,
     ):
         super().__init__(storage_sets)
-        if not single_node:
-            assert cluster_name
-
         self.__query_node = ClickhouseNode(host, port)
         self.__http_port = http_port
         self.__single_node = single_node
