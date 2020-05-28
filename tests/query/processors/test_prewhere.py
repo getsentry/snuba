@@ -20,7 +20,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 test_data = [
     (
-        {"conditions": [[["positionCaseInsensitive", ["message", "abc"]], "!=", 0]]},
+        {"conditions": [[["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]]},
         [
             "event_id",
             "group_id",
@@ -31,7 +31,7 @@ test_data = [
         ],
         [],
         None,
-        [[["positionCaseInsensitive", ["message", "abc"]], "!=", 0]],
+        [[["positionCaseInsensitive", ["message", "'abc'"]], "!=", 0]],
         FunctionCall(
             None,
             OPERATOR_TO_FUNCTION["!="],
@@ -39,7 +39,7 @@ test_data = [
                 FunctionCall(
                     None,
                     "positionCaseInsensitive",
-                    (Column(None, None, "message"), Column(None, None, "abc")),
+                    (Column(None, None, "message"), Literal(None, "abc")),
                 ),
                 Literal(None, 0),
             ),
