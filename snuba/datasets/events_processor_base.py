@@ -1,31 +1,30 @@
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-import logging
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from snuba import settings
-from snuba.clickhouse.columns import ColumnSet
 from snuba.consumer import KafkaMessageMetadata
 from snuba.datasets.events_format import (
+    EventTooOld,
     enforce_retention,
-    extract_project_id,
     extract_extra_contexts,
     extract_extra_tags,
+    extract_project_id,
     flatten_nested_field,
-    EventTooOld,
 )
 from snuba.processor import (
+    InvalidMessageType,
+    InvalidMessageVersion,
+    MessageProcessor,
+    ProcessedMessage,
+    ProcessorAction,
     _as_dict_safe,
     _boolify,
     _collapse_uint32,
     _ensure_valid_date,
     _hashify,
     _unicodify,
-    InvalidMessageType,
-    InvalidMessageVersion,
-    MessageProcessor,
-    ProcessorAction,
-    ProcessedMessage,
 )
 
 logger = logging.getLogger(__name__)
@@ -246,6 +245,7 @@ class EventsProcessorBase(MessageProcessor, ABC):
         if metadata is not None:
             processed["offset"] = metadata.offset
             processed["partition"] = metadata.partition
+            processed["message_timestamp"] = metadata.timestamp
 
         return processed
 
