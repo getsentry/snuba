@@ -16,8 +16,8 @@ def test_iterate_over_query():
     """
     Creates a query with the new AST and iterate over all expressions.
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 
@@ -64,8 +64,8 @@ def test_replace_expression():
     Create a query with the new AST and replaces a function with a different function
     replaces f1(...) with tag(f1)
     """
-    column1 = Column(None, "c1", "t1")
-    column2 = Column(None, "c2", "t1")
+    column1 = Column(None, "t1", "c1")
+    column2 = Column(None, "t1", "c2")
     function_1 = FunctionCall("alias", "f1", (column1, column2))
     function_2 = FunctionCall("alias", "f2", (column2,))
 

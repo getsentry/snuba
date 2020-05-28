@@ -18,9 +18,9 @@ def test_apdex_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             FunctionCall(
-                "perf", "apdex", (Column(None, "column1", None), Literal(None, 300))
+                "perf", "apdex", (Column(None, None, "column1"), Literal(None, 300))
             ),
         ],
     )
@@ -28,7 +28,7 @@ def test_apdex_format_expressions() -> None:
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
-            Column(None, "column2", None),
+            Column(None, None, "column2"),
             div(
                 plus(
                     FunctionCall(
@@ -38,7 +38,7 @@ def test_apdex_format_expressions() -> None:
                             binary_condition(
                                 None,
                                 ConditionFunctions.LTE,
-                                Column(None, "column1", None),
+                                Column(None, None, "column1"),
                                 Literal(None, 300),
                             ),
                         ),
@@ -54,13 +54,13 @@ def test_apdex_format_expressions() -> None:
                                     binary_condition(
                                         None,
                                         ConditionFunctions.GT,
-                                        Column(None, "column1", None),
+                                        Column(None, None, "column1"),
                                         Literal(None, 300),
                                     ),
                                     binary_condition(
                                         None,
                                         ConditionFunctions.LTE,
-                                        Column(None, "column1", None),
+                                        Column(None, None, "column1"),
                                         multiply(Literal(None, 300), Literal(None, 4)),
                                     ),
                                 ),
