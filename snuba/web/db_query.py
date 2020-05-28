@@ -63,6 +63,7 @@ def update_query_metadata_and_stats(
     return stats
 
 
+@with_span(op="db")
 def execute_query(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -105,7 +106,7 @@ def execute_query(
     return result
 
 
-@with_span()
+@with_span(op="db")
 def execute_query_with_rate_limits(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -152,6 +153,7 @@ def get_query_cache_key(formatted_query: SqlQuery) -> str:
     return md5(force_bytes(formatted_query.format_sql())).hexdigest()
 
 
+@with_span(op="db")
 def execute_query_with_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
@@ -200,7 +202,7 @@ def execute_query_with_caching(
             return execute()
 
 
-@with_span()
+@with_span(op="db")
 def execute_query_with_readthrough_caching(
     clickhouse_query: Query,
     request_settings: RequestSettings,
