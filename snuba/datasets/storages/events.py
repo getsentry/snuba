@@ -1,3 +1,4 @@
+from collections import ChainMap
 from typing import FrozenSet, Mapping, Sequence
 
 from snuba.clickhouse.columns import (
@@ -24,6 +25,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
@@ -315,6 +317,21 @@ storage = WritableTableStorage(
         # in the storage selector.
         ReadOnlyTableSelector("sentry_dist", "sentry_dist_ro"),
         EventsColumnProcessor(),
+        MappingColumnPromoter(
+            mapping_specs={
+                "tags": ChainMap(
+                    {col.flattened: col.flattened for col in promoted_tag_columns},
+                    {
+                        col.flattened.replace("_", "."): col.flattened
+                        for col in promoted_context_tag_columns
+                    },
+                ),
+                "contexts": {
+                    col.flattened.replace("_", "."): col.flattened
+                    for col in promoted_context_columns
+                },
+            },
+        ),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
