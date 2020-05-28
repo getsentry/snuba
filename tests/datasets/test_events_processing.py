@@ -32,7 +32,7 @@ def test_events_processing() -> None:
         query: Query, settings: RequestSettings, reader: Reader[SqlQuery]
     ) -> QueryResult:
         assert query.get_selected_columns_from_ast() == [
-            Column("tags[transaction]", "transaction", None)
+            Column("tags[transaction]", None, "transaction")
         ]
         return QueryResult({}, {})
 

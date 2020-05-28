@@ -3,7 +3,14 @@ from typing import Mapping, NamedTuple, Optional
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
+from snuba.clickhouse.translators.snuba.mappers import (
+    KEY_COL_TAG_PARAM,
+    KEY_TAG_PARAM,
+    TABLE_TAG_PARAM,
+    VALUE_COL_TAG_PARAM,
+    tag_pattern,
+)
+from snuba.query.expressions import Column, Expression, FunctionCall
 from snuba.request.request_settings import RequestSettings
 
 
@@ -16,7 +23,7 @@ class SubscriptableMatch(NamedTuple):
     key_field: str
     # The value column name in the mapping (like key for tags.value)
     val_field: str
-    # The key found in the query (like tags[key])
+    # The key found in the query (like key in tags[key])
     key: str
 
 
@@ -32,17 +39,8 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     `arrayElement("tags.value", indexOf("tags.key", "myTag"))`
     """
 
-    if not (
-        isinstance(exp, FunctionCall)
-        and exp.function_name == "arrayElement"
-        and len(exp.parameters) == 2
-        and isinstance(exp.parameters[0], Column)
-        and isinstance(exp.parameters[1], FunctionCall)
-        and exp.parameters[1].function_name == "indexOf"
-        and len(exp.parameters[1].parameters) == 2
-        and isinstance(exp.parameters[1].parameters[0], Column)
-        and isinstance(exp.parameters[1].parameters[1], Literal)
-    ):
+    match = tag_pattern.match(exp)
+    if match is None:
         return None
 
     # TODO: There is should be a structured Column class (#963 - #966)
@@ -50,9 +48,9 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     # the column name string.
 
     # exp.parameters[0] is a Column with a name like `tags.value`
-    value_col_split = exp.parameters[0].column_name.split(".", 2)
+    value_col_split = match.string(VALUE_COL_TAG_PARAM).split(".", 2)
     # exp.parameters[1].parameters[0] is a Column with a name like `tags.key`
-    key_col_split = exp.parameters[1].parameters[0].column_name.split(".", 2)
+    key_col_split = match.string(KEY_COL_TAG_PARAM).split(".", 2)
 
     if len(value_col_split) != 2 or len(key_col_split) != 2:
         return None
@@ -63,16 +61,13 @@ def match_subscriptable_reference(exp: Expression) -> Optional[SubscriptableMatc
     if val_column != key_column:
         return None
 
-    key_literal = exp.parameters[1].parameters[1]
-    if not isinstance(key_literal.value, str):
-        return None
-
+    table_name = match.scalar(TABLE_TAG_PARAM)
     return SubscriptableMatch(
-        table_name=exp.parameters[0].table_name,
+        table_name=str(table_name) if table_name is not None else None,
         column_name=val_column,
         key_field=key_field,
         val_field=val_field,
-        key=key_literal.value,
+        key=match.string(KEY_TAG_PARAM),
     )
 
 
@@ -127,7 +122,7 @@ class MappingColumnPromoter(QueryProcessor):
                     col_type = self.__columns.get(promoted_col_name, None)
                     col_type_name = str(col_type) if col_type else None
 
-                    ret_col = Column(exp.alias, promoted_col_name, subscript.table_name)
+                    ret_col = Column(exp.alias, subscript.table_name, promoted_col_name)
                     if (
                         col_type_name
                         and "String" in col_type_name
