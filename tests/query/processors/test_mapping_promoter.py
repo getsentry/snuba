@@ -10,7 +10,7 @@ from snuba.request.request_settings import HTTPRequestSettings
 
 columns = ColumnSet(
     [
-        ("promtoed", Nullable(String())),
+        ("promoted", Nullable(String())),
         ("tags", Nested([("key", String()), ("value", String())])),
     ]
 )
@@ -105,7 +105,7 @@ test_cases = [
 def test_format_expressions(
     name: str, query: ClickhouseQuery, expected_query: ClickhouseQuery
 ) -> None:
-    MappingColumnPromoter({"tags": {"promtoed_tag": "promtoed"}}).process_query(
+    MappingColumnPromoter({"tags": {"promoted_tag": "promoted"}}).process_query(
         query, HTTPRequestSettings()
     )
 
