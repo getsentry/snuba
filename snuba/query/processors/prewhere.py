@@ -188,7 +188,7 @@ class ASTPrewhereProcessor(PrewhereProcessorDelegate[Expression, Column]):
                     for col in get_columns_in_expression(cond)
                 )
             ]
-            if ast_condition
+            if ast_condition is not None
             else []
         )
 
