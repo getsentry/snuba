@@ -6,7 +6,8 @@ from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
     BooleanFunctions,
     binary_condition,
-    combine_conditions,
+    combine_and_conditions,
+    combine_or_conditions,
 )
 from snuba.query.expressions import Argument, Expression, FunctionCall, Lambda, Literal
 from snuba.query.parser.expressions import parse_expression
@@ -128,12 +129,12 @@ def parse_conditions_to_expr(
     def and_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return combine_conditions(expressions, BooleanFunctions.AND)
+        return combine_and_conditions(expressions)
 
     def or_builder(expressions: Sequence[Expression]) -> Optional[Expression]:
         if not expressions:
             return None
-        return combine_conditions(expressions, BooleanFunctions.OR)
+        return combine_or_conditions(expressions)
 
     def preprocess_literal(op: str, literal: Any) -> Expression:
         """

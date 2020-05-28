@@ -116,11 +116,12 @@ def is_unary_condition(exp: Expression, operator: str) -> bool:
 
 def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
     """
-    Utility function to implement several conditions related functionalities that were
-    trivial with the legacy query representation where the top level conditions for a
-    query were a simple list of conditions.
-    In the AST, the condition is a tree, so we need some additional logic to extract
-    the operands of the top level AND condition.
+    Utility function to implement several conditions related
+    functionalities that were trivial with the legacy query
+    representation where the top level conditions for a query
+    were a simple list of conditions.
+    In the AST, the condition is a tree, so we need some additional
+    logic to extract the operands of the top level AND condition.
     """
     if (
         isinstance(condition, FunctionCall)
@@ -134,12 +135,20 @@ def get_first_level_conditions(condition: Expression) -> Sequence[Expression]:
         return [condition]
 
 
-def combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
+def combine_or_conditions(conditions: Sequence[Expression]) -> Expression:
+    return _combine_conditions(conditions, BooleanFunctions.OR)
+
+
+def combine_and_conditions(conditions: Sequence[Expression]) -> Expression:
+    return _combine_conditions(conditions, BooleanFunctions.AND)
+
+
+def _combine_conditions(conditions: Sequence[Expression], function: str) -> Expression:
     """
-    Combine multiple independent conditions in a single function representing an AND or
-    an OR.
-    This is the inverse of get_first_level_conditions with the difference that it can
-    actually combine both ORs and ANDs.
+    Combine multiple independent conditions in a single function
+    representing an AND or an OR.
+    This is the inverse of get_first_level_conditions with the
+    difference that it can actually combine both ORs and ANDs.
     """
 
     # TODO: Make BooleanFunctions an enum for stricter typing.
@@ -149,5 +158,5 @@ def combine_conditions(conditions: Sequence[Expression], function: str) -> Expre
         return conditions[0]
 
     return binary_condition(
-        None, function, conditions[0], combine_conditions(conditions[1:], function)
+        None, function, conditions[0], _combine_conditions(conditions[1:], function)
     )
