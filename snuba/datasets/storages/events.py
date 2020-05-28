@@ -25,10 +25,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-from snuba.query.processors.mapping_promoter import (
-    MappingColumnPromoter,
-    PromotedColumnsSpec,
-)
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
 from snuba.web.split import ColumnSplitQueryStrategy, TimeSplitQueryStrategy
@@ -323,27 +320,17 @@ storage = WritableTableStorage(
         MappingColumnPromoter(
             columns=all_columns,
             mapping_spec={
-                "tags": PromotedColumnsSpec(
-                    key_field="key",
-                    val_field="value",
-                    column_mapping=ChainMap(
-                        {col.flattened: col.flattened for col in promoted_tag_columns},
-                        {
-                            col.flattened.replace("_", "."): col.flattened
-                            for col in promoted_context_tag_columns
-                        },
-                    ),
+                "tags": ChainMap(
+                    {col.flattened: col.flattened for col in promoted_tag_columns},
+                    {
+                        col.flattened.replace("_", "."): col.flattened
+                        for col in promoted_context_tag_columns
+                    },
                 ),
-                "contexts": PromotedColumnsSpec(
-                    key_field="key",
-                    val_field="value",
-                    column_mapping=ChainMap(
-                        {
-                            col.flattened.replace("_", "."): col.flattened
-                            for col in promoted_context_columns
-                        },
-                    ),
-                ),
+                "contexts": {
+                    col.flattened.replace("_", "."): col.flattened
+                    for col in promoted_context_columns
+                },
             },
         ),
         PrewhereProcessor(),

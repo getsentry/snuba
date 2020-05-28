@@ -5,10 +5,7 @@ from snuba.clickhouse.query import Query as ClickhouseQuery
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query as LogicalQuery
-from snuba.query.processors.mapping_promoter import (
-    MappingColumnPromoter,
-    PromotedColumnsSpec,
-)
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.request.request_settings import HTTPRequestSettings
 
 test_cases = [
@@ -23,11 +20,11 @@ test_cases = [
                         "tags[foo]",
                         "arrayValue",
                         (
-                            Column(None, "tags.value", None),
+                            Column(None, None, "tags.value"),
                             FunctionCall(
                                 None,
                                 "indexOf",
-                                (Column(None, "tags.key", None), Literal(None, "foo")),
+                                (Column(None, None, "tags.key"), Literal(None, "foo")),
                             ),
                         ),
                     )
@@ -43,11 +40,11 @@ test_cases = [
                         "tags[foo]",
                         "arrayValue",
                         (
-                            Column(None, "tags.value", None),
+                            Column(None, None, "tags.value"),
                             FunctionCall(
                                 None,
                                 "indexOf",
-                                (Column(None, "tags.key", None), Literal(None, "foo")),
+                                (Column(None, None, "tags.key"), Literal(None, "foo")),
                             ),
                         ),
                     )
@@ -66,12 +63,12 @@ test_cases = [
                         "tags[promoted_tag]",
                         "arrayValue",
                         (
-                            Column(None, "tags.value", "table"),
+                            Column(None, "table", "tags.value"),
                             FunctionCall(
                                 None,
                                 "indexOf",
                                 (
-                                    Column(None, "tags.key", "table"),
+                                    Column(None, "table", "tags.key"),
                                     Literal(None, "promoted_tag"),
                                 ),
                             ),
@@ -88,7 +85,7 @@ test_cases = [
                     FunctionCall(
                         "tags[promoted_tag]",
                         "toString",
-                        (Column(None, "promoted", "table"),),
+                        (Column(None, "table", "promoted"),),
                     )
                 ],
             )
@@ -108,8 +105,7 @@ def test_format_expressions(
         ]
     )
     MappingColumnPromoter(
-        columns,
-        {"tags": PromotedColumnsSpec("key", "value", {"promtoed_tag": "promtoed"})},
+        columns, {"tags": {"promtoed_tag": "promtoed"}},
     ).process_query(query, HTTPRequestSettings())
 
     assert query.get_arrayjoin_from_ast() == expected_query.get_arrayjoin_from_ast()

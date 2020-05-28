@@ -26,10 +26,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
-from snuba.query.processors.mapping_promoter import (
-    MappingColumnPromoter,
-    PromotedColumnsSpec,
-)
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 all_columns = ColumnSet(
@@ -162,14 +159,7 @@ storage = WritableTableStorage(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
         MappingColumnPromoter(
-            columns=all_columns,
-            mapping_spec={
-                "tags": PromotedColumnsSpec(
-                    key_field="key",
-                    val_field="value",
-                    column_mapping=promoted_tag_columns,
-                )
-            },
+            columns=all_columns, mapping_spec={"tags": promoted_tag_columns},
         ),
         PrewhereProcessor(),
     ],
