@@ -1,7 +1,7 @@
 from datetime import timedelta
 from typing import Mapping, Sequence
 
-from snuba.clickhouse.translators.snuba.mappers import SimpleColumnMapper, TagMapper
+from snuba.clickhouse.translators.snuba.mappers import TagMapper
 from snuba.clickhouse.translators.snuba.mapping import TranslationMappers
 from snuba.datasets.dataset import TimeSeriesDataset
 from snuba.datasets.plans.single_storage import SingleStorageQueryPlanBuilder
@@ -20,11 +20,10 @@ from snuba.query.project_extension import ProjectExtension, ProjectWithGroupsPro
 from snuba.query.timeseries_extension import TimeSeriesExtension
 from snuba.util import qualified_column
 
-
 # TODO: This will be a property of the relationship between entity and
 # storage. Now we do not have entities so it is between dataset and
 # storage.
-events_translation_mappers = TranslationMappers(
+event_translator = TranslationMappers(
     subscriptables=[
         TagMapper(None, "tags", None, "tags"),
         TagMapper(None, "contexts", None, "contexts"),
@@ -46,7 +45,7 @@ class EventsDataset(TimeSeriesDataset):
         super(EventsDataset, self).__init__(
             storages=[storage],
             query_plan_builder=SingleStorageQueryPlanBuilder(
-                storage=storage, mappers=events_translation_mappers,
+                storage=storage, mappers=event_translator,
             ),
             abstract_column_set=columns,
             writable_storage=storage,

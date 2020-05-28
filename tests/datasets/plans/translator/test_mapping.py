@@ -113,6 +113,9 @@ def test_translation(
     name: str, query: SnubaQuery, expected: ClickhouseQuery, mappers: TranslationMappers
 ) -> None:
     translated = QueryTranslator(mappers).translate(query)
+
+    # TODO: consider providing an __eq__ method to the Query class. Or turn it into
+    # a dataclass.
     assert (
         expected.get_selected_columns_from_ast()
         == translated.get_selected_columns_from_ast()

@@ -30,6 +30,6 @@ class QueryTranslator:
         def translate_expression(expr: SnubaExpression) -> ClickhouseExpression:
             return expr.accept(self.__expression_translator)
 
-        query_copy = ClickhouseQuery(copy.deepcopy(query))
-        query_copy.transform_expressions(translate_expression)
-        return query_copy
+        translated = ClickhouseQuery(copy.deepcopy(query))
+        translated.transform_expressions(translate_expression)
+        return translated
