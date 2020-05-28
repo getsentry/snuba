@@ -36,13 +36,13 @@ class ErrorRateProcessor(QueryProcessor):
                             binary_condition(
                                 None,
                                 ConditionFunctions.NEQ,
-                                Column(None, "transaction_status", None),
+                                Column(None, None, "transaction_status"),
                                 Literal(None, SPAN_STATUS_NAME_TO_CODE["ok"]),
                             ),
                             binary_condition(
                                 None,
                                 ConditionFunctions.NEQ,
-                                Column(None, "transaction_status", None),
+                                Column(None, None, "transaction_status"),
                                 Literal(
                                     None, SPAN_STATUS_NAME_TO_CODE["unknown_error"]
                                 ),

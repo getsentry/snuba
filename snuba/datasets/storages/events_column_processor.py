@@ -17,7 +17,7 @@ class EventsColumnProcessor(QueryProcessor):
                         exp.alias,
                         "nullIf",
                         (
-                            Column(None, exp.column_name, exp.table_name),
+                            Column(None, exp.table_name, exp.column_name),
                             Literal(None, 0),
                         ),
                     )
@@ -29,8 +29,8 @@ class EventsColumnProcessor(QueryProcessor):
                         exp.alias,
                         "coalesce",
                         (
-                            Column(None, exp.column_name, exp.table_name),
-                            Column(None, "search_message", exp.table_name),
+                            Column(None, exp.table_name, exp.column_name),
+                            Column(None, exp.table_name, "search_message"),
                         ),
                     )
 
