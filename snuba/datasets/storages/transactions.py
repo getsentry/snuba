@@ -76,16 +76,6 @@ def transactions_migrations(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN _contexts_flattened String DEFAULT ''"
         )
 
-    if "_start_date" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN _start_date Date MATERIALIZED toDate(start_ts) AFTER start_ms"
-        )
-
-    if "_finish_date" not in current_schema:
-        ret.append(
-            f"ALTER TABLE {clickhouse_table} ADD COLUMN _finish_date Date MATERIALIZED toDate(finish_ts) AFTER finish_ms"
-        )
-
     if "user_hash" not in current_schema:
         ret.append(
             f"ALTER TABLE {clickhouse_table} ADD COLUMN user_hash UInt64 MATERIALIZED cityHash64(user) AFTER user"
@@ -126,10 +116,8 @@ columns = ColumnSet(
         ("transaction_status", WithDefault(UInt(8), str(UNKNOWN_SPAN_STATUS))),
         ("start_ts", DateTime()),
         ("start_ms", UInt(16)),
-        ("_start_date", Materialized(Date(), "toDate(start_ts)"),),
         ("finish_ts", DateTime()),
         ("finish_ms", UInt(16)),
-        ("_finish_date", Materialized(Date(), "toDate(finish_ts)"),),
         ("duration", UInt(32)),
         ("platform", LowCardinality(String())),
         ("environment", LowCardinality(Nullable(String()))),
@@ -162,8 +150,8 @@ schema = ReplacingMergeTreeSchema(
     storage_set_key=StorageSetKey.TRANSACTIONS,
     mandatory_conditions=[],
     prewhere_candidates=["event_id", "project_id"],
-    order_by="(project_id, _finish_date, transaction_name, cityHash64(span_id))",
-    partition_by="(retention_days, toMonday(_finish_date))",
+    order_by="(project_id, toStartOfDay(finish_ts), transaction_name, cityHash64(span_id))",
+    partition_by="(retention_days, toMonday(finish_ts))",
     version_column="deleted",
     sample_expr="cityHash64(span_id)",
     ttl_expr="finish_ts + toIntervalDay(retention_days)",

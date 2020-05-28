@@ -89,7 +89,7 @@ class ProjectExtensionProcessor(ExtensionQueryProcessor):
             query.add_condition_to_ast(
                 in_condition(
                     None,
-                    Column(None, self.__project_column, None),
+                    Column(None, None, self.__project_column),
                     [Literal(None, p) for p in project_ids],
                 )
             )
@@ -143,7 +143,7 @@ class ProjectWithGroupsProcessor(ProjectExtensionProcessor):
                         not_in_condition(
                             None,
                             FunctionCall(
-                                None, "assumeNotNull", (Column(None, "group_id", None),)
+                                None, "assumeNotNull", (Column(None, None, "group_id"),)
                             ),
                             [Literal(None, p) for p in exclude_group_ids],
                         )

@@ -1,4 +1,5 @@
 from snuba.clickhouse.columns import (
+    UUID,
     Array,
     ColumnSet,
     DateTime,
@@ -11,7 +12,6 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
     WithCodecs,
     WithDefault,
 )
@@ -26,6 +26,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 
 all_columns = ColumnSet(
@@ -158,6 +159,7 @@ storage = WritableTableStorage(
         PostReplacementConsistencyEnforcer(
             project_column="project_id", replacer_state_name=ReplacerState.ERRORS,
         ),
+        MappingColumnPromoter(mapping_specs={"tags": promoted_tag_columns}),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
