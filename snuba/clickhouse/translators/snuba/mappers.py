@@ -45,8 +45,8 @@ class SimpleColumnMapper(ColumnMapper):
         ):
             return ColumnExpr(
                 alias=expression.alias,
-                column_name=self.to_col_name,
                 table_name=self.to_table_name,
+                column_name=self.to_col_name,
             )
         else:
             return None

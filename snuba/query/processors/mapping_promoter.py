@@ -95,7 +95,7 @@ class MappingColumnPromoter(QueryProcessor):
                 promoted_col_name = self.__specs[subscript.column_name].get(
                     subscript.key
                 )
-                if promoted_col_name:
+                if promoted_col_name is not None:
                     col_type = (
                         query.get_data_source()
                         .get_columns()
