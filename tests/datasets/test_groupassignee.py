@@ -94,7 +94,9 @@ class TestGroupassignee(BaseDatasetTest):
         processor = GroupAssigneeProcessor("sentry_groupasignee")
         message_filter = CdcTableNameMessageFilter(postgres_table=POSTGRES_TABLE)
 
-        metadata = KafkaMessageMetadata(offset=42, partition=0,)
+        metadata = KafkaMessageMetadata(
+            offset=42, partition=0, timestamp=datetime(1970, 1, 1)
+        )
 
         assert not message_filter.should_drop(
             self.__make_msg(0, 42, self.BEGIN_MSG, [])
