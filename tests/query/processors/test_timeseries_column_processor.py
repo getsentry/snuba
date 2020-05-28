@@ -17,7 +17,7 @@ tests = [
         FunctionCall(
             "my_time",
             "toStartOfHour",
-            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
         ),
         "(toStartOfHour(finish_ts, 'Universal') AS my_time)",
     ),
@@ -26,7 +26,7 @@ tests = [
         FunctionCall(
             "my_time",
             "toStartOfMinute",
-            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
         ),
         "(toStartOfMinute(finish_ts, 'Universal') AS my_time)",
     ),
@@ -35,7 +35,7 @@ tests = [
         FunctionCall(
             "my_time",
             "toDate",
-            (Column(None, "finish_ts", None), Literal(None, "Universal")),
+            (Column(None, None, "finish_ts"), Literal(None, "Universal")),
         ),
         "(toDate(finish_ts, 'Universal') AS my_time)",
     ),
@@ -51,7 +51,7 @@ tests = [
                         "intDiv",
                         (
                             FunctionCall(
-                                None, "toUInt32", (Column(None, "finish_ts", None),),
+                                None, "toUInt32", (Column(None, None, "finish_ts"),),
                             ),
                             Literal(None, 1440),
                         ),
@@ -74,14 +74,14 @@ def test_timeseries_column_format_expressions(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
         selected_columns=[
-            Column("transaction.duration", "duration", None),
-            Column("my_time", "time", None),
+            Column("transaction.duration", None, "duration"),
+            Column("my_time", None, "time"),
         ],
     )
     expected = Query(
         {"granularity": granularity},
         TableSource("transactions", ColumnSet([])),
-        selected_columns=[Column("transaction.duration", "duration", None), ast_value],
+        selected_columns=[Column("transaction.duration", None, "duration"), ast_value],
     )
 
     dataset = TransactionsDataset()

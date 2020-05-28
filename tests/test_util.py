@@ -555,3 +555,21 @@ class TestUtil(BaseTest):
         assert exprs == [
             "((1 - (countIf(duration <= 300) + (countIf((duration > 300) AND (duration <= 1200)) / 2)) / count()) + ((1 - (1 / sqrt(uniq(user)))) * 3) AS impact_score)"
         ]
+
+    @pytest.mark.parametrize("dataset", DATASETS)
+    def test_error_rate_expression(self, dataset):
+        body = {"aggregations": [["error_rate()", "", "error_percentage"]]}
+        parsing_context = ParsingContext()
+        source = (
+            dataset.get_all_storages()[0]
+            .get_schemas()
+            .get_read_schema()
+            .get_data_source()
+        )
+        exprs = [
+            column_expr(dataset, col, Query(body, source), parsing_context, alias, agg)
+            for (agg, col, alias) in body["aggregations"]
+        ]
+        assert exprs == [
+            "(countIf((transaction_status != 0 AND transaction_status != 2)) / count() AS error_percentage)"
+        ]

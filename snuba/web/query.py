@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 import sentry_sdk
-from flask import request as http_request
+
 from functools import partial
 
 from snuba import environment, settings, state
@@ -46,7 +46,7 @@ def parse_and_run_query(
     with sentry_sdk.configure_scope() as scope:
         if scope.span:
             scope.span.set_tag("dataset", get_dataset_name(dataset))
-            scope.span.set_tag("referrer", http_request.referrer)
+            scope.span.set_tag("referrer", request.referrer)
 
     try:
         result = _run_query_pipeline(
