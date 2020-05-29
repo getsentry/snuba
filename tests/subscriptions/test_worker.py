@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Iterable, Iterator, MutableMapping, Tuple
+from typing import Iterable, Iterator, MutableMapping, Optional, Tuple
 from uuid import UUID, uuid1
 
 import pytest
@@ -47,7 +47,14 @@ def dataset() -> Iterator[Dataset]:
         yield dataset
 
 
-def test_subscription_worker(dataset: Dataset) -> None:
+@pytest.mark.parametrize(
+    "time_shift",
+    [
+        pytest.param(None, id="without time shift"),
+        pytest.param(timedelta(minutes=-5), id="with time shift"),
+    ],
+)
+def test_subscription_worker(dataset: Dataset, time_shift: Optional[timedelta]) -> None:
     result_topic = Topic("subscription-results")
 
     broker: DummyBroker[SubscriptionTaskResult] = DummyBroker()
@@ -79,20 +86,23 @@ def test_subscription_worker(dataset: Dataset) -> None:
         DummyProducer(broker),
         result_topic,
         metrics,
+        time_shift=time_shift,
     )
 
     now = datetime(2000, 1, 1)
 
+    tick = Tick(
+        offsets=Interval(0, 1),
+        timestamps=Interval(now - (frequency * evaluations), now),
+    )
+
+    # If we are utilizing time shifting, push the tick time into the future so
+    # that time alignment is otherwise preserved during our test case.
+    if time_shift is not None:
+        tick = tick.time_shift(time_shift * -1)
+
     results = worker.process_message(
-        Message(
-            Partition(Topic("events"), 0),
-            0,
-            Tick(
-                offsets=Interval(0, 1),
-                timestamps=Interval(now - (frequency * evaluations), now),
-            ),
-            now,
-        )
+        Message(Partition(Topic("events"), 0), 0, tick, now)
     )
 
     assert results is not None and len(results) == evaluations
