@@ -389,7 +389,10 @@ if application.debug or application.testing:
                 .get_stream_loader()
                 .get_processor()
                 .process_message(
-                    message, KafkaMessageMetadata(offset=offset, partition=0,)
+                    message,
+                    KafkaMessageMetadata(
+                        offset=offset, partition=0, timestamp=datetime.utcnow()
+                    ),
                 )
             )
             if processed_message:

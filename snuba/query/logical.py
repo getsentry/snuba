@@ -195,9 +195,7 @@ class Query:
     def set_selected_columns(self, columns: Sequence[Any],) -> None:
         self.__body["selected_columns"] = columns
 
-    def set_ast_selected_columns(
-        self, selected_columns: Sequence[Expression]
-    ) -> None:
+    def set_ast_selected_columns(self, selected_columns: Sequence[Expression]) -> None:
         self.__selected_columns = selected_columns
 
     def get_aggregations(self) -> Optional[Sequence[Aggregation]]:
@@ -224,7 +222,7 @@ class Query:
     def get_condition_from_ast(self) -> Optional[Expression]:
         return self.__condition
 
-    def set_ast_condition(self, condition: Expression) -> None:
+    def set_ast_condition(self, condition: Optional[Expression]) -> None:
         self.__condition = condition
 
     def set_conditions(self, conditions: Sequence[Condition]) -> None:
@@ -252,6 +250,9 @@ class Query:
         Temporary method until pre where management is moved to Clickhouse query
         """
         return self.__prewhere
+
+    def set_prewhere_ast_condition(self, condition: Optional[Expression]) -> None:
+        self.__prewhere = condition
 
     def set_prewhere(self, conditions: Sequence[Condition]) -> None:
         """

@@ -31,7 +31,9 @@ class TestSessionProcessor(BaseTest):
             "received": timestamp.timestamp(),
         }
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = SessionsProcessor()
         ret = processor.process_message(payload, meta)
         assert ret is not None
@@ -78,7 +80,9 @@ class TestSessionProcessor(BaseTest):
             "received": timestamp.timestamp(),
         }
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = SessionsProcessor()
         ret = processor.process_message(payload, meta)
         assert ret is not None
@@ -126,7 +130,9 @@ class TestSessionProcessor(BaseTest):
             "received": timestamp.timestamp(),
         }
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = SessionsProcessor()
         ret = processor.process_message(payload, meta)
         assert ret is not None
