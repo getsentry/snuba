@@ -90,6 +90,7 @@ logger = logging.getLogger(__name__)
 @click.option("--schedule-ttl", type=int, default=60 * 5)
 @click.option("--result-topic")
 @click.option("--log-level", help="Logging level to use.")
+@click.option("--tick-delay-seconds", type=int, default=0)
 def subscriptions(
     *,
     dataset_name: str,
@@ -106,6 +107,7 @@ def subscriptions(
     schedule_ttl: int,
     result_topic: Optional[str],
     log_level: Optional[str],
+    tick_delay_seconds: int,
 ) -> None:
     """Evaluates subscribed queries for a dataset."""
 
@@ -156,7 +158,8 @@ def subscriptions(
                 else Topic(loader.get_commit_log_topic_spec().topic_name)
             ),
             set(commit_log_groups),
-        )
+        ),
+        shift=timedelta(seconds=tick_delay_seconds * -1),
     )
 
     producer = KafkaProducer(
