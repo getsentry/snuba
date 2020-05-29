@@ -8,17 +8,17 @@ from snuba.query.conditions import (
 from snuba.query.dsl import count, countIf, div
 from snuba.query.expressions import Column, FunctionCall, Literal
 from snuba.query.logical import Query
-from snuba.query.processors.error_rate_processor import ErrorRateProcessor
+from snuba.query.processors.failure_rate_processor import FailureRateProcessor
 from snuba.request.request_settings import HTTPRequestSettings
 
 
-def test_error_rate_format_expressions() -> None:
+def test_failure_rate_format_expressions() -> None:
     unprocessed = Query(
         {},
         TableSource("events", ColumnSet([])),
         selected_columns=[
             Column(None, None, "column2"),
-            FunctionCall("perf", "error_rate", ()),
+            FunctionCall("perf", "failure_rate", ()),
         ],
     )
     expected = Query(
@@ -53,7 +53,7 @@ def test_error_rate_format_expressions() -> None:
         ],
     )
 
-    ErrorRateProcessor().process_query(unprocessed, HTTPRequestSettings())
+    FailureRateProcessor().process_query(unprocessed, HTTPRequestSettings())
     assert (
         expected.get_selected_columns_from_ast()
         == unprocessed.get_selected_columns_from_ast()

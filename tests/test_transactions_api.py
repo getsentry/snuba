@@ -310,7 +310,7 @@ class TestTransactionsApi(BaseApiTest):
             "duration": 1000,
         }
 
-    def test_error_rate_function(self):
+    def test_failure_rate_function(self):
         response = self.app.post(
             "/query",
             data=json.dumps(
@@ -318,7 +318,7 @@ class TestTransactionsApi(BaseApiTest):
                     "dataset": "transactions",
                     "project": 1,
                     "selected_columns": ["transaction_name", "duration"],
-                    "aggregations": [["error_rate()", "", "error_percentage"]],
+                    "aggregations": [["failure_rate()", "", "error_percentage"]],
                     "orderby": "transaction_name",
                     "groupby": ["transaction_name", "duration"],
                 }
