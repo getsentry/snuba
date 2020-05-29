@@ -52,10 +52,12 @@ def _get_time_range(
     query: Query, timestamp_field: str
 ) -> Tuple[Optional[datetime], Optional[datetime]]:
     """
-    Finds the time range for this query. Which means, finds the timestamp
-    condition with the highest datetime literal and the timestamp condition
-    with the smallest and returns the interval in the form of a tuple of
-    Literals. It only looks into first level AND conditions.
+    Finds the minimal time range for this query. Which means, it finds
+    the >= timestamp condition with the highest datetime literal and
+    the < timestamp condition with the smallest and returns the interval
+    in the form of a tuple of Literals. It only looks into first level
+    AND conditions since, if the timestamp is nested in an OR we cannot
+    say anything on how that compares to the other timestamp conditions.
 
     TODO: Consider making this part of the AST api if there are more use
     cases. It would require managing a few more corner cases for being part
@@ -67,7 +69,7 @@ def _get_time_range(
         return (None, None)
 
     max_lower_bound = None
-    mix_upper_bound = None
+    min_upper_bound = None
     for c in get_first_level_conditions(condition_clause):
         match = FunctionCall(
             None,
@@ -89,13 +91,13 @@ def _get_time_range(
         if match is not None:
             timestamp = cast(datetime, match.scalar("timestamp"))
             if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
-                if not max_lower_bound or max_lower_bound < timestamp:
+                if not max_lower_bound or timestamp > max_lower_bound:
                     max_lower_bound = timestamp
             else:
-                if not mix_upper_bound or mix_upper_bound > timestamp:
-                    mix_upper_bound = timestamp
+                if not min_upper_bound or timestamp < min_upper_bound:
+                    min_upper_bound = timestamp
 
-    return (max_lower_bound, mix_upper_bound)
+    return (max_lower_bound, min_upper_bound)
 
 
 def _replace_ast_condition(
