@@ -50,17 +50,29 @@ def optimize(
     # will ensure that optimize is performed on all of the individual nodes for
     # that cluster.
     if clickhouse_host and clickhouse_port:
-        connection = ClickhousePool(
-            clickhouse_host,
-            clickhouse_port,
-            send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
-        )
+        clickhouse_connections = [
+            ClickhousePool(
+                clickhouse_host,
+                clickhouse_port,
+                send_receive_timeout=ClickhouseClientSettings.OPTIMIZE.value.timeout,
+            )
+        ]
     elif not writable_storage.get_cluster().is_single_node():
         raise click.ClickException("Provide Clickhouse host and port for optimize")
     else:
+        # In local mode, we run optimize on each cluster relevant to the provided
+        # dataset using the cluster's host/port configuration.
+        clickhouse_connections = list(
+            set(
+                storage.get_cluster().get_connection(ClickhouseClientSettings.OPTIMIZE)
+                for storage in dataset.get_all_storages()
+            )
+        )
+
         connection = writable_storage.get_cluster().get_connection(
             ClickhouseClientSettings.OPTIMIZE
         )
 
-    num_dropped = run_optimize(connection, database, table, before=today)
-    logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
+    for connection in clickhouse_connections:
+        num_dropped = run_optimize(connection, database, table, before=today)
+        logger.info("Optimized %s partitions on %s" % (num_dropped, clickhouse_host))
