@@ -12,9 +12,9 @@ def literals_tuple(alias: Optional[str], literals: Sequence[Literal]) -> Functio
 
 # Array functions
 def arrayElement(
-    alias: Optional[str], array_col: Column, index: Expression
+    alias: Optional[str], array: Expression, index: Expression
 ) -> FunctionCall:
-    return FunctionCall(alias, "arrayElement", (array_col, index))
+    return FunctionCall(alias, "arrayElement", (array, index))
 
 
 # arithmetic function
