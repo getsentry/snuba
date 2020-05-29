@@ -128,6 +128,7 @@ def test_get_all_columns() -> None:
         "selected_columns": [
             ["f1", ["column1", "column2"], "f1_alias"],
             ["f2", [], "f2_alias"],
+            ["formatDateTime", ["timestamp", "'%Y-%m-%d'"], "formatted_time"],
         ],
         "aggregations": [
             ["count", "platform", "platforms"],
@@ -149,4 +150,5 @@ def test_get_all_columns() -> None:
         Column(None, None, "tags"),
         Column(None, None, "times_seen"),
         Column(None, None, "event_id"),
+        Column(None, None, "timestamp"),
     }
