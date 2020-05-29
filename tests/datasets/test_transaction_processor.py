@@ -234,7 +234,9 @@ class TestTransactionsProcessor(BaseTest):
         # Force an invalid event
         payload[2]["data"]["type"] = "error"
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
@@ -266,7 +268,9 @@ class TestTransactionsProcessor(BaseTest):
         # Force an invalid event
         del payload[2]["data"]["contexts"]
 
-        meta = KafkaMessageMetadata(offset=1, partition=2)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
         processor = TransactionsMessageProcessor()
         assert processor.process_message(payload, meta) is None
 
@@ -294,7 +298,9 @@ class TestTransactionsProcessor(BaseTest):
             sdk_version="0.9.0",
             geo={"country_code": "XY", "region": "fake_region", "city": "fake_city"},
         )
-        meta = KafkaMessageMetadata(offset=1, partition=2,)
+        meta = KafkaMessageMetadata(
+            offset=1, partition=2, timestamp=datetime(1970, 1, 1)
+        )
 
         processor = TransactionsMessageProcessor()
         ret = processor.process_message(message.serialize(), meta)

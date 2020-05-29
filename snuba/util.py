@@ -5,6 +5,8 @@ from functools import wraps
 from sentry_relay.consts import SPAN_STATUS_NAME_TO_CODE
 from typing import (
     Any,
+    Callable,
+    cast,
     Iterator,
     List,
     Mapping,
@@ -15,10 +17,14 @@ from typing import (
     TypeVar,
     Union,
 )
+
+import inspect
 import logging
 import numbers
 import re
 import _strptime  # NOQA fixes _strptime deferred import issue
+
+import sentry_sdk
 
 from snuba import settings
 from snuba.clickhouse.escaping import escape_identifier, escape_string
@@ -331,3 +337,25 @@ def create_metrics(prefix: str, tags: Optional[Tags] = None) -> MetricsBackend:
             else None,
         ),
     )
+
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def with_span(op: str = "function") -> Callable[[F], F]:
+    """ Wraps a function call in a Sentry AM span
+    """
+
+    def decorator(func: F) -> F:
+        frame_info = inspect.stack()[1]
+        filename = frame_info.filename
+
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            with sentry_sdk.start_span(description=func.__name__, op=op) as span:
+                span.set_data("filename", filename)
+                return func(*args, **kwargs)
+
+        return cast(F, wrapper)
+
+    return decorator
