@@ -168,6 +168,30 @@ def test_tick_consumer() -> None:
         consumer.seek({Partition(topic, -1): 0})
 
 
+def test_tick_consumer_shift() -> None:
+    topic = Topic("messages")
+
+    broker: DummyBroker[int] = DummyBroker()
+    broker.create_topic(topic, partitions=1)
+
+    producer: DummyProducer[int] = DummyProducer(broker)
+    for payload in range(2):
+        producer.produce(Partition(topic, 0), payload).result()
+
+    inner_consumer: Consumer[int] = DummyConsumer(broker, "group")
+
+    shift = timedelta(hours=1)
+    consumer = TickConsumer(inner_consumer, shift)
+
+    consumer.subscribe([topic])
+
+    assert consumer.poll() is None
+
+    assert consumer.poll().payload == Tick(
+        offsets=Interval(0, 1), timestamps=Interval(epoch + shift, epoch + shift)
+    )
+
+
 def test_tick_consumer_non_monotonic() -> None:
     topic = Topic("messages")
     partition = Partition(topic, 0)
