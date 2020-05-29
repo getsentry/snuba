@@ -318,6 +318,7 @@ def test_time_split_ast() -> None:
             ),
             None,
         )
+        print(f"{from_date_str} {from_date_ast} {to_date_str} {to_date_ast}")
         assert from_date_str == from_date_ast.isoformat()
         assert to_date_str == to_date_ast.isoformat()
 

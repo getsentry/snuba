@@ -3,25 +3,31 @@ import math
 from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any as AnyType
-from typing import List, Optional, Sequence, Tuple, Union, cast
+from typing import List, Optional, Tuple, Union, cast
 
 from snuba import environment, state, util
 from snuba.clickhouse.query import Query
 from snuba.datasets.plans.split_strategy import QuerySplitStrategy, SplitQueryRunner
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
-    BooleanFunctions,
-    binary_condition,
+    combine_and_conditions,
+    get_first_level_conditions,
     in_condition,
-    is_binary_condition,
 )
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression, FunctionCall
+from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
-from snuba.query.matchers import Any, Column
-from snuba.query.matchers import FunctionCall as Function
-from snuba.query.matchers import Literal, Or, Param, String
+from snuba.query.matchers import (
+    Any,
+    AnyExpression,
+    Column,
+    FunctionCall,
+    Literal,
+    Or,
+    Param,
+    String,
+)
 from snuba.request.request_settings import RequestSettings
 from snuba.util import is_condition
 from snuba.utils.metrics.backends.wrapper import MetricsWrapper
@@ -56,21 +62,6 @@ def _get_time_range(
     of the api.
     """
 
-    def get_first_level_conditions(exp: Expression) -> Sequence[Expression]:
-        """
-        Traverse the tree as long as it runs into AND conditions and return all the
-        top level conditions.
-        """
-        if isinstance(exp, FunctionCall) and is_binary_condition(
-            exp, BooleanFunctions.AND
-        ):
-            return [
-                *get_first_level_conditions(exp.parameters[0]),
-                *get_first_level_conditions(exp.parameters[1]),
-            ]
-        else:
-            return [exp]
-
     condition_clause = query.get_condition_from_ast()
     if not condition_clause:
         return (None, None)
@@ -78,7 +69,7 @@ def _get_time_range(
     max_lower_bound = None
     mix_upper_bound = None
     for c in get_first_level_conditions(condition_clause):
-        match = Function(
+        match = FunctionCall(
             None,
             Param(
                 "operator",
@@ -113,46 +104,28 @@ def _replace_ast_condition(
     """
     Replaces a condition in the top level AND boolean condition
     in the query WHERE clause.
-
-    This is more complex than the one on the legacy representation because,
-    with the AST, we can express complex nested conditions and we do not
-    only have two levels only (AND and OR) so we need to recursively traverse
-    the tree stopping when we run into an OR.
     """
 
-    def replace_condition_in_expression(
-        expression: Expression, field: str, operator: str, new_operand: Expression
-    ) -> Expression:
-        if isinstance(expression, FunctionCall) and is_binary_condition(
-            expression, BooleanFunctions.AND
-        ):
-            return binary_condition(
-                expression.alias,
-                BooleanFunctions.AND,
-                replace_condition_in_expression(
-                    expression.parameters[0], field, operator, new_operand
-                ),
-                replace_condition_in_expression(
-                    expression.parameters[1], field, operator, new_operand
-                ),
-            )
-        elif (
-            isinstance(expression, FunctionCall)
-            and expression.function_name == OPERATOR_TO_FUNCTION[operator]
-            and isinstance(expression.parameters[0], Column)
-            and expression.parameters[0].column_name == field
-        ):
-            return replace(
-                expression, parameters=(expression.parameters[0], new_operand)
-            )
-        else:
-            return expression
+    def replaced(expression: Expression) -> Expression:
+        match = FunctionCall(
+            None,
+            String(OPERATOR_TO_FUNCTION[operator]),
+            (Param("column", Column(None, None, String(field))), AnyExpression()),
+        ).match(expression)
 
-    condition_clause = query.get_condition_from_ast()
-    if condition_clause:
+        return (
+            expression
+            if match is None
+            else replace(
+                expression, parameters=(match.expression("column"), new_operand)
+            )
+        )
+
+    condition = query.get_condition_from_ast()
+    if condition is not None:
         query.set_ast_condition(
-            replace_condition_in_expression(
-                condition_clause, field, operator, new_operand
+            combine_and_conditions(
+                [replaced(c) for c in get_first_level_conditions(condition)]
             )
         )
 
@@ -255,7 +228,6 @@ class TimeSplitQueryStrategy(QuerySplitStrategy):
             _replace_ast_condition(
                 split_query, self.__timestamp_col, ">=", LiteralExpr(None, split_start)
             )
-
             _replace_condition(
                 split_query, self.__timestamp_col, "<", split_end.isoformat()
             )
@@ -355,9 +327,9 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         # in joins.
         minimal_query.set_ast_selected_columns(
             [
-                ColumnExpr(None, self.__id_column, None),
-                ColumnExpr(None, self.__project_column, None),
-                ColumnExpr(None, self.__timestamp_column, None),
+                ColumnExpr(None, None, self.__id_column),
+                ColumnExpr(None, None, self.__project_column),
+                ColumnExpr(None, None, self.__timestamp_column),
             ]
         )
 
@@ -386,7 +358,7 @@ class ColumnSplitQueryStrategy(QuerySplitStrategy):
         query.add_condition_to_ast(
             in_condition(
                 None,
-                ColumnExpr(None, self.__id_column, None),
+                ColumnExpr(None, None, self.__id_column),
                 [LiteralExpr(None, e_id) for e_id in event_ids],
             )
         )
