@@ -1,5 +1,7 @@
 from typing import Optional, Sequence
 
+import sentry_sdk
+
 from snuba import state
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
@@ -20,6 +22,7 @@ from snuba.request.request_settings import RequestSettings
 # dependency is a refactoring of the methods that return RawQueryResult to make them
 # depend on Result + some debug data structure instead. Also It requires removing
 # extra data from the result of the query.
+from snuba.util import with_span
 from snuba.web import QueryResult
 
 
@@ -34,6 +37,7 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
         self.__query_processors = db_query_processors
         self.__splitters = splitters or []
 
+    @with_span()
     def execute(
         self, query: Query, request_settings: RequestSettings, runner: QueryRunner
     ) -> QueryResult:
@@ -41,17 +45,23 @@ class SimpleQueryPlanExecutionStrategy(QueryPlanExecutionStrategy):
             query: Query, request_settings: RequestSettings
         ) -> QueryResult:
             for processor in self.__query_processors:
-                processor.process_query(query, request_settings)
+                with sentry_sdk.start_span(
+                    description=type(processor).__name__, op="processor"
+                ):
+                    processor.process_query(query, request_settings)
             return runner(query, request_settings, self.__cluster.get_reader())
 
         use_split = state.get_config("use_split", 1)
         if use_split:
             for splitter in self.__splitters:
-                result = splitter.execute(
-                    query, request_settings, process_and_run_query
-                )
-                if result is not None:
-                    return result
+                with sentry_sdk.start_span(
+                    description=type(splitter).__name__, op="splitter"
+                ):
+                    result = splitter.execute(
+                        query, request_settings, process_and_run_query
+                    )
+                    if result is not None:
+                        return result
 
         return process_and_run_query(query, request_settings)
 
@@ -79,6 +89,7 @@ class SingleStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         # candidate to be added here as post process.
         self.__post_processors = post_processors or []
 
+    @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         # TODO: The translator is going to be configured with a mapping between logical
         # and physical schema that is a property of the relation between dataset (later
@@ -117,6 +128,7 @@ class SelectedStorageQueryPlanBuilder(ClickhouseQueryPlanBuilder):
         self.__selector = selector
         self.__post_processors = post_processors or []
 
+    @with_span()
     def build_plan(self, request: Request) -> ClickhouseQueryPlan:
         storage = self.__selector.select_storage(request.query, request.settings)
         clickhouse_query = QueryTranslator().translate(request.query)
