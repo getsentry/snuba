@@ -17,6 +17,7 @@ from snuba.web.split import (
 from snuba.datasets.schemas.tables import TableSource
 from snuba.query.logical import Query as LogicalQuery
 from snuba.clickhouse.query import Query as ClickhouseQuery
+from snuba.query.expressions import Column
 from snuba.query.parser import parse_query
 from snuba.reader import Reader
 from snuba.request.request_settings import HTTPRequestSettings, RequestSettings
@@ -139,6 +140,11 @@ def test_col_split(
         reader: Reader[SqlQuery],
     ) -> QueryResult:
         selected_cols = query.get_selected_columns()
+        assert selected_cols == [
+            c.column_name
+            for c in query.get_selected_columns_from_ast() or []
+            if isinstance(c, Column)
+        ]
         if selected_cols == list(first_query_data[0].keys()):
             return QueryResult({"data": first_query_data}, {})
         elif selected_cols == list(second_query_data[0].keys()):
@@ -161,6 +167,9 @@ def test_col_split(
             .get_schemas()
             .get_read_schema()
             .get_data_source(),
+            selected_columns=[
+                Column(None, None, col_name) for col_name in second_query_data[0].keys()
+            ],
         )
     )
 

@@ -88,7 +88,7 @@ def _get_time_range(
 
         if match is not None:
             timestamp = cast(datetime, match.scalar("timestamp"))
-            if match.scalar("operator") == OPERATOR_TO_FUNCTION[">="]:
+            if match.string("operator") == OPERATOR_TO_FUNCTION[">="]:
                 if not max_lower_bound or max_lower_bound < timestamp:
                     max_lower_bound = timestamp
             else:
