@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import (
     Any,
     Callable,
@@ -26,6 +28,16 @@ class MessageDetails(NamedTuple):
 class Tick(NamedTuple):
     offsets: Interval[int]
     timestamps: Interval[datetime]
+
+    def shift(self, delta: timedelta) -> Tick:
+        """
+        Returns a new ``Tick`` instance that has had the bounds of its time
+        interval shifted by the provided delta.
+        """
+        return Tick(
+            self.offsets,
+            Interval(self.timestamps.lower + delta, self.timestamps.upper + delta),
+        )
 
 
 class TickConsumer(Consumer[Tick]):
