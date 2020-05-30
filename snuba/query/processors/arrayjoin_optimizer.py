@@ -151,56 +151,71 @@ class ArrayjoinOptimizer(QueryProcessor):
                 )
 
                 if not filtered_tags:
-                    # (arrayJoin(
-                    #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
-                    #  as all_tags)[1]
-                    return arrayElement(
-                        expr.alias,
-                        array_join(
-                            "all_tags",
-                            zip_columns(
-                                ColumnExpr(None, None, "tags.key"),
-                                ColumnExpr(None, None, "tags.value"),
-                            ),
-                        ),
-                        array_pos,
-                    )
+                    return _unfiltered_tag_pairs(expr.alias, array_pos)
                 else:
-                    # (arrayJoin(arrayFilter(
-                    #       pair -> arrayElement(pair, 1) IN (tags),
-                    #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
-                    #  )) as all_tags)[1]
-                    return arrayElement(
-                        expr.alias,
-                        array_join(
-                            "all_tags",
-                            filter_key_values(
-                                zip_columns(
-                                    ColumnExpr(None, None, "tags.key"),
-                                    ColumnExpr(None, None, "tags.value"),
-                                ),
-                                filtered_tags,
-                            ),
-                        ),
-                        array_pos,
-                    )
+                    return _filtered_tag_pairs(expr.alias, filtered_tags, array_pos)
 
             elif filtered_tags:
                 # Only one between tags_key and tags_value is present, and
                 # it is tags_key since we found filtered tag keys.
-                #
-                # arrayJoin(arrayFilter(
-                #   tag -> tag IN (tags),
-                #   tags.key
-                # ))
-                return array_join(
-                    expr.alias,
-                    filter_keys(ColumnExpr(None, None, "tags.key"), filtered_tags),
-                )
+                return _filtered_tag_keys(expr.alias, filtered_tags)
             else:
+                # No viable optimization
                 return expr
 
         query.transform_expressions(replace_expression)
+
+
+def _unfiltered_tag_pairs(alias: Optional[str], array_pos: LiteralExpr) -> Expression:
+    # (arrayJoin(
+    #   arrayMap((x,y) -> [x,y], tags.key, tags.value)
+    #  as all_tags)[1]
+    return arrayElement(
+        alias,
+        array_join(
+            "all_tags",
+            zip_columns(
+                ColumnExpr(None, None, "tags.key"),
+                ColumnExpr(None, None, "tags.value"),
+            ),
+        ),
+        array_pos,
+    )
+
+
+def _filtered_tag_pairs(
+    alias: Optional[str], filtered_tags: Sequence[LiteralExpr], array_pos: LiteralExpr,
+) -> Expression:
+    # (arrayJoin(arrayFilter(
+    #       pair -> arrayElement(pair, 1) IN (tags),
+    #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
+    #  )) as all_tags)[1]
+    return arrayElement(
+        alias,
+        array_join(
+            "all_tags",
+            filter_key_values(
+                zip_columns(
+                    ColumnExpr(None, None, "tags.key"),
+                    ColumnExpr(None, None, "tags.value"),
+                ),
+                filtered_tags,
+            ),
+        ),
+        array_pos,
+    )
+
+
+def _filtered_tag_keys(
+    alias: Optional[str], filtered_tags: Sequence[LiteralExpr]
+) -> Expression:
+    # arrayJoin(arrayFilter(
+    #   tag -> tag IN (tags),
+    #   tags.key
+    # ))
+    return array_join(
+        alias, filter_keys(ColumnExpr(None, None, "tags.key"), filtered_tags),
+    )
 
 
 def array_join(alias: Optional[str], content: Expression) -> Expression:
