@@ -160,6 +160,10 @@ tags_filter_tests = [
 def test_get_filtered_tag_keys(
     name: str, query: ClickhouseQuery, expected_result: Set[str],
 ) -> None:
+    """
+    Test the algorithm that identifies potential tag keys we can pre-filter
+    through arrayFilter.
+    """
     assert get_filtered_tag_keys(query) == expected_result
 
 
@@ -324,6 +328,9 @@ def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
 def test_tags_processor(
     name: str, query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
 ) -> None:
+    """
+    Tests the whole processing in some notable cases.
+    """
     processed = parse_and_process(query_body)
     assert (
         processed.get_selected_columns_from_ast()
@@ -334,6 +341,9 @@ def test_tags_processor(
 
 
 def test_formatting() -> None:
+    """
+    Validates the formatting of the arrayFilter expressions.
+    """
     assert arrayElement(
         "tags_key",
         array_join(
@@ -368,6 +378,10 @@ def test_formatting() -> None:
 
 
 def test_aliasing() -> None:
+    """
+    Validates aliasing works properly when the query contains both tags_key
+    and tags_value.
+    """
     processed = parse_and_process(
         {
             "aggregations": [],
