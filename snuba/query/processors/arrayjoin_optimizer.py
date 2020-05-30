@@ -1,21 +1,28 @@
-from typing import cast, Set, Optional
+from typing import Optional, Set, cast
 
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
-from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Lambda, Argument, LiteralExpr, Expression
-from snuba.query.dsl import arrayElement
-from snuba.query.matchers import FunctionCall, Column, String, Or, Param, Literal, Any
-from snuba.request.request_settings import RequestSettings
 from snuba.query.conditions import (
     OPERATOR_TO_FUNCTION,
-    ConditionFunctions,
-    combine_and_conditions,
-    get_first_level_conditions,
-    is_binary_condition,
-    in_condition,
     BooleanFunctions,
+    ConditionFunctions,
+    get_first_level_conditions,
+    in_condition,
+    is_binary_condition,
+    is_in_condition_pattern,
+)
+from snuba.query.dsl import arrayElement
+from snuba.query.expressions import Argument
+from snuba.query.expressions import Column as ColumnExpr
+from snuba.query.expressions import Expression
+from snuba.query.expressions import FunctionCall as FunctionCallExpr
+from snuba.query.expressions import Lambda
+from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
+from snuba.request.request_settings import RequestSettings
+
+array_join_pattern = FunctionCall(
+    None, String("arrayJoin"), (Column(None, None, String("tags.key")),)
 )
 
 
@@ -33,38 +40,20 @@ def extract_top_level_tag_conditions(condition: Expression) -> Set[str]:
     tags_found = set()
     conditions = get_first_level_conditions(condition)
     for c in conditions:
-        tag_eq_matcher = FunctionCall(
+        match = FunctionCall(
             None,
             String(ConditionFunctions.EQ),
-            (
-                FunctionCall(
-                    None, String("arrayJoin"), (Column(None, None, String("tags.key")),)
-                ),
-                Literal(None, Param("key", Any(str))),
-            ),
-        )
-        match = tag_eq_matcher.match(c)
+            (array_join_pattern, Literal(None, Param("key", Any(str)))),
+        ).match(c)
         if match is not None:
             tags_found.add(match.string("key"))
 
-        tag_in_matcher = FunctionCall(
-            None,
-            String(ConditionFunctions.IN),
-            (
-                FunctionCall(
-                    None, String("arrayJoin"), (Column(None, None, String("tags.key")),)
-                ),
-                Param("literals", Any(FunctionCall)),
-            ),
-        )
-
-        match = tag_in_matcher.match(c)
+        match = is_in_condition_pattern(array_join_pattern).match(c)
         if match is not None:
-            function = cast(FunctionCallExpr, match.expression("literals"))
-            if function.function_name == "tuple":
-                tags_found |= {
-                    l.value for l in function.parameters if isinstance(l, LiteralExpr)
-                }
+            function = cast(FunctionCallExpr, match.expression("tuple"))
+            tags_found |= {
+                l.value for l in function.parameters if isinstance(l, LiteralExpr)
+            }
 
     return tags_found
 
@@ -78,10 +67,7 @@ def get_filter_tags(query: Query) -> Set[str]:
     select_clause = query.get_selected_columns_from_ast() or []
 
     tags_key_found = any(
-        FunctionCall(
-            None, String("arrayJoin"), (Column(None, None, String("tags.key")),)
-        ).match(f)
-        is not None
+        array_join_pattern.match(f) is not None
         for expression in select_clause
         for f in expression
     )
@@ -124,6 +110,15 @@ class ArrayjoinOptimizer(QueryProcessor):
         instead of doing the entire arrayJoin and filter the results.
     """
 
+    def __build_positional_access(
+        self, alias: Optional[str], content: Expression, position: int
+    ) -> Expression:
+        return arrayElement(
+            alias,
+            FunctionCallExpr("all_tags", "arrayJoin", (content,),),
+            LiteralExpr(None, position),
+        )
+
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         matcher = FunctionCall(
             None,
@@ -137,21 +132,88 @@ class ArrayjoinOptimizer(QueryProcessor):
             ),
         )
 
-        filtered_tags = get_filter_tags(query)
-
         referenced_tags = set()
         for e in query.get_all_expressions():
             match = matcher.match(e)
             if match is not None:
                 referenced_tags.add(match.string("col"))
 
-        replaced = None
-        if len(referenced_tags) < 2:
-            if not filtered_tags:
-                return
-            else:
-                replaced = FunctionCallExpr(
-                    "all_tags",
+        filtered_tags = [
+            LiteralExpr(None, tag_name) for tag_name in get_filter_tags(query)
+        ]
+
+        def replace_expression(expr: Expression) -> Expression:
+            match = matcher.match(expr)
+            if match is None:
+                return expr
+
+            if len(referenced_tags) == 2:
+                array_pos = 1 if match.string("col") == "tags.key" else 2
+                two_col_map = FunctionCallExpr(
+                    None,
+                    "arrayMap",
+                    (
+                        Lambda(
+                            None,
+                            ("x", "y"),
+                            FunctionCallExpr(
+                                None,
+                                "tuple",
+                                (Argument(None, "x"), Argument(None, "y"),),
+                            ),
+                        ),
+                        ColumnExpr(None, None, "tags.key"),
+                        ColumnExpr(None, None, "tags.value"),
+                    ),
+                )
+                if not filtered_tags:
+                    # arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)
+                    return self.__build_positional_access(
+                        expr.alias,
+                        FunctionCallExpr("all_tags", "arrayJoin", (two_col_map,)),
+                        array_pos,
+                    )
+                else:
+                    # arrayJoin(
+                    #   arrayFilter(
+                    #       pair -> arrayElement(pair, 1) IN (tags),
+                    #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
+                    #   )
+                    # )
+                    return self.__build_positional_access(
+                        expr.alias,
+                        FunctionCallExpr(
+                            None,
+                            "arrayFilter",
+                            (
+                                Lambda(
+                                    None,
+                                    ("pair",),
+                                    in_condition(
+                                        None,
+                                        arrayElement(
+                                            None,
+                                            Argument(None, "pair"),
+                                            LiteralExpr(None, 1),
+                                        ),
+                                        filtered_tags,
+                                    ),
+                                ),
+                                two_col_map,
+                            ),
+                        ),
+                        array_pos,
+                    )
+
+            elif filtered_tags:
+                # arrayJoin(
+                #   arrayFilter(
+                #       tag -> tag IN (tags),
+                #       tags.key
+                #   )
+                # )
+                return FunctionCallExpr(
+                    expr.alias,
                     "arrayJoin",
                     (
                         FunctionCallExpr(
@@ -162,12 +224,7 @@ class ArrayjoinOptimizer(QueryProcessor):
                                     None,
                                     ("tag",),
                                     in_condition(
-                                        None,
-                                        Argument(None, "tag"),
-                                        [
-                                            LiteralExpr(None, tag_name)
-                                            for tag_name in filtered_tags
-                                        ],
+                                        None, Argument(None, "tag"), filtered_tags
                                     ),
                                 ),
                                 ColumnExpr(None, None, "tags.key"),
@@ -175,66 +232,7 @@ class ArrayjoinOptimizer(QueryProcessor):
                         ),
                     ),
                 )
-        else:
-            mapping = FunctionCallExpr(
-                None,
-                "arrayMap",
-                (
-                    Lambda(
-                        None,
-                        ("x", "y"),
-                        FunctionCallExpr(
-                            None, "array", (Argument(None, "x"), Argument(None, "y")),
-                        ),
-                    ),
-                    ColumnExpr(None, None, "tags.key"),
-                    ColumnExpr(None, None, "tags.value"),
-                ),
-            )
-            replaced = FunctionCallExpr(
-                "all_tags",
-                "arrayJoin",
-                (
-                    FunctionCallExpr(
-                        None,
-                        "arrayFilter",
-                        (
-                            Lambda(
-                                None,
-                                ("pair",),
-                                in_condition(
-                                    None,
-                                    FunctionCallExpr(
-                                        None,
-                                        "arrayElement",
-                                        (Argument(None, "pair"), LiteralExpr(None, 1)),
-                                    ),
-                                    [
-                                        LiteralExpr(None, tag_name)
-                                        for tag_name in filtered_tags
-                                    ],
-                                ),
-                            ),
-                            mapping,
-                        ),
-                    ),
-                ),
-            )
-
-        if replaced is None:
-            return
-
-        def replace_expression(expr: Expression) -> Expression:
-            match = matcher.match(expr)
-            if match is None:
+            else:
                 return expr
-
-            return arrayElement(
-                expr.alias,
-                replaced,
-                LiteralExpr(None, 1)
-                if match.string("col") == "tags.key"
-                else LiteralExpr(None, 2),
-            )
 
         query.transform_expressions(replace_expression)
