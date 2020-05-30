@@ -184,7 +184,7 @@ class ArrayjoinOptimizer(QueryProcessor):
                         None,
                         ("x", "y"),
                         FunctionCallExpr(
-                            None, "tuple", (Argument(None, "x"), Argument(None, "y")),
+                            None, "array", (Argument(None, "x"), Argument(None, "y")),
                         ),
                     ),
                     ColumnExpr(None, None, "tags.key"),
