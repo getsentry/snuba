@@ -12,36 +12,35 @@ from snuba.query.conditions import (
     binary_condition,
     in_condition,
 )
-from snuba.query.processors.arrayjoin_expressions import (
-    tag_column,
-    filter_pairs,
-    filter_tag,
-    value_column,
-    array_join,
-    map_columns,
-)
+from snuba.query.dsl import arrayElement
 from snuba.query.expressions import Column, Expression, FunctionCall, Literal
 from snuba.query.logical import Query as SnubaQuery
 from snuba.query.parser import parse_query
 from snuba.query.processors.arrayjoin_optimizer import (
     ArrayjoinOptimizer,
     array_join,
-    filter_pairs,
-    filter_tag,
-    get_filter_tags,
-    map_columns,
-    tag_column,
-    value_column,
+    filter_key_values,
+    filter_keys,
+    get_filtered_tag_keys,
+    zip_columns,
 )
 from snuba.request import Request
 from snuba.request.request_settings import HTTPRequestSettings
 
 
 def build_query(
-    selected_columns: Optional[Sequence[Expression]], condition: Optional[Expression]
+    selected_columns: Optional[Sequence[Expression]] = None,
+    condition: Optional[Expression] = None,
+    having: Optional[Expression] = None,
 ) -> ClickhouseQuery:
     return ClickhouseQuery(
-        SnubaQuery({}, None, selected_columns=selected_columns, condition=condition,)
+        SnubaQuery(
+            {},
+            None,
+            selected_columns=selected_columns,
+            condition=condition,
+            having=having,
+        )
     )
 
 
@@ -54,7 +53,6 @@ tags_filter_tests = [
                     "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
                 ),
             ],
-            condition=None,
         ),
         set(),
     ),
@@ -96,9 +94,40 @@ tags_filter_tests = [
         {"tag1", "tag2"},
     ),
     (
+        "conditions and having",
+        build_query(
+            selected_columns=[
+                FunctionCall(
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                ),
+            ],
+            condition=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                ),
+                Literal(None, "tag"),
+            ),
+            having=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                ),
+                Literal(None, "tag2"),
+            ),
+        ),
+        {"tag", "tag2"},
+    ),
+    (
         "tag OR condition",
         build_query(
-            selected_columns=None,
+            selected_columns=[
+                FunctionCall(
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                ),
+            ],
             condition=binary_condition(
                 None,
                 BooleanFunctions.OR,
@@ -113,6 +142,14 @@ tags_filter_tests = [
                     [Literal(None, "tag1"), Literal(None, "tag2")],
                 ),
             ),
+            having=binary_condition(
+                None,
+                ConditionFunctions.EQ,
+                FunctionCall(
+                    "tags_key", "arrayJoin", (Column(None, None, "tags.key"),),
+                ),
+                Literal(None, "tag"),
+            ),
         ),
         set(),
     ),
@@ -120,14 +157,15 @@ tags_filter_tests = [
 
 
 @pytest.mark.parametrize("name, query, expected_result", tags_filter_tests)
-def test_get_filter_tags(
+def test_get_filtered_tag_keys(
     name: str, query: ClickhouseQuery, expected_result: Set[str],
 ) -> None:
-    assert get_filter_tags(query) == expected_result
+    assert get_filtered_tag_keys(query) == expected_result
 
 
 test_data = [
     (
+        "no tag in select clause",
         {
             "aggregations": [],
             "groupby": [],
@@ -144,23 +182,7 @@ test_data = [
         ),
     ),  # Individual tag, no change
     (
-        {
-            "aggregations": [],
-            "groupby": [],
-            "selected_columns": ["tags_value"],
-            "conditions": [["tags_key", "IN", ["t1", "t2"]]],
-        },
-        build_query(
-            selected_columns=[value_column("tags_value", map_columns())],
-            condition=in_condition(
-                None,
-                tag_column("tags_key", map_columns()),
-                [Literal(None, "t1"), Literal(None, "t2")],
-            ),
-        ),
-    ),  # Tags key in condition but only value in select. This could technically be
-    # optimized but it would add more complexity
-    (
+        "tags_key and tags_value in query no filter",
         {
             "aggregations": [],
             "groupby": [],
@@ -169,8 +191,28 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                tag_column("tags_key", map_columns()),
-                value_column("tags_value", map_columns()),
+                arrayElement(
+                    "tags_key",
+                    array_join(
+                        "all_tags",
+                        zip_columns(
+                            Column(None, None, "tags.key"),
+                            Column(None, None, "tags.value"),
+                        ),
+                    ),
+                    Literal(None, 1),
+                ),
+                arrayElement(
+                    "tags_value",
+                    array_join(
+                        "all_tags",
+                        zip_columns(
+                            Column(None, None, "tags.key"),
+                            Column(None, None, "tags.value"),
+                        ),
+                    ),
+                    Literal(None, 2),
+                ),
             ],
             condition=in_condition(
                 None,
@@ -180,6 +222,7 @@ test_data = [
         ),
     ),  # tags_key and value in select but no condition on it. No change
     (
+        "filter on keys only",
         {
             "aggregations": [],
             "groupby": [],
@@ -188,16 +231,23 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                array_join("tags_key", filter_tag([Literal(None, "t1")])),
+                array_join(
+                    "tags_key",
+                    filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
+                ),
             ],
             condition=in_condition(
                 None,
-                array_join("tags_key", filter_tag([Literal(None, "t1")])),
+                array_join(
+                    "tags_key",
+                    filter_keys(Column(None, None, "tags.key"), [Literal(None, "t1")]),
+                ),
                 [Literal(None, "t1")],
             ),
         ),
     ),
     (
+        "filter on key value pars",
         {
             "aggregations": [],
             "groupby": [],
@@ -206,12 +256,51 @@ test_data = [
         },
         build_query(
             selected_columns=[
-                tag_column("tags_key", filter_pairs([Literal(None, "t1")])),
-                value_column("tags_value", filter_pairs([Literal(None, "t1")])),
+                arrayElement(
+                    "tags_key",
+                    array_join(
+                        "all_tags",
+                        filter_key_values(
+                            zip_columns(
+                                Column(None, None, "tags.key"),
+                                Column(None, None, "tags.value"),
+                            ),
+                            [Literal(None, "t1")],
+                        ),
+                    ),
+                    Literal(None, 1),
+                ),
+                arrayElement(
+                    "tags_value",
+                    array_join(
+                        "all_tags",
+                        filter_key_values(
+                            zip_columns(
+                                Column(None, None, "tags.key"),
+                                Column(None, None, "tags.value"),
+                            ),
+                            [Literal(None, "t1")],
+                        ),
+                    ),
+                    Literal(None, 2),
+                ),
             ],
             condition=in_condition(
                 None,
-                tag_column("tags_key", filter_pairs([Literal(None, "t1")])),
+                arrayElement(
+                    "tags_key",
+                    array_join(
+                        "all_tags",
+                        filter_key_values(
+                            zip_columns(
+                                Column(None, None, "tags.key"),
+                                Column(None, None, "tags.value"),
+                            ),
+                            [Literal(None, "t1")],
+                        ),
+                    ),
+                    Literal(None, 1),
+                ),
                 [Literal(None, "t1")],
             ),
         ),
@@ -219,40 +308,58 @@ test_data = [
 ]
 
 
-@pytest.mark.parametrize("query_body, expected_query", test_data)
-def test_tags_processor(
-    query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
-) -> None:
+def parse_and_process(query_body: MutableMapping[str, Any]) -> ClickhouseQuery:
     dataset = get_dataset("transactions")
     query = parse_query(query_body, dataset)
-    request_settings = HTTPRequestSettings()
-    request = Request("a", query, request_settings, {}, "r")
+    request = Request("a", query, HTTPRequestSettings(), {}, "r")
     for p in dataset.get_query_processors():
         p.process_query(query, request.settings)
     plan = dataset.get_query_plan_builder().build_plan(request)
 
     ArrayjoinOptimizer().process_query(plan.query, request.settings)
-    # We cannot just run == on the query objects. The content of the two
-    # objects is different, being one the AST and the ont the AST + raw body
+    return plan.query
+
+
+@pytest.mark.parametrize("name, query_body, expected_query", test_data)
+def test_tags_processor(
+    name: str, query_body: MutableMapping[str, Any], expected_query: ClickhouseQuery
+) -> None:
+    processed = parse_and_process(query_body)
     assert (
-        plan.query.get_selected_columns_from_ast()
+        processed.get_selected_columns_from_ast()
         == expected_query.get_selected_columns_from_ast()
     )
-    assert (
-        plan.query.get_condition_from_ast() == expected_query.get_condition_from_ast()
-    )
+    assert processed.get_condition_from_ast() == expected_query.get_condition_from_ast()
+    assert processed.get_having_from_ast() == expected_query.get_having_from_ast()
 
 
 def test_formatting() -> None:
-    assert tag_column("tags_key", map_columns()).accept(
-        ClickhouseExpressionFormatter()
-    ) == (
+    assert arrayElement(
+        "tags_key",
+        array_join(
+            "all_tags",
+            zip_columns(
+                Column(None, None, "tags.key"), Column(None, None, "tags.value"),
+            ),
+        ),
+        Literal(None, 1),
+    ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
         "tags.key, tags.value)) AS all_tags), 1) AS tags_key)"
     )
 
-    assert tag_column(
-        "tags_key", filter_pairs([Literal(None, "t1"), Literal(None, "t2")])
+    assert arrayElement(
+        "tags_key",
+        array_join(
+            "all_tags",
+            filter_key_values(
+                zip_columns(
+                    Column(None, None, "tags.key"), Column(None, None, "tags.value"),
+                ),
+                [Literal(None, "t1"), Literal(None, "t2")],
+            ),
+        ),
+        Literal(None, 1),
     ).accept(ClickhouseExpressionFormatter()) == (
         "(arrayElement((arrayJoin(arrayFilter((pair -> in("
         "arrayElement(pair, 1), tuple('t1', 't2'))), "
@@ -261,23 +368,15 @@ def test_formatting() -> None:
 
 
 def test_aliasing() -> None:
-    dataset = get_dataset("transactions")
-    query = parse_query(
+    processed = parse_and_process(
         {
             "aggregations": [],
             "groupby": [],
             "selected_columns": ["tags_value"],
             "conditions": [["tags_key", "IN", ["t1", "t2"]]],
-        },
-        dataset,
+        }
     )
-    request_settings = HTTPRequestSettings()
-    request = Request("a", query, request_settings, {}, "r")
-    for p in dataset.get_query_processors():
-        p.process_query(query, request.settings)
-    plan = dataset.get_query_plan_builder().build_plan(request)
-    ArrayjoinOptimizer().process_query(plan.query, request.settings)
-    sql = AstSqlQuery(plan.query, request.settings).format_sql()
+    sql = AstSqlQuery(processed, HTTPRequestSettings()).format_sql()
 
     assert sql == (
         "SELECT (arrayElement((arrayJoin(arrayMap((x, y -> array(x, y)), "
