@@ -3,20 +3,22 @@ from typing import Optional, Set, cast
 from snuba.clickhouse.processors import QueryProcessor
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
-    OPERATOR_TO_FUNCTION,
     BooleanFunctions,
     ConditionFunctions,
     get_first_level_conditions,
-    in_condition,
     is_binary_condition,
     is_in_condition_pattern,
 )
-from snuba.query.dsl import arrayElement
-from snuba.query.expressions import Argument
-from snuba.query.expressions import Column as ColumnExpr
-from snuba.query.expressions import Expression
+from snuba.query.processors.arrayjoin_expressions import (
+    tag_column,
+    filter_pairs,
+    filter_tag,
+    value_column,
+    array_join,
+    map_columns,
+)
 from snuba.query.expressions import FunctionCall as FunctionCallExpr
-from snuba.query.expressions import Lambda
+from snuba.query.expressions import Expression
 from snuba.query.expressions import Literal as LiteralExpr
 from snuba.query.matchers import Any, Column, FunctionCall, Literal, Or, Param, String
 from snuba.request.request_settings import RequestSettings
@@ -110,15 +112,6 @@ class ArrayjoinOptimizer(QueryProcessor):
         instead of doing the entire arrayJoin and filter the results.
     """
 
-    def __build_positional_access(
-        self, alias: Optional[str], content: Expression, position: int
-    ) -> Expression:
-        return arrayElement(
-            alias,
-            FunctionCallExpr("all_tags", "arrayJoin", (content,),),
-            LiteralExpr(None, position),
-        )
-
     def process_query(self, query: Query, request_settings: RequestSettings) -> None:
         matcher = FunctionCall(
             None,
@@ -148,90 +141,30 @@ class ArrayjoinOptimizer(QueryProcessor):
                 return expr
 
             if len(referenced_tags) == 2:
-                array_pos = 1 if match.string("col") == "tags.key" else 2
-                two_col_map = FunctionCallExpr(
-                    None,
-                    "arrayMap",
-                    (
-                        Lambda(
-                            None,
-                            ("x", "y"),
-                            FunctionCallExpr(
-                                None,
-                                "tuple",
-                                (Argument(None, "x"), Argument(None, "y"),),
-                            ),
-                        ),
-                        ColumnExpr(None, None, "tags.key"),
-                        ColumnExpr(None, None, "tags.value"),
-                    ),
-                )
                 if not filtered_tags:
-                    # arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value)
-                    return self.__build_positional_access(
-                        expr.alias,
-                        FunctionCallExpr("all_tags", "arrayJoin", (two_col_map,)),
-                        array_pos,
+                    # (arrayJoin(arrayMap((x,y) -> [x,y], tags.key, tags.value) as all_tags)[1]
+                    return (
+                        tag_column(expr.alias, map_columns())
+                        if match.string("col") == "tags.key"
+                        else value_column(expr.alias, map_columns())
                     )
                 else:
-                    # arrayJoin(
-                    #   arrayFilter(
+                    # (arrayJoin(arrayFilter(
                     #       pair -> arrayElement(pair, 1) IN (tags),
                     #       arrayMap((x,y) -> [x,y], tags.key, tags.value)
-                    #   )
-                    # )
-                    return self.__build_positional_access(
-                        expr.alias,
-                        FunctionCallExpr(
-                            None,
-                            "arrayFilter",
-                            (
-                                Lambda(
-                                    None,
-                                    ("pair",),
-                                    in_condition(
-                                        None,
-                                        arrayElement(
-                                            None,
-                                            Argument(None, "pair"),
-                                            LiteralExpr(None, 1),
-                                        ),
-                                        filtered_tags,
-                                    ),
-                                ),
-                                two_col_map,
-                            ),
-                        ),
-                        array_pos,
+                    #  )) as all_tags)[1]
+                    return (
+                        tag_column(expr.alias, filter_pairs(filtered_tags))
+                        if match.string("col") == "tags.key"
+                        else value_column(expr.alias, filter_pairs(filtered_tags))
                     )
 
             elif filtered_tags:
-                # arrayJoin(
-                #   arrayFilter(
+                # arrayJoin(arrayFilter(
                 #       tag -> tag IN (tags),
                 #       tags.key
-                #   )
-                # )
-                return FunctionCallExpr(
-                    expr.alias,
-                    "arrayJoin",
-                    (
-                        FunctionCallExpr(
-                            None,
-                            "arrayFilter",
-                            (
-                                Lambda(
-                                    None,
-                                    ("tag",),
-                                    in_condition(
-                                        None, Argument(None, "tag"), filtered_tags
-                                    ),
-                                ),
-                                ColumnExpr(None, None, "tags.key"),
-                            ),
-                        ),
-                    ),
-                )
+                #  ))
+                return array_join(expr.alias, filter_tag(filtered_tags))
             else:
                 return expr
 
