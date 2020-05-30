@@ -35,7 +35,9 @@ def _get_tag_keys_in_condition(condition: Optional[Expression]) -> Optional[Set[
     [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
 
     If we encounter an OR condition we return None, which means we cannot
-    safely apply the optimization.
+    safely apply the optimization. Empty set means we did not find any
+    suitable taf key for optimization in this condition but that does
+    not disqualify the whole query as the OR condition does.
     """
     if condition is None:
         return set()
@@ -144,6 +146,8 @@ class ArrayjoinOptimizer(QueryProcessor):
 
             if arrayjoins_in_query == {"tags.key", "tags.value"}:
                 # Both tags_key and tags_value expressions present int the query.
+                # do the arrayJoin on key-value pairs instead of independent
+                # arrayjoin for keys and values.
                 array_pos = (
                     LiteralExpr(None, 1)
                     if match.string("col") == "tags.key"
@@ -247,7 +251,8 @@ def filter_key_values(
     key_values: Expression, tag_keys: Sequence[LiteralExpr]
 ) -> Expression:
     """
-    Filter a an array of key value pairs based on a sequence of keys (tag keys in this case).
+    Filter a an array of key value pairs based on a sequence of keys
+    (tag keys in this case).
     """
     return FunctionCallExpr(
         None,
