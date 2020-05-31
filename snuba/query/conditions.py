@@ -2,6 +2,8 @@ from typing import Mapping, Optional, Sequence
 
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
+from snuba.query.matchers import FunctionCall as FunctionCallPattern
+from snuba.query.matchers import Param, String, Pattern
 
 
 class ConditionFunctions:
@@ -66,6 +68,19 @@ def __is_set_condition(exp: Expression, operator: str) -> bool:
     return False
 
 
+def __set_condition_pattern(
+    lhs: Pattern[Expression], operator: str
+) -> FunctionCallPattern:
+    return FunctionCallPattern(
+        None,
+        String(operator),
+        (
+            Param("lhs", lhs),
+            Param("tuple", FunctionCallPattern(None, String("tuple"), None)),
+        ),
+    )
+
+
 def in_condition(
     alias: Optional[str], lhs: Expression, rhs: Sequence[Literal],
 ) -> Expression:
@@ -74,6 +89,10 @@ def in_condition(
 
 def is_in_condition(exp: Expression) -> bool:
     return __is_set_condition(exp, ConditionFunctions.IN)
+
+
+def is_in_condition_pattern(lhs: Pattern[Expression]) -> FunctionCallPattern:
+    return __set_condition_pattern(lhs, ConditionFunctions.IN)
 
 
 def not_in_condition(

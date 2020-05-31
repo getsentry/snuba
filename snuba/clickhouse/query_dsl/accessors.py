@@ -1,7 +1,25 @@
 from functools import reduce
-from typing import List, Optional, Sequence, Set
+from typing import List, Optional, Sequence, Set, Tuple
 
 from snuba.clickhouse.query import Query
+from snuba.query.conditions import (
+    BooleanFunctions,
+    ConditionFunctions,
+    is_in_condition_pattern,
+)
+from snuba.query.expressions import Expression
+from snuba.query.expressions import FunctionCall as FunctionCallExpr
+from snuba.query.expressions import Literal as LiteralExpr
+from snuba.query.matchers import (
+    Any,
+    AnyExpression,
+    Column,
+    FunctionCall,
+    Literal,
+    Or,
+    Param,
+    String,
+)
 from snuba.query.types import Condition
 from snuba.util import is_condition
 
@@ -70,3 +88,72 @@ def get_project_ids_in_query(query: Query, project_column: str) -> Optional[Set[
     if not all_project_id_sets:
         return None
     return reduce(lambda x, y: x & y, all_project_id_sets)
+
+
+def get_project_ids_in_query_ast(
+    query: Query, project_column: str
+) -> Optional[Set[int]]:
+    """
+    Finds the project ids this query is filtering according to the AST query
+    representation.
+
+    It works like get_project_ids_in_query with the exception that boolean
+    functions are supported here.
+    """
+
+    def get_project_ids_in_condition(condition: Expression) -> Optional[Set[int]]:
+        """
+        Extract project ids from an expression. Returns None if no project
+        if condition is found.
+        """
+        match = FunctionCall(
+            None,
+            String(ConditionFunctions.EQ),
+            (
+                Column(None, None, String(project_column)),
+                Literal(None, Param("project_id", Any(int))),
+            ),
+        ).match(condition)
+        if match is not None:
+            return {match.integer("project_id")}
+
+        match = is_in_condition_pattern(
+            Column(None, None, String(project_column))
+        ).match(condition)
+        if match is not None:
+            projects = match.expression("tuple")
+            if isinstance(projects, FunctionCallExpr):
+                return {
+                    l.value
+                    for l in projects.parameters
+                    if isinstance(l, LiteralExpr) and isinstance(l.value, int)
+                }
+
+        match = FunctionCall(
+            None,
+            Param(
+                "operator",
+                Or([String(BooleanFunctions.AND), String(BooleanFunctions.OR)]),
+            ),
+            (Param("lhs", AnyExpression()), Param("rhs", AnyExpression())),
+        ).match(condition)
+        if match is not None:
+            lhs_projects = get_project_ids_in_condition(match.expression("lhs"))
+            rhs_projects = get_project_ids_in_condition(match.expression("rhs"))
+            if lhs_projects is None:
+                return rhs_projects
+            elif rhs_projects is None:
+                return lhs_projects
+            else:
+                return (
+                    lhs_projects & rhs_projects
+                    if match.string("operator") == BooleanFunctions.AND
+                    else lhs_projects | rhs_projects
+                )
+
+        return None
+
+    condition = query.get_condition_from_ast()
+    if condition is None:
+        return None
+    return get_project_ids_in_condition(condition)
