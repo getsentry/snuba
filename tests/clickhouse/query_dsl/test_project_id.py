@@ -2,14 +2,13 @@ from typing import Any, MutableMapping, Set
 
 import pytest
 
-from snuba.datasets.factory import get_dataset
 from snuba.clickhouse.query import Query as ClickhouseQuery
-from snuba.query.parser import parse_query
 from snuba.clickhouse.query_dsl.accessors import (
     get_project_ids_in_query,
     get_project_ids_in_query_ast,
 )
-
+from snuba.datasets.factory import get_dataset
+from snuba.query.parser import parse_query
 
 test_cases = [
     (

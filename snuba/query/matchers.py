@@ -64,8 +64,8 @@ class MatchResult:
 
     def integer(self, name: str) -> int:
         """
-        Returns a int present in the result, guaranteeing the int
-        is there or throws.
+        Returns a int present in the result, guaranteeing the int is there
+        or throws.
         """
         ret = self.results[name]
         assert isinstance(ret, int)

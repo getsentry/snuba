@@ -3,7 +3,7 @@ from typing import Mapping, Optional, Sequence
 from snuba.query.dsl import literals_tuple
 from snuba.query.expressions import Expression, FunctionCall, Literal
 from snuba.query.matchers import FunctionCall as FunctionCallPattern
-from snuba.query.matchers import Param, String, Pattern
+from snuba.query.matchers import Param, Pattern, String
 
 
 class ConditionFunctions:

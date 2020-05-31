@@ -1,5 +1,4 @@
 import logging
-
 from copy import deepcopy
 from typing import Optional
 
@@ -54,7 +53,7 @@ class PostReplacementConsistencyEnforcer(QueryProcessor):
                 logger.warning(
                     "Discrepancy between AST project ids and legacy project ids",
                     exc_info=True,
-                    extra={"legacy": project_ids, "Ast": project_ids_ast},
+                    extra={"legacy": project_ids, "ast": project_ids_ast},
                 )
         except Exception as e:
             if activated:

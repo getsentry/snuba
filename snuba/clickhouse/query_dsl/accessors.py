@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import List, Optional, Sequence, Set, Tuple
+from typing import List, Optional, Sequence, Set
 
 from snuba.clickhouse.query import Query
 from snuba.query.conditions import (
@@ -94,11 +94,11 @@ def get_project_ids_in_query_ast(
     query: Query, project_column: str
 ) -> Optional[Set[int]]:
     """
-    Finds the project ids this query is filtering according to the AST query
-    representation.
+    Finds the project ids this query is filtering according to the AST
+    query representation.
 
-    It works like get_project_ids_in_query with the exception that boolean
-    functions are supported here.
+    It works like get_project_ids_in_query with the exception that
+    boolean functions are supported here.
     """
 
     def get_project_ids_in_condition(condition: Expression) -> Optional[Set[int]]:
@@ -154,6 +154,4 @@ def get_project_ids_in_query_ast(
         return None
 
     condition = query.get_condition_from_ast()
-    if condition is None:
-        return None
-    return get_project_ids_in_condition(condition)
+    return get_project_ids_in_condition(condition) if condition is not None else None
