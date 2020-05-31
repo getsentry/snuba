@@ -180,6 +180,9 @@ class TagColumnProcessor:
         Which means: if the tags_key column is in the select clause and there are
         one or more top level conditions on the tags_key column.
         """
+        if not state.get_config("ast_tag_processor_enabled", 1):
+            return []
+
         tags_key_found = any(
             "tags_key" in columns_in_expr(expression)
             for expression in query.get_selected_columns() or []
