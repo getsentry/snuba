@@ -4,8 +4,10 @@ from datetime import datetime
 
 from snuba.datasets.factory import get_dataset
 from snuba.query.parser import parse_query
+from snuba.query.parser.conditions import parse_conditions_to_expr
 from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.request.request_settings import HTTPRequestSettings
+from snuba.query.conditions import combine_and_conditions
 
 test_data = [
     (
@@ -223,7 +225,8 @@ test_data = [
 
 @pytest.mark.parametrize("query_body, expected_condition", test_data)
 def test_nested_optimizer(query_body, expected_condition) -> None:
-    query = parse_query(query_body, get_dataset("transactions"))
+    dataset = get_dataset("transactions")
+    query = parse_query(query_body, dataset)
     request_settings = HTTPRequestSettings()
     processor = NestedFieldConditionOptimizer(
         nested_col="tags",
@@ -234,3 +237,6 @@ def test_nested_optimizer(query_body, expected_condition) -> None:
     processor.process_query(query, request_settings)
 
     assert query.get_conditions() == expected_condition
+
+    ast_conditions = parse_conditions_to_expr(expected_condition, dataset, None)
+    assert query.get_condition_from_ast() == ast_conditions
