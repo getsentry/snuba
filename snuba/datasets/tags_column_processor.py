@@ -1,25 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional, Set, Union
-
 from dataclasses import dataclass
+from typing import Any, List, Mapping, Optional, Sequence, Set, Union
+
 from snuba import state
 from snuba.clickhouse.columns import ColumnSet
 from snuba.clickhouse.escaping import escape_identifier
-from snuba.query.conditions import (
-    BooleanFunctions,
-    ConditionFunctions,
-    is_binary_condition,
-    is_in_condition,
-)
-from snuba.query.expressions import Column, Expression, FunctionCall, Literal
-from snuba.query.parser.strings import NESTED_COL_EXPR_RE
-
 from snuba.query.logical import Query
+from snuba.query.parser.strings import NESTED_COL_EXPR_RE
 from snuba.query.parsing import ParsingContext
+from snuba.query.types import Condition
 from snuba.util import (
     alias_expr,
+    columns_in_expr,
     escape_literal,
+    is_condition,
     qualified_column,
 )
 
@@ -157,7 +152,7 @@ class TagColumnProcessor:
             }
         )
 
-    def __extract_top_level_tag_conditions(self, condition: Expression) -> List[str]:
+    def __extract_top_level_tag_conditions(self, condition: Condition) -> List[str]:
         """
         Finds the top level conditions that include tags_key in an expression.
         For top level condition. In Snuba conditions are expressed in layers, the top level
@@ -169,41 +164,13 @@ class TagColumnProcessor:
         [[['tagskey' '=' 'a'], ['col2' '=' 'b']], ['tagskey' '=' 'c']] does not
         """
 
-        if is_binary_condition(condition, ConditionFunctions.EQ):
-            # This is to make mypy happy.
-            assert isinstance(condition, FunctionCall)
-            if (
-                isinstance(condition.parameters[0], FunctionCall)
-                and condition.parameters[0].function_name == "arrayJoin"
-                and condition.parameters[0].parameters
-                == (Column(None, None, "tags.key"),)
-                and isinstance(condition.parameters[1], Literal)
-            ):
-                # Tags are strings, but mypy does not know that
-                return [str(condition.parameters[1].value)]
+        if is_condition(condition) and condition[1] == "=":
+            if condition[0] == "tags_key" and isinstance(condition[2], str):
+                return [condition[2]]
 
-        if is_in_condition(condition):
-            assert isinstance(condition, FunctionCall)
-            if (
-                isinstance(condition.parameters[0], FunctionCall)
-                and condition.parameters[0].function_name == "arrayJoin"
-                and condition.parameters[0].parameters
-                == (Column(None, None, "tags.key"),)
-            ):
-                # The parameters of the inner function `a IN tuple(b,c,d)`
-                assert isinstance(condition.parameters[1], FunctionCall)
-                literals = condition.parameters[1].parameters
-                return [
-                    str(literal.value)
-                    for literal in literals
-                    if isinstance(literal, Literal)
-                ]
-
-        if is_binary_condition(condition, BooleanFunctions.AND):
-            assert isinstance(condition, FunctionCall)
-            return self.__extract_top_level_tag_conditions(
-                condition.parameters[0]
-            ) + self.__extract_top_level_tag_conditions(condition.parameters[1])
+        if is_condition(condition) and condition[1] == "IN":
+            if condition[0] == "tags_key" and isinstance(condition[2], (list, tuple)):
+                return [str(tag) for tag in condition[2]]
 
         return []
 
@@ -213,37 +180,33 @@ class TagColumnProcessor:
         Which means: if the tags_key column is in the select clause and there are
         one or more top level conditions on the tags_key column.
         """
-        if not state.get_config("ast_tag_processor_enabled", 0):
-            return []
-
-        select_clause = query.get_selected_columns_from_ast() or []
-
         tags_key_found = any(
-            f.function_name == "arrayJoin"
-            and f.parameters == (Column(None, None, "tags.key"),)
-            for expression in select_clause
-            for f in expression
-            if isinstance(f, FunctionCall)
+            "tags_key" in columns_in_expr(expression)
+            for expression in query.get_selected_columns() or []
         )
 
         if not tags_key_found:
             return []
 
         def extract_tags_from_condition(
-            cond: Optional[Expression],
+            cond: Sequence[Condition],
         ) -> Optional[List[str]]:
             if not cond:
                 return []
-            if any(is_binary_condition(cond, BooleanFunctions.OR) for cond in cond):
+            if any(not is_condition(c) for c in cond):
+                # This is an OR
                 return None
-            return self.__extract_top_level_tag_conditions(cond)
+            ret = []
+            for c in cond:
+                ret.extend(self.__extract_top_level_tag_conditions(c))
+            return ret
 
-        cond_tags_key = extract_tags_from_condition(query.get_condition_from_ast())
+        cond_tags_key = extract_tags_from_condition(query.get_conditions() or [])
         if cond_tags_key is None:
             # This means we found an OR. Cowardly we give up even though there could
             # be cases where this condition is still optimizable.
             return []
-        having_tags_key = extract_tags_from_condition(query.get_having_from_ast())
+        having_tags_key = extract_tags_from_condition(query.get_having() or [])
         if having_tags_key is None:
             # Same as above
             return []

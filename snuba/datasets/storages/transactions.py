@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Mapping, Sequence
 
 from snuba.clickhouse.columns import (
+    UUID,
     ColumnSet,
     ColumnType,
-    Date,
     DateTime,
     IPv4,
     IPv6,
@@ -14,24 +14,24 @@ from snuba.clickhouse.columns import (
     Nullable,
     String,
     UInt,
-    UUID,
     WithDefault,
 )
 from snuba.clusters.storage_sets import StorageSetKey
 from snuba.datasets.dataset_schemas import StorageSchemas
-from snuba.datasets.storages.transaction_column_processor import (
-    TransactionColumnProcessor,
-)
-from snuba.query.processors.prewhere import PrewhereProcessor
-from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.datasets.schemas.tables import ReplacingMergeTreeSchema
 from snuba.datasets.storage import WritableTableStorage
 from snuba.datasets.storages import StorageKey
+from snuba.datasets.storages.transaction_column_processor import (
+    TransactionColumnProcessor,
+)
 from snuba.datasets.table_storage import KafkaStreamLoader
 from snuba.datasets.transactions_processor import (
-    TransactionsMessageProcessor,
     UNKNOWN_SPAN_STATUS,
+    TransactionsMessageProcessor,
 )
+from snuba.query.processors.arrayjoin_optimizer import ArrayjoinOptimizer
+from snuba.query.processors.prewhere import PrewhereProcessor
+from snuba.query.processors.tagsmap import NestedFieldConditionOptimizer
 from snuba.web.split import TimeSplitQueryStrategy
 
 # This is the moment in time we started filling in flattened_tags and flattened_contexts
@@ -180,6 +180,7 @@ storage = WritableTableStorage(
             BEGINNING_OF_TIME,
         ),
         TransactionColumnProcessor(),
+        ArrayjoinOptimizer(),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(

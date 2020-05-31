@@ -25,6 +25,7 @@ from snuba.datasets.storages.processors.replaced_groups import (
     PostReplacementConsistencyEnforcer,
 )
 from snuba.datasets.table_storage import KafkaStreamLoader
+from snuba.query.processors.arrayjoin_optimizer import ArrayjoinOptimizer
 from snuba.query.processors.mapping_promoter import MappingColumnPromoter
 from snuba.query.processors.prewhere import PrewhereProcessor
 from snuba.query.processors.readonly_events import ReadOnlyTableSelector
@@ -338,6 +339,7 @@ storage = WritableTableStorage(
                 },
             },
         ),
+        ArrayjoinOptimizer(),
         PrewhereProcessor(),
     ],
     stream_loader=KafkaStreamLoader(
